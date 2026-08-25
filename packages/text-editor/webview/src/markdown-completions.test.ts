@@ -152,10 +152,10 @@ describe('Markdown CodeMirror completion source', () => {
         {
           kind: 'resource',
           source: 'asset',
-          ref: { kind: 'media-library', namespace: 'Reference', id: 'shot.mp4' },
+          ref: { kind: 'workspace-file', id: 'neko/assets/Reference/shot.mp4' },
           label: 'shot.mp4',
-          detail: 'Reference/shot.mp4',
-          target: 'media-library:Reference/shot.mp4',
+          detail: 'neko/assets/Reference/shot.mp4',
+          target: 'neko/assets/Reference/shot.mp4',
           embeddable: true,
         },
       ]),
@@ -173,8 +173,8 @@ describe('Markdown CodeMirror completion source', () => {
       expect.objectContaining({
         label: 'shot.mp4',
         type: 'neko-media-library',
-        detail: '媒体库 · Reference/shot.mp4',
-        apply: '[[media-library:Reference/shot.mp4]]',
+        detail: '媒体库 · neko/assets/Reference/shot.mp4',
+        apply: '[[neko/assets/Reference/shot.mp4]]',
         section: { name: '媒体库', rank: 3 },
       }),
     ]);
@@ -327,7 +327,7 @@ function markdownProjection(source: string, documentId = 'notes/draft.md'): Text
       owner: { kind: 'window', windowId: 'window-1', projectId: 'project-1' },
       workspaceId: 'workspace-1',
       documentId,
-      locator: { kind: 'workspace-file', path: documentId },
+      locator: { file: { authority: 'workspace', path: documentId } },
     },
     sessionId: 'session-1',
     editSequence: 2,

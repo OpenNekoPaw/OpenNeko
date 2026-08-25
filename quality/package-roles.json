@@ -19,6 +19,15 @@
       "architectureState": "converged"
     },
     {
+      "path": "packages/agent/dsh-plugin",
+      "name": "@neko/agent-dsh-plugin",
+      "family": "agent",
+      "roles": ["infrastructure"],
+      "runtimes": ["node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
       "path": "packages/agent/webview",
       "name": "@neko/agent-webview",
       "family": "agent",
@@ -28,12 +37,21 @@
       "architectureState": "converged"
     },
     {
+      "path": "packages/dsh-bridge",
+      "name": "@neko/dsh-bridge",
+      "family": "agent",
+      "roles": ["infrastructure"],
+      "runtimes": ["node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
       "path": "packages/automation/contracts",
       "name": "@neko/automation-contracts",
       "family": "automation",
       "roles": ["contracts"],
       "runtimes": ["host-neutral"],
-      "productStatus": "active-product",
+      "productStatus": "retained-kernel",
       "architectureState": "converged"
     },
     {
@@ -42,16 +60,7 @@
       "family": "automation",
       "roles": ["application", "node"],
       "runtimes": ["host-neutral", "node"],
-      "productStatus": "active-product",
-      "architectureState": "converged"
-    },
-    {
-      "path": "packages/automation/webview",
-      "name": "@neko/automation-webview",
-      "family": "automation",
-      "roles": ["webview"],
-      "runtimes": ["browser"],
-      "productStatus": "active-product",
+      "productStatus": "retained-kernel",
       "architectureState": "converged"
     },
     {
@@ -109,6 +118,15 @@
       "architectureState": "converged"
     },
     {
+      "path": "packages/canvas/dsh-plugin",
+      "name": "@neko/canvas-dsh-plugin",
+      "family": "canvas",
+      "roles": ["infrastructure"],
+      "runtimes": ["node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
       "path": "packages/canvas/node",
       "name": "@neko/canvas-node",
       "family": "canvas",
@@ -127,8 +145,8 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/chara",
-      "name": "@neko/chara",
+      "path": "packages/chara/domain",
+      "name": "@neko/chara-domain",
       "family": "chara",
       "roles": ["contracts", "domain", "application", "testing"],
       "runtimes": ["host-neutral", "test"],
@@ -136,7 +154,16 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/chara-node",
+      "path": "packages/chara/dsh-plugin",
+      "name": "@neko/chara-dsh-plugin",
+      "family": "chara",
+      "roles": ["infrastructure"],
+      "runtimes": ["node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/chara/node",
       "name": "@neko/chara-node",
       "family": "chara",
       "roles": ["node"],
@@ -145,7 +172,16 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/chara-webview",
+      "path": "packages/world/dsh-plugin",
+      "name": "@neko/world-dsh-plugin",
+      "family": "world",
+      "roles": ["infrastructure"],
+      "runtimes": ["node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/chara/webview",
       "name": "@neko/chara-webview",
       "family": "chara",
       "roles": ["webview"],
@@ -154,11 +190,20 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/content",
-      "name": "@neko/content",
+      "path": "packages/content/domain",
+      "name": "@neko/content-domain",
       "family": "content",
       "roles": ["contracts", "domain", "node"],
       "runtimes": ["host-neutral", "node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/content/dsh-plugin",
+      "name": "@neko/content-dsh-plugin",
+      "family": "content",
+      "roles": ["infrastructure"],
+      "runtimes": ["node"],
       "productStatus": "active-product",
       "architectureState": "converged"
     },
@@ -168,6 +213,15 @@
       "family": "cut",
       "roles": ["contracts", "domain", "application"],
       "runtimes": ["host-neutral"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/cut/dsh-plugin",
+      "name": "@neko/cut-dsh-plugin",
+      "family": "cut",
+      "roles": ["infrastructure"],
+      "runtimes": ["node"],
       "productStatus": "active-product",
       "architectureState": "converged"
     },
@@ -217,11 +271,47 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/generation",
-      "name": "@neko/generation",
+      "path": "packages/generation/domain",
+      "name": "@neko/generation-domain",
       "family": "generation",
       "roles": ["contracts", "domain", "application", "node"],
       "runtimes": ["host-neutral", "node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/generation/dsh-plugin",
+      "name": "@neko/generation-dsh-plugin",
+      "family": "generation",
+      "roles": ["infrastructure"],
+      "runtimes": ["node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/professional-apps/contracts",
+      "name": "@neko/professional-apps-contracts",
+      "family": "professional-apps",
+      "roles": ["contracts"],
+      "runtimes": ["host-neutral"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/professional-apps/node",
+      "name": "@neko/professional-apps-node",
+      "family": "professional-apps",
+      "roles": ["application", "node"],
+      "runtimes": ["host-neutral", "node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/professional-apps/webview",
+      "name": "@neko/professional-apps-webview",
+      "family": "professional-apps",
+      "roles": ["webview"],
+      "runtimes": ["browser"],
       "productStatus": "active-product",
       "architectureState": "converged"
     },
@@ -262,12 +352,21 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/media-local-metadata",
-      "name": "@neko/media-local-metadata",
-      "family": "media",
-      "roles": ["node"],
-      "runtimes": ["node"],
-      "productStatus": "retained-kernel",
+      "path": "packages/model/domain",
+      "name": "@neko/model-domain",
+      "family": "model",
+      "roles": ["contracts", "domain"],
+      "runtimes": ["host-neutral"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/model/webview",
+      "name": "@neko/model-webview",
+      "family": "model",
+      "roles": ["webview"],
+      "runtimes": ["browser"],
+      "productStatus": "active-product",
       "architectureState": "converged"
     },
     {
@@ -276,6 +375,15 @@
       "family": "preview",
       "roles": ["contracts", "domain"],
       "runtimes": ["host-neutral"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/preview/node",
+      "name": "@neko/preview-node",
+      "family": "preview",
+      "roles": ["node"],
+      "runtimes": ["node"],
       "productStatus": "active-product",
       "architectureState": "converged"
     },
@@ -289,8 +397,8 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/project",
-      "name": "@neko/project",
+      "path": "packages/project/domain",
+      "name": "@neko/project-domain",
       "family": "project",
       "roles": ["contracts", "domain", "application", "testing"],
       "runtimes": ["host-neutral", "test"],
@@ -298,7 +406,7 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/project-node",
+      "path": "packages/project/node",
       "name": "@neko/project-node",
       "family": "project",
       "roles": ["node"],
@@ -307,21 +415,12 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/project-webview",
+      "path": "packages/project/webview",
       "name": "@neko/project-webview",
       "family": "project",
       "roles": ["webview"],
       "runtimes": ["browser"],
       "productStatus": "active-product",
-      "architectureState": "converged"
-    },
-    {
-      "path": "packages/quality",
-      "name": "@neko/quality",
-      "family": "quality",
-      "roles": ["domain", "testing"],
-      "runtimes": ["host-neutral", "test"],
-      "productStatus": "retained-kernel",
       "architectureState": "converged"
     },
     {
@@ -406,8 +505,8 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/world",
-      "name": "@neko/world",
+      "path": "packages/world/domain",
+      "name": "@neko/world-domain",
       "family": "world",
       "roles": ["contracts", "domain", "application", "testing"],
       "runtimes": ["host-neutral", "test"],
@@ -415,7 +514,7 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/world-node",
+      "path": "packages/world/node",
       "name": "@neko/world-node",
       "family": "world",
       "roles": ["node"],
@@ -424,7 +523,7 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/world-webview",
+      "path": "packages/world/webview",
       "name": "@neko/world-webview",
       "family": "world",
       "roles": ["webview"],

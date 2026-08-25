@@ -9,8 +9,6 @@ import {
 } from '@neko/host/desktop-scene-contract';
 import { createDesktopWindowComposition } from '@neko/host/desktop-window-composition-contract';
 import { TEXT_EDITOR_HOST_ROUTES } from '@neko/text-editor-domain';
-import type { Tool } from '@neko/agent-contracts';
-import { createCoreTools } from '@neko/agent-runtime/tools';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DesktopTextEditorRuntime,
@@ -116,12 +114,60 @@ describe('DesktopTextEditorRuntime', () => {
     expect(await readFile(path.join(root, 'notes/readme.md'), 'utf8')).toBe('# Saved\n');
   });
 
+  it('opens a persisted Agent Markdown locator through the existing Text Editor path', async () => {
+    const root = await createWorkspace('neko/generated/file/story-plan.md', '# Story plan\n');
+    let workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    const shell = createShell(
+      root,
+      () => workbench,
+      (next) => {
+        workbench = next;
+      },
+    );
+    const runtime = new DesktopTextEditorRuntime({
+      shell,
+      referenceCatalog: emptyReferenceCatalog(),
+      media: emptyMediaService(),
+    });
+
+    const opened = await runtime.openWorkspaceFile({
+      windowId: 'window-1',
+      rendererSessionId: 'renderer-1',
+      workspaceId: 'workspace-1',
+      contentLocator: {
+        file: {
+          authority: 'workspace',
+          path: 'neko/generated/file/story-plan.md',
+        },
+      },
+      displayLabel: 'Story plan',
+    });
+
+    expect(opened).toMatchObject({
+      status: 'ready',
+      projection: {
+        source: '# Story plan\n',
+        identity: { workspaceId: 'workspace-1' },
+      },
+    });
+    expect(workbench.main.views).toEqual([
+      expect.objectContaining({
+        kind: 'text-editor',
+        documentId: 'neko/generated/file/story-plan.md',
+      }),
+    ]);
+  });
+
   it('delegates reference search to one exact catalog and discards a stale edit sequence', async () => {
     const root = await createWorkspace('notes/readme.md', '@小');
     let workbench = createDefaultDesktopWorkbenchLayout('window-1');
-    const shell = createShell(root, () => workbench, (next) => {
-      workbench = next;
-    });
+    const shell = createShell(
+      root,
+      () => workbench,
+      (next) => {
+        workbench = next;
+      },
+    );
     const entitySearch = vi.fn(async () => [
       {
         kind: 'mention' as const,
@@ -133,7 +179,7 @@ describe('DesktopTextEditorRuntime', () => {
     const referenceCatalog = {
       search: vi.fn(async (request, options) =>
         options.isCurrent?.(request) === false
-          ? ({ status: 'discarded' as const, reason: 'stale' as const })
+          ? { status: 'discarded' as const, reason: 'stale' as const }
           : {
               status: 'ready' as const,
               projection: {
@@ -207,9 +253,13 @@ describe('DesktopTextEditorRuntime', () => {
     const source = '![[assets/cover.png]]';
     const root = await createWorkspace('notes/readme.md', source);
     let workbench = createDefaultDesktopWorkbenchLayout('window-1');
-    const shell = createShell(root, () => workbench, (next) => {
-      workbench = next;
-    });
+    const shell = createShell(
+      root,
+      () => workbench,
+      (next) => {
+        workbench = next;
+      },
+    );
     const media = emptyMediaService();
     media.prepare.mockImplementation(async (input) => ({
       ...input.request,
@@ -554,14 +604,72 @@ describe('DesktopTextEditorRuntime', () => {
     expect(closeWatcher).toHaveBeenCalledOnce();
   });
 
+  it('closes only the clean deleted document and preserves a dirty deleted sibling', async () => {
+    const root = await createWorkspace('notes/clean.md', '# Clean\n');
+    await writeFile(path.join(root, 'notes/dirty.md'), '# Dirty\n', 'utf8');
+    let workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    const shell = createShell(
+      root,
+      () => workbench,
+      (next) => {
+        workbench = next;
+      },
+    );
+    const watchers = new Map<string, () => Promise<void>>();
+    const runtime = new DesktopTextEditorRuntime({
+      shell,
+      referenceCatalog: emptyReferenceCatalog(),
+      media: emptyMediaService(),
+      watchFile: (_directory, fileName, onChange) => {
+        watchers.set(fileName, onChange);
+        return { close: () => undefined };
+      },
+    });
+    const clean = await runtime.open({
+      identity: resourceIdentity,
+      item: textItem('notes/clean.md'),
+    });
+    const dirty = await runtime.open({
+      identity: resourceIdentity,
+      item: textItem('notes/dirty.md'),
+    });
+    if (clean.status !== 'ready' || dirty.status !== 'ready') {
+      throw new Error('Expected ready Text Editors.');
+    }
+    await runtime.execute('window-1', {
+      route: TEXT_EDITOR_HOST_ROUTES.editsApply,
+      requestId: 'dirty-edit',
+      identity: dirty.identity,
+      expectedEditSequence: 0,
+      changes: [{ from: 2, to: 7, insert: 'Unsaved' }],
+    });
+    const dirtyEvents: import('@neko/text-editor-domain').TextEditorProjectionEvent[] = [];
+    await runtime.subscribe('window-1', dirty.identity, (event) => dirtyEvents.push(event));
+
+    await rm(path.join(root, 'notes/clean.md'));
+    await watchers.get('clean.md')?.();
+    expect(workbench.main.views.map((view) => view.documentId)).toEqual(['notes/dirty.md']);
+
+    await rm(path.join(root, 'notes/dirty.md'));
+    await watchers.get('dirty.md')?.();
+    expect(workbench.main.views.map((view) => view.documentId)).toEqual(['notes/dirty.md']);
+    expect(dirtyEvents.at(-1)).toMatchObject({
+      projection: {
+        dirty: true,
+        diagnostics: [{ code: 'text-document-external-change-unavailable', severity: 'error' }],
+      },
+    });
+    runtime.dispose();
+  });
+
   it.each([
-    ['notes/agent-change.md', '# Initial\n', '# Agent Markdown\n'],
-    ['story/agent-change.fountain', '.INT. ROOM - DAY\n', '.EXT. STREET - NIGHT\n'],
-    ['notes/agent-change.txt', 'Initial text\n', 'Agent plain text\n'],
+    ['notes/external-change.md', '# Initial\n', '# External Markdown\n'],
+    ['story/external-change.fountain', '.INT. ROOM - DAY\n', '.EXT. STREET - NIGHT\n'],
+    ['notes/external-change.txt', 'Initial text\n', 'External plain text\n'],
   ])(
-    'projects the canonical Agent Write for %s through the same external-change consumer',
-    async (relativePath, initialSource, agentSource) => {
-      const root = await createWorkspace(relativePath, initialSource, true);
+    'projects an external write for %s through the canonical external-change consumer',
+    async (relativePath, initialSource, externalSource) => {
+      const root = await createWorkspace(relativePath, initialSource);
       let workbench = createDefaultDesktopWorkbenchLayout('window-1');
       const shell = createShell(
         root,
@@ -587,27 +695,12 @@ describe('DesktopTextEditorRuntime', () => {
       if (opened.status !== 'ready') throw new Error('Expected a ready Text Editor.');
       const events: import('@neko/text-editor-domain').TextEditorProjectionEvent[] = [];
       await runtime.subscribe('window-1', opened.identity, (event) => events.push(event));
-      const coreTools = createCoreTools({ defaultCwd: root });
-      const observed = await getTool(coreTools, 'Read').execute({ file_path: relativePath });
-
-      await expect(
-        getTool(coreTools, 'Write').execute({
-          file_path: relativePath,
-          content: agentSource,
-          expected_fingerprint: requireFingerprint(observed),
-        }),
-      ).resolves.toMatchObject({
-        success: true,
-        data: {
-          contentLocator: { kind: 'workspace-file', path: relativePath },
-          operation: 'replace',
-        },
-      });
+      await writeFile(path.join(root, ...relativePath.split('/')), externalSource);
       if (!notifyExternalChange) throw new Error('Expected a Text Editor watcher callback.');
       await notifyExternalChange();
 
       expect(events.at(-1)).toMatchObject({
-        projection: { source: agentSource, dirty: false, conflict: false },
+        projection: { source: externalSource, dirty: false, conflict: false },
       });
       runtime.dispose();
     },
@@ -653,12 +746,8 @@ describe('DesktopTextEditorRuntime', () => {
   });
 });
 
-async function createWorkspace(
-  relativePath: string,
-  source: string,
-  coreFileToolsAllowed = false,
-): Promise<string> {
-  const parent = coreFileToolsAllowed ? path.resolve(process.cwd(), '.test-workspaces') : tmpdir();
+async function createWorkspace(relativePath: string, source: string): Promise<string> {
+  const parent = tmpdir();
   await mkdir(parent, { recursive: true });
   const root = await mkdtemp(path.join(parent, 'openneko-text-editor-'));
   roots.push(root);
@@ -758,26 +847,7 @@ function textItem(relativePath: string) {
     depth: 0,
     kind: 'file' as const,
     label: path.basename(relativePath),
-    locator: { kind: 'workspace-file' as const, path: relativePath },
+    locator: { file: { authority: 'workspace' as const, path: relativePath } },
     capabilities: ['edit-text', 'preview', 'reveal'] as const,
   };
-}
-
-function getTool(tools: readonly Tool[], name: string): Tool {
-  const tool = tools.find((candidate) => candidate.name === name);
-  if (!tool) throw new Error(`Missing tool: ${name}`);
-  return tool;
-}
-
-function requireFingerprint(result: Awaited<ReturnType<Tool['execute']>>): unknown {
-  if (
-    !result.success ||
-    typeof result.data !== 'object' ||
-    result.data === null ||
-    Array.isArray(result.data) ||
-    !('fingerprint' in result.data)
-  ) {
-    throw new Error('Expected file freshness evidence.');
-  }
-  return result.data.fingerprint;
 }

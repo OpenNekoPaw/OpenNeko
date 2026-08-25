@@ -1,4 +1,8 @@
-import { parseCanvasHostRuntimeIdentity } from '@neko/canvas-domain';
+import {
+  parseCanvasHostRuntimeIdentity,
+  parseCanvasWorkspaceContextCatalog,
+  type CanvasWorkspaceContextCatalog,
+} from '@neko/canvas-domain';
 import type {
   CanvasHostIntentRequest,
   CanvasHostIntentResult,
@@ -10,7 +14,7 @@ import type {
   CanvasTextFilePreviewRequest,
   CanvasTextFilePreviewResult,
 } from '@neko/canvas-domain';
-import { validateContentLocator, type ContentLocator } from '@neko/content';
+import { validateContentLocator, type ContentLocator } from '@neko/content-domain';
 import {
   parsePreviewMediaDescriptor,
   type PreviewContentKind,
@@ -22,9 +26,11 @@ export const DESKTOP_CANVAS_CHANNELS = {
   materialActionsResolve: 'open-neko:canvas:material-actions-resolve',
   textFilePreviewRead: 'open-neko:canvas:text-file-preview-read',
   intentExecute: 'open-neko:canvas:intent-execute',
-  previewVariantResolve: 'open-neko:canvas:preview-variant-resolve',
   previewResourceResolve: 'open-neko:canvas:preview-resource-resolve',
   previewResourceRelease: 'open-neko:canvas:preview-resource-release',
+  workspaceIndexCatalogRead: 'open-neko:canvas:workspace-index-catalog-read',
+  workspaceIndexChangedEvent: 'open-neko:canvas:workspace-index-changed-event',
+  workspaceDocumentOpen: 'open-neko:canvas:workspace-document-open',
   projectionEvent: 'open-neko:canvas:projection-event',
 } as const;
 
@@ -38,13 +44,19 @@ export interface OpenNekoDesktopCanvasBridge {
     readTextFilePreview(
       request: CanvasTextFilePreviewRequest,
     ): Promise<CanvasTextFilePreviewResult>;
-    resolvePreviewVariant(
-      request: DesktopCanvasPreviewVariantRequest,
-    ): Promise<DesktopCanvasPreviewVariantResult>;
     resolvePreviewResource(
       request: DesktopCanvasPreviewResourceRequest,
     ): Promise<DesktopCanvasPreviewResourceResult>;
     releasePreviewResource(request: DesktopCanvasPreviewResourceReleaseRequest): Promise<void>;
+    readWorkspaceIndexCatalog(
+      request: DesktopCanvasWorkspaceIndexCatalogRequest,
+    ): Promise<DesktopCanvasWorkspaceIndexCatalogResult>;
+    openWorkspaceDocument(
+      request: DesktopCanvasWorkspaceDocumentOpenRequest,
+    ): Promise<DesktopCanvasWorkspaceDocumentOpenResult>;
+    subscribeWorkspaceIndex(
+      listener: (event: DesktopCanvasWorkspaceIndexChangedEvent) => void,
+    ): () => void;
     subscribe(
       identity: CanvasHostRuntimeIdentity,
       listener: (event: CanvasHostProjectionEvent) => void,
@@ -52,18 +64,124 @@ export interface OpenNekoDesktopCanvasBridge {
   };
 }
 
-export interface DesktopCanvasPreviewVariantRequest {
-  readonly identity: CanvasHostRuntimeIdentity;
-  readonly requestId: string;
-  readonly sourceId: string;
-  readonly locator: ContentLocator;
-  readonly role: 'source' | 'thumbnail' | 'proxy' | 'fov-crop';
-  readonly mediaType?: string;
+export interface DesktopCanvasWorkspaceIndexChangedEvent {
+  readonly workspaceId: string;
 }
 
-export interface DesktopCanvasPreviewVariantResult {
+export interface DesktopCanvasWorkspaceIndexCatalogRequest {
   readonly requestId: string;
-  readonly url: string;
+  readonly workspaceId: string;
+  readonly workspaceGrantId: string;
+}
+
+export interface DesktopCanvasWorkspaceIndexCatalogResult {
+  readonly requestId: string;
+  readonly catalog: CanvasWorkspaceContextCatalog;
+}
+
+export function parseDesktopCanvasWorkspaceIndexChangedEvent(
+  value: unknown,
+): DesktopCanvasWorkspaceIndexChangedEvent {
+  if (isRecord(value) === false) {
+    throw new Error('Desktop Canvas workspace index changed event must be an object.');
+  }
+  requireExactKeys(value, ['workspaceId'], 'Desktop Canvas workspace index changed event');
+  return { workspaceId: requireString(value['workspaceId'], 'workspaceId') };
+}
+
+export interface DesktopCanvasWorkspaceDocumentOpenRequest {
+  readonly requestId: string;
+  readonly workspaceId: string;
+  readonly workspaceGrantId: string;
+  readonly canvasId: string;
+}
+
+export interface DesktopCanvasWorkspaceDocumentOpenResult {
+  readonly requestId: string;
+  readonly status: 'opened';
+}
+
+export function parseDesktopCanvasWorkspaceDocumentOpenRequest(
+  value: unknown,
+): DesktopCanvasWorkspaceDocumentOpenRequest {
+  if (isRecord(value) === false) {
+    throw new Error('Desktop Canvas workspace document open request must be an object.');
+  }
+  requireExactKeys(
+    value,
+    ['requestId', 'workspaceId', 'workspaceGrantId', 'canvasId'],
+    'Desktop Canvas workspace document open request',
+  );
+  const canvasId = requireString(value['canvasId'], 'canvasId');
+  const locator = validateContentLocator({
+    file: { authority: 'workspace', path: canvasId },
+  });
+  if (!locator.ok || !canvasId.toLocaleLowerCase('en-US').endsWith('.nkc')) {
+    throw new Error(
+      'Desktop Canvas workspace document open requires a Workspace-file NKC identity.',
+    );
+  }
+  return {
+    requestId: requireString(value['requestId'], 'requestId'),
+    workspaceId: requireString(value['workspaceId'], 'workspaceId'),
+    workspaceGrantId: requireString(value['workspaceGrantId'], 'workspaceGrantId'),
+    canvasId,
+  };
+}
+
+export function parseDesktopCanvasWorkspaceDocumentOpenResult(
+  value: unknown,
+  requestId: string,
+): DesktopCanvasWorkspaceDocumentOpenResult {
+  if (isRecord(value) === false) {
+    throw new Error('Desktop Canvas workspace document open result must be an object.');
+  }
+  requireExactKeys(value, ['requestId', 'status'], 'Desktop Canvas workspace document open result');
+  if (value['requestId'] !== requestId || value['status'] !== 'opened') {
+    throw new Error('Desktop Canvas workspace document open result is invalid.');
+  }
+  return { requestId, status: 'opened' };
+}
+
+export function parseDesktopCanvasWorkspaceIndexCatalogRequest(
+  value: unknown,
+): DesktopCanvasWorkspaceIndexCatalogRequest {
+  if (isRecord(value) === false) {
+    throw new Error('Desktop Canvas workspace index catalog request must be an object.');
+  }
+  requireExactKeys(
+    value,
+    ['requestId', 'workspaceId', 'workspaceGrantId'],
+    'Desktop Canvas workspace index catalog request',
+  );
+  return {
+    requestId: requireString(value['requestId'], 'requestId'),
+    workspaceId: requireString(value['workspaceId'], 'workspaceId'),
+    workspaceGrantId: requireString(value['workspaceGrantId'], 'workspaceGrantId'),
+  };
+}
+
+export function parseDesktopCanvasWorkspaceIndexCatalogResult(
+  value: unknown,
+  requestId: string,
+  expectedWorkspaceId: string,
+): DesktopCanvasWorkspaceIndexCatalogResult {
+  if (isRecord(value) === false) {
+    throw new Error('Desktop Canvas workspace index catalog result must be an object.');
+  }
+  requireExactKeys(
+    value,
+    ['requestId', 'catalog'],
+    'Desktop Canvas workspace index catalog result',
+  );
+  if (value['requestId'] !== requestId) {
+    throw new Error('Desktop Canvas workspace index catalog requestId mismatch.');
+  }
+  const catalog = parseCanvasWorkspaceContextCatalog(value['catalog']);
+  if (catalog.workspaceId !== expectedWorkspaceId) {
+    throw new Error('Desktop Canvas workspace index catalog workspace mismatch.');
+  }
+  return { requestId, catalog };
 }
 
 export interface DesktopCanvasPreviewResourceRequest {
@@ -85,47 +203,6 @@ export interface DesktopCanvasPreviewResourceResult {
 export interface DesktopCanvasPreviewResourceReleaseRequest {
   readonly identity: CanvasHostRuntimeIdentity;
   readonly descriptorId: string;
-}
-
-export function parseDesktopCanvasPreviewVariantRequest(
-  value: unknown,
-): DesktopCanvasPreviewVariantRequest {
-  if (!isRecord(value)) {
-    throw new Error('Desktop Canvas preview request must be an object.');
-  }
-  const locator = validateContentLocator(value['locator']);
-  if (!locator.ok) throw new Error('Desktop Canvas preview requires a valid ContentLocator.');
-  const role = value['role'];
-  if (role !== 'source' && role !== 'thumbnail' && role !== 'proxy' && role !== 'fov-crop') {
-    throw new Error('Desktop Canvas preview role is invalid.');
-  }
-  const mediaType = value['mediaType'];
-  if (mediaType !== undefined && (typeof mediaType !== 'string' || mediaType.trim().length === 0)) {
-    throw new Error('Desktop Canvas preview media type is invalid.');
-  }
-  return {
-    identity: parseCanvasHostRuntimeIdentity(value['identity']),
-    requestId: requireIdentity(value['requestId'], 'preview request'),
-    sourceId: requireIdentity(value['sourceId'], 'preview source'),
-    locator: locator.locator,
-    role,
-    ...(mediaType === undefined ? {} : { mediaType }),
-  };
-}
-
-export function parseDesktopCanvasPreviewVariantResult(
-  value: unknown,
-  requestId: string,
-): DesktopCanvasPreviewVariantResult {
-  if (
-    !isRecord(value) ||
-    value['requestId'] !== requestId ||
-    typeof value['url'] !== 'string' ||
-    !value['url'].startsWith('openneko://resource/')
-  ) {
-    throw new Error('Desktop Canvas preview result is invalid.');
-  }
-  return { requestId, url: value['url'] };
 }
 
 export function parseDesktopCanvasPreviewResourceRequest(
@@ -205,4 +282,22 @@ function requireIdentity(value: unknown, label: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function requireString(value: unknown, label: string): string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error(`${label} must be a non-empty string.`);
+  }
+  return value;
+}
+
+function requireExactKeys(
+  record: Record<string, unknown>,
+  keys: readonly string[],
+  label: string,
+): void {
+  const unknown = Object.keys(record).find((key) => keys.includes(key) === false);
+  if (unknown !== undefined) throw new Error(`${label} contains unsupported field '${unknown}'.`);
+  const missing = keys.find((key) => key in record === false);
+  if (missing !== undefined) throw new Error(`${label} is missing field '${missing}'.`);
 }

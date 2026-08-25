@@ -25,7 +25,9 @@ describe('Desktop renderer Vite workspace resolution', () => {
     expect(
       rendererConfig.optimizeDeps?.include?.filter((entry) => entry.startsWith('@neko/')),
     ).toEqual([]);
-    expect(rendererConfig.optimizeDeps?.include).toContain('@tanstack/react-virtual');
+    expect(rendererConfig.optimizeDeps?.include).not.toContain('@tanstack/react-virtual');
+    expect(rendererConfig.optimizeDeps?.include).not.toContain('mermaid');
+    expect(rendererConfig.optimizeDeps?.include).not.toContain('prism-react-renderer');
     expect(rendererConfig.optimizeDeps?.include).toContain('zustand');
   });
 

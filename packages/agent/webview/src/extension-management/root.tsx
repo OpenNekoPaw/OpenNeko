@@ -1,9 +1,7 @@
 import {
-  ArrowRightIcon,
-  FileIcon,
-  FolderIcon,
-  GridIcon,
-  LayersIcon,
+  BotIcon,
+  ChevronRightIcon,
+  CodeIcon,
   PackageIcon,
   PlusIcon,
   SearchIcon,
@@ -11,619 +9,656 @@ import {
   WarningIcon,
 } from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
-import { EmptyState, Switch } from '@neko/ui/primitives';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { AgentExtensionCatalogItem } from '@neko/agent-contracts';
+import { Button, Dialog, EmptyState } from '@neko/ui/primitives';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type {
   AgentExtensionManagementProjection,
   AgentExtensionManagementRuntime,
+  AgentManagedMcpItem,
   AgentManagedSkillItem,
 } from '@neko/agent-contracts/extension-management';
 
-export type AgentExtensionManagementTab = 'skills' | 'extensions';
-export type AgentExtensionManagementView = 'grid' | 'list';
-
-export interface AgentExtensionManagementDetailRenderInput {
-  readonly content: ReactNode;
-  readonly selectedItemId: string | undefined;
-  readonly tab: AgentExtensionManagementTab;
-}
+export type AgentExtensionManagementTab = 'skills' | 'mcp';
 
 export function AgentExtensionManagementRoot({
-  confirmAction,
+  compactHeading = false,
   interactive,
-  onDetailVisibilityChange,
-  renderDetail,
   runtime,
+  selectedTab,
+  showTabControls = true,
+  onTabChange,
+  toolbarControls,
 }: {
-  readonly confirmAction: (message: string) => boolean | Promise<boolean>;
+  readonly compactHeading?: boolean;
   readonly interactive: boolean;
-  readonly onDetailVisibilityChange?: (visible: boolean) => void;
-  readonly renderDetail?: (input: AgentExtensionManagementDetailRenderInput) => ReactNode;
   readonly runtime: AgentExtensionManagementRuntime;
+  readonly selectedTab?: AgentExtensionManagementTab;
+  readonly showTabControls?: boolean;
+  readonly onTabChange?: (tab: AgentExtensionManagementTab) => void;
+  readonly toolbarControls?: ReactNode;
 }): JSX.Element {
   const { locale, t } = useTranslation();
-  const [tab, setTab] = useState<AgentExtensionManagementTab>('skills');
-  const [view, setView] = useState<AgentExtensionManagementView>('grid');
+  const [localTab, setLocalTab] = useState<AgentExtensionManagementTab>('skills');
+  const tab = selectedTab ?? localTab;
+  const setTab = (next: AgentExtensionManagementTab): void => {
+    if (selectedTab === undefined) setLocalTab(next);
+    onTabChange?.(next);
+  };
   const [query, setQuery] = useState('');
-  const [selectedSkillId, setSelectedSkillId] = useState<string>();
-  const [selectedExtensionId, setSelectedExtensionId] = useState<string>();
-  const [refreshRequestId, setRefreshRequestId] = useState('initial');
   const [projection, setProjection] = useState<AgentExtensionManagementProjection>();
   const [error, setError] = useState<string>();
-  const [operationKey, setOperationKey] = useState<string>();
+  const [loading, setLoading] = useState(false);
+  const [pendingIdentity, setPendingIdentity] = useState<string>();
+  const [selectedEntryIdentity, setSelectedEntryIdentity] = useState<string>();
+  const [addMcpOpen, setAddMcpOpen] = useState(false);
+  const [removeEntry, setRemoveEntry] = useState<AgentExtensionCatalogEntry>();
+  const [mcpDraft, setMcpDraft] = useState({
+    serverName: '',
+    description: '',
+    transport: 'stdio' as 'stdio' | 'streamable-http',
+    command: '',
+    args: '',
+    url: '',
+  });
+
+  const runMutation = (
+    identity: string,
+    mutation: () => Promise<AgentExtensionManagementProjection>,
+    after?: () => void,
+  ): void => {
+    setPendingIdentity(identity);
+    setError(undefined);
+    void mutation()
+      .then((next) => {
+        setProjection(next);
+        after?.();
+      })
+      .catch((reason: unknown) =>
+        setError(reason instanceof Error ? reason.message : String(reason)),
+      )
+      .finally(() => setPendingIdentity(undefined));
+  };
+
+  const addCurrent = (): void => {
+    if (tab === 'skills') {
+      runMutation('skill:add', () => runtime.addSkill());
+    } else {
+      setAddMcpOpen(true);
+    }
+  };
+
+  const addMcp = (): void => {
+    const common = {
+      serverName: mcpDraft.serverName.trim(),
+      description: mcpDraft.description.trim(),
+    };
+    runMutation(
+      'mcp:add',
+      () =>
+        mcpDraft.transport === 'stdio'
+          ? runtime.addMcp({
+              ...common,
+              transport: 'stdio',
+              command: mcpDraft.command.trim(),
+              args: mcpDraft.args
+                .split('\n')
+                .map((value) => value.trim())
+                .filter(Boolean),
+            })
+          : runtime.addMcp({
+              ...common,
+              transport: 'streamable-http',
+              url: mcpDraft.url.trim(),
+            }),
+      () => {
+        setAddMcpOpen(false);
+        setMcpDraft({
+          serverName: '',
+          description: '',
+          transport: 'stdio',
+          command: '',
+          args: '',
+          url: '',
+        });
+      },
+    );
+  };
+
+  const setEnabled = (entry: AgentExtensionCatalogEntry, enabled: boolean): void => {
+    runMutation(`${entry.kind}:${entry.item.id}`, () =>
+      entry.kind === 'skill'
+        ? runtime.setSkillEnabled({
+            name: entry.item.name,
+            source: entry.item.source,
+            enabled,
+          })
+        : runtime.setMcpEnabled({ id: entry.item.id, enabled }),
+    );
+  };
+
+  const remove = (entry: AgentExtensionCatalogEntry): void => {
+    runMutation(
+      `${entry.kind}:${entry.item.id}`,
+      () =>
+        entry.kind === 'skill'
+          ? runtime.removeSkill({ name: entry.item.name, source: entry.item.source })
+          : runtime.removeMcp(entry.item.id),
+      () => {
+        setRemoveEntry(undefined);
+        setSelectedEntryIdentity(undefined);
+      },
+    );
+  };
 
   useEffect(() => {
     if (!interactive) return;
     let active = true;
+    setLoading(true);
     setError(undefined);
-    void runtime.getSnapshot().then(
-      (next) => {
+    void runtime
+      .getSnapshot()
+      .then((next) => {
         if (active) setProjection(next);
-      },
-      () => {
-        if (active) setError(t('home.capabilities.operationFailed'));
-      },
-    );
+      })
+      .catch((reason: unknown) => {
+        if (active) setError(reason instanceof Error ? reason.message : String(reason));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
     return () => {
       active = false;
     };
-  }, [interactive, refreshRequestId, runtime, t]);
+  }, [interactive, runtime]);
+
+  const catalogEntries = useMemo(() => {
+    return (
+      tab === 'skills'
+        ? (projection?.skills ?? []).map((item) => ({
+            kind: 'skill' as const,
+            item,
+            presentation: presentSkill(item, t),
+          }))
+        : (projection?.mcp ?? []).map((item) => ({
+            kind: 'mcp' as const,
+            item,
+            presentation: { name: item.name, summary: item.description },
+          }))
+    ) satisfies readonly AgentExtensionCatalogEntry[];
+  }, [projection, t, tab]);
+
+  const entries = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase();
+    return catalogEntries
+      .filter(({ item, presentation }) =>
+        `${presentation.name} ${presentation.summary} ${item.name} ${item.description} ${item.id}`
+          .toLocaleLowerCase()
+          .includes(normalized),
+      )
+      .sort((left, right) => left.presentation.name.localeCompare(right.presentation.name, locale));
+  }, [catalogEntries, locale, query]);
+
+  const selectedEntry = catalogEntries.find(
+    ({ kind, item }) => `${kind}:${item.id}` === selectedEntryIdentity,
+  );
 
   useEffect(() => {
-    const skills = projection?.skills ?? [];
-    setSelectedSkillId((current) =>
-      current && skills.some((item) => item.id === current) ? current : undefined,
-    );
-    const extensions = projection?.extensions ?? [];
-    setSelectedExtensionId((current) =>
-      current && extensions.some((item) => item.id === current) ? current : undefined,
-    );
-  }, [projection?.extensions, projection?.skills]);
+    setSelectedEntryIdentity(undefined);
+  }, [tab]);
 
-  const skills = useMemo(
-    () => searchAndOrderAgentSkills(projection?.skills ?? [], query),
-    [projection?.skills, query],
-  );
-  const extensions = useMemo(
-    () => searchAndOrderAgentExtensions(projection?.extensions ?? [], query, locale),
-    [locale, projection?.extensions, query],
-  );
-  const selectedSkill = projection?.skills.find((item) => item.id === selectedSkillId);
-  const selectedExtension = projection?.extensions.find((item) => item.id === selectedExtensionId);
-  const selectedItem = tab === 'skills' ? selectedSkill : selectedExtension;
-  const detailVisible = selectedItem !== undefined;
-
-  useEffect(() => {
-    onDetailVisibilityChange?.(detailVisible);
-  }, [detailVisible, onDetailVisibilityChange]);
-
-  useEffect(
-    () => () => {
-      onDetailVisibilityChange?.(false);
-    },
-    [onDetailVisibilityChange],
-  );
-
-  const runMutation = useCallback(
-    async (key: string, operation: () => Promise<void>): Promise<void> => {
-      if (operationKey) return;
-      setOperationKey(key);
-      setError(undefined);
-      try {
-        await operation();
-        setRefreshRequestId(crypto.randomUUID());
-      } catch {
-        setError(t('home.capabilities.operationFailed'));
-      } finally {
-        setOperationKey(undefined);
-      }
-    },
-    [operationKey, t],
-  );
-  const requestExtensionEnablementChange = (
-    extension: AgentExtensionCatalogItem,
-    checked: boolean,
-  ): void => {
-    if (!checked) {
-      void runMutation(`disable:${extension.id}`, () => runtime.disablePlugin(extension.id));
-      return;
-    }
-    void Promise.resolve(
-      confirmAction(
-        t('home.capabilities.confirmEnablePlugin', {
-          name: extension.displayName,
-        }),
-      ),
-    ).then((confirmed) => {
-      if (confirmed) {
-        void runMutation(`enable:${extension.id}`, () => runtime.enablePlugin(extension.id));
-      }
-    });
-  };
-  const issueCount =
-    (projection?.skillDiscovery.diagnostics.reduce((total, item) => total + item.count, 0) ?? 0) +
-    (projection?.skillDiscovery.duplicateCount ?? 0) +
-    (projection?.extensionDiscovery.diagnostics.reduce((total, item) => total + item.count, 0) ??
-      0);
-  const visibleEntries =
-    tab === 'skills'
-      ? skills.map((item) => ({ kind: 'skill' as const, item }))
-      : extensions.map((item) => ({ kind: 'extension' as const, item }));
-  const selectedItemId = selectedItem?.id;
-  const detail = selectedItem ? (
-    <AgentExtensionOverviewRoot
-      confirmAction={confirmAction}
-      interactive={interactive}
-      onViewOwningPlugin={(pluginId) => {
-        setQuery('');
-        setSelectedExtensionId(pluginId);
-        setTab('extensions');
-      }}
-      operationKey={operationKey}
-      owningExtension={
-        selectedSkill?.source === 'plugin'
-          ? projection?.extensions.find((item) => item.id === selectedSkill.sourceId)
-          : undefined
-      }
-      runMutation={runMutation}
-      runtime={runtime}
-      selectedExtension={tab === 'extensions' ? selectedExtension : undefined}
-      selectedSkill={tab === 'skills' ? selectedSkill : undefined}
-      tab={tab}
-    />
-  ) : undefined;
-
+  const diagnosticCount = projection?.diagnostics.reduce((sum, item) => sum + item.count, 0) ?? 0;
   return (
-    <>
-      <section className="agent-extension-management-root" data-catalog-view={view}>
+    <section className="agent-extension-management-root">
+      {compactHeading ? null : (
         <header className="management-surface-header">
           <div>
             <p className="section-label">{t('home.capabilities.eyebrow')}</p>
             <h2>{t('home.capabilities')}</h2>
             <p>{t('home.capabilities.description')}</p>
           </div>
-          <div className="management-surface-actions">
-            <button
-              type="button"
-              disabled={!interactive || !projection || operationKey !== undefined}
-              onClick={() => void runMutation('refresh', () => runtime.rescanSources())}
-            >
-              {t('home.capabilities.refresh')}
-            </button>
-            {tab === 'skills' ? (
-              <button
-                type="button"
-                disabled={!interactive || !projection || operationKey !== undefined}
-                onClick={() =>
-                  void runMutation('skill-install', () => runtime.installPersonalSkill())
-                }
-              >
-                <PlusIcon size={14} />
-                <span>{t('home.capabilities.addSkill')}</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                data-local-plugin-install="true"
-                disabled={!interactive || !projection || operationKey !== undefined}
-                onClick={() =>
-                  void runMutation('plugin-install', () => runtime.installLocalPlugin())
-                }
-              >
-                <PlusIcon size={14} />
-                <span>{t('home.capabilities.addLocalPlugin')}</span>
-              </button>
-            )}
-          </div>
         </header>
-        <div className="management-surface-toolbar">
-          <label className="management-search-field">
-            <SearchIcon size={16} />
-            <input
-              aria-label={t('home.capabilities.search')}
-              value={query}
-              onChange={(event) => setQuery(event.currentTarget.value)}
-            />
-          </label>
-          <div className="management-segmented-control" aria-label={t('home.capabilities.tabs')}>
-            <button
-              type="button"
-              aria-pressed={tab === 'skills'}
-              data-extension-catalog-tab="skills"
-              onClick={() => setTab('skills')}
-            >
-              {t('home.capabilities.skills')}
-            </button>
-            <button
-              type="button"
-              aria-pressed={tab === 'extensions'}
-              data-extension-catalog-tab="extensions"
-              onClick={() => setTab('extensions')}
-            >
-              {t('home.capabilities.extensions')}
-            </button>
-          </div>
-          <button
-            type="button"
-            aria-label={t('home.capabilities.view.grid')}
-            aria-pressed={view === 'grid'}
-            data-catalog-view-control="grid"
-            title={t('home.capabilities.view.grid')}
-            onClick={() => setView('grid')}
-          >
-            <GridIcon size={15} />
-          </button>
-          <button
-            type="button"
-            aria-label={t('home.capabilities.view.list')}
-            aria-pressed={view === 'list'}
-            data-catalog-view-control="list"
-            title={t('home.capabilities.view.list')}
-            onClick={() => setView('list')}
-          >
-            <LayersIcon size={15} />
-          </button>
-        </div>
-        {error ? (
-          <div className="management-surface-diagnostic" role="alert">
-            <WarningIcon size={17} />
-            <span>{error}</span>
-          </div>
-        ) : issueCount > 0 ? (
-          <div className="management-surface-diagnostic" role="alert">
-            <WarningIcon size={17} />
-            <span>{t('home.capabilities.discoveryIssues', { count: issueCount })}</span>
-          </div>
-        ) : null}
-        <div
-          aria-label={t(
-            tab === 'skills' ? 'home.capabilities.skills' : 'home.capabilities.extensions',
-          )}
-          className={`management-surface-list is-${view}`}
-          data-empty={visibleEntries.length === 0}
-          role="list"
-        >
-          {visibleEntries.length === 0 ? (
-            <EmptyState
-              fill
-              icon={<PackageIcon size={24} />}
-              title={t(
-                tab === 'skills' ? 'home.capabilities.noSkills' : 'home.capabilities.noExtensions',
-              )}
-            />
-          ) : null}
-          {visibleEntries.map((entry) => {
-            const selected = entry.item.id === selectedItemId;
-            const name = entry.kind === 'skill' ? entry.item.name : entry.item.displayName;
-            const description =
-              entry.kind === 'skill'
-                ? entry.item.description
-                : resolveAgentExtensionDescription(entry.item, locale);
-            return (
-              <article
-                aria-label={name}
-                className="management-surface-row agent-extension-catalog-row"
-                data-selected={selected}
-                data-extension-card-id={entry.kind === 'extension' ? entry.item.id : undefined}
-                key={entry.item.id}
-                role="listitem"
+      )}
+      <div className="management-surface-toolbar">
+        <label className="management-search-field">
+          <SearchIcon size={16} />
+          <input
+            aria-label={t('home.capabilities.search')}
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+          />
+        </label>
+        {toolbarControls ??
+          (showTabControls ? (
+            <div className="management-segmented-control" aria-label={t('home.capabilities.tabs')}>
+              <button
+                type="button"
+                aria-pressed={tab === 'skills'}
+                data-extension-catalog-tab="skills"
+                onClick={() => setTab('skills')}
               >
-                <button
-                  type="button"
-                  aria-expanded={selected}
-                  className="management-surface-row__select"
-                  onClick={() => {
-                    if (entry.kind === 'skill') setSelectedSkillId(entry.item.id);
-                    else setSelectedExtensionId(entry.item.id);
-                  }}
-                >
-                  <span className="management-surface-icon">
-                    {entry.kind === 'extension' && entry.item.iconDataUrl ? (
-                      <img alt="" src={entry.item.iconDataUrl} />
-                    ) : (
-                      <PackageIcon size={18} />
-                    )}
-                  </span>
-                  <span className="management-surface-copy">
-                    <strong>{name}</strong>
-                    <small>{description || entry.item.id}</small>
-                    <small>
-                      {entry.kind === 'skill'
-                        ? t(`home.capabilities.source.${entry.item.source}`)
-                        : `${entry.item.version} · ${t(
-                            `home.capabilities.agentStatus.${entry.item.agentStatus}`,
-                          )}`}
-                    </small>
-                  </span>
-                </button>
-                {entry.kind === 'extension' ? (
-                  <span className="management-surface-row-actions">
-                    <Switch
-                      aria-label={t('home.capabilities.enablement', {
-                        name: entry.item.displayName,
-                      })}
-                      checked={entry.item.enabled}
-                      className="extension-catalog-enablement"
-                      disabled={
-                        !interactive ||
-                        operationKey !== undefined ||
-                        (entry.item.enabled ? !entry.item.canDisable : !entry.item.canEnable)
-                      }
-                      id={`extension-enablement:${entry.item.id}`}
-                      onCheckedChange={(checked) =>
-                        requestExtensionEnablementChange(entry.item, checked)
-                      }
-                    />
-                  </span>
-                ) : null}
-              </article>
-            );
-          })}
+                {t('home.capabilities.skills')}
+              </button>
+              <button
+                type="button"
+                aria-pressed={tab === 'mcp'}
+                data-extension-catalog-tab="mcp"
+                onClick={() => setTab('mcp')}
+              >
+                MCP
+              </button>
+            </div>
+          ) : null)}
+        <Button
+          data-extension-add-action={tab}
+          disabled={!interactive || loading || pendingIdentity !== undefined}
+          onClick={addCurrent}
+          size="sm"
+        >
+          <PlusIcon size={14} />
+          {tab === 'skills' ? t('extension.skill.add') : t('extension.mcp.add')}
+        </Button>
+      </div>
+      {error ? (
+        <div className="management-surface-diagnostic" role="alert">
+          <WarningIcon size={17} />
+          <span>{error}</span>
         </div>
-      </section>
-      {detail && selectedItemId
-        ? renderDetail
-          ? renderDetail({ content: detail, selectedItemId, tab })
-          : detail
-        : null}
-    </>
-  );
-}
-
-function AgentExtensionOverviewRoot({
-  confirmAction,
-  interactive,
-  onViewOwningPlugin,
-  operationKey,
-  owningExtension,
-  runMutation,
-  runtime,
-  selectedExtension,
-  selectedSkill,
-  tab,
-}: {
-  readonly confirmAction: (message: string) => boolean | Promise<boolean>;
-  readonly interactive: boolean;
-  readonly onViewOwningPlugin: (pluginId: string) => void;
-  readonly operationKey: string | undefined;
-  readonly owningExtension: AgentExtensionCatalogItem | undefined;
-  readonly runMutation: (key: string, operation: () => Promise<void>) => Promise<void>;
-  readonly runtime: AgentExtensionManagementRuntime;
-  readonly selectedExtension: AgentExtensionCatalogItem | undefined;
-  readonly selectedSkill: AgentManagedSkillItem | undefined;
-  readonly tab: AgentExtensionManagementTab;
-}): JSX.Element {
-  const { locale, t } = useTranslation();
-  const item = tab === 'skills' ? selectedSkill : selectedExtension;
-  if (!item) {
-    throw new Error('Extension overview requires an exact selected catalog item.');
-  }
-
-  const name = selectedSkill?.name ?? selectedExtension?.displayName ?? item.id;
-  const description = selectedExtension
-    ? resolveAgentExtensionDescription(selectedExtension, locale)
-    : item.description;
-  const mutationsDisabled = !interactive || operationKey !== undefined;
-  return (
-    <section className="agent-extension-configuration-root" data-configuration-kind={tab}>
-      <header className="extension-configuration-header">
-        <span className="management-surface-icon">
-          {selectedExtension?.iconDataUrl ? (
-            <img alt="" src={selectedExtension.iconDataUrl} />
-          ) : (
-            <PackageIcon size={20} />
-          )}
-        </span>
-        <div>
-          <p className="section-label">{t('home.capabilities.overview')}</p>
-          <h2>{name}</h2>
-          <p>{description || item.id}</p>
-        </div>
-      </header>
-
-      {selectedSkill ? (
-        <div className="extension-configuration-facts">
-          <Definition label={t('home.capabilities.detail.source')}>
-            {t(`home.capabilities.source.${selectedSkill.source}`)}
-          </Definition>
-          <Definition label={t('home.capabilities.detail.identifier')}>
-            {selectedSkill.name}
-          </Definition>
-          {selectedSkill.source === 'plugin' ? (
-            <Definition label={t('home.capabilities.detail.owningPlugin')}>
-              {owningExtension?.displayName ?? selectedSkill.sourceId}
-            </Definition>
-          ) : null}
+      ) : diagnosticCount > 0 ? (
+        <div className="management-surface-diagnostic" role="alert">
+          <WarningIcon size={17} />
+          <span>{t('home.capabilities.discoveryIssues', { count: diagnosticCount })}</span>
         </div>
       ) : null}
-
-      {selectedExtension ? (
-        <>
-          <div className="extension-configuration-facts">
-            <Definition label={t('home.capabilities.detail.source')}>
-              {t(`home.capabilities.deliverySource.${selectedExtension.deliverySource}`)}
-            </Definition>
-            <Definition label={t('home.capabilities.detail.identifier')}>
-              {selectedExtension.id}
-            </Definition>
-            <Definition label={t('home.capabilities.detail.version')}>
-              {selectedExtension.version}
-            </Definition>
-            <Definition label={t('home.capabilities.detail.developer')}>
-              {selectedExtension.developer || selectedExtension.id}
-            </Definition>
-            <Definition label={t('home.capabilities.detail.contributions')}>
-              {describeExtensionContributions(selectedExtension, t)}
-            </Definition>
-            <Definition label={t('home.capabilities.detail.agentStatus')}>
-              {t(`home.capabilities.agentStatus.${selectedExtension.agentStatus}`)}
-              {selectedExtension.runtimeDiagnosticCode
-                ? ` · ${describeRuntimeDiagnostic(selectedExtension.runtimeDiagnosticCode, t)}`
-                : ''}
-            </Definition>
-          </div>
-        </>
+      <ul
+        aria-label={tab === 'skills' ? t('home.capabilities.skills') : 'MCP'}
+        className="management-surface-list is-grid"
+        data-empty={entries.length === 0}
+        role="list"
+      >
+        {entries.length === 0 ? (
+          <EmptyState
+            fill
+            icon={<PackageIcon size={24} />}
+            title={
+              loading
+                ? t('home.capabilities.loading')
+                : tab === 'mcp' &&
+                    catalogEntries.length === 0 &&
+                    query.trim().length === 0 &&
+                    error === undefined
+                  ? t('extension.empty.mcpUnconfigured')
+                  : t('home.capabilities.noEntries')
+            }
+          />
+        ) : null}
+        {entries.map(({ kind, item, presentation }) => (
+          <li
+            aria-label={presentation.name}
+            className="management-surface-row agent-extension-catalog-row"
+            data-extension-kind={kind}
+            data-lifecycle-state={item.enabled ? 'enabled' : 'disabled'}
+            data-selected={selectedEntryIdentity === `${kind}:${item.id}`}
+            key={`${kind}:${item.id}`}
+          >
+            <button
+              aria-pressed={selectedEntryIdentity === `${kind}:${item.id}`}
+              className="agent-extension-catalog-row__open"
+              type="button"
+              onClick={() => setSelectedEntryIdentity(`${kind}:${item.id}`)}
+            >
+              <span className="agent-extension-catalog-row__heading">
+                <span className="management-surface-icon">
+                  {kind === 'skill' ? <CodeIcon size={19} /> : <BotIcon size={19} />}
+                </span>
+                <strong>{presentation.name}</strong>
+                <span className="agent-extension-catalog-row__affordance" aria-hidden="true">
+                  <ChevronRightIcon size={14} />
+                </span>
+              </span>
+              <small className="agent-extension-catalog-row__summary">
+                {presentation.summary || item.id}
+              </small>
+              {kind === 'mcp' && item.status !== 'ready' ? (
+                <small className="agent-extension-catalog-row__diagnostic" role="alert">
+                  {describeMcp(item)}
+                </small>
+              ) : null}
+              <small
+                className="agent-extension-catalog-row__status"
+                data-extension-lifecycle-state={item.enabled ? 'enabled' : 'disabled'}
+              >
+                {item.enabled
+                  ? t('extension.lifecycle.enabled')
+                  : t('extension.lifecycle.disabled')}
+              </small>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {selectedEntry ? (
+        <AgentExtensionDetailOverlay
+          entry={selectedEntry}
+          onClose={() => setSelectedEntryIdentity(undefined)}
+          onRemove={() => setRemoveEntry(selectedEntry)}
+          onSetEnabled={(enabled) => setEnabled(selectedEntry, enabled)}
+          pending={pendingIdentity === `${selectedEntry.kind}:${selectedEntry.item.id}`}
+        />
       ) : null}
-
-      {selectedSkill?.canOpenInEditor ||
-      selectedSkill?.canShowInFolder ||
-      (selectedSkill?.source === 'plugin' && owningExtension) ||
-      selectedSkill?.canRemove ||
-      selectedExtension?.canRemove ? (
-        <div className="extension-configuration-actions">
-          {selectedSkill?.canOpenInEditor ? (
-            <button
-              type="button"
-              disabled={mutationsDisabled}
-              onClick={() =>
-                void runMutation(`open:${selectedSkill.id}`, () =>
-                  runtime.openPersonalSkill(selectedSkill.managementId),
-                )
-              }
-            >
-              <FileIcon size={14} />
-              <span>{t('home.capabilities.openSkillInEditor')}</span>
-            </button>
-          ) : null}
-          {selectedSkill?.canShowInFolder ? (
-            <button
-              type="button"
-              disabled={mutationsDisabled}
-              onClick={() =>
-                void runMutation(`reveal:${selectedSkill.id}`, () =>
-                  runtime.showPersonalSkillInFolder(selectedSkill.managementId),
-                )
-              }
-            >
-              <FolderIcon size={14} />
-              <span>{t('home.capabilities.showSkillInFolder')}</span>
-            </button>
-          ) : null}
-          {selectedSkill?.source === 'plugin' && owningExtension ? (
-            <button
-              type="button"
-              disabled={mutationsDisabled}
-              onClick={() => onViewOwningPlugin(owningExtension.id)}
-            >
-              <ArrowRightIcon size={14} />
-              <span>{t('home.capabilities.viewOwningPlugin')}</span>
-            </button>
-          ) : null}
-          {selectedSkill?.canRemove || selectedExtension?.canRemove ? (
-            <button
-              type="button"
-              disabled={mutationsDisabled}
-              onClick={() => {
-                const message = selectedSkill
-                  ? t('home.capabilities.confirmRemoveSkill', { name })
-                  : t('home.capabilities.confirmRemovePlugin', { name });
-                void Promise.resolve(confirmAction(message)).then((confirmed) => {
-                  if (!confirmed) return;
-                  void runMutation(`remove:${item.id}`, () => {
-                    if (selectedSkill) {
-                      return runtime.removePersonalSkill(selectedSkill.managementId);
-                    }
-                    if (!selectedExtension) {
-                      throw new Error('Extension management selection is invalid.');
-                    }
-                    return runtime.removePlugin(selectedExtension.id);
-                  });
-                });
-              }}
-            >
-              <TrashIcon size={14} />
-              <span>{t('home.capabilities.remove')}</span>
-            </button>
-          ) : null}
+      <McpAddDialog
+        draft={mcpDraft}
+        onAdd={addMcp}
+        onChange={setMcpDraft}
+        onOpenChange={setAddMcpOpen}
+        open={addMcpOpen}
+        pending={pendingIdentity === 'mcp:add'}
+      />
+      <Dialog
+        closeLabel={t('extension.lifecycle.cancel')}
+        description={
+          removeEntry?.kind === 'skill'
+            ? t('extension.lifecycle.removeSkillDescription')
+            : t('extension.lifecycle.removeMcpDescription')
+        }
+        onOpenChange={(open) => {
+          if (!open) setRemoveEntry(undefined);
+        }}
+        open={removeEntry !== undefined}
+        title={t('extension.lifecycle.removeTitle')}
+      >
+        <div className="extension-lifecycle-confirm-actions">
+          <Button onClick={() => setRemoveEntry(undefined)} variant="secondary">
+            {t('extension.lifecycle.cancel')}
+          </Button>
+          <Button
+            disabled={!removeEntry || pendingIdentity !== undefined}
+            onClick={() => removeEntry && remove(removeEntry)}
+          >
+            <TrashIcon size={14} />
+            {t('extension.lifecycle.remove')}
+          </Button>
         </div>
-      ) : null}
+      </Dialog>
     </section>
   );
 }
 
-function Definition({ children, label }: { readonly children: ReactNode; readonly label: string }) {
+function AgentExtensionDetailOverlay({
+  entry,
+  onClose,
+  onRemove,
+  onSetEnabled,
+  pending,
+}: {
+  readonly entry: AgentExtensionCatalogEntry;
+  readonly onClose: () => void;
+  readonly onRemove: () => void;
+  readonly onSetEnabled: (enabled: boolean) => void;
+  readonly pending: boolean;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const { item, kind, presentation } = entry;
   return (
-    <div className="extension-configuration-fact">
-      <dt>{label}</dt>
-      <dd>{children}</dd>
-    </div>
+    <Dialog
+      className="extension-detail-overlay agent-extension-detail-overlay"
+      closeLabel={t('extension.detail.close')}
+      description={presentation.summary || item.description}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      open
+      title={presentation.name}
+    >
+      <div className="extension-detail-overlay__content" data-extension-detail-kind={kind}>
+        <header className="extension-detail-overlay__identity">
+          <span className="extension-detail-overlay__avatar">
+            {kind === 'skill' ? <CodeIcon size={24} /> : <BotIcon size={24} />}
+          </span>
+          <div>
+            <div className="extension-detail-overlay__tags">
+              <span>{kind === 'skill' ? 'Skill' : 'MCP'}</span>
+              {kind === 'skill' ? <span>{item.source}</span> : <span>{item.status}</span>}
+            </div>
+          </div>
+        </header>
+        {kind === 'skill' && item.whenToUse && item.whenToUse !== presentation.summary ? (
+          <section className="extension-detail-overlay__section">
+            <h3>{t('extension.detail.whenToUse')}</h3>
+            <p className="extension-detail-overlay__long-copy">{item.whenToUse}</p>
+          </section>
+        ) : null}
+        <section className="extension-detail-overlay__section">
+          <h3>{t('extension.detail.capabilityInfo')}</h3>
+          <dl className="extension-detail-overlay__facts">
+            <div>
+              <dt>{t('extension.detail.identity')}</dt>
+              <dd>{item.id}</dd>
+            </div>
+            {kind === 'skill' ? (
+              <>
+                <div>
+                  <dt>{t('extension.detail.source')}</dt>
+                  <dd>{item.source}</dd>
+                </div>
+                <div>
+                  <dt>{t('extension.detail.provider')}</dt>
+                  <dd>{item.provider}</dd>
+                </div>
+                <div>
+                  <dt>{t('extension.detail.invocation')}</dt>
+                  <dd>
+                    {item.userInvocable
+                      ? t('extension.detail.userInvocable')
+                      : t('extension.detail.notUserInvocable')}
+                    {' · '}
+                    {item.modelInvocable
+                      ? t('extension.detail.modelInvocable')
+                      : t('extension.detail.notModelInvocable')}
+                  </dd>
+                </div>
+              </>
+            ) : (
+              <div>
+                <dt>{t('extension.detail.status')}</dt>
+                <dd>{describeMcp(item)}</dd>
+              </div>
+            )}
+          </dl>
+        </section>
+        {kind === 'mcp' && item.status !== 'ready' ? (
+          <div className="management-surface-diagnostic" role="alert">
+            <WarningIcon size={17} />
+            <span>{describeMcp(item)}</span>
+          </div>
+        ) : null}
+        <section className="extension-detail-overlay__section">
+          <h3>{t('extension.lifecycle.management')}</h3>
+          <div className="extension-detail-overlay__actions">
+            {kind === 'mcp' || item.manageable ? (
+              <Button
+                disabled={pending}
+                onClick={() => onSetEnabled(!item.enabled)}
+                size="sm"
+                variant="secondary"
+              >
+                {item.enabled ? t('extension.lifecycle.disable') : t('extension.lifecycle.enable')}
+              </Button>
+            ) : (
+              <span>{t('extension.lifecycle.readOnly')}</span>
+            )}
+            {kind === 'mcp' || item.removable ? (
+              <Button disabled={pending} onClick={onRemove} size="sm" variant="secondary">
+                <TrashIcon size={14} />
+                {t('extension.lifecycle.remove')}
+              </Button>
+            ) : null}
+          </div>
+        </section>
+      </div>
+    </Dialog>
   );
 }
 
-export function searchAndOrderAgentSkills(
-  skills: readonly AgentManagedSkillItem[],
-  query: string,
-): readonly AgentManagedSkillItem[] {
-  const normalized = query.trim().toLocaleLowerCase();
-  return [...skills]
-    .filter((item) =>
-      `${item.name} ${item.description} ${item.source}`.toLocaleLowerCase().includes(normalized),
-    )
-    .sort((left, right) => {
-      if (left.source !== right.source) return left.source === 'personal' ? -1 : 1;
-      return left.name.localeCompare(right.name);
-    });
+function McpAddDialog({
+  draft,
+  onAdd,
+  onChange,
+  onOpenChange,
+  open,
+  pending,
+}: {
+  readonly draft: {
+    readonly serverName: string;
+    readonly description: string;
+    readonly transport: 'stdio' | 'streamable-http';
+    readonly command: string;
+    readonly args: string;
+    readonly url: string;
+  };
+  readonly onAdd: () => void;
+  readonly onChange: (value: {
+    readonly serverName: string;
+    readonly description: string;
+    readonly transport: 'stdio' | 'streamable-http';
+    readonly command: string;
+    readonly args: string;
+    readonly url: string;
+  }) => void;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly open: boolean;
+  readonly pending: boolean;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const valid =
+    draft.serverName.trim().length > 0 &&
+    (draft.transport === 'stdio' ? draft.command.trim().length > 0 : draft.url.trim().length > 0);
+  return (
+    <Dialog
+      closeLabel={t('extension.lifecycle.cancel')}
+      description={t('extension.mcp.addDescription')}
+      onOpenChange={onOpenChange}
+      open={open}
+      title={t('extension.mcp.add')}
+    >
+      <div className="extension-mcp-add-form">
+        <label>
+          <span>{t('extension.mcp.serverName')}</span>
+          <input
+            value={draft.serverName}
+            onChange={(event) => onChange({ ...draft, serverName: event.currentTarget.value })}
+          />
+        </label>
+        <label>
+          <span>{t('extension.mcp.description')}</span>
+          <input
+            value={draft.description}
+            onChange={(event) => onChange({ ...draft, description: event.currentTarget.value })}
+          />
+        </label>
+        <label>
+          <span>{t('extension.mcp.transport')}</span>
+          <select
+            value={draft.transport}
+            onChange={(event) =>
+              onChange({
+                ...draft,
+                transport: event.currentTarget.value as 'stdio' | 'streamable-http',
+              })
+            }
+          >
+            <option value="stdio">stdio</option>
+            <option value="streamable-http">streamable-http</option>
+          </select>
+        </label>
+        {draft.transport === 'stdio' ? (
+          <>
+            <label>
+              <span>{t('extension.mcp.command')}</span>
+              <input
+                value={draft.command}
+                onChange={(event) => onChange({ ...draft, command: event.currentTarget.value })}
+              />
+            </label>
+            <label>
+              <span>{t('extension.mcp.args')}</span>
+              <textarea
+                value={draft.args}
+                onChange={(event) => onChange({ ...draft, args: event.currentTarget.value })}
+              />
+            </label>
+          </>
+        ) : (
+          <label>
+            <span>URL</span>
+            <input
+              value={draft.url}
+              onChange={(event) => onChange({ ...draft, url: event.currentTarget.value })}
+            />
+          </label>
+        )}
+        <div className="extension-lifecycle-confirm-actions">
+          <Button onClick={() => onOpenChange(false)} variant="secondary">
+            {t('extension.lifecycle.cancel')}
+          </Button>
+          <Button disabled={!valid || pending} onClick={onAdd}>
+            <PlusIcon size={14} />
+            {t('extension.mcp.add')}
+          </Button>
+        </div>
+      </div>
+    </Dialog>
+  );
 }
 
-export function searchAndOrderAgentExtensions(
-  extensions: readonly AgentExtensionCatalogItem[],
-  query: string,
-  locale = 'en',
-): readonly AgentExtensionCatalogItem[] {
-  const normalized = query.trim().toLocaleLowerCase();
-  return [...extensions]
-    .filter((item) =>
-      [item.id, item.displayName, resolveAgentExtensionDescription(item, locale), item.developer]
-        .join(' ')
-        .toLocaleLowerCase()
-        .includes(normalized),
-    )
-    .sort((left, right) => {
-      return left.displayName.localeCompare(right.displayName);
-    });
+type Translate = (key: string, params?: Record<string, string | number>) => string;
+
+interface AgentExtensionCatalogPresentation {
+  readonly name: string;
+  readonly summary: string;
 }
 
-export function resolveAgentExtensionDescription(
-  extension: AgentExtensionCatalogItem,
-  locale: string,
-): string {
-  return extension.localization[locale]?.description ?? extension.description;
+type AgentExtensionCatalogEntry =
+  | {
+      readonly kind: 'skill';
+      readonly item: AgentManagedSkillItem;
+      readonly presentation: AgentExtensionCatalogPresentation;
+    }
+  | {
+      readonly kind: 'mcp';
+      readonly item: AgentManagedMcpItem;
+      readonly presentation: AgentExtensionCatalogPresentation;
+    };
+
+const BUILTIN_SKILL_PRESENTATION_NAMES = new Set([
+  'audio-mixing',
+  'character-creator',
+  'color-grading',
+  'content-authoring',
+  'image',
+  'media-production',
+  'scene-to-music',
+  'script-generation',
+  'script-to-timeline',
+  'skill-creator',
+  'storyboard',
+  'subtitle-assistant',
+  'video',
+  'video-editing',
+  'world-creator',
+]);
+
+function presentSkill(
+  item: AgentManagedSkillItem,
+  t: Translate,
+): AgentExtensionCatalogPresentation {
+  if (item.source !== 'bundled' || !BUILTIN_SKILL_PRESENTATION_NAMES.has(item.name)) {
+    return { name: item.name, summary: (item.whenToUse ?? item.description) || item.id };
+  }
+  return {
+    name: t(`skill.catalog.${item.name}.title`),
+    summary: t(`skill.catalog.${item.name}.summary`),
+  };
 }
 
-function describeExtensionContributions(
-  extension: AgentExtensionCatalogItem,
-  t: (key: string, values?: Record<string, string | number>) => string,
-): string {
-  const contributions = [
-    ...(extension.componentReadiness.mcp.status === 'absent'
-      ? []
-      : [
-          `${t('home.capabilities.extensionMcp', {
-            ids: extension.mcpServerIds.join(', ') || '—',
-          })} (${t(`home.capabilities.agentStatus.${extension.componentReadiness.mcp.status}`)})`,
-        ]),
-    ...(extension.componentReadiness.skills.status === 'absent'
-      ? []
-      : [
-          `${t('home.capabilities.extensionSkills')} (${t(
-            `home.capabilities.agentStatus.${extension.componentReadiness.skills.status}`,
-          )})`,
-        ]),
-    ...(extension.componentReadiness.apps.status === 'absent'
-      ? []
-      : [
-          `${t('home.capabilities.extensionApps', {
-            ids: extension.appIds.join(', ') || '—',
-          })} (${t(`home.capabilities.agentStatus.${extension.componentReadiness.apps.status}`)})`,
-        ]),
-  ];
-  return contributions.join(' · ') || t('home.capabilities.extensionNoContributions');
-}
-
-function describeRuntimeDiagnostic(
-  code: string,
-  t: (key: string, values?: Record<string, string | number>) => string,
-): string {
-  return t('home.capabilities.runtimeDiagnostic.other', { code });
+function describeMcp(item: AgentManagedMcpItem): string {
+  return `${item.status}${item.diagnosticCode ? ` · ${item.diagnosticCode}` : ''}`;
 }

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import {
   CUT_HOST_RUNTIME_ROUTES,
   CutDocumentSession,
@@ -27,7 +27,8 @@ import {
   parseContentLocatorDragData,
   type ContentLocator,
   type ContentLocatorDragData,
-} from '@neko/content';
+} from '@neko/content-domain';
+import { CutExportApplicationService } from './CutExportApplicationService';
 import { CutExportTaskRegistry } from './CutExportTaskRegistry';
 import {
   CutPreviewRuntimeController,
@@ -37,6 +38,7 @@ import { CutWorkspaceMediaImporter } from './CutWorkspaceMediaImporter';
 import { CutWorkspaceMediaPaths } from './CutWorkspaceMediaPaths';
 import { NodeFfmpegCutMediaAdapter } from './NodeFfmpegCutMediaAdapter';
 import { createInMemoryExportJobStore } from './export-job/store';
+import type { ExportJobStore } from './export-job';
 import { freezeCutExportRequest, readCutExportSettings } from './cutExportRequest';
 import { generateClipRepresentations, readClipRepresentationRequests } from './clipRepresentations';
 import type { NodeMediaPublisher } from '@neko/media/node';
@@ -104,6 +106,7 @@ export interface CutApplicationRuntimeOptions {
   ) => Pick<CutMediaRuntimeAdapter, 'probe' | 'dispose'>;
   readonly createPreviewMediaAdapter?: (workspacePath: string) => CutMediaRuntimeAdapter;
   readonly createExportMediaAdapter?: (workspacePath: string) => CutMediaRuntimeAdapter;
+  readonly createExportJobStore?: (workspaceId: string) => ExportJobStore;
   readonly selectExportDestination?: (input: {
     readonly identity: CutHostRuntimeIdentity;
     readonly workspacePath: string;
@@ -128,15 +131,10 @@ export class CutApplicationRuntime {
   private readonly operationTails = new Map<string, Promise<void>>();
   private readonly pendingDisposals = new Set<Promise<void>>();
   private readonly presentationSnapshots = new Map<string, CutPresentationSnapshotEntry>();
-  private readonly exportTasks: CutExportTaskRegistry;
+  private readonly exportTasks = new Map<string, CutExportTaskRegistry>();
   private disposed = false;
 
-  constructor(private readonly options: CutApplicationRuntimeOptions) {
-    this.exportTasks = new CutExportTaskRegistry({
-      store: createInMemoryExportJobStore(),
-      onUpdate: (task) => this.projectExportTaskUpdate(task.sessionId),
-    });
-  }
+  constructor(private readonly options: CutApplicationRuntimeOptions) {}
 
   async addResource(input: {
     readonly resourceIdentity: ResourceBrowserIdentity;
@@ -289,6 +287,14 @@ export class CutApplicationRuntime {
   hasSession(identity: CutHostRuntimeIdentity): boolean {
     this.requireActive();
     return this.sessions.has(cutSessionKey(identity));
+  }
+
+  async recoverExportJobs(input: {
+    readonly workspaceId: string;
+    readonly workspacePath: string;
+  }): Promise<void> {
+    this.requireActive();
+    await this.exportTasksForWorkspace(input.workspaceId, input.workspacePath).recover();
   }
 
   createDraft(input: {
@@ -523,50 +529,19 @@ export class CutApplicationRuntime {
         const outputWorkspaceRelativePath = selectedDestination;
         assertWorkspaceRelativeExportPath(outputWorkspaceRelativePath, frozen.settings.container);
         await entry.preview.stop(request.requestId);
-        await this.exportTasks.start({
+        await this.exportTasksFor(entry).start({
           documentUri: frozen.documentUri,
           sessionId: frozen.sessionId,
           sourceSnapshotId: frozen.sourceSnapshotId,
+          timeline: frozen.timeline,
           settings: frozen.settings,
           outputWorkspaceRelativePath,
-          run: async (signal) => {
-            const adapter =
-              this.options.createExportMediaAdapter?.(entry.workspacePath) ??
-              this.createNodeMediaAdapter(
-                entry.workspacePath,
-                entry.identity,
-                frozen.sourceSnapshotId,
-              );
-            try {
-              await adapter.export(
-                {
-                  timeline: Object.freeze({
-                    ...frozen.timeline,
-                    documentUri: pathToFileURL(entry.documentPath).href,
-                  }),
-                  outputWorkspaceRelativePath,
-                  settings: frozen.settings,
-                },
-                signal,
-              );
-            } catch (error: unknown) {
-              this.options.reportExportFailure?.({
-                identity: entry.identity,
-                sourceSnapshotId: frozen.sourceSnapshotId,
-                outputWorkspaceRelativePath,
-                error,
-              });
-              throw error;
-            } finally {
-              await adapter.dispose();
-            }
-          },
         });
         break;
       }
       case CUT_HOST_RUNTIME_ROUTES.exportCancel: {
         const jobId = requireExportCancelPayload(request.payload);
-        await this.exportTasks.cancel(entry.identity.documentId, jobId);
+        await this.exportTasksFor(entry).cancel(entry.identity.documentId, jobId);
         break;
       }
       case CUT_HOST_RUNTIME_ROUTES.representationResolve: {
@@ -740,7 +715,7 @@ export class CutApplicationRuntime {
     this.sessions.clear();
     this.presentationSnapshots.clear();
     const results = await Promise.allSettled(this.pendingDisposals);
-    await this.exportTasks.dispose();
+    await Promise.all([...this.exportTasks.values()].map((registry) => registry.dispose()));
     const failures = results.flatMap((result) =>
       result.status === 'rejected' ? [result.reason] : [],
     );
@@ -844,7 +819,7 @@ export class CutApplicationRuntime {
       document: entry.session.view(),
       playback: { status: 'idle' },
       export: {
-        tasks: this.exportTasks
+        tasks: this.exportTasksFor(entry)
           .list(entry.identity.documentId)
           .filter((task) => task.sessionId === entry.identity.sessionId),
       },
@@ -934,6 +909,53 @@ export class CutApplicationRuntime {
     for (const entry of this.sessions.values()) {
       if (entry.identity.sessionId === sessionId) this.publish(entry);
     }
+  }
+
+  private exportTasksFor(entry: CutApplicationRuntimeEntry): CutExportTaskRegistry {
+    return this.exportTasksForWorkspace(entry.identity.workspaceId, entry.workspacePath);
+  }
+
+  resolveExportService(input: {
+    readonly workspaceId: string;
+    readonly workspacePath: string;
+    readonly authoring: Pick<import('@neko/cut-domain').CutProjectAuthoringService, 'query'>;
+  }): CutExportApplicationService {
+    this.requireActive();
+    return new CutExportApplicationService({
+      authoring: input.authoring,
+      registry: this.exportTasksForWorkspace(input.workspaceId, input.workspacePath),
+    });
+  }
+
+  private exportTasksForWorkspace(
+    workspaceId: string,
+    workspacePath: string,
+  ): CutExportTaskRegistry {
+    const key = workspaceId;
+    const current = this.exportTasks.get(key);
+    if (current) return current;
+    const registry = new CutExportTaskRegistry({
+      store: this.options.createExportJobStore?.(key) ?? createInMemoryExportJobStore(),
+      workspacePath,
+      ...(this.options.createExportMediaAdapter === undefined
+        ? {}
+        : { createMediaAdapter: this.options.createExportMediaAdapter }),
+      onFailure: (task) => {
+        const entry = [...this.sessions.values()].find(
+          (candidate) => candidate.identity.sessionId === task.sessionId,
+        );
+        if (!entry) return;
+        this.options.reportExportFailure?.({
+          identity: entry.identity,
+          sourceSnapshotId: task.sourceSnapshotId,
+          outputWorkspaceRelativePath: task.outputWorkspaceRelativePath,
+          error: new Error(task.diagnostic?.code ?? 'Cut export Job failed.'),
+        });
+      },
+      onUpdate: (task) => this.projectExportTaskUpdate(task.sessionId),
+    });
+    this.exportTasks.set(key, registry);
+    return registry;
   }
 
   private publish(
@@ -1031,7 +1053,9 @@ function projectCutAgentContext(
   const track = view.tracks.find((candidate) => candidate.trackId === selection.trackId);
   if (!track) throw new Error(`Cut Agent target Track '${selection.trackId}' is stale.`);
   const document = {
-    locator: { kind: 'workspace-file' as const, path: entry.identity.documentId },
+    locator: {
+      file: { authority: 'workspace' as const, path: entry.identity.documentId },
+    },
     sessionId: entry.identity.sessionId,
   };
   if (selection.kind === 'track') {

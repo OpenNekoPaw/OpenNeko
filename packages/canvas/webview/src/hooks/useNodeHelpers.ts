@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { DroppedTextCanvasAsset } from '@neko/canvas-domain';
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 import type { CanvasNode, MarkdownCanvasNode } from '@neko/canvas-domain';
 import { buildCanvasNode } from '../utils/nodeFactory';
 
@@ -22,6 +22,7 @@ export interface UseNodeHelpersReturn {
     options?: {
       contentLocator: ContentLocator;
       runtimeAssetPath?: string;
+      intrinsicDimensions?: { readonly width: number; readonly height: number };
     },
   ) => void;
   addGroupAt: (pos: { x: number; y: number }) => void;
@@ -113,6 +114,7 @@ export function useNodeHelpers(options: UseNodeHelpersOptions): UseNodeHelpersRe
       options?: {
         contentLocator?: ContentLocator;
         runtimeAssetPath?: string;
+        intrinsicDimensions?: { readonly width: number; readonly height: number };
       },
     ) => {
       const contentLocator = options?.contentLocator;
@@ -131,6 +133,9 @@ export function useNodeHelpers(options: UseNodeHelpersOptions): UseNodeHelpersRe
             ...(runtimePath ? { runtimeAssetPath: runtimePath } : {}),
             ...(name ? { title: name } : {}),
             mediaType,
+            ...(options?.intrinsicDimensions
+              ? { intrinsicDimensions: options.intrinsicDimensions }
+              : {}),
           },
         }),
       );

@@ -1,5 +1,5 @@
 import { type CanvasHostRuntimeIdentity } from '@neko/canvas-domain';
-import { isContentLocator, type ContentLocator } from '@neko/content';
+import { isContentLocator, type ContentLocator } from '@neko/content-domain';
 
 interface DesktopCanvasWebviewDelegate {
   postMessage(message: unknown): void;
@@ -19,7 +19,6 @@ export function createDesktopCanvasWebviewDelegate(
   };
   return {
     supportsMessage: (messageType) =>
-      messageType === 'preview:resolveVariant' ||
       messageType === 'preview:resolveResource' ||
       messageType === 'preview:releaseResource',
     postMessage(message) {
@@ -46,32 +45,7 @@ export function createDesktopCanvasWebviewDelegate(
         void window.openNekoDesktop.canvas.releasePreviewResource({ identity, descriptorId });
         return;
       }
-      const request = parsePreviewVariantMessage(message);
-      void window.openNekoDesktop.canvas
-        .resolvePreviewVariant({
-          identity,
-          requestId: request.requestId,
-          sourceId: request.sourceId,
-          locator: request.contentLocator,
-          role: request.role,
-          ...(request.mediaType === undefined ? {} : { mediaType: request.mediaType }),
-        })
-        .then(
-          (result) => {
-            emit({
-              type: 'preview:variantResolved',
-              requestId: result.requestId,
-              url: result.url,
-            });
-          },
-          (error: unknown) => {
-            emit({
-              type: 'preview:variantResolved',
-              requestId: request.requestId,
-              error: describeError(error),
-            });
-          },
-        );
+      throw new Error('Desktop Canvas delegate received an unsupported message.');
     },
     getState: () => state,
     setState(nextState) {
@@ -108,45 +82,6 @@ function parsePreviewResourceMessage(message: Record<string, unknown>) {
     mediaType: requireString(message['mediaType'], 'preview resource media type'),
     displayName: requireString(message['displayName'], 'preview resource display name'),
   } as const;
-}
-
-function parsePreviewVariantMessage(message: unknown): {
-  readonly requestId: string;
-  readonly sourceId: string;
-  readonly contentLocator: ContentLocator;
-  readonly role: 'source' | 'thumbnail' | 'proxy' | 'fov-crop';
-  readonly mediaType?: string;
-} {
-  if (!isRecord(message) || message['type'] !== 'preview:resolveVariant') {
-    throw new Error('Desktop Canvas delegate received an unsupported message.');
-  }
-  const requestId = message['requestId'];
-  const sourceId = message['sourceId'];
-  const contentLocator = readPreviewContentLocator(message);
-  const role = message['role'];
-  const mediaType = message['mediaType'];
-  if (
-    typeof requestId !== 'string' ||
-    requestId.length === 0 ||
-    typeof sourceId !== 'string' ||
-    sourceId.length === 0 ||
-    !contentLocator
-  ) {
-    throw new Error('Desktop Canvas preview message is invalid.');
-  }
-  if (role !== 'source' && role !== 'thumbnail' && role !== 'proxy' && role !== 'fov-crop') {
-    throw new Error('Desktop Canvas preview role is invalid.');
-  }
-  if (mediaType !== undefined && (typeof mediaType !== 'string' || mediaType.length === 0)) {
-    throw new Error('Desktop Canvas preview media type is invalid.');
-  }
-  return {
-    requestId,
-    sourceId,
-    contentLocator,
-    role,
-    ...(mediaType === undefined ? {} : { mediaType }),
-  };
 }
 
 function readPreviewContentLocator(message: Record<string, unknown>): ContentLocator | undefined {

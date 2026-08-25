@@ -21,7 +21,6 @@ export function CharacterDialogueTargetSelector({
 }: CharacterDialogueTargetSelectorProps): JSX.Element {
   const { t } = useTranslation();
   const targetsByProject = groupTargetsByProject(targets);
-
   return (
     <section
       className="agent-entry-character-selector"
@@ -76,8 +75,9 @@ export function CharacterDialogueTargetSelector({
                       );
                       return;
                     }
-                    if (versions.length !== 1 || !versions[0]) return;
-                    onChange([...selected, selectionFromTarget(versions[0])]);
+                    if (versions.length === 1 && versions[0]) {
+                      onChange([...selected, selectionFromTarget(versions[0])]);
+                    }
                   }}
                 />
                 {versions.length > 1 ? (
@@ -113,7 +113,7 @@ export function CharacterDialogueTargetSelector({
                       </option>
                       {versions.map((target) => (
                         <option key={target.characterVersionId} value={target.characterVersionId}>
-                          {`${target.versionLabel} — ${presentLineage(target, t)}`}
+                          {`${target.versionLabel} - ${presentLineage(target, t)}`}
                         </option>
                       ))}
                     </select>
@@ -148,13 +148,13 @@ function groupTargetsByProject(targets: readonly AgentCharacterDialogueTargetOpt
         );
       }
       current.versions.push(target);
-      continue;
+    } else {
+      groups.set(target.globalCharacterId, {
+        globalCharacterId: target.globalCharacterId,
+        displayName: target.displayName,
+        versions: [target],
+      });
     }
-    groups.set(target.globalCharacterId, {
-      globalCharacterId: target.globalCharacterId,
-      displayName: target.displayName,
-      versions: [target],
-    });
   }
   return [...groups.values()];
 }
@@ -178,5 +178,5 @@ function presentLineage(target: AgentCharacterDialogueTargetOption, t: Translati
       : undefined,
     target.lineage.isHead ? t('chat.entryExperience.characterDialogue.head') : undefined,
   ].filter((value): value is string => value !== undefined);
-  return states.length > 0 ? `${states.join(' · ')} · ${path}` : path;
+  return states.length > 0 ? `${states.join(' / ')} / ${path}` : path;
 }

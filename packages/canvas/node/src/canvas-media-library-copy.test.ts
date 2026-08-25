@@ -32,7 +32,7 @@ describe('CanvasMediaLibraryCopyService', () => {
       request: {
         kind: 'copy-to-project-media-library',
         identity: materialIdentity(fixture.identity),
-        source: { kind: 'workspace-file', path: 'source/shot.mp4' },
+        source: { file: { authority: 'workspace', path: 'source/shot.mp4' } },
         libraryName: 'Editorial',
         destinationDirectory: 'Sequences',
         fileName: 'shot.mp4',
@@ -43,11 +43,9 @@ describe('CanvasMediaLibraryCopyService', () => {
     expect(result).toEqual({
       status: 'copied',
       destinationKind: 'project-media-library',
-      source: { kind: 'workspace-file', path: 'source/shot.mp4' },
+      source: { file: { authority: 'workspace', path: 'source/shot.mp4' } },
       destination: {
-        kind: 'media-library',
-        libraryName: 'Editorial',
-        relativePath: 'Sequences/shot.mp4',
+        file: { authority: 'workspace', path: 'neko/assets/Editorial/Sequences/shot.mp4' },
       },
       byteLength: 12,
     });
@@ -75,7 +73,7 @@ describe('CanvasMediaLibraryCopyService', () => {
       request: {
         kind: 'copy-to-global-media-library',
         identity: materialIdentity(fixture.identity),
-        source: { kind: 'workspace-file', path: 'source/portrait.png' },
+        source: { file: { authority: 'workspace', path: 'source/portrait.png' } },
         globalLibraryId: libraryId,
         destinationDirectory: 'Characters',
         fileName: 'portrait.png',
@@ -86,7 +84,7 @@ describe('CanvasMediaLibraryCopyService', () => {
     expect(result).toEqual({
       status: 'copied',
       destinationKind: 'global-media-library',
-      source: { kind: 'workspace-file', path: 'source/portrait.png' },
+      source: { file: { authority: 'workspace', path: 'source/portrait.png' } },
       globalLibraryId: libraryId,
       entryId: 'Characters/portrait.png',
       byteLength: 8,
@@ -124,7 +122,7 @@ describe('CanvasMediaLibraryCopyService', () => {
         request: {
           kind: 'copy-to-project-media-library',
           identity: { ...materialIdentity(fixture.identity), canvasSessionId: 'stale-session' },
-          source: { kind: 'workspace-file', path: 'source/portrait.png' },
+          source: { file: { authority: 'workspace', path: 'source/portrait.png' } },
           libraryName: 'Editorial',
           destinationDirectory: '',
           fileName: 'portrait.png',

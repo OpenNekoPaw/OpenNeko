@@ -14,6 +14,6 @@ export function resolveDesktopBuiltinSkillRoot(input: ResolveDesktopBuiltinSkill
     : resolveDesktopBuiltinSkillSourceRoot(input.appPath);
 }
 
-export function resolveDesktopBuiltinSkillSourceRoot(desktopAppPath: string): string {
+function resolveDesktopBuiltinSkillSourceRoot(desktopAppPath: string): string {
   return resolve(desktopAppPath, '../../packages/skills/skills');
 }

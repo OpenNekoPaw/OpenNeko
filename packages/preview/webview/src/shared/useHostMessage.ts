@@ -1,7 +1,7 @@
 /** Typed window messaging for embeddable preview viewers. */
 
-import { useEffect, useCallback, useRef } from 'react';
-import type { WebviewMessage, HostMessage, ReadyMessage } from './types';
+import { useEffect, useRef } from 'react';
+import type { WebviewMessage, HostMessage } from './types';
 import { getBrowserHostState } from './browserHostState';
 
 /**
@@ -29,22 +29,4 @@ export function useHostMessage(handler: (message: HostMessage) => void): void {
     window.addEventListener('message', listener);
     return () => window.removeEventListener('message', listener);
   }, []);
-}
-
-/**
- * Hook that sends 'ready' on mount and provides postMessage
- */
-export function useHostReady(readyMessage: ReadyMessage = { type: 'ready' }): {
-  postMessage: (message: WebviewMessage) => void;
-} {
-  const readyMessageRef = useRef(readyMessage);
-  const post = useCallback((message: WebviewMessage) => {
-    postMessage(message);
-  }, []);
-
-  useEffect(() => {
-    postMessage(readyMessageRef.current);
-  }, []);
-
-  return { postMessage: post };
 }

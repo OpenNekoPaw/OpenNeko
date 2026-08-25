@@ -63,6 +63,23 @@ describe('@neko/ui button primitives', () => {
     expect(onClick).not.toHaveBeenCalled();
   });
 
+  it('uses canonical button colors for default primary controls', () => {
+    act(() => {
+      root.render(
+        <>
+          <Button>Apply</Button>
+          <IconButton label="Confirm" icon={<span data-testid="icon" />} variant="default" />
+        </>,
+      );
+    });
+
+    const [button, iconButton] = host.querySelectorAll('button');
+    expect(button?.className).toContain('var(--neko-button-background,var(--neko-accent))');
+    expect(iconButton?.className).toContain('var(--neko-button-background,var(--neko-accent))');
+    expect(button?.className).toContain('var(--neko-button-hoverBackground');
+    expect(iconButton?.className).toContain('var(--neko-button-hoverBackground');
+  });
+
   it('renders IconButton with accessible label', () => {
     act(() => {
       root.render(<IconButton label="Confirm" icon={<span data-testid="icon" />} />);

@@ -1446,7 +1446,31 @@ html.canvas-webview-document #root,
   color: var(--node-fg-secondary);
   font-size: 12px;
   line-height: 18px;
-  pointer-events: none;
+  cursor: inherit;
+  pointer-events: auto;
+}
+
+.canvas-node-drag-rail {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 1;
+  height: 8px;
+  cursor: inherit;
+}
+
+.canvas-node-drag-rail--top {
+  top: -8px;
+}
+
+.canvas-node-drag-rail--bottom {
+  bottom: -8px;
+}
+
+.canvas-text-reference-node > .canvas-node-external-label {
+  top: -20px;
+  font-size: 10px;
+  line-height: 15px;
 }
 
 .canvas-node-external-label > span:last-child {
@@ -1454,6 +1478,10 @@ html.canvas-webview-document #root,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.canvas-image-node-frame > .canvas-node-external-label {
+  max-width: 120px;
 }
 
 .canvas-node-external-label > svg,
@@ -1604,27 +1632,27 @@ html.canvas-webview-document #root,
   flex: none;
   overflow: hidden;
   color: var(--node-fg);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  line-height: 16px;
+  line-height: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .canvas-markdown-node__preview,
-.canvas-markdown-node__editor,
-.canvas-markdown-rich-surface,
-.canvas-markdown-rich-surface__mount,
-.canvas-markdown-rich-surface__mount > .milkdown {
+.canvas-markdown-node__document {
   min-width: 0;
   min-height: 0;
 }
 
-.canvas-markdown-node__preview,
-.canvas-markdown-node__editor {
+.canvas-markdown-node__preview {
   position: relative;
   flex: 1;
   overflow: auto;
+}
+
+.canvas-webview-root [data-canvas-wheel-owner='content'] {
+  overscroll-behavior: contain;
 }
 
 .canvas-markdown-node__document {
@@ -1671,93 +1699,6 @@ html.canvas-webview-document #root,
 .canvas-markdown-node__document ul,
 .canvas-markdown-node__document ol {
   padding-inline-start: 1.35em;
-}
-
-.canvas-markdown-node__editor,
-.canvas-markdown-rich-surface,
-.canvas-markdown-rich-surface__mount,
-.canvas-markdown-rich-surface__mount > .milkdown,
-.canvas-markdown-rich-surface__mount .ProseMirror {
-  height: 100%;
-}
-
-.canvas-markdown-rich-surface__mount .ProseMirror {
-  box-sizing: border-box;
-  min-height: 100%;
-  padding: 1px 2px 18px;
-  outline: none;
-  color: var(--node-fg);
-  font-family: inherit;
-  font-size: 12px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-  user-select: text;
-  white-space: pre-wrap;
-}
-
-.canvas-markdown-rich-surface__mount .ProseMirror > :first-child {
-  margin-top: 0;
-}
-
-.canvas-markdown-rich-surface__mount .ProseMirror h1,
-.canvas-markdown-rich-surface__mount .ProseMirror h2,
-.canvas-markdown-rich-surface__mount .ProseMirror h3,
-.canvas-markdown-rich-surface__mount .ProseMirror h4,
-.canvas-markdown-rich-surface__mount .ProseMirror h5,
-.canvas-markdown-rich-surface__mount .ProseMirror h6 {
-  margin: 0.7em 0 0.35em;
-  line-height: 1.25;
-}
-
-.canvas-markdown-rich-surface__mount .ProseMirror h1 {
-  font-size: 18px;
-}
-
-.canvas-markdown-rich-surface__mount .ProseMirror h2 {
-  font-size: 16px;
-}
-
-.canvas-markdown-rich-surface__mount .ProseMirror h3,
-.canvas-markdown-rich-surface__mount .ProseMirror h4,
-.canvas-markdown-rich-surface__mount .ProseMirror h5,
-.canvas-markdown-rich-surface__mount .ProseMirror h6 {
-  font-size: 13px;
-}
-
-.canvas-markdown-rich-surface__mount .ProseMirror p,
-.canvas-markdown-rich-surface__mount .ProseMirror ul,
-.canvas-markdown-rich-surface__mount .ProseMirror ol,
-.canvas-markdown-rich-surface__mount .ProseMirror blockquote,
-.canvas-markdown-rich-surface__mount .ProseMirror pre {
-  margin: 0.45em 0;
-}
-
-.canvas-markdown-rich-surface__mount .ProseMirror ul,
-.canvas-markdown-rich-surface__mount .ProseMirror ol {
-  padding-inline-start: 1.35em;
-}
-
-.canvas-markdown-rich-surface__mount .ProseMirror table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.canvas-markdown-rich-surface__mount .ProseMirror th,
-.canvas-markdown-rich-surface__mount .ProseMirror td {
-  padding: 3px 5px;
-  border: 1px solid var(--node-divider);
-  vertical-align: top;
-}
-
-.canvas-markdown-node__status {
-  position: sticky;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  padding: 3px 0;
-  color: var(--node-fg-secondary);
-  font-size: 10px;
-  line-height: 14px;
 }
 
 .canvas-generation-node__content {
@@ -2664,6 +2605,235 @@ html.canvas-webview-document #root,
   backdrop-filter: blur(14px);
 }
 
+.canvas-markdown-editor-overlay {
+  position: absolute;
+  z-index: 121;
+  inset: 0;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: 52px minmax(0, 1fr);
+  overflow: hidden;
+  background: var(--neko-editor-background, var(--canvas-bg));
+  color: var(--neko-fg);
+  outline: none;
+}
+
+.canvas-markdown-editor-overlay__toolbar {
+  z-index: 1;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--canvas-surface-border);
+  background: var(--canvas-overlay-surface);
+  box-shadow: 0 1px 10px color-mix(in srgb, black 7%, transparent);
+  backdrop-filter: var(--canvas-overlay-blur);
+}
+
+.canvas-markdown-editor-overlay__identity,
+.canvas-markdown-editor-overlay__actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.canvas-markdown-editor-overlay__identity {
+  gap: 11px;
+}
+
+.canvas-markdown-editor-overlay__actions {
+  flex: none;
+  gap: 12px;
+}
+
+.canvas-markdown-editor-overlay__kind {
+  flex: none;
+  color: var(--neko-fg);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.canvas-markdown-editor-overlay__divider {
+  width: 1px;
+  height: 18px;
+  flex: none;
+  background: var(--canvas-surface-border);
+}
+
+.canvas-markdown-editor-overlay__title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--neko-fg-secondary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-markdown-editor-overlay__mode {
+  color: var(--neko-fg-secondary);
+  font-size: 11px;
+}
+
+.canvas-markdown-editor-overlay__body {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: clamp(20px, 4vw, 52px) clamp(18px, 6vw, 72px) 64px;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--neko-surface) 38%, transparent),
+      transparent 160px
+    ),
+    var(--neko-editor-background, var(--canvas-bg));
+}
+
+.canvas-markdown-editor-overlay__page {
+  box-sizing: border-box;
+  width: min(100%, 920px);
+  min-height: 100%;
+  margin: 0 auto;
+  padding: clamp(30px, 5vw, 64px) clamp(28px, 7vw, 88px) 100px;
+  border: 1px solid var(--canvas-surface-border);
+  border-radius: 12px;
+  background: var(--neko-elevated);
+  box-shadow: var(--canvas-card-shadow);
+}
+
+.canvas-markdown-editor-surface,
+.canvas-markdown-editor-surface__mount,
+.canvas-markdown-editor-surface__mount > .milkdown {
+  min-width: 0;
+  min-height: 100%;
+}
+
+.canvas-markdown-editor-surface__mount .ProseMirror {
+  min-height: max(420px, calc(100vh - 260px));
+  outline: none;
+  color: var(--neko-fg);
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+  user-select: text;
+  white-space: pre-wrap;
+}
+
+.canvas-markdown-editor-surface__mount .ProseMirror > :first-child {
+  margin-top: 0;
+}
+
+.canvas-markdown-editor-surface__mount .ProseMirror h1,
+.canvas-markdown-editor-surface__mount .ProseMirror h2,
+.canvas-markdown-editor-surface__mount .ProseMirror h3,
+.canvas-markdown-editor-surface__mount .ProseMirror h4,
+.canvas-markdown-editor-surface__mount .ProseMirror h5,
+.canvas-markdown-editor-surface__mount .ProseMirror h6 {
+  margin: 1.15em 0 0.5em;
+  line-height: 1.25;
+}
+
+.canvas-markdown-editor-surface__mount .ProseMirror h1 {
+  font-size: 2em;
+}
+
+.canvas-markdown-editor-surface__mount .ProseMirror h2 {
+  font-size: 1.5em;
+}
+
+.canvas-markdown-editor-surface__mount .ProseMirror h3 {
+  font-size: 1.2em;
+}
+
+.canvas-markdown-editor-surface__mount .ProseMirror p,
+.canvas-markdown-editor-surface__mount .ProseMirror ul,
+.canvas-markdown-editor-surface__mount .ProseMirror ol,
+.canvas-markdown-editor-surface__mount .ProseMirror blockquote,
+.canvas-markdown-editor-surface__mount .ProseMirror pre {
+  margin: 0.7em 0;
+}
+
+.canvas-markdown-editor-surface__mount .ProseMirror ul,
+.canvas-markdown-editor-surface__mount .ProseMirror ol {
+  padding-inline-start: 1.55em;
+}
+
+.canvas-markdown-editor-surface__mount .neko-markdown-table-scroll {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  margin: 1.25em 0;
+  overflow-x: auto;
+  border: 1px solid var(--canvas-surface-border);
+  border-radius: 7px;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  white-space: normal;
+}
+
+.canvas-markdown-editor-surface__mount .neko-markdown-table {
+  width: 100%;
+  min-width: 40rem;
+  margin: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.canvas-markdown-editor-surface__mount .ProseMirror th,
+.canvas-markdown-editor-surface__mount .ProseMirror td {
+  min-width: 12rem;
+  padding: 9px 11px;
+  border: 0;
+  border-inline-end: 1px solid var(--canvas-surface-border);
+  border-block-end: 1px solid var(--canvas-surface-border);
+  vertical-align: top;
+  overflow-wrap: break-word;
+}
+
+.canvas-markdown-editor-surface__mount .ProseMirror th {
+  background: color-mix(in srgb, var(--neko-surface) 58%, transparent);
+  font-weight: 650;
+}
+
+.canvas-markdown-editor-surface__mount .ProseMirror tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--neko-surface) 24%, transparent);
+}
+
+.canvas-markdown-editor-surface__mount .ProseMirror tr > :last-child {
+  border-inline-end: 0;
+}
+
+.canvas-markdown-editor-surface__mount .ProseMirror tbody tr:last-child > td {
+  border-block-end: 0;
+}
+
+.canvas-markdown-editor-surface__mount .ProseMirror th > :first-child,
+.canvas-markdown-editor-surface__mount .ProseMirror td > :first-child {
+  margin-top: 0;
+}
+
+.canvas-markdown-editor-surface__mount .ProseMirror th > :last-child,
+.canvas-markdown-editor-surface__mount .ProseMirror td > :last-child {
+  margin-bottom: 0;
+}
+
+.canvas-markdown-editor-overlay__status {
+  display: grid;
+  min-height: 220px;
+  place-items: center;
+  color: var(--neko-fg-secondary);
+  font-size: 12px;
+  text-align: center;
+}
+
 .canvas-image-preview-overlay__toolbar {
   display: flex;
   min-height: 36px;
@@ -2837,6 +3007,37 @@ html.canvas-webview-document #root,
   .canvas-image-preview-overlay__thumbnail {
     width: 48px;
     height: 38px;
+  }
+
+  .canvas-markdown-editor-overlay {
+    grid-template-rows: 46px minmax(0, 1fr);
+  }
+
+  .canvas-markdown-editor-overlay__toolbar {
+    padding: 0 10px;
+  }
+
+  .canvas-markdown-editor-overlay__mode,
+  .canvas-markdown-editor-overlay__divider {
+    display: none;
+  }
+
+  .canvas-markdown-editor-overlay__body {
+    padding: 0;
+  }
+
+  .canvas-markdown-editor-overlay__page {
+    width: 100%;
+    min-height: 100%;
+    padding: 24px 20px 72px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .canvas-markdown-editor-surface__mount .ProseMirror {
+    min-height: calc(100vh - 142px);
+    font-size: 15px;
   }
 }
 

@@ -125,7 +125,7 @@ export function parseAgentInputCatalogEntry(value: unknown): AgentInputCatalogEn
       executable: {
         kind: 'skill',
         skillName: requireIdentity(executable['skillName'], 'Skill'),
-        activationId: requireIdentity(executable['activationId'], 'Skill activation'),
+        activationId: requireIdentity(executable['activationId'], 'Skill selection'),
       },
     };
   }

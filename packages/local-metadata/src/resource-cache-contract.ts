@@ -12,7 +12,7 @@ import {
   type ContentLocator,
   type DocumentFormat,
   type DocumentSourceRef,
-} from '@neko/content';
+} from '@neko/content-domain';
 import { hashStableValue } from '@neko/shared';
 
 export type ResourceScope = 'project' | 'global' | 'extension-private';

@@ -1,9 +1,21 @@
 ---
 name: 'world-creator'
-description: 'Create a reviewable world from a user concept or authorized evidence. In a Project creation context it saves a workspace world; in Assistant conversation it saves directly to the global world catalog.'
+description: '根据用户概念或授权证据创建可评审世界观，并按当前上下文保存到工作区或全局世界目录。 Create a reviewable world from a user concept or authorized evidence and save it to the context-authorized workspace or global catalog.'
 ---
 
 # World Creator
+
+## 中文方法
+
+创建一个因果连贯、可评审的世界观，并清楚区分来源事实、创作推断、作者决定、未知项和外部依赖。
+
+1. 只读取用户提供或当前上下文授权的参考，明确体验目标、范围、基调和世界需要回答的问题。
+2. 建立精简设定：身份/前提/主题、地点与时代、阵营与制度、物理/社会/魔法/技术规则及代价、历史与当前矛盾、已知和未知、外部角色/实体/素材依赖。
+3. 检查因果、尺度、规则例外和知识边界；冲突证据应保留，不静默选边。
+4. 不把世界观创建自动扩展为发布、预览、模拟、导入导出、完整故事/玩法或实时 AI 系统。
+5. 成功保存后只以当前权限选择的工作区世界或全局世界及其标题说明结果；除诊断或用户要求外，不暴露内部 identity。
+
+## English guidance
 
 Create one coherent world while keeping evidence, inference, and dependency boundaries visible.
 

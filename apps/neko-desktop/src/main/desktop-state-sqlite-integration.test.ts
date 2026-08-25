@@ -133,6 +133,7 @@ describe('Desktop SQLite application state composition', () => {
       };
       const service = new DesktopShellService({
         applicationInstanceId: 'application:test',
+        experimentalCreativeCapabilitiesReady: true,
         stateRepository: repository,
         workspaceRegistry,
         createIdentity: () => `identity-${(identity += 1)}`,
@@ -175,6 +176,7 @@ describe('Desktop SQLite application state composition', () => {
       await reopenedRepository.prepare();
       const reopenedService = new DesktopShellService({
         applicationInstanceId: 'application:reopened',
+        experimentalCreativeCapabilitiesReady: true,
         stateRepository: reopenedRepository,
         workspaceRegistry: {
           resolve: async () => {
@@ -295,6 +297,7 @@ describe('Desktop SQLite application state composition', () => {
       let identity = 0;
       const service = new DesktopShellService({
         applicationInstanceId: 'application:test',
+        experimentalCreativeCapabilitiesReady: true,
         stateRepository: repository,
         workspaceRegistry: {
           resolve: async () => {

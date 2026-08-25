@@ -12,7 +12,7 @@ import type {
   ProjectEntityCandidateProjection,
   ProjectEntityRecord,
 } from '@neko/entity-domain';
-import type { EntityMention } from '@neko/chara';
+import type { EntityMention } from '@neko/chara-domain';
 import { parseEntityUri } from '@neko/entity-domain';
 import { normalizeCreativeEntityLookupKey } from '@neko/entity-domain';
 
@@ -277,8 +277,7 @@ function candidateFromObservation(
       ...(input.source.rootKind === 'workspace' || input.source.rootKind === 'document'
         ? {
             locator: {
-              kind: 'workspace-file' as const,
-              path: input.source.relativePath,
+              file: { authority: 'workspace' as const, path: input.source.relativePath },
             },
           }
         : {}),

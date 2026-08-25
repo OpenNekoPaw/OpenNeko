@@ -1,12 +1,10 @@
-import type { ContentLocator, ContentRepresentationLocator } from '@neko/content';
+import type { ContentLocator, ContentRepresentationHandle } from '@neko/content-domain';
 import {
   detectPreviewContentKind,
   parsePreviewMediaDescriptor,
   type PreviewContentKind,
   type PreviewMediaDescriptor,
 } from './index.js';
-
-export type PreviewResourceLocator = ContentLocator | ContentRepresentationLocator;
 
 interface PreviewResourceSourceBase {
   readonly mediaType: string;
@@ -62,7 +60,8 @@ export type PreviewResourceProjection =
 
 export interface PreviewResourceProjectionInput<Owner> {
   readonly descriptorId: string;
-  readonly locator: PreviewResourceLocator;
+  readonly source: ContentLocator;
+  readonly representationHandle?: ContentRepresentationHandle;
   readonly displayName: string;
   readonly owner: Owner;
   readonly requestedMediaType?: string;
@@ -76,7 +75,8 @@ export interface PreviewResourceProjectionService<Owner> {
 
 export function createPreviewResourceProjectionService<Owner>(ports: {
   readonly resolveSource: (input: {
-    readonly locator: PreviewResourceLocator;
+    readonly source: ContentLocator;
+    readonly representationHandle?: ContentRepresentationHandle;
     readonly displayName: string;
     readonly owner: Owner;
     readonly requestedMediaType?: string;
@@ -113,7 +113,8 @@ export function createPreviewResourceProjectionService<Owner>(ports: {
       return releasedProjection();
     }
     const resolved = await ports.resolveSource({
-      locator: input.locator,
+      source: input.source,
+      ...(input.representationHandle ? { representationHandle: input.representationHandle } : {}),
       displayName: requireDisplayName(input.displayName),
       owner: input.owner,
       ...(input.requestedMediaType
@@ -167,8 +168,7 @@ export function createPreviewResourceProjectionService<Owner>(ports: {
       const descriptor = parsePreviewMediaDescriptor({
         descriptorId: input.descriptorId,
         sourceFingerprint: resolved.source.sourceFingerprint,
-        contentLocator:
-          input.locator.kind === 'content-representation' ? input.locator.source : input.locator,
+        contentLocator: input.source,
         url: registered.lease.url,
         ...(registered.lease.resourceUris ? { resourceUris: registered.lease.resourceUris } : {}),
         contentKind,

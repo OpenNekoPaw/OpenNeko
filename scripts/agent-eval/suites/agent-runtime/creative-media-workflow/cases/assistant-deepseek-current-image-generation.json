@@ -24,7 +24,7 @@
       }
     ],
     "expectedResult": "The new Assistant Draft keeps its explicit image.generate binding, invokes GenerateImage after the current submit, and returns a valid generated-output artifact without inspecting historical Jobs or files.",
-    "expectedFailure": "A missing current GenerateImage result, historical DescribeGenerationJob or ObserveGenerationJob use, directory or file scanning, ReadImage substitution, invalid generated-output identity, runtime error, or non-idle completion fails visibly."
+    "expectedFailure": "A missing current GenerateImage result, historical DescribeGenerationJob or ObserveGenerationJob use, directory or file scanning, read_image substitution, invalid generated-output identity, runtime error, or non-idle completion fails visibly."
   },
   "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
@@ -51,18 +51,6 @@
       "finalPhase": "session",
       "finalBindingKind": "assistant",
       "conversationCreated": true,
-      "evidenceRef": "deepseek-generation-facts"
-    },
-    {
-      "id": "pi-runtime",
-      "kind": "pi-runtime",
-      "implementation": "pi-agent-core",
-      "transcriptAuthority": "pi-session",
-      "productMetadataAuthority": "sqlite",
-      "purpose": "agent.main",
-      "workspaceLocatorKind": "virtual",
-      "turnDurability": "durable",
-      "modelProfileId": "deepseek-image-purpose",
       "evidenceRef": "deepseek-generation-facts"
     },
     {
@@ -126,7 +114,7 @@
     {
       "id": "no-visual-qa-substitute",
       "kind": "tool-call",
-      "name": "ReadImage",
+      "name": "read_image",
       "status": "absent",
       "evidenceRef": "deepseek-generation-facts"
     },

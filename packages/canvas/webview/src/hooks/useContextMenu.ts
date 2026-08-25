@@ -92,7 +92,12 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
         canvasStore.getState().selectNode(contextNodeId);
       }
       const showNodeMenu = clickedOnNode;
-      const contextNode = nodes.find((node) => node.id === contextNodeId);
+      const effectiveSelectedNodes = effectiveSelectedNodeIds.flatMap(
+        (nodeId) => nodes.find((node) => node.id === nodeId) ?? [],
+      );
+      const allSelectedNodesLocked =
+        effectiveSelectedNodes.length > 0 &&
+        effectiveSelectedNodes.every((node) => node.locked === true);
 
       const menuCtx = {
         canvasPosition: canvasPos,
@@ -110,7 +115,7 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
         onGroup: handleGroup,
         onUngroup: handleUngroup,
         contextNodeId,
-        isNodeLocked: contextNode?.locked === true,
+        isNodeLocked: allSelectedNodesLocked,
         canGroup: effectiveSelectedNodeIds.length >= 2,
         canUngroup:
           effectiveSelectedNodeIds.length === 1 &&
@@ -121,18 +126,13 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
         canUndo: historyStore.getState().canUndo(),
         canRedo: historyStore.getState().canRedo(),
         onBringToFront: () => {
-          if (!contextNodeId) return;
-          const maxZ = Math.max(...nodes.map((node) => node.zIndex), 0);
-          canvasStore.getState().reorderNode(contextNodeId, maxZ + 1);
+          canvasStore.getState().reorderNodes(effectiveSelectedNodeIds, 'front');
         },
         onSendToBack: () => {
-          if (!contextNodeId) return;
-          const minZ = Math.min(...nodes.map((node) => node.zIndex), 0);
-          canvasStore.getState().reorderNode(contextNodeId, minZ - 1);
+          canvasStore.getState().reorderNodes(effectiveSelectedNodeIds, 'back');
         },
         onToggleLock: () => {
-          if (!contextNode) return;
-          canvasStore.getState().updateNode(contextNode.id, { locked: !contextNode.locked });
+          canvasStore.getState().setNodesLocked(effectiveSelectedNodeIds, !allSelectedNodesLocked);
         },
       };
 

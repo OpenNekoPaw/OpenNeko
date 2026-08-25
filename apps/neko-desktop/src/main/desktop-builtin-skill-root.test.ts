@@ -34,21 +34,22 @@ describe('Desktop builtin Skill root', () => {
     );
   });
 
-  it('registers the real builtin Skill source as an Electron package resource', async () => {
+  it('registers the filtered Release Skill stage as an Electron package resource', async () => {
     const sourceRoot = resolveDesktopBuiltinSkillRoot({
       appPath: resolve(import.meta.dirname, '../..'),
       isPackaged: false,
       resourcesPath: '/ignored',
     });
-    const bundledExtensionRoot = resolve(import.meta.dirname, '../../resources/extensions');
+    const dshRuntimeStageRoot = resolve(
+      import.meta.dirname,
+      '../../.dsh-runtime-stage/dsh-runtime',
+    );
+    const releaseSkillStageRoot = resolve(import.meta.dirname, '../../.dsh-runtime-stage/skills');
 
     await expect(access(join(sourceRoot, 'storyboard', 'SKILL.md'))).resolves.toBeUndefined();
-    await expect(
-      access(join(bundledExtensionRoot, 'plugins', 'browser-use', 'plugin.json')),
-    ).resolves.toBeUndefined();
     expect(forgeConfig.packagerConfig?.extraResource).toEqual([
-      sourceRoot,
-      bundledExtensionRoot,
+      releaseSkillStageRoot,
+      dshRuntimeStageRoot,
     ]);
   });
 });

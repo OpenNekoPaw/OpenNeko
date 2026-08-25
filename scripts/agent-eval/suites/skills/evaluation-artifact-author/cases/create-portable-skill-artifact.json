@@ -8,10 +8,10 @@
     "userBehavior": "Activate the project evaluation-artifact-author Skill and create one deterministic portable Skill package through the canonical native authoring capability.",
     "canonicalPath": [
       "Desktop App session owner",
-      "Desktop renderer/preload Agent bridge",
-      "sender-bound Desktop Agent controller",
-      "Desktop Agent input queue",
-      "Pi Conversation runtime and Pi Session",
+      "Desktop renderer/preload DSH Session bridge",
+      "sender-bound Desktop DSH Session host",
+      "public DSH Session submit",
+      "exact Conversation-to-DSH Session binding",
       "project Skill lifecycle trigger and prompt composition",
       "CreateSkill Tool",
       "project .agents/skills artifact",
@@ -63,7 +63,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$evaluation-artifact-author Activate this exact project Skill, then call the native CreateSkill capability once with target project and skill { name: eval-created-skill, description: Evaluation created portable Skill., body: # Evaluation Created Skill\\n\\nUse canonical portable Skill guidance. }. Do not use an ordinary file-write capability and do not write under .neko/skills. Report success only after the native result is observed."
+      "prompt": "$evaluation-artifact-author Activate this exact project Skill, then call the native CreateSkill capability once with { layout: directory, skillMarkdown: \"---\\nname: eval-created-skill\\ndescription: Evaluation created portable Skill.\\n---\\n# Evaluation Created Skill\\n\\nUse canonical portable Skill guidance.\", resources: [] }. The current Workspace Conversation owns the destination. Do not use an ordinary file-write capability and do not write under .neko/skills. Report success only after the native result is observed."
     },
     {
       "id": "idle",

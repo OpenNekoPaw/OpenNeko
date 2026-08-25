@@ -78,6 +78,8 @@ export function buildSafeConfigDiagnosticMessage(
       return `Configuration file contains an unsupported provider protocol_profile: ${filePath}. Use newapi, openai-chat, openai-responses, anthropic, google, or ollama, then open a new Agent session or tab.`;
     case 'unsupportedProviderSupportLevel':
       return `Configuration file contains an unsupported provider support_level: ${filePath}. Use verified, compatible, experimental, or custom, then open a new Agent session or tab.`;
+    case 'unsupportedProviderModelFamily':
+      return `Configuration file contains an unsupported provider supported_model_families value: ${filePath}. Use dialogue or generation, then reload the configuration.`;
     case 'unsupportedProtocolAuthType':
       return `Configuration file contains an unsupported protocol_variant auth_type: ${filePath}. Use bearer, api-key, or custom-header, then open a new Agent session or tab.`;
     case 'unsupportedProtocolStreamFormat':
@@ -99,7 +101,7 @@ export function buildSafeConfigDiagnosticMessage(
     case 'unsupportedDefaultModelType':
       return `Configuration file contains an unsupported default_models key: ${filePath}. Use llm, image, video, or audio, then open a new Agent session or tab.`;
     case 'unsupportedDefaultModelPurpose':
-      return `Configuration file contains an invalid default_model_purposes entry: ${filePath}. Use provider_id and model_id for each purpose binding, then open a new Agent session or tab.`;
+      return `Configuration file contains an unsupported default_model_purposes entry${path ? ` (${path})` : ''}: ${filePath}. Remove that entry or use a registered product purpose, then open a new Agent session or tab.`;
     case 'invalidDefaultModelBinding':
       return `Configuration file contains a default model binding that references an unavailable provider/model or mismatched capability: ${filePath}. Fix the default binding, then open a new Agent session or tab.`;
     case 'readError':

@@ -30,7 +30,6 @@ export type NekoStorageClass =
   | 'valuable-local-state'
   | 'rebuildable-metadata'
   | 'artifact-file'
-  | 'raw-journal'
   | 'raw-log'
   | 'extension-private'
   | 'durable-media'
@@ -104,7 +103,6 @@ export type NekoStorageClassificationId =
   | 'valuable-local-state'
   | 'rebuildable-metadata'
   | 'workspace-cache-artifacts'
-  | 'conversation-journals'
   | 'raw-logs'
   | 'extension-private-files'
   | 'retained-media'
@@ -313,25 +311,6 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     cleanup: 'rebuildable-only',
     backup: 'not-applicable',
   },
-  'conversation-journals': {
-    id: 'conversation-journals',
-    scope: 'user-global',
-    storageClass: 'raw-journal',
-    metadataOwnership: null,
-    durability: 'authoritative',
-    owner: 'agent',
-    authorityKind: 'file',
-    userManagement: 'user-content',
-    portability: 'user-exportable',
-    sensitivity: 'local-sensitive',
-    sqliteRole: 'prohibited',
-    deletion: 'user-controlled',
-    retention: 'explicit-user-action',
-    defaultLocation: '~/.neko/journals/',
-    tracking: 'outside-workspace',
-    cleanup: 'never-automatic',
-    backup: 'required',
-  },
   'raw-logs': {
     id: 'raw-logs',
     scope: 'user-global',
@@ -519,7 +498,6 @@ export interface IGlobalStorageLayout {
   readonly database: string;
   readonly assets: string;
   readonly mediaLibraries: string;
-  readonly journals: string;
   readonly logs: string;
   readonly desktopLogs: string;
   readonly workspaceLogs: string;
@@ -530,7 +508,6 @@ export interface IGlobalStorageLayout {
   readonly prompts: string;
   readonly marketCache: string;
   readonly marketInstalled: string;
-  readonly conversations: string;
   readonly providerCards: string;
   readonly profiles: string;
   readonly processors: string;
@@ -577,7 +554,6 @@ export function resolveGlobalStorageLayout(homedir: string): IGlobalStorageLayou
     database: join(root, 'neko.db'),
     assets: join(root, 'assets'),
     mediaLibraries: join(root, 'media-libraries'),
-    journals: join(root, 'journals'),
     logs: join(root, 'logs'),
     desktopLogs: join(root, 'logs', 'desktop'),
     workspaceLogs: join(root, 'logs', 'workspaces'),
@@ -590,7 +566,6 @@ export function resolveGlobalStorageLayout(homedir: string): IGlobalStorageLayou
     config: join(root, 'config.toml'),
     marketCache: join(root, 'market-cache'),
     marketInstalled: join(root, 'market-installed.json'),
-    conversations: join(root, 'conversations'),
     providerCards: join(root, 'providers'),
     profiles: join(root, 'profiles'),
     processors: join(root, 'processors'),

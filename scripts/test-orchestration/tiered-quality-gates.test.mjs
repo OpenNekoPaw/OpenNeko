@@ -20,7 +20,7 @@ describe('development/main quality gate orchestration', () => {
     assert.equal(scripts['build'], 'pnpm --recursive --if-present --sort run build');
     assert.equal(
       scripts['build:ui'],
-      'pnpm --filter @neko/cut-webview --filter @neko/preview-webview --filter @neko/agent-webview --filter @neko/canvas-webview run build',
+      'pnpm --filter @neko/cut-webview --filter @neko/model-webview --filter @neko/preview-webview --filter @neko/canvas-webview run build',
     );
     assert.equal(scripts['typecheck'], 'pnpm --recursive --if-present --sort run typecheck');
     assert.equal(scripts['typecheck:desktop'], 'pnpm --dir apps/neko-desktop run typecheck');

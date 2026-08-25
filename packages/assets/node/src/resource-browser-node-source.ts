@@ -58,22 +58,25 @@ import { initializeProjectMediaLibraryBindings } from './project-media-library-i
 import {
   resolveProjectMediaLibraryContentPath,
   resolveProjectMediaLibraryRootPath,
-  projectMediaLibraryWorkspaceLocator,
 } from './project-content-read-service';
+import { parseWorkspaceMediaLibraryPath } from './project-media-library-content-handler';
 import {
   CreativeDocumentCreationService,
   WorkspaceEntryCreationService,
-} from '@neko/content/project-file-io';
+} from '@neko/content-domain/project-file-io';
 import {
   NodeAuthorizedWorkspaceDirectoryCreator,
   NodeAuthorizedWorkspaceWriter,
-} from '@neko/content/node';
+} from '@neko/content-domain/node';
 import {
   createEmptyCanvasDocumentBytes,
   isValidCanvasDocumentBytes,
 } from '@neko/canvas-domain/project-file-io';
 import { createEmptyCutDocumentBytes, isValidCutDocumentBytes } from '@neko/cut-domain';
-import type { MediaLibraryContentLocator, WorkspaceFileContentLocator } from '@neko/content';
+import {
+  isWorkspaceFileContentLocator,
+  type WorkspaceFileContentLocator,
+} from '@neko/content-domain';
 
 const FILE_SCAN_LIMIT = 5_000;
 const EXCLUDED_DIRECTORIES = new Set([
@@ -315,19 +318,6 @@ export function createResourceBrowserNodeReadSource(
   };
 }
 
-export async function searchProjectMediaLibraryContentLocators(input: {
-  readonly projectId: string;
-  readonly workspace: AssetWorkspaceResolution;
-  readonly globalMediaLibraryRoot: string;
-  readonly files: NekoHostPorts['files'];
-  readonly query: string;
-  readonly limit: number;
-}): Promise<readonly MediaLibraryContentLocator[]> {
-  return (await searchProjectMediaLibraryContentEntries(input)).flatMap((entry) =>
-    entry.role === 'content' && entry.locator.kind === 'media-library' ? [entry.locator] : [],
-  );
-}
-
 export async function searchProjectMediaLibraryWorkspaceLocators(input: {
   readonly projectId: string;
   readonly workspace: AssetWorkspaceResolution;
@@ -336,8 +326,12 @@ export async function searchProjectMediaLibraryWorkspaceLocators(input: {
   readonly query: string;
   readonly limit: number;
 }): Promise<readonly WorkspaceFileContentLocator[]> {
-  return (await searchProjectMediaLibraryContentLocators(input)).map(
-    projectMediaLibraryWorkspaceLocator,
+  return (await searchProjectMediaLibraryContentEntries(input)).flatMap((entry) =>
+    entry.role === 'content' &&
+    isWorkspaceFileContentLocator(entry.locator) &&
+    entry.locator.selector === undefined
+      ? [entry.locator]
+      : [],
   );
 }
 
@@ -547,7 +541,7 @@ export function createResourceBrowserNodeProjectionSource(
       return 'imported';
     },
     async trashContent({ item }): Promise<void> {
-      assertResourceBrowserProjectStorageMutable(requireWorkspaceFileLocator(item).path);
+      assertResourceBrowserProjectStorageMutable(requireWorkspaceFileLocator(item).file.path);
       const absolutePath = await resolveWorkspaceContentLocator(
         options.workspace,
         requireWorkspaceFileLocator(item),
@@ -650,10 +644,10 @@ export function createResourceBrowserNodeProjectionSource(
     },
     editText: options.openTextEditor,
     async openCreativeDocument({ identity, item }): Promise<void> {
-      if (item.locator.kind !== 'workspace-file') {
+      if (!isWorkspaceFileContentLocator(item.locator) || item.locator.selector) {
         throw new Error('Resource Browser creative-document open requires a Workspace file.');
       }
-      const kind = creativeDocumentKindForPath(item.locator.path);
+      const kind = creativeDocumentKindForPath(item.locator.file.path);
       if (!kind) {
         throw new Error('Resource Browser creative-document open requires an NKC or OTIO file.');
       }
@@ -856,8 +850,9 @@ function requireBrowsableMediaLibraryName(
   if (
     item.role === 'directory' &&
     item.libraryName &&
-    item.locator.kind === 'media-library' &&
-    item.locator.libraryName === item.libraryName
+    isWorkspaceFileContentLocator(item.locator) &&
+    item.locator.selector === undefined &&
+    parseWorkspaceMediaLibraryPath(item.locator.file.path)?.libraryName === item.libraryName
   ) {
     return item.libraryName;
   }
@@ -944,8 +939,10 @@ async function readMediaLibraryChildren(
   const relativeDirectory =
     parent.role === 'library-root'
       ? undefined
-      : parent.locator.kind === 'media-library' && parent.locator.libraryName === libraryName
-        ? parent.locator.relativePath
+      : isWorkspaceFileContentLocator(parent.locator) &&
+          parent.locator.selector === undefined &&
+          parseWorkspaceMediaLibraryPath(parent.locator.file.path)?.libraryName === libraryName
+        ? parseWorkspaceMediaLibraryPath(parent.locator.file.path)?.relativePath
         : failInvalidMediaParent();
   const context = {
     projectId: options.projectId,
@@ -956,9 +953,10 @@ async function readMediaLibraryChildren(
   let absoluteDirectory: string | undefined;
   if (relativeDirectory) {
     await resolveProjectMediaLibraryContentPath(context, {
-      kind: 'media-library',
-      libraryName,
-      relativePath: relativeDirectory,
+      file: {
+        authority: 'workspace',
+        path: `neko/assets/${libraryName}/${relativeDirectory}`,
+      },
     });
     absoluteDirectory = path.join(absoluteRoot, ...relativeDirectory.split('/'));
   }
@@ -996,23 +994,27 @@ function projectBoundMediaEntry(
   libraryName: string,
   entry: ResourceBrowserContentEntry,
 ): ResourceBrowserContentEntry {
-  if (entry.locator.kind !== 'workspace-file') {
+  if (!isWorkspaceFileContentLocator(entry.locator) || entry.locator.selector) {
     throw new Error('Project Media Library scanner returned an unexpected locator owner.');
   }
   const parentLocator =
-    entry.parentLocator?.kind === 'workspace-file'
+    entry.parentLocator &&
+    isWorkspaceFileContentLocator(entry.parentLocator) &&
+    entry.parentLocator.selector === undefined
       ? {
-          kind: 'media-library' as const,
-          libraryName,
-          relativePath: entry.parentLocator.path,
+          file: {
+            authority: 'workspace' as const,
+            path: `neko/assets/${libraryName}/${entry.parentLocator.file.path}`,
+          },
         }
       : undefined;
   return {
     ...entry,
     locator: {
-      kind: 'media-library',
-      libraryName,
-      relativePath: entry.locator.path,
+      file: {
+        authority: 'workspace',
+        path: `neko/assets/${libraryName}/${entry.locator.file.path}`,
+      },
     },
     ...(parentLocator ? { parentLocator } : {}),
     description: entry.description === '.' ? libraryName : `${libraryName}/${entry.description}`,
@@ -1143,11 +1145,17 @@ async function initializeGlobalAssetMembershipInventory(input: {
   const registeredAt = new Date().toISOString();
   await input.memberships.registerDiscovered(
     entries.flatMap((entry) => {
-      if (entry.role !== 'content' || entry.locator.kind !== 'workspace-file') return [];
+      if (
+        entry.role !== 'content' ||
+        !isWorkspaceFileContentLocator(entry.locator) ||
+        entry.locator.selector
+      ) {
+        return [];
+      }
       return [
         {
           membershipId: randomUUID(),
-          sourceRelativePath: entry.locator.path,
+          sourceRelativePath: entry.locator.file.path,
           label: entry.label,
           mediaType: entry.metadata?.mediaType ?? null,
           byteLength: entry.metadata?.byteLength ?? null,
@@ -1213,10 +1221,10 @@ function projectMediaLibraryEntry(
   connection: GlobalMediaLibraryConnection,
   entry: ResourceBrowserContentEntry,
 ): GlobalMediaLibraryItem {
-  if (entry.locator.kind !== 'workspace-file') {
+  if (!isWorkspaceFileContentLocator(entry.locator) || entry.locator.selector) {
     throw new Error('Desktop global Media Library produced a non-file locator.');
   }
-  const relativePath = entry.locator.path;
+  const relativePath = entry.locator.file.path;
   const id = createGlobalLibraryOpaqueId(
     'media-library',
     `${connection.libraryId}:${relativePath}`,
@@ -1312,9 +1320,13 @@ function presentCreatedCreativeDocument(
   const parentPath = segments.slice(0, -1).join('/');
   return presentResourceBrowserContentItem(
     {
-      locator: { kind: 'workspace-file', path: locatorPath },
+      locator: { file: { authority: 'workspace', path: locatorPath } },
       ...(parentPath
-        ? { parentLocator: { kind: 'workspace-file' as const, path: parentPath } }
+        ? {
+            parentLocator: {
+              file: { authority: 'workspace' as const, path: parentPath },
+            },
+          }
         : {}),
       label,
       availability: 'available',
@@ -1346,7 +1358,11 @@ export async function resolveResourceBrowserItemPath(input: {
   if (input.item.role === 'library-root') {
     throw new Error('Resource Browser Media Library root has no content path.');
   }
-  if (input.item.locator.kind === 'media-library') {
+  if (
+    isWorkspaceFileContentLocator(input.item.locator) &&
+    input.item.locator.selector === undefined &&
+    parseWorkspaceMediaLibraryPath(input.item.locator.file.path)
+  ) {
     return resolveProjectMediaLibraryContentPath(
       {
         projectId: input.projectId,
@@ -1356,19 +1372,16 @@ export async function resolveResourceBrowserItemPath(input: {
       input.item.locator,
     );
   }
-  if (
-    input.item.locator.kind === 'workspace-file' ||
-    input.item.locator.kind === 'generated-output'
-  ) {
+  if (isWorkspaceFileContentLocator(input.item.locator)) {
     return resolveWorkspaceContentLocator(input.workspace, input.item.locator);
   }
   throw new Error('Resource Browser item has no directly resolvable Host file path.');
 }
 
 function requireWorkspaceFileLocator(item: {
-  readonly locator: import('@neko/content').ContentLocator;
+  readonly locator: import('@neko/content-domain').ContentLocator;
 }): WorkspaceFileContentLocator {
-  if (item.locator.kind !== 'workspace-file') {
+  if (!isWorkspaceFileContentLocator(item.locator) || item.locator.selector) {
     throw new Error('Resource Browser Files operation requires a Workspace File locator.');
   }
   return item.locator;
@@ -1397,8 +1410,8 @@ function dedupeProjection(
 ): readonly ResourceBrowserContentEntry[] {
   const byLocator = new Map<string, ResourceBrowserContentEntry>();
   for (const entry of entries) {
-    if (entry.locator.kind !== 'workspace-file') continue;
-    byLocator.set(entry.locator.path, entry);
+    if (!isWorkspaceFileContentLocator(entry.locator) || entry.locator.selector) continue;
+    byLocator.set(entry.locator.file.path, entry);
   }
   return [...byLocator.values()];
 }

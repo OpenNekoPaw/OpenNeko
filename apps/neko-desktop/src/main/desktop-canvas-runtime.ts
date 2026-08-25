@@ -20,8 +20,8 @@ import {
   createCanvasMaterialActionOwner,
 } from '@neko/canvas-domain';
 import type { NekoHostPorts } from '@neko/host/ports';
-import { contentLocatorKey, type ContentLocator } from '@neko/content';
-import { createNodeHostContentReadService } from '@neko/content/node';
+import { contentLocatorKey, type ContentLocator } from '@neko/content-domain';
+import { createNodeHostContentReadService } from '@neko/content-domain/node';
 import {
   loadNkc,
   saveNkc,
@@ -43,12 +43,9 @@ import { resolveWorkspaceContentLocator } from '@neko/assets-node';
 import {
   parseDesktopCanvasPreviewResourceReleaseRequest,
   parseDesktopCanvasPreviewResourceRequest,
-  parseDesktopCanvasPreviewVariantRequest,
   type DesktopCanvasPreviewResourceRequest,
   type DesktopCanvasPreviewResourceResult,
   type DesktopCanvasPreviewResourceReleaseRequest,
-  type DesktopCanvasPreviewVariantRequest,
-  type DesktopCanvasPreviewVariantResult,
 } from '../shared/canvas-bridge-contract';
 import type {
   PreviewResourceLease,
@@ -60,7 +57,18 @@ export interface DesktopCanvasShellPort {
     windowId: string,
     identity: CanvasHostRuntimeIdentity,
   ): Promise<DesktopCanvasViewGrant>;
+  closeCanvasView?(identity: CanvasHostRuntimeIdentity): Promise<void>;
 }
+
+export interface DesktopCanvasFileWatcher {
+  close(): void;
+}
+
+export type DesktopCanvasWatchFile = (
+  directory: string,
+  fileName: string,
+  onChange: () => Promise<void>,
+) => DesktopCanvasFileWatcher;
 
 interface DesktopCanvasSessionEntry {
   readonly windowId: string;
@@ -68,6 +76,8 @@ interface DesktopCanvasSessionEntry {
   readonly documentPath: string;
   readonly workspace: DesktopCanvasViewGrant['workspace'];
   readonly session: CanvasHostRuntimeSession;
+  watcher?: DesktopCanvasFileWatcher;
+  externalChangeQueue: Promise<void>;
   generationReattachmentScheduled: boolean;
 }
 
@@ -120,6 +130,7 @@ export class DesktopCanvasRuntime {
       readonly shell: DesktopCanvasShellPort;
       readonly host: NekoHostPorts;
       readonly globalMediaLibraryRoot: string;
+      readonly watchFile?: DesktopCanvasWatchFile;
       readonly requestSource?: (input: {
         readonly identity: CanvasHostRuntimeIdentity;
         readonly sourceKind: 'image' | 'video' | 'audio' | 'model' | 'document' | 'canvas';
@@ -144,7 +155,7 @@ export class DesktopCanvasRuntime {
         readonly identity: CanvasHostRuntimeIdentity;
         readonly workspace: DesktopCanvasViewGrant['workspace'];
         readonly locator: ContentLocator;
-        readonly purpose: 'inline-variant' | 'viewer-source';
+        readonly purpose: 'viewer-source';
         readonly descriptorId: string;
         readonly displayName: string;
         readonly mediaType?: string;
@@ -251,51 +262,6 @@ export class DesktopCanvasRuntime {
     );
   }
 
-  async resolvePreviewVariant(
-    windowId: string,
-    value: DesktopCanvasPreviewVariantRequest | unknown,
-  ): Promise<DesktopCanvasPreviewVariantResult> {
-    const request = parseDesktopCanvasPreviewVariantRequest(value);
-    const entry = await this.requireSession(windowId, request.identity);
-    const projectPreviewResource = this.options.projectPreviewResource;
-    if (!projectPreviewResource) {
-      throw new Error('Canvas preview variant capability is unavailable.');
-    }
-    const key = previewLeaseKey(request);
-    const locatorKey = contentLocatorKey(request.locator);
-    const current = this.previewLeases.get(key);
-    if (current?.locatorKey === locatorKey && current.mediaType === request.mediaType) {
-      return { requestId: request.requestId, url: current.lease.url };
-    }
-    if (current) this.releasePreviewProjection(current.descriptor.descriptorId);
-    this.previewLeases.delete(key);
-    const descriptorId = `canvas-inline:${request.identity.sessionId}:${request.sourceId}:${request.role}`;
-    const projection = await projectPreviewResource({
-      identity: request.identity,
-      workspace: entry.workspace,
-      locator: request.locator,
-      purpose: 'inline-variant',
-      descriptorId,
-      displayName: canvasPreviewDisplayName(request.locator),
-      ...(request.mediaType === undefined ? {} : { mediaType: request.mediaType }),
-    });
-    if (projection.status === 'unavailable') throw new Error(projection.diagnostic.message);
-    const lease = projection.lease;
-    this.previewLeases.set(key, {
-      windowId,
-      viewId: request.identity.viewId,
-      sessionKey: sessionKey(request.identity),
-      locatorKey,
-      ...(request.mediaType === undefined ? {} : { mediaType: request.mediaType }),
-      lease,
-      descriptor: projection.descriptor,
-    });
-    return {
-      requestId: request.requestId,
-      url: lease.url,
-    };
-  }
-
   async resolvePreviewResource(
     windowId: string,
     value: DesktopCanvasPreviewResourceRequest | unknown,
@@ -385,6 +351,15 @@ export class DesktopCanvasRuntime {
         )
         .sort((left, right) => sessionKey(left.identity).localeCompare(sessionKey(right.identity)));
       if (entries.length === 0) return operation();
+      const snapshots = await Promise.all(entries.map((entry) => entry.session.getSnapshot()));
+      const dirtyDocuments = snapshots
+        .filter((snapshot) => snapshot.dirty)
+        .map((snapshot) => JSON.stringify(snapshot.canvas));
+      if (new Set(dirtyDocuments).size > 1) {
+        throw new CanvasHostVisibleEffectError(
+          'workspace-board-open-session-conflict: Open Workspace Board views contain divergent unsaved changes.',
+        );
+      }
 
       const coordinate = async (
         index: number,
@@ -402,15 +377,16 @@ export class DesktopCanvasRuntime {
         return entry.session.coordinateAuthoritativeDocumentChange(() => coordinate(index + 1));
       };
 
-      return (await coordinate(0)).value;
+      const result = await coordinate(0);
+      await Promise.all(entries.map((entry) => entry.session.reattachGenerationNodes()));
+      return result.value;
     });
   }
 
   detachWindow(windowId: string): void {
     for (const [key, entry] of this.sessions) {
       if (entry.windowId !== windowId) continue;
-      entry.session.dispose();
-      this.sessions.delete(key);
+      this.releaseSession(key, entry);
     }
     this.releasePreviewLeases((entry) => entry.windowId === windowId);
     this.presentationSnapshots.deleteWindow(windowId);
@@ -437,16 +413,14 @@ export class DesktopCanvasRuntime {
       ) {
         continue;
       }
-      entry.session.dispose();
-      this.sessions.delete(key);
-      this.releasePreviewLeases((lease) => lease.sessionKey === key);
+      this.releaseSession(key, entry);
     }
   }
 
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
-    for (const entry of this.sessions.values()) entry.session.dispose();
+    for (const [key, entry] of this.sessions) this.releaseSession(key, entry);
     this.sessions.clear();
     this.releasePreviewLeases(() => true);
     this.presentationSnapshots.clear();
@@ -499,8 +473,7 @@ export class DesktopCanvasRuntime {
       identity.documentId === CANVAS_WORKSPACE_BOARD_PATH
         ? this.options.host.paths.join(grant.workspace.workspacePath, identity.documentId)
         : await resolveWorkspaceContentLocator(grant.workspace, {
-            kind: 'workspace-file',
-            path: identity.documentId,
+            file: { authority: 'workspace', path: identity.documentId },
           });
     const initialCanvas = await this.loadDocument(documentPath, grant.workspace.displayName);
     const textFilePreview = new CanvasTextFilePreviewService(
@@ -524,7 +497,7 @@ export class DesktopCanvasRuntime {
             identity: requestIdentity,
             workspace: grant.workspace,
             locator,
-            ...(locator.kind === 'workspace-file' || locator.kind === 'generated-output'
+            ...(locator.file.authority === 'workspace' && locator.selector === undefined
               ? {
                   absolutePath: await this.resolveContentPath(
                     requestIdentity.projectId,
@@ -562,8 +535,8 @@ export class DesktopCanvasRuntime {
       ...(this.options.host.external?.revealPath
         ? {
             resolveReveal: async ({ target }: { readonly target: CanvasMaterialActionTarget }) =>
-              target.locator.kind === 'workspace-file' ||
-              target.locator.kind === 'generated-output',
+              target.locator.file.authority === 'workspace' &&
+              target.locator.selector === undefined,
             reveal: ({ identity: requestIdentity, target }) =>
               revealEffect(requestIdentity, target.locator),
           }
@@ -867,10 +840,50 @@ export class DesktopCanvasRuntime {
       documentPath,
       workspace: grant.workspace,
       session,
+      externalChangeQueue: Promise.resolve(),
       generationReattachmentScheduled: false,
     };
+    if (identity.documentId !== CANVAS_WORKSPACE_BOARD_PATH) {
+      const watchFile = this.options.watchFile;
+      if (watchFile) {
+        entry.watcher = watchFile(
+          this.options.host.paths.dirname(documentPath),
+          documentPath.split(/[\\/]/u).at(-1) ?? identity.documentId,
+          () => this.queueExternalChange(entry),
+        );
+      }
+    }
     this.sessions.set(key, entry);
     return entry;
+  }
+
+  private queueExternalChange(entry: DesktopCanvasSessionEntry): Promise<void> {
+    entry.externalChangeQueue = entry.externalChangeQueue.then(async () => {
+      const key = sessionKey(entry.identity);
+      if (this.disposed || this.sessions.get(key) !== entry) return;
+      try {
+        const stat = await this.options.host.files.stat(entry.documentPath);
+        if (stat.type === 'file') return;
+      } catch (error: unknown) {
+        if (!isFileNotFound(error)) throw error;
+      }
+      const snapshot = await entry.session.getSnapshot();
+      if (snapshot.dirty) return;
+      const closeCanvasView = this.options.shell.closeCanvasView;
+      if (!closeCanvasView) {
+        throw new Error('Desktop Canvas clean deletion requires a View close capability.');
+      }
+      await closeCanvasView(entry.identity);
+      this.releaseSession(key, entry);
+    });
+    return entry.externalChangeQueue;
+  }
+
+  private releaseSession(key: string, entry: DesktopCanvasSessionEntry): void {
+    entry.watcher?.close();
+    entry.session.dispose();
+    this.sessions.delete(key);
+    this.releasePreviewLeases((lease) => lease.sessionKey === key);
   }
 
   private scheduleGenerationReattachment(entry: DesktopCanvasSessionEntry): void {
@@ -888,8 +901,8 @@ export class DesktopCanvasRuntime {
     workspace: DesktopCanvasViewGrant['workspace'],
     locator: ContentLocator,
   ): Promise<string> {
-    if (locator.kind === 'workspace-file' || locator.kind === 'generated-output') {
-      return resolveWorkspaceContentLocator(workspace, locator);
+    if (locator.file.authority === 'workspace' && locator.selector === undefined) {
+      return resolveWorkspaceContentLocator(workspace, { file: locator.file });
     }
     throw new Error('Canvas material has no directly resolvable Host file path.');
   }
@@ -1018,17 +1031,9 @@ function materialIdentity(identity: CanvasHostRuntimeIdentity) {
 }
 
 function materialFileName(locator: ContentLocator): string {
-  switch (locator.kind) {
-    case 'workspace-file':
-    case 'generated-output':
-      return portableBaseName(locator.path);
-    case 'media-library':
-      return portableBaseName(locator.relativePath);
-    case 'document-entry':
-      return portableBaseName(locator.entryPath);
-    case 'package-resource':
-      return portableBaseName(locator.resourcePath);
-  }
+  return portableBaseName(
+    locator.selector?.kind === 'entry' ? locator.selector.path : locator.file.path,
+  );
 }
 
 function portableBaseName(value: string): string {
@@ -1055,24 +1060,6 @@ function sessionKey(identity: CanvasHostRuntimeIdentity): string {
     identity.sessionId,
     identity.rendererSessionId,
   ].join(':');
-}
-
-function previewLeaseKey(request: DesktopCanvasPreviewVariantRequest): string {
-  return [sessionKey(request.identity), request.sourceId, request.role].join(':');
-}
-
-function canvasPreviewDisplayName(locator: ContentLocator): string {
-  switch (locator.kind) {
-    case 'workspace-file':
-    case 'generated-output':
-      return portableBaseName(locator.path);
-    case 'media-library':
-      return portableBaseName(locator.relativePath);
-    case 'document-entry':
-      return portableBaseName(locator.entryPath);
-    case 'package-resource':
-      return portableBaseName(locator.resourcePath);
-  }
 }
 
 function isFileNotFound(error: unknown): boolean {

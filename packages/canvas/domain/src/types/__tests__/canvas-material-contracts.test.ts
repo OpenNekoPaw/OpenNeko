@@ -30,22 +30,19 @@ const generation: CanvasGenerationEvidence = {
 };
 
 const generatedLocator = {
-  kind: 'generated-output',
-  outputId: 'output-1',
-  digest: 'sha256:generated-output-1',
-  path: 'neko/generated/image/output-1.png',
+  file: { authority: 'workspace', path: 'neko/generated/image/output-1.png' },
 } as const;
 
 describe('Canvas material contracts', () => {
-  it('derives origin only from the canonical ContentLocator kind', () => {
+  it('derives origin from Generation evidence rather than the ContentLocator path', () => {
     expect(
-      deriveCanvasMaterialOrigin({ kind: 'workspace-file', path: 'media/reference.png' }),
+      deriveCanvasMaterialOrigin({ file: { authority: 'workspace', path: 'media/reference.png' } }),
     ).toBe('referenced');
-    expect(deriveCanvasMaterialOrigin(generatedLocator)).toBe('generated');
+    expect(deriveCanvasMaterialOrigin(generatedLocator)).toBe('referenced');
+    expect(deriveCanvasMaterialOrigin(generatedLocator, generation)).toBe('generated');
     expect(() =>
       deriveCanvasMaterialOrigin({
-        kind: 'workspace-file',
-        path: '/Users/example/reference.png',
+        file: { authority: 'workspace', path: '/Users/example/reference.png' },
       }),
     ).toThrow('valid ContentLocator');
   });
@@ -71,7 +68,7 @@ describe('Canvas material contracts', () => {
       isCanvasMaterialAuthoringRequest({
         kind: 'direct-reference',
         identity,
-        locator: { kind: 'workspace-file', path: 'media/reference.png' },
+        locator: { file: { authority: 'workspace', path: 'media/reference.png' } },
         mediaKind: 'image',
       }),
     ).toBe(true);
@@ -79,10 +76,10 @@ describe('Canvas material contracts', () => {
       isCanvasMaterialAuthoringRequest({
         kind: 'direct-reference',
         identity,
-        locator: { kind: 'workspace-file', path: 'neko/assets/Characters/reference.png' },
+        locator: { file: { authority: 'workspace', path: 'neko/assets/Characters/reference.png' } },
         mediaKind: 'image',
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       isCanvasMaterialAuthoringRequest({
         kind: 'external-import',
@@ -124,7 +121,7 @@ describe('Canvas material contracts', () => {
       isCanvasMaterialAuthoringRequest({
         kind: 'derived-output-commit',
         identity,
-        locator: { kind: 'workspace-file', path: 'neko/derived/crop.png' },
+        locator: { file: { authority: 'workspace', path: 'neko/derived/crop.png' } },
         mediaKind: 'image',
         title: 'crop.png',
         sourceNodeIds: ['source-node'],
@@ -143,7 +140,7 @@ describe('Canvas material contracts', () => {
     ).toBe(true);
   });
 
-  it('rejects raw external paths and generated locators in direct reference requests', () => {
+  it('rejects raw external paths while allowing canonical locators independent of provenance', () => {
     expect(
       isCanvasMaterialAuthoringRequest({
         kind: 'external-import',
@@ -161,7 +158,7 @@ describe('Canvas material contracts', () => {
         locator: generatedLocator,
         mediaKind: 'image',
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       isCanvasMaterialAuthoringRequest({
         kind: 'derived-output-commit',
@@ -171,18 +168,18 @@ describe('Canvas material contracts', () => {
         title: 'Missing authority',
         sourceNodeIds: ['source-node'],
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       isCanvasMaterialAuthoringRequest({
         kind: 'derived-output-commit',
         identity,
-        locator: { kind: 'workspace-file', path: 'neko/derived/crop.png' },
+        locator: { file: { authority: 'workspace', path: 'neko/derived/crop.png' } },
         generation,
         mediaKind: 'image',
         title: 'Conflicting evidence',
         sourceNodeIds: ['source-node'],
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('requires an explicit same-Entity replacement request with stale-binding evidence', () => {
@@ -195,7 +192,7 @@ describe('Canvas material contracts', () => {
         bindingId: 'binding-portrait-original',
         role: 'portrait',
       },
-      locator: { kind: 'workspace-file', path: 'characters/portrait-replacement.png' },
+      locator: { file: { authority: 'workspace', path: 'characters/portrait-replacement.png' } },
       mediaKind: 'image',
       title: 'portrait-replacement.png',
       entity: {
@@ -217,7 +214,7 @@ describe('Canvas material contracts', () => {
         ...request,
         locator: generatedLocator,
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('validates owner-contributed action descriptors and instance-scoped intents', () => {
@@ -259,7 +256,7 @@ describe('Canvas material contracts', () => {
   });
 
   it('requires an explicit project-linked or global Media Library copy destination', () => {
-    const source = { kind: 'workspace-file', path: 'media/reference.png' } as const;
+    const source = { file: { authority: 'workspace', path: 'media/reference.png' } } as const;
     expect(
       isCanvasMediaLibraryCopyRequest({
         kind: 'copy-to-project-media-library',
@@ -310,20 +307,15 @@ describe('Canvas material contracts', () => {
       validateCanvasMaterialNodePersistence('media', {
         assetPath: 'Books/story.epub/image/cover.jpg',
         contentLocator: {
-          kind: 'document-entry',
-          source: { kind: 'workspace-file', path: 'neko/assets/Books/story.epub' },
-          entryPath: 'image/cover.jpg',
+          file: { authority: 'workspace', path: 'neko/assets/Books/story.epub' },
+          selector: { kind: 'entry', path: 'image/cover.jpg' },
         },
       }),
-    ).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ code: 'canvas-material-content-locator-invalid' }),
-      ]),
-    );
+    ).toEqual([]);
     expect(
       validateCanvasMaterialNodePersistence('media', {
         assetPath: 'media/reference.png',
-        contentLocator: { kind: 'workspace-file', path: 'media/reference.png' },
+        contentLocator: { file: { authority: 'workspace', path: 'media/reference.png' } },
         entityRepresentation: {
           entityId: 'character-1',
           bindingId: 'binding-1',
@@ -333,7 +325,7 @@ describe('Canvas material contracts', () => {
     ).toEqual([]);
     expect(
       validateCanvasMaterialNodePersistence('media', {
-        assetPath: generatedLocator.path,
+        assetPath: generatedLocator.file.path,
         contentLocator: generatedLocator,
         generation,
       }),
@@ -342,18 +334,21 @@ describe('Canvas material contracts', () => {
     expect(
       validateCanvasMaterialNodePersistence('media', {
         assetPath: 'media/reference.png',
-        contentLocator: { kind: 'workspace-file', path: 'media/reference.png' },
+        contentLocator: { file: { authority: 'workspace', path: 'media/reference.png' } },
         generation,
       }),
-    ).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ code: 'canvas-material-generation-evidence-forbidden' }),
-      ]),
-    );
+    ).toEqual([]);
     expect(
       validateCanvasMaterialNodePersistence('file', {
-        path: generatedLocator.path,
+        path: generatedLocator.file.path,
         contentLocator: generatedLocator,
+      }),
+    ).toEqual([]);
+    expect(
+      validateCanvasMaterialNodePersistence('file', {
+        path: generatedLocator.file.path,
+        contentLocator: generatedLocator,
+        generation: { ...generation, summary: {} },
       }),
     ).toEqual(
       expect.arrayContaining([
@@ -363,7 +358,7 @@ describe('Canvas material contracts', () => {
     expect(
       validateCanvasMaterialNodePersistence('media', {
         assetPath: 'media/reference.png',
-        contentLocator: { kind: 'workspace-file', path: 'media/reference.png' },
+        contentLocator: { file: { authority: 'workspace', path: 'media/reference.png' } },
         credentials: { accessToken: 'secret' },
       }),
     ).toEqual(

@@ -1,4 +1,3 @@
-import type { MCPServerConfig } from '@neko/agent-contracts';
 import type {
   ModelConfig,
   ModelRefConfig,
@@ -8,25 +7,18 @@ import type {
   ProtocolVariant,
   TypeDefaultModels,
 } from '@neko/ai-contracts';
-import type {
-  ExternalResearchConfigInput,
-  ExternalResearchFetchOutputSchema,
-  ExternalResearchMcpFetchToolBinding,
-  ExternalResearchMcpProviderConfig,
-  ExternalResearchMcpSearchToolBinding,
-  ExternalResearchMode,
-  ExternalResearchSearchOutputSchema,
-} from '@neko/agent-contracts';
 import {
   AUTH_TYPES,
   MODEL_TYPES,
   PROVIDER_CONNECTION_KINDS,
+  PROVIDER_MODEL_FAMILIES,
   PROVIDER_PROTOCOL_PROFILES,
   PROVIDER_SUPPORT_LEVELS,
   PROVIDER_TYPES,
   STREAM_FORMATS,
 } from '@neko/ai-contracts';
 import { parse, stringify } from 'smol-toml';
+import { isAgentModelPurpose } from '../model-purpose-registry';
 import type { ProviderDefinition, UnifiedConfig } from './types';
 
 export interface NekoTomlConfig {
@@ -44,8 +36,6 @@ export interface NekoTomlConfig {
   readonly execution_mode?: 'plan' | 'ask' | 'auto';
   readonly providers?: readonly TomlProviderConfig[];
   readonly models?: readonly TomlModelConfig[];
-  readonly mcp_servers?: readonly TomlMcpServerConfig[];
-  readonly external_research?: TomlExternalResearchConfig;
 }
 
 export interface TomlDefaultsConfig {
@@ -69,6 +59,7 @@ export interface TomlProviderConfig {
   readonly connection_kind?: ProviderConfig['connectionKind'];
   readonly protocol_profile?: ProviderConfig['protocolProfile'];
   readonly support_level?: ProviderConfig['supportLevel'];
+  readonly supported_model_families?: ProviderConfig['supportedModelFamilies'];
   readonly requires_api_key?: boolean;
   readonly builtin?: boolean;
   readonly supports_beta?: boolean;
@@ -113,63 +104,6 @@ export interface TomlModelConfig {
   readonly provider_expression_profile_id?: string;
 }
 
-export interface TomlMcpServerConfig {
-  readonly id: string;
-  readonly name: string;
-  readonly description: string;
-  readonly category: MCPServerConfig['category'];
-  readonly transport: MCPServerConfig['transport'];
-  readonly command?: string;
-  readonly args?: readonly string[];
-  readonly env?: Record<string, string>;
-  readonly cwd?: string;
-  readonly inherit_process_env?: boolean;
-  readonly url?: string;
-  readonly headers?: Record<string, string>;
-  readonly enabled?: boolean;
-  readonly builtin?: boolean;
-  readonly homepage?: string;
-  readonly tools?: readonly NonNullable<MCPServerConfig['tools']>[number][];
-  readonly request_timeout?: number;
-}
-
-export interface TomlExternalResearchConfig {
-  readonly mode?: ExternalResearchMode;
-  readonly provider_id?: string;
-  readonly require_approval_for_live?: boolean;
-  readonly allow_project_context_in_query?: boolean;
-  readonly max_results?: number;
-  readonly max_fetch_content_tokens?: number;
-  readonly allowed_domains?: readonly string[];
-  readonly blocked_domains?: readonly string[];
-  readonly mcp?: TomlExternalResearchMcpProviderConfig;
-}
-
-export interface TomlExternalResearchMcpProviderConfig {
-  readonly server_id: string;
-  readonly search_tool: TomlExternalResearchMcpSearchToolBinding;
-  readonly fetch_tool?: TomlExternalResearchMcpFetchToolBinding;
-  readonly expose_bound_tools_as_raw_mcp?: boolean;
-}
-
-export interface TomlExternalResearchMcpSearchToolBinding {
-  readonly name: string;
-  readonly query_arg: string;
-  readonly max_results_arg?: string;
-  readonly allowed_domains_arg?: string;
-  readonly blocked_domains_arg?: string;
-  readonly output_schema: ExternalResearchSearchOutputSchema;
-}
-
-export interface TomlExternalResearchMcpFetchToolBinding {
-  readonly name: string;
-  readonly url_arg: string;
-  readonly max_content_tokens_arg?: string;
-  readonly allowed_domains_arg?: string;
-  readonly blocked_domains_arg?: string;
-  readonly output_schema: ExternalResearchFetchOutputSchema;
-}
-
 export interface TomlConfigValidationIssue {
   readonly code:
     | 'invalidConfigField'
@@ -177,6 +111,7 @@ export interface TomlConfigValidationIssue {
     | 'unsupportedProviderConnectionKind'
     | 'unsupportedProviderProtocolProfile'
     | 'unsupportedProviderSupportLevel'
+    | 'unsupportedProviderModelFamily'
     | 'unsupportedProtocolAuthType'
     | 'unsupportedProtocolStreamFormat'
     | 'unsupportedModelProtocolProfile'
@@ -222,7 +157,7 @@ export function projectTomlConfig(value: unknown): TomlConfigProjection {
   const providerCredentials: Record<string, ProviderCredentialDeclaration> = {};
   const providers = decodeProviders(root['providers'], diagnostics, providerCredentials);
   const models = decodeModels(root['models'], diagnostics);
-  const mcpServers = decodeMcpServers(root['mcp_servers'], diagnostics);
+  rejectRetiredAgentConfiguration(root, diagnostics);
   const defaultModels = decodeModelRefs(
     root['default_models'],
     'default_models',
@@ -248,10 +183,6 @@ export function projectTomlConfig(value: unknown): TomlConfigProjection {
       ? { providers: providers.map(tomlProviderToRuntime) }
       : {}),
     ...(Array.isArray(root['models']) ? { models: models.map(tomlModelToRuntime) } : {}),
-    ...(Array.isArray(root['mcp_servers'])
-      ? { mcpServers: mcpServers.map(tomlMcpServerToRuntime) }
-      : {}),
-    ...decodeExternalResearch(root['external_research'], diagnostics),
   };
   return { config, diagnostics, providerCredentials: Object.freeze(providerCredentials) };
 }
@@ -302,11 +233,26 @@ export function unifiedConfigToToml(
         }
       : {}),
     ...(config.models ? { models: config.models.map(runtimeModelToToml) } : {}),
-    ...(config.mcpServers ? { mcp_servers: config.mcpServers.map(runtimeMcpServerToToml) } : {}),
-    ...(config.externalResearch !== undefined
-      ? { external_research: runtimeExternalResearchToToml(config.externalResearch) }
-      : {}),
   };
+}
+
+function rejectRetiredAgentConfiguration(
+  root: Record<string, unknown>,
+  diagnostics: TomlConfigValidationIssue[],
+): void {
+  if (root['mcp_servers'] !== undefined) {
+    diagnostics.push(
+      invalidField('mcp_servers', 'mcp_servers is retired; DSH owns MCP configuration.'),
+    );
+  }
+  if (root['external_research'] !== undefined) {
+    diagnostics.push(
+      invalidField(
+        'external_research',
+        'external_research is retired; package-owned DSH Tools provide this capability.',
+      ),
+    );
+  }
 }
 
 export function serializeUnifiedConfigToToml(config: UnifiedConfig): string {
@@ -374,6 +320,14 @@ function decodeProviders(
       'unsupportedProviderSupportLevel',
       issues,
     );
+    const supportedModelFamilies = readOptionalAllowedStringArray(
+      record,
+      'supported_model_families',
+      path,
+      PROVIDER_MODEL_FAMILIES,
+      'unsupportedProviderModelFamily',
+      issues,
+    );
     const requiresApiKey = readOptionalBoolean(record, 'requires_api_key', path, issues);
     const builtin = readOptionalBoolean(record, 'builtin', path, issues);
     const supportsBeta = readOptionalBoolean(record, 'supports_beta', path, issues);
@@ -412,6 +366,9 @@ function decodeProviders(
       ...(connectionKind === undefined ? {} : { connection_kind: connectionKind }),
       ...(protocolProfile === undefined ? {} : { protocol_profile: protocolProfile }),
       ...(supportLevel === undefined ? {} : { support_level: supportLevel }),
+      ...(supportedModelFamilies === undefined
+        ? {}
+        : { supported_model_families: supportedModelFamilies }),
       ...(requiresApiKey === undefined ? {} : { requires_api_key: requiresApiKey }),
       ...(builtin === undefined ? {} : { builtin }),
       ...(supportsBeta === undefined ? {} : { supports_beta: supportsBeta }),
@@ -514,121 +471,6 @@ function decodeModels(value: unknown, issues: TomlConfigValidationIssue[]): Toml
   return decoded.filter((model) => !duplicateIds.has(model.id));
 }
 
-function decodeMcpServers(
-  value: unknown,
-  issues: TomlConfigValidationIssue[],
-): TomlMcpServerConfig[] {
-  if (value === undefined) return [];
-  if (!Array.isArray(value)) {
-    issues.push(invalidField('mcp_servers', 'mcp_servers must be an array of tables.'));
-    return [];
-  }
-  const decoded: TomlMcpServerConfig[] = [];
-  for (const [index, entry] of value.entries()) {
-    const record = readRecord(entry);
-    const indexPath = `mcp_servers[${index}]`;
-    if (!record) {
-      issues.push(invalidField(indexPath, 'MCP server entry must be a table.'));
-      continue;
-    }
-    const id = readRequiredString(record, 'id', indexPath, issues);
-    const path = id ? `mcp_servers.${id}` : indexPath;
-    const startIssueCount = issues.length;
-    const name = readRequiredString(record, 'name', path, issues);
-    const description = readRequiredString(record, 'description', path, issues);
-    const category = readAllowedString(
-      record,
-      'category',
-      path,
-      ['filesystem', 'database', 'api', 'development', 'productivity', 'ai', 'other'] as const,
-      'invalidConfigField',
-      issues,
-    );
-    const transport = readAllowedString(
-      record,
-      'transport',
-      path,
-      ['stdio', 'http'] as const,
-      'invalidConfigField',
-      issues,
-    );
-    const command = readOptionalString(record, 'command', path, issues);
-    const args = readOptionalStringArray(record, 'args', path, issues);
-    const env = readOptionalStringRecord(record, 'env', path, issues);
-    const cwd = readOptionalString(record, 'cwd', path, issues);
-    const inheritProcessEnv = readOptionalBoolean(record, 'inherit_process_env', path, issues);
-    const url = readOptionalString(record, 'url', path, issues);
-    const headers = readOptionalStringRecord(record, 'headers', path, issues);
-    const enabled = readOptionalBoolean(record, 'enabled', path, issues);
-    const builtin = readOptionalBoolean(record, 'builtin', path, issues);
-    const homepage = readOptionalString(record, 'homepage', path, issues);
-    const tools = decodeMcpTools(record['tools'], `${path}.tools`, issues);
-    const requestTimeout = readOptionalPositiveInteger(
-      record,
-      'request_timeout',
-      path,
-      'invalidConfigField',
-      issues,
-    );
-    if (
-      !id ||
-      !name ||
-      description === undefined ||
-      !category ||
-      !transport ||
-      issues.length > startIssueCount
-    ) {
-      continue;
-    }
-    decoded.push({
-      id,
-      name,
-      description,
-      category,
-      transport,
-      ...(command === undefined ? {} : { command }),
-      ...(args === undefined ? {} : { args }),
-      ...(env === undefined ? {} : { env }),
-      ...(cwd === undefined ? {} : { cwd }),
-      ...(inheritProcessEnv === undefined ? {} : { inherit_process_env: inheritProcessEnv }),
-      ...(url === undefined ? {} : { url }),
-      ...(headers === undefined ? {} : { headers }),
-      ...(enabled === undefined ? {} : { enabled }),
-      ...(builtin === undefined ? {} : { builtin }),
-      ...(homepage === undefined ? {} : { homepage }),
-      ...(tools === undefined ? {} : { tools }),
-      ...(requestTimeout === undefined ? {} : { request_timeout: requestTimeout }),
-    });
-  }
-  const duplicateIds = collectDuplicateIds(decoded, 'mcp_servers', 'invalidConfigField', issues);
-  return decoded.filter((server) => !duplicateIds.has(server.id));
-}
-
-function decodeMcpTools(
-  value: unknown,
-  path: string,
-  issues: TomlConfigValidationIssue[],
-): readonly NonNullable<MCPServerConfig['tools']>[number][] | undefined {
-  if (value === undefined) return undefined;
-  if (!Array.isArray(value)) {
-    issues.push(invalidField(path, `${path} must be an array of tables.`));
-    return undefined;
-  }
-  const tools: NonNullable<MCPServerConfig['tools']>[number][] = [];
-  for (const [index, entry] of value.entries()) {
-    const record = readRecord(entry);
-    const entryPath = `${path}[${index}]`;
-    if (!record) {
-      issues.push(invalidField(entryPath, `${entryPath} must be a table.`));
-      continue;
-    }
-    const name = readRequiredString(record, 'name', entryPath, issues);
-    const description = readRequiredString(record, 'description', entryPath, issues);
-    if (name && description) tools.push({ name, description });
-  }
-  return tools;
-}
-
 function decodeModelRefs(
   value: unknown,
   section: 'default_models' | 'default_model_purposes',
@@ -644,6 +486,17 @@ function decodeModelRefs(
   const result: Record<string, TomlModelRefConfig> = {};
   for (const [key, entry] of Object.entries(record)) {
     const path = `${section}.${key}`;
+    if (
+      section === 'default_model_purposes' &&
+      !isAgentModelPurpose(tomlModelPurposeKeyToRuntime(key))
+    ) {
+      issues.push({
+        code: 'unsupportedDefaultModelPurpose',
+        path,
+        message: `${path} is not a supported model purpose.`,
+      });
+      continue;
+    }
     if (restrictKeys && !isModelType(key)) {
       issues.push({
         code: 'unsupportedDefaultModelType',
@@ -815,183 +668,6 @@ function decodeMediaEndpoints(
   };
 }
 
-function decodeExternalResearch(
-  value: unknown,
-  issues: TomlConfigValidationIssue[],
-): Pick<UnifiedConfig, 'externalResearch'> {
-  if (value === undefined) return {};
-  const record = readRecord(value);
-  if (!record) {
-    issues.push(invalidField('external_research', 'external_research must be a table.'));
-    return {};
-  }
-  const startIssueCount = issues.length;
-  const mode = readAllowedString(
-    record,
-    'mode',
-    'external_research',
-    ['disabled', 'indexed', 'live'] as const,
-    'invalidConfigField',
-    issues,
-  );
-  const providerId = readOptionalString(record, 'provider_id', 'external_research', issues);
-  const requireApproval = readOptionalBoolean(
-    record,
-    'require_approval_for_live',
-    'external_research',
-    issues,
-  );
-  const allowProjectContext = readOptionalBoolean(
-    record,
-    'allow_project_context_in_query',
-    'external_research',
-    issues,
-  );
-  const maxResults = readOptionalPositiveInteger(
-    record,
-    'max_results',
-    'external_research',
-    'invalidConfigField',
-    issues,
-  );
-  const maxFetchTokens = readOptionalPositiveInteger(
-    record,
-    'max_fetch_content_tokens',
-    'external_research',
-    'invalidConfigField',
-    issues,
-  );
-  const allowedDomains = readOptionalStringArray(
-    record,
-    'allowed_domains',
-    'external_research',
-    issues,
-  );
-  const blockedDomains = readOptionalStringArray(
-    record,
-    'blocked_domains',
-    'external_research',
-    issues,
-  );
-  const mcp = decodeExternalResearchMcp(record['mcp'], 'external_research.mcp', issues);
-  if (issues.length > startIssueCount) return {};
-  const tomlConfig: TomlExternalResearchConfig = {
-    ...(mode === undefined ? {} : { mode }),
-    ...(providerId === undefined ? {} : { provider_id: providerId }),
-    ...(requireApproval === undefined ? {} : { require_approval_for_live: requireApproval }),
-    ...(allowProjectContext === undefined
-      ? {}
-      : { allow_project_context_in_query: allowProjectContext }),
-    ...(maxResults === undefined ? {} : { max_results: maxResults }),
-    ...(maxFetchTokens === undefined ? {} : { max_fetch_content_tokens: maxFetchTokens }),
-    ...(allowedDomains === undefined ? {} : { allowed_domains: allowedDomains }),
-    ...(blockedDomains === undefined ? {} : { blocked_domains: blockedDomains }),
-    ...(mcp === undefined ? {} : { mcp }),
-  };
-  return { externalResearch: tomlExternalResearchToRuntime(tomlConfig) };
-}
-
-function decodeExternalResearchMcp(
-  value: unknown,
-  path: string,
-  issues: TomlConfigValidationIssue[],
-): TomlExternalResearchMcpProviderConfig | undefined {
-  if (value === undefined) return undefined;
-  const record = readRecord(value);
-  if (!record) {
-    issues.push(invalidField(path, `${path} must be a table.`));
-    return undefined;
-  }
-  const serverId = readRequiredString(record, 'server_id', path, issues);
-  const searchTool = decodeExternalResearchSearchTool(
-    record['search_tool'],
-    `${path}.search_tool`,
-    issues,
-  );
-  const fetchTool = decodeExternalResearchFetchTool(
-    record['fetch_tool'],
-    `${path}.fetch_tool`,
-    issues,
-  );
-  const exposeRaw = readOptionalBoolean(record, 'expose_bound_tools_as_raw_mcp', path, issues);
-  if (!serverId || !searchTool) return undefined;
-  return {
-    server_id: serverId,
-    search_tool: searchTool,
-    ...(fetchTool === undefined ? {} : { fetch_tool: fetchTool }),
-    ...(exposeRaw === undefined ? {} : { expose_bound_tools_as_raw_mcp: exposeRaw }),
-  };
-}
-
-function decodeExternalResearchSearchTool(
-  value: unknown,
-  path: string,
-  issues: TomlConfigValidationIssue[],
-): TomlExternalResearchMcpSearchToolBinding | undefined {
-  const record = readRecord(value);
-  if (!record) {
-    issues.push(invalidField(path, `${path} must be a table.`));
-    return undefined;
-  }
-  const name = readRequiredString(record, 'name', path, issues);
-  const queryArg = readRequiredString(record, 'query_arg', path, issues);
-  const outputSchema = readAllowedString(
-    record,
-    'output_schema',
-    path,
-    ['neko.externalResearch.search'] as const,
-    'invalidConfigField',
-    issues,
-  );
-  const maxResultsArg = readOptionalString(record, 'max_results_arg', path, issues);
-  const allowedDomainsArg = readOptionalString(record, 'allowed_domains_arg', path, issues);
-  const blockedDomainsArg = readOptionalString(record, 'blocked_domains_arg', path, issues);
-  if (!name || !queryArg || !outputSchema) return undefined;
-  return {
-    name,
-    query_arg: queryArg,
-    output_schema: outputSchema,
-    ...(maxResultsArg === undefined ? {} : { max_results_arg: maxResultsArg }),
-    ...(allowedDomainsArg === undefined ? {} : { allowed_domains_arg: allowedDomainsArg }),
-    ...(blockedDomainsArg === undefined ? {} : { blocked_domains_arg: blockedDomainsArg }),
-  };
-}
-
-function decodeExternalResearchFetchTool(
-  value: unknown,
-  path: string,
-  issues: TomlConfigValidationIssue[],
-): TomlExternalResearchMcpFetchToolBinding | undefined {
-  if (value === undefined) return undefined;
-  const record = readRecord(value);
-  if (!record) {
-    issues.push(invalidField(path, `${path} must be a table.`));
-    return undefined;
-  }
-  const name = readRequiredString(record, 'name', path, issues);
-  const urlArg = readRequiredString(record, 'url_arg', path, issues);
-  const outputSchema = readAllowedString(
-    record,
-    'output_schema',
-    path,
-    ['neko.externalResearch.fetch'] as const,
-    'invalidConfigField',
-    issues,
-  );
-  const maxTokensArg = readOptionalString(record, 'max_content_tokens_arg', path, issues);
-  const allowedDomainsArg = readOptionalString(record, 'allowed_domains_arg', path, issues);
-  const blockedDomainsArg = readOptionalString(record, 'blocked_domains_arg', path, issues);
-  if (!name || !urlArg || !outputSchema) return undefined;
-  return {
-    name,
-    url_arg: urlArg,
-    output_schema: outputSchema,
-    ...(maxTokensArg === undefined ? {} : { max_content_tokens_arg: maxTokensArg }),
-    ...(allowedDomainsArg === undefined ? {} : { allowed_domains_arg: allowedDomainsArg }),
-    ...(blockedDomainsArg === undefined ? {} : { blocked_domains_arg: blockedDomainsArg }),
-  };
-}
-
 function collectDuplicateIds<T extends { readonly id: string }>(
   entries: readonly T[],
   section: string,
@@ -1093,14 +769,31 @@ function readRequiredStringArray(
   return undefined;
 }
 
-function readOptionalStringArray(
+function readOptionalAllowedStringArray<T extends string>(
   record: Record<string, unknown>,
   key: string,
   owner: string,
+  allowed: readonly T[],
+  code: TomlConfigValidationIssue['code'],
   issues: TomlConfigValidationIssue[],
-): readonly string[] | undefined {
-  if (record[key] === undefined) return undefined;
-  return readRequiredStringArray(record, key, owner, issues);
+): readonly T[] | undefined {
+  const value = record[key];
+  if (value === undefined) return undefined;
+  const path = fieldPath(owner, key);
+  if (!Array.isArray(value) || value.length === 0) {
+    issues.push({ code, path, message: `${path} must be a non-empty array.` });
+    return undefined;
+  }
+  const selected = value.filter((entry): entry is T => isAllowedString(entry, allowed));
+  if (selected.length !== value.length || new Set(selected).size !== selected.length) {
+    issues.push({
+      code,
+      path,
+      message: `${path} must contain unique values from ${formatAllowedValues(allowed)}.`,
+    });
+    return undefined;
+  }
+  return selected;
 }
 
 function readOptionalRecord(
@@ -1190,6 +883,9 @@ function tomlProviderToRuntime(provider: TomlProviderConfig): ProviderDefinition
       ? {}
       : { protocolProfile: provider.protocol_profile }),
     ...(provider.support_level === undefined ? {} : { supportLevel: provider.support_level }),
+    ...(provider.supported_model_families === undefined
+      ? {}
+      : { supportedModelFamilies: provider.supported_model_families }),
     ...(provider.requires_api_key === undefined
       ? {}
       : { requiresApiKey: provider.requires_api_key }),
@@ -1218,6 +914,7 @@ function runtimeProviderToToml(
     connection_kind: provider.connectionKind,
     protocol_profile: provider.protocolProfile,
     support_level: provider.supportLevel,
+    supported_model_families: provider.supportedModelFamilies,
     requires_api_key: provider.requiresApiKey,
     builtin: provider.builtin,
     supports_beta: provider.supportsBeta,
@@ -1366,28 +1063,6 @@ function runtimeModelRefToToml(ref: ModelRefConfig): TomlModelRefConfig {
   };
 }
 
-function tomlMcpServerToRuntime(server: TomlMcpServerConfig): MCPServerConfig {
-  return removeUndefined({
-    id: server.id,
-    name: server.name,
-    description: server.description,
-    category: server.category,
-    transport: server.transport,
-    command: server.command,
-    args: server.args ? [...server.args] : undefined,
-    env: server.env,
-    cwd: server.cwd,
-    inheritProcessEnv: server.inherit_process_env,
-    url: server.url,
-    headers: server.headers,
-    enabled: server.enabled ?? true,
-    builtin: server.builtin,
-    homepage: server.homepage,
-    tools: server.tools ? [...server.tools] : undefined,
-    requestTimeout: server.request_timeout,
-  }) as MCPServerConfig;
-}
-
 function isModelType(value: unknown): value is ModelType {
   return isAllowedString(value, MODEL_TYPES);
 }
@@ -1402,138 +1077,6 @@ function isPositiveInteger(value: unknown): value is number {
 
 function formatAllowedValues(values: readonly string[]): string {
   return values.map((value) => `"${value}"`).join(', ');
-}
-
-function runtimeMcpServerToToml(server: MCPServerConfig): TomlMcpServerConfig {
-  return removeUndefined({
-    id: server.id,
-    name: server.name,
-    description: server.description,
-    category: server.category,
-    transport: server.transport,
-    command: server.command,
-    args: server.args,
-    env: server.env,
-    cwd: server.cwd,
-    inherit_process_env: server.inheritProcessEnv,
-    url: server.url,
-    headers: server.headers,
-    enabled: server.enabled,
-    builtin: server.builtin,
-    homepage: server.homepage,
-    tools: server.tools,
-    request_timeout: server.requestTimeout,
-  }) as TomlMcpServerConfig;
-}
-
-function tomlExternalResearchToRuntime(
-  config: TomlExternalResearchConfig,
-): ExternalResearchConfigInput {
-  return removeUndefined({
-    mode: config.mode,
-    providerId: config.provider_id,
-    requireApprovalForLive: config.require_approval_for_live,
-    allowProjectContextInQuery: config.allow_project_context_in_query,
-    maxResults: config.max_results,
-    maxFetchContentTokens: config.max_fetch_content_tokens,
-    allowedDomains: config.allowed_domains ? [...config.allowed_domains] : undefined,
-    blockedDomains: config.blocked_domains ? [...config.blocked_domains] : undefined,
-    mcp: config.mcp ? tomlExternalResearchMcpToRuntime(config.mcp) : undefined,
-  });
-}
-
-function runtimeExternalResearchToToml(
-  config: ExternalResearchConfigInput,
-): TomlExternalResearchConfig {
-  return removeUndefined({
-    mode: config.mode,
-    provider_id: config.providerId,
-    require_approval_for_live: config.requireApprovalForLive,
-    allow_project_context_in_query: config.allowProjectContextInQuery,
-    max_results: config.maxResults,
-    max_fetch_content_tokens: config.maxFetchContentTokens,
-    allowed_domains: config.allowedDomains,
-    blocked_domains: config.blockedDomains,
-    mcp: config.mcp ? runtimeExternalResearchMcpToToml(config.mcp) : undefined,
-  }) as TomlExternalResearchConfig;
-}
-
-function tomlExternalResearchMcpToRuntime(
-  config: TomlExternalResearchMcpProviderConfig,
-): ExternalResearchMcpProviderConfig {
-  return removeUndefined({
-    serverId: config.server_id,
-    searchTool: tomlExternalResearchSearchToolToRuntime(config.search_tool),
-    fetchTool: config.fetch_tool
-      ? tomlExternalResearchFetchToolToRuntime(config.fetch_tool)
-      : undefined,
-    exposeBoundToolsAsRawMcp: config.expose_bound_tools_as_raw_mcp,
-  }) as ExternalResearchMcpProviderConfig;
-}
-
-function runtimeExternalResearchMcpToToml(
-  config: ExternalResearchMcpProviderConfig,
-): TomlExternalResearchMcpProviderConfig {
-  return removeUndefined({
-    server_id: config.serverId,
-    search_tool: runtimeExternalResearchSearchToolToToml(config.searchTool),
-    fetch_tool: config.fetchTool
-      ? runtimeExternalResearchFetchToolToToml(config.fetchTool)
-      : undefined,
-    expose_bound_tools_as_raw_mcp: config.exposeBoundToolsAsRawMcp,
-  }) as TomlExternalResearchMcpProviderConfig;
-}
-
-function tomlExternalResearchSearchToolToRuntime(
-  binding: TomlExternalResearchMcpSearchToolBinding,
-): ExternalResearchMcpSearchToolBinding {
-  return removeUndefined({
-    name: binding.name,
-    queryArg: binding.query_arg,
-    maxResultsArg: binding.max_results_arg,
-    allowedDomainsArg: binding.allowed_domains_arg,
-    blockedDomainsArg: binding.blocked_domains_arg,
-    outputSchema: binding.output_schema,
-  }) as ExternalResearchMcpSearchToolBinding;
-}
-
-function runtimeExternalResearchSearchToolToToml(
-  binding: ExternalResearchMcpSearchToolBinding,
-): TomlExternalResearchMcpSearchToolBinding {
-  return removeUndefined({
-    name: binding.name,
-    query_arg: binding.queryArg,
-    max_results_arg: binding.maxResultsArg,
-    allowed_domains_arg: binding.allowedDomainsArg,
-    blocked_domains_arg: binding.blockedDomainsArg,
-    output_schema: binding.outputSchema,
-  }) as TomlExternalResearchMcpSearchToolBinding;
-}
-
-function tomlExternalResearchFetchToolToRuntime(
-  binding: TomlExternalResearchMcpFetchToolBinding,
-): ExternalResearchMcpFetchToolBinding {
-  return removeUndefined({
-    name: binding.name,
-    urlArg: binding.url_arg,
-    maxContentTokensArg: binding.max_content_tokens_arg,
-    allowedDomainsArg: binding.allowed_domains_arg,
-    blockedDomainsArg: binding.blocked_domains_arg,
-    outputSchema: binding.output_schema,
-  }) as ExternalResearchMcpFetchToolBinding;
-}
-
-function runtimeExternalResearchFetchToolToToml(
-  binding: ExternalResearchMcpFetchToolBinding,
-): TomlExternalResearchMcpFetchToolBinding {
-  return removeUndefined({
-    name: binding.name,
-    url_arg: binding.urlArg,
-    max_content_tokens_arg: binding.maxContentTokensArg,
-    allowed_domains_arg: binding.allowedDomainsArg,
-    blocked_domains_arg: binding.blockedDomainsArg,
-    output_schema: binding.outputSchema,
-  }) as TomlExternalResearchMcpFetchToolBinding;
 }
 
 function mapRecordValues<TInput, TOutput>(

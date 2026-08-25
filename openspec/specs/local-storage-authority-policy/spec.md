@@ -1,7 +1,7 @@
 # local-storage-authority-policy Specification
 
 ## Purpose
-TBD - created by archiving change govern-local-storage-authorities. Update Purpose after archive.
+Define ownership and failure isolation for local user records, project facts, projections, credentials and package data.
 ## Requirements
 ### Requirement: Durable data declares one authority
 
@@ -69,15 +69,25 @@ select, pin, compare or restore versions of that object. Internal shape/schema v
 
 ### Requirement: Secrets and raw logs use dedicated authorities
 
-Credentials, provider tokens, mount secrets and encryption material MUST use a protected credential
-authority. Raw logs/audit data MUST use owner-partitioned managed files with retention/redaction and
-MUST NOT be stored as ordinary SQLite rows or replayed as business facts.
+Credentials, provider tokens, mount secrets and encryption material MUST use a dedicated sensitive
+authority. A user-authored provider `api_key` MAY use the product-owned local configuration document
+as its explicit authority only when the config owner keeps the secret outside ordinary DTOs and
+projects it through a Host-only credential port. Credentials entered through protected product UI
+MUST use SecretStorage/keychain. Raw logs/audit data MUST use owner-partitioned managed files with
+retention/redaction and MUST NOT be stored as ordinary SQLite rows or replayed as business facts.
 
-#### Scenario: Provider credential is configured
+#### Scenario: Provider credential is configured in the user document
 
-- **WHEN** a provider needs a secret
-- **THEN** configuration stores only non-secret identity/presence metadata
-- **AND** secret bytes remain inside SecretStorage/keychain
+- **WHEN** a provider explicitly declares a valid `api_key` in canonical user TOML
+- **THEN** the product config owner parses the secret under that provider identity
+- **AND** secret bytes never enter SQLite, ordinary config facts, logs, Renderer projection or export
+- **AND** no automatic migration or second persisted credential copy is created
+
+#### Scenario: Provider credential is entered through protected UI
+
+- **WHEN** the user enters a credential through the product credential interaction
+- **THEN** SecretStorage/keychain is its sole persisted authority
+- **AND** the product does not write the secret into user TOML
 
 ### Requirement: Retired data is outside product runtime
 
@@ -167,3 +177,42 @@ The Search semantic cache SHALL persist source identity, source fingerprint, fre
 - **WHEN** Search initializes its Local Metadata tables in a fresh database
 - **THEN** no semantic evidence table is created
 - **AND** semantic source records can round-trip without segment evidence
+
+### Requirement: Desktop tests use isolated storage authority
+
+Every canonical Desktop functional or Agent Evaluation run SHALL bind its runtime HOME, Local Metadata
+SQLite database, Electron `userData`, and prepared Workspace to one explicit temporary fixture root
+before application storage opens. A functional launch with a missing, relative, unsafe, or escaping
+storage path MUST fail visibly and MUST NOT fall back to the system HOME or `~/.neko/neko.db`.
+
+#### Scenario: Canonical functional run starts
+
+- **WHEN** the shared Desktop functional runner prepares a UI or Agent Evaluation scenario
+- **THEN** it launches Desktop with an explicit fixture argument and absolute contained HOME, userData,
+  and Workspace paths
+- **AND** Desktop opens `${FIXTURE_HOME}/.neko/neko.db` rather than the user database
+
+#### Scenario: Functional userData escapes the fixture root
+
+- **WHEN** a functional launch supplies Electron `userData` outside its fixture HOME
+- **THEN** Desktop rejects startup before Local Metadata opens
+- **AND** no fallback database is selected
+
+#### Scenario: Ordinary product startup begins
+
+- **WHEN** Desktop starts without the explicit functional fixture argument or fixture environment
+- **THEN** it uses the system HOME and canonical user database
+- **AND** it does not inspect or import discarded functional fixture databases
+
+### Requirement: Historical fixture records are not inferred or rewritten
+
+Product runtime and test orchestration MUST NOT classify, hide, migrate, rewrite, or delete existing
+user catalog rows by matching path names associated with tests, reports, or temporary directories.
+Identifiable unavailable rows SHALL remain visible for explicit identity-scoped user handling.
+
+#### Scenario: User database contains an old fixture-looking Workspace
+
+- **WHEN** a retained Workspace locator includes a temporary, report, or Agent Evaluation path
+- **THEN** the project catalog displays the record and its local diagnostic according to normal catalog
+  rules
+- **AND** only an explicit user removal for that exact identity may delete the catalog record

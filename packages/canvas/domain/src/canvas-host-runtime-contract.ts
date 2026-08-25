@@ -1,4 +1,8 @@
-import { validateContentLocator, type ContentLocator } from '@neko/content';
+import {
+  isWorkspaceFileContentLocator,
+  validateContentLocator,
+  type ContentLocator,
+} from '@neko/content-domain';
 import {
   isCanvasMaterialActionDescriptor,
   isCanvasMaterialActionIntent,
@@ -101,10 +105,10 @@ export type CanvasHostIntent =
   | {
       readonly type: 'replace-document';
       readonly canvas: CanvasData;
+      readonly removedNodeIds: readonly string[];
     }
   | {
       readonly type: 'save';
-      readonly removedNodeIds?: readonly string[];
     }
   | {
       readonly type: 'undo' | 'redo';
@@ -202,6 +206,11 @@ export interface CanvasHostProjectionEvent {
   readonly sequence: number;
   /** Present when this projection was produced by an accepted Host intent. */
   readonly originCommandId?: string;
+  /** Present when a background autosave failed after an accepted document mutation. */
+  readonly diagnostic?: {
+    readonly code: 'canvas-autosave-failed';
+    readonly message: string;
+  };
   readonly snapshot: CanvasHostSnapshot;
 }
 
@@ -327,8 +336,9 @@ export function parseCanvasHostSnapshot(value: unknown): CanvasHostSnapshot {
 
 export function parseCanvasHostProjectionEvent(value: unknown): CanvasHostProjectionEvent {
   const record = requireRecord(value, 'Canvas Host projection event must be an object.');
-  requireExactKeys(record, ['sequence', 'originCommandId', 'snapshot']);
+  requireExactKeys(record, ['sequence', 'originCommandId', 'diagnostic', 'snapshot']);
   const originCommandId = record['originCommandId'];
+  const diagnostic = record['diagnostic'];
   return {
     sequence: requirePositiveInteger(
       record['sequence'],
@@ -342,6 +352,7 @@ export function parseCanvasHostProjectionEvent(value: unknown): CanvasHostProjec
             'Canvas Host projection origin command identity is invalid.',
           ),
         }),
+    ...(diagnostic === undefined ? {} : { diagnostic: parseCanvasAutosaveDiagnostic(diagnostic) }),
     snapshot: parseCanvasHostSnapshot(record['snapshot']),
   };
 }
@@ -450,23 +461,24 @@ function parseCanvasHostIntent(value: unknown): CanvasHostIntent {
   const record = requireRecord(value, 'Canvas Host intent must be an object.');
   const type = record['type'];
   if (type === 'replace-document') {
+    requireExactKeys(record, ['type', 'canvas', 'removedNodeIds']);
     const canvas = record['canvas'];
     if (!isValidNkc(canvas)) {
       throw invalidPayload('Canvas Host replace-document intent requires valid .nkc data.');
     }
-    return { type, canvas };
+    return {
+      type,
+      canvas,
+      removedNodeIds: parseNodeIdentityList(
+        record['removedNodeIds'],
+        'Canvas Host removed node identities must be an array.',
+        'Canvas Host removed node identity is invalid.',
+      ),
+    };
   }
   if (type === 'save') {
-    requireExactKeys(record, ['type', 'removedNodeIds']);
-    const removedNodeIds =
-      record['removedNodeIds'] === undefined
-        ? undefined
-        : parseNodeIdentityList(
-            record['removedNodeIds'],
-            'Canvas Host removed node identities must be an array.',
-            'Canvas Host removed node identity is invalid.',
-          );
-    return { type, ...(removedNodeIds === undefined ? {} : { removedNodeIds }) };
+    requireExactKeys(record, ['type']);
+    return { type };
   }
   if (type === 'undo' || type === 'redo') {
     requireExactKeys(record, ['type']);
@@ -826,6 +838,7 @@ function parseCanvasGenerationRuntimeProjection(value: unknown): CanvasGeneratio
     throw invalidPayload('Canvas Generation runtime phase is invalid.');
   }
   const jobRef = record['jobRef'];
+  const submissionId = record['submissionId'];
   const createdAt = record['createdAt'];
   const updatedAt = record['updatedAt'];
   const progress = record['progress'];
@@ -833,6 +846,9 @@ function parseCanvasGenerationRuntimeProjection(value: unknown): CanvasGeneratio
   const diagnostic = record['diagnostic'];
   const text = record['text'];
   const recipeStale = record['recipeStale'];
+  if (submissionId === undefined && jobRef === undefined) {
+    throw invalidPayload('Canvas Generation runtime identity is missing.');
+  }
   if ((createdAt === undefined) !== (updatedAt === undefined)) {
     throw invalidPayload('Canvas Generation runtime timestamps must be projected together.');
   }
@@ -851,17 +867,32 @@ function parseCanvasGenerationRuntimeProjection(value: unknown): CanvasGeneratio
   ) {
     throw invalidPayload('Canvas Generation runtime timestamp order is invalid.');
   }
+  const identity =
+    jobRef === undefined
+      ? {
+          submissionId: requireOpaqueIdentity(
+            submissionId,
+            'Canvas Generation submission identity is invalid.',
+          ),
+        }
+      : {
+          jobRef: parseGenerationJobRef(jobRef),
+          ...(submissionId === undefined
+            ? {}
+            : {
+                submissionId: requireOpaqueIdentity(
+                  submissionId,
+                  'Canvas Generation submission identity is invalid.',
+                ),
+              }),
+        };
   return {
     nodeId: requireOpaqueIdentity(record['nodeId'], 'Canvas Generation node identity is invalid.'),
-    submissionId: requireOpaqueIdentity(
-      record['submissionId'],
-      'Canvas Generation submission identity is invalid.',
-    ),
     recipeInputFingerprint: requireNonEmptyString(
       record['recipeInputFingerprint'],
       'Canvas Generation fingerprint is invalid.',
     ),
-    ...(jobRef === undefined ? {} : { jobRef: parseGenerationJobRef(jobRef) }),
+    ...identity,
     phase,
     ...(parsedCreatedAt === undefined ? {} : { createdAt: parsedCreatedAt }),
     ...(parsedUpdatedAt === undefined ? {} : { updatedAt: parsedUpdatedAt }),
@@ -929,7 +960,11 @@ function parseGenerationProgress(
 
 function requireGeneratedOutputLocator(value: unknown) {
   const result = validateContentLocator(value);
-  if (!result.ok || result.locator.kind !== 'generated-output') {
+  if (
+    !result.ok ||
+    !isWorkspaceFileContentLocator(result.locator) ||
+    result.locator.selector !== undefined
+  ) {
     throw invalidPayload('Canvas Generation output locator is invalid.');
   }
   return result.locator;
@@ -966,6 +1001,23 @@ function requireDiagnosticCode(
     throw invalidPayload('Canvas Host diagnostic code is invalid.');
   }
   return match;
+}
+
+function parseCanvasAutosaveDiagnostic(
+  value: unknown,
+): NonNullable<CanvasHostProjectionEvent['diagnostic']> {
+  const record = requireRecord(value, 'Canvas autosave diagnostic is invalid.');
+  requireExactKeys(record, ['code', 'message']);
+  if (record['code'] !== 'canvas-autosave-failed') {
+    throw invalidPayload('Canvas autosave diagnostic code is invalid.');
+  }
+  return {
+    code: record['code'],
+    message: requireNonEmptyString(
+      record['message'],
+      'Canvas autosave diagnostic message is required.',
+    ),
+  };
 }
 
 function requireRecord(value: unknown, message: string): Record<string, unknown> {

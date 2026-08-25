@@ -136,10 +136,6 @@ describe('neko-ui-validation repository Skill', () => {
   it('codifies the canonical workflow in contributor and quality standards', async () => {
     const contributingCn = await readFile(join(repoRoot, 'CONTRIBUTING_CN.md'), 'utf8');
     const contributingEn = await readFile(join(repoRoot, 'CONTRIBUTING.md'), 'utf8');
-    const qualityGates = await readFile(
-      join(repoRoot, 'docs/architecture/adr-code-review-quality-gates.md'),
-      'utf8',
-    );
 
     assert.match(contributingCn, /\.codex\/skills\/neko-ui-validation\/SKILL\.md/u);
     assert.match(contributingCn, /建立受影响功能清单/u);
@@ -163,16 +159,6 @@ describe('neko-ui-validation repository Skill', () => {
     assert.match(contributingEn, /directly inspected by an image-capable Agent/u);
     assert.match(contributingEn, /do not replace visual review/u);
     assert.match(contributingEn, /UI validation is advisory/u);
-
-    assert.match(qualityGates, /\.codex\/skills\/neko-ui-validation\/SKILL\.md/u);
-    assert.match(qualityGates, /唯一 UI 参考验证流程 owner/u);
-    assert.match(qualityGates, /真实 Electron 产品路径是权威运行时/u);
-    assert.match(qualityGates, /任何必需项失败、阻塞、缺失或未执行时，该 UI 报告不得标记为通过/u);
-    assert.match(qualityGates, /本文不建立第二套流程/u);
-    assert.match(qualityGates, /Agent 实际读取当前图像证据/u);
-    assert.match(qualityGates, /均不能替代视觉审阅/u);
-    assert.match(qualityGates, /UI 结果仅作非阻塞参考/u);
-    assert.match(qualityGates, /不得成为 required check/u);
   });
 
   it('keeps focused Desktop visual states in package-owned scenario evidence', async () => {

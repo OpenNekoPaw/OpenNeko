@@ -11,7 +11,7 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import { type ContentReadService } from '@neko/content';
+import { type ContentReadService } from '@neko/content-domain';
 import {
   type LocalMetadataRepositories,
   type TaskCheckpointRepository,
@@ -137,8 +137,7 @@ describe('Desktop portable Media Library snapshot', () => {
           representations: [
             {
               target: {
-                kind: 'workspace-file',
-                path: 'media/collected/Footage/shot.mov',
+                file: { authority: 'workspace', path: 'media/collected/Footage/shot.mov' },
               },
             },
           ],
@@ -698,9 +697,7 @@ async function writeBinding(
               {
                 bindingId: 'binding-a',
                 target: {
-                  kind: 'media-library',
-                  libraryName: 'Footage',
-                  relativePath: locatorPath,
+                  file: { authority: 'workspace', path: `neko/assets/Footage/${locatorPath}` },
                 },
                 role: 'portrait',
                 source: 'user',
@@ -742,10 +739,12 @@ function packageResourceCanvasFixture() {
         data: {
           assetPath: 'installed/package/portrait.png',
           contentLocator: {
-            kind: 'package-resource',
-            packageId: 'asset-character-a',
-            revision: 'published',
-            resourcePath: 'portrait.png',
+            file: {
+              authority: 'package',
+              packageId: 'asset-character-a',
+              revision: 'published',
+              path: 'portrait.png',
+            },
           },
         },
       },

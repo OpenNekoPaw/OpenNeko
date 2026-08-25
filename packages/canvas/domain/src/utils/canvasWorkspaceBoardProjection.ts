@@ -12,7 +12,7 @@ import type {
   GroupCanvasNode,
 } from '../types/canvas';
 import type { CanvasHeadlessAuthoringOperation } from '../types/canvas-headless-authoring';
-import { contentLocatorKey, isContentLocator } from '@neko/content';
+import { contentLocatorKey, isContentLocator } from '@neko/content-domain';
 import { hashStableValue } from '@neko/shared';
 import {
   applyCanvasHeadlessAuthoringOperations,
@@ -20,22 +20,24 @@ import {
 } from './canvasHeadlessAuthoring';
 import {
   CANVAS_AUDIO_NODE_DEFAULT_SIZE,
-  CANVAS_IMAGE_PROJECTION_DEFAULT_WIDTH,
-  CANVAS_IMAGE_PROJECTION_MIN_HEIGHT,
+  resolveCanvasFileNodeDefaultSize,
+  resolveCanvasImageNodeSize,
   resolveCanvasNodeDefaultSize,
 } from '../canvas-node-sizing';
+import { projectGenerationSnapshotToWorkspaceBoard } from '../canvas-generation-projection';
 
 /** Existing Board inbox identity retained for rendering; new projections never create it. */
 export const CANVAS_WORKSPACE_INBOX_NODE_ID = 'workspace-inbox' as const;
 
 const CONTENT_ORIGIN = { x: 40, y: 40 } as const;
-const CONTENT_HORIZONTAL_GAP = 48;
-const CONTENT_VERTICAL_GAP = 24;
+const CONTENT_HORIZONTAL_GAP = 32;
+const CONTENT_VERTICAL_GAP = 16;
+const CONTENT_COLUMN_GAP = 16;
 const CONTENT_LANE_WIDTH = 288;
-const CONTENT_GRID_COLUMNS = 3;
-const GROUP_PADDING = 24;
-const GROUP_HEADER = 56;
-const GROUP_GAP = 20;
+const CONTENT_GRID_COLUMNS = 5;
+const GROUP_PADDING = 16;
+const GROUP_HEADER = 40;
+const GROUP_GAP = 12;
 
 export interface CanvasWorkspaceBoardProjectionPlan {
   readonly status: 'projected' | 'noop';
@@ -66,6 +68,40 @@ export function planCanvasWorkspaceBoardProjection(
     throw new Error(diagnostics.map((entry) => `${entry.code}: ${entry.message}`).join('; '));
   }
 
+  const generationJob = request.artifacts.find((artifact) => artifact.kind === 'generation-job');
+  if (generationJob) {
+    if (request.artifacts.length !== 1) {
+      throw new Error(
+        'invalid-artifact-relation: Generation Job snapshots require an isolated delivery batch.',
+      );
+    }
+    const nextCanvasData = projectGenerationSnapshotToWorkspaceBoard({
+      canvas: canvasData,
+      snapshot: generationJob.snapshot,
+    });
+    const nodeIds = nextCanvasData.nodes
+      .filter(
+        (node) =>
+          node.type === 'generation' &&
+          node.data.latestRun?.jobRef?.jobId === generationJob.snapshot.ref.jobId,
+      )
+      .map((node) => node.id);
+    const projectedNodeIds = new Set(nodeIds);
+    const connectionIds = nextCanvasData.connections
+      .filter(
+        (connection) =>
+          projectedNodeIds.has(connection.sourceId) && projectedNodeIds.has(connection.targetId),
+      )
+      .map((connection) => connection.id);
+    return {
+      status:
+        hashStableValue(canvasData) === hashStableValue(nextCanvasData) ? 'noop' : 'projected',
+      canvasData: nextCanvasData,
+      nodeIds,
+      connectionIds,
+    };
+  }
+
   const artifacts = sortArtifactsByDependencies(request.artifacts);
   const roleLanes = createRoleLanes(artifacts);
   const existingContentNodes = indexExistingContentNodes(canvasData.nodes);
@@ -94,7 +130,11 @@ export function planCanvasWorkspaceBoardProjection(
     const exactExisting = existingContentNodes.get(contentIdentity)?.[0];
     const existing = exactExisting;
     if (existing) {
-      const resolved = { node: existing } as const;
+      const refreshed = refreshExistingResourceProvenance(existing, artifact);
+      if (refreshed !== existing) {
+        operations.push({ kind: 'node.replace', node: refreshed });
+      }
+      const resolved = { node: refreshed } as const;
       resolvedByContentIdentity.set(contentIdentity, resolved);
       resolvedByArtifactId.set(artifact.provenance.artifactId, resolved);
       continue;
@@ -202,7 +242,15 @@ export function planCanvasWorkspaceBoardProjection(
   );
 
   const nodeIds = uniqueStrings(
-    artifacts.map((artifact) => resolvedByArtifactId.get(artifact.provenance.artifactId)!.node.id),
+    artifacts.map((artifact) => {
+      const resolved = resolvedByArtifactId.get(artifact.provenance.artifactId);
+      if (!resolved) {
+        throw new Error(
+          `projection-conflict: Canvas artifact ${artifact.provenance.artifactId} was not resolved.`,
+        );
+      }
+      return resolved.node.id;
+    }),
   );
   if (operations.length === 0) {
     return {
@@ -223,6 +271,30 @@ export function planCanvasWorkspaceBoardProjection(
   };
 }
 
+function refreshExistingResourceProvenance(
+  node: CanvasNode,
+  artifact: CanvasWorkspaceProjectionArtifact,
+): CanvasNode {
+  if (
+    artifact.kind === 'markdown' ||
+    artifact.kind === 'generation-job' ||
+    (node.type !== 'media' && node.type !== 'file')
+  ) {
+    return node;
+  }
+  const existing = node.data.provenance;
+  if (existing?.['contentFingerprint'] === artifact.provenance.contentFingerprint) return node;
+  return {
+    ...node,
+    data: {
+      ...node.data,
+      provenance: existing
+        ? { ...existing, contentFingerprint: artifact.provenance.contentFingerprint }
+        : createSerializableProvenance(artifact),
+    },
+  } as CanvasNode;
+}
+
 function sortArtifactsByDependencies(
   artifacts: readonly CanvasWorkspaceProjectionArtifact[],
 ): readonly CanvasWorkspaceProjectionArtifact[] {
@@ -240,8 +312,11 @@ function sortArtifactsByDependencies(
       throw new Error('invalid-artifact-relation: Creative-content relations contain a cycle.');
     }
     const [next] = pending.splice(nextIndex, 1);
-    sorted.push(next!.artifact);
-    emitted.add(next!.artifact.provenance.artifactId);
+    if (!next) {
+      throw new Error('invalid-artifact-relation: Creative-content ordering lost an artifact.');
+    }
+    sorted.push(next.artifact);
+    emitted.add(next.artifact.provenance.artifactId);
   }
   return sorted;
 }
@@ -280,6 +355,9 @@ function indexExistingContentNodes(
 }
 
 function createArtifactContentIdentity(artifact: CanvasWorkspaceProjectionArtifact): string {
+  if (artifact.kind === 'generation-job') {
+    return hashStableValue({ kind: 'generation-job', ref: artifact.snapshot.ref });
+  }
   return artifact.kind === 'markdown'
     ? createPortableArtifactContentIdentity(
         artifact.provenance.artifactId,
@@ -336,7 +414,7 @@ function planGeneratedBatchGroup(
   }
   if (groupedArtifacts.length < 2) return undefined;
 
-  const columns = Math.ceil(Math.sqrt(groupedArtifacts.length));
+  const columns = Math.min(CONTENT_GRID_COLUMNS, groupedArtifacts.length);
   const rows = Math.ceil(groupedArtifacts.length / columns);
   const columnWidths = Array.from({ length: columns }, () => 0);
   const rowHeights = Array.from({ length: rows }, () => 0);
@@ -359,13 +437,14 @@ function planGeneratedBatchGroup(
     contentIdentities,
     childIds: nodes.map((node) => node.id),
     childOffsets: new Map(
-      nodes.map((node) => [
-        node.id,
-        {
-          x: columnOffsets[node.column]!,
-          y: rowOffsets[node.row]!,
-        },
-      ]),
+      nodes.map((node) => {
+        const x = columnOffsets[node.column];
+        const y = rowOffsets[node.row];
+        if (x === undefined || y === undefined) {
+          throw new Error('projection-conflict: Generated batch layout offset is missing.');
+        }
+        return [node.id, { x, y }] as const;
+      }),
     ),
     size: {
       width:
@@ -385,9 +464,10 @@ function planGeneratedBatchGroup(
 function isGeneratedOutputMediaArtifact(artifact: CanvasWorkspaceProjectionArtifact): boolean {
   return (
     artifact.kind !== 'markdown' &&
+    artifact.kind !== 'generation-job' &&
     artifact.provenance.role === 'output' &&
     (artifact.kind === 'image' || artifact.kind === 'audio' || artifact.kind === 'video') &&
-    artifact.contentLocator.kind === 'generated-output'
+    artifact.generation !== undefined
   );
 }
 
@@ -468,7 +548,7 @@ function findAvailableContentPosition(
     let nextY = y;
     for (let column = 0; column < CONTENT_GRID_COLUMNS; column += 1) {
       const position = {
-        x: preferred.x + column * CONTENT_LANE_WIDTH,
+        x: preferred.x + column * (size.width + CONTENT_COLUMN_GAP),
         y,
       };
       const intersecting = existingNodes.filter((node) =>
@@ -519,6 +599,10 @@ function createArtifactNode(
     };
   }
 
+  if (artifact.kind === 'generation-job') {
+    throw new Error('Generation Job projection must use the canonical lifecycle planner.');
+  }
+
   if (artifact.kind === 'image' || artifact.kind === 'audio' || artifact.kind === 'video') {
     return {
       ...base,
@@ -550,14 +634,13 @@ function createArtifactNode(
 }
 
 function artifactNodeSize(artifact: CanvasWorkspaceProjectionArtifact): CanvasNode['size'] {
-  const imageAspectRatio = artifactImageAspectRatio(artifact);
-  if (imageAspectRatio !== undefined) {
-    const defaultWidth = CANVAS_IMAGE_PROJECTION_DEFAULT_WIDTH;
-    const minimumHeight = CANVAS_IMAGE_PROJECTION_MIN_HEIGHT;
-    const heightAtDefaultWidth = defaultWidth / imageAspectRatio;
-    return heightAtDefaultWidth >= minimumHeight
-      ? { width: defaultWidth, height: heightAtDefaultWidth }
-      : { width: minimumHeight * imageAspectRatio, height: minimumHeight };
+  if (artifact.kind === 'generation-job') {
+    return resolveCanvasNodeDefaultSize('job');
+  }
+  const imageDimensions = artifactImageDimensions(artifact);
+  const imageSize = resolveCanvasImageNodeSize(imageDimensions);
+  if (imageSize) {
+    return imageSize;
   }
   switch (artifact.kind) {
     case 'markdown':
@@ -565,7 +648,10 @@ function artifactNodeSize(artifact: CanvasWorkspaceProjectionArtifact): CanvasNo
     case 'file-reference':
     case 'file':
     case 'storyboard':
-      return resolveCanvasNodeDefaultSize('file');
+      return resolveCanvasFileNodeDefaultSize({
+        path: artifact.title,
+        ...(artifact.mimeType ? { mediaType: artifact.mimeType } : {}),
+      });
     case 'audio':
       return { ...CANVAS_AUDIO_NODE_DEFAULT_SIZE };
     case 'image':
@@ -574,25 +660,13 @@ function artifactNodeSize(artifact: CanvasWorkspaceProjectionArtifact): CanvasNo
   }
 }
 
-function artifactImageAspectRatio(artifact: CanvasWorkspaceProjectionArtifact): number | undefined {
+function artifactImageDimensions(
+  artifact: CanvasWorkspaceProjectionArtifact,
+):
+  { readonly width?: number; readonly height?: number; readonly aspectRatio?: string } | undefined {
   if (artifact.kind !== 'image') return undefined;
   const summary = artifact.generation?.summary;
-  const dimensions = artifact.intrinsicDimensions ?? summary;
-  if (
-    typeof dimensions?.width === 'number' &&
-    Number.isFinite(dimensions.width) &&
-    dimensions.width > 0 &&
-    typeof dimensions.height === 'number' &&
-    Number.isFinite(dimensions.height) &&
-    dimensions.height > 0
-  ) {
-    return dimensions.width / dimensions.height;
-  }
-  const match = summary?.aspectRatio?.match(/^\s*(\d+(?:\.\d+)?)\s*[:/]\s*(\d+(?:\.\d+)?)\s*$/);
-  if (!match) return undefined;
-  const width = Number(match[1]);
-  const height = Number(match[2]);
-  return width > 0 && height > 0 ? width / height : undefined;
+  return artifact.intrinsicDimensions ?? summary;
 }
 
 function createSerializableProvenance(

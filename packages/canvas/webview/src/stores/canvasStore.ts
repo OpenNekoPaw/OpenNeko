@@ -31,7 +31,6 @@ import {
   releaseContainerChildren,
   removeContainerChild,
   reorderContainerChildren,
-  translateContainerSubtree,
 } from '../utils/containerActions';
 import { autoArrangeContainer } from '../utils/containerLayout';
 import { resolveAuthoredNodeDefaultSize } from '../utils/nodeFactory';
@@ -62,6 +61,7 @@ import {
   type CanvasConnectionMutationResult,
   validateCanvasConnectionDraft,
 } from '../utils/canvasConnectionAuthoring';
+import { translateCanvasSelection } from '../utils/selectionTransforms';
 
 // =============================================================================
 // Types
@@ -87,8 +87,11 @@ export interface CanvasStore {
   updateNode: (id: string, updates: CanvasNodeUpdates) => void;
   updateNodeData: (id: string, data: Record<string, unknown>) => void;
   removeNode: (id: string) => void;
-  /** Record history + update position (call on drag end) */
-  moveNodeEnd: (id: string, position: { x: number; y: number }) => void;
+  /** Record one history snapshot and move the exact selection by a shared Canvas-space delta. */
+  moveNodesEnd: (
+    nodeIds: readonly string[],
+    delta: { readonly x: number; readonly y: number },
+  ) => void;
   /** Record history + final resize (call on resize end) */
   resizeNodeEnd: (
     id: string,
@@ -103,6 +106,8 @@ export interface CanvasStore {
   // ==================== Reorder Actions ====================
   /** Reorder a node to a new zIndex (for layer panel drag) */
   reorderNode: (id: string, newZIndex: number) => void;
+  reorderNodes: (nodeIds: readonly string[], placement: 'front' | 'back') => void;
+  setNodesLocked: (nodeIds: readonly string[], locked: boolean) => void;
 
   // ==================== Container Actions ====================
   /** Remove a child from its Group without deleting the child node. */
@@ -255,11 +260,16 @@ function deleteCanvasSelection(
   };
 }
 
-function syncNodeContainerMembership(nodes: CanvasNode[], movedNodeId: string): CanvasNode[] {
+function syncNodeContainerMembership(
+  nodes: CanvasNode[],
+  movedNodeId: string,
+  excludedContainerIds?: ReadonlySet<string>,
+): CanvasNode[] {
   const movedNode = nodes.find((n) => n.id === movedNodeId);
   if (!movedNode) return nodes;
   const resolution = resolveCanvasDropContainer(nodes, movedNodeId, {
     movingSubtree: isContainerNode(movedNode),
+    ...(excludedContainerIds ? { excludedContainerIds } : {}),
   });
   if (resolution.diagnostic) throw new Error(resolution.diagnostic);
   const targetContainer = resolution.targetContainerId
@@ -516,29 +526,30 @@ function createCanvasState(
       operationStore.getState().recordContentNodeDelta([...removedNodeIds]);
     },
 
-    moveNodeEnd: (id, position) => {
+    moveNodesEnd: (nodeIds, delta) => {
       const { canvasData } = get();
       if (!canvasData) return;
-
-      const oldNode = canvasData.nodes.find((n) => n.id === id);
-      if (!oldNode || arePositionsEqual(oldNode.position, position)) return;
+      const translation = translateCanvasSelection(canvasData.nodes, nodeIds, delta);
+      if (translation.rootIds.length === 0 || (delta.x === 0 && delta.y === 0)) return;
       recordHistory(canvasData);
 
-      if (isContainerNode(oldNode)) {
-        const dx = position.x - oldNode.position.x;
-        const dy = position.y - oldNode.position.y;
-        const translatedNodes = translateContainerSubtree(canvasData.nodes, id, { x: dx, y: dy });
-        const nextNodes = syncNodeContainerMembership(translatedNodes, id);
-        set({ canvasData: { ...canvasData, nodes: nextNodes } });
-      } else {
-        const movedNodes = canvasData.nodes.map((node) =>
-          node.id === id ? { ...node, position } : node,
-        );
-        const nextNodes = syncNodeContainerMembership(movedNodes, id);
-        set({ canvasData: { ...canvasData, nodes: nextNodes } });
+      const movingRootIds = new Set(translation.rootIds);
+      let nextNodes = translation.nodes;
+      for (const rootId of translation.rootIds) {
+        nextNodes = syncNodeContainerMembership(nextNodes, rootId, movingRootIds);
       }
+      set({ canvasData: { ...canvasData, nodes: nextNodes } });
 
-      operationStore.getState().recordNodeUpdate(id, { position }, { position: oldNode.position });
+      const nextNodeById = new Map(nextNodes.map((node) => [node.id, node]));
+      const previousNodeById = new Map(canvasData.nodes.map((node) => [node.id, node]));
+      for (const rootId of translation.rootIds) {
+        const previous = previousNodeById.get(rootId);
+        const next = nextNodeById.get(rootId);
+        if (!previous || !next || arePositionsEqual(previous.position, next.position)) continue;
+        operationStore
+          .getState()
+          .recordNodeUpdate(rootId, { position: next.position }, { position: previous.position });
+      }
     },
 
     resizeNodeEnd: (id, size, position) => {
@@ -636,6 +647,68 @@ function createCanvasState(
 
       if (oldNode) {
         operationStore.getState().recordNodeReorder(id, newZIndex, oldNode.zIndex);
+      }
+    },
+
+    reorderNodes: (nodeIds, placement) => {
+      const { canvasData } = get();
+      if (!canvasData) return;
+      const selectedIds = new Set(nodeIds);
+      const selectedNodes = canvasData.nodes
+        .filter((node) => selectedIds.has(node.id))
+        .sort((left, right) => left.zIndex - right.zIndex || left.id.localeCompare(right.id));
+      if (selectedNodes.length === 0) return;
+
+      const selectedZIndex = new Map<string, number>();
+      if (placement === 'front') {
+        const maximum = Math.max(...canvasData.nodes.map((node) => node.zIndex), 0);
+        selectedNodes.forEach((node, index) => selectedZIndex.set(node.id, maximum + index + 1));
+      } else {
+        const minimum = Math.min(...canvasData.nodes.map((node) => node.zIndex), 0);
+        selectedNodes.forEach((node, index) =>
+          selectedZIndex.set(node.id, minimum - selectedNodes.length + index),
+        );
+      }
+
+      recordHistory(canvasData);
+      set({
+        canvasData: {
+          ...canvasData,
+          nodes: canvasData.nodes.map((node) => {
+            const zIndex = selectedZIndex.get(node.id);
+            return zIndex === undefined ? node : { ...node, zIndex };
+          }),
+        },
+      });
+      for (const node of selectedNodes) {
+        const zIndex = selectedZIndex.get(node.id);
+        if (zIndex === undefined) {
+          throw new Error(`Canvas batch reorder omitted selected node "${node.id}".`);
+        }
+        operationStore.getState().recordNodeReorder(node.id, zIndex, node.zIndex);
+      }
+    },
+
+    setNodesLocked: (nodeIds, locked) => {
+      const { canvasData } = get();
+      if (!canvasData) return;
+      const selectedIds = new Set(nodeIds);
+      const changedNodes = canvasData.nodes.filter(
+        (node) => selectedIds.has(node.id) && node.locked !== locked,
+      );
+      if (changedNodes.length === 0) return;
+
+      recordHistory(canvasData);
+      set({
+        canvasData: {
+          ...canvasData,
+          nodes: canvasData.nodes.map((node) =>
+            selectedIds.has(node.id) ? { ...node, locked } : node,
+          ),
+        },
+      });
+      for (const node of changedNodes) {
+        operationStore.getState().recordNodeUpdate(node.id, { locked }, { locked: node.locked });
       }
     },
 

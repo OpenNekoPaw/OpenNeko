@@ -272,13 +272,6 @@ function validateReferences(suite, cases, rubrics) {
       modelProfiles,
       `scenario ${scenario.id} model sequence profile`,
     );
-    assertReferencesExist(
-      scenario.assertions
-        .filter((assertion) => assertion.kind === 'pi-runtime' && assertion.modelProfileId)
-        .map((assertion) => assertion.modelProfileId),
-      modelProfiles,
-      `scenario ${scenario.id} Pi runtime model profile`,
-    );
     if (scenario.rubric) {
       assertReferencesExist(
         [scenario.rubric.judgeProfileId],

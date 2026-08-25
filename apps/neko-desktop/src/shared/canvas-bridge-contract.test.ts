@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { createCanvasHostSessionId, parseCanvasHostRuntimeIdentity } from '@neko/canvas-domain';
 import {
+  parseDesktopCanvasWorkspaceIndexCatalogRequest,
+  parseDesktopCanvasWorkspaceIndexCatalogResult,
+  parseDesktopCanvasWorkspaceIndexChangedEvent,
+  parseDesktopCanvasWorkspaceDocumentOpenRequest,
+  parseDesktopCanvasWorkspaceDocumentOpenResult,
   isSameCanvasHostIdentity,
   parseDesktopCanvasPreviewResourceReleaseRequest,
   parseDesktopCanvasPreviewResourceRequest,
   parseDesktopCanvasPreviewResourceResult,
-  parseDesktopCanvasPreviewVariantRequest,
-  parseDesktopCanvasPreviewVariantResult,
 } from './canvas-bridge-contract';
 
 const identity = {
@@ -44,72 +47,13 @@ describe('Desktop Canvas bridge contract', () => {
     ).toBe(false);
   });
 
-  it('accepts owner-bound portable preview locators and opaque resource results', () => {
-    const request = {
-      identity,
-      requestId: 'preview-1',
-      sourceId: 'image-node-1',
-      locator: { kind: 'workspace-file', path: 'media/cat.png' },
-      role: 'thumbnail',
-      mediaType: 'image',
-    };
-    expect(parseDesktopCanvasPreviewVariantRequest(request)).toEqual(request);
-    expect(
-      parseDesktopCanvasPreviewVariantResult(
-        {
-          requestId: 'preview-1',
-          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/preview',
-        },
-        'preview-1',
-      ),
-    ).toEqual({
-      requestId: 'preview-1',
-      url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/preview',
-    });
-
-    expect(
-      parseDesktopCanvasPreviewVariantRequest({
-        ...request,
-        locator: {
-          kind: 'document-entry',
-          source: { kind: 'workspace-file', path: 'books/story.epub' },
-          entryPath: 'OPS/images/cover.jpg',
-        },
-      }).locator.kind,
-    ).toBe('document-entry');
-
-    expect(() =>
-      parseDesktopCanvasPreviewVariantRequest({
-        ...request,
-        locator: { kind: 'workspace-file', path: '/private/cat.png' },
-      }),
-    ).toThrow('valid ContentLocator');
-    expect(() =>
-      parseDesktopCanvasPreviewVariantRequest({
-        ...request,
-        locator: { kind: 'workspace-file', path: '../cat.png' },
-      }),
-    ).toThrow('valid ContentLocator');
-    expect(() =>
-      parseDesktopCanvasPreviewVariantResult(
-        { requestId: 'preview-1', url: 'file:///private/cat.png' },
-        'preview-1',
-      ),
-    ).toThrow('preview result is invalid');
-  });
-
   it('parses exact embedded Preview ownership and rejects non-opaque transport values', () => {
     const request = {
       identity,
       requestId: 'embedded-1',
       nodeId: 'generation-1',
       outputId: 'output-1',
-      locator: {
-        kind: 'generated-output' as const,
-        outputId: 'output-1',
-        digest: 'sha256:output-1',
-        path: 'neko/generated/output-1.png',
-      },
+      locator: { file: { authority: 'workspace' as const, path: 'neko/generated/output-1.png' } },
       contentKind: 'image' as const,
       mediaType: 'image/png',
       displayName: 'Output 1',
@@ -148,5 +92,79 @@ describe('Desktop Canvas bridge contract', () => {
         'embedded-1',
       ),
     ).toThrow();
+  });
+});
+
+describe('Desktop Canvas workspace index catalog contract', () => {
+  it('strictly parses one Workspace-scoped changed event', () => {
+    expect(parseDesktopCanvasWorkspaceIndexChangedEvent({ workspaceId: 'ws1' })).toEqual({
+      workspaceId: 'ws1',
+    });
+    expect(() =>
+      parseDesktopCanvasWorkspaceIndexChangedEvent({ workspaceId: 'ws1', extra: true }),
+    ).toThrow("unsupported field 'extra'");
+  });
+
+  it('parses an exact request', () => {
+    expect(
+      parseDesktopCanvasWorkspaceIndexCatalogRequest({
+        requestId: 'r1',
+        workspaceId: 'ws1',
+        workspaceGrantId: 'grant1',
+      }),
+    ).toEqual({ requestId: 'r1', workspaceId: 'ws1', workspaceGrantId: 'grant1' });
+  });
+
+  it('rejects unknown request fields', () => {
+    expect(() =>
+      parseDesktopCanvasWorkspaceIndexCatalogRequest({
+        requestId: 'r1',
+        workspaceId: 'ws1',
+        workspaceGrantId: 'grant1',
+        extra: true,
+      }),
+    ).toThrow("unsupported field 'extra'");
+  });
+
+  it('rejects result workspace mismatch', () => {
+    expect(() =>
+      parseDesktopCanvasWorkspaceIndexCatalogResult(
+        {
+          requestId: 'r1',
+          catalog: {
+            workspaceId: 'ws2',
+            defaultTarget: { kind: 'workspace-board', workspaceId: 'ws2' },
+            options: [{ target: { kind: 'workspace-board', workspaceId: 'ws2' }, label: 'Board' }],
+            diagnostics: [],
+          },
+        },
+        'r1',
+        'ws1',
+      ),
+    ).toThrow('workspace mismatch');
+  });
+});
+
+describe('Desktop Canvas workspace document open contract', () => {
+  it('accepts only an exact Workspace NKC identity and correlated result', () => {
+    const request = {
+      requestId: 'open-1',
+      workspaceId: 'ws1',
+      workspaceGrantId: 'grant1',
+      canvasId: 'neko/boards/story.nkc',
+    };
+    expect(parseDesktopCanvasWorkspaceDocumentOpenRequest(request)).toEqual(request);
+    expect(
+      parseDesktopCanvasWorkspaceDocumentOpenResult(
+        { requestId: 'open-1', status: 'opened' },
+        'open-1',
+      ),
+    ).toEqual({ requestId: 'open-1', status: 'opened' });
+    expect(() =>
+      parseDesktopCanvasWorkspaceDocumentOpenRequest({ ...request, canvasId: 'notes/story.txt' }),
+    ).toThrow('NKC identity');
+    expect(() =>
+      parseDesktopCanvasWorkspaceDocumentOpenRequest({ ...request, extra: true }),
+    ).toThrow("unsupported field 'extra'");
   });
 });

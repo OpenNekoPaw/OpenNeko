@@ -1,5 +1,5 @@
-import type { CharacterCreationSourceAuthority } from '@neko/chara/application';
-import { createNodeHostContentReadService } from '@neko/content/node';
+import type { CharacterCreationSourceAuthority } from '@neko/chara-domain/application';
+import { createNodeHostContentReadService } from '@neko/content-domain/node';
 import { NodeProjectEntityAuthoringService } from '@neko/entity-node';
 
 export interface DesktopCharacterCreationWorkspaceResolution {

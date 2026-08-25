@@ -15,6 +15,7 @@ describe('DesktopAssetCenterRuntime', () => {
     }));
     const runtime = new DesktopAssetCenterRuntime(
       { assetCenterSessionId: 'asset-center:window-1', windowId: 'window-1' },
+      'renderer-session-1',
       'grid',
       { assetCenter: { execute } },
     );
@@ -24,6 +25,7 @@ describe('DesktopAssetCenterRuntime', () => {
       1,
       expect.objectContaining({
         route: 'attach',
+        rendererSessionId: 'renderer-session-1',
         identity: { assetCenterSessionId: 'asset-center:window-1', windowId: 'window-1' },
       }),
     );
@@ -48,6 +50,14 @@ describe('DesktopAssetCenterRuntime', () => {
           };
         }
         if (request.route === 'preview.get') throw new Error('Unexpected Preview request.');
+        if (request.route === 'session.detach') {
+          return {
+            requestId: request.requestId,
+            route: request.route,
+            status: 'detached',
+            projection: readyProjection(),
+          };
+        }
         return {
           requestId: request.requestId,
           route: request.route,
@@ -57,6 +67,7 @@ describe('DesktopAssetCenterRuntime', () => {
     );
     const runtime = new DesktopAssetCenterRuntime(
       { assetCenterSessionId: 'asset-center:window-1', windowId: 'window-1' },
+      'renderer-session-1',
       'grid',
       { assetCenter: { execute } },
     );
@@ -82,6 +93,40 @@ describe('DesktopAssetCenterRuntime', () => {
     expect(JSON.stringify(execute.mock.calls)).not.toMatch(
       /absolutePath|selectedId|previewKind|"extension"/u,
     );
+  });
+
+  it('fences delayed detach with the Renderer identity that created the runtime', async () => {
+    const execute = vi.fn(
+      async (request: AssetCenterHostRequest): Promise<AssetCenterHostResult> =>
+        request.route === 'session.detach'
+          ? {
+              requestId: request.requestId,
+              route: request.route,
+              status: 'stale',
+            }
+          : request.route === 'preview.get' || request.route === 'thumbnail.resolve'
+            ? Promise.reject(new Error('Unexpected Asset Center resource request.'))
+            : {
+                requestId: request.requestId,
+                route: request.route,
+                projection: projection(),
+              },
+    );
+    const runtime = new DesktopAssetCenterRuntime(
+      { assetCenterSessionId: 'asset-center:window-1', windowId: 'window-1' },
+      'renderer-session-outgoing',
+      'list',
+      { assetCenter: { execute } },
+    );
+    await runtime.getSnapshot();
+    runtime.dispose();
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(2));
+
+    expect(execute.mock.calls.map(([request]) => request.rendererSessionId)).toEqual([
+      'renderer-session-outgoing',
+      'renderer-session-outgoing',
+    ]);
+    expect(execute.mock.calls.at(-1)?.[0]).toMatchObject({ route: 'session.detach' });
   });
 });
 

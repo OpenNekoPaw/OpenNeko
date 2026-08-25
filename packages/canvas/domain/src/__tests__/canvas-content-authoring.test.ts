@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type ContentLocator } from '@neko/content';
+import { type ContentLocator } from '@neko/content-domain';
 import { createEmptyCanvasData, type CanvasGenerationEvidence } from '@neko/canvas-domain';
 import {
   portableMaterialPath,
@@ -13,7 +13,7 @@ describe('Canvas ContentLocator authoring', () => {
     const canvas = projectResolvedCanvasMaterialToCanvas({
       canvas: createEmptyCanvasData('Fixture'),
       material: {
-        locator: { kind: 'workspace-file', path: 'media/cat.png' },
+        locator: { file: { authority: 'workspace', path: 'media/cat.png' } },
         title: 'cat.png',
         mediaKind: 'image',
         position: { x: 320, y: 180 },
@@ -26,11 +26,48 @@ describe('Canvas ContentLocator authoring', () => {
         position: { x: 320, y: 180 },
         data: expect.objectContaining({
           assetPath: 'media/cat.png',
-          contentLocator: { kind: 'workspace-file', path: 'media/cat.png' },
+          contentLocator: { file: { authority: 'workspace', path: 'media/cat.png' } },
           mediaType: 'image',
         }),
       }),
     ]);
+  });
+
+  it('fits a newly resolved image to intrinsic dimensions but keeps dimensions out of node data', () => {
+    const canvas = projectResolvedCanvasMaterialToCanvas({
+      canvas: createEmptyCanvasData('Fixture'),
+      material: {
+        locator: { file: { authority: 'workspace', path: 'media/portrait.png' } },
+        title: 'portrait.png',
+        mediaKind: 'image',
+        intrinsicDimensions: { width: 800, height: 1200 },
+      },
+    });
+
+    expect(canvas.nodes[0]?.size).toEqual({ width: 80, height: 120 });
+    expect(canvas.nodes[0]?.data).not.toHaveProperty('intrinsicDimensions');
+  });
+
+  it('uses Generation summary dimensions through the same image sizing policy', () => {
+    const canvas = projectResolvedCanvasMaterialToCanvas({
+      canvas: createEmptyCanvasData('Fixture'),
+      material: {
+        locator: { file: { authority: 'workspace', path: 'neko/generated/wide.png' } },
+        title: 'wide.png',
+        mediaKind: 'image',
+        generation: {
+          jobRef: { kind: 'generation', jobId: 'generation-job-wide' },
+          summary: {
+            prompt: 'A wide fixture',
+            model: 'fixture-model',
+            width: 1600,
+            height: 900,
+          },
+        },
+      },
+    });
+
+    expect(canvas.nodes[0]?.size).toEqual({ width: 120, height: 67.5 });
   });
 
   it('projects every source-backed add action to a real supported Canvas node', () => {
@@ -45,7 +82,7 @@ describe('Canvas ContentLocator authoring', () => {
       const canvas = projectResolvedCanvasMaterialToCanvas({
         canvas: createEmptyCanvasData('Fixture'),
         material: {
-          locator: { kind: 'workspace-file', path: source.path },
+          locator: { file: { authority: 'workspace', path: source.path } },
           title: source.path,
           mediaKind: source.mediaType ?? 'model',
           position: { x: 240, y: 160 },
@@ -58,7 +95,7 @@ describe('Canvas ContentLocator authoring', () => {
         position: { x: 240, y: 160 },
       });
       expect(node?.data).toMatchObject({
-        contentLocator: { kind: 'workspace-file', path: source.path },
+        contentLocator: { file: { authority: 'workspace', path: source.path } },
       });
       if (source.mediaType) {
         expect(node?.data).toMatchObject({ mediaType: source.mediaType });
@@ -67,7 +104,9 @@ describe('Canvas ContentLocator authoring', () => {
   });
 
   it('retains stable Entity representation evidence separately from content identity', () => {
-    const locator = { kind: 'workspace-file', path: 'neko/entities/neko/portrait.png' } as const;
+    const locator = {
+      file: { authority: 'workspace', path: 'neko/entities/neko/portrait.png' },
+    } as const;
     const entity = {
       entityId: 'character-neko',
       bindingId: 'binding-neko-portrait',
@@ -99,7 +138,7 @@ describe('Canvas ContentLocator authoring', () => {
     const original = projectResolvedCanvasMaterialToCanvas({
       canvas: createEmptyCanvasData('Fixture'),
       material: {
-        locator: { kind: 'workspace-file', path: 'characters/neko-original.png' },
+        locator: { file: { authority: 'workspace', path: 'characters/neko-original.png' } },
         title: 'neko-original.png',
         mediaKind: 'image',
         entity: originalEntity,
@@ -121,7 +160,7 @@ describe('Canvas ContentLocator authoring', () => {
         nodeId: 'entity-node',
         expectedEntity: { ...originalEntity, bindingId: 'stale-binding' },
         material: {
-          locator: { kind: 'workspace-file', path: 'characters/neko-replacement.png' },
+          locator: { file: { authority: 'workspace', path: 'characters/neko-replacement.png' } },
           title: 'neko-replacement.png',
           mediaKind: 'image',
           entity: nextEntity,
@@ -134,7 +173,7 @@ describe('Canvas ContentLocator authoring', () => {
       nodeId: 'entity-node',
       expectedEntity: originalEntity,
       material: {
-        locator: { kind: 'workspace-file', path: 'characters/neko-replacement.png' },
+        locator: { file: { authority: 'workspace', path: 'characters/neko-replacement.png' } },
         title: 'neko-replacement.png',
         mediaKind: 'image',
         entity: nextEntity,
@@ -146,8 +185,11 @@ describe('Canvas ContentLocator authoring', () => {
     expect(replaced.nodes[0]).toMatchObject({
       id: 'entity-node',
       position: { x: 320, y: 180 },
+      size: original.nodes[0]?.size,
       data: {
-        contentLocator: { kind: 'workspace-file', path: 'characters/neko-replacement.png' },
+        contentLocator: {
+          file: { authority: 'workspace', path: 'characters/neko-replacement.png' },
+        },
         entityRepresentation: nextEntity,
       },
     });
@@ -157,7 +199,7 @@ describe('Canvas ContentLocator authoring', () => {
     const withCanvas = projectResolvedCanvasMaterialToCanvas({
       canvas: createEmptyCanvasData('Fixture'),
       material: {
-        locator: { kind: 'workspace-file', path: 'boards/scene.nkc' },
+        locator: { file: { authority: 'workspace', path: 'boards/scene.nkc' } },
         title: 'scene.nkc',
         mediaKind: 'document',
       },
@@ -165,7 +207,7 @@ describe('Canvas ContentLocator authoring', () => {
     const withDocument = projectResolvedCanvasMaterialToCanvas({
       canvas: withCanvas,
       material: {
-        locator: { kind: 'workspace-file', path: 'docs/brief.pdf' },
+        locator: { file: { authority: 'workspace', path: 'docs/brief.pdf' } },
         title: 'brief.pdf',
         mediaKind: 'document',
       },
@@ -173,7 +215,7 @@ describe('Canvas ContentLocator authoring', () => {
 
     expect(withDocument.nodes.map((node) => node.type)).toEqual(['canvas-embed', 'file']);
     expect(withDocument.nodes[0]?.data).toMatchObject({
-      contentLocator: { kind: 'workspace-file', path: 'boards/scene.nkc' },
+      contentLocator: { file: { authority: 'workspace', path: 'boards/scene.nkc' } },
     });
     expect(JSON.stringify(withDocument)).not.toContain('file://');
     expect(JSON.stringify(withDocument)).not.toContain('runtimePath');
@@ -181,28 +223,29 @@ describe('Canvas ContentLocator authoring', () => {
 
   it.each([
     {
-      locator: { kind: 'workspace-file', path: 'media/cat.png' } satisfies ContentLocator,
+      locator: { file: { authority: 'workspace', path: 'media/cat.png' } } satisfies ContentLocator,
       expectedPath: 'media/cat.png',
     },
     {
       locator: {
-        kind: 'document-entry',
-        source: { kind: 'workspace-file', path: 'packs/story.epub' },
-        entryPath: 'images/cover.png',
+        file: { authority: 'workspace', path: 'packs/story.epub' },
+        selector: { kind: 'entry', path: 'images/cover.png' },
       } satisfies ContentLocator,
       expectedPath: 'images/cover.png',
     },
     {
       locator: {
-        kind: 'package-resource',
-        packageId: 'fixture-package',
-        revision: '1.0.0',
-        resourcePath: 'images/cover.png',
+        file: {
+          authority: 'package',
+          packageId: 'fixture-package',
+          revision: '1.0.0',
+          path: 'images/cover.png',
+        },
       } satisfies ContentLocator,
       expectedPath: 'images/cover.png',
     },
   ])(
-    'projects referenced locator $locator.kind without changing identity',
+    'projects a canonical referenced locator without changing identity',
     ({ locator, expectedPath }) => {
       const canvas = projectResolvedCanvasMaterialToCanvas({
         canvas: createEmptyCanvasData('Fixture'),
@@ -215,13 +258,10 @@ describe('Canvas ContentLocator authoring', () => {
     },
   );
 
-  it('requires immutable Generation evidence for generated-output locators', () => {
+  it('persists Generation evidence independently beside a canonical Workspace locator', () => {
     const generation = generationEvidence();
     const locator = {
-      kind: 'generated-output',
-      outputId: 'image-1',
-      digest: 'sha256:image-1',
-      path: 'neko/generated/image-1.png',
+      file: { authority: 'workspace', path: 'neko/generated/image-1.png' },
     } as const;
     const canvas = projectResolvedCanvasMaterialToCanvas({
       canvas: createEmptyCanvasData('Fixture'),
@@ -237,33 +277,32 @@ describe('Canvas ContentLocator authoring', () => {
       contentLocator: locator,
       generation,
     });
-    expect(() =>
-      projectResolvedCanvasMaterialToCanvas({
-        canvas: createEmptyCanvasData('Fixture'),
-        material: { locator, title: 'image-1.png', mediaKind: 'image' },
-      }),
-    ).toThrow('requires canonical Generation evidence');
+    const referenced = projectResolvedCanvasMaterialToCanvas({
+      canvas: createEmptyCanvasData('Fixture'),
+      material: { locator, title: 'image-1.png', mediaKind: 'image' },
+    });
+    expect(referenced.nodes[0]?.data).not.toHaveProperty('generation');
   });
 
-  it('rejects Generation evidence on referenced locators', () => {
-    expect(() =>
-      projectResolvedCanvasMaterialToCanvas({
-        canvas: createEmptyCanvasData('Fixture'),
-        material: {
-          locator: { kind: 'workspace-file', path: 'media/cat.png' },
-          title: 'cat.png',
-          mediaKind: 'image',
-          generation: generationEvidence(),
-        },
-      }),
-    ).toThrow('must not contain Generation evidence');
+  it('classifies a canonical locator with Generation evidence as generated', () => {
+    const generation = generationEvidence();
+    const canvas = projectResolvedCanvasMaterialToCanvas({
+      canvas: createEmptyCanvasData('Fixture'),
+      material: {
+        locator: { file: { authority: 'workspace', path: 'media/cat.png' } },
+        title: 'cat.png',
+        mediaKind: 'image',
+        generation,
+      },
+    });
+    expect(canvas.nodes[0]?.data).toMatchObject({ generation });
   });
 
   it('commits a derivative as a new node with lineage without rewriting its sources', () => {
     const source = projectResolvedCanvasMaterialToCanvas({
       canvas: createEmptyCanvasData('Fixture'),
       material: {
-        locator: { kind: 'workspace-file', path: 'media/source.png' },
+        locator: { file: { authority: 'workspace', path: 'media/source.png' } },
         title: 'source.png',
         mediaKind: 'image',
       },
@@ -274,10 +313,7 @@ describe('Canvas ContentLocator authoring', () => {
     const derived = projectDerivedCanvasMaterialToCanvas({
       canvas: source,
       material: {
-        locator: {
-          kind: 'workspace-file',
-          path: 'neko/derived/crop/source-cropped.png',
-        },
+        locator: { file: { authority: 'workspace', path: 'neko/derived/crop/source-cropped.png' } },
         title: 'source-cropped.png',
         mediaKind: 'image',
       },
@@ -291,8 +327,7 @@ describe('Canvas ContentLocator authoring', () => {
       id: 'derived-node',
       data: {
         contentLocator: {
-          kind: 'workspace-file',
-          path: 'neko/derived/crop/source-cropped.png',
+          file: { authority: 'workspace', path: 'neko/derived/crop/source-cropped.png' },
         },
       },
     });
@@ -311,7 +346,7 @@ describe('Canvas ContentLocator authoring', () => {
     const source = projectResolvedCanvasMaterialToCanvas({
       canvas: createEmptyCanvasData('Fixture'),
       material: {
-        locator: { kind: 'workspace-file', path: 'media/source.png' },
+        locator: { file: { authority: 'workspace', path: 'media/source.png' } },
         title: 'source.png',
         mediaKind: 'image',
       },
@@ -320,10 +355,7 @@ describe('Canvas ContentLocator authoring', () => {
     const originalSource = structuredClone(source.nodes[0]);
     const generation = generationEvidence();
     const generatedLocator = {
-      kind: 'generated-output',
-      outputId: 'generated-derivative-1',
-      digest: 'sha256:generated-derivative-1',
-      path: 'neko/generated/generated-derivative-1.png',
+      file: { authority: 'workspace', path: 'neko/generated/generated-derivative-1.png' },
     } as const;
 
     const derived = projectDerivedCanvasMaterialToCanvas({
@@ -361,7 +393,7 @@ describe('Canvas ContentLocator authoring', () => {
       projectDerivedCanvasMaterialToCanvas({
         canvas: createEmptyCanvasData('Fixture'),
         material: {
-          locator: { kind: 'workspace-file', path: 'neko/derived/output.png' },
+          locator: { file: { authority: 'workspace', path: 'neko/derived/output.png' } },
           title: 'output.png',
           mediaKind: 'image',
         },

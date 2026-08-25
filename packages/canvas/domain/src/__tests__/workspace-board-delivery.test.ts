@@ -84,7 +84,7 @@ describe('Workspace Board delivery coordinator', () => {
 
     const group = mutation.canvasData.nodes.find((node) => node.type === 'group');
     expect(group).toMatchObject({
-      container: { layout: { mode: 'grid', columns: 3 } },
+      container: { layout: { mode: 'grid', columns: 5, spacing: 12 } },
       data: {
         provenance: {
           kind: 'generated-batch',
@@ -335,10 +335,10 @@ function generatedBatchDelivery(
         kind: 'image' as const,
         title: `Generated ${index + 1}`,
         contentLocator: {
-          kind: 'generated-output' as const,
-          outputId,
-          digest,
-          path: `neko/generated/image/${outputId}.png`,
+          file: {
+            authority: 'workspace' as const,
+            path: `neko/generated/image/${outputId}.png`,
+          },
         },
         generation: {
           jobRef: {

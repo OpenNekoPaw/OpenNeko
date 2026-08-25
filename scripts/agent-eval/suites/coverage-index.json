@@ -9,6 +9,12 @@
     },
     {
       "kind": "builtin-skill",
+      "id": "content-authoring",
+      "disposition": "suite",
+      "suiteIds": ["skill.content-authoring"]
+    },
+    {
+      "kind": "builtin-skill",
       "id": "storyboard",
       "disposition": "suite",
       "suiteIds": ["skill.storyboard"]
@@ -32,12 +38,6 @@
       "id": "media-production",
       "disposition": "suite",
       "suiteIds": ["skill.media-production"]
-    },
-    {
-      "kind": "builtin-skill",
-      "id": "media-quality-review",
-      "disposition": "suite",
-      "suiteIds": ["skill.media-quality-review"]
     },
     {
       "kind": "builtin-skill",
@@ -93,8 +93,8 @@
       "id": "schema",
       "disposition": "excluded",
       "deterministicValidation": {
-        "command": "pnpm --dir packages/agent/runtime exec vitest run src/session/__tests__/system-prompt-builder.test.ts",
-        "reason": "The canonical Builder has no independent runtime schema-module path; its supported composition inputs and secret-free projection are deterministic and covered by the Builder contract tests."
+        "command": "pnpm --dir packages/dsh-bridge exec vitest run src/product-system-prompt.test.ts src/index.test.ts",
+        "reason": "The DSH bridge product protocol is a static fragment mounted after the locked standard preset; its content and exact registration are deterministic bridge contract checks."
       }
     },
     {
@@ -114,8 +114,8 @@
       "id": "ephemeral",
       "disposition": "excluded",
       "deterministicValidation": {
-        "command": "pnpm --dir packages/agent/runtime exec vitest run src/session/__tests__/system-prompt-builder.test.ts",
-        "reason": "The canonical Builder has no Orchestrator-owned ephemeral module path; execution-mode selection and non-mutating composition are deterministic and covered by the Builder contract tests."
+        "command": "pnpm --dir packages/dsh-bridge exec vitest run src/index.test.ts",
+        "reason": "Per-Conversation product context uses one exact DSH systemPrompt context registration and is covered by the bridge Session rebuild contract test."
       }
     },
 
@@ -127,6 +127,57 @@
         "command": "pnpm test:agent:eval",
         "reason": "Evaluation platform code is external test infrastructure and cannot change target Agent behavior by itself."
       }
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "dsh-standard-agent-loop",
+      "disposition": "excluded",
+      "deterministicValidation": {
+        "command": "pnpm --dir packages/dsh-bridge run test -- --run",
+        "reason": "The generic Agent loop is DSH-owned. OpenNeko verifies only ACP transport, typed bridge admission, and fail-visible diagnostics; it does not duplicate upstream loop behavior tests."
+      }
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "dsh-standard-session-history",
+      "disposition": "excluded",
+      "deterministicValidation": {
+        "command": "pnpm --dir packages/agent/runtime run test -- --run src/acp",
+        "reason": "DSH owns session persistence and history replay semantics. OpenNeko tests exact Conversation-to-DSH Session binding and projection isolation, not a second session authority."
+      }
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "dsh-standard-skill-runtime",
+      "disposition": "excluded",
+      "deterministicValidation": {
+        "command": "pnpm --dir packages/dsh-bridge run test -- --run",
+        "reason": "DSH owns Skill discovery, activation, and execution. OpenNeko retains Skill source/provenance projection and command gesture coverage only."
+      }
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "dsh-standard-tool-scheduling",
+      "disposition": "excluded",
+      "deterministicValidation": {
+        "command": "pnpm --dir packages/agent/runtime run test -- --run src/acp",
+        "reason": "DSH owns generic Tool scheduling, progress, and standard cancellation. OpenNeko evaluates only domain Tool delegation, authorization, and artifact/job facts."
+      }
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "dsh-standard-permission-presets",
+      "disposition": "excluded",
+      "deterministicValidation": {
+        "command": "pnpm --dir packages/agent/contracts run test -- --run src/dsh-permission-host.test.ts",
+        "reason": "DSH owns standard permission preset semantics. OpenNeko verifies sender-bound projection and explicit user selection without redefining plan/ask/auto or duplicating preset behavior."
+      }
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "dsh-active-session-inbox",
+      "disposition": "suite",
+      "suiteIds": ["agent-runtime.workflow-controller"]
     },
     {
       "kind": "agent-runtime-capability",
@@ -158,7 +209,7 @@
       "disposition": "suite",
       "suiteIds": [
         "agent-runtime.external-automation",
-        "agent-runtime.perception-routing",
+        "agent-runtime.media-tool-routing",
         "skill.skill-creator",
         "skill.image",
         "skill.video"
@@ -168,7 +219,7 @@
       "kind": "agent-runtime-capability",
       "id": "provider-model-routing",
       "disposition": "suite",
-      "suiteIds": ["agent-runtime.model-binding", "agent-runtime.perception-routing"]
+      "suiteIds": ["agent-runtime.model-binding", "agent-runtime.media-tool-routing"]
     },
     {
       "kind": "agent-runtime-capability",
@@ -197,7 +248,7 @@
       "kind": "agent-runtime-capability",
       "id": "media-library-content",
       "disposition": "suite",
-      "suiteIds": ["agent-runtime.media-library-content", "agent-runtime.stream-delivery"]
+      "suiteIds": ["agent-runtime.media-tool-routing"]
     },
     {
       "kind": "agent-runtime-capability",
@@ -228,12 +279,6 @@
       "id": "desktop-event-projection",
       "disposition": "suite",
       "suiteIds": ["agent-runtime.external-automation", "agent-runtime.stream-delivery"]
-    },
-    {
-      "kind": "agent-runtime-capability",
-      "id": "resource-display-projection",
-      "disposition": "suite",
-      "suiteIds": ["agent-runtime.stream-delivery"]
     }
   ]
 }

@@ -26,9 +26,7 @@ export function HomeExperienceQuickActions({
   children,
 }: HomeExperienceQuickActionsProps): JSX.Element | null {
   const { t } = useTranslation();
-  if ((mode === 'assistant' || mode === 'world-experience') && children == null) {
-    return null;
-  }
+  if ((mode === 'assistant' || mode === 'world-experience') && children == null) return null;
 
   const titleKey =
     mode === 'assistant'
@@ -40,7 +38,11 @@ export function HomeExperienceQuickActions({
   const accessibleLabel = summary ? `${title}: ${summary}` : title;
 
   return (
-    <section className="agent-entry-quick-actions" aria-label={t('chat.entryQuickActions.label')}>
+    <section
+      className="agent-entry-quick-actions"
+      aria-label={t('chat.entryQuickActions.label')}
+      data-entry-panel-mode={mode}
+    >
       <Collapsible
         className="agent-entry-quick-panel"
         contentClassName="agent-entry-quick-detail"

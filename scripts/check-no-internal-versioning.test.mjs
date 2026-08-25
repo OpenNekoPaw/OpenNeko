@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 
 import {
   buildAuditReport,
+  isGeneratedDirectoryName,
   scanSources,
   validateAllowanceRegistry,
   validateCorrectnessAllowanceRegistry,
@@ -13,6 +14,10 @@ const forbiddenField = ['schema', 'Version'].join('');
 const externalField = ['protocol', 'Version'].join('');
 
 describe('internal versioning audit', () => {
+  it('keeps generated DSH packaging stages outside the source audit', () => {
+    assert.equal(isGeneratedDirectoryName('.dsh-runtime-stage'), true);
+  });
+
   it('rejects versioned table generations and SQLite table version pragmas', () => {
     const generatedSchemaPath = ['packages/example/src/m1', 'schema.ts'].join('-');
     const generatedTableIdentifier = ['M1', 'TABLES'].join('_');
@@ -97,6 +102,11 @@ describe('internal versioning audit', () => {
     ]);
 
     assert.deepEqual(findings, []);
+  });
+
+  it('keeps generated DSH development closures outside the internal contract audit', () => {
+    assert.equal(isGeneratedDirectoryName('.dsh-development-runtime'), true);
+    assert.equal(isGeneratedDirectoryName('packages'), false);
   });
 
   it('distinguishes AI generation domain data from numeric generation counters', () => {
@@ -205,7 +215,7 @@ describe('internal versioning audit', () => {
   it('allows only exact Character or managed Asset domain occurrences inside their owners', () => {
     const [finding] = scanSources([
       {
-        path: 'packages/chara/src/character-project.ts',
+        path: 'packages/chara/domain/src/character-project.ts',
         content: 'export interface CharacterVersion { characterVersion: string }',
       },
     ]);
@@ -215,7 +225,7 @@ describe('internal versioning audit', () => {
       path: finding.path,
       category: finding.category,
       token: finding.token,
-      domainOwner: '@neko/chara',
+      domainOwner: '@neko/chara-domain',
       businessRequirement: 'Published character snapshots are immutable and user-referenceable.',
       fieldScope: 'Character publication identity only.',
       isolationRule: 'The identity never selects a contract, codec, migration, or component shape.',

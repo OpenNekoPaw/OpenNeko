@@ -9,7 +9,7 @@
     "canonicalPath": [
       "Desktop Agent Draft purpose bindings",
       "flat agent.main and image.generate policy",
-      "Pi provider/model registration",
+      "exact DSH Session model configuration",
       "ordinary terminal answer"
     ],
     "observables": [
@@ -47,17 +47,6 @@
     {
       "id": "idle",
       "kind": "fully-idle",
-      "evidenceRef": "ordinary-message-facts"
-    },
-    {
-      "id": "pi-runtime",
-      "kind": "pi-runtime",
-      "implementation": "pi-agent-core",
-      "transcriptAuthority": "pi-session",
-      "productMetadataAuthority": "sqlite",
-      "purpose": "agent.main",
-      "workspaceLocatorKind": "virtual",
-      "turnDurability": "durable",
       "evidenceRef": "ordinary-message-facts"
     },
     {

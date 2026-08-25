@@ -2,8 +2,8 @@ import {
   type ContentIoDiagnostic,
   type ContentLocator,
   type ContentReadService,
-  type MediaLibraryContentLocator,
-} from '@neko/content';
+  type WorkspaceFileContentLocator,
+} from '@neko/content-domain';
 import {
   isCanvasMediaLibraryCopyRequest,
   type CanvasMediaLibraryCopyRequest,
@@ -55,7 +55,7 @@ export type CanvasMediaLibraryCopyResult =
       readonly status: 'copied';
       readonly destinationKind: 'project-media-library';
       readonly source: ContentLocator;
-      readonly destination: MediaLibraryContentLocator;
+      readonly destination: WorkspaceFileContentLocator;
       readonly byteLength: number;
     }
   | {
@@ -214,9 +214,10 @@ function mapProjectResult(
     destinationKind: 'project-media-library',
     source: result.source,
     destination: {
-      kind: 'media-library',
-      libraryName,
-      relativePath: result.entryId,
+      file: {
+        authority: 'workspace',
+        path: `neko/assets/${libraryName}/${result.entryId}`,
+      },
     },
     byteLength: result.byteLength,
   };

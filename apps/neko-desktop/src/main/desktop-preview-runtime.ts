@@ -5,7 +5,6 @@ import {
   PREVIEW_HOST_RUNTIME_ROUTES,
   assertPreviewRuntimeIdentity,
   detectPreviewContentKind,
-  getEpubResourceMediaType,
   getPreviewMediaType,
   parsePreviewProjection,
   parsePreviewRuntimeRequest,
@@ -22,13 +21,13 @@ import {
   type PreviewResourceProjectionService,
   type PreviewResourceSource,
 } from '@neko/preview-domain/resource-projection';
-import { createNodeArchiveResource } from '@neko/content/document/node';
+import { publishEpubPreviewResource } from '@neko/preview-node';
 import type {
   ResourceBrowserIdentity,
   ResourceBrowserItem,
   ResourceBrowserQuickPreviewDescriptor,
 } from '@neko/assets-domain/resource-browser/contract';
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 import {
   closeMainView,
   findMainGroupForView,
@@ -66,6 +65,13 @@ export interface DesktopPreviewRuntimeOptions {
     DesktopResourceRegistry,
     'registerFile' | 'registerResourceSet' | 'registerResourceTree' | 'releaseSession'
   >;
+  readonly resolveRestoredSource?: (input: {
+    readonly projectId: string;
+    readonly workspaceId: string;
+    readonly contentLocator: ContentLocator;
+    readonly displayName: string;
+    readonly signal: AbortSignal;
+  }) => Promise<PreviewSourceInput>;
   readonly createIdentity?: () => string;
 }
 
@@ -168,7 +174,7 @@ export class DesktopPreviewRuntime {
         status: 'loading',
       });
       pendingSource = {
-        source,
+        source: Promise.resolve(source),
         displayName: input.item.label,
         contentKind,
         contentLocator,
@@ -190,6 +196,9 @@ export class DesktopPreviewRuntime {
       documentId: input.item.resourceId,
       previewPresentation: presentation,
       ...(contentKind === undefined ? {} : { previewContentKind: contentKind }),
+      ...(pendingSource === undefined
+        ? {}
+        : { previewContentLocator: pendingSource.contentLocator }),
     };
     let workbench: DesktopWorkbenchLayoutProjection;
     try {
@@ -258,7 +267,7 @@ export class DesktopPreviewRuntime {
     const source = await resolvePreviewSource({ absolutePath: input.absolutePath }, mediaType);
     const projected = await this.previewResources.project({
       descriptorId,
-      locator: resolvePreviewContentLocator(input.item),
+      source: resolvePreviewContentLocator(input.item),
       displayName: input.item.label,
       owner: {
         source,
@@ -281,6 +290,11 @@ export class DesktopPreviewRuntime {
       projected.lease.release();
       throw new Error('Desktop quick Preview descriptor kind does not match its item.');
     }
+    if (!projected.descriptor.contentLocator) {
+      projected.lease.release();
+      throw new Error('Desktop quick Preview requires a durable content locator.');
+    }
+    const contentLocator = projected.descriptor.contentLocator;
     try {
       this.sessions.registerTransient(input.identity.windowId, previewSessionId);
     } catch (error) {
@@ -289,7 +303,7 @@ export class DesktopPreviewRuntime {
     }
     return {
       previewSessionId,
-      descriptor: { ...projected.descriptor, contentKind },
+      descriptor: { ...projected.descriptor, contentLocator, contentKind },
     };
   }
 
@@ -305,7 +319,6 @@ export class DesktopPreviewRuntime {
   ): Promise<PreviewProjection> {
     this.requireActive();
     const request = parseDesktopPreviewBootstrapRequest(value);
-    const session = this.sessions.read(request.sessionId);
     const projection = await this.options.shell.getProjection(windowId);
     const workspaceWorkbench = resolveDesktopWindowWorkspaceWorkbench(
       projection.window,
@@ -321,6 +334,9 @@ export class DesktopPreviewRuntime {
     if (request.rendererSessionId !== projection.rendererSessionId) {
       throw new Error('Desktop Preview bootstrap endpoint is stale.');
     }
+    const session = this.sessions.has(request.sessionId)
+      ? this.sessions.read(request.sessionId)
+      : this.restoreSession(windowId, request, view);
     const requestedIdentity = {
       ...session.identity,
       projectId: request.projectId,
@@ -453,12 +469,14 @@ export class DesktopPreviewRuntime {
   ): Promise<PreviewProjection> {
     try {
       source.abortController.signal.throwIfAborted();
+      const previewSource = await source.source;
+      source.abortController.signal.throwIfAborted();
       const projected = await this.previewResources.project({
         descriptorId: source.descriptorId,
-        locator: source.contentLocator,
+        source: source.contentLocator,
         displayName: source.displayName,
         owner: {
-          source: source.source,
+          source: previewSource,
           displayName: source.displayName,
           contentKind: source.contentKind,
           signal: source.abortController.signal,
@@ -469,7 +487,7 @@ export class DesktopPreviewRuntime {
             rendererSessionId: source.identity.rendererSessionId,
           },
         },
-        requestedMediaType: source.source.mediaType,
+        requestedMediaType: previewSource.mediaType,
       });
       if (projected.status === 'unavailable') throw new Error(projected.diagnostic.message);
       if (source.abortController.signal.aborted) {
@@ -519,6 +537,66 @@ export class DesktopPreviewRuntime {
       source.abortController.abort(new Error('Preview source preparation was released.'));
     }
     this.previewResources.release(`preview:${sessionId}`);
+  }
+
+  private restoreSession(
+    windowId: string,
+    request: DesktopPreviewBootstrapRequest,
+    view: DesktopWorkbenchLayoutProjection['main']['views'][number],
+  ): PreviewSessionSnapshot {
+    if (!this.options.resolveRestoredSource) {
+      throw new Error('Desktop Preview restored-source resolver is unavailable.');
+    }
+    if (
+      !view.documentId ||
+      !view.previewPresentation ||
+      !view.previewContentKind ||
+      !view.previewContentLocator
+    ) {
+      throw new Error('Desktop Preview View has no durable ContentLocator recovery source.');
+    }
+    const mediaType = getPreviewMediaType(view.displayLabel);
+    if (!mediaType) {
+      throw new Error(`Desktop Preview does not support '${view.displayLabel}'.`);
+    }
+    const identity: PreviewRuntimeIdentity = {
+      projectId: request.projectId,
+      workspaceId: request.workspaceId,
+      windowId,
+      viewId: request.viewId,
+      viewInstanceId: request.viewInstanceId,
+      documentId: view.documentId,
+      sessionId: request.sessionId,
+      rendererSessionId: request.rendererSessionId,
+    };
+    const projection = parsePreviewProjection({
+      identity,
+      presentation: view.previewPresentation,
+      status: 'loading',
+    });
+    const abortController = new AbortController();
+    const contentLocator = view.previewContentLocator;
+    const source = this.options
+      .resolveRestoredSource({
+        projectId: request.projectId,
+        workspaceId: request.workspaceId,
+        contentLocator,
+        displayName: view.displayLabel,
+        signal: abortController.signal,
+      })
+      .then((restored) => resolvePreviewSource(restored, mediaType));
+    this.sessions.register(projection);
+    this.pendingSources.set(request.sessionId, {
+      source,
+      displayName: view.displayLabel,
+      contentKind: view.previewContentKind,
+      contentLocator,
+      descriptorId: `preview:${request.sessionId}`,
+      identity,
+      presentation: view.previewPresentation,
+      abortController,
+    });
+    return this.sessions.read(request.sessionId);
   }
 
   private async updatePresentation(
@@ -643,7 +721,7 @@ async function resolvePreviewSource(
 }
 
 interface PendingPreviewSource {
-  readonly source: PreviewResourceSource;
+  readonly source: Promise<PreviewResourceSource>;
   readonly displayName: string;
   readonly contentKind: PreviewContentKind;
   readonly contentLocator: ResourceBrowserContentLocator;
@@ -694,30 +772,11 @@ async function publishPreviewResource(input: {
   }
   const absolutePath = input.source.absolutePath;
   if (input.source.mediaType === 'application/epub+zip') {
-    const archive = await createNodeArchiveResource(absolutePath, {
+    return publishEpubPreviewResource({
+      absolutePath,
       signal: input.signal,
+      registerResourceTree: (tree) => input.resources.registerResourceTree(input.owner, tree),
     });
-    try {
-      if (!archive.entries.some((entry) => entry.path === 'META-INF/container.xml')) {
-        throw new Error('EPUB container descriptor is missing.');
-      }
-      const lease = input.resources.registerResourceTree(input.owner, {
-        entries: archive.entries.map((entry) => ({
-          virtualPath: entry.path,
-          byteLength: entry.byteLength,
-          contentType: getEpubResourceMediaType(entry.path),
-          read: (signal) => archive.readEntry(entry.path, signal),
-        })),
-        release: () => {
-          void archive.dispose();
-        },
-      });
-      releaseLeaseIfAborted(lease, input.signal);
-      return lease;
-    } catch (error) {
-      await archive.dispose();
-      throw error;
-    }
   }
   if (
     input.contentKind !== 'model' ||

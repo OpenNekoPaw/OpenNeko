@@ -1,0 +1,475 @@
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+
+import { Context } from '@deepseek-ai/cordis';
+import { FileSystemSkillProvider } from '@deepseek-ai/dsh-skill-filesystem';
+import { renderSkillContent, SkillRegistry, type SkillCandidate } from '@deepseek-ai/dsh-skill';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { validateStagedSkillPackage } from './index';
+
+const roots: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
+
+describe('locked DSH filesystem Skill provider contract', () => {
+  it('validates isolated authoring candidates through the locked provider for both layouts', async () => {
+    const directoryRoot = await fixtureRoot();
+    await writeDirectorySkill(directoryRoot, 'candidate', 'Directory authoring candidate.');
+    await writeFile(
+      join(directoryRoot, 'candidate', 'SKILL.md'),
+      '---\nname: created-directory\ndescription: Directory authoring candidate.\n---\n# Created\n',
+      'utf8',
+    );
+    const flatRoot = await fixtureRoot();
+    await writeFile(
+      join(flatRoot, 'candidate.md'),
+      '---\nname: created-flat\ndescription: Flat authoring candidate.\n---\n# Created\n',
+      'utf8',
+    );
+
+    await expect(
+      validateStagedSkillPackage(directoryRoot, 'directory', 'candidate/SKILL.md'),
+    ).resolves.toEqual({
+      name: 'created-directory',
+    });
+    await expect(validateStagedSkillPackage(flatRoot, 'flat', 'candidate.md')).resolves.toEqual({
+      name: 'created-flat',
+    });
+  });
+
+  it('rejects a staged root with a second candidate instead of selecting one', async () => {
+    const root = await fixtureRoot();
+    await writeDirectorySkill(root, 'candidate', 'Canonical candidate.');
+    await writeFlatSkill(root, 'sibling', 'Unexpected sibling.');
+
+    await expect(
+      validateStagedSkillPackage(root, 'directory', 'candidate/SKILL.md'),
+    ).rejects.toThrow(/exactly one DSH Skill/u);
+  });
+
+  it('rejects an entry that escapes the isolated validation root', async () => {
+    const parent = await fixtureRoot();
+    const root = join(parent, 'validation');
+    await mkdir(root);
+    await writeFile(
+      join(parent, 'outside.md'),
+      '---\nname: outside\ndescription: Outside.\n---\n# Outside\n',
+      'utf8',
+    );
+
+    await expect(validateStagedSkillPackage(root, 'flat', '../outside.md')).rejects.toThrow(
+      /invalid for its layout/u,
+    );
+  });
+
+  it('discovers directory and flat layouts while preserving all invocation-policy combinations', async () => {
+    const root = await fixtureRoot();
+    await writeDirectorySkill(root, 'directory-default', 'Directory default.');
+    await writeFlatSkill(
+      root,
+      'flat-user-only',
+      'Flat user only.',
+      'disable-model-invocation: true\n',
+    );
+    await writeDirectorySkill(
+      root,
+      'directory-model-only',
+      'Directory model only.',
+      'user-invocable: false\n',
+    );
+    await writeFlatSkill(
+      root,
+      'flat-disabled',
+      'Flat disabled.',
+      'disable-model-invocation: true\nuser-invocable: false\n',
+    );
+    const provider = isolatedProvider(root);
+
+    const observation = await provider.list({ cwd: root });
+
+    expect(Array.isArray(observation)).toBe(true);
+    const candidates = Array.isArray(observation) ? observation : observation.candidates;
+    expect(
+      candidates.map((candidate) => ({
+        name: candidate.name,
+        invocation: candidate.invocation,
+        source: candidate.source,
+      })),
+    ).toEqual([
+      {
+        name: 'directory-default',
+        invocation: { modelInvocable: true, userInvocable: true },
+        source: 'custom',
+      },
+      {
+        name: 'directory-model-only',
+        invocation: { modelInvocable: true, userInvocable: false },
+        source: 'custom',
+      },
+      {
+        name: 'flat-disabled',
+        invocation: { modelInvocable: false, userInvocable: false },
+        source: 'custom',
+      },
+      {
+        name: 'flat-user-only',
+        invocation: { modelInvocable: false, userInvocable: true },
+        source: 'custom',
+      },
+    ]);
+    await provider.dispose();
+  });
+
+  it('loads only the selected body and resource-base guidance without preloading sibling resources', async () => {
+    const root = await fixtureRoot();
+    await writeDirectorySkill(root, 'guided-skill', 'Guided skill.');
+    await mkdir(join(root, 'guided-skill', 'references'));
+    await writeFile(
+      join(root, 'guided-skill', 'references', 'guide.md'),
+      'RESOURCE_SENTINEL',
+      'utf8',
+    );
+    await writeDirectorySkill(root, 'sibling-skill', 'Sibling skill.');
+    const provider = isolatedProvider(root);
+    const observation = await provider.list({ cwd: root });
+    const candidates = Array.isArray(observation) ? observation : observation.candidates;
+    const candidate = candidates.find((item) => item.name === 'guided-skill');
+    expect(candidate).toBeDefined();
+
+    const definition = await provider.get(candidate!, { cwd: root });
+
+    expect(definition).toMatchObject({
+      name: 'guided-skill',
+      content: '# guided-skill',
+      resourceBase: { kind: 'directory', path: join(root, 'guided-skill') },
+    });
+    expect(definition?.content).not.toContain('RESOURCE_SENTINEL');
+    expect(candidates.map((item) => item.name)).toContain('sibling-skill');
+    await provider.dispose();
+  });
+
+  it('loads builtin content guidance through DSH without preloading any referenced guide', async () => {
+    const skillRoot = resolve(import.meta.dirname, '../../skills/skills');
+    const contentRoot = join(skillRoot, 'content-authoring');
+    const guidePaths = [
+      'references/creative-proposal.md',
+      'references/analysis-report.md',
+      'references/project-proposal.md',
+      'references/execution-plan.md',
+      'references/prompt-package.md',
+      'references/model-tool-handoff.md',
+    ];
+    const provider = isolatedProvider(skillRoot);
+    const observation = await provider.list({ cwd: skillRoot });
+    const candidates = Array.isArray(observation) ? observation : observation.candidates;
+    const candidate = candidates.find((item) => item.name === 'content-authoring');
+    if (candidate === undefined) throw new Error('Builtin content-authoring Skill was not found.');
+
+    const definition = await provider.get(candidate, { cwd: skillRoot });
+    if (definition === undefined) throw new Error('Builtin content-authoring Skill did not load.');
+
+    expect(definition).toMatchObject({
+      name: 'content-authoring',
+      resourceBase: { kind: 'directory', path: contentRoot },
+    });
+    for (const guidePath of guidePaths) {
+      expect(definition.content).toContain(`](${guidePath})`);
+      const guide = await readFile(join(contentRoot, ...guidePath.split('/')), 'utf8');
+      expect(definition.content).not.toContain(guide);
+    }
+    const rendered = renderSkillContent(definition);
+    expect(rendered).toContain(`Base directory for this skill: ${contentRoot}`);
+    expect(rendered).toContain('Load referenced resources only as needed.');
+    await provider.dispose();
+  });
+
+  it('keeps every builtin Skill and model-readable resource Chinese-first and English-equivalent', async () => {
+    const skillRoot = resolve(import.meta.dirname, '../../skills/skills');
+    const skillEntries = (await readdir(skillRoot, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .sort((left, right) => left.name.localeCompare(right.name));
+    const provider = isolatedProvider(skillRoot);
+    const observation = await provider.list({ cwd: skillRoot });
+    const candidates = Array.isArray(observation) ? observation : observation.candidates;
+
+    expect(candidates.map((candidate) => candidate.name).sort()).toEqual(
+      skillEntries.map((entry) => entry.name),
+    );
+    for (const entry of skillEntries) {
+      const candidate = candidates.find((item) => item.name === entry.name);
+      if (candidate === undefined) throw new Error(`Builtin Skill '${entry.name}' was not found.`);
+      expect(candidate.description, `${entry.name} description`).toMatch(/^\p{Script=Han}/u);
+      expect(candidate.description, `${entry.name} description`).toMatch(/[A-Za-z]/u);
+      expect(
+        candidate.description.length,
+        `${entry.name} catalog description length`,
+      ).toBeLessThanOrEqual(500);
+
+      const definition = await provider.get(candidate, { cwd: skillRoot });
+      if (definition === undefined) throw new Error(`Builtin Skill '${entry.name}' did not load.`);
+      expectBilingualGuidance(definition.content, `${entry.name}/SKILL.md`, '中文方法');
+
+      const referencesRoot = join(skillRoot, entry.name, 'references');
+      const referenceEntries = await readdir(referencesRoot, { withFileTypes: true }).catch(
+        (error: unknown) => {
+          if (isMissingPathError(error)) return [];
+          throw error;
+        },
+      );
+      for (const reference of referenceEntries) {
+        if (!reference.isFile() || !reference.name.endsWith('.md')) continue;
+        const path = join(referencesRoot, reference.name);
+        expectBilingualGuidance(
+          await readFile(path, 'utf8'),
+          `${entry.name}/references/${reference.name}`,
+          '中文指南',
+        );
+      }
+
+      const agentsRoot = join(skillRoot, entry.name, 'agents');
+      const agentEntries = await readdir(agentsRoot, { withFileTypes: true }).catch(
+        (error: unknown) => {
+          if (isMissingPathError(error)) return [];
+          throw error;
+        },
+      );
+      for (const agent of agentEntries) {
+        if (!agent.isFile() || !agent.name.endsWith('.yaml')) continue;
+        expectBilingualAgentOverlay(
+          await readFile(join(agentsRoot, agent.name), 'utf8'),
+          `${entry.name}/agents/${agent.name}`,
+        );
+      }
+    }
+    await provider.dispose();
+  });
+
+  it('keeps adaptation-scale guidance as an on-demand media-production resource', async () => {
+    const skillRoot = resolve(import.meta.dirname, '../../skills/skills');
+    const mediaRoot = join(skillRoot, 'media-production');
+    const guidePath = 'references/adaptation-feasibility.md';
+    const provider = isolatedProvider(skillRoot);
+    const observation = await provider.list({ cwd: skillRoot });
+    const candidates = Array.isArray(observation) ? observation : observation.candidates;
+    const candidate = candidates.find((item) => item.name === 'media-production');
+    if (candidate === undefined) throw new Error('Builtin media-production Skill was not found.');
+
+    const definition = await provider.get(candidate, { cwd: skillRoot });
+    if (definition === undefined) throw new Error('Builtin media-production Skill did not load.');
+
+    const guide = await readFile(join(mediaRoot, ...guidePath.split('/')), 'utf8');
+    expect(definition).toMatchObject({
+      name: 'media-production',
+      resourceBase: { kind: 'directory', path: mediaRoot },
+    });
+    expect(definition.content).toContain(`](${guidePath})`);
+    expect(definition.content).not.toContain(guide);
+    expect(renderSkillContent(definition)).toContain('Load referenced resources only as needed.');
+    await provider.dispose();
+  });
+
+  it('keeps adapted creative methods on demand without importing upstream runtime authority', async () => {
+    const skillRoot = resolve(import.meta.dirname, '../../skills/skills');
+    const packages = [
+      {
+        name: 'storyboard',
+        guides: [
+          'references/cinematic-shot-design.md',
+          'references/visual-continuity.md',
+          'references/reference-video-analysis.md',
+        ],
+      },
+      {
+        name: 'video',
+        guides: ['references/single-clip-prompt.md'],
+      },
+    ];
+    const provider = isolatedProvider(skillRoot);
+    const observation = await provider.list({ cwd: skillRoot });
+    const candidates = Array.isArray(observation) ? observation : observation.candidates;
+
+    for (const packageDefinition of packages) {
+      const candidate = candidates.find((item) => item.name === packageDefinition.name);
+      if (candidate === undefined) {
+        throw new Error(`Builtin ${packageDefinition.name} Skill was not found.`);
+      }
+      const definition = await provider.get(candidate, { cwd: skillRoot });
+      if (definition === undefined) {
+        throw new Error(`Builtin ${packageDefinition.name} Skill did not load.`);
+      }
+      const packageRoot = join(skillRoot, packageDefinition.name);
+      expect(definition).toMatchObject({
+        name: packageDefinition.name,
+        resourceBase: { kind: 'directory', path: packageRoot },
+      });
+      for (const guidePath of packageDefinition.guides) {
+        const guide = await readFile(join(packageRoot, ...guidePath.split('/')), 'utf8');
+        expect(definition.content).toContain(`](${guidePath})`);
+        expect(definition.content).not.toContain(guide);
+        expect(guide).not.toMatch(
+          /~\/(?:\.kunpeng|\.openclaw)|DMXAPI_KEY|runninghub\.py|@图片|api[_-]?key/iu,
+        );
+      }
+    }
+    await provider.dispose();
+  });
+
+  it('preserves the locked DSH rank order across every filesystem source and runtime Skills', async () => {
+    const context = new Context();
+    const registry = new SkillRegistry(context);
+    const providerName = 'openneko-rank-contract';
+    const candidates = [
+      rankedCandidate(providerName, 'bundled', 600),
+      rankedCandidate(providerName, 'user-agents', 500),
+      rankedCandidate(providerName, 'user-dsh', 400),
+      rankedCandidate(providerName, 'custom', 300),
+      rankedCandidate(providerName, 'project-agents', 200),
+      rankedCandidate(providerName, 'project-dsh', 100),
+    ];
+    const disposeProvider = registry.registerProvider(() => ({
+      name: providerName,
+      list: async () => candidates,
+      get: async (candidate) => ({
+        ...candidate,
+        content: `# ${candidate.source}`,
+      }),
+    }));
+    const disposeRuntime = registry.register({
+      name: 'ranked-skill',
+      description: 'runtime',
+      source: 'runtime',
+      content: '# runtime',
+    });
+
+    await expect(registry.list()).resolves.toEqual([
+      expect.objectContaining({ name: 'ranked-skill', source: 'project-dsh' }),
+    ]);
+    await expect(registry.get('ranked-skill')).resolves.toMatchObject({
+      source: 'project-dsh',
+      content: '# project-dsh',
+    });
+    disposeRuntime();
+    disposeProvider();
+  });
+
+  it('isolates a malformed entry without hiding valid sibling Skills', async () => {
+    const root = await fixtureRoot();
+    await writeDirectorySkill(root, 'valid-skill', 'Valid skill.');
+    await mkdir(join(root, 'invalid-skill'));
+    await writeFile(
+      join(root, 'invalid-skill', 'SKILL.md'),
+      '---\nname: Invalid Skill\ndescription: Invalid.\n---\n# Invalid\n',
+      'utf8',
+    );
+    const provider = isolatedProvider(root);
+
+    const observation = await provider.list({ cwd: root });
+    const candidates = Array.isArray(observation) ? observation : observation.candidates;
+
+    expect(candidates.map((item) => item.name)).toEqual(['valid-skill']);
+    await provider.dispose();
+  });
+});
+
+async function fixtureRoot(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), 'openneko-dsh-skill-contract-'));
+  roots.push(root);
+  return root;
+}
+
+function isolatedProvider(root: string): FileSystemSkillProvider {
+  const context = new Context();
+  const controller = new AbortController();
+  return new FileSystemSkillProvider(
+    context,
+    { signal: controller.signal, invalidate: () => undefined },
+    {
+      providerName: 'openneko-contract-fixture',
+      includeDefaultRoots: false,
+      customSkillDirs: [root],
+      watch: false,
+    },
+  );
+}
+
+function rankedCandidate(provider: string, source: string, rank: number): SkillCandidate {
+  return {
+    name: 'ranked-skill',
+    description: source,
+    invocation: { modelInvocable: true, userInvocable: true },
+    source,
+    provider,
+    rank,
+    locator: source,
+  };
+}
+
+function expectBilingualGuidance(
+  content: string,
+  path: string,
+  chineseHeading: '中文方法' | '中文指南',
+): void {
+  const chineseIndex = content.indexOf(`## ${chineseHeading}`);
+  const englishIndex = content.indexOf('## English guidance');
+  expect(chineseIndex, `${path} Chinese guidance`).toBeGreaterThanOrEqual(0);
+  expect(englishIndex, `${path} English guidance`).toBeGreaterThan(chineseIndex);
+  expect(content.slice(chineseIndex, englishIndex), `${path} Chinese content`).toMatch(
+    /\p{Script=Han}/u,
+  );
+  expect(content.slice(englishIndex), `${path} English content`).toMatch(/[A-Za-z]/u);
+}
+
+function isMissingPathError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    'code' in error &&
+    (error as Error & { readonly code?: string }).code === 'ENOENT'
+  );
+}
+
+function expectBilingualAgentOverlay(content: string, path: string): void {
+  const interfaceLines = content
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => /^(display_name|short_description|default_prompt):/u.test(line));
+  expect(interfaceLines, `${path} interface fields`).toHaveLength(3);
+  for (const line of interfaceLines) {
+    const value = line
+      .slice(line.indexOf(':') + 1)
+      .trim()
+      .replace(/^['"]|['"]$/gu, '');
+    expect(value, `${path} Chinese-first interface value`).toMatch(/^\p{Script=Han}/u);
+    expect(value, `${path} English-equivalent interface value`).toMatch(/[A-Za-z]/u);
+  }
+}
+
+async function writeDirectorySkill(
+  root: string,
+  name: string,
+  description: string,
+  invocation = '',
+): Promise<void> {
+  await mkdir(join(root, name));
+  await writeFile(
+    join(root, name, 'SKILL.md'),
+    `---\nname: ${name}\ndescription: ${description}\n${invocation}---\n# ${name}\n`,
+    'utf8',
+  );
+}
+
+async function writeFlatSkill(
+  root: string,
+  name: string,
+  description: string,
+  invocation = '',
+): Promise<void> {
+  await writeFile(
+    join(root, `${name}.md`),
+    `---\nname: ${name}\ndescription: ${description}\n${invocation}---\n# ${name}\n`,
+    'utf8',
+  );
+}

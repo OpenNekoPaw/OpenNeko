@@ -56,4 +56,37 @@ describe('EntityInspector', () => {
     expect(screen.queryByText('Provenance')).toBeNull();
     expect(screen.getByText('Dialogue is unavailable.')).toBeTruthy();
   });
+
+  it('emits a canonical workspace ContentLocator when binding a representation', () => {
+    const onIntent = vi.fn();
+    render(
+      <EntityInspector
+        locale="en"
+        onIntent={onIntent}
+        projection={{
+          status: 'confirmed',
+          kind: 'character',
+          names: { canonical: 'Nova', aliases: [] },
+          entityId: 'character-nova',
+          bindings: [],
+          operations: ['bind'],
+          blockers: [],
+        }}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Workspace path' }), {
+      target: { value: 'characters/nova.png' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Bind' }));
+
+    expect(onIntent).toHaveBeenCalledWith({
+      type: 'bind',
+      entityId: 'character-nova',
+      binding: {
+        role: 'reference',
+        target: { file: { authority: 'workspace', path: 'characters/nova.png' } },
+      },
+    });
+  });
 });

@@ -10,8 +10,10 @@ const AssetCenterMainRoot = lazy(async () => {
 
 export function DesktopAssetCenterMainSurface({
   projection,
+  rendererSessionId,
 }: {
   readonly projection: AssetCenterSessionProjection;
+  readonly rendererSessionId: string;
 }): JSX.Element {
   const { locale } = useTranslation();
   return (
@@ -24,6 +26,7 @@ export function DesktopAssetCenterMainSurface({
             bridge={window.openNekoDesktop}
             previewSessionId={previewSessionId}
             projection={projection}
+            rendererSessionId={rendererSessionId}
           />
         )}
       />

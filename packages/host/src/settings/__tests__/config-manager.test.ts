@@ -8,7 +8,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ConfigManager } from '../config-manager';
 import type { IUserConfigManager, UserConfig } from '../user-config';
 import type { Provider, Model } from '../types/provider';
-import type { MCPServerPreset } from '../types/config';
 import type { UnifiedConfig } from '../config-core/index';
 import type { ConfigReadResult } from '../config-reader';
 import type { AssistantRuntimeSettingsPort } from '../assistant-runtime-settings-port';
@@ -20,13 +19,12 @@ import { RETRY_TIMEOUT_PRESETS } from '../retry-timeout-presets';
 
 function createMockUserConfigManager(
   initial?: Partial<UserConfig>,
-  rawScalars: Omit<UnifiedConfig, 'providers' | 'models' | 'mcpServers'> = {},
+  rawScalars: Omit<UnifiedConfig, 'providers' | 'models'> = {},
 ): IUserConfigManager {
   let scalars = { ...rawScalars };
   let config: UserConfig = {
     providers: [],
     models: [],
-    mcpServers: [],
     ...initial,
   };
 
@@ -35,7 +33,6 @@ function createMockUserConfigManager(
       ...config,
       providers: [...config.providers],
       models: [...config.models],
-      mcpServers: [...config.mcpServers],
     }),
     save: async (c: UserConfig) => {
       config = { ...c };
@@ -56,26 +53,16 @@ function createMockUserConfigManager(
     removeModel: async (id: string) => {
       config.models = config.models.filter((m) => m.id !== id);
     },
-    addMCPServer: async (s: MCPServerPreset) => {
-      const i = config.mcpServers.findIndex((x) => x.id === s.id);
-      if (i >= 0) config.mcpServers[i] = s;
-      else config.mcpServers.push(s);
-    },
-    removeMCPServer: async (id: string) => {
-      config.mcpServers = config.mcpServers.filter((s) => s.id !== id);
-    },
     clear: async () => {
       config = {
         providers: [],
         models: [],
-        mcpServers: [],
       };
     },
     loadRaw: () => ({
       ...scalars,
       providers: config.providers,
       models: config.models,
-      mcpServers: config.mcpServers,
     }),
     loadRawResult: () => ({
       status: 'ok',
@@ -84,7 +71,6 @@ function createMockUserConfigManager(
         ...scalars,
         providers: config.providers,
         models: config.models,
-        mcpServers: config.mcpServers,
       } satisfies UnifiedConfig,
       diagnostics: [],
       providerCredentials: {},
@@ -147,7 +133,6 @@ function createReadResultUserConfigManager(
     load: () => ({
       providers: [],
       models: [],
-      mcpServers: [],
     }),
     loadRaw: () => {
       const current = readResult();
@@ -167,12 +152,6 @@ function createReadResultUserConfigManager(
       throw new Error('write path should not be used');
     },
     removeModel: async () => {
-      throw new Error('write path should not be used');
-    },
-    addMCPServer: async () => {
-      throw new Error('write path should not be used');
-    },
-    removeMCPServer: async () => {
       throw new Error('write path should not be used');
     },
     clear: async () => {
@@ -219,7 +198,6 @@ describe('ConfigManager', () => {
 
       expect(config.providers.size).toBe(0);
       expect(config.models.size).toBe(0);
-      expect(config.mcpServers.size).toBe(0);
     });
 
     it('should return retry/timeout presets', () => {
@@ -663,7 +641,7 @@ describe('ConfigManager', () => {
       expect(() => manager.assertConfigAvailable()).not.toThrow();
     });
 
-    it('resolves purpose-specific model bindings before capability fallback', () => {
+    it('rejects unknown purpose bindings', () => {
       const googleProvider: Provider = {
         id: 'google',
         name: 'google',
@@ -675,7 +653,7 @@ describe('ConfigManager', () => {
         protocolProfile: 'google',
         requiresApiKey: true,
       };
-      const fastModel: Model = {
+      const model: Model = {
         id: 'gemini-flash',
         name: 'gemini-2.5-flash',
         providerId: 'google',
@@ -683,37 +661,29 @@ describe('ConfigManager', () => {
         capabilities: ['chat', 'vision', 'vision_video'],
         enabled: true,
       };
-      const proModel: Model = {
-        ...fastModel,
-        id: 'gemini-pro',
-        name: 'gemini-2.5-pro',
-      };
       const manager = new ConfigManager({
         userConfigManager: createReadResultUserConfigManager({
           status: 'ok',
           filePath: '/tmp/neko/config.toml',
           config: {
             providers: [googleProvider],
-            models: [fastModel, proModel],
+            models: [model],
             defaultModelPurposes: {
-              'video.understand': {
+              'media.analysis': {
                 providerId: 'google',
-                modelId: 'gemini-pro',
+                modelId: 'gemini-flash',
               },
             },
           },
         }),
       });
 
-      expect(manager.getConfigDiagnostic()).toBeUndefined();
-      expect(manager.getDefaultModelPurposeRef('video.understand')).toEqual({
-        providerId: 'google',
-        modelId: 'gemini-pro',
+      expect(manager.getConfigDiagnostic()).toMatchObject({
+        code: 'invalidDefaultModelBinding',
+        path: 'default_model_purposes.media.analysis',
       });
-      expect(manager.resolveModelRefForPurpose('video.understand')).toEqual({
-        providerId: 'google',
-        modelId: 'gemini-pro',
-      });
+      expect(manager.getDefaultModelPurposeRef('media.analysis')).toBeUndefined();
+      expect(manager.resolveModelRefForPurpose('media.analysis')).toBeUndefined();
     });
 
     it('atomically persists explicit Character purpose bindings', async () => {
@@ -756,6 +726,64 @@ describe('ConfigManager', () => {
         providerId: SAMPLE_PROVIDER.id,
         modelId: SAMPLE_MODEL.id,
       });
+    });
+
+    it('persists one typed default model without replacing sibling defaults', async () => {
+      const imageModel: Model = {
+        ...SAMPLE_MODEL,
+        id: 'image-model',
+        name: 'image-model',
+        type: 'image',
+        capabilities: ['image.generate'],
+      };
+      const userConfigManager = createMockUserConfigManager(
+        {
+          providers: [SAMPLE_PROVIDER],
+          models: [SAMPLE_MODEL, imageModel],
+        },
+        {
+          defaultModels: {
+            llm: {
+              providerId: SAMPLE_PROVIDER.id,
+              modelId: SAMPLE_MODEL.id,
+            },
+          },
+        },
+      );
+      const updateScalars = vi.spyOn(userConfigManager, 'updateScalars');
+      const manager = new ConfigManager({ userConfigManager });
+
+      await manager.setDefaultModelRef('image', {
+        providerId: SAMPLE_PROVIDER.id,
+        modelId: imageModel.id,
+      });
+
+      expect(updateScalars).toHaveBeenCalledWith({
+        defaultModels: {
+          llm: {
+            providerId: SAMPLE_PROVIDER.id,
+            modelId: SAMPLE_MODEL.id,
+          },
+          image: {
+            providerId: SAMPLE_PROVIDER.id,
+            modelId: imageModel.id,
+          },
+        },
+      });
+      expect(manager.getDefaultModelRef('llm')).toEqual({
+        providerId: SAMPLE_PROVIDER.id,
+        modelId: SAMPLE_MODEL.id,
+      });
+      expect(manager.getDefaultModelRef('image')).toEqual({
+        providerId: SAMPLE_PROVIDER.id,
+        modelId: imageModel.id,
+      });
+      await expect(
+        manager.setDefaultModelRef('video', {
+          providerId: SAMPLE_PROVIDER.id,
+          modelId: imageModel.id,
+        }),
+      ).rejects.toThrow('is not a video model');
     });
 
     it('preserves existing purpose bindings while adding a missing Character purpose', async () => {
@@ -821,166 +849,6 @@ describe('ConfigManager', () => {
       ).rejects.toThrow('Model anthropic/image-only does not support purpose character.dialogue.');
       expect(updateScalars).not.toHaveBeenCalled();
       expect(manager.resolveModelRefForPurpose('character.dialogue')).toBeUndefined();
-    });
-
-    it('projects media understanding model routing for frontend confirmation', () => {
-      const googleProvider: Provider = {
-        id: 'google',
-        name: 'google',
-        displayName: 'Google Gemini',
-        type: 'google',
-        apiUrl: 'https://generativelanguage.googleapis.com/v1beta',
-        enabled: true,
-        connectionKind: 'direct',
-        protocolProfile: 'google',
-        requiresApiKey: true,
-      };
-      const flashModel: Model = {
-        id: 'gemini-flash',
-        name: 'gemini-2.5-flash',
-        displayName: 'Gemini Flash',
-        providerId: 'google',
-        type: 'llm',
-        capabilities: [
-          'chat',
-          'vision',
-          'image.understand',
-          'audio.understand',
-          'video.understand',
-        ],
-        enabled: true,
-      };
-      const proModel: Model = {
-        ...flashModel,
-        id: 'gemini-pro',
-        name: 'gemini-2.5-pro',
-        displayName: 'Gemini Pro',
-      };
-      const manager = new ConfigManager({
-        userConfigManager: createReadResultUserConfigManager({
-          status: 'ok',
-          filePath: '/tmp/neko/config.toml',
-          config: {
-            providers: [googleProvider],
-            models: [flashModel, proModel],
-            defaultModelPurposes: {
-              'video.understand': {
-                providerId: 'google',
-                modelId: 'gemini-pro',
-              },
-            },
-          },
-        }),
-      });
-
-      expect(manager.getAssistantSettingsData().mediaUnderstandingModels).toEqual({
-        image: {
-          category: 'image',
-          purpose: 'image.understand',
-          status: 'missing',
-        },
-        audio: {
-          category: 'audio',
-          purpose: 'audio.understand',
-          status: 'missing',
-        },
-        video: {
-          category: 'video',
-          purpose: 'video.understand',
-          status: 'configured',
-          providerId: 'google',
-          modelId: 'gemini-pro',
-          optionId: 'google:gemini-pro',
-          label: 'Google Gemini / Gemini Pro',
-          providerLabel: 'Google Gemini',
-          source: 'explicit-config',
-        },
-      });
-      expect(manager.getAssistantConfigState().mediaUnderstandingModels?.video.status).toBe(
-        'configured',
-      );
-    });
-
-    it('projects missing media understanding models when no enabled model supports the purpose', () => {
-      const localProvider: Provider = {
-        id: 'ollama-local',
-        name: 'ollama',
-        displayName: 'Ollama Local',
-        type: 'ollama',
-        apiUrl: 'http://localhost:11434/api',
-        enabled: true,
-        connectionKind: 'local',
-        protocolProfile: 'ollama',
-        requiresApiKey: false,
-      };
-      const textOnlyModel: Model = {
-        id: 'llama-text',
-        name: 'llama3.2',
-        displayName: 'Llama Text',
-        providerId: 'ollama-local',
-        type: 'llm',
-        capabilities: ['chat'],
-        enabled: true,
-      };
-      const manager = new ConfigManager({
-        userConfigManager: createReadResultUserConfigManager({
-          status: 'ok',
-          filePath: '/tmp/neko/config.toml',
-          config: {
-            providers: [localProvider],
-            models: [textOnlyModel],
-          },
-        }),
-      });
-
-      expect(manager.getAssistantSettingsData().mediaUnderstandingModels).toEqual({
-        image: { category: 'image', purpose: 'image.understand', status: 'missing' },
-        audio: { category: 'audio', purpose: 'audio.understand', status: 'missing' },
-        video: { category: 'video', purpose: 'video.understand', status: 'missing' },
-      });
-    });
-
-    it('does not infer a purpose binding from the first compatible model', () => {
-      const googleProvider: Provider = {
-        id: 'google',
-        name: 'google',
-        displayName: 'Google Gemini',
-        type: 'google',
-        apiUrl: 'https://generativelanguage.googleapis.com/v1beta',
-        enabled: true,
-        connectionKind: 'direct',
-        protocolProfile: 'google',
-        requiresApiKey: true,
-      };
-      const manager = new ConfigManager({
-        userConfigManager: createReadResultUserConfigManager({
-          status: 'ok',
-          filePath: '/tmp/neko/config.toml',
-          config: {
-            providers: [googleProvider],
-            models: [
-              {
-                id: 'text-only',
-                name: 'gemini-text',
-                providerId: 'google',
-                type: 'llm',
-                capabilities: ['chat'],
-                enabled: true,
-              },
-              {
-                id: 'gemini-flash',
-                name: 'gemini-2.5-flash',
-                providerId: 'google',
-                type: 'llm',
-                capabilities: ['chat', 'vision', 'vision_video'],
-                enabled: true,
-              },
-            ],
-          },
-        }),
-      });
-
-      expect(manager.resolveModelRefForPurpose('video.understand')).toBeUndefined();
     });
 
     it('refreshes only through explicit reloadConfig snapshots', () => {

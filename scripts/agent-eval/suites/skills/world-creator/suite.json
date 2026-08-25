@@ -39,12 +39,6 @@
   ],
   "cases": [
     {
-      "id": "workspace-missing-world-target-rejected",
-      "file": "cases/workspace-missing-world-target-rejected.json",
-      "group": "boundary",
-      "visibility": "public"
-    },
-    {
       "id": "assistant-creates-global-world",
       "file": "cases/assistant-creates-global-world.json",
       "group": "canonical",

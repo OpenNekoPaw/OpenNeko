@@ -6,10 +6,10 @@ import {
   isContentSourceRef,
   isHostProjectedRuntimeValue,
   isProjectDurableContentLocator,
+  isRuntimeOnlyContentRef,
   type ContentLocator,
   type ContentSourceRef,
-} from '@neko/content';
-import { isContentRepresentationLocator, type ContentRepresentationLocator } from '@neko/content';
+} from '@neko/content-domain';
 import {
   validateMediaTextRangeForSourceRef,
   type ContributionDiagnostic,
@@ -20,7 +20,7 @@ import {
   type MediaTextSourceKind,
   type MediaTextSegmentKind,
 } from './media-semantic-index';
-import type { CharacterObservation } from '@neko/chara';
+import type { CharacterObservation } from '@neko/chara-domain';
 
 export type ProjectSearchItemKind =
   | 'story-scene'
@@ -129,7 +129,7 @@ export type ProjectIndexUpdateReason =
   | 'cache-rebuild';
 
 export type ProjectSemanticIndexingWorkKind =
-  'sidecar-projection' | 'ledger-projection' | 'ocr' | 'asr' | 'embedding' | 'perception-refresh';
+  'sidecar-projection' | 'ledger-projection' | 'ocr' | 'asr' | 'embedding';
 
 export type ProjectSemanticIndexingTrigger =
   'project-open' | 'idle' | 'import' | 'on-demand' | 'manual-refresh';
@@ -162,7 +162,6 @@ export interface ProjectSearchScoreHints {
 }
 
 export interface ProjectSearchVisualResource {
-  readonly representationLocator?: ContentRepresentationLocator;
   readonly projectedUri?: string;
   readonly status?: ProjectSearchResourceStatus;
   readonly alt?: string;
@@ -431,7 +430,6 @@ export const PROJECT_SEMANTIC_INDEXING_WORK_KINDS: readonly ProjectSemanticIndex
   'ocr',
   'asr',
   'embedding',
-  'perception-refresh',
 ] as const;
 
 export const PROJECT_SEMANTIC_INDEXING_TRIGGERS: readonly ProjectSemanticIndexingTrigger[] = [
@@ -465,11 +463,6 @@ export const PROJECT_SEMANTIC_INDEXING_POLICIES: readonly ProjectSemanticIndexin
   },
   {
     workKind: 'embedding',
-    allowedTriggers: ['idle', 'import', 'on-demand', 'manual-refresh'],
-    blocksProjectOpen: false,
-  },
-  {
-    workKind: 'perception-refresh',
     allowedTriggers: ['idle', 'import', 'on-demand', 'manual-refresh'],
     blocksProjectOpen: false,
   },
@@ -800,19 +793,12 @@ export function isProjectSearchItem(value: unknown): value is ProjectSearchItem 
     typeof value['projectRoot'] === 'string' &&
     typeof value['searchText'] === 'string' &&
     isProjectIndexFreshness(value['freshness']) &&
-    optionalProjectSearchVisualResource(value['visualResource']) &&
-    isProjectSearchDurableVisualResource(value['visualResource'])
+    optionalProjectSearchVisualResource(value['visualResource'])
   );
 }
 
 function isProjectSearchDurableContentLocator(value: unknown): value is ContentLocator {
   return isProjectDurableContentLocator(value);
-}
-
-function isProjectSearchDurableVisualResource(value: unknown): boolean {
-  if (!isRecord(value) || value['representationLocator'] === undefined) return true;
-  if (!isContentRepresentationLocator(value['representationLocator'])) return false;
-  return isProjectSearchDurableContentLocator(value['representationLocator'].source);
 }
 
 export function projectMediaSemanticIndexToSearchItems(
@@ -979,8 +965,7 @@ function optionalProjectSearchVisualResource(value: unknown): boolean {
   if (value === undefined) return true;
   if (!isRecord(value)) return false;
   return (
-    (value['representationLocator'] === undefined ||
-      isContentRepresentationLocator(value['representationLocator'])) &&
+    hasOnlyFields(value, PROJECT_SEARCH_VISUAL_RESOURCE_FIELDS) &&
     optionalString(value['projectedUri']) &&
     (value['status'] === undefined || isProjectSearchResourceStatus(value['status'])) &&
     optionalString(value['alt'])
@@ -1099,7 +1084,7 @@ function isStableSemanticSourceRef(value: unknown): value is MediaSemanticSource
 }
 
 function isCacheOrRuntimeSemanticSourceRef(ref: ContentSourceRef): boolean {
-  if (ref.kind === 'runtime') return true;
+  if (isRuntimeOnlyContentRef(ref)) return true;
   return !isSafeSemanticCoverageValue(ref);
 }
 
@@ -1192,6 +1177,8 @@ function hasOnlyFields(
 ): boolean {
   return Object.keys(value).every((field) => allowedFields.has(field));
 }
+
+const PROJECT_SEARCH_VISUAL_RESOURCE_FIELDS = new Set(['projectedUri', 'status', 'alt']);
 
 function rejectUnknownCoverageFields(
   value: Record<string, unknown>,

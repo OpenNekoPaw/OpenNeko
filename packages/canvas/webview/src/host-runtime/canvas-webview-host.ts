@@ -14,7 +14,7 @@ import {
   type CanvasTextFilePreviewResult,
 } from '@neko/canvas-domain';
 import { isValidNkc, type CanvasData, type CanvasViewport } from '@neko/canvas-domain';
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 import type {
   CanvasMaterialActionDescriptor,
   CanvasMaterialActionIntent,
@@ -119,6 +119,7 @@ export function createCanvasWebviewHost(
   let initialSnapshotFailure: unknown;
   let runtimeEventObserved = false;
   let projectionSequence = 0;
+  let acceptedPresentation: CanvasHostPresentationState | undefined;
   let operationTail: Promise<void> = Promise.resolve();
   const localCommandIds = new Set<string>();
   const localCommandOrder: string[] = [];
@@ -144,11 +145,15 @@ export function createCanvasWebviewHost(
   };
 
   const publishSnapshot = (next: CanvasHostSnapshot): void => {
-    pendingRemovedNodeIds.clear();
+    if (!next.dirty) pendingRemovedNodeIds.clear();
     snapshot = next;
-    updatePresentationState(next);
+    const presentationChanged = !areJsonValuesEqual(acceptedPresentation, next.presentation);
+    acceptedPresentation = next.presentation;
+    if (presentationChanged) updatePresentationState(next);
     emit({ type: 'update', data: next.canvas });
-    emit({ type: 'canvas.hostPresentation', presentation: next.presentation });
+    if (presentationChanged) {
+      emit({ type: 'canvas.hostPresentation', presentation: next.presentation });
+    }
   };
 
   const replaySnapshot = (listener: (message: unknown) => void, next: CanvasHostSnapshot): void => {
@@ -170,6 +175,7 @@ export function createCanvasWebviewHost(
 
   const adoptLocalSnapshot = (next: CanvasHostSnapshot): void => {
     snapshot = next;
+    acceptedPresentation = next.presentation;
     updatePresentationState(next);
   };
 
@@ -183,8 +189,14 @@ export function createCanvasWebviewHost(
           throw new Error('Canvas Host projection belongs to another document session.');
         }
         if (event.sequence <= projectionSequence) return;
+        const wasDirty = snapshot?.dirty ?? false;
         projectionSequence = event.sequence;
         runtimeEventObserved = true;
+        if (event.diagnostic) {
+          emit({ type: 'canvas.saveFailed', diagnostic: event.diagnostic });
+        } else if (wasDirty && !event.snapshot.dirty) {
+          emit({ type: 'canvas.saveSucceeded' });
+        }
         if (event.originCommandId && localCommandIds.has(event.originCommandId)) {
           adoptLocalSnapshot(event.snapshot);
           return;
@@ -216,11 +228,10 @@ export function createCanvasWebviewHost(
   };
 
   const executeSave = async (): Promise<void> => {
-    await executeIntent({
-      type: 'save',
-      removedNodeIds: [...pendingRemovedNodeIds],
-    });
+    const observedDirtySnapshot = snapshot?.dirty === true;
+    await executeIntent({ type: 'save' });
     pendingRemovedNodeIds.clear();
+    if (!observedDirtySnapshot) emit({ type: 'canvas.saveSucceeded' });
   };
 
   const executeCanvasStatus = async (value: unknown): Promise<void> => {
@@ -230,6 +241,7 @@ export function createCanvasWebviewHost(
       current = await executeIntent({
         type: 'replace-document',
         canvas,
+        removedNodeIds: [...pendingRemovedNodeIds],
       });
     }
     const presentation = parseCanvasPresentation(value);
@@ -275,11 +287,12 @@ export function createCanvasWebviewHost(
     return result.snapshot;
   };
 
-  const readTextFilePreview = (
+  const readTextFilePreview = async (
     nodeId: string,
     locator: ContentLocator,
   ): Promise<CanvasTextFilePreviewResult> => {
     if (disposed) return Promise.reject(new Error('Canvas Webview Host is disposed.'));
+    await waitForOperationQueueToSettle();
     textFilePreviewRequestSequence += 1;
     const request = createCanvasTextFilePreviewRequest({
       requestId: `canvas-webview-text-preview:${textFilePreviewRequestSequence}`,
@@ -307,7 +320,15 @@ export function createCanvasWebviewHost(
       }
       case 'save':
       case 'requestSave': {
-        enqueue(executeSave);
+        void queueOperation(executeSave).catch((error: unknown) => {
+          emit({
+            type: 'canvas.saveFailed',
+            diagnostic: {
+              code: 'canvas-save-failed',
+              message: error instanceof Error ? error.message : 'Canvas save failed.',
+            },
+          });
+        });
         return;
       }
       case 'canvasDataReady':
@@ -330,8 +351,12 @@ export function createCanvasWebviewHost(
           delegate.postMessage(value);
         }
         return;
-      case 'preview:resolveVariant':
       case 'preview:resolveResource':
+        if (!delegate || !supportsMessage(value['type'])) {
+          throw new Error(`Canvas Host runtime does not implement message '${value['type']}'.`);
+        }
+        enqueue(async () => delegate.postMessage(value));
+        return;
       case 'preview:releaseResource':
         if (!delegate || !supportsMessage(value['type'])) {
           throw new Error(`Canvas Host runtime does not implement message '${value['type']}'.`);

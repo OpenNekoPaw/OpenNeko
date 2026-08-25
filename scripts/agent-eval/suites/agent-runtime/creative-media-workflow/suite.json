@@ -83,12 +83,6 @@
       "file": "cases/assistant-deepseek-current-image-generation.json",
       "group": "regression",
       "visibility": "public"
-    },
-    {
-      "id": "workspace-board-material-analysis",
-      "file": "cases/workspace-board-material-analysis.json",
-      "group": "workflow",
-      "visibility": "public"
     }
   ],
   "rubricRefs": [],

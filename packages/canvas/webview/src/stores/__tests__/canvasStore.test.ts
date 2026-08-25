@@ -108,7 +108,7 @@ describe('canvasStore canonical workspace', () => {
         canvas([group('group-1', [], 100, 100, 720, 420), markdown('note-1', 900, 900)]),
       );
 
-    useCanvasStore.getState().moveNodeEnd('note-1', { x: 180, y: 220 });
+    useCanvasStore.getState().moveNodesEnd(['note-1'], { x: -720, y: -680 });
 
     let state = useCanvasStore.getState().canvasData;
     expect(state?.nodes.find((node) => node.id === 'note-1')?.parentId).toBe('group-1');
@@ -116,7 +116,7 @@ describe('canvasStore canonical workspace', () => {
       'note-1',
     ]);
 
-    useCanvasStore.getState().moveNodeEnd('note-1', { x: 980, y: 980 });
+    useCanvasStore.getState().moveNodesEnd(['note-1'], { x: 800, y: 760 });
 
     state = useCanvasStore.getState().canvasData;
     expect(state?.nodes.find((node) => node.id === 'note-1')?.parentId).toBeUndefined();
@@ -138,8 +138,8 @@ describe('canvasStore canonical workspace', () => {
         ),
       );
 
-    useCanvasStore.getState().moveNodeEnd('note-1', { x: 180, y: 220 });
-    useCanvasStore.getState().moveNodeEnd('note-1', { x: 980, y: 980 });
+    useCanvasStore.getState().moveNodesEnd(['note-1'], { x: -720, y: -680 });
+    useCanvasStore.getState().moveNodesEnd(['note-1'], { x: 800, y: 760 });
 
     expect(useCanvasStore.getState().canvasData?.connections).toEqual([reference]);
   });
@@ -147,8 +147,8 @@ describe('canvasStore canonical workspace', () => {
   it('records a single history and operation entry for a committed transform', () => {
     useCanvasStore.getState().setCanvasData(canvas([markdown('note-1', 100, 100)]));
 
-    useCanvasStore.getState().moveNodeEnd('note-1', { x: 160, y: 180 });
-    useCanvasStore.getState().moveNodeEnd('note-1', { x: 160, y: 180 });
+    useCanvasStore.getState().moveNodesEnd(['note-1'], { x: 60, y: 80 });
+    useCanvasStore.getState().moveNodesEnd(['note-1'], { x: 0, y: 0 });
 
     expect(useHistoryStore.getState().undoStack).toHaveLength(1);
     expect(recordNodeUpdateSpy).toHaveBeenCalledTimes(1);
@@ -185,11 +185,78 @@ describe('canvasStore canonical workspace', () => {
         ]),
       );
 
-    useCanvasStore.getState().moveNodeEnd('outer', { x: 100, y: 50 });
+    useCanvasStore.getState().moveNodesEnd(['outer'], { x: 100, y: 50 });
 
     const nodes = useCanvasStore.getState().canvasData?.nodes ?? [];
     expect(nodes.find((node) => node.id === 'inner')?.position).toEqual({ x: 120, y: 130 });
     expect(nodes.find((node) => node.id === 'child')?.position).toEqual({ x: 160, y: 210 });
+  });
+
+  it('moves a multi-selection atomically and restores it with one undo', () => {
+    useCanvasStore
+      .getState()
+      .setCanvasData(canvas([markdown('first', 20, 30), media('second', 360, 90)]));
+
+    useCanvasStore.getState().moveNodesEnd(['first', 'second'], { x: 80, y: -20 });
+
+    expect(
+      useCanvasStore.getState().canvasData?.nodes.map((node) => [node.id, node.position]),
+    ).toEqual([
+      ['first', { x: 100, y: 10 }],
+      ['second', { x: 440, y: 70 }],
+    ]);
+    expect(useHistoryStore.getState().undoStack).toHaveLength(1);
+    expect(recordNodeUpdateSpy).toHaveBeenCalledTimes(2);
+
+    useCanvasStore.getState().undo();
+    expect(
+      useCanvasStore.getState().canvasData?.nodes.map((node) => [node.id, node.position]),
+    ).toEqual([
+      ['first', { x: 20, y: 30 }],
+      ['second', { x: 360, y: 90 }],
+    ]);
+  });
+
+  it('moves a selected Group and selected descendant exactly once while keeping locked siblings fixed', () => {
+    const locked = markdown('locked', 700, 80);
+    locked.locked = true;
+    useCanvasStore
+      .getState()
+      .setCanvasData(
+        canvas([group('outer', ['child']), markdown('child', 60, 160, 'outer'), locked]),
+      );
+
+    useCanvasStore.getState().moveNodesEnd(['outer', 'child', 'locked'], { x: 100, y: 50 });
+
+    const nodes = useCanvasStore.getState().canvasData?.nodes ?? [];
+    expect(nodes.find((node) => node.id === 'outer')?.position).toEqual({ x: 100, y: 50 });
+    expect(nodes.find((node) => node.id === 'child')?.position).toEqual({ x: 160, y: 210 });
+    expect(nodes.find((node) => node.id === 'locked')?.position).toEqual({ x: 700, y: 80 });
+    expect(nodes.find((node) => node.id === 'child')?.parentId).toBe('outer');
+    expect(useHistoryStore.getState().undoStack).toHaveLength(1);
+    expect(recordNodeUpdateSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('reorders and locks a complete selection with one history step per batch command', () => {
+    const first = markdown('first', 0, 0);
+    first.zIndex = 2;
+    const second = markdown('second', 320, 0);
+    second.zIndex = 5;
+    const sibling = markdown('sibling', 640, 0);
+    sibling.zIndex = 9;
+    useCanvasStore.getState().setCanvasData(canvas([first, second, sibling]));
+
+    useCanvasStore.getState().reorderNodes(['first', 'second'], 'front');
+    let nodes = useCanvasStore.getState().canvasData?.nodes ?? [];
+    expect(nodes.find((node) => node.id === 'first')?.zIndex).toBe(10);
+    expect(nodes.find((node) => node.id === 'second')?.zIndex).toBe(11);
+    expect(useHistoryStore.getState().undoStack).toHaveLength(1);
+
+    useCanvasStore.getState().setNodesLocked(['first', 'second'], true);
+    nodes = useCanvasStore.getState().canvasData?.nodes ?? [];
+    expect(nodes.filter((node) => node.id !== 'sibling').every((node) => node.locked)).toBe(true);
+    expect(nodes.find((node) => node.id === 'sibling')?.locked).not.toBe(true);
+    expect(useHistoryStore.getState().undoStack).toHaveLength(2);
   });
 
   it('deleting a Group releases children and preserves child connections', () => {
@@ -368,12 +435,12 @@ describe('canvasStore canonical workspace', () => {
 
     expect(
       useCanvasStore.getState().canvasData?.nodes.find((node) => node.id === 'tiny-group')?.size,
-    ).toEqual({ width: 220, height: 150 });
+    ).toEqual({ width: 110, height: 75 });
 
     useCanvasStore.getState().updateNode('tiny-group', { size: { width: 100, height: 100 } });
 
     expect(
       useCanvasStore.getState().canvasData?.nodes.find((node) => node.id === 'tiny-group')?.size,
-    ).toEqual({ width: 220, height: 150 });
+    ).toEqual({ width: 110, height: 100 });
   });
 });

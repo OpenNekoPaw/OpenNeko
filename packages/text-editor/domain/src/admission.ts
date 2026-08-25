@@ -1,4 +1,4 @@
-import type { ContentFingerprint } from '@neko/content';
+import type { ContentFingerprint } from '@neko/content-domain';
 import {
   TEXT_DOCUMENT_MAX_BYTES,
   TextDocumentError,

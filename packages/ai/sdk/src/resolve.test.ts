@@ -29,4 +29,25 @@ describe('resolveProvider', () => {
 
     expect(resolved).toMatchObject({ type: 'kling', source: 'native' });
   });
+
+  it('resolves H3 and Seedance as native async video models', () => {
+    const minimax = resolveProvider('minimax', {
+      apiUrl: 'https://api.minimaxi.com/v2',
+      apiKey: 'test-key',
+    });
+    const bytedance = resolveProvider('bytedance', {
+      apiUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+      apiKey: 'test-key',
+    });
+
+    expect(minimax?.video('MiniMax-H3')).toMatchObject({
+      specificationVersion: 'v4',
+      provider: 'minimax',
+      modelId: 'MiniMax-H3',
+    });
+    expect(bytedance?.video('doubao-seedance-2-0-260128')).toMatchObject({
+      specificationVersion: 'v4',
+      modelId: 'doubao-seedance-2-0-260128',
+    });
+  });
 });

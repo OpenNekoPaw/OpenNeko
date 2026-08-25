@@ -5,8 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { parse as parseToml } from 'smol-toml';
 import { openFixtureWorkspace } from '../../desktop-functional/desktop-operations.mjs';
 import { evaluateArtifactChecks } from '../runner/artifact-checks.mjs';
-import { createDesktopAgentDriver } from './driver.mjs';
-import { requiresOpenNekoResourceObservation } from './evidence.mjs';
+import { createDshDesktopAgentDriver } from './dsh-driver.mjs';
 import { executeDesktopAgentWorkflow } from './workflow.mjs';
 
 const ACTIVE_AGENT_SURFACE_SELECTOR = '[data-primary-surface="agent"]';
@@ -16,7 +15,6 @@ const ACTIVE_AGENT_APPROVE_SELECTOR = `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-i
 const DEVELOPMENT_RENDERER_STABILITY_MS = 6_000;
 
 export function createDesktopAgentEvaluationScenario(executionCase, authorization) {
-  const mediaObservationRequired = requiresOpenNekoResourceObservation(executionCase.assertions);
   return Object.freeze({
     id: `agent-eval-${executionCase.caseId}`,
     owner: '@neko/agent-runtime',
@@ -77,7 +75,6 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
       waitForDesktopBridge,
       restartApplication,
       checkpoint,
-      readOpenNekoResourceRequests,
     }) {
       const startSurface = executionCase.execution?.startSurface ?? 'workspace';
       let mediaLibrarySetup;
@@ -97,7 +94,7 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
         waitForDesktopBridge,
         waitForSelector,
       });
-      const driver = createDesktopAgentDriver({
+      const driver = createDshDesktopAgentDriver({
         evaluate,
         waitForRenderer: async () => {
           await waitForDesktopBridge(30_000);
@@ -140,10 +137,7 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
       const conversationId = workflow.conversationId;
       const identity = workflow.terminalIdle.identity;
       const finalInteraction = await readActiveAgentInteraction(evaluate);
-      let resumed = await driver.resume({
-        conversationId,
-        timeoutMs: executionCase.budget.timeoutMs,
-      });
+      let resumed = await driver.resume(conversationId);
       const projection = await driver.readProjection(conversationId);
       const pendingFacts = await driver.readFacts(identity);
       const lifecycle = {};
@@ -154,7 +148,7 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
           timeoutMs: executionCase.budget.timeoutMs,
         });
         workflowDriver.setConnection(restored.connection);
-        resumed = { accepted: true, snapshot: restored.snapshot };
+        resumed = { accepted: true, snapshot: restored.snapshot ?? restored };
         lifecycle.rendererReload = {
           status: 'restored',
           connection: restored.connection,
@@ -169,11 +163,6 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
           throw new Error('Desktop Agent composer did not retain visible focus.');
         lifecycle.composerFocus = { status: 'focused' };
       }
-      const mediaCard = mediaObservationRequired
-        ? await waitForPackageOwnedMediaCard(evaluate, readOpenNekoResourceRequests, 30_000)
-        : undefined;
-      if (mediaCard) checkpoint('agent-package-media-card-rendered', mediaCard);
-      const openNekoResourceRequestCount = readOpenNekoResourceRequests().length;
       const artifactChecks = await evaluateArtifactChecks(executionCase.artifactChecks, {
         workspace: prepared.workspacePath,
         facts: pendingFacts.facts,
@@ -190,12 +179,12 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
         identity,
         projection,
         snapshot: resumed.snapshot,
-        facts: closed.facts,
+        facts: {
+          ...pendingFacts.facts,
+          ...(closed.facts?.disposal === undefined ? {} : { disposal: closed.facts.disposal }),
+        },
         workflow,
         artifactChecks,
-        mediaObservationRequired,
-        openNekoResourceRequestCount,
-        mediaCard,
         lifecycle,
         interaction: {
           initial: initialInteraction,
@@ -310,8 +299,8 @@ function createScenarioWorkflowDriver(input) {
         accepted: true,
         identity: {
           conversationId: command.conversationId,
-          turnId: command.turnId,
-          runId: command.runId,
+          dshSessionId: command.dshSessionId,
+          turn: command.turn,
         },
         toolCallId: command.toolCallId,
       };
@@ -411,25 +400,6 @@ export function validateAuthorizedUserConfiguration(configText, authorization) {
     );
   }
   return configText;
-}
-
-async function waitForPackageOwnedMediaCard(evaluate, readRequests, timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const card = await evaluate(`(() => {
-      const root = document.querySelector('[data-owner-root="agent"]');
-      const image = root?.querySelector('[data-testid="tool-produced-outputs"] img[src^="openneko://resource/"]');
-      return image instanceof HTMLImageElement
-        ? { owner: root?.getAttribute('data-owner-root'), tag: image.tagName, loaded: image.complete && image.naturalWidth > 0 }
-        : undefined;
-    })()`);
-    if (card?.owner === 'agent' && card.tag === 'IMG' && card.loaded === true) {
-      const requests = readRequests();
-      if (requests.length > 0) return { ...card, openNekoRequestCount: requests.length };
-    }
-    await delay(50);
-  }
-  throw new Error('Package-owned Agent media card did not render an OpenNeko image.');
 }
 
 function authorizationError(message) {

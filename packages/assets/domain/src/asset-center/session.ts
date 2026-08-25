@@ -11,7 +11,7 @@ import {
   type AssetCenterSessionProjection,
   type AssetCenterPreviewProjection,
 } from './contract';
-import { validateContentLocator, type ContentLocator } from '@neko/content';
+import { validateContentLocator, type ContentLocator } from '@neko/content-domain';
 
 export interface AssetCenterSelectionIntent {
   readonly owner: AssetCenterCatalogEntry['item']['owner'];

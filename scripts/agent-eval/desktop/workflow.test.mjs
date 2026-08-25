@@ -2,147 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { executeDesktopAgentWorkflow } from './workflow.mjs';
 
 describe('Desktop Agent workflow interpreter', () => {
-  it('executes queue, cancel and feedback through one driver contract', async () => {
-    const identity = { conversationId: 'conversation-1', turnId: 'turn-1', runId: 'run-1' };
-    const driver = {
-      submit: vi
-        .fn()
-        .mockResolvedValueOnce({ accepted: true, eventOffset: 3 })
-        .mockResolvedValueOnce({ accepted: true, eventOffset: 9 }),
-      queue: vi.fn(async () => ({
-        accepted: true,
-        eventOffset: 4,
-        queueItemId: 'queue-1',
-      })),
-      waitForIdentity: vi.fn(async () => identity),
-      cancel: vi.fn(async () => ({ accepted: true, identity })),
-      waitForIdle: vi.fn(async () => ({ identity })),
-      resume: vi.fn(async () => ({
-        accepted: true,
-        snapshot: {
-          messages: [{ id: 'assistant-1', role: 'assistant', content: 'previous answer' }],
-        },
-      })),
-      observeWorkflowStep: vi.fn(async ({ afterEventOffset }) => ({
-        conversationId: 'conversation-1',
-        messages: [],
-        messageQueue: {
-          conversationId: 'conversation-1',
-          pendingCount: afterEventOffset === 4 ? 1 : 0,
-          sequence: 1,
-          paused: false,
-          items: [],
-        },
-        queued: afterEventOffset === 4,
-        projectionEvents: [],
-      })),
-    };
-    const checkpoints = [];
-    const result = await executeDesktopAgentWorkflow({
-      driver,
-      conversationId: 'conversation-1',
-      defaultTimeoutMs: 30_000,
-      checkpoint: (name, detail) => checkpoints.push({ name, detail }),
-      steps: [
-        { id: 'submit', kind: 'submit', prompt: 'start' },
-        { id: 'queue', kind: 'queue', afterStepId: 'submit', prompt: 'queued' },
-        { id: 'cancel', kind: 'cancel', afterStepId: 'queue' },
-        { id: 'idle-1', kind: 'wait-for-idle', timeoutMs: 1000 },
-        {
-          id: 'feedback',
-          kind: 'feedback',
-          afterStepId: 'idle-1',
-          prompt: 'Improve: ${lastAssistant}',
-        },
-        { id: 'idle-2', kind: 'wait-for-idle', timeoutMs: 1000 },
-      ],
-    });
-
-    expect(driver.waitForIdentity).toHaveBeenCalledWith('conversation-1', 4, 30_000);
-    expect(driver.queue).toHaveBeenCalledWith({
-      conversationId: 'conversation-1',
-      prompt: 'queued',
-      timeoutMs: 30_000,
-    });
-    expect(driver.submit).toHaveBeenLastCalledWith({
-      conversationId: 'conversation-1',
-      prompt: 'Improve: previous answer',
-    });
-    expect(result.conversationId).toBe('conversation-1');
-    expect(result.terminalIdle.identity).toEqual(identity);
-    expect(Object.isFrozen(result.receipts)).toBe(true);
-    expect(result.steps).toHaveLength(6);
-    expect(result.steps[1]).toMatchObject({
-      id: 'queue',
-      method: 'message.submit',
-      queued: true,
-      snapshot: { messageQueue: { pendingCount: 1 } },
-    });
-    expect(checkpoints).toHaveLength(6);
-  });
-
-  it('releases the exact queued item through send-now after cancellation reaches idle', async () => {
-    const identity = { conversationId: 'conversation-1', turnId: 'turn-2', runId: 'run-2' };
-    const driver = {
-      submit: vi.fn(async () => ({ accepted: true, eventOffset: 1 })),
-      queue: vi.fn(async () => ({
-        accepted: true,
-        eventOffset: 2,
-        queueItemId: 'queue-priority',
-      })),
-      waitForIdentity: vi.fn(async () => identity),
-      cancel: vi.fn(async () => ({ accepted: true, identity })),
-      sendQueuedMessageNow: vi.fn(async () => ({
-        accepted: true,
-        eventOffset: 5,
-        queueItemId: 'queue-priority',
-      })),
-      waitForIdle: vi.fn(async () => ({ identity })),
-      observeWorkflowStep: vi.fn(async () => ({
-        conversationId: 'conversation-1',
-        messages: [],
-        messageQueue: {
-          conversationId: 'conversation-1',
-          pendingCount: 0,
-          sequence: 2,
-          paused: false,
-          items: [],
-        },
-        queued: false,
-        projectionEvents: [],
-      })),
-    };
-
-    const result = await executeDesktopAgentWorkflow({
-      driver,
-      conversationId: 'conversation-1',
-      defaultTimeoutMs: 30_000,
-      steps: [
-        { id: 'submit', kind: 'submit', prompt: 'start' },
-        { id: 'priority', kind: 'queue', afterStepId: 'submit', prompt: 'priority' },
-        { id: 'cancel', kind: 'cancel', afterStepId: 'priority' },
-        { id: 'cancelled-idle', kind: 'wait-for-idle', timeoutMs: 1000 },
-        { id: 'send-now', kind: 'send-queued-now', queueStepId: 'priority' },
-        { id: 'recovered-idle', kind: 'wait-for-idle', timeoutMs: 1000 },
-      ],
-    });
-
-    expect(driver.sendQueuedMessageNow).toHaveBeenCalledWith({
-      conversationId: 'conversation-1',
-      queueItemId: 'queue-priority',
-      timeoutMs: 30_000,
-    });
-    expect(result.steps[4]).toMatchObject({
-      id: 'send-now',
-      method: 'message.queue.send-now',
-      accepted: true,
-      queueItemId: 'queue-priority',
-      queueStepId: 'priority',
-    });
-  });
-
   it('binds a visible first submission and application restart to the established conversation', async () => {
-    const identity = { conversationId: 'conversation-1', turnId: 'turn-2', runId: 'run-2' };
+    const identity = { conversationId: 'conversation-1', dshSessionId: 'dsh-session-1', turn: 2 };
     const driver = {
       submit: vi.fn(async (command) => ({
         accepted: true,
@@ -182,7 +43,7 @@ describe('Desktop Agent workflow interpreter', () => {
   });
 
   it('binds Tool confirmation to public projection identity and supports resume', async () => {
-    const identity = { conversationId: 'conversation-1', turnId: 'turn-1', runId: 'run-1' };
+    const identity = { conversationId: 'conversation-1', dshSessionId: 'dsh-session-1', turn: 1 };
     const driver = {
       submit: vi.fn(async () => ({ accepted: true, eventOffset: 3 })),
       waitForPendingTool: vi.fn(async () => ({
@@ -243,7 +104,7 @@ describe('Desktop Agent workflow interpreter', () => {
       })),
       waitForIdentity: vi.fn(async () => identity),
       waitForIdle: vi.fn(async () => ({
-        identity: { conversationId: 'conversation-1', turnId: 'turn-1', runId: 'run-1' },
+        identity: { conversationId: 'conversation-1', dshSessionId: 'dsh-session-1', turn: 1 },
       })),
       resume: vi.fn(async () => ({ accepted: true, snapshot: { messages: [] } })),
     };
@@ -271,7 +132,7 @@ describe('Desktop Agent workflow interpreter', () => {
     const driver = {
       submit: vi.fn(async () => ({ accepted: true, eventOffset: turn++ })),
       waitForIdle: vi.fn(async (conversationId) => ({
-        identity: { conversationId, turnId: `turn-${turn}`, runId: `run-${turn}` },
+        identity: { conversationId, dshSessionId: 'dsh-session-1', turn },
       })),
       readFacts: vi.fn(async (identity) => ({
         status: 'facts',
@@ -330,27 +191,19 @@ describe('Desktop Agent workflow interpreter', () => {
         chatModel: { providerId: 'provider', modelId: 'model-b', category: 'llm' },
       }),
     );
-    expect(result.receipts['first-idle'].facts.identity.turnId).toBe('turn-1');
+    expect(result.receipts['first-idle'].facts.identity.turn).toBe(1);
     expect(result.receipts.compact.result.type).toBe('compressionResult');
     expect(result.steps[2]).toMatchObject({ method: 'agent-input.invoke', accepted: true });
   });
 
-  it('preserves Draft rejection receipts and updates future-Turn configuration while running', async () => {
-    const identity = { conversationId: 'conversation-1', turnId: 'turn-1', runId: 'run-1' };
+  it('updates the exact idle Session configuration', async () => {
+    const identity = { conversationId: 'conversation-1', dshSessionId: 'dsh-session-1', turn: 1 };
     const driver = {
-      bindDraft: vi.fn(async () => ({ accepted: true, catalogRef: 'assistant-binding' })),
-      submitDraft: vi.fn(async () => ({
-        accepted: false,
-        status: 'rejected',
-        catalogRef: 'initial',
-      })),
-      prepareSessionAfterDraft: vi.fn(async () => ({ reloading: true })),
       submit: vi.fn(async () => ({
         accepted: true,
         eventOffset: 0,
         conversationId: 'conversation-1',
       })),
-      waitForIdentity: vi.fn(async () => identity),
       updateConfiguration: vi.fn(async () => ({
         accepted: true,
         status: 'applied',
@@ -365,42 +218,32 @@ describe('Desktop Agent workflow interpreter', () => {
       driver,
       defaultTimeoutMs: 1000,
       steps: [
-        { id: 'assistant-binding', kind: 'draft-bind', target: 'assistant' },
-        {
-          id: 'stale-submit',
-          kind: 'draft-submit',
-          catalogRef: 'initial',
-          input: { kind: 'message', text: 'hello' },
-          expectedStatus: 'rejected',
-        },
         { id: 'first', kind: 'submit', prompt: 'first' },
+        { id: 'first-idle', kind: 'wait-for-idle', timeoutMs: 1000 },
         {
           id: 'model-update',
           kind: 'update-configuration',
-          afterStepId: 'first',
           providerId: 'provider',
           modelId: 'model-b',
           expectedStatus: 'applied',
-          turnState: 'running',
+          turnState: 'idle',
           timeoutMs: 1000,
         },
-        { id: 'idle', kind: 'wait-for-idle', timeoutMs: 1000 },
+        { id: 'second', kind: 'submit', prompt: 'second' },
+        { id: 'second-idle', kind: 'wait-for-idle', timeoutMs: 1000 },
       ],
     });
 
-    expect(driver.prepareSessionAfterDraft).toHaveBeenCalledOnce();
     expect(driver.updateConfiguration).toHaveBeenCalledWith({
       conversationId: 'conversation-1',
       providerId: 'provider',
       modelId: 'model-b',
       expectedStatus: 'applied',
-      turnState: 'running',
-      runningTurnIdentity: identity,
+      turnState: 'idle',
       timeoutMs: 1000,
     });
     expect(result.steps).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: 'stale-submit', method: 'draft.input.submit' }),
         expect.objectContaining({
           id: 'model-update',
           method: 'conversation.configuration.update',

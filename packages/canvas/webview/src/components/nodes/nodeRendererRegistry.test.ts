@@ -50,8 +50,7 @@ describe('nodeRendererRegistry', () => {
         data: {
           assetPath: 'media/Cut Basic Functional Fixture.mp4',
           contentLocator: {
-            kind: 'workspace-file',
-            path: 'media/Cut Basic Functional Fixture.mp4',
+            file: { authority: 'workspace', path: 'media/Cut Basic Functional Fixture.mp4' },
           },
           mediaType: 'video',
         },
@@ -67,9 +66,10 @@ describe('nodeRendererRegistry', () => {
           path: 'Assets/epub/animation/Blame/volume-01.epub',
           title: 'ignored/path/title.epub',
           contentLocator: {
-            kind: 'media-library',
-            libraryName: 'Assets',
-            relativePath: 'epub/animation/Blame/volume-01.epub',
+            file: {
+              authority: 'workspace',
+              path: 'neko/assets/Assets/epub/animation/Blame/volume-01.epub',
+            },
           },
         },
         zIndex: 2,

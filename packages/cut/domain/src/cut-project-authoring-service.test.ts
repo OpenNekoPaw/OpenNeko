@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import {
   createNodeHostContentReadService,
   NodeAuthorizedWorkspaceWriter,
-} from '@neko/content/node';
+} from '@neko/content-domain/node';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { serializeOtio } from './codec';

@@ -61,9 +61,8 @@ describe('workspace semantic/entity metadata binding', () => {
     });
     await expect(
       binding.findEntityLinksByLocator(request.source.sourceId, {
-        kind: 'text-range',
-        startLine: 1,
-        endLine: 1,
+        file: { authority: 'workspace', path: request.source.relativePath },
+        selector: { kind: 'text-range', startLine: 1, endLine: 1 },
       }),
     ).resolves.toHaveLength(2);
 
@@ -179,7 +178,9 @@ function commitRequest(): SemanticEntitySourceCommitRequest {
         evidenceId: 'evidence:nova',
         owner: 'workspace' as const,
         sourceId: source.sourceId,
-        locator: { kind: 'workspace-file' as const, path: source.relativePath },
+        locator: {
+          file: { authority: 'workspace' as const, path: source.relativePath },
+        },
       },
     ],
   };
@@ -246,7 +247,10 @@ function occurrence(input: {
     },
     role: 'reference' as const,
     location: '${WORKSPACE}/story.fountain:1',
-    locator: { kind: 'text-range' as const, startLine: 1, endLine: 1 },
+    locator: {
+      file: { authority: 'workspace' as const, path: 'story.fountain' },
+      selector: { kind: 'text-range' as const, startLine: 1, endLine: 1 },
+    },
     range: { startLine: 1, endLine: 1 },
     sourceFingerprint,
   };

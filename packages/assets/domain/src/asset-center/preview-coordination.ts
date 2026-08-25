@@ -1,4 +1,4 @@
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 import type { PreviewMediaDescriptor } from '@neko/preview-domain';
 import type { AuthorizedPreviewSessionProjection } from '@neko/preview-domain/authorized-session';
 import type { AssetCenterSelectionProjection, AssetCenterSessionIdentity } from './contract';

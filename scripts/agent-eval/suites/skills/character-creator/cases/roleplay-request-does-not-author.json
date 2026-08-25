@@ -44,7 +44,7 @@
     {
       "id": "no-draft-mutation",
       "kind": "tool-call",
-      "name": "chara.character.fillDraft",
+      "name": "openneko.character",
       "status": "absent",
       "evidenceRef": "roleplay-boundary-facts"
     }

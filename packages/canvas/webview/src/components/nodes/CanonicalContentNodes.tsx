@@ -1,4 +1,4 @@
-import { contentLocatorKey, type ContentLocator } from '@neko/content';
+import { contentLocatorKey, type ContentLocator } from '@neko/content-domain';
 import type {
   CanvasTextFilePreviewDiagnosticCode,
   CanvasTextFilePreviewKind,
@@ -11,8 +11,7 @@ import type {
 import { resolveCanvasTextFilePreviewKind } from '@neko/canvas-domain';
 import { FileIcon, toCodiconClassName, type CodiconName } from '@neko/ui/icons';
 import { MarkdownDocumentView } from '@neko/ui/markdown';
-import type { MilkdownRichSurfaceState } from '@neko/markdown/rich-surface';
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { t } from '../../i18n';
 import { useOptionalCanvasHost } from '../../host-runtime';
 import { PreviewSurface } from '../../preview/PreviewRendererRegistry';
@@ -37,26 +36,13 @@ type CanvasFilePreviewPresentation =
       readonly status: 'local-error';
       readonly code: CanvasTextFilePreviewDiagnosticCode;
     };
-const CanvasMilkdownRichSurface = lazy(async () => {
-  const module = await import('@neko/markdown/rich-surface');
-  return { default: module.MilkdownRichSurface };
-});
-
 export function MarkdownNode({
   node,
   isSelected,
-  onUpdateData,
+  onUpdateData: _onUpdateData,
+  onMarkdownEdit,
   ...baseProps
 }: CanonicalNodeProps<MarkdownCanvasNode>) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [richState, setRichState] = useState<MilkdownRichSurfaceState>('loading');
-  const [richFailure, setRichFailure] = useState<string>();
-
-  useEffect(() => {
-    if (!isSelected) setIsEditing(false);
-  }, [isSelected]);
-
-  const editActive = isSelected && isEditing;
   return (
     <BaseNode
       node={node}
@@ -64,69 +50,20 @@ export function MarkdownNode({
       {...baseProps}
       presentation="foundational"
       opaqueSurface
-      onActivate={() => setIsEditing(true)}
+      onActivate={onMarkdownEdit ? () => onMarkdownEdit(node.id) : undefined}
     >
-      <div
-        className="canvas-markdown-node"
-        data-editing={editActive ? 'true' : 'false'}
-        onMouseDown={editActive ? (event) => event.stopPropagation() : undefined}
-        onClick={editActive ? (event) => event.stopPropagation() : undefined}
-        onDoubleClick={editActive ? (event) => event.stopPropagation() : undefined}
-        onKeyDownCapture={
-          editActive
-            ? (event) => {
-                if (event.key !== 'Escape') return;
-                event.preventDefault();
-                event.stopPropagation();
-                setIsEditing(false);
-              }
-            : undefined
-        }
-      >
+      <div className="canvas-markdown-node">
         {node.data.title ? (
           <div className="canvas-markdown-node__title" title={node.data.title}>
             {node.data.title}
           </div>
         ) : null}
-        {editActive ? (
-          <div className="canvas-markdown-node__editor">
-            <Suspense
-              fallback={
-                <div className="canvas-markdown-node__status" role="status">
-                  {t('node.markdownRichLoading')}
-                </div>
-              }
-            >
-              <CanvasMilkdownRichSurface
-                value={node.data.content}
-                ariaLabel={t('node.markdownInput')}
-                readOnly={false}
-                className="canvas-markdown-rich-surface"
-                mountClassName="canvas-markdown-rich-surface__mount"
-                onChange={(content) => onUpdateData?.(node.id, { ...node.data, content })}
-                onActions={(actions) => actions?.focus()}
-                onStateChange={(nextState, failure) => {
-                  setRichState(nextState);
-                  setRichFailure(failure);
-                }}
-              />
-            </Suspense>
-            {richState === 'unavailable' || richState === 'error' ? (
-              <div className="canvas-markdown-node__status" role="alert" title={richFailure}>
-                {richState === 'unavailable'
-                  ? t('node.markdownRichUnavailable')
-                  : t('node.markdownRichFailed')}
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <div className="canvas-markdown-node__preview">
-            <MarkdownDocumentView
-              value={node.data.content}
-              className="canvas-markdown-node__document"
-            />
-          </div>
-        )}
+        <div className="canvas-markdown-node__preview" data-canvas-wheel-owner="content">
+          <MarkdownDocumentView
+            value={node.data.content}
+            className="canvas-markdown-node__document"
+          />
+        </div>
       </div>
     </BaseNode>
   );
@@ -145,6 +82,7 @@ export function MediaNode({
     [contentLocatorIdentity],
   );
   const mediaType = node.data.mediaType ?? 'image';
+  const sourceFingerprint = readSourceFingerprint(node.data.provenance);
   const previewRole =
     mediaType === 'image' ? 'image' : mediaType === 'audio' ? 'audio-waveform' : 'video-proxy';
   const title =
@@ -163,11 +101,21 @@ export function MediaNode({
         mediaType,
       },
       ...(contentLocator ? { contentLocator } : {}),
+      ...(sourceFingerprint ? { sourceFingerprint } : {}),
       metadata: {
         ...(node.data.duration ? { duration: node.data.duration } : {}),
       },
     }),
-    [mediaType, contentLocator, node.data.duration, node.data.title, node.id, previewRole, source],
+    [
+      mediaType,
+      contentLocator,
+      node.data.duration,
+      node.data.title,
+      node.id,
+      previewRole,
+      source,
+      sourceFingerprint,
+    ],
   );
   return (
     <BaseNode
@@ -176,6 +124,7 @@ export function MediaNode({
       {...baseProps}
       presentation="foundational"
       opaqueSurface
+      className={mediaType === 'image' ? 'canvas-image-node-frame' : undefined}
       onActivate={
         contentLocator && onFullscreenPreview ? () => onFullscreenPreview(node.id) : undefined
       }
@@ -320,6 +269,7 @@ export function FileNode({
   const fileName = resolveCanvasFileName(node.data);
   const contentLocator = readCanonicalContentLocator(node.data.contentLocator);
   const contentLocatorIdentity = contentLocator ? contentLocatorKey(contentLocator) : undefined;
+  const sourceFingerprint = readSourceFingerprint(node.data.provenance);
   const contentLocatorRef = useRef(contentLocator);
   contentLocatorRef.current = contentLocator;
   const host = useOptionalCanvasHost();
@@ -349,7 +299,7 @@ export function FileNode({
     return () => {
       active = false;
     };
-  }, [contentLocatorIdentity, eligibleKind, host, node.id]);
+  }, [contentLocatorIdentity, eligibleKind, host, node.id, sourceFingerprint]);
 
   return (
     <BaseNode
@@ -358,6 +308,7 @@ export function FileNode({
       {...baseProps}
       presentation="foundational"
       opaqueSurface
+      className={eligibleKind ? 'canvas-text-reference-node' : undefined}
       onActivate={
         contentLocator && isFullscreenPreviewFile(node.data) && onFullscreenPreview
           ? () => onFullscreenPreview(node.id)
@@ -380,6 +331,13 @@ export function FileNode({
       </div>
     </BaseNode>
   );
+}
+
+function readSourceFingerprint(
+  provenance: FileCanvasNode['data']['provenance'],
+): string | undefined {
+  const value = provenance?.['contentFingerprint'];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 function isFullscreenPreviewMediaKind(value: unknown): value is 'image' | 'video' | 'audio' {
@@ -444,7 +402,7 @@ function CanvasFileNodeContent({
       <div className="canvas-file-node__format" aria-label={resolvePreviewKindLabel(preview.kind)}>
         {resolvePreviewKindLabel(preview.kind)}
       </div>
-      <div className="canvas-file-node__scroll">
+      <div className="canvas-file-node__scroll" data-canvas-wheel-owner="content">
         {preview.kind === 'markdown' ? (
           <MarkdownDocumentView
             value={preview.text}

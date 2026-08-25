@@ -6,10 +6,7 @@
   "visibility": "public",
   "evidenceContract": {
     "userBehavior": "Answer an informational question about Storyboard terminology without starting creator authoring.",
-    "canonicalPath": [
-      "ordinary user turn",
-      "ordinary assistant answer"
-    ],
+    "canonicalPath": ["ordinary user turn", "ordinary assistant answer"],
     "observables": [
       {
         "ref": "turn-facts",
@@ -21,13 +18,9 @@
     "expectedResult": "The Agent gives a concise conceptual explanation and creates no creator artifact or task.",
     "expectedFailure": "Skill activation, Canvas authoring, or media generation for this adjacent negative fails."
   },
-  "fixtureRefs": [
-    "empty-workspace"
-  ],
+  "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "markdown",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "submit",

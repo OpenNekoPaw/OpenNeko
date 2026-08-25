@@ -80,6 +80,12 @@
       "kind": "terminal-idle",
       "concerns": ["turnIdle", "continuationQueueIdle"],
       "evidenceRef": "computer-target-rejection-facts"
+    },
+    {
+      "id": "lifecycle",
+      "kind": "desktop-lifecycle",
+      "checks": ["graceful-close"],
+      "evidenceRef": "computer-target-rejection-facts"
     }
   ],
   "artifactChecks": [],

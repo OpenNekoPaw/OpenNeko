@@ -4,7 +4,10 @@ import {
   searchProjectMediaLibraryContentEntries,
   searchWorkspaceContentEntries,
 } from '@neko/assets-node';
-import { serializeContentReferenceTarget } from '@neko/content';
+import {
+  isWorkspaceFileContentLocator,
+  serializeContentReferenceTarget,
+} from '@neko/content-domain';
 import { readProjectEntityResources } from '@neko/entity-node';
 import type { NekoHostPorts } from '@neko/host/ports';
 import {
@@ -94,21 +97,9 @@ function projectContentEntry(
   if (entry.role !== 'content' || entry.availability !== 'available') {
     return [];
   }
-  if (source === 'workspace-file' && entry.locator.kind !== 'workspace-file') return [];
-  if (source === 'asset' && entry.locator.kind !== 'media-library') return [];
-  if (entry.locator.kind !== 'workspace-file' && entry.locator.kind !== 'media-library') return [];
-  const ref =
-    entry.locator.kind === 'media-library'
-      ? {
-          kind: 'media-library',
-          namespace: entry.locator.libraryName,
-          id: entry.locator.relativePath,
-        }
-      : { kind: 'workspace-file', id: entry.locator.path };
-  const detail =
-    entry.locator.kind === 'media-library'
-      ? `${entry.locator.libraryName}/${entry.locator.relativePath}`
-      : entry.locator.path;
+  if (!isWorkspaceFileContentLocator(entry.locator) || entry.locator.selector) return [];
+  const ref = { kind: 'workspace-file', id: entry.locator.file.path };
+  const detail = entry.locator.file.path;
   if (kind === 'mention') return [];
   const mediaType = entry.metadata?.mediaType;
   const embeddable = mediaType === 'image' || mediaType === 'audio' || mediaType === 'video';

@@ -27,13 +27,12 @@ const MATRIX_SUITES = Object.freeze([
   'agent-runtime.prompt-composition',
   'agent-runtime.skill-runtime',
   'agent-runtime.workflow-controller',
-  'agent-runtime.perception-routing',
+  'agent-runtime.media-tool-routing',
   'agent-runtime.creative-media-workflow',
   'skill.storyboard',
   'skill.skill-creator',
   'skill.image',
   'skill.video',
-  'skill.media-quality-review',
 ]);
 export async function main(argv = process.argv.slice(2), io = defaultIo()) {
   const args = parseArgs(argv);

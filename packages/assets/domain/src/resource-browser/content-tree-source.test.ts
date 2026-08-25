@@ -111,7 +111,9 @@ describe('Resource Browser content tree source', () => {
     });
 
     expect(entries.map((entry) => entry.label)).toEqual(['project.json']);
-    expect(entries[0]?.locator).toEqual({ kind: 'workspace-file', path: 'neko/project.json' });
+    expect(entries[0]?.locator).toEqual({
+      file: { authority: 'workspace', path: 'neko/project.json' },
+    });
     expect(readDirectory).not.toHaveBeenCalledWith('/workspace/neko/assets');
     expect(stat).toHaveBeenCalledTimes(1);
   });
@@ -158,20 +160,20 @@ describe('Resource Browser content tree source', () => {
         label: 'characters',
         role: 'directory',
         depth: 0,
-        locator: { kind: 'workspace-file', path: 'characters' },
+        locator: { file: { authority: 'workspace', path: 'characters' } },
       }),
       expect.objectContaining({
         label: 'cover.png',
         role: 'content',
         depth: 0,
-        locator: { kind: 'workspace-file', path: 'cover.png' },
+        locator: { file: { authority: 'workspace', path: 'cover.png' } },
       }),
       expect.objectContaining({
         label: 'hero.glb',
         role: 'content',
         depth: 1,
-        parentLocator: { kind: 'workspace-file', path: 'characters' },
-        locator: { kind: 'workspace-file', path: 'characters/hero.glb' },
+        parentLocator: { file: { authority: 'workspace', path: 'characters' } },
+        locator: { file: { authority: 'workspace', path: 'characters/hero.glb' } },
       }),
     ]);
     expect(readDirectory).not.toHaveBeenCalledWith('/workspace/node_modules');

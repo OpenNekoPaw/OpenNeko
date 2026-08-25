@@ -7,38 +7,6 @@ import type { AssistantConfigDiagnostic } from './config-diagnostic';
 import { isProviderConfigured } from './provider-configuration';
 
 export type AssistantExecutionMode = 'plan' | 'ask' | 'auto';
-export type MediaUnderstandingCategory = 'image' | 'audio' | 'video';
-export type MediaUnderstandingPurpose =
-  'image.understand' | 'audio.understand' | 'video.understand';
-export type MediaUnderstandingModelStatusValue = 'configured' | 'auto' | 'missing';
-export type MediaUnderstandingModelSource = 'explicit-config';
-
-export const MEDIA_UNDERSTANDING_PURPOSES = [
-  { category: 'image', purpose: 'image.understand' },
-  { category: 'audio', purpose: 'audio.understand' },
-  { category: 'video', purpose: 'video.understand' },
-] as const satisfies readonly {
-  category: MediaUnderstandingCategory;
-  purpose: MediaUnderstandingPurpose;
-}[];
-
-export interface MediaUnderstandingModelStatus {
-  category: MediaUnderstandingCategory;
-  purpose: MediaUnderstandingPurpose;
-  status: MediaUnderstandingModelStatusValue;
-  providerId?: string;
-  modelId?: string;
-  optionId?: string;
-  label?: string;
-  providerLabel?: string;
-  source?: MediaUnderstandingModelSource;
-}
-
-export type MediaUnderstandingModels = Record<
-  MediaUnderstandingCategory,
-  MediaUnderstandingModelStatus
->;
-
 export interface AssistantProviderModelView {
   id: string;
   name: string;
@@ -92,7 +60,6 @@ export interface AssistantSettingsData extends AssistantSettingsSnapshot {
   chatModelOptions: ChatModelOption[];
   modelGroups: ModelSourceGroup[];
   defaultMediaModels: Partial<Record<MediaModelType, string>>;
-  mediaUnderstandingModels?: MediaUnderstandingModels;
   configDiagnostic?: AssistantConfigDiagnostic;
 }
 
@@ -111,7 +78,6 @@ export interface AssistantConfigState {
   chatModelOptions: ChatModelOption[];
   modelGroups: ModelSourceGroup[];
   defaultMediaModels: Partial<Record<MediaModelType, string>>;
-  mediaUnderstandingModels?: MediaUnderstandingModels;
   configDiagnostic?: AssistantConfigDiagnostic;
 }
 

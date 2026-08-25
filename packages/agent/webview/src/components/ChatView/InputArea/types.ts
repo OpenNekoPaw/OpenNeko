@@ -92,7 +92,6 @@ export type ComposerControlMenuId =
   | 'session-mode'
   | 'composer-config'
   | 'agent-model'
-  | 'understanding-model'
   | 'character-conversation-mode'
   | 'execution-mode';
 
@@ -124,11 +123,11 @@ export const DEFAULT_COMPOSER_MENU_STATE: Readonly<ComposerMenuState> = {
 
 // Project file for @ reference
 export interface ProjectFile {
-  locator: import('@neko/content').WorkspaceFileContentLocator;
+  locator: import('@neko/content-domain').WorkspaceFileContentLocator;
   name: string;
   type: 'file' | 'folder';
   icon?: string;
-  source?: 'workspace' | 'media-library' | 'entity-graph' | 'story' | 'canvas';
+  source?: 'workspace' | 'media-library' | 'asset-library' | 'entity-graph' | 'story' | 'canvas';
   mediaType?: 'video' | 'audio' | 'image' | 'sequence' | 'text' | 'document';
 }
 
@@ -149,7 +148,9 @@ export interface MentionItem {
   /** Secondary hint text */
   description?: string;
   /** Stable Host-issued content identity used when this item is selected. */
-  contentLocator?: import('@neko/content').ContentLocator;
+  contentLocator?: import('@neko/content-domain').ContentLocator;
+  /** Exact Host identity used only to materialize a selected Asset into the Workspace. */
+  assetId?: string;
   /** Optional icon supplied by host protocol */
   icon?: string;
   /** Source index that produced this candidate */

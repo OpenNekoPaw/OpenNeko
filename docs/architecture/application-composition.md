@@ -1,12 +1,5 @@
 # 应用组合根
 
-状态：Accepted
-
-更新日期：2026-08-10
-对应变更：`replace-desktop-media-scheme-with-http-resource-gateway`、
-`enforce-thin-desktop-application-root`、`compose-desktop-workbench-scenes`、
-`bound-desktop-ui-residency`
-
 OpenNeko 只有一个可执行产品组合根：`apps/neko-desktop`。`packages/*` 与 `packages/*/*` canonical workspace
 提供 host-neutral contract、领域 runtime、Node adapter 和 browser-safe UI；应用根负责把它们
 组合为 Electron Main、preload 和 renderer 运行时。Application root 是部署、信任和 concrete
@@ -72,13 +65,14 @@ test，则必须进入对应 owning package。Desktop handler 只做边界解析
 public port、投影结果和释放资源。
 
 不能以“当前只有 Desktop”“只有一个调用方”或“尚无 TUI/VS Code”为由把业务实现留在应用根；这类
-条件只意味着不应建立 speculative multi-host framework。没有明确 owner 的跨领域业务先通过 OpenSpec
-定义中立职责，不得放进 `@neko/desktop-core` 或其他 catch-all package。
+条件只意味着不应建立 speculative multi-host framework。没有明确 owner 的跨领域业务必须先定义中立职责；
+若会改变产品功能则进入对应 OpenSpec，行为等价的 ownership 整理直接实施并完成质量 review，不得放进
+`@neko/desktop-core` 或其他 catch-all package。
 
 Canvas material authoring/generation、Media Library sync、project portability、Resource Browser、
-application settings、Agent content/facts/resource projection 与 personal Skill lifecycle 已迁入各自
-package。Desktop 对这些能力只保留 sender/path/trust 授权、Electron 资源绑定、native interaction、
-public port wiring 与 disposal；旧 app-owned 路径由边界测试和 legacy gate 持续 poison。
+Application settings、Agent content/facts/resource projection 与 personal Skill lifecycle 由各自 package
+拥有。Desktop 对这些能力只保留 sender/path/trust 授权、Electron 资源绑定、native interaction、
+public port wiring 与 disposal。
 
 Resource Browser 的 `entity.manage` 继续复用同一个 sender-bound Desktop bridge。Desktop 根据已授权
 workspace 构造 `@neko/entity-node` runtime，并注入 canonical Entity repository 与 local-metadata public
@@ -132,8 +126,9 @@ provider turn、媒体/GPU、subscription、后台 Job 和其他真实昂贵 run
 
 Workbench 是可变形态，不是固定的 Workspace 页面：默认 Agent draft 只有 Interaction；Assistant
 激活后是 Agent + Preview Main；Project Workspace 是 Agent + creative Main + 右侧 Project Browser；
-资源中心与扩展中心分别把 Asset Management 和 Extension Management 放入 Main，信息充分且由 owner
-提供的 Preview/Detail 只能进入可选 Secondary Main。Settings 和项目管理同样使用该 Shell；低信息量的
+资源中心把 Asset Management 放入 Main，信息充分且由 owner 提供的 Preview/Detail 只能进入可选
+Secondary Main。扩展中心把只读 Skill/MCP Management 放入全宽 Main，不预留 Plugin Detail；Settings
+和项目管理同样使用该 Shell。低信息量的
 Project selection 保留在 catalog，并以独立行操作显式打开 Workspace，不创建空洞的 Detail shell。
 Character Management 使用 package-owned catalog Main 与 exact detail Secondary Main；Character/Room
 Conversation 使用独立 `character-interaction` composition，组合 Agent Interaction、一个 exact owner-qualified
@@ -149,7 +144,7 @@ scene，只组合 package-owned 全局目录 Main 与可选版本详情 Secondar
 编辑。正式运行使用独立 `world-runtime` scene 和 exact
 `GlobalWorld + WorldVersion -> WorldRun -> WorldSave/branch` identity。Main/preload 只转发各自的 strict
 management、authoring、portable 和 runtime contract；Project、Version、Run、Save、branch 与 event 事务均由
-`@neko/world` / `@neko/world-node` 拥有。离开任一 scene 后对应 Root 必须卸载，但 durable World 记录和受保护后台
+`@neko/world-domain` / `@neko/world-node` 拥有。离开任一 scene 后对应 Root 必须卸载，但 durable World 记录和受保护后台
 能力不受影响。创作预览只做纯定义检查，不创建 Run、Save、branch、event 或 Agent 记录；确定性 Foundation
 runtime 不得冒充 Story、Gameplay、WorldExperience、Agent Play 或 realtime generation。
 
@@ -170,9 +165,9 @@ instance。Workspace 只能由显式 Project identity 或 sender/Window-bound op
 取消授权保持原 scene，且不得创建 Workspace 或 conversation。
 
 PrimarySidebar 是 Desktop 唯一用户级 Project context 与 conversation switcher。Project group 可见性是
-轻量导航 projection，不表示对应 Workspace Root、媒体资源或 Agent runtime 驻留。Agent Webview 在 Desktop
-dock 中保留完整 controller/composer/runtime 能力，但隐藏 package 内部 Tab、新建和 History 导航，防止只
-切换 transcript 而不切换完整 owner-qualified Scene。Project header 不恢复 first/active/recent conversation；
+轻量导航 projection，不表示对应 Workspace Root、媒体资源或 Agent runtime 驻留。Desktop 原生 Agent surface
+只按 exact Conversation identity 消费 DSH Session/Permission projection，不拥有 controller、transcript、queue
+或 Agent runtime。Project header 不恢复 first/active/recent conversation；
 conversation restore 与 delete 都验证完整 owner identity。Character/Room Conversation 必须恢复到 exact
 `character-interaction` scene；缺失的 Run、Avatar、World 或 Room command 只在对应 owning Surface 返回
 带 exact owner identity 的 unavailable，不得降级为 Assistant 或 Workspace。
@@ -194,7 +189,7 @@ provider execution 前通过 package-owned materialization port 幂等确保 exa
 Agent runtime 已拥有同一 conversation identity；只有该 conversation 可以 bootstrap 后，Host 才把
 Scene 暴露为 session。Desktop Main 只实现 context 到 concrete runtime 的组合 adapter，不拥有提交或
 恢复规则。renderer 的 session adapter 与 preload 传输按显式 connection identity 绑定 send 和
-subscription；endpoint replacement 必须用创建旧 attachment 的 binding 发送 `endpoint-replaced`
+subscription；endpoint replacement 必须用创建待替换 attachment 的 binding 发送 `endpoint-replaced`
 detach，再由新 connection attach。全局 active connection 不得代替 instance owner，endpoint identity
 mismatch 继续 fail-visible。
 
@@ -235,10 +230,10 @@ audio/video、Preview 与 Agent 展示使用原生 `<audio>` / `<video>`；文�
   removed-host production path。
 - `pnpm check:application-boundaries` 验证 package-to-app、renderer-to-Node/Electron 和
   Main-to-React 依赖违规。
-- 新增或实质修改 `apps/neko-desktop` 生产模块时，OpenSpec/评审证据必须说明它为何需要 Application
+- 新增或实质修改 `apps/neko-desktop` 生产模块时，适用的功能 OpenSpec、PR 或交付说明必须说明它为何需要 Application
   层、组合哪些 package public contract，以及为何不是可下沉的业务实现。
-- 业务逻辑迁移必须同时用 package producer test、Desktop consumer/path test 和旧 app path
-  poison/delete 证明唯一 canonical path；涉及 IPC、窗口、安全或用户资源时增加真实 Electron 验收。
+- 业务逻辑变更必须同时用 package producer test 和 Desktop consumer/path test 证明唯一 canonical path；
+  涉及 IPC、窗口、安全或用户资源时增加真实 Electron 验收。
 - `pnpm test`、`pnpm build`、`pnpm check` 验证生产者/消费者、workspace resolution 和依赖图。
 - `pnpm package:desktop` 检查 Electron 生产包；涉及用户路径时还需真实 Desktop
   project-open/creative-surface 场景。

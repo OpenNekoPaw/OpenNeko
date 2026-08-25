@@ -34,10 +34,10 @@ const regenerateImage: CanvasMaterialActionDescriptor = {
 describe('Canvas material action catalog', () => {
   it('resolves the exact selected Generation media output as a material target', () => {
     const locator = {
-      kind: 'generated-output' as const,
-      outputId: 'video-output-1',
-      digest: 'sha256:video-output-1',
-      path: 'neko/generated/video-output-1.mp4',
+      file: {
+        authority: 'workspace' as const,
+        path: 'neko/generated/video-output-1.mp4',
+      },
     };
     const data = createCanvasGenerationNodeData('video');
     const node: CanvasNode = {
@@ -86,10 +86,10 @@ describe('Canvas material action catalog', () => {
 
   it('resolves the exact selected Prompt output as an immutable document target', () => {
     const locator = {
-      kind: 'generated-output' as const,
-      outputId: 'prompt-output-1',
-      digest: 'sha256:prompt-output-1',
-      path: 'neko/generated/prompt-output-1.txt',
+      file: {
+        authority: 'workspace' as const,
+        path: 'neko/generated/prompt-output-1.txt',
+      },
     };
     const data = createCanvasGenerationNodeData('prompt');
     const node: CanvasNode = {
@@ -133,7 +133,9 @@ describe('Canvas material action catalog', () => {
       data: {
         path: 'references/looks-like-video.mp4',
         title: 'looks-like-video.mp4',
-        contentLocator: { kind: 'workspace-file', path: 'references/looks-like-video.mp4' },
+        contentLocator: {
+          file: { authority: 'workspace', path: 'references/looks-like-video.mp4' },
+        },
       },
     };
 
@@ -151,7 +153,7 @@ describe('Canvas material action catalog', () => {
     const referenced = projectResolvedCanvasMaterialToCanvas({
       canvas: createEmptyCanvasData('Fixture'),
       material: {
-        locator: { kind: 'workspace-file', path: 'media/reference.png' },
+        locator: { file: { authority: 'workspace', path: 'media/reference.png' } },
         title: 'reference.png',
         mediaKind: 'image',
       },
@@ -160,12 +162,7 @@ describe('Canvas material action catalog', () => {
     const generated = projectResolvedCanvasMaterialToCanvas({
       canvas: referenced,
       material: {
-        locator: {
-          kind: 'generated-output',
-          outputId: 'image-output',
-          digest: 'fixture-digest',
-          path: 'generated/image.png',
-        },
+        locator: { file: { authority: 'workspace', path: 'generated/image.png' } },
         title: 'image.png',
         mediaKind: 'image',
         generation: {
@@ -201,7 +198,7 @@ describe('Canvas material action catalog', () => {
     const canvas = projectResolvedCanvasMaterialToCanvas({
       canvas: createEmptyCanvasData('Fixture'),
       material: {
-        locator: { kind: 'workspace-file', path: 'opaque/character.bin' },
+        locator: { file: { authority: 'workspace', path: 'opaque/character.bin' } },
         title: 'character.bin',
         mediaKind: 'model',
       },
@@ -238,7 +235,7 @@ describe('Canvas material action catalog', () => {
     const canvas = projectResolvedCanvasMaterialToCanvas({
       canvas: createEmptyCanvasData('Fixture'),
       material: {
-        locator: { kind: 'workspace-file', path: `materials/${mediaKind}.source` },
+        locator: { file: { authority: 'workspace', path: `materials/${mediaKind}.source` } },
         title: `${mediaKind}.source`,
         mediaKind,
       },
@@ -277,7 +274,7 @@ describe('Canvas material action catalog', () => {
     const canvas = projectResolvedCanvasMaterialToCanvas({
       canvas: createEmptyCanvasData('Fixture'),
       material: {
-        locator: { kind: 'workspace-file', path: 'neko/entities/neko/portrait.png' },
+        locator: { file: { authority: 'workspace', path: 'neko/entities/neko/portrait.png' } },
         title: 'portrait.png',
         mediaKind: 'image',
         entity: entityRepresentation,
@@ -307,7 +304,7 @@ describe('Canvas material action catalog', () => {
     canvas = projectResolvedCanvasMaterialToCanvas({
       canvas,
       material: {
-        locator: { kind: 'workspace-file', path: 'media/first.png' },
+        locator: { file: { authority: 'workspace', path: 'media/first.png' } },
         title: 'first.png',
         mediaKind: 'image',
       },
@@ -316,7 +313,7 @@ describe('Canvas material action catalog', () => {
     canvas = projectResolvedCanvasMaterialToCanvas({
       canvas,
       material: {
-        locator: { kind: 'workspace-file', path: 'media/second.png' },
+        locator: { file: { authority: 'workspace', path: 'media/second.png' } },
         title: 'second.png',
         mediaKind: 'image',
       },
@@ -336,7 +333,7 @@ describe('Canvas material action catalog', () => {
     canvas = projectResolvedCanvasMaterialToCanvas({
       canvas,
       material: {
-        locator: { kind: 'workspace-file', path: 'media/frame.png' },
+        locator: { file: { authority: 'workspace', path: 'media/frame.png' } },
         title: 'frame.png',
         mediaKind: 'image',
       },
@@ -345,7 +342,7 @@ describe('Canvas material action catalog', () => {
     canvas = projectResolvedCanvasMaterialToCanvas({
       canvas,
       material: {
-        locator: { kind: 'workspace-file', path: 'media/ambience.wav' },
+        locator: { file: { authority: 'workspace', path: 'media/ambience.wav' } },
         title: 'ambience.wav',
         mediaKind: 'audio',
       },
@@ -379,7 +376,7 @@ describe('Canvas material action catalog', () => {
     const canvas = projectResolvedCanvasMaterialToCanvas({
       canvas: createEmptyCanvasData('Fixture'),
       material: {
-        locator: { kind: 'workspace-file', path: 'media/reference.png' },
+        locator: { file: { authority: 'workspace', path: 'media/reference.png' } },
         title: 'reference.png',
         mediaKind: 'image',
       },
@@ -413,9 +410,9 @@ describe('Canvas material action catalog', () => {
     expect(resolveCanvasMaterialActionTargets([degraded], [degraded.id])).toEqual([]);
   });
 
-  it('projects no actions for a safe invalid locator while rejecting unsafe values', () => {
-    const unavailable = {
-      id: 'unavailable-media',
+  it('resolves a mounted Media Library locator as a durable referenced target while rejecting unsafe values', () => {
+    const mounted = {
+      id: 'mounted-media',
       type: 'media',
       position: { x: 40, y: 60 },
       size: { width: 300, height: 180 },
@@ -424,27 +421,30 @@ describe('Canvas material action catalog', () => {
         assetPath: 'Books/story.epub/image/cover.jpg',
         mediaType: 'image',
         contentLocator: {
-          kind: 'document-entry',
-          source: { kind: 'workspace-file', path: 'neko/assets/Books/story.epub' },
-          entryPath: 'image/cover.jpg',
+          file: { authority: 'workspace', path: 'neko/assets/Books/story.epub' },
+          selector: { kind: 'entry', path: 'image/cover.jpg' },
         },
       },
     } as unknown as CanvasNode;
     const unsafe = {
-      ...unavailable,
+      ...mounted,
       id: 'unsafe-media',
       data: {
-        ...unavailable.data,
-        contentLocator: {
-          kind: 'workspace-file',
-          path: '/Users/example/private.png',
-        },
+        ...mounted.data,
+        contentLocator: { file: { authority: 'workspace', path: '/Users/example/private.png' } },
       },
     } as unknown as CanvasNode;
 
-    expect(resolveCanvasMaterialActionTargets([unavailable], [unavailable.id])).toEqual([]);
-    expect(() => resolveCanvasMaterialActionTargets([unsafe], [unsafe.id])).toThrow(
-      'valid canonical ContentLocator',
-    );
+    expect(resolveCanvasMaterialActionTargets([mounted], [mounted.id])).toEqual([
+      expect.objectContaining({
+        nodeId: 'mounted-media',
+        origin: 'referenced',
+        locator: {
+          file: { authority: 'workspace', path: 'neko/assets/Books/story.epub' },
+          selector: { kind: 'entry', path: 'image/cover.jpg' },
+        },
+      }),
+    ]);
+    expect(resolveCanvasMaterialActionTargets([unsafe], [unsafe.id])).toEqual([]);
   });
 });

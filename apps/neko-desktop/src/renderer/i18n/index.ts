@@ -3,14 +3,24 @@ import { createWebviewI18n } from '@neko/ui/i18n/webview';
 import { en } from './locales/en';
 import { zhCN } from './locales/zh-cn';
 import type { DesktopLocalePreference } from '@neko/host/application-settings';
+import { professionalApplicationsMessages } from '@neko/professional-apps-webview/messages';
+import { agentExtensionManagementMessages } from '@neko/agent-webview/extension-management/messages';
 
 export function createDesktopI18n(locale: SupportedLocale) {
   return createWebviewI18n({
     initialLocale: locale,
     defaultLocale: 'en',
     bundles: {
-      en: { desktop: en },
-      'zh-cn': { desktop: zhCN },
+      en: {
+        desktop: en,
+        agentExtensions: agentExtensionManagementMessages.en,
+        professionalApplications: professionalApplicationsMessages.en,
+      },
+      'zh-cn': {
+        desktop: zhCN,
+        agentExtensions: agentExtensionManagementMessages['zh-cn'],
+        professionalApplications: professionalApplicationsMessages['zh-cn'],
+      },
     },
   });
 }

@@ -6,7 +6,7 @@ import {
   type ProjectEntityDocument,
   type ProjectEntityRecord,
 } from '../contracts/index';
-import { contentLocatorsEqual } from '@neko/content';
+import { contentLocatorsEqual } from '@neko/content-domain';
 
 export type ProjectEntityManagementStatus =
   'confirmed' | 'candidate' | 'needs-attention' | 'deprecated';

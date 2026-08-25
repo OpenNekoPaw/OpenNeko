@@ -7,7 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, '../../../..');
 
 const agentCriticalFiles = [
-  'packages/agent/webview/src/components/ChatView/index.tsx',
+  'packages/agent/webview/src/dsh-session/root.tsx',
   'packages/agent/webview/src/components/ChatView/InputArea/InputArea.tsx',
   'packages/agent/webview/src/components/ChatView/InputArea/ModelSelector.tsx',
   'packages/agent/webview/src/components/ChatView/InputArea/ModeSelector.tsx',

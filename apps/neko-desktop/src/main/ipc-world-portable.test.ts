@@ -3,7 +3,7 @@ import {
   WORLD_PORTABLE_HOST_CHANNELS,
   createWorldPortableHostRequest,
   type WorldPortableHostBinding,
-} from '@neko/world/contracts';
+} from '@neko/world-domain/contracts';
 
 const electron = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, payload: unknown) => unknown>(),

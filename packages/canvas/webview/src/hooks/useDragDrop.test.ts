@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { CONTENT_LOCATOR_DRAG_MIME } from '@neko/content';
+import { CONTENT_LOCATOR_DRAG_MIME } from '@neko/content-domain';
 import {
   applyCanvasAddSourceResult,
   createCanvasFilePickerAddSourceInput,
@@ -131,7 +131,7 @@ describe('useDragDrop add-source contract', () => {
             requestId: 'first-add',
             ok: true,
             durablePath: 'media/first.mp4',
-            contentLocator: { kind: 'workspace-file', path: 'media/first.mp4' },
+            contentLocator: { file: { authority: 'workspace', path: 'media/first.mp4' } },
             diagnostics: [],
             metadata: { canvasAssetKind: 'media', mediaType: 'video', name: 'first.mp4' },
           },
@@ -157,7 +157,7 @@ describe('useDragDrop add-source contract', () => {
             path: 'media/first.mp4',
             name: 'first.mp4',
             mediaType: 'video',
-            contentLocator: { kind: 'workspace-file', path: 'media/first.mp4' },
+            contentLocator: { file: { authority: 'workspace', path: 'media/first.mp4' } },
           },
         ],
         { x: 10, y: 20 },
@@ -180,7 +180,7 @@ describe('useDragDrop add-source contract', () => {
           requestId: `add-${name}`,
           ok: true,
           durablePath: `assets/${name}`,
-          contentLocator: { kind: 'workspace-file', path: `assets/${name}` },
+          contentLocator: { file: { authority: 'workspace', path: `assets/${name}` } },
           diagnostics: [],
           metadata: {
             canvasAssetKind: 'text',
@@ -262,6 +262,54 @@ describe('useDragDrop add-source contract', () => {
     expect(JSON.stringify(request)).not.toContain('blob:');
   });
 
+  it('projects intrinsic image dimensions through add-source without persisting image bytes', () => {
+    const file = {
+      name: 'portrait.png',
+      size: 24,
+      type: 'image/png',
+      lastModified: 1,
+      arrayBuffer: async () => new ArrayBuffer(0),
+    } as File;
+    const bytes = new Uint8Array([1, 2, 3]);
+    const request = createCanvasMediaAddSourceInput({
+      file,
+      bytes,
+      mediaType: 'image',
+      dropPosition: { x: 12, y: 34 },
+      intrinsicDimensions: { width: 800, height: 1200 },
+    });
+
+    expect(request.bytes).toBe(bytes);
+    expect(request.metadata).toMatchObject({ intrinsicWidth: 800, intrinsicHeight: 1200 });
+
+    const onDropAssets = vi.fn();
+    applyCanvasAddSourceResult({
+      result: {
+        requestId: 'portrait',
+        ok: true,
+        durablePath: 'media/portrait.png',
+        contentLocator: { file: { authority: 'workspace', path: 'media/portrait.png' } },
+        diagnostics: [],
+        metadata: request.metadata,
+      },
+      sourceNameHint: 'portrait.png',
+      mediaTypeHint: 'image',
+      dropPosition: { x: 12, y: 34 },
+      addMediaAt: vi.fn(),
+      onDropAssets,
+    });
+
+    expect(onDropAssets).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          kind: 'media',
+          intrinsicDimensions: { width: 800, height: 1200 },
+        }),
+      ],
+      { x: 12, y: 34 },
+    );
+  });
+
   it('adds the first and second media assets only after durable source success', () => {
     const addMediaAt = vi.fn();
     const onDropAssets = vi.fn();
@@ -271,7 +319,7 @@ describe('useDragDrop add-source contract', () => {
         requestId: 'first',
         ok: true,
         durablePath: 'media/first.mp4',
-        contentLocator: { kind: 'workspace-file', path: 'media/first.mp4' },
+        contentLocator: { file: { authority: 'workspace', path: 'media/first.mp4' } },
         diagnostics: [],
         metadata: { canvasAssetKind: 'media', mediaType: 'video', name: 'first.mp4' },
       },
@@ -286,7 +334,7 @@ describe('useDragDrop add-source contract', () => {
         requestId: 'second',
         ok: true,
         durablePath: 'media/second.mp4',
-        contentLocator: { kind: 'workspace-file', path: 'media/second.mp4' },
+        contentLocator: { file: { authority: 'workspace', path: 'media/second.mp4' } },
         diagnostics: [],
         metadata: { canvasAssetKind: 'media', mediaType: 'video', name: 'second.mp4' },
       },
@@ -306,7 +354,7 @@ describe('useDragDrop add-source contract', () => {
           path: 'media/first.mp4',
           name: 'first.mp4',
           mediaType: 'video',
-          contentLocator: { kind: 'workspace-file', path: 'media/first.mp4' },
+          contentLocator: { file: { authority: 'workspace', path: 'media/first.mp4' } },
         },
       ],
       { x: 10, y: 20 },
@@ -319,7 +367,7 @@ describe('useDragDrop add-source contract', () => {
           path: 'media/second.mp4',
           name: 'second.mp4',
           mediaType: 'video',
-          contentLocator: { kind: 'workspace-file', path: 'media/second.mp4' },
+          contentLocator: { file: { authority: 'workspace', path: 'media/second.mp4' } },
         },
       ],
       { x: 40, y: 50 },

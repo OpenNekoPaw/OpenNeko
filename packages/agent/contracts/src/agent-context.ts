@@ -2,44 +2,6 @@
 // Agent Context Types — unified context payload for sendToAgent protocol
 // =============================================================================
 
-import {
-  isCreativeEntityKind,
-  isProjectEntityRecord,
-  type CreativeEntityKind,
-  type ProjectEntityRecord,
-} from '@neko/entity-domain';
-
-export const AGENT_RESOLVED_ENTITY_CONTEXT_KIND = 'resolved-entity-context' as const;
-
-export interface AgentResolvedEntityContextData {
-  readonly kind: typeof AGENT_RESOLVED_ENTITY_CONTEXT_KIND;
-  readonly entityRef: {
-    readonly entityId: string;
-    readonly entityKind: CreativeEntityKind;
-  };
-  readonly entity: ProjectEntityRecord;
-}
-
-export function isAgentResolvedEntityContextData(
-  value: unknown,
-): value is AgentResolvedEntityContextData {
-  if (!isRecord(value)) return false;
-  const entityRef = value['entityRef'];
-  const entity = value['entity'];
-  if (!isRecord(entityRef) || !isProjectEntityRecord(entity)) return false;
-  return (
-    hasOnlyFields(value, new Set(['kind', 'entityRef', 'entity'])) &&
-    hasOnlyFields(entityRef, new Set(['entityId', 'entityKind'])) &&
-    value['kind'] === AGENT_RESOLVED_ENTITY_CONTEXT_KIND &&
-    typeof entityRef['entityId'] === 'string' &&
-    entityRef['entityId'].length > 0 &&
-    isCreativeEntityKind(entityRef['entityKind']) &&
-    entity.entityId === entityRef['entityId'] &&
-    entity.kind === entityRef['entityKind'] &&
-    entity.lifecycle.state === 'active'
-  );
-}
-
 /**
  * Source type for agent context attachments.
  * Used to determine how the agent should interpret the payload.
@@ -91,37 +53,4 @@ export interface AgentContextPayload {
   data: unknown;
   /** Optional user intent hint pre-filled into the input box */
   intent?: string;
-}
-
-/**
- * Message sent from any webview/extension to the agent panel webview
- * to attach a context payload.
- */
-export interface SendToAgentMessage {
-  type: 'sendToAgent';
-  payload: AgentContextPayload;
-}
-
-/**
- * Ambient canvas context injected into the agent system prompt
- * whenever canvas nodes are selected.
- */
-export interface CanvasAmbientContext {
-  /** Currently selected canvas node summaries (max 5) */
-  selectedNodes: Array<{
-    nodeId: string;
-    type: string;
-    summary: string;
-  }>;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function hasOnlyFields(
-  value: Record<string, unknown>,
-  allowedFields: ReadonlySet<string>,
-): boolean {
-  return Object.keys(value).every((field) => allowedFields.has(field));
 }

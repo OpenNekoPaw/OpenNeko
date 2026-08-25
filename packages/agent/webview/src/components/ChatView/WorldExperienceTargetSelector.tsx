@@ -62,9 +62,7 @@ export function WorldExperienceTargetSelector({
                   onSelect={() => {
                     if (selectedInProject) {
                       onChange(undefined);
-                      return;
-                    }
-                    if (versions.length === 1 && versions[0]) {
+                    } else if (versions.length === 1 && versions[0]) {
                       onChange(selectionFromTarget(versions[0]));
                     }
                   }}

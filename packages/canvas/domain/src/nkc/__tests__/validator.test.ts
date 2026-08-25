@@ -47,10 +47,7 @@ describe('NKC validator', () => {
             data: {
               assetPath: 'neko/generated/image/concept.png',
               contentLocator: {
-                kind: 'generated-output',
-                outputId: 'generated-output:1',
-                digest: 'sha256:generated',
-                path: 'neko/generated/image/concept.png',
+                file: { authority: 'workspace', path: 'neko/generated/image/concept.png' },
               },
               generation: {
                 jobRef: { kind: 'generation', jobId: 'generation-job-1' },
@@ -67,9 +64,7 @@ describe('NKC validator', () => {
             data: {
               assetPath: 'Characters/concept.png',
               contentLocator: {
-                kind: 'media-library',
-                libraryName: 'Characters',
-                relativePath: 'concept.png',
+                file: { authority: 'workspace', path: 'neko/assets/Characters/concept.png' },
               },
               entityRepresentation: {
                 entityId: 'character-1',
@@ -97,7 +92,7 @@ describe('NKC validator', () => {
     expect(result.errors).toEqual([]);
   });
 
-  it('requires canonical locator and Job evidence for generated material nodes', () => {
+  it('requires a canonical locator without inferring Generation from its path', () => {
     const result = validateNkc(
       createValidCanvas({
         nodes: [
@@ -114,10 +109,7 @@ describe('NKC validator', () => {
               path: 'neko/generated/document/result.md',
               title: 'Generated document',
               contentLocator: {
-                kind: 'generated-output',
-                outputId: 'output-document-1',
-                digest: 'sha256:document',
-                path: 'neko/generated/document/result.md',
+                file: { authority: 'workspace', path: 'neko/generated/document/result.md' },
               },
             },
           },
@@ -125,15 +117,8 @@ describe('NKC validator', () => {
       }),
     );
 
-    expect(result.valid).toBe(false);
-    expect(result.errors).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          field: 'nodes[1].data.generation',
-          message: expect.stringContaining('canvas-material-generation-evidence-required'),
-        }),
-      ]),
-    );
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
     expect(result.warnings).toContainEqual(
       expect.objectContaining({
         field: 'nodes[0].data.contentLocator',
@@ -142,7 +127,7 @@ describe('NKC validator', () => {
     );
   });
 
-  it('rejects referenced material carrying Generation evidence and non-portable locators', () => {
+  it('accepts valid Generation evidence beside any canonical locator and rejects non-portable locators', () => {
     const result = validateNkc(
       createValidCanvas({
         nodes: [
@@ -150,7 +135,7 @@ describe('NKC validator', () => {
             ...createCompleteNode('media'),
             data: {
               assetPath: 'media/reference.png',
-              contentLocator: { kind: 'workspace-file', path: 'media/reference.png' },
+              contentLocator: { file: { authority: 'workspace', path: 'media/reference.png' } },
               generation: {
                 jobRef: { kind: 'generation', jobId: 'generation-job-1' },
                 summary: { prompt: 'Must not classify a referenced file' },
@@ -164,8 +149,7 @@ describe('NKC validator', () => {
               path: '/Users/example/private.md',
               title: 'Invalid absolute file',
               contentLocator: {
-                kind: 'workspace-file',
-                path: '/Users/example/private.md',
+                file: { authority: 'workspace', path: '/Users/example/private.md' },
               },
             },
           },
@@ -173,13 +157,10 @@ describe('NKC validator', () => {
       }),
     );
 
-    expect(result.valid).toBe(false);
-    expect(result.errors).toEqual(
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          field: 'nodes[0].data.generation',
-          message: expect.stringContaining('canvas-material-generation-evidence-forbidden'),
-        }),
         expect.objectContaining({
           field: 'nodes[1].data.contentLocator',
           message: expect.stringContaining('canvas-material-content-locator-invalid'),

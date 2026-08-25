@@ -11,7 +11,7 @@ import {
   validateCanvasBoardRef,
 } from '@neko/canvas-domain';
 import type { CanvasDroppedAsset, ProjectedCanvasStatus } from '@neko/canvas-domain';
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 import type {
   CanvasBoardNavigationDiagnostic,
   CanvasBoardRef,
@@ -145,7 +145,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   const updateNodeData = useCanvasStore((state) => state.updateNodeData);
   const undo = useCanvasStore((state) => state.undo);
   const redo = useCanvasStore((state) => state.redo);
-  const moveNodeEnd = useCanvasStore((state) => state.moveNodeEnd);
+  const moveNodesEnd = useCanvasStore((state) => state.moveNodesEnd);
   const resizeNodeEnd = useCanvasStore((state) => state.resizeNodeEnd);
   const rotateNodeEnd = useCanvasStore((state) => state.rotateNodeEnd);
   const selectNodes = useCanvasStore((state) => state.selectNodes);
@@ -167,6 +167,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   // Derive computed values from canvasData
   const nodes = canvasData?.nodes ?? [];
   const connections = canvasData?.connections ?? [];
+  const hasCanvasData = canvasData !== null;
   const selectedNodeIds = selection.nodeIds;
   const selectedConnectionIds = selection.connectionIds;
   const isPanMode = interactionTool === 'pan';
@@ -303,6 +304,9 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
             addMediaAt(dropPos, asset.mediaType, asset.path, asset.name, {
               contentLocator: asset.contentLocator,
               ...(asset.runtimeAssetPath ? { runtimeAssetPath: asset.runtimeAssetPath } : {}),
+              ...(asset.intrinsicDimensions
+                ? { intrinsicDimensions: asset.intrinsicDimensions }
+                : {}),
             });
             break;
           case 'text':
@@ -430,7 +434,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   // Host messages
   // =========================================================================
 
-  const { isReady, loadDiagnostic, keyboardActionRef } = useCanvasHostMessages({
+  const { isReady, loadDiagnostic, saveDiagnostic, keyboardActionRef } = useCanvasHostMessages({
     hostPort,
     defaultCanvasData: DEFAULT_CANVAS_DATA,
     setCanvasData,
@@ -607,7 +611,9 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
 
   const handleCanvasEmbedOpen = useCallback(
     (canvasPath: string) => {
-      void hostPort.previewResource({ kind: 'workspace-file', path: canvasPath });
+      void hostPort.previewResource({
+        file: { authority: 'workspace', path: canvasPath },
+      });
     },
     [hostPort],
   );
@@ -719,7 +725,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   keyboardActionRef.current = isFullscreenPreviewOpen ? () => undefined : handleKeyboardAction;
 
   useEffect(() => {
-    if (!hostPort || !canvasData) {
+    if (!hasCanvasData) {
       viewportSnapshotPolicyRef.current?.cancel();
       viewportSnapshotPolicyRef.current = null;
       return;
@@ -737,7 +743,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
       viewportSnapshotPolicyRef.current?.flush('close');
       viewportSnapshotPolicyRef.current = null;
     };
-  }, [canvasData, hostPort]);
+  }, [hasCanvasData, hostPort]);
 
   useEffect(() => {
     viewportSnapshotPolicyRef.current?.schedule(viewport);
@@ -859,9 +865,10 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
     setContextMenu(null);
     clearSelection();
   }, [clearSelection, setContextMenu]);
-  const handleNodeMove = useCallback(
-    (nodeId: string, position: { x: number; y: number }) => moveNodeEnd(nodeId, position),
-    [moveNodeEnd],
+  const handleNodesMove = useCallback(
+    (nodeIds: readonly string[], delta: { readonly x: number; readonly y: number }) =>
+      moveNodesEnd(nodeIds, delta),
+    [moveNodesEnd],
   );
   const handleNodeResizeEnd = useCallback(
     (nodeId: string, size: { width: number; height: number }, position: { x: number; y: number }) =>
@@ -1028,8 +1035,9 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
                   selectedNodeIds={selectedNodeIds}
                   selectedConnectionIds={selectedConnectionIds}
                   onViewportChange={handleViewportChange}
+                  onContextMenuRequest={handleContextMenu}
                   onNodeSelect={handleNodeSelect}
-                  onNodeMove={handleNodeMove}
+                  onNodesMove={handleNodesMove}
                   onNodeResizeEnd={handleNodeResizeEnd}
                   onNodeRotateEnd={handleNodeRotateEnd}
                   onNodeUpdateData={handleNodeUpdateData}
@@ -1046,6 +1054,24 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
                   isSpacePanActive={isSpacePanActive}
                   isGridVisible={isGridVisible}
                 />
+
+                {saveDiagnostic ? (
+                  <div
+                    className="absolute bottom-20 right-4 z-50 max-w-sm rounded-lg border px-3 py-2 text-sm shadow-lg"
+                    data-canvas-save-diagnostic={saveDiagnostic.code}
+                    role="alert"
+                    style={{
+                      backgroundColor: 'var(--toolbar-bg)',
+                      borderColor: 'var(--error-fg, #f14c4c)',
+                      color: 'var(--toolbar-fg)',
+                    }}
+                  >
+                    <div className="font-medium">{t('saveError.title')}</div>
+                    <div className="mt-1 text-xs" style={{ color: 'var(--toolbar-fg-secondary)' }}>
+                      {saveDiagnostic.message}
+                    </div>
+                  </div>
+                ) : null}
 
                 <div className="canvas-floating-toolbar-host" data-canvas-toolbar-host="bottom">
                   <CanvasToolbar

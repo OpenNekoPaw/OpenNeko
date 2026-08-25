@@ -29,14 +29,14 @@
   },
   "dependencies": {
     "@neko/text-editor-domain": "workspace:*",
-    "@neko/content": "workspace:*",
+    "@neko/content-domain": "workspace:*",
     "@neko/entity-domain": "workspace:*",
     "@neko/preview-domain": "workspace:*",
     "@neko/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "typescript": "^5.3.2",
+    "typescript": "6.0.3",
     "vitest": "^4.1.2"
   }
 }

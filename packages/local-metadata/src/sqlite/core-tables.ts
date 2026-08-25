@@ -10,18 +10,6 @@ const CORE_TABLES = [
     last_seen_at TEXT NOT NULL,
     orphaned_at TEXT
   ) STRICT`,
-  `CREATE TABLE IF NOT EXISTS conversations (
-    conversation_id TEXT PRIMARY KEY NOT NULL,
-    workspace_id TEXT,
-    journal_id TEXT NOT NULL UNIQUE,
-    title TEXT NOT NULL,
-    source TEXT NOT NULL CHECK (source IN ('desktop', 'agent', 'import')),
-    model TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-  ) STRICT`,
-  `CREATE INDEX IF NOT EXISTS conversations_workspace_updated_idx
-    ON conversations(workspace_id, updated_at DESC)`,
 ] as const;
 
 export function initializeCoreLocalMetadataTables(store: LocalMetadataStore): Promise<void> {

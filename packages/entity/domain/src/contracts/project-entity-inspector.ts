@@ -1,5 +1,5 @@
-import type { ContentLocator } from '@neko/content';
-import { isProjectDurableContentLocator, validateContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
+import { isProjectDurableContentLocator, validateContentLocator } from '@neko/content-domain';
 import { isCreativeEntityKind, type CreativeEntityKind } from './creative-entity-identity';
 import { isEntityRepresentationRole } from './project-entity-representation';
 import type {

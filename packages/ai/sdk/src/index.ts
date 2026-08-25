@@ -9,3 +9,8 @@ export { resolveProvider } from './resolve';
 export type { ResolveProviderOptions } from './resolve';
 export type { ProviderConfig, ResolvedProvider, ResolvedProviderSource } from './types';
 export { createNewAPIProvider } from './providers/newapi';
+export {
+  createVideoTaskOperation,
+  decodeVideoTaskOperation,
+  type VideoTaskOperation,
+} from './video-task-operation';

@@ -7,7 +7,7 @@ describe('buildCanvasNode', () => {
     const markdown = createNode('markdown', { content: '# Draft' });
     const media = createNode('media', {
       assetPath: 'media/hero.png',
-      contentLocator: { kind: 'workspace-file', path: 'media/hero.png' },
+      contentLocator: { file: { authority: 'workspace', path: 'media/hero.png' } },
       mediaType: 'image',
     });
     const group = createNode('group', { label: 'Chapter' });
@@ -18,7 +18,7 @@ describe('buildCanvasNode', () => {
     });
     const file = createNode('file', {
       path: 'docs/script.fountain',
-      contentLocator: { kind: 'workspace-file', path: 'docs/script.fountain' },
+      contentLocator: { file: { authority: 'workspace', path: 'docs/script.fountain' } },
     });
     const subcanvas = createNode('canvas-embed', {
       canvasPath: 'boards/chapter.nkc',
@@ -27,11 +27,12 @@ describe('buildCanvasNode', () => {
 
     expect(markdown).toMatchObject({
       type: 'markdown',
+      size: { width: 240, height: 160 },
       data: { content: '# Draft' },
     });
     expect(media).toMatchObject({
       type: 'media',
-      size: { width: 240, height: 180 },
+      size: { width: 120, height: 90 },
       data: { assetPath: 'media/hero.png', mediaType: 'image' },
     });
     expect(group).toMatchObject({
@@ -55,6 +56,7 @@ describe('buildCanvasNode', () => {
     });
     expect(file).toMatchObject({
       type: 'file',
+      size: { width: 240, height: 160 },
       data: { path: 'docs/script.fountain', title: 'script.fountain' },
     });
     expect(subcanvas).toMatchObject({
@@ -63,18 +65,40 @@ describe('buildCanvasNode', () => {
     });
   });
 
+  it('keeps unsupported binary files compact', () => {
+    const file = createNode('file', {
+      path: 'books/volume.epub',
+      mediaType: 'application/epub+zip',
+      contentLocator: { file: { authority: 'workspace', path: 'books/volume.epub' } },
+    });
+
+    expect(file.size).toEqual({ width: 110, height: 75 });
+  });
+
   it('normalizes canonical node inputs without retaining unknown fields', () => {
     const node = createNode('media', {
       assetPath: 'media/voice.wav',
-      contentLocator: { kind: 'workspace-file', path: 'media/voice.wav' },
+      contentLocator: { file: { authority: 'workspace', path: 'media/voice.wav' } },
       mediaType: 'audio',
       duration: Number.POSITIVE_INFINITY,
       unsupportedPrompt: 'must not survive',
     });
 
-    expect(node.size.height).toBe(120);
+    expect(node.size.height).toBe(60);
     expect(node.data).not.toHaveProperty('unsupportedPrompt');
     expect((node.data as Record<string, unknown>).duration).toBeUndefined();
+  });
+
+  it('uses intrinsic image dimensions for initial geometry without persisting metadata', () => {
+    const node = createNode('media', {
+      assetPath: 'media/portrait.png',
+      contentLocator: { file: { authority: 'workspace', path: 'media/portrait.png' } },
+      mediaType: 'image',
+      intrinsicDimensions: { width: 800, height: 1200 },
+    });
+
+    expect(node.size).toEqual({ width: 80, height: 120 });
+    expect(node.data).not.toHaveProperty('intrinsicDimensions');
   });
 
   it('uses the compact content-specific Generation size', () => {
@@ -82,9 +106,9 @@ describe('buildCanvasNode', () => {
     const image = createNode('generation', { ...createCanvasGenerationNodeData('image') });
     const audio = createNode('generation', { ...createCanvasGenerationNodeData('audio') });
 
-    expect(prompt.size).toEqual({ width: 240, height: 160 });
-    expect(image.size).toEqual({ width: 240, height: 180 });
-    expect(audio.size).toEqual({ width: 240, height: 120 });
+    expect(prompt.size).toEqual({ width: 120, height: 80 });
+    expect(image.size).toEqual({ width: 120, height: 90 });
+    expect(audio.size).toEqual({ width: 120, height: 60 });
   });
 
   it('rejects unsupported node types at the authoring boundary', () => {

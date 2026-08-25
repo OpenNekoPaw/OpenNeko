@@ -61,9 +61,15 @@ export class WorkspaceConfigManagerAuthority {
       }
       return existing.config;
     }
-    const config = this.createConfig(workspacePath);
+    const config = this.createConfig();
     this.workspaceConfigs.set(workspaceId, { workspacePath, config });
     return config;
+  }
+
+  reloadAll(): void {
+    this.requireActive();
+    this.applicationConfig?.reloadConfig();
+    for (const entry of this.workspaceConfigs.values()) entry.config.reloadConfig();
   }
 
   dispose(): void {
@@ -75,11 +81,10 @@ export class WorkspaceConfigManagerAuthority {
     this.workspaceConfigs.clear();
   }
 
-  private createConfig(workspacePath?: string): ConfigManager {
+  private createConfig(): ConfigManager {
     return new ConfigManager({
       userConfigManager: this.options.userConfigManager,
       assistantRuntimeSettings: this.options.assistantRuntimeSettings,
-      ...(workspacePath === undefined ? {} : { workspacePath }),
     });
   }
 

@@ -103,6 +103,12 @@
       "kind": "terminal-idle",
       "concerns": ["turnIdle", "continuationQueueIdle"],
       "evidenceRef": "browser-denial-facts"
+    },
+    {
+      "id": "lifecycle",
+      "kind": "desktop-lifecycle",
+      "checks": ["graceful-close"],
+      "evidenceRef": "browser-denial-facts"
     }
   ],
   "artifactChecks": [],

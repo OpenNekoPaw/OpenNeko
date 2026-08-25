@@ -10,19 +10,34 @@
 - [`docs/README.md`](docs/README.md)：文档导航；
 - [`docs/architecture/application-composition.md`](docs/architecture/application-composition.md)：Desktop-only 组合边界；
 - [`docs/architecture/package-boundaries.md`](docs/architecture/package-boundaries.md)：包职责与依赖方向；
-- [`openspec/changes/`](openspec/changes/)：正在设计或实施的变更。
+- [`openspec/changes/`](openspec/changes/)：正在设计或实施的产品功能变更。
 
-非平凡功能、跨包修改、公共契约或架构变更必须先建立或更新 OpenSpec artifacts。简单文档和局部修正可以直接实施，但仍需符合当前架构。
+OpenSpec 只用于能够独立命名并改变系统能力边界、核心产品工作流、持久用户事实或安全/信任边界的系统级或产品级功能变更，并且必须在实施前建立。提案只保存产品意图、系统边界和产品级验收。
 
-每个 OpenSpec 提案的 `tasks.md` 最多包含 30 个可执行复选任务。超过上限时，必须按独立目标、owner 或交付边界拆分为多个可独立评审和验收的提案，不得把无关工作合并为单个任务规避上限。
+局部 UI/交互细节、缺陷修复、性能优化、行为等价重构与清理、包/目录/内部 contract 调整、测试/质量门禁、构建/依赖/开发工具及 inventory/audit/status 不得创建或扩写 OpenSpec。此类改动直接修改代码和测试，在提交、PR 或交付说明中记录必要证据，不新增状态、调研或 verification 文档。
 
-触及 `apps/*`、`packages/*` 或 `packages/*/*` 生产模块时，OpenSpec design/tasks 和交付 review 必须记录 owning
-responsibility、package role、canonical public path、producer/consumer、runtime boundary、旧路径
-删除/poison 条件、用户数据语义与验证命令。仅说明“当前只有 Desktop”或只给最终测试结果不算完成证据。
+代码已经形成 canonical path、提案只剩局部修补或补充验证时，应删除 proposal；只有系统架构或核心产品设计结论可以提升到稳定文档。不得保留 archive、implementation evidence、verification、evaluation 或历史任务副本。
+
+OpenSpec task 只保留少量产品级里程碑和最终验收，不记录文件、类/函数、逐提交步骤、命令结果、日期化证据或实现进度。实际业务逻辑、功能实现和实现状态以代码与测试为准。
+
+长期文档只描述当前 canonical 架构、开发规范和核心产品设计。不得保留已删除包、路径、协议或提案的
+历史说明，不保存迁移阶段、完成状态、Accepted/Deprecated 标签和更新时间；文件名必须匹配当前职责。
+当前 package 清单、产品可达状态和实现进度以代码、测试及机器台账为准。
+
+触及 `apps/*`、`packages/*` 或 `packages/*/*` 生产模块时，交付 review 必须记录 owning responsibility、
+package role、canonical public path、producer/consumer、runtime boundary、旧路径删除/poison 条件、用户数据
+语义与验证命令。OpenSpec 只保留稳定产品边界和产品级里程碑，不复制交付 review 的实现证据。仅说明
+“当前只有 Desktop”或只给最终测试结果不算完成证据。
 
 内部 package 统一使用 `@neko/*`。新增或移动 package 前先更新 `quality/package-roles.json`；消费方
 必须使用 manifest 中显式声明的 public export，不得直接导入 `packages/**/src`，也不得增加旧 scope、
 TypeScript path alias 或兼容 re-export。
+
+单 package owner 只使用 `packages/<name>`；一旦拆出独立 role，必须在同一变更中转换为纯
+`packages/<family>/<role>` family，family 根不得包含 `package.json`。禁止新增
+`packages/<family>-<role>` 平铺 package、根 package 与 nested role 混合、跨多个物理根的同一 family，
+也不得把仓库中尚未迁移的历史路径当作先例。移动或删除 package 时还必须清除精确旧 root 下可重建的
+build/cache/package-local dependency 残留并验证旧目录消失，不得用模糊 glob 触及用户数据或无关 package。
 
 ## 本地开发
 

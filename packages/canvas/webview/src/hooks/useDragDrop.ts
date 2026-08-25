@@ -10,6 +10,7 @@ import {
   inferCanvasDroppedAssetKind,
   inferCanvasMediaType,
   inferCanvasTextFileFormat,
+  readCanvasImageDimensions,
   type CanvasDroppedAsset,
 } from '@neko/canvas-domain';
 import {
@@ -17,12 +18,14 @@ import {
   type ProjectSourceAddClient,
   type ProjectSourceAddClientInput,
   type ProjectSourceAddResult,
-} from '@neko/content/project-file-io';
+} from '@neko/content-domain/project-file-io';
 import {
   CONTENT_LOCATOR_DRAG_MIME,
   parseContentLocatorDragData,
+  probeImageMetadata,
   type ContentLocator,
-} from '@neko/content';
+  type WorkspaceFileContentLocator,
+} from '@neko/content-domain';
 import { isMediaLibraryDragData } from '@neko/assets-domain/contracts';
 import {
   type CanvasMaterialMediaKind,
@@ -48,7 +51,11 @@ export interface UseDragDropOptions {
     mediaType: 'image' | 'video' | 'audio',
     uri?: string,
     name?: string,
-    options?: { contentLocator: ContentLocator; runtimeAssetPath?: string },
+    options?: {
+      contentLocator: ContentLocator;
+      runtimeAssetPath?: string;
+      intrinsicDimensions?: { readonly width: number; readonly height: number };
+    },
   ) => void;
   onDropAssets?: (assets: CanvasDroppedAsset[], position?: { x: number; y: number }) => void;
   addSourceClient?: ProjectSourceAddClient;
@@ -93,9 +100,6 @@ export function useDragDrop(options: UseDragDropOptions): UseDragDropReturn {
         }
         try {
           const payload = parseContentLocatorDragData(result.data);
-          if (payload.locator.kind === 'generated-output') {
-            throw new Error('Generated results require the Generation-owned Canvas commit path.');
-          }
           await projectContent(
             payload.locator,
             inferMaterialMediaKind(payload.name),
@@ -169,11 +173,18 @@ export function useDragDrop(options: UseDragDropOptions): UseDragDropReturn {
           if (mediaType) {
             const offset = i * 30;
             const dropPos = { x: (pos?.x ?? 0) + offset, y: (pos?.y ?? 0) + offset };
+            const bytes = new Uint8Array(await file.arrayBuffer());
+            const intrinsicDimensions =
+              mediaType === 'image'
+                ? readCanvasImageDimensions(probeImageMetadata(bytes))
+                : undefined;
             const result = await addSourceClient.addSource(
               createCanvasMediaAddSourceInput({
                 file,
+                bytes,
                 mediaType,
                 dropPosition: dropPos,
+                ...(intrinsicDimensions ? { intrinsicDimensions } : {}),
               }),
             );
             applyCanvasAddSourceResult({
@@ -291,13 +302,16 @@ function createCanvasAssetAddSourceInput(input: {
 
 export function createCanvasMediaAddSourceInput(input: {
   readonly file: File;
+  readonly bytes?: Uint8Array;
   readonly mediaType: 'image' | 'video' | 'audio';
   readonly dropPosition: { x: number; y: number };
+  readonly intrinsicDimensions?: { readonly width: number; readonly height: number };
 }): ProjectSourceAddClientInput {
   return {
     kind: 'drag-drop',
     formatId: 'nkc',
     file: input.file,
+    ...(input.bytes ? { bytes: input.bytes } : {}),
     target: {
       role: input.mediaType === 'audio' ? 'audio' : input.mediaType === 'image' ? 'image' : 'media',
     },
@@ -308,6 +322,7 @@ export function createCanvasMediaAddSourceInput(input: {
         assetKind: 'media',
         mediaType: input.mediaType,
         dropPosition: input.dropPosition,
+        ...(input.intrinsicDimensions ? { intrinsicDimensions: input.intrinsicDimensions } : {}),
       }),
     },
   };
@@ -363,6 +378,7 @@ function readCanvasAddSourceMetadata(result: ProjectSourceAddResult): {
   readonly title?: string;
   readonly textFormat?: string;
   readonly textContent?: string;
+  readonly intrinsicDimensions?: { readonly width: number; readonly height: number };
 } {
   const metadata = result.metadata;
   const canvasAssetKind = metadata?.['canvasAssetKind'];
@@ -372,6 +388,10 @@ function readCanvasAddSourceMetadata(result: ProjectSourceAddResult): {
   const title = metadata?.['title'];
   const textFormat = metadata?.['textFormat'];
   const textContent = metadata?.['textContent'];
+  const intrinsicDimensions = readCanvasImageDimensions({
+    width: metadata?.['intrinsicWidth'],
+    height: metadata?.['intrinsicHeight'],
+  });
   return {
     ...(isCanvasAddSourceAssetKind(canvasAssetKind) ? { canvasAssetKind } : {}),
     ...(mediaType === 'image' || mediaType === 'video' || mediaType === 'audio'
@@ -382,6 +402,7 @@ function readCanvasAddSourceMetadata(result: ProjectSourceAddResult): {
     ...(typeof title === 'string' ? { title } : {}),
     ...(typeof textFormat === 'string' ? { textFormat } : {}),
     ...(typeof textContent === 'string' ? { textContent } : {}),
+    ...(intrinsicDimensions ? { intrinsicDimensions } : {}),
   };
 }
 
@@ -420,6 +441,7 @@ export function applyCanvasAddSourceResult(input: {
         input.addMediaAt(input.dropPosition, asset.mediaType, asset.path, asset.name, {
           contentLocator: asset.contentLocator,
           ...(asset.runtimeAssetPath ? { runtimeAssetPath: asset.runtimeAssetPath } : {}),
+          ...(asset.intrinsicDimensions ? { intrinsicDimensions: asset.intrinsicDimensions } : {}),
         });
         return;
       }
@@ -436,7 +458,7 @@ export function applyCanvasAddSourceResult(input: {
 
 function createCanvasDroppedAssetFromAddSourceResult(input: {
   readonly durablePath: string;
-  readonly contentLocator: Extract<ContentLocator, { readonly kind: 'workspace-file' }>;
+  readonly contentLocator: WorkspaceFileContentLocator;
   readonly metadata: ReturnType<typeof readCanvasAddSourceMetadata>;
   readonly sourceNameHint: string;
   readonly mediaTypeHint?: 'image' | 'video' | 'audio';
@@ -457,6 +479,9 @@ function createCanvasDroppedAssetFromAddSourceResult(input: {
       contentLocator: input.contentLocator,
       ...(input.metadata.runtimeAssetPath
         ? { runtimeAssetPath: input.metadata.runtimeAssetPath }
+        : {}),
+      ...(input.metadata.intrinsicDimensions
+        ? { intrinsicDimensions: input.metadata.intrinsicDimensions }
         : {}),
     };
   }
@@ -488,6 +513,7 @@ function createCanvasAddSourceMetadata(input: {
   readonly assetKind: ReturnType<typeof inferCanvasDroppedAssetKind> | undefined | null;
   readonly mediaType?: 'image' | 'video' | 'audio';
   readonly dropPosition: { x: number; y: number };
+  readonly intrinsicDimensions?: { readonly width: number; readonly height: number };
 }): Record<string, unknown> {
   const assetKind = input.assetKind ?? (input.mediaType ? 'media' : undefined);
   const baseName = stripExtension(input.fileName);
@@ -499,6 +525,12 @@ function createCanvasAddSourceMetadata(input: {
     dropY: input.dropPosition.y,
     name: input.fileName,
     title: baseName || input.fileName,
+    ...(input.intrinsicDimensions
+      ? {
+          intrinsicWidth: input.intrinsicDimensions.width,
+          intrinsicHeight: input.intrinsicDimensions.height,
+        }
+      : {}),
     ...(assetKind === 'text'
       ? { textFormat: inferCanvasTextFileFormat(input.fileName) ?? undefined }
       : {}),

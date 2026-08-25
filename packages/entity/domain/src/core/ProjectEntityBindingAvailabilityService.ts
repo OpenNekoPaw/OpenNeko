@@ -1,14 +1,10 @@
 import {
   contentLocatorsEqual,
   isContentStat,
+  type ContentLocator,
   type ContentReadOptions,
   type ContentStat,
-  type DocumentEntryContentLocator,
-  type GeneratedOutputContentLocator,
-  type MediaLibraryContentLocator,
-  type PackageResourceContentLocator,
-  type WorkspaceFileContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 import {
   ProjectEntityContractError,
   type EntityBindingAvailabilityProjectionValue,
@@ -17,16 +13,12 @@ import {
   type ProjectEntityRepresentationBinding,
 } from '../contracts/index';
 
-export interface ProjectEntityBindingResourcePort<TLocator> {
-  stat(locator: TLocator, options: ContentReadOptions): Promise<ContentStat>;
+export interface ProjectEntityBindingResourcePort {
+  stat(locator: ContentLocator, options: ContentReadOptions): Promise<ContentStat>;
 }
 
 export interface ProjectEntityBindingAvailabilityServiceOptions {
-  readonly workspaceFile: ProjectEntityBindingResourcePort<WorkspaceFileContentLocator>;
-  readonly mediaLibrary: ProjectEntityBindingResourcePort<MediaLibraryContentLocator>;
-  readonly documentEntry: ProjectEntityBindingResourcePort<DocumentEntryContentLocator>;
-  readonly generatedOutput: ProjectEntityBindingResourcePort<GeneratedOutputContentLocator>;
-  readonly packageResource: ProjectEntityBindingResourcePort<PackageResourceContentLocator>;
+  readonly content: ProjectEntityBindingResourcePort;
 }
 
 export class ProjectEntityBindingAvailabilityService {
@@ -74,17 +66,8 @@ export class ProjectEntityBindingAvailabilityService {
     binding: ProjectEntityRepresentationBinding,
     signal?: AbortSignal,
   ): Promise<ContentStat> {
-    const options = signal ? { signal } : {};
     const target = binding.target;
-    const result = await (target.kind === 'workspace-file'
-      ? this.options.workspaceFile.stat(target, options)
-      : target.kind === 'media-library'
-        ? this.options.mediaLibrary.stat(target, options)
-        : target.kind === 'document-entry'
-          ? this.options.documentEntry.stat(target, options)
-          : target.kind === 'generated-output'
-            ? this.options.generatedOutput.stat(target, options)
-            : this.options.packageResource.stat(target, options));
+    const result = await this.options.content.stat(target, signal ? { signal } : {});
     if (!isContentStat(result) || !contentLocatorsEqual(result.locator, target)) {
       throw new ProjectEntityContractError([
         {
@@ -101,18 +84,8 @@ export class ProjectEntityBindingAvailabilityService {
 function bindingOwner(
   binding: ProjectEntityRepresentationBinding,
 ): EntityBindingAvailabilityProjectionValue['owner'] {
-  switch (binding.target.kind) {
-    case 'workspace-file':
-      return 'workspace-file';
-    case 'media-library':
-      return 'media-library';
-    case 'document-entry':
-      return 'document';
-    case 'generated-output':
-      return 'generated-output';
-    case 'package-resource':
-      return 'asset';
-  }
+  if (binding.target.file.authority === 'package') return 'asset';
+  return binding.target.selector?.kind === 'entry' ? 'document' : 'workspace-file';
 }
 
 function attentionAction(
@@ -120,7 +93,7 @@ function attentionAction(
   stat: Extract<ContentStat, { readonly status: 'unavailable' }>,
 ): ProjectEntityBindingAttentionAction {
   if (stat.diagnostic.code === 'content-unauthorized') return 'reconnect';
-  if (binding.target.kind === 'package-resource' && stat.diagnostic.code === 'content-missing') {
+  if (binding.target.file.authority === 'package' && stat.diagnostic.code === 'content-missing') {
     return 'reinstall';
   }
   if (stat.diagnostic.code === 'content-missing' || stat.diagnostic.code === 'content-changed') {

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ResourceBrowserItem } from '@neko/assets-domain/resource-browser/contract';
-import type { OpenNekoDesktopProjectLocalAuthoringBridge } from '@neko/project/contracts';
+import type { OpenNekoDesktopProjectLocalAuthoringBridge } from '@neko/project-domain/contracts';
 import { createDesktopProjectCharacterFromResource } from './DesktopResourceBrowserSurface';
 
 const binding = {
@@ -36,7 +36,7 @@ describe('Desktop Resource Browser Character creation handoff', () => {
       depth: 0,
       kind: 'document',
       label: 'rin.md',
-      locator: { kind: 'workspace-file', path: 'characters/rin.md' },
+      locator: { file: { authority: 'workspace', path: 'characters/rin.md' } },
       capabilities: ['reveal'],
     };
 
@@ -65,7 +65,7 @@ describe('Desktop Resource Browser Character creation handoff', () => {
             evidenceId: 'evidence:evidence',
             sourceWorkspaceId: 'workspace-source',
             sourceWorkspaceGrantId: 'workspace-grant-source',
-            locator: { kind: 'workspace-file', path: 'characters/rin.md' },
+            locator: { file: { authority: 'workspace', path: 'characters/rin.md' } },
             observedAt: '2026-08-12T10:00:00.000Z',
           },
         ],

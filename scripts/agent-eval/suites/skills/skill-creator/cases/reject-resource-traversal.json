@@ -42,7 +42,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$skill-creator Call CreateSkill exactly once with skill { name: eval-traversal-skill, description: Evaluate traversal rejection., body: # Eval Traversal Skill }, and one utf8 resource { path: ../escape.txt, content: MUST_NOT_ESCAPE }. The current Workspace Conversation owns the destination. Preserve the native failure; do not correct, retry, or use another writer."
+      "prompt": "$skill-creator Call CreateSkill exactly once with { layout: directory, skillMarkdown: \"---\\nname: eval-traversal-skill\\ndescription: Evaluate traversal rejection.\\n---\\n# Eval Traversal Skill\", resources: [{ path: ../escape.txt, content: MUST_NOT_ESCAPE }] }. The current Workspace Conversation owns the destination. Preserve the native failure; do not correct, retry, or use another writer."
     },
     {
       "id": "idle",
@@ -71,7 +71,7 @@
       "name": "CreateSkill",
       "status": "error",
       "resultIncludes": {
-        "code": "invalid-resource-path"
+        "code": "SKILL_AUTHORING_RESOURCE_PATH_INVALID"
       },
       "evidenceRef": "tool-facts"
     }

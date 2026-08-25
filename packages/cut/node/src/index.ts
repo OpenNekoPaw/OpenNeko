@@ -1,5 +1,6 @@
 export * from './clipRepresentations';
 export * from './CutExportTaskRegistry';
+export * from './CutExportApplicationService';
 export * from './CutPreviewRuntimeController';
 export * from './CutWorkspaceMediaPaths';
 export * from './CutWorkspaceMediaImporter';

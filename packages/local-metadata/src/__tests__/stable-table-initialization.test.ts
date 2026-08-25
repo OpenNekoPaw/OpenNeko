@@ -24,9 +24,43 @@ describe('stable local metadata table initialization', () => {
     await initializeCoreLocalMetadataTables(store);
     const names = await readTableNames(store);
 
-    expect(names).toEqual(expect.arrayContaining(['conversations', 'workspaces']));
+    expect(names).toContain('workspaces');
+    expect(names).not.toContain('conversations');
     expect(names).not.toContain('projection_versions');
     expect(names).not.toContain(['schema_', 'migra', 'tions'].join(''));
+    await store.dispose();
+  });
+
+  it('leaves a retired conversation catalog table untouched when it already exists', async () => {
+    const store = await openStore();
+    await store.transaction(
+      { mode: 'state-write', ownership: 'system', operation: 'seed-retired-conversation-table' },
+      async ({ sql }) => {
+        await sql.exec(`CREATE TABLE conversations (
+          conversation_id TEXT PRIMARY KEY NOT NULL,
+          journal_id TEXT NOT NULL,
+          title TEXT NOT NULL
+        ) STRICT`);
+        await sql.run(
+          'INSERT INTO conversations(conversation_id, journal_id, title) VALUES (?, ?, ?)',
+          ['retired-conversation', 'retired-journal', 'Retired conversation'],
+        );
+      },
+    );
+
+    await initializeCoreLocalMetadataTables(store);
+
+    const rows = await store.transaction(
+      { mode: 'read', ownership: 'system', operation: 'read-retired-conversation-table' },
+      ({ sql }) => sql.all('SELECT conversation_id, journal_id, title FROM conversations'),
+    );
+    expect(rows).toEqual([
+      {
+        conversation_id: 'retired-conversation',
+        journal_id: 'retired-journal',
+        title: 'Retired conversation',
+      },
+    ]);
     await store.dispose();
   });
 

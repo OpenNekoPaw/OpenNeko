@@ -41,10 +41,10 @@ export function createInMemoryJobStore<S extends JobSnapshotBase>(): JobStore<S>
       return stored;
     },
 
-    observe: (ref: S['ref']): AsyncIterable<S> => {
+    observe: (ref: S['ref'], signal?: AbortSignal): AsyncIterable<S> => {
       const current = getRequiredSnapshot(snapshots, ref);
       assertExactRef(current.ref, ref);
-      return observations.observe(ref, async () => current);
+      return observations.observe(ref, async () => current, signal);
     },
   });
 }

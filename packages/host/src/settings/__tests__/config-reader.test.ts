@@ -227,6 +227,43 @@ describe('config-reader typed results', () => {
     ]);
   });
 
+  it('isolates an invalid provider model-family declaration', () => {
+    const filePath = path.join(createTempRoot(), 'config.toml');
+    fs.writeFileSync(
+      filePath,
+      [
+        '[[providers]]',
+        'id = "invalid-family"',
+        'name = "Invalid Family"',
+        'type = "generic"',
+        'api_url = "https://invalid.example/v1"',
+        'protocol_profile = "openai-chat"',
+        'supported_model_families = ["dialogue", "embedding"]',
+        '',
+        '[[providers]]',
+        'id = "valid-generation"',
+        'name = "Valid Generation"',
+        'type = "generic"',
+        'api_url = "https://media.example/v1"',
+        'protocol_profile = "openai-chat"',
+        'supported_model_families = ["generation"]',
+      ].join('\n'),
+      'utf-8',
+    );
+
+    const result = readConfigFileResult(filePath);
+
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') throw new Error('Expected ok result');
+    expect(result.config.providers?.map((provider) => provider.id)).toEqual(['valid-generation']);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'unsupportedProviderModelFamily',
+        path: 'providers.invalid-family.supported_model_families',
+      }),
+    ]);
+  });
+
   it('preserves type defaults and model capability metadata from TOML', () => {
     const filePath = path.join(createTempRoot(), 'config.toml');
     fs.writeFileSync(
@@ -279,20 +316,16 @@ describe('config-reader typed results', () => {
     );
   });
 
-  it('preserves purpose-specific default model bindings from TOML', () => {
+  it('rejects an unknown purpose while preserving valid sibling purposes', () => {
     const filePath = path.join(createTempRoot(), 'config.toml');
     fs.writeFileSync(
       filePath,
       [
-        '[default_model_purposes.image_understand]',
+        '[default_model_purposes.media_analysis]',
         'provider_id = "google"',
         'model_id = "google-gemini-2.5-flash"',
         '',
-        '[default_model_purposes.audio_understand]',
-        'provider_id = "google"',
-        'model_id = "google-gemini-2.5-flash"',
-        '',
-        '[default_model_purposes.video_understand]',
+        '[default_model_purposes.character_dialogue]',
         'provider_id = "google"',
         'model_id = "google-gemini-2.5-flash"',
         '',
@@ -301,7 +334,7 @@ describe('config-reader typed results', () => {
         'name = "gemini-2.5-flash"',
         'provider_id = "google"',
         'type = "llm"',
-        'capabilities = ["chat", "vision", "image.understand", "audio.understand", "video.understand"]',
+        'capabilities = ["chat", "vision", "audio", "vision_video"]',
       ].join('\n'),
       'utf-8',
     );
@@ -311,30 +344,22 @@ describe('config-reader typed results', () => {
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') throw new Error('Expected ok result');
     expect(result.config.defaultModelPurposes).toEqual({
-      'image.understand': {
-        providerId: 'google',
-        modelId: 'google-gemini-2.5-flash',
-      },
-      'audio.understand': {
-        providerId: 'google',
-        modelId: 'google-gemini-2.5-flash',
-      },
-      'video.understand': {
+      'character.dialogue': {
         providerId: 'google',
         modelId: 'google-gemini-2.5-flash',
       },
     });
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'unsupportedDefaultModelPurpose',
+        path: 'default_model_purposes.media_analysis',
+      }),
+    ]);
 
     writeConfigFile(filePath, result.config);
-    expect(fs.readFileSync(filePath, 'utf-8')).toContain(
-      '[default_model_purposes.image_understand]',
-    );
-    expect(fs.readFileSync(filePath, 'utf-8')).toContain(
-      '[default_model_purposes.audio_understand]',
-    );
-    expect(fs.readFileSync(filePath, 'utf-8')).toContain(
-      '[default_model_purposes.video_understand]',
-    );
+    const rewritten = fs.readFileSync(filePath, 'utf-8');
+    expect(rewritten).toContain('[default_model_purposes.character_dialogue]');
+    expect(rewritten).not.toContain('media_analysis');
   });
 
   it('preserves model protocol profile overrides from TOML', () => {
@@ -555,6 +580,7 @@ describe('config-reader typed results', () => {
           apiUrl: 'http://localhost:11434/api',
           enabled: true,
           connectionKind: 'local',
+          supportedModelFamilies: ['dialogue'],
           requiresApiKey: false,
         },
       ],
@@ -575,6 +601,7 @@ describe('config-reader typed results', () => {
     expect(written).toContain('[default_models.llm]');
     expect(written).toContain('[[providers]]');
     expect(written).toContain('connection_kind = "local"');
+    expect(written).toContain('supported_model_families = [ "dialogue" ]');
     expect(written).toContain('protocol_profile = "ollama"');
 
     const result = readConfigFileResult(filePath);
@@ -586,6 +613,7 @@ describe('config-reader typed results', () => {
     });
     expect(result.config.models?.[0]?.providerId).toBe('ollama-local');
     expect(result.config.models?.[0]?.protocolProfile).toBe('ollama');
+    expect(result.config.providers?.[0]?.supportedModelFamilies).toEqual(['dialogue']);
   });
 
   it('diagnoses duplicate provider ids', () => {
@@ -775,7 +803,7 @@ describe('config-reader typed results', () => {
     const filePath = path.join(createTempRoot(), 'config.toml');
     fs.writeFileSync(
       filePath,
-      ['[default_model_purposes.video_understand]', 'provider_id = "google"'].join('\n'),
+      ['[default_model_purposes.character_dialogue]', 'provider_id = "google"'].join('\n'),
       'utf-8',
     );
 
@@ -787,7 +815,7 @@ describe('config-reader typed results', () => {
     expect(result.diagnostics).toEqual([
       expect.objectContaining({
         code: 'unsupportedDefaultModelPurpose',
-        path: 'default_model_purposes.video_understand',
+        path: 'default_model_purposes.character_dialogue',
       }),
     ]);
   });

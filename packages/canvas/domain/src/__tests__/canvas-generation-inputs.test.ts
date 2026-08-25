@@ -30,7 +30,7 @@ describe('Canvas Generation input resolution', () => {
       {
         kind: 'image',
         sourceNodeId: 'image-1',
-        locator: { kind: 'workspace-file', path: 'images/reference.png' },
+        locator: { file: { authority: 'workspace', path: 'images/reference.png' } },
       },
     ]);
     expect(port.authorizeLocator).toHaveBeenCalledTimes(1);
@@ -110,8 +110,10 @@ function media(id: string, mediaType: 'image' | 'audio' | 'video'): CanvasNode {
     data: {
       assetPath: `${mediaType}s/reference.${mediaType === 'image' ? 'png' : 'bin'}`,
       contentLocator: {
-        kind: 'workspace-file',
-        path: `${mediaType}s/reference.${mediaType === 'image' ? 'png' : 'bin'}`,
+        file: {
+          authority: 'workspace',
+          path: `${mediaType}s/reference.${mediaType === 'image' ? 'png' : 'bin'}`,
+        },
       },
       mediaType,
     },

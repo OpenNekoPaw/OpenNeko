@@ -12,56 +12,6 @@ export function assertOrderedWorkflowEvents(assertion, steps) {
   return { observed };
 }
 
-export function assertWorkflowQueueState(assertion, steps) {
-  const step = requireWorkflowStep(steps, assertion.stepId);
-  const queue = step.snapshot?.messageQueue;
-  if (!queue) throw new Error(`queue snapshot is unavailable at step ${assertion.stepId}`);
-  if (assertion.status === 'queued') {
-    const minPending = assertion.minPending ?? 1;
-    if (step.method !== 'message.submit' || step.queued !== true) {
-      throw new Error(
-        `step ${assertion.stepId} was not accepted by the active Desktop Agent queue`,
-      );
-    }
-    if (!Number.isInteger(queue.pendingCount) || queue.pendingCount < minPending) {
-      throw new Error(
-        `queue pendingCount at ${assertion.stepId} is ${queue.pendingCount ?? 'unavailable'}; expected >= ${minPending}`,
-      );
-    }
-  } else if (assertion.status === 'drained') {
-    if (queue.pendingCount !== 0) {
-      throw new Error(`queue was not drained at ${assertion.stepId}: ${queue.pendingCount}`);
-    }
-  } else if (assertion.status === 'paused-after-cancel') {
-    const minPending = assertion.minPending ?? 1;
-    if (queue.paused !== true || queue.pendingCount < minPending) {
-      throw new Error(`queue was not paused with pending items at ${assertion.stepId}`);
-    }
-  } else {
-    const queuedStep = requireWorkflowStep(steps, assertion.queueStepId);
-    if (
-      step.method !== 'message.queue.send-now' ||
-      step.accepted !== true ||
-      typeof step.queueItemId !== 'string' ||
-      step.queueItemId !== queuedStep.queueItemId ||
-      step.queueStepId !== assertion.queueStepId ||
-      queue.paused !== false
-    ) {
-      throw new Error(
-        `step ${assertion.stepId} did not resume and send the exact item from ${assertion.queueStepId}`,
-      );
-    }
-  }
-  return {
-    stepId: assertion.stepId,
-    status: assertion.status,
-    pendingCount: queue.pendingCount,
-    sequence: queue.sequence,
-    paused: queue.paused === true,
-    ...(step.queueItemId === undefined ? {} : { queueItemId: step.queueItemId }),
-  };
-}
-
 function findEventPosition(event, steps, after) {
   const domain = event.kind;
   for (let stepIndex = Math.max(after.stepIndex, 0); stepIndex < steps.length; stepIndex += 1) {
@@ -119,12 +69,6 @@ function matchesProcessEvent(event, item) {
     return item?.name === event.name && (!event.status || item?.status === event.status);
   }
   return item?.source === event.source && (!event.status || item?.status === event.status);
-}
-
-function requireWorkflowStep(steps, stepId) {
-  const step = steps.find((candidate) => candidate?.id === stepId);
-  if (!step) throw new Error(`workflow step was not observed: ${stepId}`);
-  return step;
 }
 
 function arrayOrEmpty(value) {

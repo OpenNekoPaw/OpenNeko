@@ -35,18 +35,38 @@ describe('Desktop build platform contract', () => {
     const packageJson = JSON.parse(await readFile('apps/neko-desktop/package.json', 'utf8'));
     const hostGuardSource = await readFile('scripts/assert-supported-desktop-host.mjs', 'utf8');
     const outputGuardSource = await readFile('scripts/assert-desktop-package-output.mjs', 'utf8');
+    const forgeBuildSource = await readFile(
+      'scripts/desktop-functional/run-forge-build.mjs',
+      'utf8',
+    );
     const scripts = packageJson.scripts ?? {};
-    for (const command of ['build', 'dev', 'make', 'package']) {
+    for (const command of ['build', 'package']) {
       assert.match(
         scripts[command] ?? '',
-        /^node \.\.\/\.\.\/scripts\/assert-supported-desktop-host\.mjs && /u,
+        /^node \.\.\/\.\.\/scripts\/assert-supported-desktop-host\.mjs && node \.\.\/\.\.\/scripts\/prepare-dsh-runtime-stage\.mjs --development && /u,
         `${command} must reject unsupported hosts before Forge`,
       );
     }
+    assert.match(
+      scripts.make ?? '',
+      /^node \.\.\/\.\.\/scripts\/assert-dsh-cutover-release-ready\.mjs && node \.\.\/\.\.\/scripts\/assert-supported-desktop-host\.mjs && /u,
+      'make must remain behind the release guard',
+    );
+    assert.match(
+      scripts.dev ?? '',
+      /^node \.\.\/\.\.\/scripts\/assert-supported-desktop-host\.mjs && /u,
+      'dev must reject unsupported hosts before starting the development runtime',
+    );
 
     for (const command of ['build', 'make', 'package']) {
-      assert.match(scripts[command] ?? '', /&& electron-forge /u);
+      assert.match(
+        scripts[command] ?? '',
+        /&& node \.\.\/\.\.\/scripts\/desktop-functional\/run-forge-build\.mjs (?:make|package) /u,
+        `${command} must enter Forge only through the checkout bundle owner`,
+      );
+      assert.doesNotMatch(scripts[command] ?? '', /electron-forge/u);
     }
+    assert.match(forgeBuildSource, /runDesktopForgeBuild/u);
     assert.equal(
       scripts.dev,
       'node ../../scripts/assert-supported-desktop-host.mjs && node ../../scripts/desktop-functional/run-development.mjs',

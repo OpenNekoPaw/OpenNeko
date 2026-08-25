@@ -187,6 +187,9 @@ async function createMilkdownRichSurfaceController({
   let currentSource = source;
   const extensions = createExtensions?.(() => currentSource);
   const nodeViews = extensions?.nodeViews ?? [];
+  if (nodeViews.some(([nodeName]) => nodeName === 'table')) {
+    throw new Error('Markdown table presentation is owned by the Rich Surface.');
+  }
   const refreshPlugins = extensions?.refreshPlugins ?? [];
   const editor = await Editor.make()
     .config((ctx) => {
@@ -194,9 +197,11 @@ async function createMilkdownRichSurfaceController({
       ctx.set(defaultValueCtx, source);
       ctx.set(rootAttrsCtx, { 'aria-label': ariaLabel });
       ctx.set(editorViewOptionsCtx, { editable: () => false });
-      if (nodeViews.length) {
-        ctx.update(nodeViewCtx, (views) => [...views, ...nodeViews]);
-      }
+      ctx.update(nodeViewCtx, (views) => [
+        ...views,
+        ['table', createMarkdownTableNodeView] as [string, NodeViewConstructor],
+        ...nodeViews,
+      ]);
       ctx.update(prosePluginsCtx, (plugins) => [
         ...plugins,
         ...(extensions?.prosePlugins ?? []),
@@ -254,17 +259,12 @@ async function createMilkdownRichSurfaceController({
     revealHeading: (headingIndex) =>
       editor.action((ctx) => {
         const view = ctx.get(editorViewCtx);
-        let currentIndex = 0;
-        let headingPosition: number | undefined;
+        const headingPositions: number[] = [];
         view.state.doc.descendants((node, position) => {
-          if (node.type.name !== 'heading') return true;
-          if (currentIndex === headingIndex) {
-            headingPosition = position;
-            return false;
-          }
-          currentIndex += 1;
+          if (node.type.name === 'heading') headingPositions.push(position);
           return true;
         });
+        const headingPosition = headingPositions[headingIndex];
         if (headingPosition === undefined) return false;
         const selection = TextSelection.near(view.state.doc.resolve(headingPosition + 1));
         view.dispatch(view.state.tr.setSelection(selection).scrollIntoView());
@@ -338,6 +338,38 @@ async function createMilkdownRichSurfaceController({
     onSourceChange(serialized);
   }
 }
+
+const createMarkdownTableNodeView: NodeViewConstructor = (node) => {
+  const dom = document.createElement('div');
+  const table = document.createElement('table');
+  const contentDOM = document.createElement('tbody');
+
+  dom.className = 'neko-markdown-table-scroll';
+  dom.dataset['markdownTableScroll'] = 'true';
+  table.className = 'neko-markdown-table';
+  table.append(contentDOM);
+  dom.append(table);
+  updateTablePresentation(node);
+
+  return {
+    dom,
+    contentDOM,
+    update(nextNode) {
+      if (nextNode.type !== node.type) return false;
+      node = nextNode;
+      updateTablePresentation(nextNode);
+      return true;
+    },
+  };
+
+  function updateTablePresentation(nextNode: typeof node): void {
+    const columnCount = nextNode.firstChild?.childCount ?? 0;
+    if (columnCount < 1) {
+      throw new Error('Markdown table presentation requires at least one column.');
+    }
+    dom.dataset['markdownTableColumns'] = String(columnCount);
+  }
+};
 
 const safeTableCellSchema = withoutInlineTableAlignment(tableCellSchema, 'td');
 const safeTableHeaderSchema = withoutInlineTableAlignment(tableHeaderSchema, 'th');

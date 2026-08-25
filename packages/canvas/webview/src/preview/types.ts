@@ -1,4 +1,4 @@
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 import type {
   AssetIdentityCapability,
   CanvasPreviewRole,
@@ -11,6 +11,8 @@ export interface PreviewSourceDescriptor {
   nodeId?: string;
   outputId?: string;
   contentLocator?: ContentLocator;
+  /** Content freshness only; never used as durable identity or persisted location. */
+  sourceFingerprint?: string;
   asset?: AssetIdentityCapability;
   role: CanvasPreviewRole;
   variants?: CanvasPreviewVariant[];
@@ -36,34 +38,7 @@ export interface PreviewPlaybackControl {
   onEnded?: (event: PreviewPlaybackEndedEvent) => void;
 }
 
-export interface RuntimePreviewVariant extends CanvasPreviewVariant {
-  runtimeUrl?: string;
-  runtimeToken?: string;
-}
-
-export interface PreviewResolveRequest {
-  source: PreviewSourceDescriptor;
-  role?: CanvasPreviewRole;
-}
-
-export interface PreviewResolver {
-  resolve(request: PreviewResolveRequest): Promise<RuntimePreviewVariant>;
-  dispose?: () => void;
-}
-
-export interface PreviewRuntimeRecord {
-  id: string;
-  variant?: RuntimePreviewVariant;
-  cleanup?: () => void;
-}
-
 export type PreviewPlaybackKind = 'audio' | 'video';
-
-export interface PreviewPlaybackRecord {
-  id: string;
-  kind: PreviewPlaybackKind;
-  stop: () => void;
-}
 
 export interface PreviewDelegateRequest {
   action: DelegateAction;

@@ -76,7 +76,7 @@ function fixtureProjection(): TextDocumentProjection {
     identity: {
       workspaceId: 'workspace-1',
       documentId: 'notes/story.md',
-      locator: { kind: 'workspace-file', path: 'notes/story.md' },
+      locator: { file: { authority: 'workspace', path: 'notes/story.md' } },
       owner: { kind: 'window', windowId: 'window-1', projectId: 'project-1' },
     },
     sessionId: 'editor-session-1',

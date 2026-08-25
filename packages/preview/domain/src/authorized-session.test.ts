@@ -161,7 +161,7 @@ function descriptor() {
   return {
     descriptorId: 'descriptor-1',
     sourceFingerprint: 'fingerprint-1',
-    contentLocator: { kind: 'workspace-file' as const, path: 'shots/shot.png' },
+    contentLocator: { file: { authority: 'workspace' as const, path: 'shots/shot.png' } },
     url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     contentKind: 'image' as const,
     mediaType: 'image/png',

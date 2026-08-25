@@ -314,7 +314,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
   const chapterHeightsRef = useRef<Map<number, number>>(new Map());
   const chapterLayoutFrameRef = useRef<number | null>(null);
 
-  const buildCurrentChapterLocator = useCallback(() => {
+  const buildCurrentChapterCoordinate = useCallback(() => {
     const href =
       currentChapterHref ||
       tocRef.current.find((item) => item.label === currentChapter)?.href ||
@@ -334,7 +334,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
   // Waterfall text selection via native document selection
   const { selection: waterfallSelection } = useDocumentSelection({
     chapterTitle: currentChapter,
-    getLocator: () => buildCurrentChapterLocator(),
+    getCoordinate: () => buildCurrentChapterCoordinate(),
   });
 
   const applyCurrentChapter = useCallback(
@@ -521,14 +521,14 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
         renditionRef.current?.display(href);
       }
     } else if (msg.type === 'document:navigate') {
-      const locator = msg.payload.locator;
+      const coordinate = msg.payload.coordinate;
       const href =
-        locator.kind === 'chapter'
-          ? locator.chapterHref
-          : locator.kind === 'page'
-            ? spineEntriesRef.current[locator.pageNumber - 1]?.href
-            : locator.kind === 'region'
-              ? spineEntriesRef.current[locator.pageNumber - 1]?.href
+        coordinate.kind === 'chapter'
+          ? coordinate.chapterHref
+          : coordinate.kind === 'page'
+            ? spineEntriesRef.current[coordinate.pageNumber - 1]?.href
+            : coordinate.kind === 'region'
+              ? spineEntriesRef.current[coordinate.pageNumber - 1]?.href
               : undefined;
       if (!href) return;
       if (loadingRef.current) {
@@ -1230,7 +1230,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
                   text: bodyText,
                   contentKind: 'text',
                   context: { chapter: currentChapter || undefined },
-                  locator: {
+                  coordinate: {
                     kind: 'chapter',
                     chapterHref: entry.href,
                     spineIndex: entry.index,
@@ -1265,7 +1265,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
           text: bodyText || undefined,
           contentKind: 'text',
           context: { chapter: currentChapter || undefined },
-          locator: buildCurrentChapterLocator(),
+          coordinate: buildCurrentChapterCoordinate(),
           excerpt: bodyText
             ? {
                 contentKind: 'text',
@@ -1278,7 +1278,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
     } finally {
       setCapturing(false);
     }
-  }, [capturing, currentChapter, viewMode, buildCurrentChapterLocator]);
+  }, [capturing, currentChapter, viewMode, buildCurrentChapterCoordinate]);
 
   const handleContextMenuTarget = useCallback((target: HTMLElement) => {
     const imgEl = target.tagName === 'IMG' ? (target as HTMLImageElement) : null;
@@ -1332,7 +1332,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
         imageData,
         contentKind,
         context: { chapter: currentChapter || undefined },
-        locator: buildCurrentChapterLocator(),
+        coordinate: buildCurrentChapterCoordinate(),
         excerpt: {
           contentKind,
           text: text || undefined,
@@ -1353,7 +1353,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
     epubSelection,
     rightClickedImageSrc,
     currentChapter,
-    buildCurrentChapterLocator,
+    buildCurrentChapterCoordinate,
   ]);
 
   const contextActions = useDocumentContextActions({
@@ -1364,11 +1364,11 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
 
   if (error) {
     return (
-      <div
-        className="flex h-full items-center justify-center"
-        style={{ color: 'var(--neko-errorForeground)' }}
-      >
-        {t('preview.document.error', { error })}
+      <div className="epub-viewer__error" role="alert">
+        <div className="epub-viewer__error-card">
+          <strong>{t('preview.document.previewUnavailable')}</strong>
+          <span>{error}</span>
+        </div>
       </div>
     );
   }

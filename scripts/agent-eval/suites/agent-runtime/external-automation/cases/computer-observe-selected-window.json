@@ -14,7 +14,7 @@
     "userBehavior": "Select the exact native evaluation window and verify its real state through the reviewed Cua Driver observe Tool.",
     "canonicalPath": [
       "visible Desktop Agent composer",
-      "Pi agent.main Tool call",
+      "DSH Agent Tool call",
       "explicitly authorized Cua Driver app with expected publisher, notarization, and TCC responsibility chain",
       "explicit native-window target selector",
       "computer-use.observe.macos profile",
@@ -84,7 +84,7 @@
     {
       "id": "computer-timeline",
       "kind": "timeline-projection",
-      "terminalStatus": "completed",
+      "turnEndReason": "completed",
       "toolName": "automation_cua-driver_verify_state",
       "evidenceRef": "computer-observe-facts"
     },
@@ -106,6 +106,12 @@
       "id": "terminal",
       "kind": "terminal-idle",
       "concerns": ["turnIdle", "continuationQueueIdle"],
+      "evidenceRef": "computer-observe-facts"
+    },
+    {
+      "id": "lifecycle",
+      "kind": "desktop-lifecycle",
+      "checks": ["graceful-close"],
       "evidenceRef": "computer-observe-facts"
     }
   ],

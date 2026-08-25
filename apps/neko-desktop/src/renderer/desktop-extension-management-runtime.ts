@@ -26,49 +26,40 @@ export class DesktopExtensionManagementRuntime implements AgentExtensionManageme
     return this.execute({ route: 'snapshot.get' });
   }
 
-  async installLocalPlugin(): Promise<void> {
-    this.requireActive();
-    await this.execute({ route: 'plugin.install' });
+  async addSkill(): Promise<AgentExtensionManagementProjection> {
+    return this.execute({ route: 'skill.add' });
   }
 
-  async enablePlugin(pluginId: string): Promise<void> {
-    this.requireActive();
-    await this.execute({ route: 'plugin.enable', pluginId });
+  async setSkillEnabled(input: {
+    readonly name: string;
+    readonly source: string;
+    readonly enabled: boolean;
+  }): Promise<AgentExtensionManagementProjection> {
+    return this.execute({ route: 'skill.enablement.update', ...input });
   }
 
-  async disablePlugin(pluginId: string): Promise<void> {
-    this.requireActive();
-    await this.execute({ route: 'plugin.disable', pluginId });
+  async removeSkill(input: {
+    readonly name: string;
+    readonly source: string;
+  }): Promise<AgentExtensionManagementProjection> {
+    return this.execute({ route: 'skill.remove', ...input });
   }
 
-  async removePlugin(pluginId: string): Promise<void> {
-    this.requireActive();
-    await this.execute({ route: 'plugin.remove', pluginId });
+  async addMcp(
+    server: Parameters<AgentExtensionManagementRuntime['addMcp']>[0],
+  ): Promise<AgentExtensionManagementProjection> {
+    return this.execute({ route: 'mcp.add', server });
   }
 
-  async rescanSources(): Promise<void> {
-    this.requireActive();
-    await this.execute({ route: 'sources.rescan' });
+  async setMcpEnabled(input: {
+    readonly id: string;
+    readonly enabled: boolean;
+  }): Promise<AgentExtensionManagementProjection> {
+    return this.execute({ route: 'mcp.enablement.update', ...input });
   }
 
-  async installPersonalSkill(): Promise<void> {
-    this.requireActive();
-    await this.execute({ route: 'skill.install' });
-  }
-
-  async openPersonalSkill(managementId: string): Promise<void> {
-    this.requireActive();
-    await this.execute({ route: 'skill.open', managementId });
-  }
-
-  async showPersonalSkillInFolder(managementId: string): Promise<void> {
-    this.requireActive();
-    await this.execute({ route: 'skill.reveal', managementId });
-  }
-
-  async removePersonalSkill(managementId: string): Promise<void> {
-    this.requireActive();
-    await this.execute({ route: 'skill.remove', managementId });
+  async removeMcp(id: string): Promise<AgentExtensionManagementProjection> {
+    return this.execute({ route: 'mcp.remove', id });
   }
 
   dispose(): void {

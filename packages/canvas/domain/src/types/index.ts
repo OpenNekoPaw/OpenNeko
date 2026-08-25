@@ -1,6 +1,7 @@
 export * from './canvas';
 export * from './canvas-creative-scope';
 export * from './canvas-workspace-board';
+export * from './canvas-workspace-context';
 export * from './canvas-playback';
 export * from './canvas-layered';
 export * from './canvas-serializable';
@@ -9,5 +10,3 @@ export * from './canvas-authoring-contracts';
 export * from './canvas-material-contracts';
 export * from './canvas-generation-node';
 export * from './canvas-headless-authoring';
-export * from './storyboard-table';
-export * from './creative-table-profile';

@@ -1,4 +1,4 @@
-import { type ContentLocator } from '@neko/content';
+import { type ContentLocator } from '@neko/content-domain';
 import {
   deriveCanvasMaterialOrigin,
   type CanvasEntityRepresentationEvidence,
@@ -7,6 +7,7 @@ import {
 } from './types/canvas-material-contracts';
 import { planCanvasNodeCreation } from './utils/canvasHeadlessAuthoring';
 import { type CanvasData, type CanvasConnection } from './types/canvas';
+import { resolveCanvasImageNodeSize, type CanvasImageDimensions } from './canvas-node-sizing';
 
 /**
  * Host-resolved, portable material ready for a Canvas commit.
@@ -19,6 +20,7 @@ export interface ResolvedCanvasMaterialDescriptor {
   readonly position?: { readonly x: number; readonly y: number };
   readonly generation?: CanvasGenerationEvidence;
   readonly entity?: CanvasEntityRepresentationEvidence;
+  readonly intrinsicDimensions?: CanvasImageDimensions;
 }
 
 export function projectResolvedCanvasMaterialToCanvas(input: {
@@ -27,13 +29,7 @@ export function projectResolvedCanvasMaterialToCanvas(input: {
   readonly generateId?: () => string;
 }): CanvasData {
   const { material } = input;
-  const origin = deriveCanvasMaterialOrigin(material.locator);
-  if (origin === 'referenced' && material.generation) {
-    throw new Error('Referenced Canvas material must not contain Generation evidence.');
-  }
-  if (origin === 'generated' && !material.generation) {
-    throw new Error('Generated Canvas material requires canonical Generation evidence.');
-  }
+  deriveCanvasMaterialOrigin(material.locator, material.generation);
 
   const position = material.position ?? {
     x: 100 + (input.canvas.nodes.length % 4) * 40,
@@ -56,13 +52,18 @@ export function projectResolvedCanvasMaterialToCanvas(input: {
   }
 
   if (isRenderableMediaKind(material.mediaKind)) {
+    const imageSize =
+      material.mediaKind === 'image'
+        ? resolveCanvasImageNodeSize(material.intrinsicDimensions ?? material.generation?.summary)
+        : undefined;
     return planCanvasNodeCreation(
       { canvasData: input.canvas, ...(input.generateId ? { generateId: input.generateId } : {}) },
       {
         type: 'media',
         position,
+        ...(imageSize ? { size: imageSize } : {}),
         data: {
-          assetPath: material.locator.kind === 'document-entry' ? '' : portablePath,
+          assetPath: material.locator.selector ? '' : portablePath,
           contentLocator: material.locator,
           mediaType: material.mediaKind,
           title: material.title,
@@ -162,7 +163,9 @@ export function replaceCanvasEntityRepresentationOnCanvas(input: {
   if (input.material.entity.entityId !== currentEntity.entityId) {
     throw new Error('Canvas Entity representation refresh cannot change stable Entity identity.');
   }
-  if (deriveCanvasMaterialOrigin(input.material.locator) !== 'referenced') {
+  if (
+    deriveCanvasMaterialOrigin(input.material.locator, input.material.generation) !== 'referenced'
+  ) {
     throw new Error(
       'Canvas Entity representation refresh requires a referenced representation locator.',
     );
@@ -221,18 +224,7 @@ function sameEntityEvidence(
 }
 
 export function portableMaterialPath(locator: ContentLocator): string {
-  switch (locator.kind) {
-    case 'workspace-file':
-      return locator.path;
-    case 'media-library':
-      return locator.relativePath;
-    case 'document-entry':
-      return locator.entryPath;
-    case 'generated-output':
-      return locator.path;
-    case 'package-resource':
-      return locator.resourcePath;
-  }
+  return locator.selector?.kind === 'entry' ? locator.selector.path : locator.file.path;
 }
 
 function isRenderableMediaKind(

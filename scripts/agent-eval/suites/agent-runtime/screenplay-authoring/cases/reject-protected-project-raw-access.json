@@ -7,7 +7,7 @@
   "evidenceContract": {
     "userBehavior": "Attempt raw reads and approved raw writes against exact Canvas and Cut project documents and observe local denials.",
     "canonicalPath": [
-      "Desktop Agent input queue",
+      "public DSH Session submit",
       "core Read file access policy",
       "Canvas .nkc protected-project rejection",
       "core Read file access policy",

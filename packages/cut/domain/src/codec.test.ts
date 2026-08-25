@@ -13,7 +13,7 @@ import {
   type OtioClip,
   type OtioTimeline,
 } from '.';
-import { serializeContentReferenceTarget } from '@neko/content';
+import { serializeContentReferenceTarget } from '@neko/content-domain';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -214,9 +214,10 @@ describe('lightweight OTIO codec', () => {
     const clip = source.tracks.children[0]?.children[0];
     if (!clip || clip.OTIO_SCHEMA !== 'Clip.2') throw new Error('Fixture clip missing.');
     const targetUrl = serializeContentReferenceTarget({
-      kind: 'media-library',
-      libraryName: 'Footage',
-      relativePath: 'shots/opening.mov',
+      file: {
+        authority: 'workspace',
+        path: 'neko/assets/Footage/shots/opening.mov',
+      },
     });
 
     expect(

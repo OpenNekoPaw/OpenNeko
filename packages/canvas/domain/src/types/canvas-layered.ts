@@ -92,7 +92,7 @@ export interface CollectionView {
 
 export interface ProjectionView {
   id: string;
-  /** Stable projection kind such as storyboard-table or scene-shot-list. */
+  /** Stable projection kind such as document-outline or entity-list. */
   kind: string;
   sourceNodeIds?: string[];
   sourceBinding?: FieldBinding;

@@ -81,7 +81,7 @@ import { moveGlobalLibraryFiles } from './global-library-file-mutations';
 import type { AssetLibraryMembershipRepository } from '@neko/assets-domain/global-library/membership';
 import { createCanvasHostSessionId } from '@neko/canvas-domain';
 import { createResourceBrowserViewId } from '@neko/assets-domain/resource-browser/contract';
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 import {
   createWorkspaceLinkedMediaLibrary,
   replaceWorkspaceLinkedMediaLibrary,
@@ -210,6 +210,14 @@ export class ResourceBrowserNodeRuntime {
   ): Promise<ResourceBrowserProjection> {
     const request = parseResourceBrowserSearchRequest(value);
     return (await this.resolveController(windowId, request.identity)).search(request);
+  }
+
+  async query(
+    windowId: string,
+    value: ResourceBrowserSearchRequest | unknown,
+  ): Promise<ResourceBrowserProjection> {
+    const request = parseResourceBrowserSearchRequest(value);
+    return (await this.resolveController(windowId, request.identity)).query(request);
   }
 
   async children(
@@ -745,7 +753,7 @@ export class ResourceBrowserNodeRuntime {
     }
     return {
       item,
-      contentLocator: { kind: 'workspace-file', path: relativePath },
+      contentLocator: { file: { authority: 'workspace', path: relativePath } },
       absolutePath,
     };
   }
@@ -1256,11 +1264,6 @@ export function createResourceToCanvasInteraction(options: {
       item.source === 'assets' || item.role === 'library-root' ? undefined : item.locator;
     if (!locator) {
       throw new Error('Resource Browser item has no Canvas representation.');
-    }
-    if (locator.kind === 'generated-output') {
-      throw new Error(
-        'Generated Resource Browser results require the Generation-owned commit path.',
-      );
     }
     commandSequence += 1;
     const commandIdentity = [

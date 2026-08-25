@@ -70,7 +70,6 @@ function entity(entityId: string, canonical: string) {
     entityId,
     kind: 'character',
     names: { canonical, aliases: [] },
-    facts: {},
     representations: [],
     lifecycle: { state: 'active' },
     createdAt: '2026-08-06T00:00:00.000Z',

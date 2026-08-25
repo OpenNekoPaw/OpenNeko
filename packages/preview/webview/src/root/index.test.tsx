@@ -17,7 +17,6 @@ import { PreviewViewerSnapshotProvider } from './viewer-snapshot-context';
 import { createPreviewViewerSnapshotStore } from './viewer-snapshot';
 import { createPreviewRuntimeBootstrap } from './runtime-bootstrap';
 const playerStyles = readFileSync(resolve(__dirname, '../styles/player.css'), 'utf8');
-const modelStyles = readFileSync(resolve(__dirname, '../model/model.css'), 'utf8');
 const rootStyles = readFileSync(resolve(__dirname, './style.css'), 'utf8');
 
 const identity: PreviewRuntimeIdentity = {
@@ -32,8 +31,7 @@ const identity: PreviewRuntimeIdentity = {
 };
 
 const previewContentLocator = {
-  kind: 'workspace-file' as const,
-  path: 'preview/fixture.bin',
+  file: { authority: 'workspace' as const, path: 'preview/fixture.bin' },
 };
 
 afterEach(() => {
@@ -46,8 +44,6 @@ describe('PreviewRoot', () => {
   it('keeps embeddable viewer layout styles scoped away from the Host document root', () => {
     expect(playerStyles).not.toMatch(/(^|\n)\s*#root\s*\{/u);
     expect(playerStyles).not.toMatch(/(^|\n)\s*html\s*,/u);
-    expect(modelStyles).not.toMatch(/(^|\n)\s*#root\s*[,{]/u);
-    expect(modelStyles).not.toMatch(/(^|\n)\s*html\s*,/u);
     expect(rootStyles).toMatch(/\.neko-preview-root__viewer\s*\{[^}]*position:\s*relative;/u);
   });
 
@@ -60,6 +56,19 @@ describe('PreviewRoot', () => {
       'document',
       'model',
     ]);
+  });
+
+  it('gives the shared image element a definite two-axis contain box', () => {
+    const imageRule = rootStyles.match(/\.neko-preview-viewer--image > img\s*\{([^}]*)\}/u)?.[1];
+
+    expect(imageRule).toBeDefined();
+    expect(imageRule).toMatch(/position:\s*absolute;/u);
+    expect(imageRule).toMatch(/inset:\s*0;/u);
+    expect(imageRule).toMatch(/width:\s*100%;/u);
+    expect(imageRule).toMatch(/height:\s*100%;/u);
+    expect(imageRule).toMatch(/object-fit:\s*contain;/u);
+    expect(imageRule).not.toMatch(/max-width:/u);
+    expect(imageRule).not.toMatch(/max-height:/u);
   });
 
   it('uses one package-owned presentation and viewer registry for Workspace and authorized previews', async () => {

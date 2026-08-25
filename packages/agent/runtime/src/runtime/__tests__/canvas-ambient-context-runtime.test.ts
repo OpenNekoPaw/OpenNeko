@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { GenerationModelConfig } from '@neko/generation';
+import type { GenerationModelConfig } from '@neko/generation-domain';
 import type { CanvasNode } from '@neko/canvas-domain';
 import {
   CanvasAmbientContextRuntime,

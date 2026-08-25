@@ -201,7 +201,11 @@ function scenario(id, caseGroup, visibility, rubric = true) {
     caseGroup,
     visibility,
     evidenceContract: {
-      canonicalPath: ['Desktop renderer bridge', 'sender-bound controller', 'Pi Session'],
+      canonicalPath: [
+        'Desktop renderer bridge',
+        'sender-bound Desktop Session Host',
+        'DSH Session through ACP',
+      ],
       observables: [{ ref: 'persona-facts', required: true }],
     },
     fixtureRefs: ['empty-workspace'],

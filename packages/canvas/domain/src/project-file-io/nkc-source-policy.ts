@@ -1,10 +1,10 @@
 import type { CanvasData } from '../types/canvas';
-import { isHostProjectedRuntimeValue } from '@neko/content';
+import { isHostProjectedRuntimeValue } from '@neko/content-domain';
 import type {
   PortableSourcePathPolicy,
   ProjectSourceDescriptor,
   ProjectSourceReplacement,
-} from '@neko/content/project-file-io';
+} from '@neko/content-domain/project-file-io';
 
 export const nkcSourcePathPolicy: PortableSourcePathPolicy<CanvasData> = {
   listSources(document) {

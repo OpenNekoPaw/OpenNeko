@@ -24,6 +24,7 @@ export const ASSET_CENTER_HOST_CHANNEL = 'neko:assets:asset-center' as const;
 
 interface AssetCenterHostRequestBase {
   readonly requestId: string;
+  readonly rendererSessionId: string;
   readonly identity: AssetCenterSessionIdentity;
 }
 
@@ -73,8 +74,22 @@ export type AssetCenterHostRequest =
 export type AssetCenterHostResult =
   | {
       readonly requestId: string;
-      readonly route: Exclude<AssetCenterHostRequest['route'], 'preview.get' | 'thumbnail.resolve'>;
+      readonly route: Exclude<
+        AssetCenterHostRequest['route'],
+        'preview.get' | 'thumbnail.resolve' | 'session.detach'
+      >;
       readonly projection: AssetCenterSessionProjection;
+    }
+  | {
+      readonly requestId: string;
+      readonly route: 'session.detach';
+      readonly status: 'detached';
+      readonly projection: AssetCenterSessionProjection;
+    }
+  | {
+      readonly requestId: string;
+      readonly route: 'session.detach';
+      readonly status: 'stale';
     }
   | {
       readonly requestId: string;
@@ -105,6 +120,10 @@ export function parseAssetCenterHostRequest(value: unknown): AssetCenterHostRequ
   const record = requireRecord(value, 'Asset Center Host request must be an object.');
   const base = {
     requestId: requireIdentity(record['requestId'], 'Asset Center request'),
+    rendererSessionId: requireIdentity(
+      record['rendererSessionId'],
+      'Asset Center Renderer session',
+    ),
     identity: parseAssetCenterSessionIdentity(record['identity']),
   } as const;
   switch (record['route']) {
@@ -220,6 +239,30 @@ export function parseAssetCenterHostResult(
       thumbnail: parseGlobalLibraryThumbnailResult(record['thumbnail']),
     };
   }
+  if (request.route === 'session.detach') {
+    if (record['status'] === 'stale') {
+      requireExactKeys(record, ['requestId', 'route', 'status'], 'Asset Center detach result');
+      return {
+        requestId: request.requestId,
+        route: request.route,
+        status: 'stale',
+      };
+    }
+    if (record['status'] !== 'detached') {
+      throw new Error('Asset Center detach result status is invalid.');
+    }
+    requireExactKeys(
+      record,
+      ['requestId', 'route', 'status', 'projection'],
+      'Asset Center detach result',
+    );
+    return {
+      requestId: request.requestId,
+      route: request.route,
+      status: 'detached',
+      projection: parseAssetCenterSessionProjection(record['projection']),
+    };
+  }
   requireExactKeys(record, ['requestId', 'route', 'projection'], 'Asset Center Host result');
   return {
     requestId: request.requestId,
@@ -228,7 +271,7 @@ export function parseAssetCenterHostResult(
   };
 }
 
-const BASE_KEYS = ['requestId', 'identity', 'route'] as const;
+const BASE_KEYS = ['requestId', 'rendererSessionId', 'identity', 'route'] as const;
 
 function requireRecord(value: unknown, message: string): Readonly<Record<string, unknown>> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(message);

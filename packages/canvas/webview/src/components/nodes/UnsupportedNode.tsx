@@ -23,6 +23,7 @@ export interface UnsupportedNodeProps {
   onRotate?: (nodeId: string, rotation: number) => void;
   onRotateEnd?: (nodeId: string, rotation: number) => void;
   onConnectionStart?: (nodeId: string, anchor: string, e: React.MouseEvent) => void;
+  showTransformHandles?: boolean;
 }
 
 export function UnsupportedNode({
@@ -38,6 +39,7 @@ export function UnsupportedNode({
   onRotate,
   onRotateEnd,
   onConnectionStart,
+  showTransformHandles,
 }: UnsupportedNodeProps) {
   return (
     <BaseNode
@@ -53,6 +55,7 @@ export function UnsupportedNode({
       onRotate={onRotate}
       onRotateEnd={onRotateEnd}
       onConnectionStart={onConnectionStart}
+      showTransformHandles={showTransformHandles}
     >
       <div className="flex h-full flex-col overflow-hidden">
         <div className="flex items-center gap-2 border-b border-[var(--node-border)] bg-[var(--node-header-bg)] px-2 py-1.5">

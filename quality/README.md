@@ -2,7 +2,7 @@
 
 This directory stores machine-readable quality gate inputs for repository scripts and CI jobs.
 
-Human-readable architecture decisions, review policies, and validation matrices live in `docs/architecture/`. Files here are data ledgers consumed by repeatable checks, not long-form documentation or implementation logs.
+Human-readable architecture constraints and development policy live in `docs/architecture/`. Files here are data ledgers consumed by repeatable checks, not long-form documentation or implementation logs.
 
 ## Contents
 
@@ -19,7 +19,7 @@ Human-readable architecture decisions, review policies, and validation matrices 
 ## Rules
 
 - Keep quality inputs deterministic and machine-readable.
-- Adding a Shared responsibility needs architecture review and OpenSpec evidence that no owning domain or focused infrastructure package is appropriate.
+- Adding a Shared responsibility needs architecture review proving that no owning domain or focused infrastructure package is appropriate.
 - Update the consuming script and validation command when moving or renaming a quality input.
-- Keep policy explanations in `docs/architecture/adr-code-review-quality-gates.md`; link to this directory for concrete CI input data.
+- Keep stable policy explanations in `docs/architecture/development-quality.md`; link to this directory for concrete CI input data.
 - Do not store one-off command output, implementation journals, or dated status snapshots here.

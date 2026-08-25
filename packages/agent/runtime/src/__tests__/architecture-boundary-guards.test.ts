@@ -114,15 +114,10 @@ describe('agent architecture boundary guards', () => {
   it('keeps runtime root limited to documented runtime owners', () => {
     const allowedRuntimeRootFiles = new Set([
       'agent-entry-intent-runtime.ts',
-      'agent-state-runtime.ts',
-      'config-bridge-runtime.ts',
-      'conversation-route-runtime.ts',
-      'conversation-tab-runtime.ts',
       'document-module-diagnostics.ts',
       'index.ts',
       'plugin-transfer-runtime.ts',
       'resource-cache-runtime.ts',
-      'subagent-event-runtime.ts',
     ]);
     const runtimeRootFiles = readdirSync(join(agentSrc, 'runtime'), { withFileTypes: true })
       .filter(
@@ -134,34 +129,14 @@ describe('agent architecture boundary guards', () => {
     expect(runtimeRootFiles).toEqual([]);
   });
 
-  it('keeps runtime subdirectories narrow and documented', () => {
-    const allowedRuntimeSubdirectories = new Set([
-      '__tests__',
-      'capability',
-      'host-controller',
-      'projection',
-      'session',
-      'stream',
-      'turn',
-    ]);
+  it('keeps runtime subdirectories narrow', () => {
+    const allowedRuntimeSubdirectories = new Set(['__tests__', 'capability', 'session', 'turn']);
     const runtimeSubdirectories = readdirSync(join(agentSrc, 'runtime'), { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name)
       .filter((name) => !allowedRuntimeSubdirectories.has(name));
 
     expect(runtimeSubdirectories).toEqual([]);
-
-    const readme = readFileSync(join(agentSrc, 'runtime/README.md'), 'utf-8');
-    for (const name of [
-      'session/',
-      'turn/',
-      'capability/',
-      'host-controller/',
-      'stream/',
-      'projection/',
-    ]) {
-      expect(readme).toContain(name);
-    }
   });
 
   it('keeps presenters, projectors, services, and stores out of runtime root', () => {
@@ -316,24 +291,11 @@ describe('agent architecture boundary guards', () => {
   });
 
   it('keeps domain validators and task-result projectors out of Agent core', () => {
-    const coreProjectionFiles = [
-      join(agentSrc, 'validation/output-validator.ts'),
+    const forbiddenFiles = [
+      join(agentTypesSrc, 'message.ts'),
+      join(agentTypesSrc, 'tool.ts'),
       join(agentTypesSrc, 'work-item.ts'),
       join(agentTypesSrc, 'work-item-projector.ts'),
-    ];
-    const forbiddenPatterns = [
-      /\bcreativeEntity\b/,
-      /generated-storyboard/,
-      /\b(?:validate|project|sanitize)Storyboard\w*\b/,
-      /\bStoryboard(?:Output)?Validator\b/,
-    ];
-    const violations = coreProjectionFiles.flatMap((file) => {
-      const source = stripTypeScriptComments(readFileSync(file, 'utf-8'));
-      return forbiddenPatterns
-        .filter((pattern) => pattern.test(source))
-        .map((pattern) => `${relative(workspaceRoot, file)} matches ${pattern}`);
-    });
-    const forbiddenFiles = [
       join(agentSrc, 'validation/storyboard-output-validator.ts'),
       join(agentSrc, 'task/media-task-creative-entity.ts'),
       join(agentSrc, 'task/task-view-projector.ts'),
@@ -342,7 +304,7 @@ describe('agent architecture boundary guards', () => {
       .filter((file) => existsSync(file))
       .map((file) => relative(workspaceRoot, file).replace(/\\/g, '/'));
 
-    expect([...violations, ...forbiddenFiles]).toEqual([]);
+    expect(forbiddenFiles).toEqual([]);
   });
 
   it('keeps creative Agent and planner services out of Agent and Platform core', () => {
@@ -397,7 +359,7 @@ describe('agent architecture boundary guards', () => {
     }
   });
 
-  it('keeps Character domain runtime in @neko/chara', () => {
+  it('keeps Character domain runtime in @neko/chara-domain', () => {
     for (const fileName of [
       'character-runtime-policy.ts',
       'character-evidence.ts',
@@ -405,13 +367,14 @@ describe('agent architecture boundary guards', () => {
       'embody-character-session.ts',
     ]) {
       expect(existsSync(join(agentSrc, 'runtime', fileName)), fileName).toBe(false);
-      expect(existsSync(join(workspaceRoot, 'packages/chara/src/core', fileName)), fileName).toBe(
-        true,
-      );
+      expect(
+        existsSync(join(workspaceRoot, 'packages/chara/domain/src/core', fileName)),
+        fileName,
+      ).toBe(true);
     }
     expect(
       existsSync(
-        join(workspaceRoot, 'packages/chara/src/application/character-dialogue-runtime.ts'),
+        join(workspaceRoot, 'packages/chara/domain/src/application/character-dialogue-runtime.ts'),
       ),
     ).toBe(true);
   });
@@ -503,9 +466,8 @@ describe('agent architecture boundary guards', () => {
   });
 
   it('keeps Canvas and Cut tool localization metadata out of Agent core', () => {
-    const toolRegistrySource = stripTypeScriptComments(
-      readFileSync(join(agentSrc, 'tools/tool-registry.ts'), 'utf-8'),
-    );
+    expect(existsSync(join(agentSrc, 'tools/tool-registry.ts'))).toBe(false);
+    const acpSource = readSourceFiles(join(agentSrc, 'acp'), (file) => !isTestFile(file));
     const forbiddenToolMetadataKeys = [
       'CreateCanvas',
       'AddCanvasShape',
@@ -536,21 +498,18 @@ describe('agent architecture boundary guards', () => {
       'canvas.validateMarkdownStoryboard',
     ];
     const violations = forbiddenToolMetadataKeys
-      .filter((toolName) => createObjectKeyPattern(toolName).test(toolRegistrySource))
-      .map((toolName) => `tools/tool-registry.ts contains localization key ${toolName}`);
+      .filter((toolName) => createObjectKeyPattern(toolName).test(acpSource))
+      .map((toolName) => `ACP application client contains localization key ${toolName}`);
 
     expect(violations).toEqual([]);
   });
 
   it('keeps media tool metadata on locator-only durable fields', () => {
-    const toolRegistrySource = stripTypeScriptComments(
-      readFileSync(join(agentSrc, 'tools/tool-registry.ts'), 'utf-8'),
-    );
-
-    expect(toolRegistrySource).toContain('referenceImageLocator');
-    expect(toolRegistrySource).toContain('startFrameLocator');
-    expect(toolRegistrySource).toContain('endFrameLocator');
-    expect(toolRegistrySource).toContain('referenceVideoLocator');
+    expect(existsSync(join(agentSrc, 'tools/tool-registry.ts'))).toBe(false);
+    const acpSource = readSourceFiles(join(agentSrc, 'acp'), (file) => !isTestFile(file));
+    expect(acpSource).not.toMatch(/referenceImage(?:Path|Url)/);
+    expect(acpSource).not.toMatch(/(?:start|end)Frame(?:Path|Url)/);
+    expect(acpSource).not.toMatch(/referenceVideo(?:Path|Url)/);
   });
 
   it('keeps domain tool permission defaults out of Agent core', () => {
@@ -591,23 +550,8 @@ describe('agent architecture boundary guards', () => {
     expect(violations).toEqual([]);
   });
 
-  it('keeps provider-specific Canvas tool instructions out of Agent runtime prompts', () => {
-    const messageRuntimeSource = stripTypeScriptComments(
-      readFileSync(join(agentSrc, 'runtime/turn/message-runtime.ts'), 'utf-8'),
-    );
-    const forbiddenPromptToolNames = [
-      'canvas_get_node',
-      'canvas_update_node',
-      'canvas_generate_image',
-      'canvas_describe_authoring_capabilities',
-      'canvas_list_connections',
-      'canvas_create_connection',
-    ];
-    const violations = forbiddenPromptToolNames
-      .filter((toolName) => messageRuntimeSource.includes(toolName))
-      .map((toolName) => `runtime/turn/message-runtime.ts contains provider tool ${toolName}`);
-
-    expect(violations).toEqual([]);
+  it('keeps the retired Pi message turn runtime absent', () => {
+    expect(existsSync(join(agentSrc, 'runtime/turn/message-runtime.ts'))).toBe(false);
   });
 
   it('keeps Canvas authoring semantics in Canvas provider, Skill, and catalog contracts', () => {

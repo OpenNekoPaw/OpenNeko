@@ -3,7 +3,7 @@ import {
   CHARACTER_PORTABLE_HOST_CHANNELS,
   createCharacterPortableHostRequest,
   type CharacterPortableHostBinding,
-} from '@neko/chara/contracts';
+} from '@neko/chara-domain/contracts';
 
 const electron = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, payload: unknown) => unknown>(),

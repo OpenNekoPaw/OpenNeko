@@ -1,0 +1,83 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "single-clip-prompt-handoff",
+  "suiteId": "skill.video",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Request one model-neutral single-clip prompt and preflight without executing generation.",
+    "canonicalPath": [
+      "builtin video Skill",
+      "single-clip-prompt relative guidance",
+      "model-neutral prompt handoff",
+      "no generation Tool call"
+    ],
+    "observables": [
+      {
+        "ref": "clip-prompt-facts",
+        "kind": "runtime-fact",
+        "description": "Exact Video receipt, relative guidance read, prompt contract and absent generation facts.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The prompt separates subject, action, space, temporal beats, camera, audio, reference roles and constraints while leaving model parameters to current capability preflight.",
+    "expectedFailure": "A provider endpoint, guessed model parameters, unresolved positional references or a generation-complete claim fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "$video 只为一个连续 5 秒片段写可直接继续评审的模型中立提示词和执行前检查，不要生成：雨夜废弃站台，一名红围巾女孩从静止转为缓慢回头，远处蓝色信号灯熄灭；角色参考图和站台参考图已授权但尚未绑定运行时引用。保留环境声，不要配乐。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "clip-prompt-facts"
+    },
+    {
+      "id": "skill",
+      "kind": "skill",
+      "identity": {
+        "name": "video",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "video",
+        "fingerprint": "sha256:f682ad0c1b3826ea94c2528eacaafdc350c6778b89f44de1758147c8dd83f4cf"
+      },
+      "status": "injected",
+      "evidenceRef": "clip-prompt-facts"
+    },
+    {
+      "id": "read",
+      "kind": "tool-call",
+      "name": "Read",
+      "status": "success",
+      "evidenceRef": "clip-prompt-facts"
+    },
+    {
+      "id": "output",
+      "kind": "structured-output",
+      "format": "markdown",
+      "requiredFields": ["主体", "动作", "空间", "时间", "镜头", "声音", "参考", "约束", "检查"],
+      "forbiddenFields": ["https://", "--param", "Seedance", "RunningHub", "DMXAPI", "已生成", "生成完成"],
+      "locale": "zh-cn",
+      "evidenceRef": "clip-prompt-facts"
+    },
+    {
+      "id": "no-video",
+      "kind": "tool-call",
+      "name": "GenerateVideo",
+      "status": "absent",
+      "evidenceRef": "clip-prompt-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 3 }
+}

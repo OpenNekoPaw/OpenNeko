@@ -4,7 +4,7 @@ function rolePathPattern(role, predicate = () => true) {
   const paths = packageRoleCatalog.packages
     .filter((entry) => entry.roles.includes(role) && predicate(entry))
     .map((entry) => entry.path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  return `^(?:${paths.join('|')})/`;
+  return `^(?:${paths.join('|')})/src/`;
 }
 
 /** @type {import('dependency-cruiser').IConfiguration} */
@@ -93,34 +93,6 @@ module.exports = {
       },
       to: {
         path: '^packages/chara/',
-      },
-    },
-    {
-      name: 'quality-domain-only-shared-contracts',
-      comment:
-        'Quality stays host-neutral and may consume only shared, content, and generation contracts',
-      severity: 'error',
-      from: { path: '^packages/quality/' },
-      to: {
-        path: '^packages/',
-        pathNot: [
-          '^packages/quality/',
-          '^packages/shared/',
-          '^packages/content/',
-          '^packages/generation/',
-        ],
-      },
-    },
-    {
-      name: 'agent-runtime-no-quality-domain',
-      comment:
-        'Generic Agent runtime packages remain Quality-neutral; only host composition may depend on neko-quality',
-      severity: 'error',
-      from: {
-        path: '^packages/(?:agent/(?:runtime|webview)|ai/sdk)/',
-      },
-      to: {
-        path: '^packages/quality/',
       },
     },
   ],

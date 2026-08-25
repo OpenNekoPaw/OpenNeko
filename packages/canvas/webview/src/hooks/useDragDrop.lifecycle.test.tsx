@@ -3,7 +3,7 @@ import React from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CONTENT_LOCATOR_DRAG_MIME, createContentLocatorDragData } from '@neko/content';
+import { CONTENT_LOCATOR_DRAG_MIME, createContentLocatorDragData } from '@neko/content-domain';
 import { useDragDrop, type UseDragDropOptions, type UseDragDropReturn } from './useDragDrop';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -52,7 +52,7 @@ describe('useDragDrop lifecycle', () => {
 
     const payload = JSON.stringify(
       createContentLocatorDragData({
-        locator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+        locator: { file: { authority: 'workspace', path: 'media/clip.mp4' } },
         name: 'clip.mp4',
       }),
     );
@@ -72,7 +72,7 @@ describe('useDragDrop lifecycle', () => {
 
     expect(projectContent).toHaveBeenCalledTimes(1);
     expect(projectContent).toHaveBeenCalledWith(
-      { kind: 'workspace-file', path: 'media/clip.mp4' },
+      { file: { authority: 'workspace', path: 'media/clip.mp4' } },
       'video',
       { x: 110, y: 220 },
       'clip.mp4',

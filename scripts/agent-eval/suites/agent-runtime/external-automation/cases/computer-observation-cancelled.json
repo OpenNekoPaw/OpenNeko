@@ -15,7 +15,7 @@
     "canonicalPath": [
       "visible Desktop Agent composer",
       "pending compatible Computer Tool request",
-      "Pi turn cancellation",
+      "exact DSH Turn cancellation",
       "AbortSignal propagation",
       "owned automation session cleanup",
       "exact-session Stop/Take over companion contract",
@@ -63,6 +63,12 @@
       "id": "terminal",
       "kind": "terminal-idle",
       "concerns": ["turnIdle", "continuationQueueIdle"],
+      "evidenceRef": "computer-cancel-facts"
+    },
+    {
+      "id": "lifecycle",
+      "kind": "desktop-lifecycle",
+      "checks": ["graceful-close"],
       "evidenceRef": "computer-cancel-facts"
     }
   ],

@@ -45,7 +45,6 @@ export const desktopAgentProviderUiScenario = Object.freeze({
       workspacePath,
       providerId: authorization.providerId,
       modelId: authorization.modelId,
-      databasePath: join(fixtureHome, '.neko', 'neko.db'),
     };
   },
   async run({ checkpoint, click, evaluate, prepared, screenshot, type, waitForSelector }) {
@@ -108,14 +107,18 @@ export const desktopAgentProviderUiScenario = Object.freeze({
     );
     await waitForCondition(
       evaluate,
-      `(() => window.__openNekoAgentProviderUiObservation?.sawTranscriptActivity === true)()`,
-      'Visible Desktop Agent did not project live execution activity into the transcript.',
+      `(() => {
+        const observation = window.__openNekoAgentProviderUiObservation;
+        return observation?.sawTranscriptActivity === true &&
+          observation?.sawUserMessageActivity === true &&
+          observation?.sawVisibleUserTimestamp === true;
+      })()`,
+      'Visible Desktop Agent did not bind live execution activity and time to the user message.',
     );
     checkpoint('visible-transcript-execution-activity', await inspectProviderWaitState(evaluate));
 
     await waitForProviderResponse(
       evaluate,
-      prepared.databasePath,
       `(async () => {
         const projection = await window.openNekoDesktop.shell.getSnapshot();
         ${requireActiveWorkbenchProjection('projection')}
@@ -159,15 +162,9 @@ export const desktopAgentProviderUiScenario = Object.freeze({
       })()`,
     );
 
-    const [evidence, lifecycle] = await Promise.all([
-      inspectCompletedConversation(evaluate, prompt),
-      readLatestVisibleAgentLifecycleState(prepared.databasePath),
-    ]);
-    if (lifecycle?.status !== 'completed') {
-      throw new Error('Visible Desktop Agent completed without a persisted lifecycle terminal.');
-    }
+    const evidence = await inspectCompletedConversation(evaluate, prompt);
     const responseScreenshot = await screenshot('desktop-agent-provider-response-visible');
-    checkpoint('visible-provider-response-complete', { ...evidence, lifecycle });
+    checkpoint('visible-provider-response-complete', evidence);
 
     const approvalPrompt =
       'Use the Write Tool once to create notes/approval-ui-visible.txt containing exactly ' +
@@ -185,7 +182,6 @@ export const desktopAgentProviderUiScenario = Object.freeze({
     await click('.agent-pending-approval-panel [data-approval-action="approve"]', 0);
     await waitForProviderResponse(
       evaluate,
-      prepared.databasePath,
       `(() => {
         const panel = document.querySelector('.agent-pending-approval-panel');
         const stop = document.querySelector('.agent-composer-stop');
@@ -205,7 +201,6 @@ export const desktopAgentProviderUiScenario = Object.freeze({
       entry,
       modelSelection,
       conversation: evidence,
-      lifecycle,
       approval: { pending: pendingApproval, completed: approvedTool },
       screenshots: [responseScreenshot, approvalScreenshot, approvalCompleteScreenshot],
       submitPath: 'visible-composer',
@@ -437,6 +432,8 @@ async function beginExecutionActivityObservation(evaluate) {
     window.__openNekoAgentProviderUiObservation?.observer?.disconnect();
     const observation = {
       sawTranscriptActivity: false,
+      sawUserMessageActivity: false,
+      sawVisibleUserTimestamp: false,
       observer: undefined,
     };
     const inspect = () => {
@@ -444,6 +441,14 @@ async function beginExecutionActivityObservation(evaluate) {
         '[data-owner-root="agent"] .agent-message-list .agent-execution-activity',
       );
       observation.sawTranscriptActivity ||= activity instanceof HTMLElement;
+      observation.sawUserMessageActivity ||=
+        activity?.getAttribute('data-placement') === 'user-message' &&
+        activity.closest('.agent-user-prompt') instanceof HTMLElement;
+      const timestamp = activity
+        ?.closest('.agent-message-row')
+        ?.querySelector('[data-message-timestamp]');
+      observation.sawVisibleUserTimestamp ||=
+        timestamp instanceof HTMLElement && getComputedStyle(timestamp).opacity === '1';
     };
     observation.observer = new MutationObserver(inspect);
     observation.observer.observe(document.body, {
@@ -465,68 +470,17 @@ async function waitForCondition(evaluate, expression, message, timeoutMs = 30_00
   throw new Error(message);
 }
 
-async function waitForProviderResponse(evaluate, databasePath, expression) {
+async function waitForProviderResponse(evaluate, expression) {
   const deadline = Date.now() + RESPONSE_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    const [uiComplete, lifecycleState] = await Promise.all([
-      evaluate(expression),
-      readLatestVisibleAgentLifecycleState(databasePath),
-    ]);
-    if (uiComplete && lifecycleState?.status === 'completed') return;
-    if (lifecycleState?.status === 'failed') {
-      throw new Error(`Visible Desktop Agent turn failed: ${lifecycleState.diagnostic}`);
-    }
+    if (await evaluate(expression)) return;
     await delay(100);
   }
-  const [uiState, lifecycleState] = await Promise.all([
-    inspectProviderWaitState(evaluate),
-    readLatestVisibleAgentLifecycleState(databasePath),
-  ]);
+  const uiState = await inspectProviderWaitState(evaluate);
   throw new Error(
     'Visible Desktop Agent did not render a completed provider response and active sidebar ' +
-      `conversation: ${JSON.stringify({ uiState, lifecycleState })}`,
+      `conversation: ${JSON.stringify({ uiState })}`,
   );
-}
-
-export async function readLatestVisibleAgentLifecycleState(databasePath) {
-  const sqlite = await import('node:sqlite');
-  let database;
-  try {
-    database = new sqlite.DatabaseSync(databasePath, { readOnly: true, timeout: 1_000 });
-  } catch {
-    return undefined;
-  }
-  try {
-    const lifecycleTable = database
-      .prepare(
-        `SELECT name
-           FROM sqlite_master
-          WHERE type = 'table' AND name = 'agent_conversation_records'`,
-      )
-      .get();
-    if (!lifecycleTable) return undefined;
-    const row = database
-      .prepare(
-        `SELECT payload_json
-           FROM agent_conversation_records
-          ORDER BY rowid DESC
-          LIMIT 1`,
-      )
-      .get();
-    if (!row || typeof row.payload_json !== 'string') return undefined;
-    const snapshot = JSON.parse(row.payload_json);
-    const pendingTurn = snapshot?.pendingTurn;
-    if (!pendingTurn || typeof pendingTurn.status !== 'string') return undefined;
-    return {
-      conversationId:
-        typeof snapshot.conversationId === 'string' ? snapshot.conversationId : undefined,
-      turnId: typeof pendingTurn.turnId === 'string' ? pendingTurn.turnId : undefined,
-      status: pendingTurn.status,
-      diagnostic: typeof pendingTurn.diagnostic === 'string' ? pendingTurn.diagnostic : undefined,
-    };
-  } finally {
-    database.close();
-  }
 }
 
 async function inspectProviderWaitState(evaluate) {

@@ -1,5 +1,5 @@
-import { isHostProjectedRuntimeValue } from '@neko/content';
-import type { ContentLocator } from '@neko/content';
+import { isHostProjectedRuntimeValue } from '@neko/content-domain';
+import type { ContentLocator } from '@neko/content-domain';
 
 export const CANVAS_CREATIVE_SCOPE_KINDS = [
   'episode',

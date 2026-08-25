@@ -6,7 +6,6 @@
 
 import type { UnifiedConfig, NormalizedConfig } from './types';
 import { DEFAULT_CONFIG } from './types';
-import { normalizeExternalResearchConfig } from '@neko/agent-contracts';
 
 // =============================================================================
 // Configuration Normalization
@@ -40,7 +39,5 @@ export function normalizeConfig(config: UnifiedConfig): NormalizedConfig {
     outputFormat: config.outputFormat ?? DEFAULT_CONFIG.outputFormat,
     providers: arrayToMap(config.providers),
     models: arrayToMap(config.models),
-    mcpServers: arrayToMap(config.mcpServers),
-    externalResearch: normalizeExternalResearchConfig(config.externalResearch),
   };
 }

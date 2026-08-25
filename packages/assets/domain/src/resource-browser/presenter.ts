@@ -1,4 +1,4 @@
-import { contentLocatorKey } from '@neko/content';
+import { contentLocatorKey } from '@neko/content-domain';
 import { modeForTextDocument } from '@neko/text-editor-domain';
 import { type MediaLibraryProjectionEntry } from '@neko/assets-domain/contracts';
 import type { GlobalAssetItem } from '../global-library/contract';
@@ -130,9 +130,10 @@ function presentContentCapabilities(
   const result: ResourceBrowserCapability[] = [];
   if (
     source === 'files' &&
-    locator.kind === 'workspace-file' &&
+    locator.file.authority === 'workspace' &&
+    locator.selector === undefined &&
     capabilities.includes('read') &&
-    modeForTextDocument(locator.path)
+    modeForTextDocument(locator.file.path)
   ) {
     result.push('edit-text');
   }

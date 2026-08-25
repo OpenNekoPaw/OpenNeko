@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
@@ -12,7 +11,7 @@ afterEach(async () => {
 });
 
 describe('resolveWorkspaceContentLocator', () => {
-  it('authorizes an immutable generated output only when its digest matches', async () => {
+  it('authorizes a generated file through the same canonical Workspace address', async () => {
     const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-generated-output-path-'));
     roots.push(workspacePath);
     const relativePath = 'neko/generated/image/frame.png';
@@ -20,21 +19,12 @@ describe('resolveWorkspaceContentLocator', () => {
     await mkdir(path.dirname(path.join(workspacePath, relativePath)), { recursive: true });
     await writeFile(path.join(workspacePath, relativePath), bytes);
     const locator = {
-      kind: 'generated-output' as const,
-      outputId: 'generated-frame-1',
-      digest: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
-      path: relativePath,
+      file: { authority: 'workspace' as const, path: relativePath },
     };
 
     await expect(resolveWorkspaceContentLocator(workspace(workspacePath), locator)).resolves.toBe(
       await realpath(path.join(workspacePath, relativePath)),
     );
-    await expect(
-      resolveWorkspaceContentLocator(workspace(workspacePath), {
-        ...locator,
-        digest: 'sha256:stale-generated-frame',
-      }),
-    ).rejects.toThrow('Generated output content is unavailable: content-changed.');
   });
 
   it('authorizes a managed linked-media workspace path', async () => {
@@ -51,8 +41,7 @@ describe('resolveWorkspaceContentLocator', () => {
 
     await expect(
       resolveWorkspaceContentLocator(workspace(workspacePath), {
-        kind: 'workspace-file',
-        path: 'neko/assets/Footage/shot.mov',
+        file: { authority: 'workspace', path: 'neko/assets/Footage/shot.mov' },
       }),
     ).resolves.toBe(await realpath(path.join(externalPath, 'shot.mov')));
   });
@@ -65,8 +54,7 @@ describe('resolveWorkspaceContentLocator', () => {
 
     await expect(
       resolveWorkspaceContentLocator(workspace(workspacePath), {
-        kind: 'workspace-file',
-        path: 'neko/assets/Footage/shot.mov',
+        file: { authority: 'workspace', path: 'neko/assets/Footage/shot.mov' },
       }),
     ).rejects.toMatchObject({ code: 'library-entry-not-link' });
   });
@@ -84,8 +72,7 @@ describe('resolveWorkspaceContentLocator', () => {
 
     await expect(
       resolveWorkspaceContentLocator(workspace(workspacePath), {
-        kind: 'workspace-file',
-        path: 'external/secret.txt',
+        file: { authority: 'workspace', path: 'external/secret.txt' },
       }),
     ).rejects.toMatchObject({ code: 'unmanaged-symlink' });
   });

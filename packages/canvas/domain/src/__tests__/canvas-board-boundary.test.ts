@@ -65,4 +65,32 @@ describe('Canvas Board package boundaries', () => {
       expect(existsSync(resolve(repositoryRoot, relativePath)), relativePath).toBe(false);
     }
   });
+
+  it('keeps retired structured storyboard ownership out of Canvas Domain', () => {
+    const deletedPaths = [
+      'packages/canvas/domain/src/canvas-cut-draft.ts',
+      'packages/canvas/domain/src/canvas-semantic-storyboard.ts',
+      'packages/canvas/domain/src/types/storyboard-table.ts',
+      'packages/canvas/domain/src/types/creative-table-profile.ts',
+    ];
+
+    for (const relativePath of deletedPaths) {
+      expect(existsSync(resolve(repositoryRoot, relativePath)), relativePath).toBe(false);
+    }
+
+    const publicEntries = [
+      read('packages/canvas/domain/src/index.ts'),
+      read('packages/canvas/domain/src/types/index.ts'),
+    ].join('\n');
+    expect(publicEntries).not.toMatch(
+      /canvas-cut-draft|canvas-semantic-storyboard|storyboard-table|creative-table-profile/,
+    );
+
+    const authoringContracts = read(
+      'packages/canvas/domain/src/types/canvas-authoring-contracts.ts',
+    );
+    expect(authoringContracts).not.toMatch(
+      /CanvasAuthoring(?:Catalog|FieldProfile|SemanticPrompt|Recipe|Operation|ResultEnvelope)/,
+    );
+  });
 });

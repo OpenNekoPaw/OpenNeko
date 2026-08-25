@@ -57,12 +57,12 @@ describe('Agent Evaluation local runner', () => {
       ),
     ).resolves.toEqual([
       'agent-runtime.model-binding',
-      'agent-runtime.perception-routing',
+      'agent-runtime.media-tool-routing',
       'agent-runtime.workflow-controller',
     ]);
   });
 
-  it('selects Desktop Agent composition coverage', async () => {
+  it('selects Desktop DSH composition coverage', async () => {
     const suites = await discoverSuites();
     await expect(
       selectSuiteIds(
@@ -70,8 +70,8 @@ describe('Agent Evaluation local runner', () => {
         suites,
         {
           changedPaths: [
-            'apps/neko-desktop/src/main/desktop-agent-app-host-composition.ts',
-            'apps/neko-desktop/src/main/desktop-agent-controller-composition.ts',
+            'apps/neko-desktop/src/main/desktop-dsh-agent-runtime.ts',
+            'apps/neko-desktop/src/main/desktop-dsh-permission-host.ts',
           ],
         },
       ),
@@ -100,7 +100,7 @@ describe('Agent Evaluation local runner', () => {
         '--suite',
         'agent-runtime.stream-delivery',
         '--case',
-        'locator-backed-display-projection',
+        'active-stream-cancellation',
         '--report-root',
         reportRoot,
       ],
@@ -128,7 +128,7 @@ describe('Agent Evaluation local runner', () => {
         '--suite',
         'agent-runtime.stream-delivery',
         '--case',
-        'locator-backed-display-projection',
+        'active-stream-cancellation',
         '--report-root',
         reportRoot,
       ],

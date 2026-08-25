@@ -130,6 +130,26 @@ describe('Desktop Agent Evaluation pipeline', () => {
       message: expect.stringContaining('artifact check results do not match'),
     });
   });
+
+  it('reports unavailable DSH configuration digest and usage without inventing facts', async () => {
+    const input = pipelineInput();
+    delete input.desktopEvidence.facts.configuration.effective.digest;
+    delete input.desktopEvidence.facts.usage;
+    const writeReport = vi.fn(async (documents) => {
+      expect(documents.result.effectiveConfiguration).toEqual({
+        runtimeProfileId: 'runtime-1',
+        modelProfileId: 'model-1',
+        status: 'missing',
+        diagnostic: 'DSH Desktop facts do not expose an effective configuration digest.',
+      });
+      expect(documents.result.usage).toEqual({ latencyMs: 25, retries: 0 });
+      return { result: '/reports/result.json' };
+    });
+
+    await expect(runEvaluationPipeline(input, { writeReport })).resolves.toMatchObject({
+      outcome: 'pass',
+    });
+  });
 });
 
 function pipelineInput(options = {}) {
@@ -207,7 +227,7 @@ function pipelineInput(options = {}) {
 }
 
 function desktopEvidence(artifactChecks) {
-  const identity = { conversationId: 'conversation-1', turnId: 'turn-1', runId: 'agent-run-1' };
+  const identity = { conversationId: 'conversation-1', dshSessionId: 'dsh-session-1', turn: 1 };
   const bounded = (items = []) => ({ limit: 100, items, droppedCount: 0 });
   return {
     identity,
@@ -220,13 +240,13 @@ function desktopEvidence(artifactChecks) {
       ],
     },
     facts: {
-      identity: { ...identity, branchId: 'branch-1', piSessionId: 'pi-session-1' },
+      identity,
       runtimePath: {
-        controller: 'sender-bound-desktop-agent-controller',
-        runtime: 'pi-conversation-runtime',
-        transcript: 'pi-session',
-        metadata: 'sqlite',
-        projection: 'conversation-projection-store',
+        controller: 'dsh-desktop-session-host',
+        runtime: 'dsh-agent',
+        transcript: 'dsh-session',
+        metadata: 'openneko-conversation-catalog',
+        projection: 'dsh-acp-projection',
       },
       configuration: {
         effective: {
@@ -246,9 +266,11 @@ function desktopEvidence(artifactChecks) {
         tools: bounded(),
         permissions: bounded(),
       },
-      projection: { terminalState: 'completed' },
-      resourceDisplayProjections: bounded(),
-      persistence: { durability: 'durable', checkpoint: 'observed' },
+      projection: {
+        conversationId: identity.conversationId,
+        dshSessionId: identity.dshSessionId,
+      },
+      persistence: { durability: 'dsh-session', checkpoint: 'observed' },
       usage: { inputTokens: 10, outputTokens: 5, costUsd: 0.01 },
       diagnostics: bounded(),
       disposal: { status: 'disposed' },

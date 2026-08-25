@@ -11,6 +11,7 @@ import { ResourceBrowserController } from './controller';
 import type {
   ResourceBrowserInteractionPort,
   ResourceBrowserContentEntry,
+  ResourceBrowserMediaLibraryRootEntry,
   ResourceBrowserProjectionSource,
 } from './ports';
 
@@ -118,6 +119,86 @@ describe('Resource Browser controller', () => {
     expect(result.source).toBe('assets');
     expect(source.assets.list).toHaveBeenCalledOnce();
     expect(source.files.list).not.toHaveBeenCalled();
+  });
+
+  it('queries without changing or publishing the active Resource Browser projection', async () => {
+    const source = createSource();
+    const controller = new ResourceBrowserController({
+      identity,
+      source,
+      interactions: createInteractions(),
+    });
+    const listener = vi.fn();
+    controller.subscribe(listener);
+    const active = await controller.getSnapshot();
+
+    const queried = await controller.query(
+      createResourceBrowserSearchRequest({
+        requestId: 'composer-query',
+        identity,
+        source: 'media',
+        query: 'scene',
+      }),
+    );
+
+    expect(queried).toMatchObject({ source: 'media', query: 'scene' });
+    expect(await controller.getSnapshot()).toBe(active);
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('projects selectable media children for an empty read-only query', async () => {
+    const source = createSource();
+    const root: ResourceBrowserMediaLibraryRootEntry = {
+      label: 'References',
+      role: 'library-root',
+      depth: 0,
+      libraryName: 'References',
+      libraryStatus: {
+        libraryName: 'References',
+        state: 'available',
+        referenceCount: 1,
+        missingCount: 0,
+        operationFingerprint: 'fingerprint-references',
+      },
+    };
+    const child: ResourceBrowserContentEntry = {
+      locator: { file: { authority: 'workspace', path: 'References/scene.png' } },
+      label: 'scene.png',
+      availability: 'available',
+      capabilities: ['read', 'preview', 'bind'],
+      metadata: { mediaType: 'image' },
+      role: 'content',
+      depth: 1,
+      libraryName: 'References',
+    };
+    source.media.search = vi.fn(async () => [root]);
+    source.media.children = vi.fn(async () => [child]);
+    const controller = new ResourceBrowserController({
+      identity,
+      source,
+      interactions: createInteractions(),
+    });
+
+    const queried = await controller.query(
+      createResourceBrowserSearchRequest({
+        requestId: 'composer-empty-media-query',
+        identity,
+        source: 'media',
+        query: '',
+      }),
+    );
+
+    expect(queried.items).toHaveLength(1);
+    expect(queried.items[0]).toMatchObject({
+      source: 'media',
+      role: 'content',
+      label: 'scene.png',
+    });
+    expect(source.media.children).toHaveBeenCalledWith({
+      identity,
+      parent: expect.objectContaining({ role: 'library-root', libraryName: 'References' }),
+      limit: 100,
+    });
   });
 
   it('allows Rescan only after an observation failure and clears the local diagnostic', async () => {
@@ -351,7 +432,7 @@ describe('Resource Browser controller', () => {
 
   it('reconciles the exact target directory after nested creative document creation', async () => {
     const directory: ResourceBrowserContentEntry = {
-      locator: { kind: 'workspace-file', path: 'References' },
+      locator: { file: { authority: 'workspace', path: 'References' } },
       label: 'References',
       availability: 'available',
       capabilities: ['read'],
@@ -360,7 +441,7 @@ describe('Resource Browser controller', () => {
       depth: 0,
     };
     const board: ResourceBrowserContentEntry = {
-      locator: { kind: 'workspace-file', path: 'References/Board.nkc' },
+      locator: { file: { authority: 'workspace', path: 'References/Board.nkc' } },
       parentLocator: directory.locator,
       label: 'Board.nkc',
       availability: 'available',
@@ -400,7 +481,7 @@ describe('Resource Browser controller', () => {
 
   it('resolves selected directories, selected-file parents, and no selection without fallback', async () => {
     const directory: ResourceBrowserContentEntry = {
-      locator: { kind: 'workspace-file', path: 'References' },
+      locator: { file: { authority: 'workspace', path: 'References' } },
       label: 'References',
       availability: 'available',
       capabilities: ['read'],
@@ -409,7 +490,7 @@ describe('Resource Browser controller', () => {
       depth: 0,
     };
     const file: ResourceBrowserContentEntry = {
-      locator: { kind: 'workspace-file', path: 'References/notes.md' },
+      locator: { file: { authority: 'workspace', path: 'References/notes.md' } },
       parentLocator: directory.locator,
       label: 'notes.md',
       availability: 'available',
@@ -506,7 +587,7 @@ describe('Resource Browser controller', () => {
   it('routes admitted text only to the editor and never falls back to Preview on admission failure', async () => {
     const source = createSource();
     const textEntry: ResourceBrowserContentEntry = {
-      locator: { kind: 'workspace-file', path: 'notes/story.fountain' },
+      locator: { file: { authority: 'workspace', path: 'notes/story.fountain' } },
       label: 'story.fountain',
       availability: 'available',
       capabilities: ['read', 'preview'],
@@ -605,7 +686,7 @@ describe('Resource Browser controller', () => {
 
   it('loads only direct children for an explicit expandable parent', async () => {
     const parent: ResourceBrowserContentEntry = {
-      locator: { kind: 'workspace-file', path: 'characters' },
+      locator: { file: { authority: 'workspace', path: 'characters' } },
       label: 'characters',
       availability: 'available',
       capabilities: ['read'],
@@ -614,7 +695,7 @@ describe('Resource Browser controller', () => {
       depth: 0,
     };
     const child: ResourceBrowserContentEntry = {
-      locator: { kind: 'workspace-file', path: 'characters/hero.glb' },
+      locator: { file: { authority: 'workspace', path: 'characters/hero.glb' } },
       parentLocator: parent.locator,
       label: 'hero.glb',
       availability: 'available',
@@ -656,7 +737,7 @@ describe('Resource Browser controller', () => {
 
   it('re-reads loaded empty directories during authoritative reconciliation', async () => {
     const parent: ResourceBrowserContentEntry = {
-      locator: { kind: 'workspace-file', path: 'References' },
+      locator: { file: { authority: 'workspace', path: 'References' } },
       label: 'References',
       availability: 'available',
       capabilities: ['read'],
@@ -665,7 +746,7 @@ describe('Resource Browser controller', () => {
       depth: 0,
     };
     const child: ResourceBrowserContentEntry = {
-      locator: { kind: 'workspace-file', path: 'References/Board.nkc' },
+      locator: { file: { authority: 'workspace', path: 'References/Board.nkc' } },
       parentLocator: parent.locator,
       label: 'Board.nkc',
       availability: 'available',
@@ -706,7 +787,7 @@ function createSource(): ResourceBrowserProjectionSource & {
   readonly refresh: ReturnType<typeof vi.fn>;
 } {
   const media: ResourceBrowserContentEntry = {
-    locator: { kind: 'workspace-file', path: 'assets/cat.png' },
+    locator: { file: { authority: 'workspace', path: 'assets/cat.png' } },
     label: 'cat.png',
     availability: 'available',
     capabilities: ['read', 'preview', 'bind'],

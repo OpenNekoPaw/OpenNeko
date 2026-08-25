@@ -109,7 +109,16 @@ function ReferenceTokenIcon({
   thumbnailSrc?: string | null;
 }) {
   if (thumbnailSrc && kind === 'image') {
-    return <img src={thumbnailSrc} alt="" title={label} className="agent-reference-thumbnail" />;
+    return (
+      <img
+        src={thumbnailSrc}
+        alt=""
+        title={label}
+        className="agent-reference-thumbnail"
+        decoding="async"
+        loading="lazy"
+      />
+    );
   }
 
   const props = { size: 13, strokeWidth: 1.8 };

@@ -1,13 +1,5 @@
-import { validateContentLocator, type ContentLocator } from '@neko/content';
-import {
-  isThreeReferenceStagingSnapshot,
-  type ThreeReferenceStagingSnapshot,
-  type ThreeReferenceSubject,
-} from './three-reference.js';
-
+import { validateContentLocator, type ContentLocator } from '@neko/content-domain';
 export * from './engine-preview.js';
-export * from './model-preview.js';
-export * from './three-reference.js';
 
 export const PREVIEW_HOST_RUNTIME_ROUTES = {
   snapshotGet: 'snapshot.get',
@@ -21,32 +13,6 @@ export type PreviewHostRuntimeRoute =
   (typeof PREVIEW_HOST_RUNTIME_ROUTES)[keyof typeof PREVIEW_HOST_RUNTIME_ROUTES];
 export type PreviewContentKind = 'image' | 'video' | 'audio' | 'document' | 'model' | 'text';
 export type PreviewViewPresentation = 'temporary' | 'pinned' | 'side';
-
-export function createSourceModelStaging(
-  sessionId: string,
-  subject: Extract<ThreeReferenceSubject, { readonly kind: 'source-model' }>,
-): ThreeReferenceStagingSnapshot & {
-  readonly subject: Extract<ThreeReferenceSubject, { readonly kind: 'source-model' }>;
-} {
-  const staging: ThreeReferenceStagingSnapshot & {
-    readonly subject: Extract<ThreeReferenceSubject, { readonly kind: 'source-model' }>;
-  } = {
-    sessionId,
-    subject,
-    selectedPurposes: ['appearance', 'camera'],
-    camera: {
-      cameraId: 'camera-front',
-      position: { x: 0, y: 0.15, z: 3.5 },
-      target: { x: 0, y: 0, z: 0 },
-      fieldOfViewDeg: 45,
-      aspectRatio: 1,
-    },
-  };
-  if (!isThreeReferenceStagingSnapshot(staging)) {
-    throw new Error('Invalid initial 3D Reference staging for source-model.');
-  }
-  return staging;
-}
 
 const PREVIEW_FILE_KINDS = {
   image: new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'tiff', 'tif']),
@@ -177,7 +143,7 @@ export interface PreviewRuntimeIdentity {
 export interface PreviewMediaDescriptor {
   readonly descriptorId: string;
   readonly sourceFingerprint: string;
-  readonly contentLocator: ContentLocator;
+  readonly contentLocator?: ContentLocator;
   readonly url: string;
   readonly resourceUris?: Readonly<Record<string, string>>;
   readonly contentKind: PreviewContentKind;
@@ -278,8 +244,11 @@ export function parsePreviewRuntimeIdentity(value: unknown): PreviewRuntimeIdent
 
 export function parsePreviewMediaDescriptor(value: unknown): PreviewMediaDescriptor {
   const record = requireRecord(value, 'Preview media descriptor must be an object.');
-  const contentLocator = validateContentLocator(record['contentLocator']);
-  if (!contentLocator.ok) {
+  const contentLocator =
+    record['contentLocator'] === undefined
+      ? undefined
+      : validateContentLocator(record['contentLocator']);
+  if (contentLocator && !contentLocator.ok) {
     throw invalidPayload(
       `Preview media descriptor contentLocator is invalid: ${contentLocator.diagnostics
         .map((diagnostic) => diagnostic.message)
@@ -295,7 +264,7 @@ export function parsePreviewMediaDescriptor(value: unknown): PreviewMediaDescrip
       record['sourceFingerprint'],
       'Preview descriptor source fingerprint is required.',
     ),
-    contentLocator: contentLocator.locator,
+    ...(contentLocator?.ok ? { contentLocator: contentLocator.locator } : {}),
     url: requireOpenNekoResourceUrl(record['url']),
     ...(record['resourceUris'] === undefined
       ? {}

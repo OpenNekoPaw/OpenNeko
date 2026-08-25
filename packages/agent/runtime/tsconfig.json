@@ -17,7 +17,6 @@
     "rootDir": "./src",
     "resolveJsonModule": true,
     "noEmit": true,
-    "baseUrl": ".",
     "types": ["node"],
     "strictNullChecks": true,
     "noImplicitAny": true

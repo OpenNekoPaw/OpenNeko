@@ -1,219 +1,197 @@
 /**
- * NewAPI Video Model - VideoModelV3 implementation using OpenAI Sora format
+ * NewAPI Video Model - AI SDK VideoModelV4 start/status implementation.
  *
- * Uses the official Sora-compatible endpoint:
- * - POST /v1/videos (multipart/form-data)
- * - GET /v1/videos/{video_id} (status polling)
- * - GET /v1/videos/{video_id}/content (video download)
- *
- * Parameters:
- * - model: string (e.g., "sora-2")
- * - prompt: string
- * - seconds: string (duration, e.g., "8")
- * - input_reference: binary (image file for i2v)
- *
- * Reference: https://doc.newapi.pro/en/api/openai-video/
+ * The provider task is returned by doStart before any status request.
+ * GenerationJob owns persistence, polling, recovery, and cancellation.
  */
 
 import type {
-  Experimental_VideoModelV3 as VideoModelV3,
-  Experimental_VideoModelV3CallOptions as VideoModelV3CallOptions,
-  Experimental_VideoModelV3VideoData as VideoModelV3VideoData,
-  SharedV3Warning,
-  SharedV3ProviderMetadata,
+  Experimental_VideoModelV4 as VideoModelV4,
+  Experimental_VideoModelV4CallOptions as VideoModelV4CallOptions,
+  Experimental_VideoModelV4OperationStartResult as VideoModelV4OperationStartResult,
+  Experimental_VideoModelV4OperationStatusResult as VideoModelV4OperationStatusResult,
+  Experimental_VideoModelV4File as VideoModelV4File,
+  JSONValue,
 } from '@ai-sdk/provider';
 import type { ProviderConfig } from '../../types';
-import { pollUntilDone, POLLING_PRESETS } from '../../polling';
+import { createVideoTaskOperation, decodeVideoTaskOperation } from '../../video-task-operation';
 import { copyBytesToArrayBuffer } from './newapi-binary';
 
-/** POST /v1/videos response */
 interface SoraCreateResponse {
-  id: string;
-  object?: string;
-  model?: string;
-  status: string;
-  progress?: number;
-  created_at?: number;
-  seconds?: string;
-  size?: string;
-  error?: { message: string; code?: string };
+  id?: string;
+  error?: { message?: string; code?: string };
 }
 
-/** GET /v1/videos/{id} response */
 interface SoraStatusResponse {
-  id: string;
-  status: string;
-  progress?: number;
-  seconds?: string;
-  size?: string;
-  quality?: string;
-  completed_at?: number;
-  expires_at?: number;
-  error?: { message: string; code?: string };
+  id?: string;
+  status?: string;
+  error?: { message?: string; code?: string };
 }
 
-export class NewAPIVideoModel implements VideoModelV3 {
-  readonly specificationVersion = 'v3' as const;
+export class NewAPIVideoModel implements VideoModelV4 {
+  readonly specificationVersion = 'v4' as const;
   readonly provider = 'newapi';
   readonly modelId: string;
   readonly maxVideosPerCall = 1;
 
-  private config: ProviderConfig;
-
-  constructor(modelId: string, config: ProviderConfig) {
+  constructor(
+    modelId: string,
+    private readonly config: ProviderConfig,
+  ) {
     this.modelId = modelId;
-    this.config = config;
   }
 
-  async doGenerate(options: VideoModelV3CallOptions): Promise<{
-    videos: Array<VideoModelV3VideoData>;
-    warnings: Array<SharedV3Warning>;
-    providerMetadata?: SharedV3ProviderMetadata;
-    response: { timestamp: Date; modelId: string; headers: Record<string, string> | undefined };
-  }> {
-    const baseUrl = this.getBaseUrl();
-    const submitUrl = `${baseUrl}/v1/videos`;
+  async doStart(options: VideoModelV4CallOptions): Promise<VideoModelV4OperationStartResult> {
+    if (options.prompt === undefined || options.prompt.trim().length === 0) {
+      throw new Error('NewAPI video generation requires a non-empty prompt.');
+    }
+    if (options.inputReferences?.length) {
+      throw new Error('NewAPI Sora video generation does not support reference media inputs.');
+    }
+    if (options.generateAudio !== undefined) {
+      throw new Error('NewAPI Sora video generation does not support generateAudio.');
+    }
 
-    // Build multipart/form-data body
+    const frameImages = options.frameImages ?? [];
+    if (frameImages.some((frame) => frame.frameType === 'last_frame')) {
+      throw new Error('NewAPI Sora video generation does not support a last-frame image.');
+    }
+    const firstFrames = frameImages.filter((frame) => frame.frameType === 'first_frame');
+    if (firstFrames.length > 1) {
+      throw new Error('NewAPI Sora video generation accepts at most one first-frame image.');
+    }
+    if (options.image && firstFrames.length > 0) {
+      throw new Error('NewAPI Sora video generation received duplicate first-frame inputs.');
+    }
+
     const formData = new FormData();
     formData.append('model', this.modelId);
-    if (options.prompt === undefined) {
-      throw new Error('NewAPI video generation requires a prompt.');
-    }
     formData.append('prompt', options.prompt);
+    if (options.duration !== undefined) formData.append('seconds', String(options.duration));
+    if (options.resolution !== undefined) formData.append('size', options.resolution);
+    const input = firstFrames[0]?.image ?? options.image;
+    if (input) appendInputReference(formData, input);
 
-    // Duration: AI SDK passes as number, Sora format expects "seconds" as string
-    if (options.duration !== undefined) {
-      formData.append('seconds', String(options.duration));
-    }
-
-    // Image-to-video: Sora format uses "input_reference" file field
-    if (options.image) {
-      if (options.image.type === 'file') {
-        const data = options.image.data;
-        const blob =
-          typeof data === 'string'
-            ? new Blob([Buffer.from(data, 'base64')], {
-                type: options.image.mediaType ?? 'image/png',
-              })
-            : new Blob([copyBytesToArrayBuffer(data)], {
-                type: options.image.mediaType ?? 'image/png',
-              });
-        formData.append('input_reference', blob, 'input.png');
-      } else if (options.image.type === 'url') {
-        // For URL references, download and attach as file
-        // Some APIs accept URL directly — try appending as string first
-        formData.append('input_reference', options.image.url);
-      }
-    }
-
-    // Submit generation request
-    const submitResponse = await fetch(submitUrl, {
+    const response = await fetch(`${this.getBaseUrl()}/v1/videos`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.config.apiKey}`,
-        // Do NOT set Content-Type — fetch auto-sets multipart boundary
-        ...(options.headers as Record<string, string>),
-      },
+      headers: buildHeaders(this.config.apiKey, options.headers),
       body: formData,
       signal: options.abortSignal,
     });
-
-    if (!submitResponse.ok) {
-      const errorBody = await submitResponse.text();
-      throw new Error(`NewAPI video generation failed (${submitResponse.status}): ${errorBody}`);
+    const responseHeaders = Object.fromEntries(response.headers.entries());
+    const body = await parseJson<SoraCreateResponse>(response, 'NewAPI video generation');
+    if (body.error?.message) {
+      throw new Error(`NewAPI video generation failed: ${body.error.message}`);
     }
-
-    const createData = (await submitResponse.json()) as SoraCreateResponse;
-
-    if (createData.error) {
-      throw new Error(`Video generation failed: ${createData.error.message}`);
+    if (typeof body.id !== 'string' || body.id.trim().length === 0) {
+      throw new Error('NewAPI video generation returned no task id.');
     }
-
-    if (!createData.id) {
-      throw new Error('NewAPI video generation: no video id returned');
-    }
-
-    await this.config.onExternalTaskId?.(createData.id);
-
-    // Poll for completion
-    const videoData = await this.pollForCompletion(createData.id, baseUrl, options.abortSignal);
 
     return {
-      videos: [videoData],
+      operation: createVideoTaskOperation(body.id),
       warnings: [],
       response: {
         timestamp: new Date(),
         modelId: this.modelId,
-        headers: undefined,
+        headers: responseHeaders,
       },
     };
   }
 
-  /**
-   * Poll GET /v1/videos/{videoId} until completion, then return video data.
-   * On success, downloads via /v1/videos/{videoId}/content.
-   */
-  private async pollForCompletion(
-    videoId: string,
-    baseUrl: string,
-    abortSignal?: AbortSignal,
-  ): Promise<VideoModelV3VideoData> {
-    const statusUrl = `${baseUrl}/v1/videos/${videoId}`;
-    const downloadUrl = `${baseUrl}/v1/videos/${videoId}/content`;
-    const apiKey = this.config.apiKey;
+  async doStatus(options: {
+    operation: JSONValue;
+    abortSignal?: AbortSignal;
+    headers?: Record<string, string | undefined>;
+  }): Promise<VideoModelV4OperationStatusResult> {
+    const { taskId } = decodeVideoTaskOperation(options.operation);
+    const response = await fetch(`${this.getBaseUrl()}/v1/videos/${encodeURIComponent(taskId)}`, {
+      method: 'GET',
+      headers: buildHeaders(this.config.apiKey, options.headers),
+      signal: options.abortSignal,
+    });
+    const responseHeaders = Object.fromEntries(response.headers.entries());
+    const body = await parseJson<SoraStatusResponse>(response, 'NewAPI video status');
+    const responseMetadata = {
+      timestamp: new Date(),
+      modelId: this.modelId,
+      headers: responseHeaders,
+    };
+    if (body.error?.message) {
+      return { status: 'error', error: body.error.message, response: responseMetadata };
+    }
 
-    return pollUntilDone<VideoModelV3VideoData>(
-      async () => {
-        const response = await fetch(statusUrl, {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${apiKey}` },
-          signal: abortSignal,
-        });
-
-        if (!response.ok) return undefined; // Transient error, continue
-
-        const data = (await response.json()) as SoraStatusResponse;
-
-        if (data.error) {
-          throw new Error(`Video generation failed: ${data.error.message}`);
-        }
-
-        const status = data.status?.toLowerCase();
-
-        if (status === 'succeeded' || status === 'completed') {
-          // Download the video file
-          const videoResponse = await fetch(downloadUrl, {
-            headers: { Authorization: `Bearer ${apiKey}` },
-            signal: abortSignal,
-          });
-
-          if (!videoResponse.ok) {
-            return { type: 'url' as const, url: downloadUrl, mediaType: 'video/mp4' };
-          }
-
-          const videoBuffer = await videoResponse.arrayBuffer();
-          return {
-            type: 'binary' as const,
-            data: new Uint8Array(videoBuffer),
-            mediaType: 'video/mp4',
-          };
-        }
-
-        if (status === 'failed') {
-          throw new Error('Video generation failed');
-        }
-
-        return undefined; // Continue polling
-      },
-      POLLING_PRESETS.video,
-      abortSignal,
-    );
+    switch (body.status?.toLowerCase()) {
+      case 'queued':
+      case 'pending':
+      case 'processing':
+      case 'in_progress':
+        return { status: 'pending', response: responseMetadata };
+      case 'succeeded':
+      case 'completed':
+        return {
+          status: 'completed',
+          videos: [
+            {
+              type: 'url',
+              url: `${this.getBaseUrl()}/v1/videos/${encodeURIComponent(taskId)}/content`,
+              mediaType: 'video/mp4',
+            },
+          ],
+          warnings: [],
+          response: responseMetadata,
+        };
+      case 'failed':
+      case 'cancelled':
+        return {
+          status: 'error',
+          error: `NewAPI video task ${taskId} ended with status ${body.status}.`,
+          response: responseMetadata,
+        };
+      default:
+        return {
+          status: 'error',
+          error: `NewAPI video task ${taskId} returned unknown status ${String(body.status)}.`,
+          response: responseMetadata,
+        };
+    }
   }
 
   private getBaseUrl(): string {
-    let base = this.config.apiUrl.replace(/\/+$/, '');
-    base = base.replace(/\/v1$/, '');
-    return base;
+    return this.config.apiUrl.replace(/\/+$/u, '').replace(/\/v1$/u, '');
+  }
+}
+
+function appendInputReference(formData: FormData, input: VideoModelV4File): void {
+  if (input.type === 'url') {
+    formData.append('input_reference', input.url);
+    return;
+  }
+  const bytes = typeof input.data === 'string' ? Buffer.from(input.data, 'base64') : input.data;
+  const blob = new Blob([copyBytesToArrayBuffer(bytes)], {
+    type: input.mediaType || 'image/png',
+  });
+  formData.append('input_reference', blob, 'input-reference');
+}
+
+function buildHeaders(
+  apiKey: string,
+  extra?: Record<string, string | undefined>,
+): Record<string, string> {
+  const headers: Record<string, string> = { Authorization: `Bearer ${apiKey}` };
+  for (const [key, value] of Object.entries(extra ?? {})) {
+    if (value !== undefined) headers[key] = value;
+  }
+  return headers;
+}
+
+async function parseJson<T>(response: Response, operation: string): Promise<T> {
+  const body = await response.text();
+  if (!response.ok) {
+    throw new Error(`${operation} failed (${response.status}): ${body}`);
+  }
+  try {
+    return JSON.parse(body) as T;
+  } catch {
+    throw new Error(`${operation} returned invalid JSON.`);
   }
 }

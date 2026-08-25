@@ -22,6 +22,13 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
+      "path": "packages/agent/dsh-plugin",
+      "owner": "packages/agent/dsh-plugin",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
       "path": "packages/ai/contracts",
       "owner": "packages/ai/contracts",
       "mode": "self",
@@ -55,13 +62,6 @@
       "mode": "self",
       "sourceScope": "src/**/*.ts",
       "testScope": "src/**/*.test.ts"
-    },
-    {
-      "path": "packages/automation/webview",
-      "owner": "packages/automation/webview",
-      "mode": "self",
-      "sourceScope": "src/**/*.{ts,tsx}",
-      "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
       "path": "packages/assets/domain",
@@ -106,22 +106,22 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/chara",
-      "owner": "packages/chara",
+      "path": "packages/chara/domain",
+      "owner": "packages/chara/domain",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/chara-node",
-      "owner": "packages/chara-node",
+      "path": "packages/chara/node",
+      "owner": "packages/chara/node",
       "mode": "self",
       "sourceScope": "src/**/*.ts",
       "testScope": "src/**/*.test.ts"
     },
     {
-      "path": "packages/chara-webview",
-      "owner": "packages/chara-webview",
+      "path": "packages/chara/webview",
+      "owner": "packages/chara/webview",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
@@ -134,22 +134,8 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/media-local-metadata",
-      "owner": "packages/media-local-metadata",
-      "mode": "self",
-      "sourceScope": "src/**/*.ts",
-      "testScope": "src/**/*.test.ts"
-    },
-    {
-      "path": "packages/content",
-      "owner": "packages/content",
-      "mode": "self",
-      "sourceScope": "src/**/*.{ts,tsx}",
-      "testScope": "src/**/*.test.{ts,tsx}"
-    },
-    {
-      "path": "packages/quality",
-      "owner": "packages/quality",
+      "path": "packages/content/domain",
+      "owner": "packages/content/domain",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
@@ -197,8 +183,8 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/generation",
-      "owner": "packages/generation",
+      "path": "packages/generation/domain",
+      "owner": "packages/generation/domain",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
@@ -225,8 +211,29 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
+      "path": "packages/model/domain",
+      "owner": "packages/model/domain",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/model/webview",
+      "owner": "packages/model/webview",
+      "mode": "self",
+      "sourceScope": "src/**/*.{ts,tsx}",
+      "testScope": "src/**/*.test.{ts,tsx}"
+    },
+    {
       "path": "packages/preview/domain",
       "owner": "packages/preview/domain",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/preview/node",
+      "owner": "packages/preview/node",
       "mode": "self",
       "sourceScope": "src/**/*.ts",
       "testScope": "src/**/*.test.ts"
@@ -239,22 +246,43 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/project",
-      "owner": "packages/project",
-      "mode": "self",
-      "sourceScope": "src/**/*.{ts,tsx}",
-      "testScope": "src/**/*.test.{ts,tsx}"
-    },
-    {
-      "path": "packages/project-node",
-      "owner": "packages/project-node",
+      "path": "packages/professional-apps/contracts",
+      "owner": "packages/professional-apps/contracts",
       "mode": "self",
       "sourceScope": "src/**/*.ts",
       "testScope": "src/**/*.test.ts"
     },
     {
-      "path": "packages/project-webview",
-      "owner": "packages/project-webview",
+      "path": "packages/professional-apps/node",
+      "owner": "packages/professional-apps/node",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/professional-apps/webview",
+      "owner": "packages/professional-apps/webview",
+      "mode": "self",
+      "sourceScope": "src/**/*.{ts,tsx}",
+      "testScope": "src/**/*.test.{ts,tsx}"
+    },
+    {
+      "path": "packages/project/domain",
+      "owner": "packages/project/domain",
+      "mode": "self",
+      "sourceScope": "src/**/*.{ts,tsx}",
+      "testScope": "src/**/*.test.{ts,tsx}"
+    },
+    {
+      "path": "packages/project/node",
+      "owner": "packages/project/node",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/project/webview",
+      "owner": "packages/project/webview",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
@@ -316,25 +344,74 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/world",
-      "owner": "packages/world",
+      "path": "packages/world/domain",
+      "owner": "packages/world/domain",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/world-node",
-      "owner": "packages/world-node",
+      "path": "packages/world/node",
+      "owner": "packages/world/node",
       "mode": "self",
       "sourceScope": "src/**/*.ts",
       "testScope": "src/**/*.test.ts"
     },
     {
-      "path": "packages/world-webview",
-      "owner": "packages/world-webview",
+      "path": "packages/world/webview",
+      "owner": "packages/world/webview",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
+    },
+    {
+      "path": "packages/dsh-bridge",
+      "owner": "packages/dsh-bridge",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/canvas/dsh-plugin",
+      "owner": "packages/canvas/dsh-plugin",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/chara/dsh-plugin",
+      "owner": "packages/chara/dsh-plugin",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/content/dsh-plugin",
+      "owner": "packages/content/dsh-plugin",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/cut/dsh-plugin",
+      "owner": "packages/cut/dsh-plugin",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/generation/dsh-plugin",
+      "owner": "packages/generation/dsh-plugin",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/world/dsh-plugin",
+      "owner": "packages/world/dsh-plugin",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
     }
   ]
 }

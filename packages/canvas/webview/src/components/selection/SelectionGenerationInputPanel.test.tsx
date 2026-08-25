@@ -10,7 +10,7 @@ import type {
   MarkdownCanvasNode,
 } from '@neko/canvas-domain';
 import { createEmptyCanvasData } from '@neko/canvas-domain';
-import { CONTENT_LOCATOR_DRAG_MIME, createContentLocatorDragData } from '@neko/content';
+import { CONTENT_LOCATOR_DRAG_MIME, createContentLocatorDragData } from '@neko/content-domain';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -132,7 +132,7 @@ describe('SelectionGenerationInputPanel', () => {
     render([node], [], [node.id], createHost(undefined, { attachGenerationReferenceMaterial }));
     const payload = JSON.stringify(
       createContentLocatorDragData({
-        locator: { kind: 'workspace-file', path: 'media/reference.png' },
+        locator: { file: { authority: 'workspace', path: 'media/reference.png' } },
         name: 'reference.png',
       }),
     );
@@ -152,7 +152,7 @@ describe('SelectionGenerationInputPanel', () => {
     });
 
     expect(attachGenerationReferenceMaterial).toHaveBeenCalledWith(node.id, {
-      locator: { kind: 'workspace-file', path: 'media/reference.png' },
+      locator: { file: { authority: 'workspace', path: 'media/reference.png' } },
       mediaKind: 'image',
       title: 'reference.png',
     });
@@ -572,10 +572,10 @@ function output(outputId: string, jobId: string, recipeInputFingerprint: string)
     outputId,
     jobRef: { kind: 'generation' as const, jobId },
     locator: {
-      kind: 'generated-output' as const,
-      outputId,
-      digest: `sha256:${outputId}`,
-      path: `neko/generated/prompt/${outputId}.txt`,
+      file: {
+        authority: 'workspace' as const,
+        path: `neko/generated/prompt/${outputId}.txt`,
+      },
     },
     kind: 'prompt' as const,
     recipeInputFingerprint,

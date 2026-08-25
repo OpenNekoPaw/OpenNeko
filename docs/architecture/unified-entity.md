@@ -1,12 +1,5 @@
 # 统一实体架构
 
-更新日期：2026-08-12
-
-> Project Entity 的 repository、候选/可用性投影和基础 Inspector 已建立。当前收敛目标由
-> [`simplify-resource-entity-character-world-boundaries`](../../openspec/changes/simplify-resource-entity-character-world-boundaries/)
-> 跟踪：Entity Asset 与 Entity-owned Character interaction 退出 canonical 路径；严格数据 contract
-> 必须在旧记录资格化后实施。本文不把尚未完成的路径描述为可用能力。
-
 本文定义 Project Entity 的最小语义身份、候选、representation binding 和搜索投影。文件与素材入口见
 [`asset-library.md`](asset-library.md)，完整跨领域关系见
 [`creative-resource-semantic-boundaries.md`](creative-resource-semantic-boundaries.md)。
@@ -90,7 +83,7 @@ availability 与 attention 是可重建投影。公共或持久 Entity contract 
 cache path、provider URL、Renderer URI 或 runtime token。
 
 workspace path 缺失或 fingerprint 不匹配时，binding 变为 orphaned。Search 可以提供候选 evidence，只有
-显式 rebind 才能修改 confirmed binding；禁止按同名文件、旧 catalog 或 active workspace 自动修复。
+显式 rebind 才能修改 confirmed binding；禁止按同名文件、旁路 catalog 或 active workspace 自动修复。
 
 unbind 不删除 bytes；资源删除只让 binding orphaned；deprecate Entity 不修改 Media link、Asset package、
 Character 或 World。
@@ -114,7 +107,7 @@ Entity card 是 read-only composition：名称和 status 来自 Entity；头像�
 occurrence、relationship、usage 和 availability 来自投影。Search 按稳定 Entity ID 去重，不写 Entity facts。
 
 Agent `@` mention 可以先查 Search，provider dispatch 前必须通过 Entity facade 重读 canonical record。缺失、
-kind mismatch、workspace ambiguity 或 invalid record 必须 fail-visible，不能回退搜索摘要或旧 snapshot。
+kind mismatch、workspace ambiguity 或 invalid record 必须 fail-visible，不能回退搜索摘要或缓存 snapshot。
 
 ## 与 Character 和 World 的关系
 
@@ -131,16 +124,8 @@ Media Library discovery 可以提供 evidence 或 rebind candidate，但不能�
 只拥有显式导入、安装或发布的普通可复用包；Project Entity 可以绑定 package member，但不拥有 Asset
 manifest、revision 或安装状态。
 
-当前 canonical 产品路径不提供 Entity Asset publish、instantiate、provenance、update availability 或
-three-way diff/apply：
-
-- 普通可复用资源使用 Asset package；
-- Character 可移植包由 Chara 拥有；
-- World 可移植/发布由 World 在依赖闭包完整时拥有；
-- ProjectEntity 保持项目本地可变事实。
-
-已实现但被取代的 Entity Asset contract/service 必须在 consumer reachability 审计后从公共入口和生产注册
-移除。现有用户 bytes 保留并显示 unsupported diagnostic，不引入 compatibility reader。
+普通可复用资源使用 Asset package；Character 可移植包由 Chara 拥有；World 可移植与发布由 World
+拥有；ProjectEntity 只保持项目本地可变事实。Entity 不拥有素材包发布、实例化或更新协议。
 
 ## Entity Inspector
 

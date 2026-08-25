@@ -87,6 +87,7 @@ const UNAVAILABLE_DOMAIN_CAPABILITIES: readonly DesktopDomainCapabilityProjectio
 
 export interface DesktopShellServiceOptions {
   readonly applicationInstanceId: string;
+  readonly experimentalCreativeCapabilitiesReady: boolean;
   readonly stateRepository: DesktopShellStateRepositoryPort;
   readonly workspaceRegistry: DesktopWorkspaceResolutionPort;
   readonly workspaceGrantAuthority?: DesktopWorkspaceGrantAuthorityPort;
@@ -298,20 +299,21 @@ export class DesktopShellService {
       const experimentalSceneReset = resetExperimentalScenePresentation(
         cutDraftCleanup.window,
         this.createIdentity,
+        this.experimentalCreativeCapabilitiesReady(),
       );
-      const restorableWorkbench = restoreWindowWorkbench(
+      const previewRestore = restoreWindowWorkbench(
         state,
         experimentalSceneReset.window,
         this.createIdentity,
       );
       const restoredSceneReconciliation = reconcileRestoredWorkspaceScene(
         activeDesktopWorkbench(experimentalSceneReset.window).scene,
-        restorableWorkbench,
+        previewRestore.layout,
         this.createIdentity,
       );
       const qualifiedWindow = captureActiveProjectPresentation(
         replaceActiveDesktopWorkbench(experimentalSceneReset.window, {
-          layout: restorableWorkbench,
+          layout: previewRestore.layout,
           scene: restoredSceneReconciliation.scene,
         }),
       );
@@ -329,6 +331,20 @@ export class DesktopShellService {
           },
         ];
       }
+      if (previewRestore.removedViewIds.length > 0) {
+        this.isolatedWindowDiagnostics = [
+          ...this.isolatedWindowDiagnostics,
+          {
+            code: 'desktop-presentation-reset',
+            severity: 'warning',
+            windowId,
+            owner: 'preview',
+            removedViewIds: previewRestore.removedViewIds,
+            message:
+              'Preview presentation without a persistent ContentLocator was removed; source content and sibling Workspace views were preserved.',
+          },
+        ];
+      }
       if (experimentalSceneReset.diagnostic) {
         this.isolatedWindowDiagnostics = [
           ...this.isolatedWindowDiagnostics,
@@ -341,21 +357,10 @@ export class DesktopShellService {
           restoredSceneReconciliation.diagnostic,
         ];
       }
-      const entryScene = createDefaultDesktopAgentScene(windowId, `draft:${this.createIdentity()}`);
-      const entryWindow = replaceActiveDesktopWorkbench(
-        {
-          ...qualifiedWindow,
-          activeTarget: { kind: 'home' },
-        },
-        {
-          layout: createDefaultDesktopWorkbenchLayout(windowId),
-          scene: entryScene,
-        },
-      );
       await this.options.stateRepository.commit({
         ...state,
         windows: state.windows.map((window) =>
-          window.windowId === windowId ? entryWindow : window,
+          window.windowId === windowId ? qualifiedWindow : window,
         ),
       });
       this.installWindowRuntime(windowId);
@@ -434,6 +439,10 @@ export class DesktopShellService {
           'desktop-scene-stale-identity',
           `Desktop Scene '${request.sceneId}' is stale; current Scene is '${activeDesktopWorkbench(window).scene.sceneId}'.`,
         );
+      }
+      const hiddenCreativeIntent = classifyHiddenCreativeIntent(request.intent);
+      if (hiddenCreativeIntent !== undefined && !this.experimentalCreativeCapabilitiesReady()) {
+        return unavailableCreativeSceneTransition(request, hiddenCreativeIntent);
       }
       if (
         request.intent.kind === 'open-workspace' ||
@@ -1245,24 +1254,36 @@ export class DesktopShellService {
     rendererSessionId: string,
     navigation: DesktopAgentHomeNavigationIdentity,
   ): Promise<void> {
+    await this.resolveAgentHomeConversations(windowId, [navigation], rendererSessionId);
+  }
+
+  async resolveAgentHomeConversations(
+    windowId: string,
+    navigations: readonly DesktopAgentHomeNavigationIdentity[],
+    rendererSessionId: string,
+  ): Promise<readonly DesktopAgentHomeNavigationIdentity[]> {
     return this.enqueue(async () => {
       this.requireActive();
       this.assertMutationContext(windowId, rendererSessionId);
       const state = await this.options.stateRepository.read();
       requireStoredWindow(state, windowId);
       const agentHome = this.readAgentHomeProjection();
-      const conversation = agentHome.conversations.find(
-        (candidate) =>
-          candidate.navigation.conversationId === navigation.conversationId &&
-          isSameAgentConversationOwner(candidate.navigation.owner, navigation.owner),
-      );
-      if (!conversation) {
-        throw new DesktopShellContractError(
-          'desktop-shell-conversation-not-found',
-          `Desktop Agent Home conversation '${navigation.conversationId}' is not present in the authoritative projection.`,
+      const conversations = navigations.map((navigation) => {
+        const conversation = agentHome.conversations.find(
+          (candidate) =>
+            candidate.navigation.conversationId === navigation.conversationId &&
+            isSameAgentConversationOwner(candidate.navigation.owner, navigation.owner),
         );
-      }
+        if (!conversation) {
+          throw new DesktopShellContractError(
+            'desktop-shell-conversation-not-found',
+            `Desktop Agent Home conversation '${navigation.conversationId}' is not present in the authoritative projection.`,
+          );
+        }
+        return conversation.navigation;
+      });
       this.assertMutationContext(windowId, rendererSessionId);
+      return Object.freeze(conversations);
     });
   }
 
@@ -1661,6 +1682,16 @@ export class DesktopShellService {
           ownerSlice: 'P1.4',
         };
       }
+      if (
+        (capability.surface === 'character' || capability.surface === 'world') &&
+        this.experimentalCreativeCapabilitiesReady()
+      ) {
+        return {
+          surface: capability.surface,
+          status: 'ready',
+          ownerSlice: 'P1.6',
+        };
+      }
       if (capability.surface === 'cut' && this.cutCapabilityReady) {
         return {
           surface: 'cut',
@@ -1670,6 +1701,10 @@ export class DesktopShellService {
       }
       return capability;
     });
+  }
+
+  private experimentalCreativeCapabilitiesReady(): boolean {
+    return this.options.experimentalCreativeCapabilitiesReady;
   }
 
   private startupStateDiagnostics(): readonly DesktopShellStateDiagnosticProjection[] {
@@ -1812,11 +1847,12 @@ function isPersistedAgentSurfaceQualified(
   if (interaction.phase === 'draft') return true;
   if (scene.context.kind === 'character-interaction') {
     const context = scene.context;
-    return agentHome.conversations.some(
+    const conversation = agentHome.conversations.find(
       (conversation) =>
         conversation.navigation.conversationId === context.scope.conversationId &&
         isSameAgentConversationOwner(conversation.navigation.owner, context.owner),
     );
+    return conversation !== undefined && conversation.unavailable === undefined;
   }
   const scope = interaction.scope;
   if (scope.kind === 'unbound' || scope.conversationId === undefined) return false;
@@ -1824,11 +1860,12 @@ function isPersistedAgentSurfaceQualified(
     scope.kind === 'assistant'
       ? { kind: 'assistant' as const, assistantSpaceId: scope.assistantSpaceId }
       : { kind: 'workspace' as const, workspaceId: scope.workspaceId };
-  return agentHome.conversations.some(
+  const conversation = agentHome.conversations.find(
     (conversation) =>
       conversation.navigation.conversationId === scope.conversationId &&
       isSameAgentConversationOwner(conversation.navigation.owner, owner),
   );
+  return conversation !== undefined && conversation.unavailable === undefined;
 }
 
 function createReplacementAgentDraftScene(
@@ -2399,15 +2436,20 @@ function restoreWindowWorkbench(
   state: DesktopShellStoredState,
   window: DesktopStoredWindow,
   createIdentity: () => string,
-): DesktopWorkbenchLayoutProjection {
+): {
+  readonly layout: DesktopWorkbenchLayoutProjection;
+  readonly removedViewIds: readonly string[];
+} {
   let restored = activeDesktopWorkbench(window).layout;
+  const removedViewIds: string[] = [];
   for (const view of activeDesktopWorkbench(window).layout.main.views) {
     if (
       view.kind === 'preview' &&
-      view.previewPresentation === 'temporary' &&
-      view.ownerId.startsWith('preview-session:')
+      ((view.previewPresentation === 'temporary' && view.ownerId.startsWith('preview-session:')) ||
+        view.previewContentLocator === undefined)
     ) {
       restored = closeMainView(restored, view.viewId);
+      removedViewIds.push(view.viewId);
     }
   }
   if (window.activeTarget.kind === 'project') {
@@ -2418,15 +2460,21 @@ function restoreWindowWorkbench(
         `Desktop active Project Tab '${activeTabId}' is unavailable during Workbench restore.`,
       );
     }
-    return attachProjectWorkbench(
-      restored,
-      requireStoredProject(state, tab.projectId),
-      createIdentity,
-    );
+    return {
+      layout: attachProjectWorkbench(
+        restored,
+        requireStoredProject(state, tab.projectId),
+        createIdentity,
+      ),
+      removedViewIds,
+    };
   }
-  if (restored === activeDesktopWorkbench(window).layout) return restored;
+  if (restored === activeDesktopWorkbench(window).layout) {
+    return { layout: restored, removedViewIds };
+  }
   return {
-    ...createDefaultDesktopWorkbenchLayout(window.windowId),
+    layout: createDefaultDesktopWorkbenchLayout(window.windowId),
+    removedViewIds,
   };
 }
 
@@ -2589,17 +2637,23 @@ function unavailableSceneTransition(
 function resetExperimentalScenePresentation(
   window: DesktopStoredWindow,
   createIdentity: () => string,
+  experimentalCreativeCapabilitiesReady: boolean,
 ): {
   readonly window: DesktopStoredWindow;
   readonly diagnostic?: DesktopShellStateDiagnosticProjection;
 } {
+  if (experimentalCreativeCapabilitiesReady) return { window };
   const scene = activeDesktopWorkbench(window).scene;
   const owner =
     scene.context.kind === 'creative-management' && scene.context.catalog === 'characters'
       ? 'character'
       : scene.context.kind === 'creative-management' && scene.context.catalog === 'worlds'
         ? 'world'
-        : undefined;
+        : scene.context.kind === 'character-interaction'
+          ? 'character'
+          : scene.context.kind === 'world-runtime'
+            ? 'world'
+            : undefined;
   if (!owner) return { window };
   const nextScene = createDefaultDesktopAgentScene(window.windowId, `draft:${createIdentity()}`);
   return {
@@ -2619,6 +2673,60 @@ function resetExperimentalScenePresentation(
       owner,
       resetSceneId: scene.sceneId,
       message: `${owner === 'character' ? 'Character' : 'World'} experimental presentation was reset because the capability has not passed product promotion. Durable records and protected background runtime were preserved.`,
+    },
+  };
+}
+
+type HiddenCreativeIntent = {
+  readonly owner: 'character' | 'world';
+  readonly intentKind:
+    | 'open-character-authoring'
+    | 'open-world-authoring'
+    | 'open-world-runtime'
+    | 'open-creative-management'
+    | 'select-character-detail'
+    | 'select-world-detail'
+    | 'restore-conversation';
+};
+
+function classifyHiddenCreativeIntent(
+  intent: DesktopSceneTransitionIntent,
+): HiddenCreativeIntent | undefined {
+  if (
+    intent.kind === 'open-character-authoring' ||
+    intent.kind === 'select-character-detail' ||
+    (intent.kind === 'open-creative-management' && intent.catalog === 'characters') ||
+    (intent.kind === 'restore-conversation' &&
+      (intent.navigation.owner.kind === 'character' || intent.navigation.owner.kind === 'room'))
+  ) {
+    return { owner: 'character', intentKind: intent.kind };
+  }
+  if (
+    intent.kind === 'open-world-authoring' ||
+    intent.kind === 'open-world-runtime' ||
+    intent.kind === 'select-world-detail' ||
+    (intent.kind === 'open-creative-management' && intent.catalog === 'worlds')
+  ) {
+    return { owner: 'world', intentKind: intent.kind };
+  }
+  return undefined;
+}
+
+function unavailableCreativeSceneTransition(
+  request: DesktopSceneTransitionRequest,
+  hiddenIntent: HiddenCreativeIntent,
+): DesktopSceneTransitionResult {
+  return {
+    status: 'unavailable',
+    requestId: request.requestId,
+    diagnostic: {
+      code: 'desktop-scene-owner-unavailable',
+      severity: 'error',
+      message: `${hiddenIntent.owner === 'character' ? 'Character' : 'World'} capability is unavailable in this Desktop distribution.`,
+      metadata: {
+        owner: hiddenIntent.owner === 'character' ? 'character-product' : 'world-product',
+        intentKind: hiddenIntent.intentKind,
+      },
     },
   };
 }
@@ -3393,21 +3501,6 @@ function createTransitionedScene(
       context: { kind: 'extensions' },
       slots: {
         main: { kind: 'extension-management' },
-        secondaryMain: { kind: 'extension-detail' },
-        status: { kind: 'scene-status', sceneId },
-      },
-    });
-  }
-  if (intent.kind === 'open-settings') {
-    const settingsSectionId = intent.sectionId ?? 'general';
-    const sceneId = `scene:${windowId}:settings`;
-    return parseDesktopWorkbenchSceneProjection({
-      sceneId,
-      windowId,
-      context: { kind: 'settings', settingsSectionId },
-      slots: {
-        leftManager: { kind: 'settings-navigation', settingsSectionId },
-        main: { kind: 'settings-main', settingsSectionId },
         status: { kind: 'scene-status', sceneId },
       },
     });

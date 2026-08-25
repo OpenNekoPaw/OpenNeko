@@ -22,6 +22,32 @@ describe('package role catalog', () => {
     );
   });
 
+  it('rejects a family root package mixed with nested role packages', () => {
+    const root = {
+      path: 'packages/example',
+      name: '@neko/example',
+      family: 'example',
+      roles: ['domain'],
+      runtimes: ['host-neutral'],
+      productStatus: 'active-product',
+      architectureState: 'converged',
+    };
+    const nested = {
+      ...validPackage,
+      path: 'packages/example/dsh-plugin',
+      name: '@neko/example-dsh-plugin',
+    };
+    const findings = validatePackageRoleCatalog({ packages: [root, nested] }, [
+      { path: root.path, name: root.name },
+      { path: nested.path, name: nested.name },
+    ]);
+    assert.ok(
+      findings.some((finding) =>
+        finding.includes('family root workspace must not coexist with nested role packages'),
+      ),
+    );
+  });
+
   it('rejects omissions, unknown roles, identity drift and invalid runtime projections', () => {
     const findings = validatePackageRoleCatalog(
       {
@@ -66,5 +92,20 @@ describe('package role catalog', () => {
 
     assert.ok(findings.some((finding) => finding.includes('redundant packages/neko-*')));
     assert.ok(findings.some((finding) => finding.includes('single @neko/* scope')));
+  });
+
+  it('rejects flat sibling role packages', () => {
+    const flat = {
+      ...validPackage,
+      path: 'packages/example-webview',
+      name: '@neko/example-webview',
+      roles: ['webview'],
+      runtimes: ['browser'],
+    };
+    const findings = validatePackageRoleCatalog({ packages: [flat] }, [
+      { path: flat.path, name: flat.name },
+    ]);
+
+    assert.ok(findings.some((finding) => finding.includes('packages/<family>/<role>')));
   });
 });

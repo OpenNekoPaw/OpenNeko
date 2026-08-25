@@ -1,1264 +1,1152 @@
 // @vitest-environment jsdom
 
-import { act, StrictMode, type ReactNode } from 'react';
-import { createRoot } from 'react-dom/client';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { I18nProvider } from '@neko/ui/i18n/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render as renderWithoutSnapshots,
+  screen,
+  waitFor,
+} from '@testing-library/react';
+import type { ReactElement } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { DshPermissionHostProjection } from '@neko/agent-contracts/dsh-permission-host';
+import type { DshRuntimeHostProjection } from '@neko/agent-contracts/dsh-runtime-host';
 import type {
-  AgentHostRuntimeAdapter,
-  AgentInteractionProjection,
-  ToolCall,
-} from '@neko/agent-contracts';
-import type { CharacterProductHandoff } from '@neko/chara/contracts';
-import type {
-  AgentComposerWorkspacePresentation,
-  AgentToolCallAccessoryRenderer,
-} from '@neko/agent-webview/root';
-import { projectAgentConfigurationPolicy } from '@neko/agent-runtime/application';
-import { DesktopAgentSurface, prepareDesktopAgentSurfaceResources } from './DesktopAgentSurface';
-import { createDesktopI18n } from './i18n';
+  DshComposerConfigurationProjection,
+  DshSessionHostProjection,
+  DshSessionHostResult,
+} from '@neko/agent-contracts/dsh-session-host';
 
-let projectedToolCall: ToolCall | undefined;
-
-vi.mock('@neko/agent-webview/root', async () => {
-  const { useEffect } = await import('react');
+vi.mock('@neko/ui/i18n/react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@neko/ui/i18n/react')>();
   return {
-    AgentWebviewRoot: ({
-      hostRuntimeAdapter,
-      agentPresentation,
-      initialConversation,
-      composerWorkspace,
-      conversationFeed,
-      locale,
-      presentation,
-      toolCallAccessoryRenderer,
-    }: {
-      readonly hostRuntimeAdapter: AgentHostRuntimeAdapter;
-      readonly agentPresentation?: AgentInteractionProjection;
-      readonly initialConversation?: { readonly id: string; readonly title: string };
-      readonly composerWorkspace?: AgentComposerWorkspacePresentation;
-      readonly locale: string;
-      readonly presentation: string;
-      readonly conversationFeed?: { readonly conversationId: string; readonly content: ReactNode };
-      readonly toolCallAccessoryRenderer?: AgentToolCallAccessoryRenderer;
-    }) => {
-      useEffect(
-        () => () => {
-          hostRuntimeAdapter.send({
-            type: 'projectionDetach',
-            key: {
-              attachmentId: 'attachment-test',
-              tabId: 'tab-test',
-              conversationId: 'conversation-test',
-            },
-            reason: 'endpoint-replaced',
-          });
-        },
-        [hostRuntimeAdapter],
-      );
-      if (hostRuntimeAdapter.runtimeId.includes('connection-failing')) {
-        throw new Error('agent surface failed');
-      }
-      return (
-        <div
-          data-testid="agent-root"
-          data-initial-conversation-id={initialConversation?.id}
-          data-initial-conversation-title={initialConversation?.title}
-          data-presentation={presentation}
-          data-agent-presentation={agentPresentation?.phase}
-          data-composer-workspace={
-            composerWorkspace?.kind === 'workspace'
-              ? composerWorkspace.label
-              : (composerWorkspace?.kind ?? 'none')
-          }
-        >
-          {hostRuntimeAdapter.runtimeId}:{locale}
-          {conversationFeed?.content}
-          <div data-agent-tool-call-id="tool-call-1" data-testid="tool-call-timeline-item">
-            {toolCallAccessoryRenderer?.({
-              conversationId: initialConversation?.id ?? null,
-              toolCall: projectedToolCall ?? automationToolCall(),
-            })}
-          </div>
-        </div>
-      );
-    },
+    ...actual,
+    useTranslation: () => ({ locale: 'en' }),
   };
+});
+
+import { DesktopAgentSurface } from './DesktopAgentSurface';
+import { DshComposerPresentationSnapshotProvider } from '@neko/agent-webview/dsh-session/presentation-snapshot';
+
+function render(view: ReactElement) {
+  return renderWithoutSnapshots(
+    <DshComposerPresentationSnapshotProvider>{view}</DshComposerPresentationSnapshotProvider>,
+  );
+}
+
+const projection: DshSessionHostProjection = {
+  conversationId: 'conversation-1',
+  dshSessionId: 'dsh-session-1',
+  title: 'Workspace planning',
+  currentTurn: 3,
+  inbox: { nextTurn: [], nextStep: [] },
+  events: [
+    {
+      kind: 'message',
+      role: 'user',
+      content: [{ type: 'text', text: 'Create a node' }],
+      messageId: 'message-1',
+    },
+    {
+      kind: 'tool',
+      toolCallId: 'tool-1',
+      turn: 3,
+      status: 'in_progress',
+      title: 'Canvas create node',
+      rawInput: { operation: 'create-node', title: 'Opening' },
+      rawOutput: { accepted: true },
+    },
+    {
+      kind: 'message',
+      role: 'assistant',
+      turn: 3,
+      step: 0,
+      text: 'Working on it',
+      messageId: 'message-2',
+      state: 'streaming',
+    },
+  ],
+};
+
+const permission: DshPermissionHostProjection = {
+  conversationId: 'conversation-1',
+  dshSessionId: 'dsh-session-1',
+  turn: 3,
+  toolCallId: 'tool-1',
+  title: 'Allow Canvas write?',
+  options: [
+    { optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' },
+    { optionId: 'reject-once', name: 'Reject', kind: 'reject_once' },
+  ],
+};
+
+const generationPermission: DshPermissionHostProjection = {
+  conversationId: 'conversation-1',
+  dshSessionId: 'dsh-session-1',
+  turn: 3,
+  toolCallId: 'tool-generation-1',
+  title: 'Allow Generation submit?',
+  options: [
+    { optionId: 'allow-generation', name: 'Allow Generation once', kind: 'allow_once' },
+    { optionId: 'reject-generation', name: 'Reject Generation', kind: 'reject_once' },
+  ],
+};
+
+const workspaceBoardTarget = {
+  kind: 'workspace-board' as const,
+  workspaceId: 'workspace-1',
+};
+
+const composerConfiguration: DshComposerConfigurationProjection = {
+  models: [
+    {
+      id: 'deepseek-official:deepseek-v4',
+      label: 'DeepSeek V4',
+      providerId: 'deepseek-official',
+      modelId: 'deepseek-v4',
+      providerLabel: 'DeepSeek',
+      category: 'llm',
+      capabilities: ['chat'],
+    },
+    {
+      id: 'openai:gpt-5',
+      label: 'GPT-5',
+      providerId: 'openai',
+      modelId: 'gpt-5',
+      providerLabel: 'OpenAI',
+      category: 'llm',
+      capabilities: ['chat'],
+    },
+    {
+      id: 'nekoapi-media:gpt-image-2',
+      label: 'GPT Image 2',
+      providerId: 'nekoapi-media',
+      modelId: 'gpt-image-2',
+      providerLabel: 'NekoAPI Media',
+      category: 'image',
+      capabilities: ['image.generate'],
+    },
+  ],
+  selectedModelOptionId: 'deepseek-official:deepseek-v4',
+  selectedMediaModelOptionIds: {},
+  permissionPresetId: 'workspace-write',
+  permissionPresets: [
+    { id: 'read-only', label: 'read-only', selectable: true },
+    { id: 'workspace-write', label: 'workspace-write', selectable: true },
+    { id: 'danger-full-access', label: 'danger-full-access', selectable: true },
+  ],
+  context: {
+    kind: 'workspace',
+    workspaceId: 'workspace-1',
+    workspaceLabel: 'My Film',
+    canvas: {
+      workspaceId: 'workspace-1',
+      defaultTarget: workspaceBoardTarget,
+      options: [
+        {
+          target: workspaceBoardTarget,
+          label: 'Board',
+        },
+      ],
+      diagnostics: [],
+    },
+  },
+};
+
+const entryComposerConfiguration: DshComposerConfigurationProjection = {
+  models: composerConfiguration.models,
+  selectedModelOptionId: composerConfiguration.selectedModelOptionId,
+  selectedMediaModelOptionIds: composerConfiguration.selectedMediaModelOptionIds,
+  permissionPresetId: composerConfiguration.permissionPresetId,
+  permissionPresets: composerConfiguration.permissionPresets,
+};
+
+let sessionListener: ((event: { readonly conversationId: string }) => void) | undefined;
+let permissionListener: ((event: { readonly conversationId: string }) => void) | undefined;
+let canvasWorkspaceIndexListener: ((event: { readonly workspaceId: string }) => void) | undefined;
+const dshSessions = {
+  create: vi.fn(async () => projection),
+  getSnapshot: vi.fn<() => Promise<DshSessionHostProjection>>(async () => projection),
+  submit: vi.fn<() => Promise<DshSessionHostResult>>(async () => ({
+    requestId: 'request-1',
+    projection,
+    stopReason: 'end_turn',
+  })),
+  cancel: vi.fn(async () => projection),
+  sendInboxMessageNow: vi.fn(async () => projection),
+  removeInboxMessage: vi.fn(async () => projection),
+  openTerminalArtifact: vi.fn(async () => undefined),
+  getImageAttachmentPreview: vi.fn(async () => ({
+    url: 'openneko://resource/lease-1/image',
+    mediaType: 'image/png' as const,
+    byteLength: 4,
+    width: 1,
+    height: 1,
+  })),
+  releaseImageAttachmentPreviews: vi.fn(async () => undefined),
+  getComposerConfiguration: vi.fn(async () => composerConfiguration),
+  searchComposerMentions: vi.fn(async () => []),
+  selectComposerModel: vi.fn(async () => ({
+    ...composerConfiguration,
+    selectedModelOptionId: 'openai:gpt-5',
+  })),
+  selectComposerPermissionPreset: vi.fn(async () => ({
+    ...composerConfiguration,
+    permissionPresetId: 'danger-full-access',
+  })),
+  selectComposerMediaModel: vi.fn(async () => composerConfiguration),
+  subscribe: vi.fn((listener: typeof sessionListener) => {
+    sessionListener = listener;
+    return vi.fn();
+  }),
+};
+const dshPermissions = {
+  list: vi.fn<() => Promise<readonly DshPermissionHostProjection[]>>(async () => [permission]),
+  decide: vi.fn(async () => []),
+  cancel: vi.fn(async () => []),
+  subscribe: vi.fn((listener: typeof permissionListener) => {
+    permissionListener = listener;
+    return vi.fn();
+  }),
+};
+let runtimeListener:
+  | ((projection: {
+      readonly status: 'running' | 'restarting' | 'unavailable';
+      readonly diagnostic?: { readonly code: string; readonly message: string };
+    }) => void)
+  | undefined;
+const dshRuntime = {
+  getStatus: vi.fn<() => Promise<DshRuntimeHostProjection>>(async () => ({ status: 'running' })),
+  restart: vi.fn<() => Promise<DshRuntimeHostProjection>>(async () => ({ status: 'running' })),
+  subscribe: vi.fn((listener: typeof runtimeListener) => {
+    runtimeListener = listener;
+    return vi.fn();
+  }),
+};
+const canvas = {
+  subscribeWorkspaceIndex: vi.fn((listener: typeof canvasWorkspaceIndexListener) => {
+    canvasWorkspaceIndexListener = listener;
+    return vi.fn();
+  }),
+};
+
+beforeEach(() => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  Object.assign(window, { openNekoDesktop: { dshSessions, dshPermissions, dshRuntime, canvas } });
+  vi.resetAllMocks();
+  dshSessions.create.mockResolvedValue(projection);
+  dshSessions.getSnapshot.mockResolvedValue(projection);
+  dshSessions.submit.mockResolvedValue({
+    requestId: 'request-1',
+    projection,
+    stopReason: 'end_turn',
+  });
+  dshSessions.cancel.mockResolvedValue(projection);
+  dshSessions.sendInboxMessageNow.mockResolvedValue(projection);
+  dshSessions.removeInboxMessage.mockResolvedValue(projection);
+  dshSessions.openTerminalArtifact.mockResolvedValue(undefined);
+  dshSessions.releaseImageAttachmentPreviews.mockResolvedValue(undefined);
+  dshSessions.getComposerConfiguration.mockResolvedValue(composerConfiguration);
+  dshSessions.selectComposerModel.mockResolvedValue({
+    ...composerConfiguration,
+    selectedModelOptionId: 'openai:gpt-5',
+  });
+  dshSessions.selectComposerPermissionPreset.mockResolvedValue({
+    ...composerConfiguration,
+    permissionPresetId: 'danger-full-access',
+  });
+  dshSessions.selectComposerMediaModel.mockResolvedValue(composerConfiguration);
+  dshPermissions.list.mockResolvedValue([permission]);
+  dshPermissions.decide.mockResolvedValue([]);
+  dshPermissions.cancel.mockResolvedValue([]);
+  dshSessions.subscribe.mockImplementation((listener: typeof sessionListener) => {
+    sessionListener = listener;
+    return vi.fn();
+  });
+  dshPermissions.subscribe.mockImplementation((listener: typeof permissionListener) => {
+    permissionListener = listener;
+    return vi.fn();
+  });
+  dshRuntime.getStatus.mockResolvedValue({ status: 'running' });
+  dshRuntime.restart.mockResolvedValue({ status: 'running' });
+  dshRuntime.subscribe.mockImplementation((listener: typeof runtimeListener) => {
+    runtimeListener = listener;
+    return vi.fn();
+  });
+  canvas.subscribeWorkspaceIndex.mockImplementation(
+    (listener: typeof canvasWorkspaceIndexListener) => {
+      canvasWorkspaceIndexListener = listener;
+      return vi.fn();
+    },
+  );
+  sessionListener = undefined;
+  permissionListener = undefined;
+  runtimeListener = undefined;
+  canvasWorkspaceIndexListener = undefined;
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
 });
 
 describe('DesktopAgentSurface', () => {
-  afterEach(() => {
-    document.body.replaceChildren();
-    sessionStorage.clear();
-    projectedToolCall = undefined;
-    vi.restoreAllMocks();
+  it('releases exact Conversation image preview resources when the Surface unmounts', async () => {
+    const view = render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
+        agentSurfaceId="surface-1"
+        conversationId="conversation-1"
+        surfaceKind="workspace"
+      />,
+    );
+    await screen.findByText('Create a node');
+
+    view.unmount();
+
+    await waitFor(() => {
+      expect(dshSessions.releaseImageAttachmentPreviews).toHaveBeenCalledWith('conversation-1');
+    });
   });
 
-  it('bootstraps the exact Project View and mounts the package-owned Root', async () => {
-    const getBootstrap = vi.fn(async () => readyBootstrap());
-    const detachSession = vi.fn(async () => undefined);
-    installBridge(getBootstrap, undefined, detachSession);
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
+  it('renders the bounded ACP projection and refreshes only its exact Conversation', async () => {
+    const { container } = render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
+        agentSurfaceId="surface-1"
+        conversationId="conversation-1"
+        surfaceKind="workspace"
+      />,
+    );
 
-    await act(async () => {
-      root.render(
-        <TestAgentSurface
-          composerWorkspace={{ kind: 'workspace', label: 'OpenNeko' }}
-          initialConversation={{ id: 'conversation-1', title: 'Conversation one' }}
+    expect(await screen.findByText('Create a node')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Workspace planning' })).toBeTruthy();
+    expect(screen.getByText('Canvas create node')).toBeTruthy();
+    expect(screen.getByText('Running')).toBeTruthy();
+    expect(screen.getByText('Allow Canvas write?')).toBeTruthy();
+    expect(container.querySelector('[data-markdown-document="ready"]')).toBeTruthy();
+    expect(container.querySelector('.agent-transcript-rail')).toBeTruthy();
+    expect(container.querySelector('.agent-composer-shell')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Canvas create node/u }));
+    expect(screen.getByText(/"operation": "create-node"/u)).toBeTruthy();
+    expect(screen.getByText(/"accepted": true/u)).toBeTruthy();
+
+    await act(async () => sessionListener?.({ conversationId: 'conversation-other' }));
+    expect(dshSessions.getSnapshot).toHaveBeenCalledOnce();
+    await act(async () => permissionListener?.({ conversationId: 'conversation-1' }));
+    await waitFor(() => expect(dshSessions.getSnapshot).toHaveBeenCalledTimes(2));
+  });
+
+  it('coalesces stream refreshes without letting an older projection replace the latest', async () => {
+    const stale = deferred<DshSessionHostProjection>();
+    dshSessions.getSnapshot
+      .mockResolvedValueOnce(projection)
+      .mockReturnValueOnce(stale.promise)
+      .mockResolvedValueOnce({
+        ...projection,
+        events: [
+          {
+            kind: 'message',
+            role: 'assistant',
+            turn: 3,
+            step: 0,
+            text: 'Latest Host projection',
+            messageId: 'message-latest',
+            state: 'final',
+          },
+        ],
+      });
+    render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
+        agentSurfaceId="surface-1"
+        conversationId="conversation-1"
+        surfaceKind="workspace"
+      />,
+    );
+    expect(await screen.findByText('Create a node')).toBeTruthy();
+
+    await act(async () => sessionListener?.({ conversationId: 'conversation-1' }));
+    await waitFor(() => expect(dshSessions.getSnapshot).toHaveBeenCalledTimes(2));
+    await act(async () => sessionListener?.({ conversationId: 'conversation-1' }));
+
+    await act(async () =>
+      stale.resolve({
+        ...projection,
+        events: [
+          {
+            kind: 'message',
+            role: 'assistant',
+            turn: 3,
+            step: 0,
+            text: 'Stale Host projection',
+            messageId: 'message-stale',
+            state: 'final',
+          },
+        ],
+      }),
+    );
+    expect(await screen.findByText('Latest Host projection')).toBeTruthy();
+    expect(dshSessions.getSnapshot).toHaveBeenCalledTimes(3);
+    expect(screen.queryByText('Stale Host projection')).toBeNull();
+    expect(screen.getByText('Latest Host projection')).toBeTruthy();
+  });
+
+  it('submits, cancels, and decides only advertised ACP permission options', async () => {
+    const idleProjection = { ...projection, currentTurn: undefined };
+    dshSessions.getSnapshot.mockResolvedValueOnce(idleProjection);
+    dshSessions.cancel.mockResolvedValueOnce(idleProjection);
+    dshPermissions.list
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([permission])
+      .mockResolvedValueOnce([]);
+    render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
+        agentSurfaceId="surface-1"
+        conversationId="conversation-1"
+        surfaceKind="workspace"
+      />,
+    );
+    await screen.findByText('Create a node');
+
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: '  hello  ' } });
+    fireEvent.click(screen.getByLabelText('Send (Enter)'));
+    await waitFor(() =>
+      expect(dshSessions.submit).toHaveBeenCalledWith('conversation-1', {
+        kind: 'message',
+        text: 'hello',
+        references: [],
+        images: [],
+        contextPayloads: [],
+        canvasTurnTarget: workspaceBoardTarget,
+      }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Allow once' }));
+    await waitFor(() =>
+      expect(dshPermissions.decide).toHaveBeenCalledWith(
+        {
+          conversationId: 'conversation-1',
+          dshSessionId: 'dsh-session-1',
+          turn: 3,
+          toolCallId: 'tool-1',
+        },
+        'allow-once',
+      ),
+    );
+
+    fireEvent.click(screen.getByLabelText('Stop response (Esc)'));
+    await waitFor(() => expect(dshSessions.cancel).toHaveBeenCalledWith('conversation-1'));
+  });
+
+  it('keeps the composer active and submits a second message to the DSH queue', async () => {
+    const idleProjection = { ...projection, currentTurn: undefined };
+    const pendingSubmit = deferred<{
+      readonly requestId: string;
+      readonly projection: DshSessionHostProjection;
+      readonly stopReason: string;
+    }>();
+    dshSessions.getSnapshot.mockResolvedValueOnce(idleProjection).mockResolvedValue(projection);
+    dshPermissions.list.mockResolvedValueOnce([]);
+    dshSessions.submit
+      .mockReturnValueOnce(pendingSubmit.promise)
+      .mockResolvedValueOnce({ requestId: 'request-queued', projection });
+    render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
+        agentSurfaceId="surface-1"
+        conversationId="conversation-1"
+        surfaceKind="workspace"
+      />,
+    );
+    await screen.findByText('Create a node');
+
+    const composer = screen.getByLabelText('Message') as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: 'first request' } });
+    fireEvent.click(screen.getByLabelText('Send (Enter)'));
+    await waitFor(() => expect(dshSessions.submit).toHaveBeenCalledOnce());
+
+    expect(composer.value).toBe('');
+    expect(composer.disabled).toBe(false);
+    expect(screen.getByLabelText('Stop response (Esc)')).toBeTruthy();
+    fireEvent.change(composer, { target: { value: 'next request' } });
+    expect(composer.value).toBe('next request');
+
+    await act(async () => sessionListener?.({ conversationId: 'conversation-1' }));
+    const queueButton = await screen.findByLabelText('Queue message (Enter)');
+    fireEvent.click(queueButton);
+    await waitFor(() => expect(dshSessions.submit).toHaveBeenCalledTimes(2));
+    expect(dshSessions.submit).toHaveBeenLastCalledWith('conversation-1', {
+      kind: 'message',
+      text: 'next request',
+      references: [],
+      images: [],
+      contextPayloads: [],
+      canvasTurnTarget: workspaceBoardTarget,
+    });
+
+    await act(async () =>
+      pendingSubmit.resolve({
+        requestId: 'request-pending',
+        projection: idleProjection,
+        stopReason: 'end_turn',
+      }),
+    );
+  });
+
+  it('sends the exact queued DSH message now and keeps Draft context adjacent to the composer', async () => {
+    const queuedProjection: DshSessionHostProjection = {
+      ...projection,
+      inbox: {
+        nextTurn: [
+          {
+            messageId: 'message-send-now',
+            createdAt: 1_000,
+            content: [{ type: 'text', text: 'Send this immediately' }],
+          },
+        ],
+        nextStep: [],
+      },
+    };
+    dshSessions.getSnapshot.mockResolvedValue(queuedProjection);
+    dshSessions.sendInboxMessageNow.mockResolvedValue({
+      ...queuedProjection,
+      inbox: { nextTurn: [], nextStep: [] },
+    });
+    const view = render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
+        agentSurfaceId="surface-1"
+        conversationId="conversation-1"
+        surfaceKind="workspace"
+      />,
+    );
+
+    expect(await screen.findByText('Send this immediately')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Re-edit queued message' })).toBeNull();
+
+    const rail = view.container.querySelector('.agent-composer-rail');
+    const queue = rail?.querySelector('.agent-composer-queue-panel');
+    const context = rail?.querySelector('.agent-workspace-canvas-context-bar');
+    const composer = rail?.querySelector('.agent-composer-shell');
+    expect(queue).toBeInstanceOf(Node);
+    expect(context).toBeInstanceOf(Node);
+    expect(composer).toBeInstanceOf(Node);
+    expect(queue!.compareDocumentPosition(context!) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(context!.compareDocumentPosition(composer!) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send now' }));
+    await waitFor(() =>
+      expect(dshSessions.sendInboxMessageNow).toHaveBeenCalledWith(
+        'conversation-1',
+        'message-send-now',
+      ),
+    );
+  });
+
+  it('keeps the existing transcript and draft when a DSH submit fails visibly', async () => {
+    dshSessions.getSnapshot.mockResolvedValueOnce({ ...projection, currentTurn: undefined });
+    dshPermissions.list.mockResolvedValueOnce([]);
+    dshSessions.submit.mockRejectedValueOnce(new Error('DSH submit rejected.'));
+    render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
+        agentSurfaceId="surface-1"
+        conversationId="conversation-1"
+        surfaceKind="workspace"
+      />,
+    );
+    expect(await screen.findByText('Create a node')).toBeTruthy();
+
+    const composer = screen.getByLabelText('Message') as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: 'retry this request' } });
+    fireEvent.click(screen.getByLabelText('Send (Enter)'));
+
+    expect(await screen.findByText('DSH submit rejected.')).toBeTruthy();
+    expect(screen.getByText('Create a node')).toBeTruthy();
+    expect(composer.value).toBe('retry this request');
+  });
+
+  it.each([
+    [
+      'Generation',
+      generationPermission,
+      'Allow Generation once',
+      'tool-generation-1',
+      'allow-generation',
+    ],
+    ['Canvas', permission, 'Allow once', 'tool-1', 'allow-once'],
+  ] as const)(
+    'routes %s approval through its exact ACP Tool identity',
+    async (_tool, pendingPermission, optionName, toolCallId, optionId) => {
+      dshPermissions.list.mockResolvedValueOnce([pendingPermission]);
+      render(
+        <DesktopAgentSurface
+          workbenchInstanceId="workbench-1"
+          sceneId="scene-1"
+          agentSurfaceId="surface-1"
+          conversationId="conversation-1"
+          surfaceKind="workspace"
         />,
       );
-    });
-    await act(async () => undefined);
 
-    expect(getBootstrap).toHaveBeenCalledWith(
-      'workbench-1',
-      'agent-surface-1',
-      'project-1',
-      'view-1',
-      'conversation-1',
-    );
-    expect(container.textContent).toContain('neko.agent.webview.electron:connection-1:en');
-    expect(
-      container
-        .querySelector('[data-testid="agent-root"]')
-        ?.getAttribute('data-initial-conversation-id'),
-    ).toBe('conversation-1');
-    expect(
-      container
-        .querySelector('[data-testid="agent-root"]')
-        ?.getAttribute('data-initial-conversation-title'),
-    ).toBe('Conversation one');
-    expect(
-      container.querySelector('[data-testid="agent-root"]')?.getAttribute('data-presentation'),
-    ).toBe('desktop-dock');
-    expect(container.querySelector('[data-owner-root="agent"]')?.getAttribute('data-view-id')).toBe(
-      'view-1',
-    );
-    expect(
-      container
-        .querySelector('[data-testid="agent-root"]')
-        ?.getAttribute('data-composer-workspace'),
-    ).toBe('OpenNeko');
-    await act(async () => root.unmount());
-    expect(detachSession).toHaveBeenCalledWith(readyBootstrap().connection);
-  });
-
-  it('restores the exact Workspace conversation projected by the active Scene', async () => {
-    const getBootstrap = vi.fn(async () => readyBootstrap());
-    installBridge(getBootstrap);
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(
-        <TestAgentSurface
-          agentPresentation={{
-            phase: 'session',
-            conversationId: 'workspace-conversation-1',
-            binding: {
-              kind: 'workspace',
-              workspaceId: 'workspace-1',
-              workspaceGrantId: 'workspace-grant-1',
-            },
-          }}
-        />,
-      );
-    });
-    await act(async () => undefined);
-
-    const agentRoot = container.querySelector('[data-testid="agent-root"]');
-    expect(agentRoot?.getAttribute('data-agent-presentation')).toBe('session');
-    expect(agentRoot?.getAttribute('data-initial-conversation-id')).toBe(
-      'workspace-conversation-1',
-    );
-    await act(async () => root.unmount());
-  });
-
-  it('mounts exact Automation target selection only for the ready Conversation connection', async () => {
-    installBridge(vi.fn(async () => readyBootstrap()));
-    const execute = vi.mocked(window.openNekoDesktop.automationTargetSelection.execute);
-    execute.mockImplementation(async (request) => ({
-      requestId: request.requestId,
-      route: request.route,
-      pending: request.route === 'pending.list' ? [targetSelectionProjection()] : [],
-    }));
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(
-        <TestAgentSurface
-          agentPresentation={{
-            phase: 'session',
+      fireEvent.click(await screen.findByRole('button', { name: optionName }));
+      await waitFor(() =>
+        expect(dshPermissions.decide).toHaveBeenCalledWith(
+          {
             conversationId: 'conversation-1',
-            binding: {
-              kind: 'workspace',
-              workspaceId: 'workspace-1',
-              workspaceGrantId: 'workspace-grant-1',
-            },
-          }}
-        />,
-      );
-    });
-    await act(async () => undefined);
-
-    expect(container.querySelector('[data-automation-target-selection="true"]')).toBeTruthy();
-    expect(execute).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        connection: readyBootstrap().connection,
-        conversationId: 'conversation-1',
-        route: 'pending.list',
-      }),
-    );
-    const target = container.querySelector<HTMLButtonElement>(
-      '.automation-target-selection__candidate',
-    );
-    await act(async () => target?.click());
-    expect(execute).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        conversationId: 'conversation-1',
-        route: 'selection.resolve',
-        decision: {
-          authorizationId: 'authorization-1',
-          decision: 'select',
-          targetKey: 'target-1',
-        },
-      }),
-    );
-    await act(async () => root.unmount());
-  });
-
-  it('mounts exact Automation live control with the ready Conversation and removes terminal state', async () => {
-    installBridge(vi.fn(async () => readyBootstrap()));
-    const execute = vi.mocked(window.openNekoDesktop.automationSessionControl.execute);
-    let active = true;
-    execute.mockImplementation(async (request) => {
-      if (request.route === 'session.control') active = false;
-      return {
-        requestId: request.requestId,
-        route: request.route,
-        controls: active ? [sessionControlProjection()] : [],
-      };
-    });
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(
-        <TestAgentSurface
-          agentPresentation={{
-            phase: 'session',
-            conversationId: 'conversation-1',
-            binding: {
-              kind: 'workspace',
-              workspaceId: 'workspace-1',
-              workspaceGrantId: 'workspace-grant-1',
-            },
-          }}
-        />,
-      );
-    });
-    await act(async () => undefined);
-
-    const control = container.querySelector<HTMLElement>(
-      '[data-automation-session-control="true"]',
-    );
-    expect(control).toBeTruthy();
-    expect(
-      container.querySelector('[data-testid="tool-call-timeline-item"]')?.contains(control ?? null),
-    ).toBe(true);
-    expect(control?.closest('[data-owner-root="agent"]')).toBeTruthy();
-    expect(control?.textContent).toContain('Fixture Window');
-    expect(control?.textContent).not.toMatch(/processId|windowId|tabId|endpointId/u);
-    expect(execute).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        connection: readyBootstrap().connection,
-        conversationId: 'conversation-1',
-        route: 'controls.list',
-      }),
-    );
-    const takeover = container.querySelector<HTMLButtonElement>(
-      '[data-automation-control-action="take-over"]',
-    );
-    await act(async () => takeover?.click());
-    expect(execute).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        conversationId: 'conversation-1',
-        route: 'session.control',
-        command: {
-          sessionId: 'session-1',
-          owner: sessionControlProjection().owner,
-          action: 'take-over',
-        },
-      }),
-    );
-    expect(container.querySelector('[data-automation-session-control="true"]')).toBeNull();
-    expect(container.querySelector('[data-testid="tool-call-timeline-item"]')).toBeTruthy();
-    await act(async () => root.unmount());
-  });
-
-  it('projects exact Character result handoffs without automatic Studio navigation', async () => {
-    projectedToolCall = {
-      id: 'tool-call-character-1',
-      name: 'chara.character.fillDraft',
-      arguments: {},
-      result: {
-        success: true,
-        data: {
-          characterProjectId: 'character-project-lin',
-          handoffs: [
-            { kind: 'open-character', characterProjectId: 'character-project-lin' },
-            {
-              kind: 'open-character-studio',
-              characterProjectId: 'character-project-lin',
-              authority: { kind: 'project', projectId: 'project-1' },
-            },
-          ],
-        },
-      },
-    };
-    installBridge(vi.fn(async () => readyBootstrap()));
-    const onCharacterProductHandoff = vi.fn();
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(<TestAgentSurface onCharacterProductHandoff={onCharacterProductHandoff} />);
-    });
-    await act(async () => undefined);
-
-    const viewCharacter = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.textContent?.trim() === 'View character',
-    );
-    const openStudio = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.textContent?.trim() === 'Open Studio',
-    );
-    expect(viewCharacter).toBeTruthy();
-    expect(openStudio?.disabled).toBe(false);
-    await act(async () => viewCharacter?.click());
-    expect(onCharacterProductHandoff).toHaveBeenCalledWith({
-      kind: 'open-character',
-      characterProjectId: 'character-project-lin',
-    });
-    await act(async () => openStudio?.click());
-    expect(onCharacterProductHandoff).toHaveBeenLastCalledWith({
-      kind: 'open-character-studio',
-      characterProjectId: 'character-project-lin',
-      authority: { kind: 'project', projectId: 'project-1' },
-    });
-    expect(onCharacterProductHandoff).toHaveBeenCalledTimes(2);
-    await act(async () => root.unmount());
-  });
-
-  it('shows a local diagnostic when a successful Character result omits handoffs', async () => {
-    projectedToolCall = {
-      id: 'tool-call-character-invalid',
-      name: 'chara.character.fillDraft',
-      arguments: {},
-      result: {
-        success: true,
-        data: { characterProjectId: 'character-project-lin' },
-      },
-    };
-    installBridge(vi.fn(async () => readyBootstrap()));
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(<TestAgentSurface />);
-    });
-    await act(async () => undefined);
-
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-      'The Character draft result is missing valid actions.',
-    );
-    await act(async () => root.unmount());
-  });
-
-  it('does not project result actions or navigate when Character draft filling fails', async () => {
-    projectedToolCall = {
-      id: 'tool-call-character-failed',
-      name: 'chara.character.fillDraft',
-      arguments: {},
-      result: {
-        success: false,
-        data: null,
-        error: 'chara.character.fillDraft failed: Character draft write interrupted.',
-      },
-    };
-    installBridge(vi.fn(async () => readyBootstrap()));
-    const onCharacterProductHandoff = vi.fn();
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(<TestAgentSurface onCharacterProductHandoff={onCharacterProductHandoff} />);
-    });
-    await act(async () => undefined);
-
-    expect(container.querySelector('[data-character-product-handoff="true"]')).toBeNull();
-    expect(onCharacterProductHandoff).not.toHaveBeenCalled();
-    await act(async () => root.unmount());
-  });
-
-  it('keeps the exact Automation selection runtime active through StrictMode replay', async () => {
-    installBridge(vi.fn(async () => readyBootstrap()));
-    const execute = vi.mocked(window.openNekoDesktop.automationTargetSelection.execute);
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-    const presentation = {
-      phase: 'session' as const,
-      conversationId: 'conversation-1',
-      binding: {
-        kind: 'workspace' as const,
-        workspaceId: 'workspace-1',
-        workspaceGrantId: 'workspace-grant-1',
-      },
-    };
-
-    await act(async () => {
-      root.render(
-        <StrictMode>
-          <TestAgentSurface agentPresentation={presentation} />
-        </StrictMode>,
-      );
-    });
-    await act(async () => undefined);
-
-    expect(execute).toHaveBeenCalledWith(
-      expect.objectContaining({
-        conversationId: 'conversation-1',
-        route: 'pending.list',
-      }),
-    );
-    expect(container.textContent).not.toContain('runtime is disposed');
-    expect(container.querySelector('[data-testid="agent-root"]')).toBeTruthy();
-    await act(async () => root.unmount());
-  });
-
-  it('balances StrictMode bootstrap leases without detaching the active session early', async () => {
-    const getBootstrap = vi.fn(async () => readyBootstrap());
-    const detachSession = vi.fn(async () => undefined);
-    installBridge(getBootstrap, undefined, detachSession);
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(
-        <StrictMode>
-          <TestAgentSurface />
-        </StrictMode>,
-      );
-    });
-    await act(async () => undefined);
-
-    expect(getBootstrap).toHaveBeenCalledTimes(2);
-    expect(container.textContent).toContain('neko.agent.webview.electron:connection-1:en');
-    expect(detachSession).toHaveBeenCalledTimes(1);
-
-    await act(async () => root.unmount());
-    expect(detachSession).toHaveBeenCalledTimes(2);
-  });
-
-  it('starts the Agent module and owner bootstrap concurrently', async () => {
-    const started: string[] = [];
-    let resolveModule: (() => void) | undefined;
-    let resolveBootstrap: ((value: ReturnType<typeof readyBootstrap>) => void) | undefined;
-    const moduleReady = new Promise<void>((resolve) => {
-      resolveModule = resolve;
-    });
-    const bootstrapReady = new Promise<ReturnType<typeof readyBootstrap>>((resolve) => {
-      resolveBootstrap = resolve;
-    });
-
-    const operation = prepareDesktopAgentSurfaceResources({
-      loadModule: () => {
-        started.push('module');
-        return moduleReady;
-      },
-      getBootstrap: () => {
-        started.push('bootstrap');
-        return bootstrapReady;
-      },
-    });
-
-    expect(started).toEqual(['module', 'bootstrap']);
-    resolveModule?.();
-    resolveBootstrap?.(readyBootstrap());
-    await expect(operation).resolves.toEqual(readyBootstrap());
-  });
-
-  it('renders the startup diagnostic without mounting an adapter', async () => {
-    const getBootstrap = vi.fn(async () => ({
-      requestId: 'request-1',
-      status: 'unavailable' as const,
-      diagnostic: {
-        code: 'desktop-agent-capability-unavailable' as const,
-        severity: 'error' as const,
-        missingRequirements: ['projection-effects'] as const,
-        message: 'Projection effects are unavailable.',
-      },
-    }));
-    installBridge(getBootstrap);
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(<TestAgentSurface />);
-    });
-    await act(async () => undefined);
-
-    expect(container.textContent).toContain(
-      'The Agent runtime required by this panel is unavailable.',
-    );
-    expect(container.querySelector('[data-testid="agent-root"]')).toBeNull();
-    await act(async () => root.unmount());
-  });
-
-  it('renders an invalid persisted Conversation as a local non-retryable Surface diagnostic', async () => {
-    const getBootstrap = vi.fn(async () => ({
-      requestId: 'request-conversation-unavailable',
-      status: 'unavailable' as const,
-      diagnostic: {
-        code: 'desktop-agent-conversation-unavailable' as const,
-        severity: 'error' as const,
-        conversationId: 'conversation-1',
-        fieldNames: ['lifecycle'],
-        message: 'Host-only stored record diagnostic.',
-      },
-    }));
-    installBridge(getBootstrap);
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(<TestAgentSurface />);
-    });
-    await act(async () => undefined);
-
-    expect(container.textContent).toContain(
-      'This conversation uses stored data that the current app cannot open.',
-    );
-    expect(container.textContent).not.toContain('Host-only stored record diagnostic.');
-    expect(container.querySelector('[data-testid="agent-root"]')).toBeNull();
-    expect(container.querySelector('.desktop-agent-failure__retry')).toBeNull();
-    await act(async () => root.unmount());
-  });
-
-  it('renders a typed Workspace attach failure as a local translated diagnostic', async () => {
-    const getBootstrap = vi.fn(async () => readyBootstrap());
-    const attach = vi.fn(async () => ({
-      requestId: 'attach-workspace-unavailable',
-      status: 'unavailable' as const,
-      diagnostic: {
-        code: 'agent-workspace-binding-unavailable',
-        owner: 'workspace',
-        message: "Workspace grant 'workspace-grant:private' is not present.",
-      },
-    }));
-    installBridge(getBootstrap, { attach, detach: vi.fn(async () => undefined) });
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-
-    await act(async () =>
-      root.render(
-        <TestAgentSurface
-          agentPresentation={{
-            phase: 'draft',
-            draftId: 'draft-workspace-unavailable',
-            binding: {
-              kind: 'workspace',
-              workspaceId: 'workspace-1',
-              workspaceGrantId: 'workspace-grant:private',
-            },
-            bindingReceipt: null,
-          }}
-        />,
-      ),
-    );
-    await act(async () => undefined);
-
-    const alert = container.querySelector('[role="alert"]');
-    expect(alert?.textContent).toContain(
-      'Workspace access for this Agent panel is currently unavailable.',
-    );
-    expect(alert?.textContent).not.toContain('workspace-grant:private');
-    expect(container.querySelector('.desktop-agent-failure__retry')).not.toBeNull();
-    expect(container.querySelector('[data-testid="agent-root"]')).toBeNull();
-    await act(async () => root.unmount());
-  });
-
-  it('mounts Assistant draft through the same Root and detaches its exact launch identity', async () => {
-    const getBootstrap = vi.fn(async () => readyBootstrap());
-    const attach = vi.fn(async () => launchReady('assistant:1', 'launch-1'));
-    const detach = vi.fn(async () => undefined);
-    installBridge(getBootstrap, { attach, detach });
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(<TestLaunchAgentSurface assistantSpaceId="assistant:1" />);
-    });
-    await act(async () => undefined);
-
-    const rootNode = container.querySelector('[data-testid="agent-root"]');
-    expect(attach).toHaveBeenCalledWith(
-      'workbench-assistant-1',
-      'agent-surface-assistant-1',
-      'agent-view:window-1',
-      {
-        phase: 'draft',
-        draftId: 'draft-launch-1',
-        binding: {
-          kind: 'assistant',
-          assistantSpaceId: 'assistant:1',
-          baseGrantIds: [],
-        },
-        bindingReceipt: null,
-      },
-    );
-    expect(rootNode?.getAttribute('data-agent-presentation')).toBe('draft');
-    expect(container.textContent).toContain('neko.agent.webview.electron.launch:launch-1:en');
-
-    await act(async () => root.unmount());
-    expect(detach).toHaveBeenCalledWith(launchCatalog('assistant:1', 'launch-1').connection);
-  });
-
-  it('keeps the Root DOM identity while replacing the adapter by exact launch identity', async () => {
-    const getBootstrap = vi.fn(async () => readyBootstrap());
-    const attach = vi
-      .fn()
-      .mockResolvedValueOnce(launchReady('assistant:1', 'launch-1'))
-      .mockResolvedValueOnce(launchReady('assistant:2', 'launch-2'));
-    const detach = vi.fn(async () => undefined);
-    installBridge(getBootstrap, { attach, detach });
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-
-    await act(async () => root.render(<TestLaunchAgentSurface assistantSpaceId="assistant:1" />));
-    await act(async () => undefined);
-    const firstRoot = container.querySelector('[data-testid="agent-root"]');
-    await act(async () => root.render(<TestLaunchAgentSurface assistantSpaceId="assistant:2" />));
-    await act(async () => undefined);
-
-    expect(container.querySelector('[data-testid="agent-root"]')).toBe(firstRoot);
-    expect(container.textContent).toContain('neko.agent.webview.electron.launch:launch-2:en');
-    expect(detach).toHaveBeenCalledWith(launchCatalog('assistant:1', 'launch-1').connection);
-    await act(async () => root.unmount());
-  });
-
-  it('keeps the Root DOM identity while attaching an Assistant committed session', async () => {
-    const getBootstrap = vi.fn(async () => readyBootstrap());
-    const getAssistantBootstrap = vi.fn(async () => readyAssistantBootstrap());
-    const attach = vi.fn(async () => launchReady('assistant:1', 'launch-1'));
-    const detach = vi.fn(async () => undefined);
-    installBridge(getBootstrap, { attach, detach, getAssistantBootstrap });
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-
-    await act(async () => root.render(<TestLaunchAgentSurface assistantSpaceId="assistant:1" />));
-    await act(async () => undefined);
-    const firstRoot = container.querySelector('[data-testid="agent-root"]');
-    await act(async () =>
-      root.render(
-        <TestLaunchAgentSurface
-          assistantSpaceId="assistant:1"
-          conversationId="conversation:1"
-          conversationFeed={<div data-testid="room-authority-feed">Room authority</div>}
-        />,
-      ),
-    );
-    await act(async () => undefined);
-
-    const sessionRoot = container.querySelector('[data-testid="agent-root"]');
-    expect(sessionRoot).toBe(firstRoot);
-    expect(sessionRoot?.getAttribute('data-agent-presentation')).toBe('session');
-    expect(sessionRoot?.getAttribute('data-initial-conversation-id')).toBe('conversation:1');
-    expect(container.textContent).toContain(
-      'neko.agent.webview.electron:assistant-connection-1:en',
-    );
-    expect(container.querySelector('[data-testid="room-authority-feed"]')?.textContent).toBe(
-      'Room authority',
-    );
-    expect(getAssistantBootstrap).toHaveBeenCalledWith(
-      'workbench-assistant-1',
-      'agent-surface-assistant-1',
-      'assistant:1',
-      'conversation:1',
-      'agent-view:window-1',
-    );
-    expect(detach).toHaveBeenCalledWith(launchCatalog('assistant:1', 'launch-1').connection);
-    await act(async () => root.unmount());
-  });
-
-  it('does not render a new session phase through the previous launch adapter', async () => {
-    let resolveSession: ((value: ReturnType<typeof readyAssistantBootstrap>) => void) | undefined;
-    const sessionBootstrap = new Promise<ReturnType<typeof readyAssistantBootstrap>>((resolve) => {
-      resolveSession = resolve;
-    });
-    const getBootstrap = vi.fn(async () => readyBootstrap());
-    const getAssistantBootstrap = vi.fn(() => sessionBootstrap);
-    const attach = vi.fn(async () => launchReady('assistant:1', 'launch-1'));
-    const detach = vi.fn(async () => undefined);
-    installBridge(getBootstrap, { attach, detach, getAssistantBootstrap });
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-
-    await act(async () => root.render(<TestLaunchAgentSurface assistantSpaceId="assistant:1" />));
-    await act(async () => undefined);
-    const agentRoot = container.querySelector('[data-testid="agent-root"]');
-    expect(agentRoot?.getAttribute('data-agent-presentation')).toBe('draft');
-
-    await act(async () =>
-      root.render(
-        <TestLaunchAgentSurface assistantSpaceId="assistant:1" conversationId="conversation:1" />,
-      ),
-    );
-
-    expect(container.querySelector('[data-testid="agent-root"]')).toBe(agentRoot);
-    expect(agentRoot?.getAttribute('data-agent-presentation')).toBe('draft');
-    expect(agentRoot?.closest('.desktop-agent-root')?.hasAttribute('hidden')).toBe(true);
-    expect(container.querySelector('.desktop-agent-status')).not.toBeNull();
-
-    resolveSession?.(readyAssistantBootstrap());
-    await act(async () => undefined);
-    expect(container.querySelector('[data-testid="agent-root"]')).toBe(agentRoot);
-    expect(agentRoot?.getAttribute('data-agent-presentation')).toBe('session');
-    expect(agentRoot?.closest('.desktop-agent-root')?.hasAttribute('hidden')).toBe(false);
-    await act(async () => root.unmount());
-  });
-
-  it('contains an async launch error, sanitizes transport details, and retries in place', async () => {
-    const getBootstrap = vi.fn(async () => readyBootstrap());
-    const attach = vi
-      .fn()
-      .mockRejectedValueOnce(
-        new Error(
-          "Error invoking remote method 'neko:agent:launch': Workspace grant 'workspace-grant:private' is not present.",
+            dshSessionId: 'dsh-session-1',
+            turn: 3,
+            toolCallId,
+          },
+          optionId,
         ),
-      )
-      .mockResolvedValueOnce(launchReady('assistant:1', 'launch-retry'));
-    installBridge(getBootstrap, { attach, detach: vi.fn(async () => undefined) });
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(
-        <>
-          <div data-testid="sibling-surface">Canvas</div>
-          <TestLaunchAgentSurface assistantSpaceId="assistant:1" />
-        </>,
       );
+    },
+  );
+
+  it('keeps the final composer visible without creating an implicit Conversation', async () => {
+    render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
+        agentSurfaceId="surface-draft"
+        surfaceKind="entry"
+      />,
+    );
+    expect(screen.getByText('Hi, start creating with a conversation')).toBeTruthy();
+    expect(dshSessions.getSnapshot).not.toHaveBeenCalled();
+    expect(dshSessions.subscribe).not.toHaveBeenCalled();
+    const composer = screen.getByLabelText('Message');
+    await waitFor(() => expect((composer as HTMLTextAreaElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: 'Execution mode' }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Full access' }));
+    await waitFor(() =>
+      expect(dshSessions.selectComposerPermissionPreset).toHaveBeenCalledWith(
+        'workbench-1',
+        'surface-draft',
+        'danger-full-access',
+      ),
+    );
+    expect(dshSessions.create).not.toHaveBeenCalled();
+  });
+
+  it('refreshes Composer scope across a preserved Entry-to-Workspace Draft transition', async () => {
+    dshSessions.getComposerConfiguration
+      .mockResolvedValueOnce(entryComposerConfiguration)
+      .mockResolvedValueOnce(composerConfiguration);
+    const view = renderWithoutSnapshots(
+      <DshComposerPresentationSnapshotProvider>
+        <DesktopAgentSurface
+          workbenchInstanceId="workbench-1"
+          sceneId="scene-entry"
+          agentSurfaceId="surface-draft"
+          surfaceKind="entry"
+        />
+      </DshComposerPresentationSnapshotProvider>,
+    );
+
+    const composer = screen.getByLabelText('Message') as HTMLTextAreaElement;
+    await waitFor(() => expect(composer.disabled).toBe(false));
+    fireEvent.change(composer, { target: { value: 'Preserve this draft' } });
+
+    view.rerender(
+      <DshComposerPresentationSnapshotProvider>
+        <DesktopAgentSurface
+          workbenchInstanceId="workbench-1"
+          sceneId="scene-workspace"
+          agentSurfaceId="surface-draft"
+          surfaceKind="workspace"
+        />
+      </DshComposerPresentationSnapshotProvider>,
+    );
+
+    expect((screen.getByLabelText('Message') as HTMLTextAreaElement).value).toBe(
+      'Preserve this draft',
+    );
+    expect(await screen.findByText('My Film')).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Workspace Board' })).toBeTruthy();
+    expect(view.container.querySelector('[data-workspace-canvas-context="true"]')).toBeTruthy();
+    expect(dshSessions.getComposerConfiguration).toHaveBeenNthCalledWith(
+      2,
+      'workbench-1',
+      'surface-draft',
+    );
+    expect(dshSessions.create).not.toHaveBeenCalled();
+    expect(dshSessions.submit).not.toHaveBeenCalled();
+  });
+
+  it('rejects a late Entry configuration after the preserved Draft enters a Workspace Scene', async () => {
+    const staleEntryConfiguration = deferred<DshComposerConfigurationProjection>();
+    dshSessions.getComposerConfiguration
+      .mockReturnValueOnce(staleEntryConfiguration.promise)
+      .mockResolvedValueOnce(composerConfiguration);
+    const view = renderWithoutSnapshots(
+      <DshComposerPresentationSnapshotProvider>
+        <DesktopAgentSurface
+          workbenchInstanceId="workbench-1"
+          sceneId="scene-entry"
+          agentSurfaceId="surface-draft"
+          surfaceKind="entry"
+        />
+      </DshComposerPresentationSnapshotProvider>,
+    );
+    await waitFor(() => expect(dshSessions.getComposerConfiguration).toHaveBeenCalledOnce());
+
+    view.rerender(
+      <DshComposerPresentationSnapshotProvider>
+        <DesktopAgentSurface
+          workbenchInstanceId="workbench-1"
+          sceneId="scene-workspace"
+          agentSurfaceId="surface-draft"
+          surfaceKind="workspace"
+        />
+      </DshComposerPresentationSnapshotProvider>,
+    );
+
+    expect(await screen.findByText('My Film')).toBeTruthy();
+    await act(async () => staleEntryConfiguration.resolve(entryComposerConfiguration));
+    expect(screen.getByText('My Film')).toBeTruthy();
+    expect(view.container.querySelector('[data-workspace-canvas-context="true"]')).toBeTruthy();
+    expect(dshSessions.create).not.toHaveBeenCalled();
+  });
+
+  it('refreshes Composer scope when the exact Scene changes between Workspace surfaces', async () => {
+    const authoringComposerConfiguration: DshComposerConfigurationProjection = {
+      ...composerConfiguration,
+      context: {
+        ...composerConfiguration.context!,
+        workspaceLabel: 'Character Studio',
+      },
+    };
+    dshSessions.getComposerConfiguration
+      .mockResolvedValueOnce(composerConfiguration)
+      .mockResolvedValueOnce(authoringComposerConfiguration);
+    const view = renderWithoutSnapshots(
+      <DshComposerPresentationSnapshotProvider>
+        <DesktopAgentSurface
+          workbenchInstanceId="workbench-1"
+          sceneId="scene-workspace"
+          agentSurfaceId="surface-draft"
+          surfaceKind="workspace"
+        />
+      </DshComposerPresentationSnapshotProvider>,
+    );
+    expect(await screen.findByText('My Film')).toBeTruthy();
+
+    view.rerender(
+      <DshComposerPresentationSnapshotProvider>
+        <DesktopAgentSurface
+          workbenchInstanceId="workbench-1"
+          sceneId="scene-character-authoring"
+          agentSurfaceId="surface-draft"
+          surfaceKind="workspace"
+        />
+      </DshComposerPresentationSnapshotProvider>,
+    );
+
+    expect(screen.queryByText('My Film')).toBeNull();
+    expect(await screen.findByText('Character Studio')).toBeTruthy();
+    expect(dshSessions.getComposerConfiguration).toHaveBeenCalledTimes(2);
+  });
+
+  it('refreshes only the matching Workspace Canvas catalog after creation without starting a Turn', async () => {
+    const exactCanvasTarget = {
+      kind: 'exact-canvas' as const,
+      workspaceId: 'workspace-1',
+      canvasId: 'test.nkc',
+    };
+    dshSessions.getComposerConfiguration
+      .mockResolvedValueOnce(composerConfiguration)
+      .mockResolvedValueOnce({
+        ...composerConfiguration,
+        context: {
+          ...composerConfiguration.context!,
+          canvas: {
+            ...composerConfiguration.context!.canvas,
+            options: [
+              ...composerConfiguration.context!.canvas.options,
+              { target: exactCanvasTarget, label: 'test.nkc' },
+            ],
+          },
+        },
+      });
+    render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-workspace"
+        agentSurfaceId="surface-draft"
+        surfaceKind="workspace"
+      />,
+    );
+
+    expect(await screen.findByText('My Film')).toBeTruthy();
+    expect(dshSessions.getComposerConfiguration).toHaveBeenCalledOnce();
+
+    await act(async () => canvasWorkspaceIndexListener?.({ workspaceId: 'workspace-other' }));
+    expect(dshSessions.getComposerConfiguration).toHaveBeenCalledOnce();
+
+    await act(async () => canvasWorkspaceIndexListener?.({ workspaceId: 'workspace-1' }));
+    expect(await screen.findByRole('option', { name: 'test.nkc' })).toBeTruthy();
+    expect(dshSessions.getComposerConfiguration).toHaveBeenCalledTimes(2);
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Canvas index' }), {
+      target: { value: exactCanvasTarget.canvasId },
     });
-    await act(async () => undefined);
+    expect(dshSessions.getComposerConfiguration).toHaveBeenCalledTimes(2);
+    expect(dshSessions.create).not.toHaveBeenCalled();
+    expect(dshSessions.submit).not.toHaveBeenCalled();
+  });
 
-    const alert = container.querySelector('[role="alert"]');
-    expect(alert?.textContent).toContain('The Agent panel could not connect');
-    expect(alert?.textContent).not.toContain('workspace-grant:private');
-    expect(alert?.textContent).not.toContain('Error invoking remote method');
-    expect(container.querySelector('[data-testid="sibling-surface"]')?.textContent).toBe('Canvas');
-    expect(container.querySelector('[data-testid="agent-root"]')).toBeNull();
+  it('passes the complete Entry context presentation to the retained selector components', async () => {
+    const loadCharacterTargets = vi.fn(async () => ({
+      targets: [
+        {
+          globalCharacterId: 'global-character-1',
+          characterVersionId: 'character-version-1',
+          displayName: 'Neko',
+          versionLabel: 'Published v1',
+          lineage: {
+            coverage: 'complete' as const,
+            state: 'declared-root' as const,
+            isHead: true,
+            path: [{ characterVersionId: 'character-version-1', label: 'Published v1' }],
+          },
+          storylines: [],
+        },
+      ],
+      diagnostics: [],
+    }));
+    const loadWorldTargets = vi.fn(async () => ({ targets: [], diagnostics: [] }));
+    const { container } = render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
+        agentSurfaceId="surface-draft"
+        surfaceKind="entry"
+        entryContext={{
+          workspace: { projects: [] },
+          experimentalCreative: { loadCharacterTargets, loadWorldTargets },
+        }}
+      />,
+    );
 
-    await act(async () => {
-      const retry = container.querySelector<HTMLButtonElement>('.desktop-agent-failure__retry');
-      if (!retry) throw new Error('Agent failure fixture requires a retry action.');
-      retry.click();
+    await waitFor(() =>
+      expect(
+        (container.querySelector('[data-entry-context-action="character"]') as HTMLButtonElement)
+          .disabled,
+      ).toBe(false),
+    );
+    fireEvent.click(
+      container.querySelector('[data-entry-context-action="character"]') as HTMLButtonElement,
+    );
+    expect(await screen.findByText('Neko')).toBeTruthy();
+    expect(loadCharacterTargets).toHaveBeenCalledOnce();
+    expect(loadWorldTargets).not.toHaveBeenCalled();
+    expect(dshSessions.create).not.toHaveBeenCalled();
+  });
+
+  it('adopts an exact Character detail handoff before acknowledging consumption', async () => {
+    const onCharacterDialogueHandoffConsumed = vi.fn();
+    dshSessions.getComposerConfiguration.mockResolvedValueOnce(entryComposerConfiguration);
+    const { container } = render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-character-handoff"
+        agentSurfaceId="surface-character-handoff"
+        surfaceKind="entry"
+        characterDialogueHandoff={{
+          kind: 'character-dialogue',
+          intentId: 'intent-character-handoff',
+          label: 'Neko',
+          binding: {
+            kind: 'character-dialogue',
+            mode: 'companion',
+            participants: [
+              {
+                globalCharacterId: 'global-character-1',
+                characterVersionId: 'character-version-1',
+              },
+            ],
+          },
+        }}
+        onCharacterDialogueHandoffConsumed={onCharacterDialogueHandoffConsumed}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(
+        container.querySelector('[data-entry-binding-kind="character-dialogue"][title="Neko"]'),
+      ).toBeTruthy(),
+    );
+    expect(onCharacterDialogueHandoffConsumed).toHaveBeenCalledWith('intent-character-handoff');
+    expect(dshSessions.create).not.toHaveBeenCalled();
+  });
+
+  it('projects content context and changes models and DSH permissions through Host ports', async () => {
+    dshSessions.getSnapshot.mockResolvedValueOnce({
+      conversationId: projection.conversationId,
+      dshSessionId: projection.dshSessionId,
+      title: projection.title,
+      inbox: { nextTurn: [], nextStep: [] },
+      events: projection.events,
     });
-    await act(async () => undefined);
+    const { container } = render(
+      <DesktopAgentSurface
+        agentSurfaceId="surface-1"
+        conversationId="conversation-1"
+        sceneId="scene-1"
+        workbenchInstanceId="workbench-1"
+        surfaceKind="workspace"
+      />,
+    );
+    expect(await screen.findByText('My Film')).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Workspace Board' })).toBeTruthy();
+    expect(container.querySelector('[data-workspace-canvas-context="true"]')).toBeTruthy();
 
-    expect(attach).toHaveBeenCalledTimes(2);
-    expect(container.querySelector('[data-testid="agent-root"]')).not.toBeNull();
-    expect(container.querySelector('[role="alert"]')).toBeNull();
-    await act(async () => root.unmount());
+    fireEvent.click(screen.getByRole('button', { name: 'Configure models' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'GPT-5' }));
+    await waitFor(() =>
+      expect(dshSessions.selectComposerModel).toHaveBeenCalledWith(
+        'workbench-1',
+        'surface-1',
+        'openai:gpt-5',
+      ),
+    );
+    if (!screen.queryByRole('tab', { name: 'Image' })) {
+      fireEvent.click(screen.getByRole('button', { name: 'Configure models' }));
+    }
+    fireEvent.click(screen.getByRole('tab', { name: 'Image' }));
+    expect(screen.queryByRole('radio', { name: 'GPT-5' })).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: 'GPT Image 2' }));
+    await waitFor(() =>
+      expect(dshSessions.selectComposerMediaModel).toHaveBeenCalledWith(
+        'workbench-1',
+        'surface-1',
+        'image',
+        'nekoapi-media:gpt-image-2',
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Execution mode' }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Full access' }));
+    await waitFor(() =>
+      expect(dshSessions.selectComposerPermissionPreset).toHaveBeenCalledWith(
+        'workbench-1',
+        'surface-1',
+        'danger-full-access',
+      ),
+    );
+    expect(
+      (screen.getByRole('button', { name: 'Attach file' }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+  });
+
+  it('submits the first Draft message atomically through create', async () => {
+    const createdProjection: DshSessionHostProjection = {
+      ...projection,
+      conversationId: 'conversation-created',
+      dshSessionId: 'dsh-session-created',
+    };
+    dshSessions.create.mockResolvedValueOnce(createdProjection);
+    dshSessions.submit.mockRejectedValueOnce(
+      new Error('First Draft input must not use a second submit request.'),
+    );
+    dshPermissions.list.mockResolvedValueOnce([]);
+    render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
+        agentSurfaceId="surface-draft"
+        surfaceKind="entry"
+      />,
+    );
+
+    const composer = screen.getByLabelText('Message');
+    await waitFor(() => expect((composer as HTMLTextAreaElement).disabled).toBe(false));
+    fireEvent.change(composer, { target: { value: '  first message  ' } });
+    fireEvent.click(screen.getByLabelText('Send (Enter)'));
+
+    await waitFor(() =>
+      expect(dshSessions.create).toHaveBeenCalledWith(
+        'workbench-1',
+        'surface-draft',
+        'workspace-write',
+        { kind: 'surface' },
+        {
+          kind: 'message',
+          text: 'first message',
+          references: [],
+          images: [],
+          contextPayloads: [],
+          canvasTurnTarget: workspaceBoardTarget,
+        },
+      ),
+    );
+    expect(dshSessions.submit).not.toHaveBeenCalled();
+    expect(dshPermissions.list).toHaveBeenCalledWith('conversation-created');
+    expect(await screen.findByText('Create a node')).toBeTruthy();
+  });
+
+  it('creates the first Entry Conversation for the exact selected Project', async () => {
+    const createdProjection: DshSessionHostProjection = {
+      ...projection,
+      conversationId: 'conversation-project',
+      dshSessionId: 'dsh-session-project',
+    };
+    dshSessions.create.mockResolvedValueOnce(createdProjection);
+    dshSessions.submit.mockRejectedValueOnce(
+      new Error('First Project input must not use a second submit request.'),
+    );
+    dshPermissions.list.mockResolvedValueOnce([]);
+    const { container } = render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
+        agentSurfaceId="surface-project-draft"
+        surfaceKind="entry"
+        entryContext={{
+          workspace: { projects: [{ projectId: 'project-1', label: 'Project One' }] },
+          experimentalCreative: {
+            loadCharacterTargets: vi.fn(async () => ({ targets: [], diagnostics: [] })),
+            loadWorldTargets: vi.fn(async () => ({ targets: [], diagnostics: [] })),
+          },
+        }}
+      />,
+    );
+
+    const composer = screen.getByLabelText('Message');
+    await waitFor(() => expect((composer as HTMLTextAreaElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('tab', { name: 'Creation' }));
+    fireEvent.click(
+      container.querySelector('[data-entry-context-action="project"]') as HTMLButtonElement,
+    );
+    fireEvent.click(screen.getByTitle('Project One'));
+    fireEvent.change(composer, { target: { value: '  create in project  ' } });
+    fireEvent.click(screen.getByLabelText('Send (Enter)'));
+
+    await waitFor(() =>
+      expect(dshSessions.create).toHaveBeenCalledWith(
+        'workbench-1',
+        'surface-project-draft',
+        'workspace-write',
+        { kind: 'project', projectId: 'project-1' },
+        {
+          kind: 'message',
+          text: 'create in project',
+          references: [],
+          images: [],
+          contextPayloads: [],
+          canvasTurnTarget: workspaceBoardTarget,
+        },
+      ),
+    );
+    expect(dshSessions.submit).not.toHaveBeenCalled();
+  });
+
+  it('fails locally instead of rendering a permission from another DSH Session', async () => {
+    dshPermissions.list.mockResolvedValueOnce([
+      { ...permission, dshSessionId: 'dsh-session-other', title: 'Stale permission' },
+    ]);
+    render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
+        agentSurfaceId="surface-1"
+        conversationId="conversation-1"
+        surfaceKind="workspace"
+      />,
+    );
+
+    expect(
+      await screen.findByText('DSH Agent projection owner identity does not match.'),
+    ).toBeTruthy();
+    expect(screen.queryByText('Stale permission')).toBeNull();
+  });
+
+  it('keeps the Conversation visible and exposes only explicit restart after a runtime crash', async () => {
+    render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
+        agentSurfaceId="surface-1"
+        conversationId="conversation-1"
+        surfaceKind="workspace"
+      />,
+    );
+    expect(await screen.findByText('Create a node')).toBeTruthy();
+
+    await act(async () =>
+      runtimeListener?.({
+        status: 'unavailable',
+        diagnostic: {
+          code: 'desktop-dsh-runtime-unavailable',
+          message: 'DSH subprocess exited unexpectedly.',
+        },
+      }),
+    );
+
+    expect(screen.getByRole('alert').textContent).toContain('DSH subprocess exited unexpectedly.');
+    expect(screen.getByText('Create a node')).toBeTruthy();
+    expect((screen.getByLabelText('Message') as HTMLTextAreaElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Restart DSH' }));
+    await waitFor(() => expect(dshRuntime.restart).toHaveBeenCalledOnce());
+    await waitFor(() => expect(dshSessions.getSnapshot).toHaveBeenCalledTimes(2));
+  });
+
+  it('keeps restart failure visible and does not retry the Session path', async () => {
+    dshRuntime.getStatus.mockResolvedValueOnce({
+      status: 'unavailable',
+      diagnostic: {
+        code: 'desktop-dsh-runtime-unavailable',
+        message: 'DSH crashed.',
+      },
+    });
+    dshRuntime.restart.mockResolvedValueOnce({
+      status: 'unavailable',
+      diagnostic: {
+        code: 'desktop-dsh-runtime-restart-failed',
+        message: 'ACP handshake rejected.',
+      },
+    });
+    render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
+        agentSurfaceId="surface-1"
+        conversationId="conversation-1"
+        surfaceKind="workspace"
+      />,
+    );
+
+    expect(await screen.findByText('DSH crashed.')).toBeTruthy();
+    expect(screen.queryByText('Loading DSH session…')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Restart DSH' }));
+    expect(await screen.findByText('ACP handshake rejected.')).toBeTruthy();
+    expect(dshSessions.getSnapshot).not.toHaveBeenCalled();
   });
 });
 
-function TestAgentSurface({
-  agentPresentation,
-  composerWorkspace,
-  initialConversation,
-  onCharacterProductHandoff,
-}: {
-  readonly agentPresentation?: AgentInteractionProjection;
-  readonly composerWorkspace?: AgentComposerWorkspacePresentation;
-  readonly initialConversation?: { readonly id: string; readonly title: string };
-  readonly onCharacterProductHandoff?: (handoff: CharacterProductHandoff) => void;
-}): JSX.Element {
-  const i18n = createDesktopI18n('en');
-  return (
-    <I18nProvider service={i18n.i18nService}>
-      <DesktopAgentSurface
-        agentPresentation={agentPresentation}
-        binding="workspace"
-        workbenchInstanceId="workbench-1"
-        agentSurfaceId="agent-surface-1"
-        composerWorkspace={composerWorkspace}
-        initialConversation={initialConversation}
-        onCharacterProductHandoff={onCharacterProductHandoff}
-        tab={{
-          tabId: 'tab-1',
-          projectId: 'project-1',
-          viewId: 'view-1',
-          viewInstanceId: 'view-instance-2',
-        }}
-      />
-    </I18nProvider>
-  );
-}
-
-function TestLaunchAgentSurface({
-  assistantSpaceId,
-  conversationId,
-  conversationFeed,
-}: {
-  readonly assistantSpaceId: string;
-  readonly conversationId?: string;
-  readonly conversationFeed?: ReactNode;
-}) {
-  const i18n = createDesktopI18n('en');
-  return (
-    <I18nProvider service={i18n.i18nService}>
-      <DesktopAgentSurface
-        binding="launch"
-        workbenchInstanceId="workbench-assistant-1"
-        agentSurfaceId="agent-surface-assistant-1"
-        viewId="agent-view:window-1"
-        conversationFeed={conversationFeed}
-        agentPresentation={
-          conversationId
-            ? {
-                phase: 'session',
-                conversationId,
-                binding: { kind: 'assistant', assistantSpaceId, baseGrantIds: [] },
-              }
-            : {
-                phase: 'draft',
-                draftId: 'draft-launch-1',
-                binding: { kind: 'assistant', assistantSpaceId, baseGrantIds: [] },
-                bindingReceipt: null,
-              }
-        }
-      />
-    </I18nProvider>
-  );
-}
-
-function installBridge(
-  getBootstrap: typeof window.openNekoDesktop.agent.getBootstrap,
-  launch?: {
-    readonly attach: typeof window.openNekoDesktop.agentLaunch.attach;
-    readonly detach: typeof window.openNekoDesktop.agentLaunch.detach;
-    readonly getAssistantBootstrap?: typeof window.openNekoDesktop.agent.getAssistantBootstrap;
-  },
-  detachSession: typeof window.openNekoDesktop.agent.detach = vi.fn(async () => undefined),
-): void {
-  Object.defineProperty(window, 'openNekoDesktop', {
-    configurable: true,
-    value: {
-      assetCenter: { execute: vi.fn() },
-      assistantResources: { execute: vi.fn() },
-      extensionManagement: { execute: vi.fn() },
-      automationLocalRuntimes: { execute: vi.fn() },
-      automationPermissions: { execute: vi.fn() },
-      automationTargetSelection: {
-        execute: vi.fn(async (request) => ({
-          requestId: request.requestId,
-          route: request.route,
-          pending: [],
-        })),
-        subscribe: vi.fn(() => () => undefined),
-      },
-      automationSessionControl: {
-        execute: vi.fn(async (request) => ({
-          requestId: request.requestId,
-          route: request.route,
-          controls: [],
-        })),
-        subscribe: vi.fn(() => () => undefined),
-      },
-      agentLaunch: {
-        attach: launch?.attach ?? vi.fn(),
-        authorizeResource: vi.fn(),
-        bindTarget: vi.fn(),
-        configureEntryTarget: vi.fn(),
-        updateConfiguration: vi.fn(),
-        searchWorkspaceMentions: vi.fn(),
-        submitDraft: vi.fn(),
-        detach: launch?.detach ?? vi.fn(),
-      },
-      workspaceGrants: {
-        chooseDirectory: vi.fn(),
-        createContentProject: vi.fn(),
-        selectProject: vi.fn(),
-      },
-      agent: {
-        getBootstrap,
-        getAssistantBootstrap: launch?.getAssistantBootstrap ?? vi.fn(),
-        detach: detachSession,
-        send: vi.fn(),
-        subscribe: vi.fn(() => () => undefined),
-      },
-      bootstrap: { get: vi.fn() },
-      lifecycle: { subscribe: vi.fn(() => () => undefined) },
-      settings: {
-        get: vi.fn(),
-        update: vi.fn(),
-        openAgentAdvanced: vi.fn(),
-        subscribe: vi.fn(() => () => undefined),
-      },
-      shell: {
-        getSnapshot: vi.fn(),
-        subscribe: vi.fn(() => () => undefined),
-      },
-      projects: {
-        open: vi.fn(),
-        openContent: vi.fn(),
-        remove: vi.fn(),
-        deleteConversations: vi.fn(),
-        requestProfile: vi.fn(),
-      },
-      conversations: { delete: vi.fn() },
-      tabs: {
-        activateHome: vi.fn(),
-        activate: vi.fn(),
-        close: vi.fn(),
-      },
-      workbench: { update: vi.fn() },
-      applicationSidebar: { update: vi.fn() },
-      scenes: { transition: vi.fn() },
-      characterFoundation: {
-        getConversationLaunchCatalog: vi.fn(async () => ({ targets: [], diagnostics: [] })),
-        getSnapshot: vi.fn(async () => ({
-          character: {
-            globalCharacters: [],
-            versions: [],
-            relationships: [],
-            characterRuns: [],
-            dialogueRuns: [],
-            rooms: [],
-            roomRuns: [],
-            storylines: [],
-            storylineDrafts: [],
-            storylineVersions: [],
-            companionContinuities: [],
-            presentationConfigurations: [],
-          },
-          diagnostics: [],
-        })),
-        execute: vi.fn(async () => ({
-          character: {
-            globalCharacters: [],
-            versions: [],
-            relationships: [],
-            characterRuns: [],
-            dialogueRuns: [],
-            rooms: [],
-            roomRuns: [],
-            storylines: [],
-            storylineDrafts: [],
-            storylineVersions: [],
-            companionContinuities: [],
-            presentationConfigurations: [],
-          },
-          diagnostics: [],
-        })),
-      },
-      characterAuthoring: {
-        getSnapshot: vi.fn(async () => {
-          throw new Error('Character authoring is not expected by this test.');
-        }),
-        execute: vi.fn(async () => {
-          throw new Error('Character authoring is not expected by this test.');
-        }),
-      },
-      characterPortable: {
-        getExportScope: vi.fn(),
-        exportPackage: vi.fn(),
-        importPackage: vi.fn(),
-      },
-      worldPortable: {
-        exportPackage: vi.fn(),
-        importPackage: vi.fn(),
-      },
-      worldManagement: {
-        getCatalog: vi.fn(async (query) => ({
-          scope: { kind: 'global-catalog' as const },
-          query,
-          items: [],
-          diagnostics: [],
-        })),
-        getDetail: vi.fn(async () => {
-          throw new Error('World management detail is not expected by this test.');
-        }),
-      },
-      worldAuthoring: {
-        getSnapshot: vi.fn(async () => {
-          throw new Error('World authoring is not expected by this test.');
-        }),
-        execute: vi.fn(async () => {
-          throw new Error('World authoring is not expected by this test.');
-        }),
-      },
-      worldRuntime: {
-        launch: vi.fn(),
-        getSnapshot: vi.fn(),
-        submitAction: vi.fn(),
-      },
-      characterAvatar: {
-        openSurface: vi.fn(),
-        releaseSurface: vi.fn(),
-      },
-      characterRoomWorkbench: {
-        getSnapshot: vi.fn(),
-        subscribe: vi.fn(() => () => undefined),
-      },
-      resources: createResourceBridgeMock(),
-      projectAuthoring: {
-        getCatalog: vi.fn(async () => ({
-          requestId: 'project-authoring-catalog',
-          projects: [],
-          diagnostics: [],
-        })),
-        getNavigation: vi.fn(),
-        getContent: vi.fn(),
-        getCreativeWorkspace: vi.fn(),
-        mutateCreativeWorkspaceReference: vi.fn(),
-        mutateCreativeWorkspaceObject: vi.fn(),
-      },
-      projectLocalAuthoring: {
-        createTarget: vi.fn(),
-      },
-      projectPortability: {
-        inspect: vi.fn(),
-        plan: vi.fn(),
-        resume: vi.fn(),
-        execute: vi.fn(),
-        cancel: vi.fn(),
-        subscribe: vi.fn(() => () => undefined),
-      },
-      preview: { getSnapshot: vi.fn(), execute: vi.fn() },
-      textEditor: { execute: vi.fn(), subscribe: vi.fn(() => () => undefined) },
-      canvas: {
-        getSnapshot: vi.fn(),
-        resolveMaterialActions: vi.fn(),
-        readTextFilePreview: vi.fn(),
-        executeIntent: vi.fn(),
-        resolvePreviewVariant: vi.fn(),
-        resolvePreviewResource: vi.fn(),
-        releasePreviewResource: vi.fn(),
-        subscribe: vi.fn(() => () => undefined),
-      },
-      cut: {
-        createDraft: vi.fn(),
-        closeView: vi.fn(),
-        getSnapshot: vi.fn(),
-        execute: vi.fn(),
-        subscribe: vi.fn(() => () => undefined),
-      },
-    } satisfies typeof window.openNekoDesktop,
+function deferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((next) => {
+    resolve = next;
   });
-}
-
-function readyAssistantBootstrap() {
-  return {
-    requestId: 'assistant-request-1',
-    status: 'ready' as const,
-    connection: {
-      applicationInstanceId: 'app-1',
-      windowId: 'window-1',
-      workbenchInstanceId: 'workbench-assistant-1',
-      agentSurfaceId: 'agent-surface-assistant-1',
-      assistantSpaceId: 'assistant:1',
-      workspaceId: 'assistant:1',
-      viewId: 'agent-view:window-1',
-      connectionId: 'assistant-connection-1',
-    },
-  };
-}
-
-function targetSelectionProjection() {
-  return {
-    authorizationId: 'authorization-1',
-    profileId: 'computer.observe',
-    provider: {
-      extensionId: 'computer-use',
-      providerId: 'cua-driver',
-      kind: 'computer' as const,
-      deliverySource: { kind: 'bundled-adapter' as const },
-    },
-    mode: 'observe' as const,
-    timeoutMs: 30_000,
-    stepBudget: 1,
-    owner: {
-      workspaceId: 'workspace-1',
-      conversationId: 'conversation-1',
-      runId: 'run-1',
-      toolCallId: 'tool-call-1',
-    },
-    candidates: [
-      {
-        kind: 'computer' as const,
-        targetKey: 'target-1',
-        label: 'Editor',
-        region: { x: 10, y: 20, width: 800, height: 600 },
-      },
-    ],
-  };
-}
-
-function automationToolCall(): ToolCall {
-  return {
-    id: 'tool-call-1',
-    name: 'automation_cua-driver_screenshot',
-    arguments: {},
-  };
-}
-
-function sessionControlProjection() {
-  return {
-    sessionId: 'session-1',
-    profileId: 'computer.observe',
-    provider: {
-      extensionId: 'computer-use',
-      providerId: 'cua-driver',
-      kind: 'computer' as const,
-    },
-    target: {
-      kind: 'computer' as const,
-      targetKey: 'target-1',
-      label: 'Fixture Window',
-    },
-    mode: 'observe' as const,
-    status: 'active' as const,
-    remainingSteps: 1,
-    phase: 'observation' as const,
-    evidenceStatus: 'none' as const,
-    owner: {
-      conversationId: 'conversation-1',
-      runId: 'run-1',
-      toolCallId: 'tool-call-1',
-    },
-    availableActions: ['pause', 'stop', 'take-over'] as const,
-  };
-}
-
-function launchCatalog(assistantSpaceId: string, connectionId: string) {
-  const draftId = 'draft-launch-1';
-  const binding = { kind: 'assistant' as const, assistantSpaceId, baseGrantIds: [] };
-  return {
-    connection: {
-      applicationInstanceId: 'app-1',
-      windowId: 'window-1',
-      workbenchInstanceId: 'workbench-assistant-1',
-      agentSurfaceId: 'agent-surface-assistant-1',
-      viewId: 'agent-view:window-1',
-      draftId,
-      connectionId,
-    },
-    interaction: {
-      phase: 'draft' as const,
-      draftId,
-      binding,
-      bindingReceipt: {
-        bindingReceiptId: `binding:${connectionId}`,
-        draftId,
-        connectionId,
-        binding,
-      },
-    },
-    models: [],
-    defaultMediaModels: {},
-    mediaUnderstandingModels: {
-      image: {
-        category: 'image' as const,
-        purpose: 'image.understand' as const,
-        status: 'missing' as const,
-      },
-      audio: {
-        category: 'audio' as const,
-        purpose: 'audio.understand' as const,
-        status: 'missing' as const,
-      },
-      video: {
-        category: 'video' as const,
-        purpose: 'video.understand' as const,
-        status: 'missing' as const,
-      },
-    },
-    configuration: projectAgentConfigurationPolicy({
-      models: [],
-      request: null,
-      source: 'global-default',
-      defaults: {
-        executionMode: 'ask',
-        temperature: 0.7,
-        maximumOutputTokens: 4096,
-        thinkingBudget: 0,
-      },
-    }),
-    inputs: [],
-  };
-}
-
-function launchReady(assistantSpaceId: string, connectionId: string) {
-  return {
-    requestId: `attach:${connectionId}`,
-    status: 'ready' as const,
-    catalog: launchCatalog(assistantSpaceId, connectionId),
-  };
-}
-
-function createResourceBridgeMock() {
-  return {
-    getSnapshot: vi.fn(),
-    children: vi.fn(),
-    resolveThumbnail: vi.fn(),
-    resolveQuickPreview: vi.fn(),
-    releaseQuickPreview: vi.fn(),
-    planRecovery: vi.fn(),
-    applyRecovery: vi.fn(),
-    cancelRecovery: vi.fn(),
-    search: vi.fn(),
-    execute: vi.fn(),
-    subscribe: vi.fn(() => () => undefined),
-  };
-}
-
-function readyBootstrap() {
-  return {
-    requestId: 'request-1',
-    status: 'ready' as const,
-    connection: {
-      applicationInstanceId: 'app-1',
-      windowId: 'window-1',
-      workbenchInstanceId: 'workbench-1',
-      agentSurfaceId: 'agent-surface-1',
-      projectId: 'project-1',
-      workspaceId: 'workspace-1',
-      viewId: 'view-1',
-      connectionId: 'connection-1',
-    },
-  };
+  return { promise, resolve };
 }

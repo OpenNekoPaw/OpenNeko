@@ -8,7 +8,8 @@ import type {
 import {
   createNodeHostContentReadService,
   NodeAuthorizedWorkspaceWriter,
-} from '@neko/content/node';
+} from '@neko/content-domain/node';
+import type { WorkspaceFileContentLocator } from '@neko/content-domain';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import type { NodeTextEditorMarkdownMediaService } from '@neko/text-editor-node';
 import {
@@ -91,13 +92,67 @@ export class DesktopTextEditorRuntime {
     this.watchFile = options.watchFile ?? watchWorkspaceFile;
   }
 
+  async openWorkspaceFile(input: {
+    readonly windowId: string;
+    readonly rendererSessionId: string;
+    readonly workspaceId: string;
+    readonly contentLocator: WorkspaceFileContentLocator;
+    readonly displayLabel: string;
+  }): Promise<TextEditorHostResult> {
+    if (input.contentLocator.selector !== undefined) {
+      throw new Error('Desktop Text Editor requires a Workspace file ContentLocator.');
+    }
+    const shell = await this.options.shell.getProjection(input.windowId);
+    if (shell.rendererSessionId !== input.rendererSessionId) {
+      throw new Error('Desktop Text Editor request has a stale renderer session.');
+    }
+    const projects = shell.catalog.projects.filter(
+      (candidate) => candidate.workspaceId === input.workspaceId,
+    );
+    if (projects.length !== 1) {
+      throw new Error(`Workspace '${input.workspaceId}' has no exact Desktop project owner.`);
+    }
+    const project = projects[0];
+    if (project === undefined) {
+      throw new Error(`Workspace '${input.workspaceId}' has no Desktop project owner.`);
+    }
+    const tab = shell.window.tabs.find((candidate) => candidate.projectId === project.projectId);
+    if (tab === undefined) {
+      throw new Error(`Workspace '${input.workspaceId}' has no open Desktop project tab.`);
+    }
+    return this.open({
+      identity: {
+        projectId: project.projectId,
+        workspaceId: input.workspaceId,
+        windowId: input.windowId,
+        viewId: 'agent-terminal-artifact',
+        viewInstanceId: tab.viewInstanceId,
+        rendererSessionId: input.rendererSessionId,
+      },
+      item: {
+        resourceId: `agent-terminal-artifact:${input.contentLocator.file.path}`,
+        source: 'files',
+        kind: 'document',
+        label: input.displayLabel,
+        capabilities: ['edit-text'],
+        role: 'content',
+        depth: 0,
+        locator: input.contentLocator,
+      },
+    });
+  }
+
   async open(input: {
     readonly identity: ResourceBrowserIdentity;
     readonly item: ResourceBrowserContentItem;
   }): Promise<TextEditorHostResult> {
     this.requireActive();
     const locator = input.item.locator;
-    if (locator.kind !== 'workspace-file' || !input.item.capabilities.includes('edit-text')) {
+    if (
+      locator.file.authority !== 'workspace' ||
+      locator.selector !== undefined ||
+      !input.item.capabilities.includes('edit-text')
+    ) {
       throw new Error('Desktop Text Editor requires an admitted Workspace File.');
     }
     const shell = await this.options.shell.getProjection(input.identity.windowId);
@@ -110,7 +165,7 @@ export class DesktopTextEditorRuntime {
       (binding) =>
         binding.runtimeIdentity.windowId === input.identity.windowId &&
         binding.runtimeIdentity.workspaceId === input.identity.workspaceId &&
-        binding.runtimeIdentity.documentId === locator.path,
+        binding.runtimeIdentity.documentId === locator.file.path,
     );
     if (existing) {
       const workbench = openOrFocusMainView(
@@ -126,7 +181,7 @@ export class DesktopTextEditorRuntime {
       return readyResult(`text-editor-open:${this.createIdentity()}`, existing);
     }
 
-    const documentId = locator.path;
+    const documentId = locator.file.path;
     const workspace = await this.options.shell.resolveAgentWorkspace(input.identity.workspaceId);
     const binding = await this.createBinding({
       projectId: input.identity.projectId,
@@ -448,7 +503,9 @@ export class DesktopTextEditorRuntime {
     readonly workspacePath: string;
   }): Promise<TextEditorBinding> {
     const sessionId = `text-document:${this.createIdentity()}`;
-    const locator = { kind: 'workspace-file' as const, path: input.documentId };
+    const locator = {
+      file: { authority: 'workspace' as const, path: input.documentId },
+    };
     const session = await TextDocumentSession.open(
       {
         owner: { kind: 'window', windowId: input.windowId, projectId: input.projectId },
@@ -561,6 +618,13 @@ export class DesktopTextEditorRuntime {
       if (binding.closed) return;
       const projection = await binding.session.observeExternalChange();
       if (!projection || binding.closed) return;
+      const unavailable = projection.diagnostics.some(
+        (diagnostic) => diagnostic.code === 'text-document-external-change-unavailable',
+      );
+      if (unavailable && !projection.dirty) {
+        await this.closeBinding(binding);
+        return;
+      }
       binding.eventSequence += 1;
       const event: TextEditorProjectionEvent = {
         sequence: binding.eventSequence,

@@ -15,24 +15,23 @@ media libraries, and creative tools into one workspace.
 With OpenNeko, you can:
 
 - choose Conversation or Creation from Agent Entry while keeping the existing sidebar navigation;
-- create content, characters, and worlds together in one Project workspace;
-- use global characters and worlds for Character Dialogue, multi-character Rooms, or World Experiences;
+- organize content in a Project and invoke currently released creative capabilities;
 - manage source material and generated results, then continue working in the Canvas or video timeline;
 - keep project files local, preview or export results, and hand work off to professional tools.
 
 ## Current Capabilities
 
-| Capability                  | What you can do                                                                         |
-| --------------------------- | --------------------------------------------------------------------------------------- |
-| Conversation and Creation   | Select global characters/worlds for interaction or add an exact Project to the composer |
-| Project workspace           | Manage content, local characters/worlds, and exact global version references together   |
-| Characters and worlds       | Create, synchronize, version, and import/export one immutable version per ZIP            |
-| Creative Agent              | Chat under the current authority, plan tasks, use tools, and generate content            |
-| Tools and APIs              | Configure cloud or local AI APIs and let the Agent use supported local tools             |
-| Skills and extensions       | Manage personal Skills and OpenNeko extensions                                          |
-| Media Library/Canvas        | Organize assets, documents, generated results, and structure                            |
-| Video timeline              | Arrange, preview, and export lightweight audio/video projects                           |
-| Content preview             | View common documents, images, audio/video, and supported 3D models                     |
+| Capability                | What you can do                                                                      |
+| ------------------------- | ------------------------------------------------------------------------------------ |
+| Conversation and Creation | Start an ordinary conversation or add an exact Project to the composer               |
+| Project workspace         | Manage content and released creative capabilities in one local context               |
+| Experimental records      | Preserve Chara/World project facts without exposing their Release capability entries |
+| Creative Agent            | Chat under the current authority, plan tasks, use tools, and generate content        |
+| Tools and APIs            | Configure cloud or local AI APIs and let the Agent use supported local tools         |
+| Skills and extensions     | Manage personal Skills and OpenNeko extensions                                       |
+| Media Library/Canvas      | Organize assets, documents, generated results, and structure                         |
+| Video timeline            | Arrange, preview, and export lightweight audio/video projects                        |
+| Content preview           | View common documents, images, audio/video, and supported 3D models                  |
 
 Available generation and understanding features depend on your configured APIs, model access, and local services.
 
@@ -40,7 +39,7 @@ Available generation and understanding features depend on your configured APIs, 
 
 - **Alpha**: currently intended for source-based previews and product validation; interfaces and project formats may change.
 - **Platform**: Apple Silicon macOS only; distributed DMGs are not Developer ID signed or Apple notarized.
-- **Product focus**: mixed Project authoring, reusable global characters/worlds, and exact-version Dialogue, Room, and World Experience interactions.
+- **Product focus**: Release builds focus on Agent, Project, content, assets, and media creation. Chara/World remain visible only in Development; Release hides their entries while preserving code and user data.
 - **In development**: the complete end-to-end workflow, stable release channel, and professional-tool integrations.
 
 ## Start From Source

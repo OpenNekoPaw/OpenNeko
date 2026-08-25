@@ -28,7 +28,7 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
         data: {
           assetPath: 'media/cat.png',
           mediaType: 'image',
-          contentLocator: { kind: 'workspace-file', path: 'media/cat.png' },
+          contentLocator: { file: { authority: 'workspace', path: 'media/cat.png' } },
         },
       },
     );
@@ -37,9 +37,40 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
       type: 'media',
       data: {
         assetPath: 'media/cat.png',
-        contentLocator: { kind: 'workspace-file', path: 'media/cat.png' },
+        contentLocator: { file: { authority: 'workspace', path: 'media/cat.png' } },
       },
     });
+  });
+
+  it('accepts a validated planner-owned size without exposing it through Agent input', () => {
+    const created = planCanvasNodeCreation(
+      { canvasData: emptyCanvas(), generateId: () => 'intrinsic-image-node' },
+      {
+        type: 'media',
+        size: { width: 80, height: 120 },
+        data: {
+          assetPath: 'media/portrait.png',
+          mediaType: 'image',
+          contentLocator: { file: { authority: 'workspace', path: 'media/portrait.png' } },
+        },
+      },
+    );
+
+    expect(created.result.node.size).toEqual({ width: 80, height: 120 });
+    expect(() =>
+      planCanvasNodeCreation(
+        { canvasData: emptyCanvas(), generateId: () => 'invalid-size-node' },
+        {
+          type: 'media',
+          size: { width: Number.NaN, height: 120 },
+          data: {
+            assetPath: 'media/portrait.png',
+            mediaType: 'image',
+            contentLocator: { file: { authority: 'workspace', path: 'media/portrait.png' } },
+          },
+        },
+      ),
+    ).toThrow('finite positive width and height');
   });
 
   it('creates all canonical node projections from valid data', () => {
@@ -52,7 +83,7 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
         data: {
           assetPath: 'media/key.png',
           mediaType: 'image',
-          contentLocator: { kind: 'workspace-file', path: 'media/key.png' },
+          contentLocator: { file: { authority: 'workspace', path: 'media/key.png' } },
         },
       },
       { type: 'group' as const, data: { label: 'References' } },
@@ -69,7 +100,7 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
         data: {
           path: 'docs/brief.pdf',
           title: 'Brief',
-          contentLocator: { kind: 'workspace-file', path: 'docs/brief.pdf' },
+          contentLocator: { file: { authority: 'workspace', path: 'docs/brief.pdf' } },
         },
       },
       {
@@ -90,11 +121,11 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
     ]);
     expect(canvas.nodes.map((node) => node.size)).toEqual([
       { width: 240, height: 160 },
-      { width: 240, height: 180 },
-      { width: 320, height: 220 },
-      { width: 240, height: 150 },
-      { width: 220, height: 150 },
-      { width: 240, height: 160 },
+      { width: 120, height: 90 },
+      { width: 160, height: 110 },
+      { width: 120, height: 75 },
+      { width: 110, height: 75 },
+      { width: 120, height: 80 },
     ]);
     expect(canvas.nodes.find((node) => node.type === 'group')?.container).toMatchObject({
       policy: 'group',
@@ -108,6 +139,34 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
       inputRefs: [],
       outputRefs: [],
     });
+  });
+
+  it('uses the text-reference default unless the creator supplies a size', () => {
+    const textFile = planCanvasNodeCreation(
+      { canvasData: emptyCanvas(), generateId: () => 'text-file' },
+      {
+        type: 'file',
+        data: {
+          path: 'docs/brief.md',
+          mediaType: 'text/markdown',
+          contentLocator: { file: { authority: 'workspace', path: 'docs/brief.md' } },
+        },
+      },
+    );
+    const explicitlySized = planCanvasNodeCreation(
+      { canvasData: textFile.canvasData, generateId: () => 'sized-text-file' },
+      {
+        type: 'file',
+        size: { width: 320, height: 180 },
+        data: {
+          path: 'docs/notes.txt',
+          contentLocator: { file: { authority: 'workspace', path: 'docs/notes.txt' } },
+        },
+      },
+    );
+
+    expect(textFile.result.node.size).toEqual({ width: 240, height: 160 });
+    expect(explicitlySized.result.node.size).toEqual({ width: 320, height: 180 });
   });
 
   it('rejects unsupported domain node types', () => {
@@ -169,7 +228,7 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
             data: {
               assetPath: 'media/result.png',
               mediaType: 'image',
-              contentLocator: { kind: 'workspace-file', path: 'media/result.png' },
+              contentLocator: { file: { authority: 'workspace', path: 'media/result.png' } },
             },
           },
         ],
@@ -199,7 +258,7 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
         data: {
           path: 'docs/target.pdf',
           title: 'Target',
-          contentLocator: { kind: 'workspace-file', path: 'docs/target.pdf' },
+          contentLocator: { file: { authority: 'workspace', path: 'docs/target.pdf' } },
         },
       },
     );
@@ -276,8 +335,7 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
 
   it('preserves stable ContentLocator identity in File nodes', () => {
     const contentLocator = {
-      kind: 'workspace-file' as const,
-      path: 'docs/reference.pdf',
+      file: { authority: 'workspace' as const, path: 'docs/reference.pdf' },
     };
     const file = planCanvasNodeCreation(
       { canvasData: emptyCanvas(), generateId: ids() },
@@ -299,8 +357,10 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
         cachePath: '/tmp/cache.png',
         previewUrl: 'blob:neko-media://preview',
         contentLocator: {
-          kind: 'workspace-file',
-          path: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
+          file: {
+            authority: 'workspace',
+            path: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
+          },
         },
       }).map((diagnostic) => diagnostic.code),
     ).toEqual([

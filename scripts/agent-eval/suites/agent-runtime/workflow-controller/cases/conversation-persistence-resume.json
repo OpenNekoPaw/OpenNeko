@@ -11,28 +11,24 @@
       "session.waitForIdle",
       "Desktop application/session owner restart",
       "session.resume",
-      "Pi Session reopen and buildContext",
-      "SQLite conversation catalog",
+      "DSH Session reopen and history replay through ACP",
+      "OpenNeko Conversation catalog",
       "message.submit"
     ],
     "observables": [
       {
         "ref": "turn-facts",
         "kind": "runtime-fact",
-        "description": "The resumed Desktop owner reports Pi Session authority, SQLite catalog, matching conversation identity, and restored history count before continuation.",
+        "description": "The resumed Desktop owner reports DSH Session authority, the OpenNeko Conversation catalog, matching Conversation identity, and restored history count before continuation.",
         "required": true
       }
     ],
-    "expectedResult": "A new Desktop App/session owner restores the same conversation from Pi Session through the user-level SQLite catalog and completes a continuation turn.",
-    "expectedFailure": "A missing catalog row, non-Pi record source, changed conversation identity, empty restored history, runtime error, or non-idle terminal state fails visibly."
+    "expectedResult": "A new Desktop application/session owner restores the same Conversation from the exact DSH Session through the OpenNeko Conversation catalog and completes a continuation turn.",
+    "expectedFailure": "A missing catalog row, non-DSH record source, changed Conversation identity, empty restored history, runtime error, or non-idle terminal state fails visibly."
   },
-  "fixtureRefs": [
-    "empty-workspace"
-  ],
+  "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "checkpoint",
@@ -67,17 +63,6 @@
       "evidenceRef": "turn-facts"
     },
     {
-      "id": "pi-runtime",
-      "kind": "pi-runtime",
-      "implementation": "pi-agent-core",
-      "transcriptAuthority": "pi-session",
-      "productMetadataAuthority": "sqlite",
-      "purpose": "agent.main",
-      "workspaceLocatorKind": "virtual",
-      "turnDurability": "durable",
-      "evidenceRef": "turn-facts"
-    },
-    {
       "id": "turn",
       "kind": "canonical-turn",
       "evidenceRef": "turn-facts"
@@ -85,11 +70,11 @@
     {
       "id": "persistence",
       "kind": "conversation-persistence",
-      "authority": "pi-session",
-      "catalog": "sqlite",
+      "authority": "dsh-session",
+      "catalog": "openneko-conversation-catalog",
       "databaseScope": "user-global",
       "resumeStatus": "restored",
-      "recordSource": "pi-session",
+      "recordSource": "dsh-session",
       "minRestoredMessages": 2,
       "evidenceRef": "turn-facts"
     },
@@ -104,10 +89,7 @@
     {
       "id": "terminal",
       "kind": "terminal-idle",
-      "concerns": [
-        "turnIdle",
-        "continuationQueueIdle"
-      ],
+      "concerns": ["turnIdle", "continuationQueueIdle"],
       "evidenceRef": "turn-facts"
     },
     {

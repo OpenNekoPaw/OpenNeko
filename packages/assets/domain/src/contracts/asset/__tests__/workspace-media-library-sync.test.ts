@@ -16,22 +16,10 @@ describe('Workspace Media Library sync contracts', () => {
           ownerId: 'board-a',
           sourceFingerprint: 'sourceFingerprint-2',
           references: [
-            {
-              kind: 'media-library',
-              libraryName: 'Footage',
-              relativePath: 'shots/a.mov',
-            },
-            {
-              kind: 'media-library',
-              libraryName: 'Footage',
-              relativePath: 'shots/a.mov',
-            },
-            {
-              kind: 'media-library',
-              libraryName: 'Documents',
-              relativePath: 'book.epub',
-            },
-            { kind: 'workspace-file', path: 'media/project-owned.png' },
+            { file: { authority: 'workspace', path: 'neko/assets/Footage/shots/a.mov' } },
+            { file: { authority: 'workspace', path: 'neko/assets/Footage/shots/a.mov' } },
+            { file: { authority: 'workspace', path: 'neko/assets/Documents/book.epub' } },
+            { file: { authority: 'workspace', path: 'media/project-owned.png' } },
           ],
         },
         {
@@ -39,11 +27,7 @@ describe('Workspace Media Library sync contracts', () => {
           ownerId: 'timeline-a',
           sourceFingerprint: 'sourceFingerprint-1',
           references: [
-            {
-              kind: 'media-library',
-              libraryName: 'Footage',
-              relativePath: 'audio/a.wav',
-            },
+            { file: { authority: 'workspace', path: 'neko/assets/Footage/audio/a.wav' } },
           ],
         },
       ],
@@ -86,7 +70,7 @@ describe('Workspace Media Library sync contracts', () => {
             ownerKind: 'canvas',
             ownerId: 'board-a',
             sourceFingerprint: 'sourceFingerprint-1',
-            references: [{ kind: 'media-library', libraryName: 'Footage', relativePath: '' }],
+            references: [{ file: { authority: 'workspace', path: '/absolute/private.png' } }],
           },
         ],
         coverage: { expectedOwnerKinds: ['canvas'], coveredOwnerKinds: ['canvas'] },

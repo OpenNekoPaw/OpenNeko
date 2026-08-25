@@ -20,15 +20,15 @@ export const DocxViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
   const containerRef = useRef<HTMLDivElement>(null);
   const styleContainerRef = useRef<HTMLDivElement>(null);
 
-  const getSelectionLocator = useCallback(() => {
-    const locator = resolveDocxSelectionLocator(containerRef.current);
-    return locator ?? { kind: 'text-range' as const, startChar: 0 };
+  const getSelectionCoordinate = useCallback(() => {
+    const coordinate = resolveDocxSelectionCoordinate(containerRef.current);
+    return coordinate ?? { kind: 'text-range' as const, startChar: 0 };
   }, []);
 
-  const fileLocator = useMemo(() => ({ kind: 'text-range' as const, startChar: 0 }), []);
+  const fileCoordinate = useMemo(() => ({ kind: 'text-range' as const, startChar: 0 }), []);
   const { selection, sendFileToAgent } = useDocumentSelection({
-    locator: fileLocator,
-    getLocator: getSelectionLocator,
+    coordinate: fileCoordinate,
+    getCoordinate: getSelectionCoordinate,
   });
 
   useHostMessage((msg) => {
@@ -115,14 +115,14 @@ export const DocxViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
     }
 
     const contentKind = hasText && imageData ? 'mixed' : hasText ? 'text' : 'image';
-    const locator = getSelectionLocator();
+    const coordinate = getSelectionCoordinate();
     postMessage({
       type: 'document:sendToAi',
       payload: {
         text: selection?.text || undefined,
         imageData,
         contentKind,
-        locator,
+        coordinate,
         excerpt: selection?.text
           ? { contentKind, text: selection.text, imageData, truncated: false }
           : undefined,
@@ -131,7 +131,7 @@ export const DocxViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
 
     window.getSelection()?.removeAllRanges();
     setRightClickedImageSrc(null);
-  }, [selection, rightClickedImageSrc, getSelectionLocator]);
+  }, [selection, rightClickedImageSrc, getSelectionCoordinate]);
 
   const contextActions = useDocumentContextActions({
     hasContent: !!selection || !!rightClickedImageSrc,
@@ -204,7 +204,7 @@ export const DocxViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
   );
 };
 
-function resolveDocxSelectionLocator(root: HTMLElement | null) {
+function resolveDocxSelectionCoordinate(root: HTMLElement | null) {
   const selection = window.getSelection();
   if (!root || !selection || selection.rangeCount === 0) {
     return null;

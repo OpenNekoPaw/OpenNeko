@@ -1,36 +1,3 @@
-/** Canonical base prompt construction and Host-owned prompt file support. */
-export {
-  SystemPromptBuilder,
-  createSystemPromptBuilder,
-  getDefaultPersonalPath,
-  hasAgentsFile,
-} from './system-prompt-builder';
-
-export { runSystemPromptAgentsFileLoadRuntime } from './system-prompt-agents-file-runtime';
-export type {
-  SystemPromptAgentsFileRuntimeDeps,
-  SystemPromptAgentsFileRuntimeInput,
-} from './system-prompt-agents-file-runtime';
-
-export type {
-  SystemPromptBuilderConfig,
-  PromptExecutionMode,
-  PromptLocale,
-  AgentsSource,
-  AgentsLoadResult,
-} from './system-prompt-builder-types';
-
-export {
-  BUILTIN_PROMPTS,
-  BUILTIN_DEFAULT_PROMPT_EN,
-  BUILTIN_DEFAULT_PROMPT_ZH,
-  BUILTIN_PLAN_PROMPT_EN,
-  BUILTIN_PLAN_PROMPT_ZH,
-  type BuiltinPromptKey,
-} from './builtin-prompts';
-
-export type { PromptCompositionFragmentProjection } from './prompt-composition-projection';
-
 // Prompt file host-neutral projection
 export {
   DEFAULT_AGENTS_FILE_CONTENT,

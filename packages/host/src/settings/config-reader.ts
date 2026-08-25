@@ -29,6 +29,7 @@ export type ConfigReadErrorCode =
   | 'unsupportedProviderConnectionKind'
   | 'unsupportedProviderProtocolProfile'
   | 'unsupportedProviderSupportLevel'
+  | 'unsupportedProviderModelFamily'
   | 'unsupportedProtocolAuthType'
   | 'unsupportedProtocolStreamFormat'
   | 'unsupportedModelProtocolProfile'

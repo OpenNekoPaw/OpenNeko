@@ -1,18 +1,21 @@
 import type {
+  AmbientCanvasNode,
   AgentConfigurationPolicyProjection,
   ConversationKind,
   SessionMode,
 } from '@neko/agent-contracts';
-import type { AmbientCanvasNodeProjection } from './plugin-transfer-presenter';
+
+export type AmbientCanvasNodeProjection = AmbientCanvasNode;
 
 export interface InputAreaUiProjectionInput {
-  presentation?: 'entry' | 'conversation';
+  presentation?: 'entry' | 'workspace' | 'conversation';
   inputValue: string;
   attachedFileCount: number;
   contextChipCount: number;
   ambientNodeCount: number;
   mediaModelCallCount: number;
   isThinking: boolean;
+  queueingEnabled?: boolean;
   queuedMessageCount?: number;
   disabled: boolean;
   sessionMode: SessionMode;
@@ -73,7 +76,8 @@ export interface AmbientCanvasContextProjection {
 }
 
 export function projectInputAreaUi(input: InputAreaUiProjectionInput): InputAreaUiProjection {
-  const isEntry = input.presentation === 'entry';
+  const isInitialPresentation =
+    input.presentation === 'entry' || input.presentation === 'workspace';
   const hasText = input.inputValue.trim().length > 0;
   const hasAttachments = input.attachedFileCount > 0;
   const hasContextChips = input.contextChipCount > 0;
@@ -88,6 +92,7 @@ export function projectInputAreaUi(input: InputAreaUiProjectionInput): InputArea
     input.configurationPolicy?.fields.executionMode.policy.status ?? 'editable';
   const hasQueueableContent = hasText || hasAttachments || hasContextChips;
   const canQueue =
+    input.queueingEnabled !== false &&
     input.isThinking &&
     !input.disabled &&
     !input.submissionBlocked &&
@@ -115,7 +120,7 @@ export function projectInputAreaUi(input: InputAreaUiProjectionInput): InputArea
     showMediaCallCount: !isCharacterRoleSession && input.mediaModelCallCount > 0,
     showExecutionModeSelector: executionModePolicy !== 'unavailable' && isAgentMode,
     showModelConfig: modelPolicy !== 'unavailable' && (isAgentMode || hasCurrentSessionMediaModels),
-    inputPlaceholderKey: isEntry
+    inputPlaceholderKey: isInitialPresentation
       ? 'chat.input.entryPlaceholder'
       : queuedMessageCount > 0
         ? 'chat.input.queuePlaceholder'

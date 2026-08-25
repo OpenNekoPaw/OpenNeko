@@ -1,8 +1,6 @@
-import { isThreeReferenceContextData, type ThreeReferenceContextData } from '@neko/preview-domain';
-import type { AgentContextPayload, AttachmentType, MessageAttachment } from '@neko/agent-contracts';
+import { isThreeReferenceContextData, type ThreeReferenceContextData } from '@neko/model-domain';
+import type { AgentContextPayload, MessageAttachment } from '@neko/agent-contracts';
 import { isDocumentFile } from '@neko/media';
-import { type ContentLocator } from '@neko/content';
-import { projectContentLocatorPath } from './content-locator-presenter';
 
 export type ReferenceTokenProjectionKind =
   'file' | 'image' | 'video' | 'audio' | 'canvas' | 'clip' | 'entity';
@@ -26,17 +24,6 @@ export interface PathReferenceTokenInput {
   label?: string;
   mediaType?: ReferenceMediaType;
   thumbnailUri?: string;
-}
-
-export interface MessageContextReferenceTokenInput {
-  type: string;
-  id: string;
-  label: string;
-  summary?: string;
-  thumbnailUri?: string;
-  mediaType?: ReferenceMediaType;
-  contentLocator?: ContentLocator;
-  navigationData?: Record<string, string>;
 }
 
 export interface AmbientCanvasReferenceTokenInput {
@@ -103,31 +90,6 @@ function formatThreeReferenceMeta(data: ThreeReferenceContextData): string {
   return [...roles, ...(guideOnly ? ['guide-only'] : [])].join(' · ');
 }
 
-export function projectMessageContextReferenceToken(
-  reference: MessageContextReferenceTokenInput,
-): ReferenceTokenProjection {
-  const path = reference.contentLocator
-    ? projectContentLocatorPath(reference.contentLocator)
-    : undefined;
-  const pathToken = path
-    ? projectPathReferenceToken({
-        path,
-        label: reference.label,
-        mediaType: reference.mediaType,
-        thumbnailUri: reference.thumbnailUri,
-      })
-    : null;
-
-  return {
-    kind: pathToken?.kind ?? toContextReferenceKind(reference.type),
-    label: reference.label,
-    title: reference.summary || path || reference.label,
-    meta: pathToken?.meta ?? null,
-    countLabel: null,
-    thumbnailSrc: reference.thumbnailUri ?? null,
-  };
-}
-
 export function projectAmbientCanvasReferenceToken(
   input: AmbientCanvasReferenceTokenInput,
 ): ReferenceTokenProjection {
@@ -142,15 +104,7 @@ export function projectAmbientCanvasReferenceToken(
   };
 }
 
-export function toAttachmentTypeFromPathReference(
-  reference: PathReferenceTokenInput,
-): AttachmentType {
-  const kind = inferReferenceKindFromPath(reference.path, reference.mediaType);
-  if (kind === 'image' || kind === 'video' || kind === 'audio') return kind;
-  return 'file';
-}
-
-export function inferReferenceKindFromPath(
+function inferReferenceKindFromPath(
   path: string,
   mediaType?: ReferenceMediaType,
 ): ReferenceTokenProjectionKind {
@@ -169,13 +123,13 @@ export function inferReferenceKindFromPath(
   return 'file';
 }
 
-export function formatReferenceBasename(path: string): string {
+function formatReferenceBasename(path: string): string {
   const normalized = path.replaceAll('\\', '/');
   const parts = normalized.split('/').filter(Boolean);
   return parts[parts.length - 1] ?? path;
 }
 
-export function formatReferenceParentPath(path: string | undefined): string | null {
+function formatReferenceParentPath(path: string | undefined): string | null {
   if (!path) return null;
   const normalized = path.replaceAll('\\', '/');
   const separatorIndex = normalized.lastIndexOf('/');
@@ -183,7 +137,7 @@ export function formatReferenceParentPath(path: string | undefined): string | nu
   return normalized.slice(0, separatorIndex);
 }
 
-export function formatReferenceSize(bytes: number | undefined): string | null {
+function formatReferenceSize(bytes: number | undefined): string | null {
   if (bytes === undefined || bytes <= 0) return null;
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;

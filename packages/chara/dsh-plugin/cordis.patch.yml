@@ -1,0 +1,3 @@
+- insert:
+    - id: openneko-character-tools
+      name: '@neko/chara-dsh-plugin'

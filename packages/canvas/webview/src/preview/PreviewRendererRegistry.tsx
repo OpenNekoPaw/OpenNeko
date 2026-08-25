@@ -6,10 +6,9 @@ import {
 } from '@neko/preview-domain';
 import { LightweightPreview, type LightweightPreviewPlayback } from '@neko/preview-webview/root';
 import type { DelegateAction } from '@neko/canvas-domain';
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 import { dispatchPreviewDelegate } from './previewDelegates';
 import type { PreviewPlaybackControl, PreviewSourceDescriptor } from './types';
-import type { PreviewRuntime } from './previewRuntime';
 import type { PlaybackSurfaceKind } from '../stores/playbackStore';
 import { useOptionalCanvasHost } from '../host-runtime';
 import { getLocale, t } from '../i18n';
@@ -20,7 +19,6 @@ import {
 
 export interface PreviewRendererProps {
   source: PreviewSourceDescriptor;
-  runtime?: PreviewRuntime;
   delegateActions?: DelegateAction[];
   surfaceKind?: PlaybackSurfaceKind;
   playbackControl?: PreviewPlaybackControl;
@@ -187,7 +185,16 @@ function useCanvasPreviewDescriptor(source: PreviewSourceDescriptor): {
         host.postMessage({ type: 'preview:releaseResource', descriptorId });
       }
     };
-  }, [host, locator, source.id, source.nodeId, source.outputId, source.role, source.title]);
+  }, [
+    host,
+    locator,
+    source.id,
+    source.nodeId,
+    source.outputId,
+    source.role,
+    source.sourceFingerprint,
+    source.title,
+  ]);
 
   return { ...(descriptor ? { descriptor } : {}), ...(diagnostic ? { diagnostic } : {}) };
 }
@@ -237,17 +244,7 @@ function FallbackPreviewRenderer(props: PreviewRendererProps): ReactNode {
 }
 
 function contentLocatorFileName(locator: ContentLocator): string {
-  switch (locator.kind) {
-    case 'workspace-file':
-    case 'generated-output':
-      return locator.path;
-    case 'media-library':
-      return locator.relativePath;
-    case 'document-entry':
-      return locator.entryPath;
-    case 'package-resource':
-      return locator.resourcePath;
-  }
+  return locator.selector?.kind === 'entry' ? locator.selector.path : locator.file.path;
 }
 
 function defaultMediaType(kind: 'image' | 'video' | 'audio'): string {

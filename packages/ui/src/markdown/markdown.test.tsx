@@ -186,6 +186,31 @@ describe('@neko/ui markdown primitives', () => {
     expect(host.querySelector('a')?.getAttribute('href')).toBe('https://example.com');
     expect(host.querySelectorAll('table th')).toHaveLength(2);
     expect(host.querySelectorAll('table td')).toHaveLength(2);
+    expect(
+      host
+        .querySelector('[data-markdown-table-scroll="true"]')
+        ?.getAttribute('data-markdown-table-columns'),
+    ).toBe('2');
+    expect(host.querySelector<HTMLTableElement>('table')?.className).toContain('min-w-[40rem]');
+    expect(host.querySelector<HTMLTableElement>('table')?.getAttribute('style')).toBeNull();
+  });
+
+  it('gives wide read-only tables a column-aware local scroll presentation', () => {
+    act(() => {
+      root.render(
+        <MarkdownDocumentView
+          value={
+            '| A | B | C | D | E | F | G |\n| - | - | - | - | - | - | - |\n| 1 | 2 | 3 | 4 | 5 | 6 | 7 |'
+          }
+        />,
+      );
+    });
+
+    const wrapper = host.querySelector<HTMLElement>('[data-markdown-table-scroll="true"]');
+    expect(wrapper?.dataset['markdownTableColumns']).toBe('7');
+    expect(wrapper?.querySelector<HTMLTableElement>('table')?.getAttribute('style')).toBeNull();
+    expect(wrapper?.querySelector('th')?.className).toContain('min-w-48');
+    expect(wrapper?.querySelectorAll('th')).toHaveLength(7);
   });
 
   it('renders generation prompt parts as shared semantic chips', () => {

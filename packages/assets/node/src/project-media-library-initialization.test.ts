@@ -37,11 +37,7 @@ describe('initializeProjectMediaLibraryBindings', () => {
             representations: [
               {
                 bindingId: 'binding-1',
-                target: {
-                  kind: 'media-library',
-                  libraryName: 'Footage',
-                  relativePath: 'hero.png',
-                },
+                target: { file: { authority: 'workspace', path: 'neko/assets/Footage/hero.png' } },
                 role: 'portrait',
                 source: 'user',
                 acceptedAt: '2026-08-14T00:00:00.000Z',

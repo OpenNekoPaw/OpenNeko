@@ -9,7 +9,7 @@ import {
   createProjectMediaLibraryBindingFingerprint,
   ProjectMediaLibraryBindingRepository,
 } from './project-media-library-binding-repository';
-import { searchProjectMediaLibraryContentLocators } from './resource-browser-node-source';
+import { searchProjectMediaLibraryWorkspaceLocators } from './resource-browser-node-source';
 
 describe('Project Media Library mention search', () => {
   const roots: string[] = [];
@@ -18,7 +18,7 @@ describe('Project Media Library mention search', () => {
     await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
   });
 
-  it('returns owner-qualified locators without following nested links or old workspace links', async () => {
+  it('returns workspace-relative locators without following nested links or old workspace links', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'openneko-media-mention-'));
     roots.push(root);
     const workspacePath = path.join(root, 'workspace');
@@ -60,7 +60,7 @@ describe('Project Media Library mention search', () => {
       }),
     );
 
-    const locators = await searchProjectMediaLibraryContentLocators({
+    const locators = await searchProjectMediaLibraryWorkspaceLocators({
       projectId,
       workspace: {
         workspaceId: 'workspace-1',
@@ -75,11 +75,7 @@ describe('Project Media Library mention search', () => {
     });
 
     expect(locators).toEqual([
-      {
-        kind: 'media-library',
-        libraryName: 'Reference',
-        relativePath: 'shots/hero.png',
-      },
+      { file: { authority: 'workspace', path: 'neko/assets/Reference/shots/hero.png' } },
     ]);
     expect(JSON.stringify(locators)).not.toContain(libraryTarget);
     expect(JSON.stringify(locators)).not.toContain('secret.png');

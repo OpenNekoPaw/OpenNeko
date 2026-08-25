@@ -10,6 +10,7 @@ export default {
     '../../packages/assets/domain/src/resource-browser/**/*.{ts,tsx}',
     '../../packages/canvas/webview/src/**/*.{ts,tsx}',
     '../../packages/cut/webview/src/**/*.{ts,tsx}',
+    '../../packages/model/webview/src/**/*.{ts,tsx}',
     '../../packages/preview/webview/src/**/*.{ts,tsx}',
     '../../packages/ui/src/**/*.{ts,tsx}',
     '../../packages/shared/src/icons/**/*.{ts,tsx}',

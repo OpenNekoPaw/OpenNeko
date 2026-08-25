@@ -19,7 +19,7 @@ describe('Project Entity Inspector intents', () => {
         entityId: 'character-nova',
         binding: {
           role: 'portrait',
-          target: { kind: 'workspace-file', path: 'nova.png' },
+          target: { file: { authority: 'workspace', path: 'nova.png' } },
         },
       }),
     ).toMatchObject({ type: 'bind', binding: { role: 'portrait' } });

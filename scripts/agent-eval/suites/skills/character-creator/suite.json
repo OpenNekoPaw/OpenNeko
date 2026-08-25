@@ -39,21 +39,9 @@
   ],
   "cases": [
     {
-      "id": "workspace-missing-character-target-rejected",
-      "file": "cases/workspace-missing-character-target-rejected.json",
-      "group": "boundary",
-      "visibility": "public"
-    },
-    {
       "id": "roleplay-request-does-not-author",
       "file": "cases/roleplay-request-does-not-author.json",
       "group": "boundary",
-      "visibility": "public"
-    },
-    {
-      "id": "assistant-creates-global-character",
-      "file": "cases/assistant-creates-global-character.json",
-      "group": "canonical",
       "visibility": "public"
     }
   ],

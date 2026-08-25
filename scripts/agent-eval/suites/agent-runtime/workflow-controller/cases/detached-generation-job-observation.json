@@ -5,39 +5,37 @@
   "caseGroup": "workflow",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Submit one detached image Generation Job, then use new Tool Calls to describe and observe the exact returned identity without retrying or using a generic Task.",
+    "userBehavior": "Ask the Agent to generate one image; the single official Generation Tool call remains active until the exact durable Job succeeds or fails.",
     "canonicalPath": [
-      "Desktop Agent input queue",
-      "PiConversationRuntime",
-      "SubmitGenerationJob Tool call",
+      "public DSH Session submit",
+      "DSH Session runtime",
+      "openneko.generation submit Tool call",
       "GenerationJobCoordinator",
-      "versioned Generation Job store",
-      "DescribeGenerationJob Tool call",
-      "ObserveGenerationJob Tool call"
+      "durable Generation Job store",
+      "exact Generation Job observer",
+      "exact turn Canvas admission",
+      "incremental Workspace Board Job projection",
+      "terminal result locator projection"
     ],
     "observables": [
       {
         "ref": "detached-generation-facts",
         "kind": "runtime-fact",
-        "description": "Distinct submit, describe and observe Tool Calls; exact Generation Job identity; owning coordinator; revision sequence; model binding; and forbidden fallback facts.",
+        "description": "One official Generation Tool call; exact Generation Job identity; owning coordinator and observer; exact-turn Workspace Board Job/result projection; terminal result locator or explicit failure; and forbidden polling/fallback facts.",
         "required": true
       }
     ],
-    "expectedResult": "Submit returns a pending revisioned Generation Job immediately; separate Tool Calls describe and observe that exact identity with monotonic revisions and no retry.",
-    "expectedFailure": "Missing Job identity, reused Tool Call, revision regression, direct provider or generic Task participation, model-authored routing, latest fallback, or retry fails."
+    "expectedResult": "The single openneko.generation submit Tool call projects one canonical Generation node into the turn-selected Workspace Board, keeps the exact JobRef visible while running, and binds the canonical Workspace result locator into that same node after success without duplicates.",
+    "expectedFailure": "A pending Tool success, missing Job identity/result locator, missing or blocked Workspace Board projection, duplicate projection, model-authored polling, direct provider or generic Task participation, Canvas fallback, or hidden terminal Job failure fails."
   },
-  "fixtureRefs": [
-    "empty-workspace"
-  ],
+  "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "manage-detached-generation",
       "kind": "submit",
-      "prompt": "Submit one detached image Generation Job for a simple red circle on white. Use the returned exact jobId in separate DescribeGenerationJob and ObserveGenerationJob Tool calls. Stop after reporting the latest authoritative snapshot. Do not retry, do not use a generic Task, and do not choose a provider or model yourself."
+      "prompt": "Generate one image of a simple red circle on white. Wait for the official Generation Tool to finish and report the resulting artifact. Do not poll with additional Tool calls, do not use a generic Task, and do not choose a provider or model yourself."
     },
     {
       "id": "idle",
@@ -52,44 +50,38 @@
       "evidenceRef": "detached-generation-facts"
     },
     {
-      "id": "submit-generation-job",
+      "id": "generation-reaches-terminal-success",
       "kind": "tool-call",
-      "name": "SubmitGenerationJob",
+      "name": "openneko.generation",
       "status": "success",
       "resultIncludes": {
-        "jobKind": "generation",
-        "jobLifecycleOwner": "generation-job-coordinator",
-        "phase": "pending"
+        "kind": "generation",
+        "phase": "succeeded",
+        "resultLocators": [
+          {
+            "file": {
+              "authority": "workspace"
+            }
+          }
+        ]
       },
       "evidenceRef": "detached-generation-facts"
     },
     {
-      "id": "describe-generation-job",
+      "id": "no-model-polling",
       "kind": "tool-call",
       "name": "DescribeGenerationJob",
-      "status": "success",
-      "resultIncludes": {
-        "jobKind": "generation",
-        "jobLifecycleOwner": "generation-job-coordinator"
-      },
-      "evidenceRef": "detached-generation-facts"
-    },
-    {
-      "id": "observe-generation-job",
-      "kind": "tool-call",
-      "name": "ObserveGenerationJob",
-      "status": "success",
-      "resultIncludes": {
-        "jobKind": "generation",
-        "jobLifecycleOwner": "generation-job-coordinator"
-      },
-      "evidenceRef": "detached-generation-facts"
-    },
-    {
-      "id": "no-retry",
-      "kind": "tool-call",
-      "name": "RetryGenerationJob",
       "status": "absent",
+      "evidenceRef": "detached-generation-facts"
+    },
+    {
+      "id": "generation-job-workspace-board",
+      "kind": "workspace-board-projection",
+      "status": "projected",
+      "targetKind": "workspace",
+      "minNodeIds": 1,
+      "sourceFingerprintRequired": true,
+      "diagnosticsEmpty": true,
       "evidenceRef": "detached-generation-facts"
     },
     {
@@ -103,17 +95,7 @@
         },
         {
           "kind": "tool",
-          "name": "SubmitGenerationJob",
-          "status": "success"
-        },
-        {
-          "kind": "tool",
-          "name": "DescribeGenerationJob",
-          "status": "success"
-        },
-        {
-          "kind": "tool",
-          "name": "ObserveGenerationJob",
+          "name": "openneko.generation",
           "status": "success"
         }
       ],
@@ -122,10 +104,7 @@
     {
       "id": "terminal",
       "kind": "terminal-idle",
-      "concerns": [
-        "turnIdle",
-        "continuationQueueIdle"
-      ],
+      "concerns": ["turnIdle", "continuationQueueIdle"],
       "evidenceRef": "detached-generation-facts"
     },
     {

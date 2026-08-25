@@ -3,6 +3,8 @@
     "skipLibCheck": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true
+    "noImplicitOverride": true,
+    "noUncheckedSideEffectImports": true,
+    "types": []
   }
 }

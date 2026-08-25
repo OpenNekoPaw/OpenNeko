@@ -155,7 +155,10 @@ function createFixture(files: readonly SemanticSourceFileObservation[]) {
       unitId: `${source.sourceId}:unit:0`,
       kind: 'plain' as const,
       text: 'Rin',
-      locator: { kind: 'page' as const, pageNumber: 1, pageIndex: 0 },
+      locator: {
+        file: { authority: 'workspace' as const, path: source.relativePath },
+        selector: { kind: 'page' as const, pageNumber: 1, pageIndex: 0 },
+      },
       contentHash: 'fnv1a32:1c8f4c6c',
       range: { startOffset: 0, endOffset: 3, startLine: 1, endLine: 1 },
     },
@@ -204,7 +207,10 @@ function createFixture(files: readonly SemanticSourceFileObservation[]) {
           unitId: `${source.sourceId}:text`,
           kind: 'plain',
           text: 'Rin',
-          locator: { kind: 'text-range', startChar: 0, endChar: 3 },
+          locator: {
+            file: { authority: 'workspace' as const, path: source.relativePath },
+            selector: { kind: 'text-range', startChar: 0, endChar: 3 },
+          },
           contentHash: 'fnv1a32:1c8f4c6c',
           range: { startOffset: 0, endOffset: 3, startLine: 1, endLine: 1 },
         },

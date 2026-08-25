@@ -37,7 +37,7 @@ describe('Canvas Host runtime contract', () => {
             canvasId: identity.documentId,
             canvasSessionId: identity.sessionId,
           },
-          locator: { kind: 'workspace-file', path: 'assets/cat.png' },
+          locator: { file: { authority: 'workspace', path: 'assets/cat.png' } },
           mediaKind: 'image',
         },
       },
@@ -100,24 +100,38 @@ describe('Canvas Host runtime contract', () => {
     ).toThrowError(CanvasHostRuntimeContractError);
   });
 
-  it('preserves exact node removal evidence on save intents', () => {
-    const save = createCanvasHostIntentRequest({
-      requestId: 'request-save',
-      commandId: 'command-save',
+  it('preserves exact node removal evidence on document replacement intents', () => {
+    const replacement = createCanvasHostIntentRequest({
+      requestId: 'request-replace',
+      commandId: 'command-replace',
       identity,
-      intent: { type: 'save', removedNodeIds: ['node-1', 'node-2'] },
+      intent: {
+        type: 'replace-document',
+        canvas: validSnapshot().canvas,
+        removedNodeIds: ['node-1', 'node-2'],
+      },
     });
 
-    expect(parseCanvasHostIntentRequest(save).intent).toEqual({
-      type: 'save',
+    expect(parseCanvasHostIntentRequest(replacement).intent).toEqual({
+      type: 'replace-document',
+      canvas: validSnapshot().canvas,
       removedNodeIds: ['node-1', 'node-2'],
     });
     expect(() =>
       parseCanvasHostIntentRequest({
-        ...save,
-        intent: { type: 'save', removedNodeIds: ['node-1', 'node-1'] },
+        ...replacement,
+        intent: {
+          ...replacement.intent,
+          removedNodeIds: ['node-1', 'node-1'],
+        },
       }),
     ).toThrowError(CanvasHostRuntimeContractError);
+    expect(
+      parseCanvasHostIntentRequest({
+        ...replacement,
+        intent: { type: 'save' },
+      }).intent,
+    ).toEqual({ type: 'save' });
   });
 
   it('preserves a stale-Recipe Generation projection and rejects invalid projection fields', () => {
@@ -136,6 +150,20 @@ describe('Canvas Host runtime contract', () => {
     });
 
     expect(snapshot.generationNodes).toEqual([projection]);
+    const agentProjection = {
+      nodeId: 'generation-agent',
+      jobRef: { kind: 'generation', jobId: 'job-agent' },
+      recipeInputFingerprint: 'sha256:agent-recipe',
+      phase: 'running',
+      createdAt: 300,
+      updatedAt: 350,
+    };
+    expect(
+      parseCanvasHostSnapshot({
+        ...validSnapshot(),
+        generationNodes: [agentProjection],
+      }).generationNodes,
+    ).toEqual([agentProjection]);
     expect(() =>
       parseCanvasHostSnapshot({
         ...validSnapshot(),
@@ -226,6 +254,22 @@ describe('Canvas Host runtime contract', () => {
     ).toMatchObject({
       sequence: 1,
       originCommandId: 'command-1',
+    });
+    expect(
+      parseCanvasHostProjectionEvent({
+        sequence: 2,
+        diagnostic: {
+          code: 'canvas-autosave-failed',
+          message: 'Canvas file is read-only.',
+        },
+        snapshot: { ...validSnapshot(), dirty: true },
+      }),
+    ).toMatchObject({
+      sequence: 2,
+      diagnostic: {
+        code: 'canvas-autosave-failed',
+        message: 'Canvas file is read-only.',
+      },
     });
   });
 

@@ -1,0 +1,255 @@
+import { describe, expect, it, vi } from 'vitest';
+import {
+  createEmptyCharacterBackgroundStory,
+  createEmptyCharacterOriginSetting,
+  parseCharacterRoom,
+  parseCharacterVersion,
+  parseUserCharacterRelationship,
+  type CharacterRoom,
+  type CharacterVersion,
+  type UserCharacterRelationship,
+} from '../contracts';
+import {
+  CharacterRoomInteractionService,
+  type CharacterPreparedRoomRunPort,
+} from '../application/character-room-interaction-service';
+import type { CharacterAgentConversationPort } from '../application/character-interaction-service';
+
+const now = '2026-08-09T10:00:00.000Z';
+
+describe('CharacterRoomInteractionService', () => {
+  it('creates one exact primary AgentSession and CharacterRun per agent participant', async () => {
+    const fixture = createFixture();
+    const service = new CharacterRoomInteractionService({
+      ...fixture.options,
+      now: () => now,
+    });
+
+    const run = await service.createRun({
+      roomRunId: 'room-run-a',
+      characterRoomId: 'room-a',
+      mode: 'companion',
+      companionBindings: [
+        {
+          participantId: 'participant-a',
+          companionContinuityId: 'continuity-a',
+          relationshipId: 'relationship-a',
+        },
+        {
+          participantId: 'participant-b',
+          companionContinuityId: 'continuity-b',
+          relationshipId: 'relationship-b',
+        },
+      ],
+    });
+
+    expect(fixture.createPrimarySession).toHaveBeenCalledTimes(2);
+    expect(fixture.createPrimarySession.mock.calls.map(([input]) => input.displayName)).toEqual([
+      'Neko',
+      'Rin',
+    ]);
+    expect(fixture.createPrimarySession.mock.calls.map(([input]) => input.owner)).toEqual([
+      {
+        kind: 'room',
+        roomId: 'room-a',
+        roomRunId: 'room-run-a',
+        participantId: 'participant-a',
+      },
+      {
+        kind: 'room',
+        roomId: 'room-a',
+        roomRunId: 'room-run-a',
+        participantId: 'participant-b',
+      },
+    ]);
+    expect(run.participants).toEqual([
+      expect.objectContaining({
+        participantId: 'participant-a',
+        controller: expect.objectContaining({
+          kind: 'agent',
+          characterRunId: 'character-run:room-run-a:participant-a',
+          primaryAgentSessionId: 'session:character-run:room-run-a:participant-a',
+        }),
+      }),
+      expect.objectContaining({
+        participantId: 'participant-b',
+        controller: expect.objectContaining({
+          kind: 'agent',
+          characterRunId: 'character-run:room-run-a:participant-b',
+          primaryAgentSessionId: 'session:character-run:room-run-a:participant-b',
+        }),
+      }),
+    ]);
+    expect(fixture.createPreparedRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        characterRuns: [
+          expect.objectContaining({ characterVersionId: 'character-version-a' }),
+          expect.objectContaining({ characterVersionId: 'character-version-b' }),
+        ],
+      }),
+      undefined,
+    );
+    expect(fixture.releaseUnboundSession).not.toHaveBeenCalled();
+  });
+
+  it('releases every created session when aggregate persistence fails', async () => {
+    const fixture = createFixture();
+    fixture.createPreparedRun.mockRejectedValueOnce(new Error('aggregate write failed'));
+    const service = new CharacterRoomInteractionService({
+      ...fixture.options,
+      now: () => now,
+    });
+
+    await expect(
+      service.createRun({
+        roomRunId: 'room-run-a',
+        characterRoomId: 'room-a',
+        mode: 'companion',
+        companionBindings: [
+          {
+            participantId: 'participant-a',
+            companionContinuityId: 'continuity-a',
+            relationshipId: 'relationship-a',
+          },
+          {
+            participantId: 'participant-b',
+            companionContinuityId: 'continuity-b',
+            relationshipId: 'relationship-b',
+          },
+        ],
+      }),
+    ).rejects.toThrow('aggregate write failed');
+    expect(fixture.releaseUnboundSession.mock.calls.map(([sessionId]) => sessionId)).toEqual([
+      'session:character-run:room-run-a:participant-a',
+      'session:character-run:room-run-a:participant-b',
+    ]);
+  });
+});
+
+function createFixture() {
+  const room = characterRoom();
+  const versions = new Map<string, CharacterVersion>([
+    ['character-version-a', characterVersion('a')],
+    ['character-version-b', characterVersion('b')],
+  ]);
+  const relationships = new Map<string, UserCharacterRelationship>([
+    ['relationship-a', relationship('a')],
+    ['relationship-b', relationship('b')],
+  ]);
+  const continuities = new Map(
+    ['a', 'b'].map((suffix) => [
+      `continuity-${suffix}`,
+      {
+        companionContinuityId: `continuity-${suffix}`,
+        userId: 'user-a',
+        characterProjectId: `character-project-${suffix}`,
+        continuityRevision: 0,
+        candidates: [],
+        entries: [],
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]),
+  );
+  const createPrimarySession = vi.fn<CharacterAgentConversationPort['createPrimarySession']>(
+    async (input: { readonly characterRunId: string }) => ({
+      primaryAgentSessionId: `session:${input.characterRunId}`,
+    }),
+  );
+  const releaseUnboundSession = vi.fn<CharacterAgentConversationPort['releaseUnboundSession']>(
+    async () => undefined,
+  );
+  const createPreparedRun = vi.fn<CharacterPreparedRoomRunPort['createPreparedRun']>(
+    async ({ run }) => structuredClone(run),
+  );
+  return {
+    createPrimarySession,
+    releaseUnboundSession,
+    createPreparedRun,
+    options: {
+      repository: {
+        readRoom: async (roomId: string) =>
+          roomId === room.characterRoomId ? structuredClone(room) : undefined,
+        readPublication: async (versionId: string) => structuredClone(versions.get(versionId)),
+        readRelationship: async (relationshipId: string) =>
+          structuredClone(relationships.get(relationshipId)),
+        readCompanionContinuity: async (continuityId: string) =>
+          structuredClone(continuities.get(continuityId)),
+      },
+      roomRuns: { createPreparedRun },
+      displayNames: {
+        requireDisplayName: async (characterVersionId: string) => {
+          const displayNames = new Map([
+            ['character-version-a', 'Neko'],
+            ['character-version-b', 'Rin'],
+          ]);
+          const displayName = displayNames.get(characterVersionId);
+          if (!displayName) throw new Error(`Missing display name for '${characterVersionId}'.`);
+          return displayName;
+        },
+      },
+      agentConversations: {
+        createPrimarySession,
+        releaseUnboundSession,
+        submitTurn: vi.fn(async () => ({ turnId: 'unused', content: 'unused' })),
+      },
+    },
+  };
+}
+
+function characterRoom(): CharacterRoom {
+  return parseCharacterRoom({
+    characterRoomId: 'room-a',
+    title: 'Archive room',
+    participantTemplates: [
+      {
+        participantTemplateId: 'participant-a',
+        displayName: 'Lin',
+        controllerKind: 'agent',
+        characterVersionId: 'character-version-a',
+      },
+      {
+        participantTemplateId: 'participant-b',
+        displayName: 'Mira',
+        controllerKind: 'agent',
+        characterVersionId: 'character-version-b',
+      },
+    ],
+    schedulingPolicy: { kind: 'mentioned' },
+    createdAt: now,
+    updatedAt: now,
+  });
+}
+
+function characterVersion(suffix: string): CharacterVersion {
+  return parseCharacterVersion({
+    characterVersionId: `character-version-${suffix}`,
+    characterProjectId: `character-project-${suffix}`,
+    label: suffix,
+    definition: {
+      summary: suffix,
+      backgroundStory: createEmptyCharacterBackgroundStory(),
+      originSetting: createEmptyCharacterOriginSetting(),
+      canon: [],
+      knowledgeBoundary: [],
+      behaviorPolicy: [],
+      expressionPolicy: [],
+      representationRefs: [],
+    },
+    acceptedEvidenceIds: [],
+    publishedAt: now,
+  });
+}
+
+function relationship(suffix: string): UserCharacterRelationship {
+  return parseUserCharacterRelationship({
+    relationshipId: `relationship-${suffix}`,
+    userId: 'user-a',
+    characterProjectId: `character-project-${suffix}`,
+    relationshipRevision: 0,
+    memories: [],
+    candidates: [],
+    createdAt: now,
+    updatedAt: now,
+  });
+}

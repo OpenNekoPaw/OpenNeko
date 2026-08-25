@@ -11,11 +11,13 @@ schema: spec-driven
 
 rules:
   proposal:
+    - OpenSpec is only for an independently named system-level or product-level capability that changes a system boundary, core product workflow, durable user fact, or security/trust boundary.
+    - Do not create a proposal for local UI or interaction details, bug fixes, performance work, refactors, cleanup, package or directory moves, internal contract changes, tests, quality gates, build/dependency/tooling, inventory, audit, or status work; implement them directly in code and tests.
+    - Keep the proposal at product intent and system-boundary level. Do not include implementation inventories, file/class/function plans, command logs, dated evidence, or code-progress history.
     - When a change touches apps/* or packages/* production modules, Impact must identify the owning responsibility and affected package role; a Desktop-only caller is not ownership evidence.
+    - After a completed feature change promotes its current requirements to canonical specs or architecture documents, delete the proposal directory; do not retain completed proposal history under openspec/changes/archive.
   design:
-    - For changed Desktop or package production modules, record the owner, package role, canonical public entry/path, producer and consumer, runtime boundary, replaced path, and user-data impact.
-    - Record why any production logic retained in apps/* requires the Application boundary and why it is not host-neutral business behavior.
+    - Record only stable owners, runtime/trust boundaries, core contracts, user-data impact, failure isolation, and product-level tradeoffs; code remains authoritative for modules, files, types, and control flow.
   tasks:
-    - Proposal objectives and implementation tasks must have clear boundaries and controlled complexity; task count is not a quality metric. A proposal must not combine independently deliverable objectives, owners, or delivery boundaries, and a task must not bundle independently executable or verifiable outcomes. Split over-complex objectives or tasks into independently reviewable, implementable, and verifiable proposals or tasks; do not merge unrelated work merely to reduce the task count.
-    - Every ownership migration must include producer tests, consumer/delegation tests, runtime verification where applicable, and deletion/poison/fail-closed proof for the replaced path.
-    - Completion tasks must list actual verification commands and residual risks; result-only success without canonical-path evidence is insufficient.
+    - Keep only a few product-level milestones and final acceptance outcomes. Do not track files, classes/functions, per-commit steps, commands, dated evidence, or implementation progress.
+    - Delete the proposal when code owns the canonical capability and only local fixes or supplemental validation remain.

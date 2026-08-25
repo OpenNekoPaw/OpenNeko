@@ -11,11 +11,11 @@
   },
   "dependencies": {
     "@neko/agent-contracts": "workspace:*",
-    "@neko/content": "workspace:*"
+    "@neko/content-domain": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "typescript": "^5.0.0",
+    "typescript": "6.0.3",
     "vitest": "^4.1.2"
   },
   "license": "AGPL-3.0-or-later"

@@ -7,6 +7,7 @@ import {
   type DesktopShellProjection,
 } from '@neko/host/desktop-shell-contract';
 import {
+  ASSET_CENTER_MAIN_SPLIT_DEFAULT_RATIO,
   applyWorkbenchDisplayMode,
   createManagementMainSplitResizeBinding,
   createDesktopAgentSurfaceProps,
@@ -43,56 +44,73 @@ import assetManagementSurfaceSource from './DesktopAssetManagementSurface.tsx?ra
 import { createDesktopWindowComposition } from '@neko/host/desktop-window-composition-contract';
 
 describe('Desktop scene Workbench', () => {
-  it('binds a finalized CharacterVersion handoff only to its exact fresh Agent Draft', () => {
+  it('projects only an exact existing Conversation into the DSH surface', () => {
     const projection = agentProjection();
     const composition = resolveActiveDesktopWindowWorkbench(projection.window);
     const interaction = composition.scene.slots.interaction;
     if (!interaction || interaction.kind !== 'agent' || interaction.scope.kind === 'workspace') {
       throw new Error('Agent projection requires an unbound interaction surface.');
     }
-    const intent = {
-      kind: 'character-dialogue' as const,
-      intentId: 'character-dialogue:1',
-      label: 'Rin',
-      binding: {
-        kind: 'character-dialogue' as const,
-        mode: 'companion' as const,
-        participants: [
-          {
-            globalCharacterId: 'global-character:rin',
-            characterVersionId: 'character-version:rin-2',
-          },
-        ],
+    expect(
+      createDesktopAgentSurfaceProps({
+        workbenchInstanceId: 'workbench-1',
+        sceneId: 'scene-entry',
+        interaction,
+      }),
+    ).toEqual({
+      agentSurfaceId: interaction.agentSurfaceId,
+      sceneId: 'scene-entry',
+      surfaceKind: 'entry',
+      workbenchInstanceId: 'workbench-1',
+    });
+
+    const sessionInteraction = {
+      ...interaction,
+      phase: 'session' as const,
+      scope: {
+        kind: 'assistant' as const,
+        draftId: interaction.scope.draftId,
+        assistantSpaceId: 'assistant-1',
+        conversationId: 'conversation-1',
       },
     };
-    const common = {
-      projection,
-      workbenchInstanceId: composition.workbenchInstanceId,
-      interaction,
-      onChooseWorkspaceTarget: vi.fn(async () => undefined),
-      onSelectWorkspaceProjectTarget: vi.fn(async () => undefined),
-      onLoadAuthoringTargets: vi.fn(async () => ({
-        targets: [],
-        creationContexts: [],
-        diagnostics: [],
-      })),
-      onSelectAuthoringTarget: vi.fn(async () => undefined),
-      onCreateAuthoringTarget: vi.fn(async () => undefined),
-    };
+    expect(
+      createDesktopAgentSurfaceProps({
+        workbenchInstanceId: 'workbench-1',
+        sceneId: 'scene-assistant',
+        interaction: sessionInteraction,
+      }),
+    ).toEqual({
+      agentSurfaceId: interaction.agentSurfaceId,
+      sceneId: 'scene-assistant',
+      surfaceKind: 'assistant',
+      workbenchInstanceId: 'workbench-1',
+      conversationId: 'conversation-1',
+    });
 
+    const workspaceInteraction = {
+      ...interaction,
+      scope: {
+        kind: 'workspace' as const,
+        draftId: interaction.scope.draftId,
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'workspace-grant-1',
+      },
+    };
     expect(
       createDesktopAgentSurfaceProps({
-        ...common,
-        characterDialogueHandoff: { draftId: interaction.scope.draftId, intent },
+        workbenchInstanceId: 'workbench-1',
+        sceneId: 'scene-workspace',
+        interaction: workspaceInteraction,
       }),
-    ).toMatchObject({ characterDialogueHandoff: intent });
-    expect(
-      createDesktopAgentSurfaceProps({
-        ...common,
-        characterDialogueHandoff: { draftId: 'wrong-draft', intent },
-      }),
-    ).not.toHaveProperty('characterDialogueHandoff');
+    ).toEqual({
+      agentSurfaceId: interaction.agentSurfaceId,
+      sceneId: 'scene-workspace',
+      surfaceKind: 'workspace',
+      workbenchInstanceId: 'workbench-1',
+    });
   });
+
   it('locks only controls owned by the pending Shell mutation scope', () => {
     const base = {
       scene: false,
@@ -161,6 +179,7 @@ describe('Desktop scene Workbench', () => {
     });
 
     expect(MANAGEMENT_MAIN_SPLIT_DEFAULT_RATIO).toBe(0.5);
+    expect(ASSET_CENTER_MAIN_SPLIT_DEFAULT_RATIO).toBe(0.6);
     expect(MANAGEMENT_MAIN_SPLIT_MIN_RATIO).toBe(0.5);
     expect(binding.minSize).toBe(0.5);
     expect(binding.maxSize).toBe(DESKTOP_WORKBENCH_LIMITS.mainSplitRatio.max);
@@ -322,7 +341,6 @@ describe('Desktop scene Workbench', () => {
     ['asset-center', projectionWithScene(assetCenterScene())],
     ['extensions', projectionWithScene(extensionsScene())],
     ['project-management', projectionWithScene(projectManagementScene())],
-    ['settings', projectionWithScene(settingsScene())],
   ])(
     'mounts exactly one PrimarySidebar and ControlledWorkbenchShell for %s',
     (_name, projection) => {
@@ -356,22 +374,62 @@ describe('Desktop scene Workbench', () => {
     expect(markup).toContain('aria-label="Expand sidebar"');
   });
 
-  it('preserves the existing primary Sidebar navigation', () => {
+  it('renders the canonical stable and Development primary Sidebar navigation', () => {
     const markup = renderShell(<DesktopShellView projection={agentProjection()} />);
     const primaryNavigation = markup.match(
       /<nav class="home-primary-navigation"[\s\S]*?<\/nav>/u,
     )?.[0];
     if (!primaryNavigation) throw new Error('Primary product navigation is missing.');
 
-    expect(primaryNavigation.match(/class="home-nav-button/gu) ?? []).toHaveLength(6);
+    expect(primaryNavigation.match(/class="home-nav-button/gu) ?? []).toHaveLength(7);
     expect(primaryNavigation).toContain('aria-label="Start creating"');
+    expect(primaryNavigation).toContain('aria-label="Projects"');
+    expect(primaryNavigation).toContain('aria-label="Works"');
+    expect(primaryNavigation).toContain('aria-label="Asset Library"');
+    expect(primaryNavigation).toContain('aria-label="Extensions"');
     expect(primaryNavigation).toContain('aria-label="Characters"');
     expect(primaryNavigation).toContain('aria-label="Worlds"');
-    expect(primaryNavigation).toContain('aria-label="Asset Center"');
-    expect(primaryNavigation).toContain('aria-label="Extensions"');
-    expect(primaryNavigation).toContain('aria-label="All projects"');
+    expect(primaryNavigation).toContain('data-navigation-group="experimental"');
+    expect(primaryNavigation.indexOf('aria-label="Projects"')).toBeLessThan(
+      primaryNavigation.indexOf('aria-label="Works"'),
+    );
+    expect(primaryNavigation.indexOf('aria-label="Works"')).toBeLessThan(
+      primaryNavigation.indexOf('aria-label="Asset Library"'),
+    );
+    expect(primaryNavigation.indexOf('aria-label="Asset Library"')).toBeLessThan(
+      primaryNavigation.indexOf('aria-label="Extensions"'),
+    );
+    expect(primaryNavigation.indexOf('aria-label="Extensions"')).toBeLessThan(
+      primaryNavigation.indexOf('aria-label="Characters"'),
+    );
     expect(primaryNavigation).not.toContain('aria-label="Conversation"');
     expect(primaryNavigation).not.toContain('aria-label="Creation"');
+  });
+
+  it('hides Character and World navigation only in the Release capability projection', () => {
+    const markup = renderShell(
+      <DesktopShellView
+        projection={projectionWithScene(
+          createDefaultDesktopAgentScene('window-1', 'release-draft'),
+        )}
+      />,
+    );
+    const primaryNavigation = markup.match(
+      /<nav class="home-primary-navigation"[\s\S]*?<\/nav>/u,
+    )?.[0];
+    if (!primaryNavigation) throw new Error('Primary product navigation is missing.');
+
+    expect(primaryNavigation.match(/class="home-nav-button/gu) ?? []).toHaveLength(5);
+    expect(primaryNavigation).not.toContain('aria-label="Characters"');
+    expect(primaryNavigation).not.toContain('aria-label="Worlds"');
+    expect(primaryNavigation).not.toContain('data-navigation-group="experimental"');
+    expect(markup).not.toContain('data-navigation-section="characters"');
+    expect(markup).not.toContain('data-navigation-section="worlds"');
+    expect(primaryNavigation).toContain('aria-label="Start creating"');
+    expect(primaryNavigation).toContain('aria-label="Projects"');
+    expect(primaryNavigation).toContain('aria-label="Works"');
+    expect(primaryNavigation).toContain('aria-label="Asset Library"');
+    expect(primaryNavigation).toContain('aria-label="Extensions"');
   });
 
   it('places structural Workspace controls in shared Workbench title chrome only', () => {
@@ -423,6 +481,30 @@ describe('Desktop scene Workbench', () => {
     expect(cutPanelSource.indexOf('data-cut-tab-add="true"')).toBeGreaterThan(
       cutPanelSource.indexOf('<WorkbenchEditorTabs'),
     );
+  });
+
+  it('keeps Workspace quick creation beside Main tabs and in only the Workspace empty state', () => {
+    const start = desktopShellSource.indexOf('function MainViewGroupSurface');
+    const end = desktopShellSource.indexOf('function renderWorkbenchMainView', start);
+    const mainGroupSource = desktopShellSource.slice(start, end);
+    const standaloneEmptyStart = desktopShellSource.indexOf(
+      'data-authoring-authority="standalone-empty"',
+    );
+    const standaloneEmptyEnd = desktopShellSource.indexOf('return { main:', standaloneEmptyStart);
+    const standaloneEmptySource = desktopShellSource.slice(
+      standaloneEmptyStart,
+      standaloneEmptyEnd,
+    );
+
+    expect(mainGroupSource).toContain('<WorkbenchEditorTabs');
+    expect(mainGroupSource).toContain('variant="tab"');
+    expect(mainGroupSource).toContain('variant="empty"');
+    expect(mainGroupSource).toContain('<EmptyMainSurface');
+    expect(mainGroupSource.indexOf('variant="tab"')).toBeGreaterThan(
+      mainGroupSource.indexOf('<WorkbenchEditorTabs'),
+    );
+    expect(standaloneEmptySource).toContain('<EmptyMainSurface />');
+    expect(standaloneEmptySource).not.toContain('WorkspaceQuickCreateControl');
   });
 
   it('selects Workspace region controls only while their exact layout regions are visible', () => {
@@ -554,14 +636,16 @@ describe('Desktop scene Workbench', () => {
     expect(desktopShellSource).toContain("const active = scene.context.kind === 'extensions'");
   });
 
-  it('reserves Settings navigation and Main portal targets in the same Workbench', () => {
+  it('keeps Skill/MCP management full-width without exposing a Plugin detail panel', () => {
     const markup = renderShell(
-      <DesktopShellView projection={projectionWithScene(settingsScene('appearance'))} />,
+      <DesktopShellView projection={projectionWithScene(extensionsScene())} />,
     );
-    expect(markup).toContain('data-workbench-slot="leftDock"');
-    expect(markup).toContain('data-workbench-slot="main"');
-    expect(markup).not.toContain('data-lifecycle=');
-    expect(markup).not.toContain('data-primary-sidebar-frame="application"');
+
+    expect(markup).toContain('data-main-split="none"');
+    expect(markup).toContain('data-main-composition="continuous"');
+    expect(markup).not.toContain('data-workbench-slot="secondaryMain"');
+    expect(markup).not.toContain('aria-label="Resize Main split"');
+    expect(markup).not.toContain('data-workbench-main-gutter="true"');
   });
 
   it.each([
@@ -576,19 +660,7 @@ describe('Desktop scene Workbench', () => {
     expect(markup).not.toContain('project-main-group__tabs');
   });
 
-  it('keeps Extensions management full-width until package selection qualifies detail', () => {
-    const markup = renderShell(
-      <DesktopShellView projection={projectionWithScene(extensionsScene())} />,
-    );
-
-    expect(markup).toContain('data-main-split="none"');
-    expect(markup).toContain('data-main-composition="continuous"');
-    expect(markup).not.toContain('data-workbench-slot="secondaryMain"');
-    expect(markup).not.toContain('aria-label="Resize Main split"');
-    expect(markup).not.toContain('data-workbench-main-gutter="true"');
-  });
-
-  it('composes management Main and detail surfaces edge-to-edge at an equal split', () => {
+  it('composes Asset management as the primary-width surface beside Preview', () => {
     const scene = assetCenterScene();
     const markup = renderShell(
       <DesktopShellView
@@ -610,7 +682,7 @@ describe('Desktop scene Workbench', () => {
 
     expect(markup).toContain('data-main-split="columns"');
     expect(markup).toContain('data-main-composition="continuous"');
-    expect(markup).toContain('--neko-controlled-main-split-ratio:50%');
+    expect(markup).toContain('--neko-controlled-main-split-ratio:60%');
     expect(markup).toContain('aria-label="Resize Main split"');
     expect(markup).not.toContain('data-workbench-main-gutter="true"');
   });
@@ -731,7 +803,7 @@ describe('Desktop scene Workbench', () => {
       },
     };
     const markup = renderShell(<DesktopShellView projection={misleading} />);
-    expect(markup).toContain('Connecting to Agent');
+    expect(markup).toContain('Hi, start creating with a conversation');
     expect(markup).toContain('data-agent-scope="unbound"');
     expect(markup).not.toContain('data-main-view-id=');
 
@@ -807,8 +879,8 @@ describe('Desktop scene Workbench', () => {
 
   it('uses one Workbench shell and the package-owned Asset Management surface', () => {
     expect(desktopShellSource.match(/<ControlledWorkbenchShell/gu) ?? []).toHaveLength(1);
-    expect(desktopShellSource).toContain('onChooseWorkspaceTarget');
-    expect(desktopShellSource).toContain('AgentComposerWorkspaceTarget');
+    expect(desktopShellSource).not.toContain('onChooseWorkspaceTarget');
+    expect(desktopShellSource).not.toContain('AgentComposerWorkspaceTarget');
     expect(assetManagementSurfaceSource).toContain('@neko/assets-webview/asset-management/root');
   });
 
@@ -885,21 +957,32 @@ describe('Desktop scene Workbench', () => {
     expect(source).not.toMatch(/latest|versions\[0\]|activeCharacter|recentCharacter/u);
   });
 
-  it('adds the exact Workspace Project to Creation context without navigating', () => {
-    const start = desktopShellSource.indexOf(
-      'onSelectWorkspaceProjectTarget: async (projectId) =>',
+  it('projects Entry targets without creating Workspace authority in Renderer', () => {
+    const characterStart = desktopShellSource.indexOf('onLoadEntryCharacterTargets: async () =>');
+    const worldStart = desktopShellSource.indexOf(
+      'onLoadEntryWorldTargets: async () =>',
+      characterStart,
     );
-    const end = desktopShellSource.indexOf('onLoadAuthoringTargets: async', start);
-    const projectSelectionSource = desktopShellSource.slice(start, end);
-    expect(start).toBeGreaterThanOrEqual(0);
-    expect(end).toBeGreaterThan(start);
-    expect(projectSelectionSource).toContain('workspaceGrants.selectProject');
-    expect(projectSelectionSource).toContain('projectId');
-    expect(projectSelectionSource).toContain('workspaceGrantId: result.grant.workspaceGrantId');
-    expect(projectSelectionSource).toContain("kind: 'project' as const");
-    expect(projectSelectionSource).not.toContain('projectAuthoring.getCatalog');
-    expect(projectSelectionSource).not.toContain('scenes.transition');
-    expect(projectSelectionSource).not.toContain("kind: 'open-project-workspace'");
+    const handoffStart = desktopShellSource.indexOf('onCharacterProductHandoff:', worldStart);
+    const characterSource = desktopShellSource.slice(characterStart, worldStart);
+    const worldSource = desktopShellSource.slice(worldStart, handoffStart);
+    const entryContextStart = desktopShellSource.indexOf('entryContext: {');
+    const entryContextEnd = desktopShellSource.indexOf('loadWorldTargets:', entryContextStart);
+    const entryContextSource = desktopShellSource.slice(entryContextStart, entryContextEnd);
+
+    expect(characterStart).toBeGreaterThanOrEqual(0);
+    expect(worldStart).toBeGreaterThan(characterStart);
+    expect(handoffStart).toBeGreaterThan(worldStart);
+    expect(entryContextStart).toBeGreaterThanOrEqual(0);
+    expect(entryContextEnd).toBeGreaterThan(entryContextStart);
+    expect(entryContextSource).toContain('projection.catalog.projects.map');
+    expect(entryContextSource).toContain('projectId: project.projectId');
+    expect(entryContextSource).not.toContain('workspaceGrants.selectProject');
+    expect(desktopShellSource).not.toContain('onSelectEntryProject');
+    expect(characterSource).toContain('characterFoundation.getConversationLaunchCatalog()');
+    expect(worldSource).toContain('worldManagement.getCatalog');
+    expect(worldSource).toContain('worldManagement.getDetail');
+    expect(desktopShellSource).not.toContain('onSelectWorkspaceProjectTarget');
   });
 
   it('removes standalone management creation producers', () => {
@@ -934,7 +1017,17 @@ function renderShell(node: JSX.Element): string {
 }
 
 function agentProjection(): DesktopShellProjection {
-  return projectionWithScene(createDefaultDesktopAgentScene('window-1', 'assistant-space:test'));
+  const projection = projectionWithScene(
+    createDefaultDesktopAgentScene('window-1', 'assistant-space:test'),
+  );
+  return {
+    ...projection,
+    domains: [
+      ...projection.domains,
+      { surface: 'character', status: 'ready', ownerSlice: 'P1.6' },
+      { surface: 'world', status: 'ready', ownerSlice: 'P1.6' },
+    ],
+  };
 }
 
 function workspaceProjection(): DesktopShellProjection {
@@ -1184,13 +1277,8 @@ function projectManagementScene(): DesktopWorkbenchSceneProjection {
   return managementScene('creative-management');
 }
 
-function settingsScene(section = 'general'): DesktopWorkbenchSceneProjection {
-  return managementScene('settings', section);
-}
-
 function managementScene(
-  kind: 'asset-center' | 'creative-management' | 'extensions' | 'settings',
-  section = 'general',
+  kind: 'asset-center' | 'creative-management' | 'extensions',
 ): DesktopWorkbenchSceneProjection {
   const sceneId = `scene:window-1:${kind}`;
   if (kind === 'asset-center') {
@@ -1211,7 +1299,6 @@ function managementScene(
       context: { kind },
       slots: {
         main: { kind: 'extension-management' },
-        secondaryMain: { kind: 'extension-detail' },
         status: { kind: 'scene-status', sceneId },
       },
     });
@@ -1227,16 +1314,7 @@ function managementScene(
       },
     });
   }
-  return parseDesktopWorkbenchSceneProjection({
-    sceneId,
-    windowId: 'window-1',
-    context: { kind, settingsSectionId: section },
-    slots: {
-      leftManager: { kind: 'settings-navigation', settingsSectionId: section },
-      main: { kind: 'settings-main', settingsSectionId: section },
-      status: { kind: 'scene-status', sceneId },
-    },
-  });
+  throw new Error(`Unsupported management fixture: ${kind}`);
 }
 
 function projectFixture(workspaceId: string, updatedAt: string) {

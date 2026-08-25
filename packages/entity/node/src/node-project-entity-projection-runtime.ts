@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { createNodeHostContentReadService } from '@neko/content/node';
+import { createNodeHostContentReadService } from '@neko/content-domain/node';
 import {
   ProjectEntityBindingAvailabilityService,
   type ProjectEntityProjectionRepository,
@@ -150,11 +150,7 @@ export class NodeProjectEntityProjectionRuntime {
       semantic,
       repository,
       availability: new ProjectEntityBindingAvailabilityService({
-        workspaceFile: stat,
-        mediaLibrary: stat,
-        documentEntry: stat,
-        generatedOutput: stat,
-        packageResource: stat,
+        content: stat,
       }),
     };
     this.states.set(workspace.workspaceId, state);

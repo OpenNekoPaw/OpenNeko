@@ -9,7 +9,7 @@ import {
   type OtioTimeline,
 } from '@neko/cut-domain';
 import { loadNkc, type CanvasData } from '@neko/canvas-domain';
-import { contentLocatorKey, serializeContentReferenceTarget } from '@neko/content';
+import { contentLocatorKey, serializeContentReferenceTarget } from '@neko/content-domain';
 import { describe, expect, it } from 'vitest';
 import {
   readProjectContentReferences,
@@ -131,25 +131,19 @@ describe('Desktop project content reference readers', () => {
       replacements: new Map([
         [
           contentLocatorKey({
-            kind: 'media-library',
-            libraryName: 'References',
-            relativePath: 'board.png',
+            file: { authority: 'workspace', path: 'neko/assets/References/board.png' },
           }),
           'media/collected/References/board.png',
         ],
         [
           contentLocatorKey({
-            kind: 'media-library',
-            libraryName: 'Shots',
-            relativePath: 'project-shot.mov',
+            file: { authority: 'workspace', path: 'neko/assets/Shots/project-shot.mov' },
           }),
           'media/collected/Shots/project-shot.mov',
         ],
         [
           contentLocatorKey({
-            kind: 'media-library',
-            libraryName: 'Portraits',
-            relativePath: 'character-a.png',
+            file: { authority: 'workspace', path: 'neko/assets/Portraits/character-a.png' },
           }),
           'media/collected/Portraits/character-a.png',
         ],
@@ -167,8 +161,7 @@ describe('Desktop project content reference readers', () => {
       throw new Error('Staged Canvas media fixture is missing.');
     }
     expect(stagedMediaNode.data.contentLocator).toEqual({
-      kind: 'workspace-file',
-      path: 'media/collected/References/board.png',
+      file: { authority: 'workspace', path: 'media/collected/References/board.png' },
     });
     const stagedCut = parseOtio(await readFile(path.join(stagedWorkspace, 'cuts', 'story.otio')));
     expect(stagedCut.ok).toBe(true);
@@ -188,8 +181,7 @@ describe('Desktop project content reference readers', () => {
           representations: [
             {
               target: {
-                kind: 'workspace-file',
-                path: 'media/collected/Portraits/character-a.png',
+                file: { authority: 'workspace', path: 'media/collected/Portraits/character-a.png' },
               },
             },
           ],
@@ -219,9 +211,7 @@ async function writeCanonicalEntities(workspacePath: string): Promise<void> {
               {
                 bindingId: 'binding-a',
                 target: {
-                  kind: 'media-library',
-                  libraryName: 'Portraits',
-                  relativePath: 'character-a.png',
+                  file: { authority: 'workspace', path: 'neko/assets/Portraits/character-a.png' },
                 },
                 role: 'portrait',
                 source: 'user',
@@ -254,9 +244,7 @@ function canvasFixture(): CanvasData {
         data: {
           assetPath: 'References/board.png',
           contentLocator: {
-            kind: 'media-library',
-            libraryName: 'References',
-            relativePath: 'board.png',
+            file: { authority: 'workspace', path: 'neko/assets/References/board.png' },
           },
         },
       },
@@ -279,9 +267,7 @@ function cutFixture(): OtioTimeline {
     clipId: 'clip-a',
     name: 'Shot',
     targetUrl: serializeContentReferenceTarget({
-      kind: 'media-library',
-      libraryName: 'Shots',
-      relativePath: 'project-shot.mov',
+      file: { authority: 'workspace', path: 'neko/assets/Shots/project-shot.mov' },
     }),
     durationFrames: 30,
     rate: 30,

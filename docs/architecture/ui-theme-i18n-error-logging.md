@@ -1,7 +1,5 @@
 # UI、主题、国际化、错误与日志横切架构
 
-更新日期：2026-07-31
-
 本文定义 OpenNeko 中 UI 公共层、统一主题、国际化、错误处理、日志和诊断的横切边界。它不描述某个创作领域的页面设计，也不记录迁移状态；具体领域 UI 仍放在对应包内，只有跨包复用和跨运行平面的约束放在这里。
 
 ## 设计目标
@@ -42,7 +40,7 @@
 | KeyboardBoundary、keyboard dispatcher、focus CSS                                       | 功能包快捷键业务命令和编辑器状态                                            |
 | 通用 property panel、number slider、timeline ruler、tree view                          | 领域 schema、文件格式、素材实体业务                                         |
 
-Renderer UI 统一进入 `@neko/ui`；旧 `@neko/shared/components` 入口已经移除，不得重新引入平行 design system。
+Renderer 通用 UI 统一由 `@neko/ui` 拥有，不得建立平行 design system。
 
 ### UI 边界规则
 
@@ -51,7 +49,7 @@ Renderer UI 统一进入 `@neko/ui`；旧 `@neko/shared/components` 入口已经
 - `@neko/ui` 组件只接收 props/callbacks/typed data，不主动读取全局 package state。
 - 被多个 renderer surface 复用且无领域语义的控件可以进入 `@neko/ui`；只在一个领域成立的交互留在领域包。
 - Cut、Canvas、Preview、Assets、Tools 等被动状态投影到 Desktop shell 的 owning activity/attention surface，避免各 surface 重复状态栏。
-- Agent 聊天输入、模型选择、会话模式、媒体模型栏等 Agent-first 交互留在 `@neko/agent-webview`，不迁入 `@neko/ui`。
+- Agent Session 输入、消息、审批与取消，以及 Skill/MCP management presentation，由 `@neko/agent-webview` 渲染；它不向 `@neko/ui` 回流领域语义。
 
 ## 统一主题
 
@@ -215,5 +213,5 @@ ffprobe / FFmpeg / loopback error
 - 子包依赖和运行平面边界见 [`package-boundaries.md`](package-boundaries.md)。
 - 媒体错误、diagnostic 和 fail-visible 运行时边界见 [`media-runtime.md`](media-runtime.md)。
 - Agent 消息、artifact 和 recovery projection 见 [`agent.md`](agent.md)。
-- Auth/secret 不应进入日志、prompt 或 renderer state，见 [`auth.md`](auth.md)。
-- 缓存、路径和运行时 URI/token 的持久化边界见 [`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)。
+- Credential/secret 不应进入日志、prompt 或 renderer state，见 [`credentials.md`](credentials.md)。
+- 派生存储、路径和运行时 URI/token 的持久化边界见 [`content-access-and-paths.md`](content-access-and-paths.md)。

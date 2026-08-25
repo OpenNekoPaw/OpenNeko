@@ -6,7 +6,7 @@ import type {
   ContentIoDiagnostic,
   ContentLocator,
   ContentReadService,
-} from '@neko/content';
+} from '@neko/content-domain';
 import type { GlobalMediaLibraryLocationKind } from '@neko/assets-domain/global-library/contract';
 
 const LOCATION_KINDS = ['local', 'nas', 'cloud'] as const;

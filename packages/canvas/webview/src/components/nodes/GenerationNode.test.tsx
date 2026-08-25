@@ -52,6 +52,11 @@ describe('GenerationNode', () => {
     expect(container.textContent).not.toContain('Text generation');
     expect(container.textContent).toContain('Failed');
     expect(container.querySelector('[data-canvas-content-kind="text"]')).not.toBeNull();
+    expect(
+      container
+        .querySelector('.canvas-generation-node__text-output')
+        ?.getAttribute('data-canvas-wheel-owner'),
+    ).toBe('content');
     expect(container.querySelector('textarea')).toBeNull();
     expect(container.querySelector('select')).toBeNull();
     expect(container.querySelector('button[title="Run"]')).toBeNull();
@@ -332,10 +337,10 @@ function imageOutput(outputId: string) {
     outputId,
     jobRef: { kind: 'generation' as const, jobId: 'job-image' },
     locator: {
-      kind: 'generated-output' as const,
-      outputId,
-      digest: `sha256:${outputId}`,
-      path: `neko/generated/image/${outputId}.png`,
+      file: {
+        authority: 'workspace' as const,
+        path: `neko/generated/image/${outputId}.png`,
+      },
     },
     kind: 'image' as const,
     recipeInputFingerprint: 'sha256:image-recipe',
@@ -347,10 +352,10 @@ function output(outputId: string, jobId: string, recipeInputFingerprint: string)
     outputId,
     jobRef: { kind: 'generation' as const, jobId },
     locator: {
-      kind: 'generated-output' as const,
-      outputId,
-      digest: `sha256:${outputId}`,
-      path: `neko/generated/prompt/${outputId}.txt`,
+      file: {
+        authority: 'workspace' as const,
+        path: `neko/generated/prompt/${outputId}.txt`,
+      },
     },
     kind: 'prompt' as const,
     recipeInputFingerprint,

@@ -14,7 +14,7 @@
       "generated-output ContentLocator",
       "Assistant conversation-only artifact retention without Workspace Board delivery",
       "Desktop application restart",
-      "Pi Conversation and artifact projection restore"
+      "DSH Conversation transcript and artifact projection restore"
     ],
     "observables": [
       {
@@ -62,18 +62,6 @@
       "evidenceRef": "assistant-generation-facts"
     },
     {
-      "id": "pi-runtime",
-      "kind": "pi-runtime",
-      "implementation": "pi-agent-core",
-      "transcriptAuthority": "pi-session",
-      "productMetadataAuthority": "sqlite",
-      "purpose": "agent.main",
-      "workspaceLocatorKind": "virtual",
-      "turnDurability": "durable",
-      "modelProfileId": "nekoapi-luna-image-purpose",
-      "evidenceRef": "assistant-generation-facts"
-    },
-    {
       "id": "tool",
       "kind": "tool-call",
       "name": "GenerateImage",
@@ -90,11 +78,11 @@
     {
       "id": "persistence",
       "kind": "conversation-persistence",
-      "authority": "pi-session",
-      "catalog": "sqlite",
+      "authority": "dsh-session",
+      "catalog": "openneko-conversation-catalog",
       "databaseScope": "user-global",
       "resumeStatus": "restored",
-      "recordSource": "pi-session",
+      "recordSource": "dsh-session",
       "minRestoredMessages": 2,
       "evidenceRef": "assistant-generation-facts"
     },

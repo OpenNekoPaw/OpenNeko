@@ -235,7 +235,9 @@ describe('CutApplicationRuntime', () => {
           projectId: 'project-1',
           workspaceId: 'workspace-1',
           document: {
-            locator: { kind: 'workspace-file', path: 'cuts/story.otio' },
+            locator: {
+              file: { authority: 'workspace', path: 'cuts/story.otio' },
+            },
             sessionId: 'cut-session:cut-view-1:view-instance-1',
           },
           selection: expect.objectContaining({

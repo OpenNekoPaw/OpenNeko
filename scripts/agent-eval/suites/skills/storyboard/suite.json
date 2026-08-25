@@ -10,7 +10,7 @@
       "provenance": "builtin",
       "rootId": "builtin-skills",
       "relativePath": "storyboard",
-      "fingerprint": "sha256:bca4ab8f29d1ef1b5a0fef44bf2856d0ba908b9b61e9c9dd8b76b13bc8ea325b"
+      "fingerprint": "sha256:1319707ec9c960b1e60193dc9d329aa937683b8e6ac497483ef194c616a297f9"
     }
   },
   "runtimeProfiles": [
@@ -66,6 +66,18 @@
       "id": "storyboard-concept-negative",
       "file": "cases/storyboard-concept-negative.json",
       "group": "boundary",
+      "visibility": "public"
+    },
+    {
+      "id": "cinematic-shot-method",
+      "file": "cases/cinematic-shot-method.json",
+      "group": "regression",
+      "visibility": "public"
+    },
+    {
+      "id": "reference-video-method-adaptation",
+      "file": "cases/reference-video-method-adaptation.json",
+      "group": "regression",
       "visibility": "public"
     }
   ],

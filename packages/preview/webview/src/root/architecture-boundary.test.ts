@@ -2,22 +2,29 @@ import { readdir, readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 
 describe('Preview Root architecture boundary', () => {
-  it('mounts the existing ModelViewer through an injected host without a second model renderer', async () => {
+  it('delegates model presentation to the dedicated package without a second renderer', async () => {
     const rootSource = await readFile(new URL('./index.tsx', import.meta.url), 'utf8');
     const source = await readFile(new URL('./viewer-kernel.tsx', import.meta.url), 'utf8');
+    const modelRoot = await readFile(
+      new URL('../../../../model/webview/src/root.tsx', import.meta.url),
+      'utf8',
+    );
     const modelViewer = await readFile(
-      new URL('../model/ModelViewer.tsx', import.meta.url),
+      new URL('../../../../model/webview/src/ModelViewer.tsx', import.meta.url),
       'utf8',
     );
     const sourceModelViewerHost = await readFile(
-      new URL('../model/sourceModelViewerHost.ts', import.meta.url),
+      new URL('../../../../model/webview/src/sourceModelViewerHost.ts', import.meta.url),
       'utf8',
     );
 
-    expect(source).toContain("await import('../model/ModelViewer')");
-    expect(source).not.toContain("from '../model/ModelViewer'");
-    expect(source).toContain(
-      "import { createSourceModelViewerHost } from '../model/sourceModelViewerHost'",
+    expect(source).toContain("await import('@neko/model-webview/root')");
+    expect(source).not.toContain("from '@neko/model-webview/root'");
+    expect(source).not.toContain('../model/');
+    expect(source).not.toContain('createSourceModelViewerHost');
+    expect(modelRoot).toContain("import { ModelViewer } from './ModelViewer'");
+    expect(modelRoot).toContain(
+      "import { createSourceModelViewerHost } from './sourceModelViewerHost'",
     );
     expect(source).not.toContain('vscodeModelViewerHost');
     expect(source).not.toContain('browserThreeRuntimeFactory');
@@ -27,6 +34,7 @@ describe('Preview Root architecture boundary', () => {
     for (const [fileName, productionSource] of [
       ['root/index.tsx', rootSource],
       ['root/viewer-kernel.tsx', source],
+      ['model/root.tsx', modelRoot],
       ['model/ModelViewer.tsx', modelViewer],
       ['model/sourceModelViewerHost.ts', sourceModelViewerHost],
     ] as const) {
@@ -64,11 +72,12 @@ describe('Preview Root architecture boundary', () => {
       '../docx/DocxViewer',
       '../epub/EpubViewer',
       '../cbz/CbzViewer',
-      '../model/ModelViewer',
     ]) {
       expect(source).toContain(`await import('${viewerModule}')`);
       expect(source).not.toContain(`from '${viewerModule}'`);
     }
+    expect(source).toContain("await import('@neko/model-webview/root')");
+    expect(source).not.toContain("from '@neko/model-webview/root'");
     expectProductionRootSource('root/index.tsx', rootSource);
     expectProductionRootSource('root/viewer-kernel.tsx', source);
     expectProductionRootSource('root/lightweight-preview.tsx', lightweightSource);
@@ -115,29 +124,6 @@ describe('Preview Root architecture boundary', () => {
       'utf8',
     );
     const kernelSource = await readFile(new URL('./viewer-kernel.tsx', import.meta.url), 'utf8');
-    const agentConsumer = await readFile(
-      new URL(
-        '../../../../agent/webview/src/components/ChatView/MediaPreview/AgentPreviewCollection.tsx',
-        import.meta.url,
-      ),
-      'utf8',
-    );
-    const agentRichMediaConsumers = await Promise.all(
-      ['ImageRenderer.tsx', 'VideoRenderer.tsx', 'AudioRenderer.tsx', 'CompositeRenderers.tsx'].map(
-        (fileName) =>
-          readFile(
-            new URL(
-              `../../../../agent/webview/src/components/ChatView/RichContent/renderers/${fileName}`,
-              import.meta.url,
-            ),
-            'utf8',
-          ),
-      ),
-    );
-    const agentMessageItem = await readFile(
-      new URL('../../../../agent/webview/src/components/ChatView/MessageItem.tsx', import.meta.url),
-      'utf8',
-    );
     const assetConsumer = await readFile(
       new URL('../../../../assets/webview/src/resource-browser/root.tsx', import.meta.url),
       'utf8',
@@ -157,18 +143,11 @@ describe('Preview Root architecture boundary', () => {
     expect(kernelSource).toContain("{ kind: 'image'");
     expect(kernelSource).toContain("{ kind: 'model'");
     expect(kernelSource).not.toMatch(/kind:\s*['"]\*['"]/u);
-    for (const consumer of [agentConsumer, assetConsumer, canvasConsumer]) {
+    for (const consumer of [assetConsumer, canvasConsumer]) {
       expect(consumer).toContain("from '@neko/preview-webview/root'");
       expect(consumer).not.toContain("from '@neko/preview-webview/src/");
+      expect(consumer).not.toContain('@neko/model-webview');
       expect(consumer).not.toContain('<PreviewRoot');
-    }
-    for (const consumer of [agentConsumer, ...agentRichMediaConsumers]) {
-      expect(consumer).toContain("from '@neko/preview-webview/root'");
-      expect(consumer).not.toMatch(/<(?:img|video|audio)\b/u);
-      expect(consumer).not.toMatch(/\b(?:previewSrc|renderUri)\b/u);
-    }
-    for (const consumer of [agentMessageItem, ...agentRichMediaConsumers]) {
-      expect(consumer).not.toMatch(/\b(?:ImagePreview|VideoCard|AudioCard)\b/u);
     }
   });
 });

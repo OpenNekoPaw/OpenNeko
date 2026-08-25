@@ -9,12 +9,14 @@ const identity = {
   assetCenterSessionId: 'asset-center:window-1',
   windowId: 'window-1',
 } as const;
+const rendererSessionId = 'renderer-session-1';
 
 describe('Asset Center Host contract', () => {
   it('owns catalog mutation and thumbnail routes behind the exact session identity', () => {
     expect(
       createAssetCenterHostRequest({
         requestId: 'request-1',
+        rendererSessionId,
         identity,
         route: 'assets.remove',
         itemIds: ['global-asset-library:item-1'],
@@ -24,6 +26,7 @@ describe('Asset Center Host contract', () => {
     expect(
       createAssetCenterHostRequest({
         requestId: 'request-move',
+        rendererSessionId,
         identity,
         route: 'items.move',
         itemIds: ['global-asset-library:item-1'],
@@ -32,6 +35,7 @@ describe('Asset Center Host contract', () => {
 
     const request = createAssetCenterHostRequest({
       requestId: 'request-2',
+      rendererSessionId,
       identity,
       route: 'thumbnail.resolve',
       itemId: 'global-asset-library:item-1',
@@ -56,10 +60,50 @@ describe('Asset Center Host contract', () => {
     ).toMatchObject({ route: 'thumbnail.resolve', thumbnail: { variant: 'hover' } });
   });
 
+  it('distinguishes current detach from expected stale Renderer cleanup', () => {
+    const request = createAssetCenterHostRequest({
+      requestId: 'request-detach',
+      rendererSessionId,
+      identity,
+      route: 'session.detach',
+    });
+    const projection = {
+      identity,
+      filter: {
+        catalog: 'media-library' as const,
+        query: '',
+        sortBy: 'name' as const,
+        sortDirection: 'ascending' as const,
+        viewMode: 'list' as const,
+      },
+      catalog: { status: 'loading' as const },
+      preview: { status: 'empty' as const },
+    };
+
+    expect(
+      parseAssetCenterHostResult(
+        { requestId: request.requestId, route: request.route, status: 'stale' },
+        request,
+      ),
+    ).toEqual({ requestId: request.requestId, route: request.route, status: 'stale' });
+    expect(
+      parseAssetCenterHostResult(
+        {
+          requestId: request.requestId,
+          route: request.route,
+          status: 'detached',
+          projection,
+        },
+        request,
+      ),
+    ).toMatchObject({ status: 'detached', projection: { identity } });
+  });
+
   it('rejects unsupported request fields', () => {
     expect(() =>
       parseAssetCenterHostRequest({
         requestId: 'request-invalid',
+        rendererSessionId,
         identity,
         route: 'selection.select',
         owner: 'global-asset-library',
@@ -67,5 +111,12 @@ describe('Asset Center Host contract', () => {
         unsupportedField: true,
       }),
     ).toThrow('unsupported fields');
+    expect(() =>
+      parseAssetCenterHostRequest({
+        requestId: 'request-unfenced',
+        identity,
+        route: 'snapshot.get',
+      }),
+    ).toThrow('Renderer session is required');
   });
 });

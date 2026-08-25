@@ -2,6 +2,7 @@ import {
   CANVAS_DEFAULT_CONTAINER_MIN_SIZE,
   CANVAS_DEFAULT_NODE_MIN_SIZE,
   CANVAS_NODE_MIN_SIZES,
+  resolveCanvasImageNodeMinSize,
 } from '@neko/canvas-domain';
 
 export interface NodeSize {
@@ -17,6 +18,7 @@ export interface NodePosition {
 export interface NodeSizingInput {
   type: string;
   size?: NodeSize;
+  data?: unknown;
   container?: unknown;
 }
 
@@ -26,12 +28,21 @@ const DEFAULT_CONTAINER_MIN_SIZE: NodeSize = CANVAS_DEFAULT_CONTAINER_MIN_SIZE;
 const NODE_TYPE_MIN_SIZES: Readonly<Partial<Record<string, NodeSize>>> = CANVAS_NODE_MIN_SIZES;
 
 export function resolveNodeMinSize(node: NodeSizingInput): NodeSize {
+  if (node.type === 'media' && hasImageMediaType(node.data) && node.size) {
+    return resolveCanvasImageNodeMinSize(node.size);
+  }
   const knownSize = NODE_TYPE_MIN_SIZES[node.type];
   if (knownSize) {
     return knownSize;
   }
 
   return node.container ? DEFAULT_CONTAINER_MIN_SIZE : DEFAULT_NODE_MIN_SIZE;
+}
+
+function hasImageMediaType(data: unknown): boolean {
+  return (
+    typeof data === 'object' && data !== null && 'mediaType' in data && data.mediaType === 'image'
+  );
 }
 
 export function centerNodeAt(position: NodePosition, size: NodeSize): NodePosition {

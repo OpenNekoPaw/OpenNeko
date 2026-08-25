@@ -6,9 +6,6 @@
  * - User config: ~/.neko/config.toml
  */
 
-import { DEFAULT_EXTERNAL_RESEARCH_CONFIG } from '@neko/agent-contracts';
-import type { ExternalResearchConfig, ExternalResearchConfigInput } from '@neko/agent-contracts';
-import type { MCPServerConfig } from '@neko/agent-contracts';
 import type {
   ProviderConfig,
   ModelConfig,
@@ -39,7 +36,7 @@ export interface UnifiedConfig {
   /** Default models by broad model type */
   defaultModels?: TypeDefaultModels;
 
-  /** Default models by product purpose, e.g. image.understand or video.understand */
+  /** Default models for explicit product roles such as Canvas, Character, or generation. */
   defaultModelPurposes?: PurposeDefaultModels;
 
   /** Global default max output tokens */
@@ -88,12 +85,6 @@ export interface UnifiedConfig {
 
   /** Model configurations */
   models?: ModelConfig[];
-
-  /** MCP server configurations */
-  mcpServers?: MCPServerConfig[];
-
-  /** Opt-in external research configuration. */
-  externalResearch?: ExternalResearchConfigInput;
 }
 
 // =============================================================================
@@ -127,12 +118,6 @@ export interface NormalizedConfig {
 
   /** Model configurations (keyed by ID) */
   models: Map<string, ModelConfig>;
-
-  /** MCP server configurations (keyed by ID) */
-  mcpServers: Map<string, MCPServerConfig>;
-
-  /** Normalized external research configuration. */
-  externalResearch: ExternalResearchConfig;
 }
 
 // =============================================================================
@@ -142,12 +127,11 @@ export interface NormalizedConfig {
 /**
  * Default configuration values
  */
-export const DEFAULT_CONFIG: Omit<NormalizedConfig, 'providers' | 'models' | 'mcpServers'> = {
+export const DEFAULT_CONFIG: Omit<NormalizedConfig, 'providers' | 'models'> = {
   maxTokens: 8192,
   temperature: 0.7,
   verbose: false,
   outputFormat: 'text',
-  externalResearch: DEFAULT_EXTERNAL_RESEARCH_CONFIG,
 };
 
 /**

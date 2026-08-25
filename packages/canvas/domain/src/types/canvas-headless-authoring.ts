@@ -1,5 +1,4 @@
 import type { CanvasData, CanvasConnection, CanvasNode } from './canvas';
-import type { QualityProjectRef } from '@neko/generation';
 import type {
   CanvasAgentApplyContentResult,
   CanvasAgentContentPayload,
@@ -70,7 +69,6 @@ export interface CanvasHeadlessAuthoringResultBase {
   readonly documentUri: string;
   readonly target: ResolvedCanvasHeadlessAuthoringTarget;
   readonly diagnostics: readonly CanvasAuthoringDiagnostic[];
-  readonly projectRef?: QualityProjectRef;
   readonly batch?: CanvasHeadlessAuthoringOperationBatch;
   readonly createdNodes?: readonly CanvasHeadlessAuthoringCreatedNodeRef[];
   readonly createdConnections?: readonly CanvasHeadlessAuthoringCreatedConnectionRef[];

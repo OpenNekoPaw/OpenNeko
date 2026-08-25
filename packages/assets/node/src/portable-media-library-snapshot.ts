@@ -4,18 +4,18 @@ import * as path from 'node:path';
 import {
   contentLocatorKey,
   type ContentReadService,
-  type MediaLibraryContentLocator,
-} from '@neko/content';
+  type WorkspaceFileContentLocator,
+} from '@neko/content-domain';
 import { createCharacterAuthoringFileRepository } from '@neko/chara-node';
 import { createWorldAuthoringFileRepository } from '@neko/world-node';
 import {
   deriveProjectDependencySnapshot,
   type ProjectContentReferenceCatalog,
-} from '@neko/project/application';
+} from '@neko/project-domain/application';
 import {
   projectPublicationDependencyKey,
   type ProjectDependencySnapshot,
-} from '@neko/project/contracts';
+} from '@neko/project-domain/contracts';
 import {
   parsePortableMediaLibrarySnapshotPlan,
   parsePortableMediaLibrarySnapshotProgress,
@@ -59,7 +59,7 @@ const EXCLUDED_PROJECT_DIRECTORIES = new Set([
 interface PortableSnapshotEntry {
   readonly key: string;
   readonly libraryName: string;
-  readonly source: MediaLibraryContentLocator;
+  readonly source: WorkspaceFileContentLocator;
   readonly destinationPath: string;
   readonly byteLength: number;
   readonly fingerprint: string;
@@ -639,18 +639,6 @@ async function buildSnapshotEntries(input: {
           'Portable snapshot requirement has no authoritative source locator.',
         );
       }
-      const declaredFingerprints = new Set(
-        matchingReferences
-          .map((reference) => reference.locator.fingerprint)
-          .filter((fingerprint) => fingerprint !== undefined)
-          .map((fingerprint) => `${fingerprint.strategy}:${fingerprint.value}`),
-      );
-      if (declaredFingerprints.size > 1) {
-        throw new PortableMediaLibrarySnapshotError(
-          'snapshot-content-unavailable',
-          'Authoritative references disagree about a linked media fingerprint.',
-        );
-      }
       const destinationPath = `media/collected/${requirement.libraryName}/${descendant}`;
       if (await optionalLstat(path.join(input.workspacePath, ...destinationPath.split('/')))) {
         throw new PortableMediaLibrarySnapshotError(
@@ -681,7 +669,7 @@ async function buildSnapshotEntries(input: {
 
 async function fingerprintSnapshotSource(
   reader: ContentReadService,
-  source: MediaLibraryContentLocator,
+  source: WorkspaceFileContentLocator,
 ): Promise<{
   readonly byteLength: number;
   readonly fingerprint: string;

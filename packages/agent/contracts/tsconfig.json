@@ -15,6 +15,7 @@
     "rootDir": "./src",
     "resolveJsonModule": true,
     "noEmit": true,
+    "types": ["node"],
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true
   },

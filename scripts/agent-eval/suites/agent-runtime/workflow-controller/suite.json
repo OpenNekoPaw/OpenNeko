@@ -39,20 +39,8 @@
   ],
   "cases": [
     {
-      "id": "queue-during-run",
-      "file": "cases/queue-during-run.json",
-      "group": "workflow",
-      "visibility": "public"
-    },
-    {
       "id": "tool-approval-visible",
       "file": "cases/tool-approval-visible.json",
-      "group": "workflow",
-      "visibility": "public"
-    },
-    {
-      "id": "media-tool-terminal-result",
-      "file": "cases/media-tool-terminal-result.json",
       "group": "workflow",
       "visibility": "public"
     },
@@ -69,12 +57,6 @@
       "visibility": "public"
     },
     {
-      "id": "cancel-resume-recovery",
-      "file": "cases/cancel-resume-recovery.json",
-      "group": "failure",
-      "visibility": "public"
-    },
-    {
       "id": "conversation-persistence-resume",
       "file": "cases/conversation-persistence-resume.json",
       "group": "regression",
@@ -87,21 +69,33 @@
       "visibility": "public"
     },
     {
+      "id": "active-session-inbox-followup",
+      "file": "cases/active-session-inbox-followup.json",
+      "group": "regression",
+      "visibility": "public"
+    },
+    {
       "id": "session-compact-continuation",
       "file": "cases/session-compact-continuation.json",
       "group": "workflow",
       "visibility": "public"
     },
     {
-      "id": "entry-compact-session-required",
-      "file": "cases/entry-compact-session-required.json",
-      "group": "boundary",
-      "visibility": "public"
-    },
-    {
       "id": "workspace-board-delivery-resume",
       "file": "cases/workspace-board-delivery-resume.json",
       "group": "failure",
+      "visibility": "public"
+    },
+    {
+      "id": "explicit-markdown-artifact-delivery",
+      "file": "cases/explicit-markdown-artifact-delivery.json",
+      "group": "workflow",
+      "visibility": "public"
+    },
+    {
+      "id": "ordinary-workspace-answer-not-persisted",
+      "file": "cases/ordinary-workspace-answer-not-persisted.json",
+      "group": "regression",
       "visibility": "public"
     },
     {

@@ -7,6 +7,7 @@ import {
 } from '@neko/canvas-domain';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  CanvasHostVisibleEffectError,
   CanvasHostRuntimeSession,
   createCanvasHostPresentationSnapshotStore,
   createCanvasHostIntentRequest,
@@ -40,6 +41,7 @@ describe('CanvasHostRuntimeSession', () => {
       request('replace-1', {
         type: 'replace-document',
         canvas: createEmptyCanvasData('Changed'),
+        removedNodeIds: ['removed-node-1'],
       }),
     );
     expect(replaced.status).toBe('accepted');
@@ -59,9 +61,7 @@ describe('CanvasHostRuntimeSession', () => {
     if (redone.status !== 'accepted') throw new Error('Expected redo to succeed.');
     expect(redone.snapshot.canvas.name).toBe('Changed');
 
-    const saved = await runtime.executeIntent(
-      request('save-1', { type: 'save', removedNodeIds: ['removed-node-1'] }),
-    );
+    const saved = await runtime.executeIntent(request('save-1', { type: 'save' }));
     expect(saved.status).toBe('accepted');
     if (saved.status !== 'accepted') throw new Error('Expected save to succeed.');
     expect(saved.snapshot).toMatchObject({ dirty: false });
@@ -71,6 +71,174 @@ describe('CanvasHostRuntimeSession', () => {
       removedNodeIds: ['removed-node-1'],
     });
     expect(events).toEqual([1, 2, 3, 4]);
+  });
+
+  it('coalesces continuous document replacements into one trailing autosave', async () => {
+    vi.useFakeTimers();
+    try {
+      const saveDocument = vi.fn(async () => undefined);
+      const runtime = new CanvasHostRuntimeSession({
+        identity,
+        initialCanvas: createEmptyCanvasData('Initial'),
+        effects: { saveDocument },
+      });
+
+      await runtime.executeIntent(
+        request('autosave-first', {
+          type: 'replace-document',
+          canvas: createEmptyCanvasData('First'),
+          removedNodeIds: ['removed-1'],
+        }),
+      );
+      await vi.advanceTimersByTimeAsync(400);
+      await runtime.executeIntent(
+        request('autosave-latest', {
+          type: 'replace-document',
+          canvas: createEmptyCanvasData('Latest'),
+          removedNodeIds: ['removed-1', 'removed-2'],
+        }),
+      );
+
+      await vi.advanceTimersByTimeAsync(799);
+      expect(saveDocument).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await runtime.getSnapshot()).toMatchObject({
+        dirty: false,
+        canvas: { name: 'Latest' },
+      });
+      expect(saveDocument).toHaveBeenCalledTimes(1);
+      expect(saveDocument).toHaveBeenCalledWith({
+        canvas: expect.objectContaining({ name: 'Latest' }),
+        identity,
+        removedNodeIds: ['removed-1', 'removed-2'],
+      });
+      runtime.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('flushes immediately on explicit save and does not rewrite a clean Canvas', async () => {
+    vi.useFakeTimers();
+    try {
+      const saveDocument = vi.fn(async () => undefined);
+      const runtime = new CanvasHostRuntimeSession({
+        identity,
+        initialCanvas: createEmptyCanvasData('Initial'),
+        effects: { saveDocument },
+      });
+      await runtime.executeIntent(
+        request('manual-flush-edit', {
+          type: 'replace-document',
+          canvas: createEmptyCanvasData('Changed'),
+          removedNodeIds: [],
+        }),
+      );
+
+      expect((await runtime.executeIntent(request('manual-flush', { type: 'save' }))).status).toBe(
+        'accepted',
+      );
+      expect(saveDocument).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(800);
+      await runtime.getSnapshot();
+      expect(saveDocument).toHaveBeenCalledTimes(1);
+
+      expect((await runtime.executeIntent(request('clean-flush', { type: 'save' }))).status).toBe(
+        'accepted',
+      );
+      expect(saveDocument).toHaveBeenCalledTimes(1);
+      runtime.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps dirty state and removal evidence after autosave failure for an explicit retry', async () => {
+    vi.useFakeTimers();
+    try {
+      const saveDocument = vi
+        .fn<NonNullable<CanvasHostRuntimeSessionEffects['saveDocument']>>()
+        .mockRejectedValueOnce(new CanvasHostVisibleEffectError('Canvas file is read-only.'))
+        .mockResolvedValue(undefined);
+      const runtime = new CanvasHostRuntimeSession({
+        identity,
+        initialCanvas: createEmptyCanvasData('Initial'),
+        effects: { saveDocument },
+      });
+      const events: import('../index').CanvasHostProjectionEvent[] = [];
+      runtime.subscribe((event) => events.push(event));
+      await runtime.executeIntent(
+        request('failed-autosave-edit', {
+          type: 'replace-document',
+          canvas: createEmptyCanvasData('Changed'),
+          removedNodeIds: ['removed-1'],
+        }),
+      );
+
+      await vi.advanceTimersByTimeAsync(800);
+      expect(await runtime.getSnapshot()).toMatchObject({ dirty: true });
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          diagnostic: {
+            code: 'canvas-autosave-failed',
+            message: 'Canvas file is read-only.',
+          },
+        }),
+      );
+
+      const retry = await runtime.executeIntent(request('failed-autosave-retry', { type: 'save' }));
+      expect(retry).toMatchObject({ status: 'accepted', snapshot: { dirty: false } });
+      expect(saveDocument).toHaveBeenLastCalledWith({
+        canvas: expect.objectContaining({ name: 'Changed' }),
+        identity,
+        removedNodeIds: ['removed-1'],
+      });
+      runtime.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not autosave presentation-only changes and cancels a pending save on dispose', async () => {
+    vi.useFakeTimers();
+    try {
+      const saveDocument = vi.fn(async () => undefined);
+      const presentationOnly = new CanvasHostRuntimeSession({
+        identity,
+        initialCanvas: createEmptyCanvasData('Initial'),
+        effects: { saveDocument },
+      });
+      await presentationOnly.executeIntent(
+        request('autosave-presentation-only', {
+          type: 'update-presentation',
+          presentation: {
+            viewport: { pan: { x: 20, y: 30 }, zoom: 1.2 },
+            selectedNodeIds: [],
+          },
+        }),
+      );
+      await vi.advanceTimersByTimeAsync(800);
+      expect(saveDocument).not.toHaveBeenCalled();
+      presentationOnly.dispose();
+
+      const disposedDirty = new CanvasHostRuntimeSession({
+        identity,
+        initialCanvas: createEmptyCanvasData('Initial'),
+        effects: { saveDocument },
+      });
+      await disposedDirty.executeIntent(
+        request('autosave-disposed-edit', {
+          type: 'replace-document',
+          canvas: createEmptyCanvasData('Changed'),
+          removedNodeIds: [],
+        }),
+      );
+      disposedDirty.dispose();
+      await vi.advanceTimersByTimeAsync(800);
+      expect(saveDocument).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('rejects another session identity without mutating state', async () => {
@@ -84,6 +252,7 @@ describe('CanvasHostRuntimeSession', () => {
       ...request('replace-stale-identity', {
         type: 'replace-document',
         canvas: createEmptyCanvasData('Wrong'),
+        removedNodeIds: [],
       }),
       identity: { ...identity, sessionId: 'session-other' },
     });
@@ -100,16 +269,10 @@ describe('CanvasHostRuntimeSession', () => {
 
   it('authorizes embedded preview only for the exact node, output and locator', () => {
     const firstLocator = {
-      kind: 'generated-output' as const,
-      outputId: 'output-1',
-      digest: 'sha256:output-1',
-      path: 'neko/generated/output-1.png',
+      file: { authority: 'workspace' as const, path: 'neko/generated/output-1.png' },
     };
     const secondLocator = {
-      kind: 'generated-output' as const,
-      outputId: 'output-2',
-      digest: 'sha256:output-2',
-      path: 'neko/generated/output-2.png',
+      file: { authority: 'workspace' as const, path: 'neko/generated/output-2.png' },
     };
     const runtime = new CanvasHostRuntimeSession({
       identity,
@@ -160,7 +323,10 @@ describe('CanvasHostRuntimeSession', () => {
       runtime.authorizePreviewSource({
         nodeId: 'generation-1',
         outputId: 'output-1',
-        locator: { ...firstLocator, path: 'neko/generated/other.png' },
+        locator: {
+          ...firstLocator,
+          file: { ...firstLocator.file, path: 'neko/generated/other.png' },
+        },
         contentKind: 'image',
       }),
     ).toThrow('output "output-1" is stale');
@@ -184,7 +350,9 @@ describe('CanvasHostRuntimeSession', () => {
       truncated: false,
       empty: false,
     }));
-    const locator = { kind: 'workspace-file' as const, path: 'data/project.json' };
+    const locator = {
+      file: { authority: 'workspace' as const, path: 'data/project.json' },
+    };
     const runtime = new CanvasHostRuntimeSession({
       identity,
       initialCanvas: {
@@ -197,7 +365,7 @@ describe('CanvasHostRuntimeSession', () => {
             size: { width: 280, height: 180 },
             zIndex: 1,
             data: {
-              path: locator.path,
+              path: locator.file.path,
               title: 'project.json',
               mediaType: 'application/json',
               contentLocator: locator,
@@ -213,10 +381,7 @@ describe('CanvasHostRuntimeSession', () => {
         requestId: 'stale',
         identity,
         nodeId: 'file-1',
-        locator: {
-          kind: 'workspace-file',
-          path: 'data/other.json',
-        },
+        locator: { file: { authority: 'workspace', path: 'data/other.json' } },
       }),
     ).resolves.toEqual({
       requestId: 'stale',
@@ -235,14 +400,14 @@ describe('CanvasHostRuntimeSession', () => {
       identity,
       nodeId: 'file-1',
       locator,
-      path: locator.path,
+      path: locator.file.path,
       mediaType: 'application/json',
     });
     const snapshot = await runtime.getSnapshot();
     expect(snapshot.canvas.nodes[0]).toMatchObject({
       id: 'file-1',
       data: {
-        path: locator.path,
+        path: locator.file.path,
         title: 'project.json',
         mediaType: 'application/json',
         contentLocator: locator,
@@ -298,7 +463,8 @@ describe('CanvasHostRuntimeSession', () => {
       }
       return {
         ...canvas,
-        name: request.locator.kind === 'workspace-file' ? request.locator.path : 'projected',
+        name:
+          request.locator.file.authority === 'workspace' ? request.locator.file.path : 'projected',
       };
     });
     const runtime = new CanvasHostRuntimeSession({
@@ -341,6 +507,7 @@ describe('CanvasHostRuntimeSession', () => {
     const command = request('identity-fenced-command', {
       type: 'replace-document',
       canvas: createEmptyCanvasData('Changed'),
+      removedNodeIds: [],
     });
     expect((await runtime.executeIntent(command)).status).toBe('accepted');
 
@@ -492,7 +659,7 @@ describe('CanvasHostRuntimeSession', () => {
         identity,
         request: expect.objectContaining({
           kind: 'direct-reference',
-          locator: { kind: 'workspace-file', path: 'media/cat.png' },
+          locator: { file: { authority: 'workspace', path: 'media/cat.png' } },
           mediaKind: 'image',
         }),
       }),
@@ -579,10 +746,10 @@ describe('CanvasHostRuntimeSession', () => {
   });
 
   it.each([
-    ['prompt', { width: 240, height: 160 }],
-    ['image', { width: 240, height: 180 }],
-    ['audio', { width: 240, height: 120 }],
-    ['video', { width: 240, height: 180 }],
+    ['prompt', { width: 120, height: 80 }],
+    ['image', { width: 120, height: 90 }],
+    ['audio', { width: 120, height: 60 }],
+    ['video', { width: 120, height: 90 }],
   ] as const)(
     'creates an empty canonical %s Generation Node with the matching content size',
     async (kind, size) => {
@@ -688,6 +855,66 @@ describe('CanvasHostRuntimeSession', () => {
     if (result.status !== 'accepted') throw new Error(result.diagnostic.message);
     expect(result.snapshot.generationNodes).toEqual([
       expect.objectContaining({ nodeId: 'generation-1', recipeStale: true }),
+    ]);
+  });
+
+  it('keeps an Agent-created Generation Job running when the durable run has no submission identity', async () => {
+    const configured = updateCanvasGenerationNodeRecipe({
+      canvas: createCanvasGenerationNode({
+        canvas: createEmptyCanvasData('Agent Generation'),
+        nodeId: 'generation-agent',
+        kind: 'image',
+        position: { x: 0, y: 0 },
+      }),
+      nodeId: 'generation-agent',
+      recipe: {
+        kind: 'image',
+        prompt: 'Agent prompt',
+        model: {
+          purpose: 'image.generate',
+          providerId: 'provider-1',
+          modelId: 'model-1',
+        },
+      },
+    });
+    const node = configured.nodes[0];
+    if (!node || node.type !== 'generation') throw new Error('Generation fixture is invalid.');
+    const run = {
+      recipeInputFingerprint: 'sha256:agent',
+      jobRef: { kind: 'generation' as const, jobId: 'job-agent' },
+    };
+    const initialCanvas = {
+      ...configured,
+      nodes: [{ ...node, data: { ...node.data, latestRun: run } }],
+    };
+    const runtime = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas,
+      effects: {
+        generation: {
+          ...unusedGenerationEffects(),
+          resumeNode: async ({ canvas }) => ({
+            canvas,
+            projection: {
+              nodeId: 'generation-agent',
+              recipeInputFingerprint: run.recipeInputFingerprint,
+              jobRef: run.jobRef,
+              phase: 'running',
+            },
+          }),
+          observeNode: async function* () {},
+        },
+      },
+    });
+
+    await runtime.reattachGenerationNodes();
+
+    expect((await runtime.getSnapshot()).generationNodes).toEqual([
+      expect.objectContaining({
+        nodeId: 'generation-agent',
+        jobRef: run.jobRef,
+        phase: 'running',
+      }),
     ]);
   });
 
@@ -849,7 +1076,7 @@ describe('CanvasHostRuntimeSession', () => {
           nodeId: node.id,
           mediaKind: 'image',
           origin: 'referenced',
-          locator: { kind: 'workspace-file', path: 'media/cat.png' },
+          locator: { file: { authority: 'workspace', path: 'media/cat.png' } },
         },
       ],
     });
@@ -866,7 +1093,7 @@ describe('CanvasHostRuntimeSession', () => {
           nodeId: node.id,
           mediaKind: 'image',
           origin: 'referenced',
-          locator: { kind: 'workspace-file', path: 'media/cat.png' },
+          locator: { file: { authority: 'workspace', path: 'media/cat.png' } },
         },
       ],
     });
@@ -1080,7 +1307,7 @@ function directReference(
       canvasId: identity.documentId,
       canvasSessionId: identity.sessionId,
     },
-    locator: { kind: 'workspace-file' as const, path },
+    locator: { file: { authority: 'workspace' as const, path } },
     mediaKind,
   };
 }
@@ -1095,7 +1322,7 @@ function referencedImageNode(): MediaCanvasNode {
     data: {
       assetPath: 'media/cat.png',
       mediaType: 'image',
-      contentLocator: { kind: 'workspace-file', path: 'media/cat.png' },
+      contentLocator: { file: { authority: 'workspace', path: 'media/cat.png' } },
     },
   };
 }

@@ -32,19 +32,14 @@ const target: CanvasMaterialActionTarget = {
   nodeId: 'media-1',
   mediaKind: 'image',
   origin: 'referenced',
-  locator: { kind: 'workspace-file', path: 'media/cat.png' },
+  locator: { file: { authority: 'workspace', path: 'media/cat.png' } },
 };
 
 const generatedTarget: CanvasMaterialActionTarget = {
   nodeId: 'generated-media-1',
   mediaKind: 'image',
   origin: 'generated',
-  locator: {
-    kind: 'generated-output',
-    outputId: 'generated-output-1',
-    digest: 'sha256:generated-output-1',
-    path: 'neko/generated/generation-job-1/result.png',
-  },
+  locator: { file: { authority: 'workspace', path: 'neko/generated/generation-job-1/result.png' } },
   generation: {
     jobRef: { kind: 'generation', jobId: 'generation-job-1' },
     summary: {
@@ -94,9 +89,8 @@ describe('Desktop Canvas material action owner', () => {
       mediaKind: 'image',
       origin: 'referenced',
       locator: {
-        kind: 'document-entry',
-        source: { kind: 'workspace-file', path: 'books/story.epub' },
-        entryPath: 'OPS/images/cover.jpg',
+        file: { authority: 'workspace', path: 'books/story.epub' },
+        selector: { kind: 'entry', path: 'OPS/images/cover.jpg' },
       },
     };
     const resolveReveal = vi.fn(async () => false);
@@ -216,7 +210,7 @@ describe('Desktop Canvas material action owner', () => {
       nodeId: 'timeline-1',
       mediaKind: 'document',
       origin: 'referenced',
-      locator: { kind: 'workspace-file', path: 'edits/sequence.otio' },
+      locator: { file: { authority: 'workspace', path: 'edits/sequence.otio' } },
     };
     const resolveCut = vi.fn(async () => true);
     const openInCut = vi.fn(async () => undefined);
@@ -266,18 +260,13 @@ describe('Desktop Canvas material action owner', () => {
       nodeId: 'notes-1',
       mediaKind: 'document',
       origin: 'referenced',
-      locator: { kind: 'workspace-file', path: 'notes/scene.md' },
+      locator: { file: { authority: 'workspace', path: 'notes/scene.md' } },
     };
     const generatedTextTarget: CanvasMaterialActionTarget = {
       nodeId: 'prompt-output-1',
       mediaKind: 'document',
       origin: 'generated',
-      locator: {
-        kind: 'generated-output',
-        outputId: 'prompt-output-1',
-        digest: 'sha256:prompt-output-1',
-        path: 'neko/generated/prompt-output-1.txt',
-      },
+      locator: { file: { authority: 'workspace', path: 'neko/generated/prompt-output-1.txt' } },
     };
     const resolveEditText = vi.fn(async () => true);
     const editText = vi.fn(async () => undefined);
@@ -313,7 +302,7 @@ describe('Desktop Canvas material action owner', () => {
       nodeId: 'video-1',
       mediaKind: 'video',
       origin: 'referenced',
-      locator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+      locator: { file: { authority: 'workspace', path: 'media/clip.mp4' } },
     };
     const executionPayload = {
       target: {
@@ -362,12 +351,7 @@ describe('Desktop Canvas material action owner', () => {
       nodeId: 'video-1',
       mediaKind: 'video',
       origin: 'generated',
-      locator: {
-        kind: 'generated-output',
-        outputId: 'video-output-1',
-        digest: 'sha256:video-output-1',
-        path: 'neko/generated/video-output-1.mp4',
-      },
+      locator: { file: { authority: 'workspace', path: 'neko/generated/video-output-1.mp4' } },
     };
     const executionPayload = {
       target: {
@@ -465,5 +449,12 @@ function generationProjection(jobId: string): CanvasGenerationProjectionSnapshot
       prompt: 'Cold industrial corridor',
       model: 'image-model',
     },
+    recipe: {
+      kind: 'image',
+      prompt: 'Cold industrial corridor',
+      model: { purpose: 'image.generate', providerId: 'fixture', modelId: 'image-model' },
+    },
+    submissionId: `submission-${jobId}`,
+    recipeInputFingerprint: `fingerprint-${jobId}`,
   };
 }

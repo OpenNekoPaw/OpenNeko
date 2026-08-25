@@ -20,7 +20,7 @@ const identity: TextDocumentIdentity = {
   owner: { kind: 'window', windowId: 'window-1', projectId: 'project-1' },
   workspaceId: 'workspace-1',
   documentId: 'notes/draft.md',
-  locator: { kind: 'workspace-file', path: 'notes/draft.md' },
+  locator: { file: { authority: 'workspace', path: 'notes/draft.md' } },
 };
 const workspace = {
   workspaceId: 'workspace-1',
@@ -75,9 +75,9 @@ describe('Node Text Editor Markdown reference catalog', () => {
         candidates: [
           {
             source: 'asset',
-            ref: { kind: 'media-library', namespace: 'Reference', id: 'cover.png' },
-            target: 'media-library:Reference/cover.png',
-            detail: 'Reference/cover.png',
+            ref: { kind: 'workspace-file', id: 'neko/assets/Reference/cover.png' },
+            target: 'neko/assets/Reference/cover.png',
+            detail: 'neko/assets/Reference/cover.png',
             embeddable: true,
           },
         ],
@@ -134,7 +134,7 @@ function active() {
 
 function contentEntry(path: string, label: string, mediaType: string = 'file') {
   return {
-    locator: { kind: 'workspace-file' as const, path },
+    locator: { file: { authority: 'workspace' as const, path } },
     label,
     description: 'Owning catalog description',
     availability: 'available' as const,
@@ -153,6 +153,11 @@ function mediaContentEntry(
 ) {
   return {
     ...contentEntry('unused', label, mediaType),
-    locator: { kind: 'media-library' as const, libraryName, relativePath },
+    locator: {
+      file: {
+        authority: 'workspace' as const,
+        path: `neko/assets/${libraryName}/${relativePath}`,
+      },
+    },
   };
 }

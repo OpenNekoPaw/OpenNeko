@@ -5,27 +5,27 @@
   "caseGroup": "regression",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Complete a Desktop turn, leave the same open conversation idle beyond its writer-lease TTL, and submit a second turn without reopening the session.",
+    "userBehavior": "Complete a Desktop turn, leave the same Conversation idle, and submit a second turn without reopening its exact DSH Session.",
     "canonicalPath": [
-      "Desktop renderer/preload Agent bridge",
-      "sender-bound Desktop Agent controller",
-      "Pi Conversation runtime and Pi Session",
-      "message.submit",
-      "session.waitForIdle",
-      "Pi Conversation runtime lease heartbeat",
-      "message.submit",
-      "Pi turn checkpoint"
+      "Desktop renderer/preload DSH Session bridge",
+      "sender-bound Desktop DSH Session host",
+      "exact Conversation-to-DSH Session binding",
+      "public DSH Session submit",
+      "DSH turn terminal projection",
+      "idle interval",
+      "public DSH Session submit",
+      "same DSH Session turn lineage"
     ],
     "observables": [
       {
         "ref": "turn-facts",
         "kind": "runtime-fact",
-        "description": "One Desktop session and Pi Conversation runtime remain authoritative across both durable turns with no stale-lease diagnostic.",
+        "description": "One exact Conversation/DSH Session binding remains authoritative across both durable turns with no runtime diagnostic.",
         "required": true
       }
     ],
-    "expectedResult": "The second turn completes durably in the same open Desktop conversation after an idle interval longer than the production lease TTL.",
-    "expectedFailure": "A stale writer lease, runtime/session recreation, changed conversation identity, runtime error, or non-idle terminal state fails visibly."
+    "expectedResult": "The second turn completes durably in the same open Desktop Conversation and exact DSH Session after the idle interval.",
+    "expectedFailure": "A changed Conversation/DSH Session identity, runtime error, missing turn lineage, or non-idle terminal state fails visibly."
   },
   "fixtureRefs": [
     "empty-workspace"
@@ -61,17 +61,6 @@
     {
       "id": "runtime",
       "kind": "runtime-errors-empty",
-      "evidenceRef": "turn-facts"
-    },
-    {
-      "id": "pi-runtime",
-      "kind": "pi-runtime",
-      "implementation": "pi-agent-core",
-      "transcriptAuthority": "pi-session",
-      "productMetadataAuthority": "sqlite",
-      "purpose": "agent.main",
-      "workspaceLocatorKind": "virtual",
-      "turnDurability": "durable",
       "evidenceRef": "turn-facts"
     },
     {

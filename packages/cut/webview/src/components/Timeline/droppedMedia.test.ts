@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CONTENT_LOCATOR_DRAG_MIME } from '@neko/content';
+import { CONTENT_LOCATOR_DRAG_MIME } from '@neko/content-domain';
 import { readDroppedMediaSource } from './droppedMedia';
 
 describe('dropped Cut media', () => {
@@ -40,7 +40,9 @@ describe('dropped Cut media', () => {
           type === CONTENT_LOCATOR_DRAG_MIME
             ? JSON.stringify({
                 type: 'content-locator',
-                locator: { kind: 'workspace-file', path: 'media/shot.mp4' },
+                locator: {
+                  file: { authority: 'workspace', path: 'media/shot.mp4' },
+                },
                 name: 'shot.mp4',
               })
             : '',
@@ -49,7 +51,9 @@ describe('dropped Cut media', () => {
       kind: 'content-locator',
       data: {
         type: 'content-locator',
-        locator: { kind: 'workspace-file', path: 'media/shot.mp4' },
+        locator: {
+          file: { authority: 'workspace', path: 'media/shot.mp4' },
+        },
         name: 'shot.mp4',
       },
     });

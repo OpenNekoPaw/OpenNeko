@@ -1,6 +1,6 @@
 import type { CanvasAuthoringDiagnostic } from '../types/canvas-authoring-contracts';
 import { isRuntimeOnlyCanvasAuthoringResourceIdentityValue } from '../types/canvas-authoring-contracts';
-import { isContentLocator } from '@neko/content';
+import { isContentLocator } from '@neko/content-domain';
 
 export interface CanvasDurableResourceIdentityValidationOptions {
   readonly rootLabel?: string;

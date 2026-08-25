@@ -78,18 +78,31 @@ describe('AssetManagementRoot', () => {
 
     expect(runtime.source.searchMediaLibraries).toHaveBeenCalledTimes(1);
     expect(container.querySelector('[data-catalog-status="ready"]')).not.toBeNull();
-    expect(connectButton?.disabled).toBe(false);
-    expect(container.textContent).toContain('Footage');
-    expect(
-      container.querySelector('.global-library-browser__header-copy .section-label')?.textContent,
-    ).toBe('Global catalog');
-    expect(container.querySelector('.global-library-browser__header-copy h1')?.textContent).toBe(
+    expect(container.querySelector('[data-catalog="media-library"]')).not.toBeNull();
+    const toolbarActions = container.querySelector('.global-library-browser__toolbar-actions');
+    const commands = toolbarActions?.querySelector('.global-library-browser__commands');
+    const modes = container.querySelector('.global-library-browser__modes');
+    expect(toolbarActions?.querySelector('select[aria-label="Sort"]')).not.toBeNull();
+    expect(toolbarActions?.querySelector('button[aria-label="List view"]')).not.toBeNull();
+    expect(toolbarActions?.querySelector('button[aria-label="Refresh"]')).toBeNull();
+    expect(commands?.querySelector('select[aria-label="Location type"]')).not.toBeNull();
+    expect(commands?.textContent).toContain('Connect directory');
+    expect(toolbarActions?.textContent).not.toContain('Media Library');
+    expect(modes?.getAttribute('aria-label')).toBe('Library mode');
+    expect(modes?.textContent).toContain('Media Library');
+    expect(modes?.textContent).toContain('Asset Library');
+    expect(modes?.querySelector('button[aria-pressed="true"]')?.textContent).toContain(
       'Media Library',
     );
-    expect(
-      container.querySelector('.global-library-browser__header-copy p:not(.section-label)')
-        ?.textContent,
-    ).toBe('Manage reusable media connections without copying source files into every project.');
+    expect(connectButton?.disabled).toBe(false);
+    expect(container.textContent).toContain('Footage');
+    expect(container.querySelector('.global-library-browser__header-copy')).toBeNull();
+    const catalogHeading = container.querySelector('.global-library-browser > h1');
+    expect(catalogHeading?.textContent).toBe('Media Library');
+    expect(catalogHeading?.classList.contains('global-library-browser__visually-hidden')).toBe(
+      true,
+    );
+    expect(container.querySelector('.global-library-browser > p')).toBeNull();
     expect(
       [...container.querySelectorAll<HTMLButtonElement>('button')]
         .find((button) => button.textContent?.includes('Connect directory'))
@@ -106,9 +119,7 @@ describe('AssetManagementRoot', () => {
     expect(
       container.querySelector('button[aria-label="List view"] svg')?.getAttribute('width'),
     ).toBe('14');
-    expect(container.querySelector('button[aria-label="Refresh"] svg')?.getAttribute('width')).toBe(
-      '14',
-    );
+    expect(container.querySelector('button[aria-label="Refresh"]')).toBeNull();
     expect(container.textContent).not.toContain('Global Library controller is disposed.');
     expect(dispose).not.toHaveBeenCalled();
 
@@ -133,9 +144,43 @@ describe('AssetManagementRoot', () => {
 
     expect(container.querySelector('[data-catalog-status="ready"]')).not.toBeNull();
     const emptyState = container.querySelector('[data-neko-empty-state="fill"]');
-    expect(emptyState?.textContent).toContain('No matching content');
+    expect(emptyState?.textContent).toContain('No media directories connected');
+    expect(emptyState?.textContent).toContain(
+      'Connect a local, NAS, or cloud directory to reuse media in projects.',
+    );
+    expect(emptyState?.querySelector('button')?.textContent).toContain('Connect directory');
     expect(emptyState?.querySelector('svg')).not.toBeNull();
     expect(container.querySelector('.global-library-browser__empty')).toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it('shows query-no-results without adding an empty-state mutation', async () => {
+    const runtime = createRuntime(createLibrary());
+    runtime.source.searchMediaLibraries = vi.fn(async () => ({ items: [] }));
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <AssetManagementRoot runtime={runtime.management} locale="en" confirmAction={() => true} />,
+      );
+    });
+    await act(async () => wait(180));
+
+    const search = container.querySelector<HTMLInputElement>(
+      'input[aria-label="Search media libraries"]',
+    );
+    if (!search) throw new Error('Expected the Media Library search input.');
+    await act(async () => {
+      setInputValue(search, 'missing');
+      await wait(180);
+    });
+
+    const emptyState = container.querySelector('.global-library-browser__empty-state');
+    expect(emptyState?.textContent).toContain('No matching results');
+    expect(emptyState?.querySelector('button')).toBeNull();
 
     await act(async () => root.unmount());
   });
@@ -787,11 +832,13 @@ function createRuntime(itemOrItems: GlobalLibraryItem | readonly GlobalLibraryIt
         const item = items.find((candidate) => candidate.id === itemId);
         if (!item) throw new Error(`Missing fixture item '${itemId}'.`);
         return {
-          kind: 'workspace-file',
-          path:
-            item.owner === 'media-library' && item.kind === 'file'
-              ? item.relativePath
-              : `${itemId.replaceAll(':', '-')}.bin`,
+          file: {
+            authority: 'workspace',
+            path:
+              item.owner === 'media-library' && item.kind === 'file'
+                ? item.relativePath
+                : `${itemId.replaceAll(':', '-')}.bin`,
+          },
         };
       },
     }),

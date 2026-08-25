@@ -1,60 +1,44 @@
 ---
-name: "skill-creator"
-description: "Guide for creating or updating reusable portable Agent Skills. Use when the user wants to design, create, refine, validate, or forward-test a Skill package without imposing a host-specific authoring gate."
+name: skill-creator
+description: '使用 DSH 原生布局、frontmatter、调用策略和可选资源创建或改进可复用 Skill；用于 Skill 设计、编写、验证与评审。 Create or refine reusable DSH Skills with native layouts, frontmatter, invocation policy, and optional resources.'
+whenToUse: '用于 DSH Skill 编写和 package 评审；普通一次性任务不需要此 Skill。 Use for DSH Skill authoring and package review; ordinary one-off tasks do not require it.'
 ---
+
 # Skill Creator
 
-Guide the creation or refinement of reusable, portable Agent Skills. A Skill is a focused package of instructions and optional resources that helps an Agent perform a recurring class of work consistently.
+## 中文方法
 
-This guidance does not own filesystem access, permissions, activation, or trust. Any host-supported authoring path may create the same portable package. Choose the available path that best fits the task and the user's instructions.
+创建聚焦、可复用且不约束无关任务的 DSH Skill。保持用户任务意图，并以当前 Tool catalog、schema、permission 和 Host authority 作为执行边界。
 
-## Decide Before Writing
+1. 使用原生目录 `<name>/SKILL.md` 或 flat `<name>.md`；资源使用相对路径并保留无关用户内容。
+2. frontmatter 必须有小写 kebab-case `name` 和能区分能力与触发条件的简短 `description`；只按真实意图使用 DSH 支持的可选字段，不新增 OpenNeko 私有 manifest/schema。
+3. 主体保留共同目的、关键判断和路由；长流程、schema、示例或领域变体进入按需资源，不创建占位目录或重复指令。
+4. 同时定义正向和负向真实请求，按需要验证发现、加载、scope、调用策略和复杂行为。
+5. 目录/flat、多 Skill 组合及四种 model/user 调用组合均有效；不得强制主 Skill、固定数量、artifact 前置或通过正文授予 Tool 权限。
 
-1. Confirm that reusable guidance is more appropriate than a one-off answer or a product feature.
-2. Identify the recurring trigger, expected outcome, important constraints, and evidence of success.
-3. Choose the smallest useful package: instructions only, or instructions plus reusable scripts, references, assets, or host metadata.
-4. Keep the portable method in the Skill and keep host runtime protocols, internal schemas, and product-specific wiring outside it.
+## English guidance
 
-Use a short lowercase hyphenated name. Write a description that states both what the Skill does and when it should be used.
+Create focused reusable guidance that changes an Agent's decisions without constraining unrelated work. Preserve the user's intended task and rely on current Tool catalogs, schemas, permissions, and Host authority for execution.
 
-## Portable Package
+## Choose the package
 
-A portable Skill package has this shape:
+Use one of the native filesystem layouts:
 
-~~~text
-skill-name/
-├── SKILL.md
-├── scripts/              # optional
-├── references/           # optional
-├── assets/               # optional
-└── agents/
-    └── <host>.yaml       # optional host metadata
-~~~
+- directory bundle: `<name>/SKILL.md`, with optional relative resources;
+- flat Skill: `<name>.md`; any relative resources share that Skill root, so use collision-safe paths and preserve unrelated entries.
 
-- `SKILL.md` is required. Its frontmatter defines `name` and `description`; its body contains the guidance loaded when the Skill is used.
-- `scripts/` contains deterministic or frequently repeated operations.
-- `references/` contains detailed material that should be loaded only when needed.
-- `assets/` contains templates or files used in produced output rather than prompt context.
-- `agents/<host>.yaml` is an optional host overlay. Preserve overlays for other hosts when updating a shared Skill.
-- A root `manifest.json` is not part of the portable Skill contract. Do not require one for creation or reuse.
+The Markdown frontmatter requires `name` and `description`. Use a lowercase kebab-case name and a short description that distinguishes both capability and trigger. Preserve supported optional `whenToUse`, `metadata`, `disable-model-invocation`, and `user-invocable` only when their semantics are intended. Do not add a manifest or private OpenNeko schema.
 
-## Authoring Principles
+Keep shared purpose, essential judgment, and routing in the main body. Put substantial conditional procedures, schemas, examples, or domain variants in relative resources and link them where the Agent should read them. Do not create placeholder directories or duplicate instructions.
 
-- Be concise. Assume the Agent already knows general concepts and include only task-specific judgment, procedure, or constraints.
-- Match specificity to risk: use flexible guidance for contextual work and scripts or exact steps for fragile deterministic work.
-- Put the main workflow in `SKILL.md`; move large examples, schemas, and background material into `references/`.
-- Make references discoverable from `SKILL.md` and avoid deep chains of references.
-- Reuse existing files when updating a Skill. Do not replace user-authored resources or other-host overlays without a task-specific reason.
-- Keep secrets, machine-specific absolute paths, runtime tool schemas, and host-internal protocols out of portable content.
+## Author and validate
 
-Draft, review, and apply may be useful authoring techniques, but they are not mandatory Skill-creation gates. User approval is required only when the active host policy or the user's instructions require it; the Skill itself must not invent an approval barrier.
+1. Identify realistic requests that should and should not use the Skill.
+2. Write the smallest body that improves those tasks. Prefer outcome criteria for open-ended work and exact steps or scripts only for fragile deterministic work.
+3. Inspect existing package resources before updating them; preserve unrelated user content.
+4. Validate the package through the available DSH-native authoring or filesystem path, then confirm the exact scoped catalog discovers and loads the intended definition.
+5. Forward-test observable behavior when the change is complex enough to justify it.
 
-## Validation
+Directory and flat layouts, all model/user invocation-policy combinations, and composition with multiple applicable Skills are valid. Do not impose a primary Skill, a fixed Skill count, an artifact-profile prerequisite, or Tool permission through Skill prose.
 
-Before reporting completion:
-
-1. Check the package shape, frontmatter, names, links, and referenced files.
-2. Run bundled scripts or focused tests when present.
-3. Inspect the Skill for duplicated generic knowledge, hidden host coupling, obsolete manifest requirements, and unsupported claims.
-4. Forward-test with realistic prompts that should trigger the Skill and nearby prompts that should not.
-5. Report what was created or changed, what was validated, and any remaining uncertainty. Do not claim files were written unless the selected authoring path confirmed the write.
+Report the created or changed package, validation evidence, and unresolved uncertainty. Do not claim publication, discovery, or execution until the corresponding runtime result confirms it.

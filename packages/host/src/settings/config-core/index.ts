@@ -25,8 +25,6 @@
 // Types (browser-safe)
 export type { UnifiedConfig, NormalizedConfig, ProviderDefinition } from './types';
 
-export type { ExternalResearchConfig, ExternalResearchConfigInput } from '@neko/agent-contracts';
-
 export {
   DEFAULT_CONFIG,
   DEFAULT_EXTENSION_CONFIG,
@@ -44,11 +42,6 @@ export type {
   TomlProtocolVariant,
   TomlMediaEndpoints,
   TomlModelConfig,
-  TomlMcpServerConfig,
-  TomlExternalResearchConfig,
-  TomlExternalResearchMcpProviderConfig,
-  TomlExternalResearchMcpSearchToolBinding,
-  TomlExternalResearchMcpFetchToolBinding,
   TomlConfigValidationIssue,
   TomlConfigProjection,
   ProviderCredentialDeclaration,

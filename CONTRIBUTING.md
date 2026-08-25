@@ -14,21 +14,47 @@ gates, and completion criteria. Read these entry documents before making changes
   for the Desktop-only composition boundary;
 - [`docs/architecture/package-boundaries.md`](docs/architecture/package-boundaries.md) for package
   ownership and dependency direction;
-- [`openspec/changes/`](openspec/changes/) for changes under design or implementation.
+- [`openspec/changes/`](openspec/changes/) for product-functional changes under design or implementation.
 
-Non-trivial features, cross-package work, public contracts, and architecture changes require
-OpenSpec artifacts before implementation. Small documentation and local corrections can proceed
-directly but must still follow the current architecture.
+OpenSpec is reserved for independently named system-level or product-level capabilities that change
+a system boundary, core product workflow, durable user fact, or security/trust boundary. Create it
+before implementation and keep only product intent, system boundaries, and product-level acceptance.
 
-Each OpenSpec proposal's `tasks.md` may contain at most 30 actionable checkbox tasks. Work beyond
-that limit must be split into independently reviewable and verifiable proposals by objective,
-owner, or delivery boundary; unrelated work must not be bundled into one task to evade the limit.
+Do not create or expand an OpenSpec for local UI/interaction details, bug fixes, performance work,
+behavior-preserving refactors or cleanup, package/directory/internal-contract changes, tests/quality
+gates, build/dependency/developer tooling, or inventory/audit/status work. Change code and tests
+directly and keep necessary evidence in the commit, PR, delivery note, or gitignored report rather
+than a status, research, or verification document.
+
+Delete a proposal once code owns the canonical path and only local fixes or supplemental validation
+remain. Promote only system architecture or core product-design conclusions. Do not retain archives,
+implementation evidence, verification/evaluation reports, or historical task copies.
+
+OpenSpec tasks contain only a few product-level milestones and final acceptance outcomes. They must
+not track files, classes/functions, per-commit steps, command output, dated evidence, or code progress.
+Code and tests are the source of truth for business logic, implementation, and implementation status.
+
+Long-lived documentation describes only the current canonical architecture, development policy, and
+core product design. Do not retain narratives about removed packages, paths, protocols, or proposals,
+migration phases, completion status, Accepted/Deprecated labels, or update dates. File names must match
+their current responsibility. Code, tests, and machine-readable ledgers own the current package catalog,
+product reachability, and implementation status.
 
 Changes to production modules under `apps/*`, `packages/*`, or `packages/*/*` must record the
 owning responsibility, package role, canonical public path, producer/consumer, runtime boundary,
-legacy-path removal conditions, user-data semantics, and validation commands. Internal packages
-use the single `@neko/*` scope. Consumers must use explicit manifest exports instead of importing
-`packages/**/src` or adding legacy scopes, path aliases, or compatibility re-exports.
+legacy-path removal conditions, user-data semantics, and validation commands in delivery review.
+OpenSpec keeps only stable product boundaries and product-level milestones; it does not duplicate
+implementation evidence from delivery review. Internal packages use the single `@neko/*` scope. Consumers must use explicit manifest
+exports instead of importing `packages/**/src` or adding legacy scopes, path aliases, or
+compatibility re-exports.
+
+A singleton owner uses `packages/<name>`. Once it gains an independently built role package, the
+same change must convert it to a pure `packages/<family>/<role>` family whose container has no
+`package.json`. Do not add flat `packages/<family>-<role>` packages, mix a family-root package with
+nested roles, distribute one family across physical roots, or cite an existing unmigrated path as
+precedent. A package move or deletion must also remove rebuildable build, cache and package-local
+dependency artifacts from the exact retired root and prove that root is gone; never use a broad glob
+that can touch user data or unrelated packages.
 
 ## Local Development
 

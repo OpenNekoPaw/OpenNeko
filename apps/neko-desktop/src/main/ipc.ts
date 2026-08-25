@@ -1,6 +1,4 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron';
-import { DESKTOP_AGENT_CHANNELS } from '../shared/agent-contract';
-import { DESKTOP_AGENT_AUTOMATION_CHANNEL } from '../shared/agent-automation-contract';
 import { DESKTOP_BRIDGE_CHANNELS } from '../shared/bridge-contract';
 import { DESKTOP_SHELL_CHANNELS } from '@neko/host/desktop-shell-contract';
 import { DESKTOP_RESOURCE_BROWSER_CHANNELS } from '../shared/resource-browser-bridge-contract';
@@ -9,16 +7,12 @@ import { TEXT_EDITOR_HOST_CHANNELS } from '@neko/text-editor-domain';
 import { DESKTOP_CANVAS_CHANNELS } from '../shared/canvas-bridge-contract';
 import { DESKTOP_CUT_CHANNELS } from '../shared/cut-bridge-contract';
 import { DESKTOP_APPLICATION_SETTINGS_CHANNELS } from '@neko/host/application-settings';
+import { DESKTOP_AI_MODEL_SETTINGS_CHANNEL } from '@neko/host/ai-model-settings';
+import { DESKTOP_STORAGE_SETTINGS_CHANNEL } from '@neko/host/desktop-storage-settings-contract';
 import { DESKTOP_PROJECT_PORTABILITY_CHANNELS } from '@neko/assets-domain/contracts';
 import { ASSET_CENTER_HOST_CHANNEL } from '@neko/assets-domain/asset-center/host-contract';
-import { AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL } from '@neko/agent-contracts/extension-management-host';
-import { AUTOMATION_LOCAL_RUNTIME_MANAGEMENT_HOST_CHANNEL } from '@neko/automation-contracts/local-runtime-management';
-import { AUTOMATION_PERMISSION_MANAGEMENT_HOST_CHANNEL } from '@neko/automation-contracts/permission-management';
-import { DESKTOP_AUTOMATION_TARGET_SELECTION_CHANNELS } from '../shared/automation-target-selection-contract';
-import { DESKTOP_AUTOMATION_SESSION_CONTROL_CHANNELS } from '../shared/automation-session-control-contract';
-import { AGENT_LAUNCH_HOST_CHANNEL } from '@neko/agent-contracts/agent-launch-host';
-import { ASSISTANT_RESOURCE_HOST_CHANNEL } from '@neko/agent-contracts/assistant-resource-host';
 import { DESKTOP_WORKSPACE_GRANT_CHANNEL } from '@neko/host/desktop-workspace-grant-contract';
+import { DSH_PERMISSION_HOST_CHANNEL } from '@neko/agent-contracts/dsh-permission-host';
 import {
   CHARACTER_FOUNDATION_HOST_CHANNEL,
   CHARACTER_AUTHORING_HOST_CHANNEL,
@@ -26,23 +20,37 @@ import {
   parseCharacterPortableHostRequest,
   CHARACTER_AVATAR_HOST_CHANNEL,
   CHARACTER_ROOM_WORKBENCH_CHANNELS,
-} from '@neko/chara/contracts';
+} from '@neko/chara-domain/contracts';
 import {
   WORLD_AUTHORING_HOST_CHANNEL,
   WORLD_MANAGEMENT_HOST_CHANNEL,
   WORLD_PORTABLE_HOST_CHANNELS,
   WORLD_RUNTIME_HOST_CHANNEL,
   parseWorldPortableHostRequest,
-} from '@neko/world/contracts';
+} from '@neko/world-domain/contracts';
 import {
   PROJECT_AUTHORING_HOST_CHANNEL,
   PROJECT_LOCAL_AUTHORING_HOST_CHANNEL,
-} from '@neko/project/contracts';
+} from '@neko/project-domain/contracts';
 import type { DesktopAppHost } from './app-host';
+import type { DesktopDshPermissionHost } from './desktop-dsh-permission-host';
+import { DSH_SESSION_HOST_CHANNEL } from '@neko/agent-contracts/dsh-session-host';
+import type { DesktopDshSessionHost } from './desktop-dsh-session-host';
+import { DSH_RUNTIME_HOST_CHANNEL } from '@neko/agent-contracts/dsh-runtime-host';
+import type { DesktopDshRuntimeHost } from './desktop-dsh-runtime-host';
+import { AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL } from '@neko/agent-contracts/extension-management-host';
+import type { DesktopDshExtensionManagementHost } from './desktop-dsh-extension-management-host';
+import { PROFESSIONAL_APPLICATION_HOST_CHANNEL } from '@neko/professional-apps-contracts/host';
+import type { DesktopProfessionalApplicationHost } from './desktop-professional-application-host';
 
 export function registerDesktopIpc(
   appHost: DesktopAppHost,
   options: {
+    readonly dshPermissions?: DesktopDshPermissionHost;
+    readonly dshRuntime?: DesktopDshRuntimeHost;
+    readonly dshSessions?: DesktopDshSessionHost;
+    readonly dshExtensions?: DesktopDshExtensionManagementHost;
+    readonly professionalApplications?: DesktopProfessionalApplicationHost;
     readonly selectContentWorkspace: (event: IpcMainInvokeEvent) => Promise<string | undefined>;
     readonly selectWorkspaceGrant: (
       event: IpcMainInvokeEvent,
@@ -59,6 +67,35 @@ export function registerDesktopIpc(
     readonly readWorldPackage: (event: IpcMainInvokeEvent) => Promise<Uint8Array | undefined>;
   },
 ): () => void {
+  if (options.dshPermissions) {
+    ipcMain.handle(DSH_PERMISSION_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
+      options.dshPermissions?.execute(requireSender(event), payload),
+    );
+  }
+  if (options.dshSessions) {
+    ipcMain.handle(DSH_SESSION_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
+      options.dshSessions?.execute(requireSender(event), payload),
+    );
+  }
+  if (options.dshRuntime) {
+    ipcMain.handle(DSH_RUNTIME_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
+      options.dshRuntime?.execute(requireSender(event), payload),
+    );
+  }
+  if (options.dshExtensions) {
+    ipcMain.handle(
+      AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL,
+      (event: IpcMainInvokeEvent, payload: unknown) =>
+        options.dshExtensions?.execute(requireSender(event), payload),
+    );
+  }
+  if (options.professionalApplications) {
+    ipcMain.handle(
+      PROFESSIONAL_APPLICATION_HOST_CHANNEL,
+      (event: IpcMainInvokeEvent, payload: unknown) =>
+        options.professionalApplications?.execute(requireSender(event), payload),
+    );
+  }
   ipcMain.handle(CHARACTER_FOUNDATION_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
     appHost.executeCharacterFoundationRequest(requireSender(event), payload),
   );
@@ -174,25 +211,11 @@ export function registerDesktopIpc(
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.openAgentAdvancedSettings(requireSender(event), payload),
   );
-  ipcMain.handle(
-    DESKTOP_AGENT_CHANNELS.bootstrapGet,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.createAgentBootstrap(requireSender(event), payload, (agentEvent) => {
-        if (!event.sender.isDestroyed()) {
-          event.sender.send(DESKTOP_AGENT_CHANNELS.messageEvent, agentEvent);
-        }
-      }),
+  ipcMain.handle(DESKTOP_AI_MODEL_SETTINGS_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.executeAiModelSettings(requireSender(event), payload),
   );
-  ipcMain.handle(
-    DESKTOP_AGENT_CHANNELS.connectionDetach,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.detachAgentConnection(requireSender(event), payload),
-  );
-  ipcMain.handle(AGENT_LAUNCH_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
-    appHost.executeAgentLaunchRequest(requireSender(event), payload),
-  );
-  ipcMain.handle(ASSISTANT_RESOURCE_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
-    appHost.executeAssistantResourceRequest(requireSender(event), payload),
+  ipcMain.handle(DESKTOP_STORAGE_SETTINGS_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.executeStorageSettings(requireSender(event), payload),
   );
   ipcMain.handle(DESKTOP_WORKSPACE_GRANT_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
     appHost.resolveWorkspaceTarget(requireSender(event), payload, () =>
@@ -269,7 +292,11 @@ export function registerDesktopIpc(
   ipcMain.handle(
     DESKTOP_RESOURCE_BROWSER_CHANNELS.execute,
     (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.executeResourceBrowser(requireSender(event), payload),
+      appHost.executeResourceBrowser(requireSender(event), payload, (changed) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send(DESKTOP_CANVAS_CHANNELS.workspaceIndexChangedEvent, changed);
+        }
+      }),
   );
   ipcMain.handle(
     DESKTOP_PROJECT_PORTABILITY_CHANNELS.inspect,
@@ -342,11 +369,6 @@ export function registerDesktopIpc(
       appHost.executeCanvasIntent(requireSender(event), payload),
   );
   ipcMain.handle(
-    DESKTOP_CANVAS_CHANNELS.previewVariantResolve,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.resolveCanvasPreviewVariant(requireSender(event), payload),
-  );
-  ipcMain.handle(
     DESKTOP_CANVAS_CHANNELS.previewResourceResolve,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.resolveCanvasPreviewResource(requireSender(event), payload),
@@ -357,12 +379,14 @@ export function registerDesktopIpc(
       appHost.releaseCanvasPreviewResource(requireSender(event), payload),
   );
   ipcMain.handle(
-    DESKTOP_AGENT_CHANNELS.messageSend,
+    DESKTOP_CANVAS_CHANNELS.workspaceIndexCatalogRead,
     (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.sendAgentMessage(requireSender(event), payload),
+      appHost.readCanvasWorkspaceIndexCatalog(requireSender(event), payload),
   );
-  ipcMain.handle(DESKTOP_AGENT_AUTOMATION_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
-    appHost.executeAgentAutomation(requireSender(event), payload),
+  ipcMain.handle(
+    DESKTOP_CANVAS_CHANNELS.workspaceDocumentOpen,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.openCanvasWorkspaceDocument(requireSender(event), payload),
   );
   ipcMain.handle(
     DESKTOP_BRIDGE_CHANNELS.bootstrapGet,
@@ -389,31 +413,6 @@ export function registerDesktopIpc(
     appHost.executeAssetCenter(requireSender(event), payload),
   );
   ipcMain.handle(
-    AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.executeExtensionManagement(requireSender(event), payload),
-  );
-  ipcMain.handle(
-    AUTOMATION_LOCAL_RUNTIME_MANAGEMENT_HOST_CHANNEL,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.executeAutomationLocalRuntimeManagement(requireSender(event), payload),
-  );
-  ipcMain.handle(
-    AUTOMATION_PERMISSION_MANAGEMENT_HOST_CHANNEL,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.executeAutomationPermissionManagement(requireSender(event), payload),
-  );
-  ipcMain.handle(
-    DESKTOP_AUTOMATION_TARGET_SELECTION_CHANNELS.execute,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.executeAutomationTargetSelection(requireSender(event), payload),
-  );
-  ipcMain.handle(
-    DESKTOP_AUTOMATION_SESSION_CONTROL_CHANNELS.execute,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.executeAutomationSessionControl(requireSender(event), payload),
-  );
-  ipcMain.handle(
     DESKTOP_SHELL_CHANNELS.projectOpenContent,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.openContentProject(requireSender(event), payload, () =>
@@ -431,14 +430,14 @@ export function registerDesktopIpc(
       appHost.removeProjects(requireSender(event), payload),
   );
   ipcMain.handle(
-    DESKTOP_SHELL_CHANNELS.projectConversationDelete,
+    DESKTOP_SHELL_CHANNELS.projectConversationArchive,
     (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.deleteProjectConversations(requireSender(event), payload),
+      appHost.archiveProjectConversations(requireSender(event), payload),
   );
   ipcMain.handle(
-    DESKTOP_SHELL_CHANNELS.conversationDelete,
+    DESKTOP_SHELL_CHANNELS.conversationArchive,
     (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.deleteHomeConversations(requireSender(event), payload),
+      appHost.archiveConversations(requireSender(event), payload),
   );
   ipcMain.handle(
     DESKTOP_SHELL_CHANNELS.projectRequestProfile,
@@ -485,16 +484,12 @@ export function registerDesktopIpc(
       PROJECT_AUTHORING_HOST_CHANNEL,
       PROJECT_LOCAL_AUTHORING_HOST_CHANNEL,
       CHARACTER_AVATAR_HOST_CHANNEL,
-      DESKTOP_AGENT_CHANNELS.bootstrapGet,
-      DESKTOP_AGENT_CHANNELS.connectionDetach,
-      AGENT_LAUNCH_HOST_CHANNEL,
-      ASSISTANT_RESOURCE_HOST_CHANNEL,
       DESKTOP_WORKSPACE_GRANT_CHANNEL,
-      DESKTOP_AGENT_CHANNELS.messageSend,
-      DESKTOP_AGENT_AUTOMATION_CHANNEL,
       DESKTOP_APPLICATION_SETTINGS_CHANNELS.snapshotGet,
       DESKTOP_APPLICATION_SETTINGS_CHANNELS.update,
       DESKTOP_APPLICATION_SETTINGS_CHANNELS.agentAdvancedOpen,
+      DESKTOP_AI_MODEL_SETTINGS_CHANNEL,
+      DESKTOP_STORAGE_SETTINGS_CHANNEL,
       DESKTOP_RESOURCE_BROWSER_CHANNELS.snapshotGet,
       DESKTOP_RESOURCE_BROWSER_CHANNELS.children,
       DESKTOP_RESOURCE_BROWSER_CHANNELS.search,
@@ -517,9 +512,10 @@ export function registerDesktopIpc(
       DESKTOP_CANVAS_CHANNELS.materialActionsResolve,
       DESKTOP_CANVAS_CHANNELS.textFilePreviewRead,
       DESKTOP_CANVAS_CHANNELS.intentExecute,
-      DESKTOP_CANVAS_CHANNELS.previewVariantResolve,
       DESKTOP_CANVAS_CHANNELS.previewResourceResolve,
       DESKTOP_CANVAS_CHANNELS.previewResourceRelease,
+      DESKTOP_CANVAS_CHANNELS.workspaceIndexCatalogRead,
+      DESKTOP_CANVAS_CHANNELS.workspaceDocumentOpen,
       DESKTOP_CUT_CHANNELS.snapshotGet,
       DESKTOP_CUT_CHANNELS.requestExecute,
       DESKTOP_CUT_CHANNELS.draftCreate,
@@ -527,16 +523,11 @@ export function registerDesktopIpc(
       DESKTOP_BRIDGE_CHANNELS.bootstrapGet,
       DESKTOP_SHELL_CHANNELS.snapshotGet,
       ASSET_CENTER_HOST_CHANNEL,
-      AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL,
-      AUTOMATION_LOCAL_RUNTIME_MANAGEMENT_HOST_CHANNEL,
-      AUTOMATION_PERMISSION_MANAGEMENT_HOST_CHANNEL,
-      DESKTOP_AUTOMATION_TARGET_SELECTION_CHANNELS.execute,
-      DESKTOP_AUTOMATION_SESSION_CONTROL_CHANNELS.execute,
       DESKTOP_SHELL_CHANNELS.projectOpenContent,
       DESKTOP_SHELL_CHANNELS.projectOpenCatalog,
       DESKTOP_SHELL_CHANNELS.projectRemove,
-      DESKTOP_SHELL_CHANNELS.projectConversationDelete,
-      DESKTOP_SHELL_CHANNELS.conversationDelete,
+      DESKTOP_SHELL_CHANNELS.projectConversationArchive,
+      DESKTOP_SHELL_CHANNELS.conversationArchive,
       DESKTOP_SHELL_CHANNELS.projectRequestProfile,
       DESKTOP_SHELL_CHANNELS.homeActivate,
       DESKTOP_SHELL_CHANNELS.tabActivate,
@@ -544,6 +535,11 @@ export function registerDesktopIpc(
       DESKTOP_SHELL_CHANNELS.workbenchUpdate,
       DESKTOP_SHELL_CHANNELS.applicationSidebarUpdate,
       DESKTOP_SHELL_CHANNELS.sceneTransition,
+      ...(options.dshPermissions ? [DSH_PERMISSION_HOST_CHANNEL] : []),
+      ...(options.dshRuntime ? [DSH_RUNTIME_HOST_CHANNEL] : []),
+      ...(options.dshSessions ? [DSH_SESSION_HOST_CHANNEL] : []),
+      ...(options.dshExtensions ? [AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL] : []),
+      ...(options.professionalApplications ? [PROFESSIONAL_APPLICATION_HOST_CHANNEL] : []),
     ]) {
       ipcMain.removeHandler(channel);
     }

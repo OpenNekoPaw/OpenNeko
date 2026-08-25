@@ -8,16 +8,16 @@
     "userBehavior": "Submit the first message from an exact Workspace-bound Draft and remain in that Workspace Session.",
     "canonicalPath": [
       "visible Workspace Draft",
-      "typed Agent Draft submit",
+      "visible Composer submit",
       "exact Workspace binding receipt",
       "owner-qualified Desktop Scene",
-      "Pi Conversation runtime"
+      "exact DSH Session"
     ],
     "observables": [
       {
         "ref": "launch-facts",
         "kind": "runtime-fact",
-        "description": "Workspace Draft and final Session Scene identities plus canonical Pi turn facts.",
+        "description": "Workspace Draft and final Session Scene identities plus canonical DSH Turn facts.",
         "required": true
       }
     ],
@@ -45,17 +45,6 @@
       "finalPhase": "session",
       "finalBindingKind": "workspace",
       "conversationCreated": true,
-      "evidenceRef": "launch-facts"
-    },
-    {
-      "id": "pi-runtime",
-      "kind": "pi-runtime",
-      "implementation": "pi-agent-core",
-      "transcriptAuthority": "pi-session",
-      "productMetadataAuthority": "sqlite",
-      "purpose": "agent.main",
-      "workspaceLocatorKind": "virtual",
-      "turnDurability": "durable",
       "evidenceRef": "launch-facts"
     },
     { "id": "answer", "kind": "final-answer", "mode": "non-empty", "evidenceRef": "launch-facts" }

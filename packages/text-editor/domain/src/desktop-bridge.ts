@@ -1,4 +1,4 @@
-import { validateContentLocator } from '@neko/content';
+import { isWorkspaceFileContentLocator, validateContentLocator } from '@neko/content-domain';
 import { parseFountainDocument } from '@neko/screenplay-domain';
 import { isTextDocumentDiagnosticCode } from './contracts';
 import {
@@ -463,7 +463,11 @@ function parseTextDocumentIdentity(value: unknown): TextDocumentIdentity {
   requireExactKeys(record, ['owner', 'workspaceId', 'documentId', 'locator']);
   const owner = parseTextDocumentSessionOwner(record['owner']);
   const locator = validateContentLocator(record['locator']);
-  if (!locator.ok || locator.locator.kind !== 'workspace-file') {
+  if (
+    !locator.ok ||
+    !isWorkspaceFileContentLocator(locator.locator) ||
+    locator.locator.selector !== undefined
+  ) {
     throw invalid('Text Document locator must be an authorized Workspace file.');
   }
   return {

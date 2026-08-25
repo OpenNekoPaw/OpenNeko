@@ -20,12 +20,15 @@
   1. 是否符合现有架构？
   2. 如何进一步降低耦合？
   3. 是否易于扩展与测试？
-- 非平凡功能、跨模块修改、公共契约或架构变更，实施前必须按 `openspec/config.yaml` 的 workflow 在 `openspec/changes/<change>/` 创建或更新 OpenSpec artifacts；proposal、design、spec 和 tasks 是实施约束，不是事后补写的文档。
-- OpenSpec 提案的目标和开发任务必须保持边界清晰且复杂度受控；任务数量本身不是质量指标。单个提案不得混合可独立交付的目标、owner 或交付边界，单个任务不得捆绑多个可独立执行或验收的结果；发现目标或任务过度复杂时，必须拆分为可独立评审、实施和验收的提案或任务，不得为了减少任务数量而合并无关工作。
+- OpenSpec 只用于系统级或产品级功能变更：目标必须能够作为独立能力或核心用户工作流命名，并改变系统能力边界、核心产品行为、持久用户事实或安全/信任边界。此类变更实施前按 `openspec/config.yaml` 建立简洁 artifacts；提案只冻结产品意图、系统边界和产品级验收，不跟踪代码文件、类/函数、逐提交任务或验证流水账。
+- 局部 UI/交互细节、缺陷修复、性能优化、行为等价重构与清理、包/目录/内部 contract 调整、测试和质量门禁、构建/依赖/开发工具、注释、inventory/audit/status 均不得新建或扩写 OpenSpec，即使用户可以观察到局部差异。此类工作直接修改代码与测试，并在提交、PR 或交付说明中记录必要证据；不得转存为状态、调研或 verification 文档。
+- 系统级或产品级提案只在核心能力边界尚未落地时保持 active；代码已经成为 canonical path、只剩局部修补或补充验证时必须删除提案。完成后仅将仍然属于系统架构或核心产品设计的结论提升到 `docs/architecture/` 或 `docs/domains/`，不得保留 proposal archive、implementation evidence、verification、evaluation 或任务历史。
+- 同时包含功能与非功能目标时应先拆分交付边界；只有无法从该功能验收中独立交付的支撑工作才能保留在同一功能 OpenSpec task 中，不得为非功能工作建立独立 proposal、附属 change 或长期 verification 文档。
+- OpenSpec task 只表达少量产品级里程碑和最终验收，不记录实现步骤、文件清单、命令结果、日期化证据或逐项代码进度；代码和测试是实现状态的唯一事实来源。提案不得因普通代码演进而要求同步维护。
 - 遇到多模块改动或新功能，先做五层分析：职责、依赖、接口、扩展、测试。
 - 分析必须覆盖完整调用链和真实运行边界，不能只优化当前文件、当前函数或单个测试暴露出的局部现象；先确认输入、状态、契约、依赖、资源生命周期、错误传播和最终用户路径，再决定修改位置。
 - 抽象只服务于稳定职责、真实边界或明确变化点：接口应精简、可组合、可替换、可测试，不要为单一实现制造无意义层级，也不要为了少写代码把不同职责压进同一接口。
-- 简单改动可直接实现，但仍需保持与现有架构一致。
+- 非功能改动和简单局部修正可直接实现，但仍需保持与现有架构一致并完成与风险相称的验证。
 - 本项目是本地 Electron Desktop + Node/FFmpeg 媒体运行时，不是云端多租户或分布式后端；设计必须按本地产品边界控制复杂度，避免为了假想远程规模、租户隔离、服务治理或未知未来需求引入过度抽象、过度配置、过度防御或多层 indirection。
 - 防御性代码只保护真实边界：Electron Main/preload/renderer 隔离、CSP、typed IPC、本地文件与路径、媒体 codec/Range、异步取消与资源释放、外部 AI/market provider、用户数据和安全/信任边界；不要用宽泛 try/catch、静默默认值、fallback、重复校验或 no-op guard 掩盖本应暴露的开发错误。
 - 默认采用 fail-visible 且 fail-local：契约违背、不可达状态、未实现路径、缺失依赖、非法 message、无法解析的 schema 或开发期路径错误应在最小 owning boundary 直接抛错、返回明确 diagnostic 或让测试失败，同时保持无关记录、实例、能力和工作区可用；除非保护用户数据、外部 provider 或安全/信任边界，不要用兜底值、兼容分支或静默降级把代码问题伪装成成功。安全或信任边界必须拒绝当前请求或资源，不得因此默认停用整个应用。
@@ -39,7 +42,7 @@
 - 不要复述用户需求、重复总结同一结论或展开无关背景；能用少量段落或列表说明时，不生成多章节长篇报告。
 - 非平凡开发任务的交付说明默认收敛为：变更摘要、关键设计、验证结果、剩余风险；仅在用户明确要求详细分析、方案对比、审计报告或教程时展开。
 - 过程更新只说明当前阶段、关键发现和阻塞项；没有新增信息时不要重复汇报。
-- 新增代码注释应优先遵循所在模块既有风格；若无明确先例，使用简洁英文注释说明非显然约束。
+- 代码注释只用简洁英文说明无法从类型、命名和控制流直接看出的“为什么”、关键不变量或外部边界；不得复述代码流程、保存历史设计、列实现步骤或描述容易随代码变化的细节。能通过命名、类型或小函数表达时不写注释。
 - 文档更新优先同步中文版本；若变更影响英文文档语义，补充对应英文文档。
 
 ## 项目概览
@@ -66,31 +69,40 @@
 - 功能背景先看 `README_CN.md`，必要时对照 `README.md`。
 - 总体架构先看 `docs/architecture/README.md` 与 `docs/architecture/package-boundaries.md`。
 - 文档导航先看 `docs/README.md`，不要猜测具体文档路径。
-- 系统级架构、ADR 和跨领域约束从 `docs/architecture/README.md` 进入。
+- 系统级架构、开发规范和跨领域约束从 `docs/architecture/README.md` 进入。
 - 子包边界、UI 层、公共代码、Desktop IPC 与 Node/FFmpeg 约束先看 `docs/architecture/package-boundaries.md`。
 - 领域能力、领域架构和跨包领域边界从 `docs/domains/README.md` 进入，再进入 `docs/domains/<domain>/README.md`。
-- 调研、竞品、技术 spike 和 UX 分析从 `docs/research/README.md` 进入。
-- Gap、迁移、健康度和审计快照从 `docs/status/README.md` 进入。
-- 活跃设计变更优先查 `openspec/changes/`。
-- 当前代码是实际行为的事实来源，根架构和已接受 ADR 是目标约束来源；两者或包级文档发生冲突时，不得默认用现有实现合理化架构漂移，应检查活跃 OpenSpec、迁移状态和已知债务，判断应修复代码、更新文档还是继续既定变更，并在设计或交付说明中记录结论。
+- 系统级或产品级活跃设计变更查 `openspec/changes/`；具体功能是否存在、如何运行及实现进度以代码和测试为准。
+- 当前代码是实际业务逻辑与功能实现的唯一事实来源；架构文档只约束长期系统边界，领域文档只描述核心产品模型。文档不得复制实现结构来要求代码同步，文档与代码实现细节冲突时删除或提升文档抽象层级。
 
 ## 文档治理
 
 - 根目录 `README_CN.md` / `README.md` 是项目入口；`docs/architecture/README.md` 是系统架构总览入口。
-- `docs/architecture/` 只放系统级约束、ADR 和跨领域不变量。
-- `docs/domains/<domain>/` 放领域能力模型、领域数据流和领域内部架构；领域架构文件命名为 `architecture.md`。
-- `docs/research/` 放调研、竞品、市场、技术 spike 和 UX 分析；此类文档必须带日期、来源或不确定性说明。
-- `docs/status/` 放带日期的 gap、迁移进度、健康度和审计快照；此类文档不作为长期架构事实来源，也不承担任务管理。
-- `openspec/changes/` 放仍在设计或实施中的变更；稳定结论再提升到 `docs/architecture/` 或 `docs/domains/`。
-- `packages/<name>/docs/` 或 `packages/<family>/<role>/docs/` 放只服务某个包的实现、配置和维护说明。
-- 新增或移动文档前，先判断它是系统约束、领域模型、调研分析、当前状态、开发变更还是包私有实现。
+- `docs/architecture/` 只放系统级架构、开发规范和跨领域长期不变量。
+- `docs/domains/<domain>/` 只放核心产品能力模型与稳定领域边界；领域架构文件命名为 `architecture.md`。
+- `openspec/changes/` 只放尚未落地的系统级或产品级功能变更，不保存实现日志、验证报告、调研、状态快照或代码任务清单。
+- 不提交 research/status/gap/audit/implementation-log/verification 文档，也不建立 package-private 实现文档；调研结论在设计时吸收，临时证据留在 issue、PR、交付说明或 gitignored report，实际实现直接读代码与测试。package README 只允许简短说明 public entry、运行边界和使用入口。
+- 新增或移动文档前，必须证明其内容属于系统架构、开发规范或核心产品设计，并且不会因普通代码重构而需要同步修改。
+- 长期文档只用当前 owner、contract 和产品概念描述 canonical 架构；不得保留“某旧包/旧路径/旧协议已删除或已退出”、迁移阶段、完成状态、历史提案入口或已被替代的实现名称。需要约束唯一路径时直接写当前正向规则，不维护历史方案黑名单。
+- 长期文档文件名必须匹配当前职责，不得沿用已经移除的实现名、内部组件名或历史技术选型。稳定文档不保存 Accepted/Deprecated 状态和更新时间；文件存在即表示当前有效，失效时删除或按当前职责重命名。
+- 当前 package 清单、产品可达状态、实现进度和临时 architecture drift 由代码、测试和机器台账负责，不复制到长期文档。用户可见领域历史、不可变版本和数据保留语义不属于实现历史，仍由核心产品设计文档明确。
 - 不要把领域内部架构放入 `docs/architecture/<domain>/`；应放入 `docs/domains/<domain>/architecture.md`。
-- 不要把实现日志、命令输出、阶段完成记录或临时状态写成架构事实。
-- 状态文档中的行动项需要设计、实现或验收时，转入 `openspec/changes/`；只是排队事项时，转入 `TODO_CN.md` / `TODO.md`；长期方向转入 `ROADMAP_CN.md` / `ROADMAP.md`。
+- 不要把实现日志、命令输出、阶段完成记录、临时状态、代码清单或验证证据写成仓库文档。
 
 ## 架构硬约束
 
 - TypeScript 不要放松以下编译约束：`strict`、`noUncheckedIndexedAccess`、`noImplicitOverride`。
+- Workspace package 物理拓扑必须唯一且可由 owner/role 推导：单 package owner 仅位于
+  `packages/<name>`；一旦同一 owner 存在两个或以上可独立构建的 dependency closure，family 根目录必须
+  是不含 `package.json` 的纯容器，全部 package 位于 `packages/<family>/<role>`，manifest identity 为
+  `@neko/<family>-<role>`。禁止 `packages/<family>-<role>` 平铺 sibling、family 根 package 与 nested role
+  package 并存、同一 family 横跨多个物理根，以及为保留根路径建立 aggregate/barrel package。
+- 单 package owner 首次拆出 Node、Webview、runtime、contracts、plugin 或其他独立 role 时，必须在同一
+  原子变更内将原 package 一并移动到明确 role，并同步 package identity、全部 consumer、
+  manifest/lockfile、构建与测试发现、质量台账、fixture 和当前文档，删除原路径且不得保留 alias、双重
+  workspace 或兼容 re-export；还必须清除该精确原 root 下可重建的 build、cache、package-local
+  `node_modules` 和空 source 目录，并验证原 root 不再存在。清理不得使用模糊 glob，也不得触及用户数据、
+  Workspace 内容或无关 package artifacts。
 - 禁止内部无意义的版本化。生产代码、内部 contract、DTO、message/event/command、IPC、schema、codec、配置、索引、缓存和内部元数据不得为了未来兼容、升级预留、数据迁移、缓存失效、调试便利或“行业惯例”新增 `version`、`schemaVersion`、`formatVersion`、`contractVersion`、用于表达内部数据代际的 `revision`/`generation`/`epoch`、migration marker、数字版本后缀或语义等价别名，也不得据此切换内部 shape、路由新旧路径或判定数据有效性。
 - 必须保留用户需要管理的领域版本数据。Character、素材以及其他用户创作对象只要存在用户可见的创建版本、历史、引用、比较、恢复、发布或删除语义，就应由 owning domain 定义明确的版本 identity、不可变内容和生命周期，并允许对应 contract/UI 原样传递和管理；此类版本是业务事实，不是 schema、component、contract 或迁移版本，不得被解释为内部 format dispatch。
 - 必须保留第三方版本。第三方服务、库、API、协议、模型、文件格式和工具链要求或公开提供的版本号、依赖约束、版本化 endpoint/参数及原始标识应保留在 lockfile、manifest、provider-specific config/contract 和边界 adapter 中，不得为了内部“无版本”规则删除、伪造或丢失；它们可以参与对应第三方调用和兼容性判断，但不得扩展为无关领域数据的 identity、内部 schema 代际或全局版本路由。
@@ -104,7 +116,8 @@
   Host adapter 与资源生命周期；业务编排、领域状态和规则由 owning package 的 host-neutral/Node
   application service 负责，不得堆入应用组合根。
 - Node/FFmpeg 媒体运行时负责宿主侧媒体探测、转码与流式读取；TypeScript owning packages 负责领域模型与编排，Renderer 不得重复实现宿主媒体逻辑。
-- 当前没有 Proto package；跨层 contract 由 owning package 的 L0 contract 或真实项目 codec 拥有。未来只有存在真实序列化 producer/consumer 时才可通过 OpenSpec 重新引入 Proto。
+- 跨层 contract 由 owning package 的 L0 contract 或真实项目 codec 拥有；只有存在真实跨语言、跨进程或
+  持久格式 producer/consumer 时才建立对应序列化 schema。
 - 禁止内部 contract 版本化。用户管理的领域版本可以作为业务 identity/ref 在 owning domain contract 中原样传递，第三方版本可以保留在 provider-specific contract 和边界 adapter 中，但两者都不得作为内部 contract、schema 或 codec shape 的判别字段。package-owned internal contract、public port、IPC/message、DTO、codec、schema、event 和 command 不得声明 contract/schema generation，不得建立内部 `v1`/`v2` 类型、版本化 channel/handler、按版本分发的 registry 或新旧 contract 并行路径。内部 Contract 必须保持单一 canonical shape；变更时必须一次性更新本次边界内全部 producer、consumer、fixture 和测试，并删除旧 shape 与旧路径。
 - Contract 失效必须隔离在最小可判定范围，优先为单次 message/event/command 或单条记录，其次为单个实例、sender、session 或能力；只能拒绝受影响的输入或操作并返回明确 diagnostic，不得因一个 contract decode、validation、registration 或 handler 失败而使其他 contract、组件、项目、工作区或整个应用不可用。Contract registry、组合根和批量加载路径必须支持逐项隔离失败，不得用全局初始化失败、清空共享状态或统一 disable 传播局部 contract 错误。
 - Contract 测试必须覆盖生产者与消费者使用同一 canonical shape、代码中不存在内部 contract 版本字段和版本分发路径、合法的用户领域版本与第三方版本不会被删除或改写，以及单个非法 contract 输入被拒绝时无关 contract、实例、能力、工作区和应用仍可正常使用；涉及 Electron trust boundary 时必须额外断言仅当前请求、sender 或授权资源 fail-closed。
@@ -145,10 +158,10 @@
 
 - 系统提示词负责默认 Agent 人设、通用行为准则、通用工具协议、Markdown/引用/视觉证据/安全边界、工具发现与失败处理规则。
 - 子包 capability 注入负责领域工具、operation 名称、参数 schema、validation、diagnostics、资源绑定、authoring lifecycle 和领域能力目录。
-- Skill content 负责扩展能力、领域方法论、创作语义、任务判断、输出风格和提示词写作规则；不得承担运行时工具协议或子包内部 schema。
-- Skill 正文不得写具体工具名教程、命令名、参数表、轮询/任务协议、UI 命令流程、缓存/Webview/path 协议或子包 authoring 细节。需要这些信息时，放到系统提示词、子包 capability prompt、tool schema 或运行时 catalog。
-- 工具名允许出现在机器可读元数据中，例如 `allowedTools`、`optionalTools`、`toolDefinitions`、tool registry、tool schema 和测试 fixture；不得以自然语言教程形式进入 Skill prompt content。
-- 新增/修改 Skill 时必须补充或维护防回流测试，确保 builtin/custom skill content 不重新包含被系统提示词或子包 capability 拥有的工具协议。
+- Skill content 负责扩展能力、领域方法论、创作语义、任务判断、输出风格和提示词写作规则；可以说明公开、稳定且对用户有意义的模型或工具如何参与该方法，但执行前必须以当前 DSH Tool catalog、schema、permission 和 Host authorization 为准。
+- Skill 正文不能授予工具可见性、权限、Workspace access、可执行 Plugin authority 或 Host trust，也不能把私有 ACP/MCP transport、缓存/Webview/path 协议、package-private schema 或 Host authorization 流程伪装成 portable runtime 能力；这些信息由系统提示词、子包 capability prompt、tool schema、profile 或 owner 文档承载。
+- DSH Skill 格式、来源、调用策略、scope、正文加载和相对资源语义只以仓库锁定的公开 DSH package contract 为准。不得增加固定 Skill 数量、单一主 Skill、Artifact Profile 前置、仅 builtin 来源、禁止 flat Markdown 或“正文出现公开工具名即不合格”等额外运行限制。
+- 新增/修改 Skill 时必须补充或维护边界测试：证明 Skill 文本不能绕过 Tool/schema/permission/Host authority，且 builtin/custom Skill 不重新实现私有运行时协议；测试不得把公开工具名或用户可执行的工具指导本身判为 DSH 格式错误。
 
 ## Agent Evaluation 开发边界
 
@@ -184,15 +197,16 @@
 - 只依赖注入的 file/time/credential/process 等 port、可脱离 Electron 执行并决定业务结果的 service，
   即使只有一个调用方，也必须下沉 owning package；Desktop 只保留边界 decode、sender/路径授权、
   concrete port implementation、调用和结果投影。
-- 现有 `apps/neko-desktop` 中的业务实现属于待迁移架构漂移，不构成先例。新增或实质修改命中混合职责
-  文件时执行“触碰即收敛”：优先在同一 OpenSpec 下沉；无法同时迁移时，必须记录 owner、目标
-  package/public entry、阻塞、旧路径删除条件和验证任务，且不得扩大 app-owned 业务 API。
-- 跨领域业务没有明确 owner 时，先通过 OpenSpec 定义中立职责和依赖方向；禁止创建
+- 新增或实质修改 `apps/neko-desktop` 中的业务实现时，必须在同一有界变更中将领域规则下沉到 owning
+  package；若同时改变产品功能，则纳入对应功能 OpenSpec，纯等价重构直接实施。不得扩大 app-owned
+  业务 API。
+- 跨领域业务没有明确 owner 时，先在稳定架构/领域文档中定义中立职责和依赖方向；只有同时新增或改变
+  产品功能时才建立 OpenSpec。禁止创建
   `@neko/desktop-core`、Desktop manager bag、万能 facade 或平行业务 contract 收纳无归属逻辑。
-- 从 Application 层迁移业务逻辑时，必须先建立 package-owned contract/test/application service，
-  再一次性切换本次边界内调用方，并删除旧 app path 及其入口、导出、注册、fixture 和专用测试；禁止用
-  poison、fail-closed 占位、compatibility shim、双实现、双写或 fallback 保留旧路径。
-- 新增 `apps/neko-desktop` 生产模块或保留 app-local 实现时，OpenSpec、PR 或交付说明必须说明允许职责、
+- 调整 Application 层业务 ownership 时，必须先建立 package-owned contract/test/application service，
+  再一次性切换本次边界内调用方并确保只有一个 public path；禁止用 poison、fail-closed 占位、
+  compatibility shim、双实现、双写或 fallback 保留平行路径。
+- 新增 `apps/neko-desktop` 生产模块或保留 app-local 实现时，PR 或交付说明必须说明允许职责、
   组合的 package public contract、为何必须依赖 Application 层，以及 package producer、Desktop
   consumer、canonical path 和真实 Electron（如适用）验证证据。
 
@@ -216,15 +230,16 @@
   - `packages/ui/src/`
   - `packages/cut/webview/src/components/`
   - `packages/cut/webview/src/hooks/`
-- `@neko/platform` 已删除；配置、provider、Generation、Content 与 Host 能力必须直接使用其 owning package 的公开入口，不得重新建立聚合 facade。
+- 配置、provider、Generation、Content 与 Host 能力必须直接使用其 owning package 的公开入口，不得建立无
+  owner 的聚合 facade。
 - 新功能涉及组件样式、主题、国际化、日志、错误/诊断、配置、路径、文件保存/读写、资源授权、缓存、DTO 或跨包契约时，必须先做公共基础能力审计：判断应复用现有公共入口、更新公共契约/adapter，还是确实保留在 owning package。
 - 禁止在功能包内并行实现 package-local design system、theme token、i18n runtime、logger/error 类型、项目文件 IO、cache manager、path resolver、宽泛媒体 client 或无 owner 的共享 DTO；确需新增公共能力时优先进入 `@neko/shared`、`@neko/ui`、owning package L0 contract 或既有 domain service。
-- 若决定不更新公共层，必须在 OpenSpec、PR 或交付说明中说明原因、边界、后续提取条件和验证命令。
+- 若决定不更新公共层，必须在 PR 或交付说明中说明原因、边界、后续提取条件和验证命令。
 - 新功能涉及 provider、registry、bridge、protocol、message router、status bar、tree view、file decoration、history、selection、recent items、projector、facade、command router、capability provider、store slice 或 workflow adapter 时，必须先做跨子包能力复用审计：搜索其他子包是否已有同类能力、相同交互模式或相同 host adapter。
 - 两个以上子包出现领域语义、生命周期、运行环境、错误模型和变化方向一致的同类能力时，优先提取到中立共享层、domain service、shared contract、adapter factory、registry、strategy、hook 或 `@neko/ui` primitive；仅名称或代码结构相似不足以证明属于同一抽象，不得为了消除少量重复强行共享，也不要让功能包直接 import 另一个功能包的内部实现。
 - 保留 package-local 实现时，必须说明职责、生命周期、领域语义、依赖方向或运行环境为何不同，以及后续满足什么条件会抽到共享层。
 - 新增 Webview/React 组件前必须先做组件复用审计：搜索 `@neko/ui`、同包 `components/`、`hooks/`、`shared/`、相邻领域包和已有测试，优先增强旧组件、提取 prop/slot/variant、或抽出 package-local adapter。
-- 只有在职责、状态生命周期、交互契约或可访问性语义明显不同，且增强旧组件会增加耦合或破坏既有使用方时，才新增组件；新增时需在 OpenSpec、PR 或交付说明中写明复用审计结论。
+- 只有在职责、状态生命周期、交互契约或可访问性语义明显不同，且增强旧组件会增加耦合或破坏既有使用方时，才新增组件；新增时需在 PR 或交付说明中写明复用审计结论。
 - 不要为单个页面复制按钮、选择器、面板、空状态、工具栏、列表、卡片、输入区、Header/Input 等已有模式；跨两个以上 Webview 复用的无业务 UI 优先进入 `@neko/ui`，领域专属适配留在 owning package。
 
 ## Bug 定位与修复
@@ -284,7 +299,8 @@
 - 替换开发期间可以使用未提交或明确临时的旧输入 fixture、路径 spy、计数器和一次性搜索，验证旧路径已失效、新路径已生效；交付前必须删除这些临时测试资产及其引用，不得进入长期单元/集成测试、普通 fixture、snapshot、Evaluation suite、产品包、构建产物或质量 ledger。OpenSpec、PR 或交付说明只记录验证结论和命令，不得把历史 shape 或旧实现重新保存为可执行测试知识。
 - 长期测试只验证当前 canonical contract 的有效行为、与历史 shape 无关的一般非法输入、最小 owning scope 的明确 diagnostic，以及无关 sibling 仍可用；不得保留 legacy fixture、旧字段 fallback、旧 message/renderer/command、兼容 alias、fallback provider/source 或专门识别已删除 shape 的拒绝测试。当前 canonical decoder 应按当前必填语义拒绝非法输入，不得知道其属于哪个历史版本或旧路径。
 - 集中式仓库门禁可以保留验证拦截器本身所必需的最小合成反例，但必须位于治理脚本的聚焦自测中，与产品 import、构建、普通领域 fixture 和运行时不可达，且不得复制真实历史 payload、维护已删除入口清单或为具体旧路径建立长期行为测试。门禁必须默认扫描生产代码和测试代码；允许项必须精确到 occurrence 和真实外部/用户领域语义，不得按目录、文件名、`provider`/`runtime`/`canonical` 等宽泛词汇放行。
-- 不能借 prelaunch cleanup 忽略 Electron、Node、pnpm、OS、renderer sandbox、CSP、codec、Range、FFmpeg、Proto、marketplace trust 或安全边界。
+- 不能借 prelaunch cleanup 忽略 Electron、Node、pnpm、OS、renderer sandbox、CSP、codec、Range、FFmpeg、
+  外部序列化协议、marketplace trust 或安全边界。
 - 不能静默删除或损坏有价值的本地项目数据、用户设置、trust state、entitlement、插件安装记录或生成产物。任何持久化数据都不得由产品迁移或重建，必须按上述规则保持稳定读取或局部 fail-visible；确需修复时只能使用显式手动操作或产品运行路径之外的独立离线脚本，并提供明确的数据保护方案或 fail-closed diagnostic。
 
 ## 测试与质量门禁
@@ -310,18 +326,18 @@
 - 验收结论必须列出实际执行的命令、结果和覆盖层级；未执行项需记录不适用原因、阻塞条件和残余风险，不能仅以单元测试通过声明功能完成。
 - Webview 功能场景由 owning package 维护 fixture、用户操作、业务断言和 authoritative side effect；共享 runner 只拥有宿主/CDP/错误策略/报告机制，不得在共享层加入包级业务 shortcut。
 - Webview 功能测试必须使用隔离、合成 fixture workspace；不得采集普通开发窗口、真实用户工作区、凭据或本机私有配置作为截图、DOM、日志或报告证据。
-- 原始功能报告写入 gitignored `reports/webview-functional/`，CI artifact 默认保留 14 天。可提交的 OpenSpec/PR 摘要只记录 scenario id、命令、宿主/版本、结果、失败分类、脱敏证据位置和剩余风险；分享或提交前必须检查并移除 secret、token、绝对用户路径和非 fixture 内容。
+- 原始功能报告写入 gitignored `reports/webview-functional/`，CI artifact 默认保留 14 天。可提交的 PR/交付摘要只记录 scenario id、命令、宿主/版本、结果、失败分类、脱敏证据位置和剩余风险；分享或提交前必须检查并移除 secret、token、绝对用户路径和非 fixture 内容。
 
 ## 完成定义
 
 新增功能、bug 修复和非平凡重构只有同时满足以下条件，才可声明完成：
 
 1. owning responsibility、目标设计、契约和依赖方向已经明确，并符合现有架构。
-2. canonical path 已实现并接入；本次边界内被替代的旧实现、入口、导出、注册、fixture、专用 diagnostic 和临时验证测试均已删除，不存在被禁用、poison、fail-closed 隔离或仍可触发的旧路径。
+2. canonical path 已实现并接入；本次边界内只有一套入口、导出、注册、fixture 和 diagnostic，不存在被禁用、poison、fail-closed 隔离或仍可触发的平行路径。
 3. 抽象保持精简，未引入无真实变化点的接口层，也未保留平行接口、多实现或多种事实来源绕开设计问题。
 4. 回归测试能够证明目标行为或 bug 根因，并覆盖关键中间状态和执行路径。
 5. 已完成“测试与质量门禁”中所有适用的阻塞验证，不能只依据单元测试或局部构建判断通过；非阻塞 UI 参考验证不属于该完成条件。
-6. 影响使用方式、架构、契约或模块入口时，相关 README、架构文档、OpenSpec 或包级文档已同步。
+6. 影响使用方式、架构、契约或模块入口时，相关 README、架构文档或包级文档已同步；属于产品功能变更时，适用的 OpenSpec 也已同步。
 7. 未执行验证、外部阻塞和残余风险已在交付说明中明确记录。
 
 ## 交付前检查

@@ -1,0 +1,595 @@
+.desktop-extension-management-composition {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  container: extension-management / inline-size;
+}
+
+.extension-management-mode-switcher {
+  display: inline-flex;
+  width: fit-content;
+  max-width: calc(100% - 72px);
+  min-height: 44px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  margin: clamp(36px, 5vh, 56px) auto 0;
+  padding: 4px;
+  border: 1px solid var(--neko-desktop-border);
+  border-radius: 12px;
+  background: var(--neko-desktop-control);
+  box-shadow: var(--neko-desktop-shadow-surface);
+}
+
+.extension-management-mode-switcher button {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--neko-desktop-text-muted);
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.extension-management-mode-switcher button:hover:not([aria-selected='true']) {
+  color: var(--neko-desktop-text-strong);
+  background: var(--neko-desktop-control-hover);
+}
+
+.extension-management-mode-switcher button[aria-selected='true'] {
+  color: var(--neko-button-foreground);
+  background: var(--neko-button-background);
+  box-shadow: var(--neko-shadow-sm);
+  font-weight: 720;
+}
+
+.extension-management-mode-switcher button:focus-visible {
+  outline: 0;
+  box-shadow: var(--neko-desktop-focus-ring);
+}
+
+.agent-extension-management-root,
+.professional-application-management-root {
+  box-sizing: border-box;
+  display: flex;
+  width: min(1118px, calc(100% - 72px));
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  margin: 0 auto;
+  padding: 18px 0 48px;
+  overflow: hidden;
+}
+
+.agent-extension-management-root > .management-surface-header,
+.agent-extension-management-root > .management-surface-toolbar,
+.professional-application-management-root > .management-surface-header,
+.professional-application-management-root > .management-surface-toolbar {
+  width: 100%;
+  flex: 0 0 auto;
+}
+
+.agent-extension-management-root > .management-surface-list,
+.professional-application-management-root > .management-surface-list {
+  width: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+  align-content: start;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.agent-extension-management-root .management-search-field,
+.professional-application-management-root .management-search-field {
+  width: auto;
+  max-width: none;
+  min-width: 12rem;
+  min-height: 36px;
+  flex: 1 1 24rem;
+  border-radius: 8px;
+}
+
+.agent-extension-management-root .management-surface-toolbar > button,
+.professional-application-management-root .management-surface-toolbar > button {
+  display: inline-flex;
+  width: auto;
+  min-width: max-content;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.agent-extension-management-root .management-segmented-control,
+.professional-application-management-root .management-segmented-control {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.agent-extension-management-root .management-segmented-control button,
+.professional-application-management-root .management-segmented-control button {
+  white-space: nowrap;
+}
+
+.agent-extension-management-root .management-surface-list,
+.professional-application-management-root .management-surface-list {
+  gap: 12px;
+}
+
+.extension-detail-overlay__actions,
+.extension-lifecycle-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.extension-mcp-add-form {
+  display: grid;
+  gap: 12px;
+}
+
+.extension-mcp-add-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--neko-desktop-text-muted);
+  font-size: 12px;
+}
+
+.extension-mcp-add-form input,
+.extension-mcp-add-form select,
+.extension-mcp-add-form textarea {
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
+  color: var(--neko-desktop-text);
+  background: var(--neko-desktop-surface-raised);
+  border: 1px solid var(--neko-desktop-border);
+  border-radius: 8px;
+  font: inherit;
+}
+
+.extension-mcp-add-form textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.agent-extension-management-root .management-surface-list.is-grid,
+.professional-application-management-root .management-surface-list.is-grid {
+  grid-template-columns: repeat(auto-fill, 214px);
+  justify-content: start;
+}
+
+.agent-extension-management-root .agent-extension-catalog-row,
+.professional-application-management-root .professional-application-row {
+  height: 120px;
+  min-height: 120px;
+  align-items: stretch;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  border-color: color-mix(in srgb, var(--neko-desktop-border) 78%, transparent);
+  border-radius: 13px;
+  background: var(--neko-desktop-surface-raised);
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.agent-extension-management-root .agent-extension-catalog-row:hover,
+.professional-application-management-root .professional-application-row:hover {
+  border-color: color-mix(in srgb, var(--neko-accent) 34%, var(--neko-desktop-border));
+  background: var(--neko-desktop-surface-raised);
+  box-shadow: var(--neko-desktop-shadow-surface);
+}
+
+.agent-extension-management-root .agent-extension-catalog-row[data-selected='true'],
+.professional-application-management-root .professional-application-row[data-selected='true'] {
+  border-color: color-mix(in srgb, var(--neko-accent) 58%, var(--neko-desktop-border));
+  background: color-mix(in srgb, var(--neko-accent) 7%, var(--neko-desktop-surface-raised));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--neko-accent) 20%, transparent),
+    var(--neko-desktop-shadow-surface);
+}
+
+.agent-extension-management-root .agent-extension-catalog-row:focus-within,
+.professional-application-management-root .professional-application-row:focus-within {
+  border-color: color-mix(in srgb, var(--neko-accent) 52%, var(--neko-desktop-border));
+  box-shadow: var(--neko-desktop-focus-ring);
+}
+
+.agent-extension-management-root .agent-extension-catalog-row[data-lifecycle-state='disabled'],
+.professional-application-management-root
+  .professional-application-row[data-lifecycle-state='disabled'] {
+  border-color: color-mix(in srgb, var(--neko-desktop-border) 68%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--neko-desktop-surface-muted) 72%,
+    var(--neko-desktop-surface-raised)
+  );
+}
+
+.agent-extension-catalog-row[data-lifecycle-state='disabled']
+  :is(.management-surface-icon, .agent-extension-catalog-row__summary),
+.professional-application-row[data-lifecycle-state='disabled']
+  :is(.management-surface-icon, .professional-application-row__summary) {
+  color: var(--neko-desktop-text-muted);
+}
+
+.agent-extension-catalog-row__open,
+.professional-application-row__open {
+  box-sizing: border-box;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 0;
+  outline: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.agent-extension-catalog-row__heading,
+.professional-application-row__heading {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 32px minmax(0, 1fr) 22px;
+  align-items: center;
+  gap: 10px;
+}
+
+.agent-extension-catalog-row__heading .management-surface-icon,
+.professional-application-row__heading .management-surface-icon {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+}
+
+.agent-extension-catalog-row__heading strong,
+.professional-application-row__title strong {
+  overflow: hidden;
+  color: var(--neko-desktop-text-strong);
+  font-size: 13px;
+  font-weight: 680;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-extension-catalog-row__affordance,
+.professional-application-row__affordance {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--neko-desktop-text-subtle);
+  background: var(--neko-desktop-control);
+}
+
+.agent-extension-catalog-row:hover .agent-extension-catalog-row__affordance,
+.professional-application-row:hover .professional-application-row__affordance {
+  color: var(--neko-desktop-text-strong);
+  background: var(--neko-desktop-control-hover);
+}
+
+.agent-extension-catalog-row__summary,
+.professional-application-row__summary {
+  display: -webkit-box;
+  overflow: hidden;
+  min-height: 2.8em;
+  color: var(--neko-fg-secondary);
+  font-size: 10px;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.4;
+}
+
+.agent-extension-catalog-row__diagnostic,
+.professional-application-row__diagnostic {
+  color: var(--neko-danger);
+  font-size: 10px;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+.agent-extension-catalog-row:has(.agent-extension-catalog-row__diagnostic),
+.professional-application-row:has(.professional-application-row__diagnostic) {
+  height: auto;
+}
+
+.professional-application-row__title {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.agent-extension-catalog-row__status,
+.professional-application-row__readiness {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 20px;
+  align-items: center;
+  align-self: flex-start;
+  margin-top: 0;
+  overflow: hidden;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--neko-desktop-border) 76%, transparent);
+  border-radius: 999px;
+  color: var(--neko-fg-secondary);
+  background: color-mix(in srgb, var(--neko-desktop-control) 76%, transparent);
+  font-size: 9px;
+  font-weight: 620;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-extension-catalog-row__status[data-extension-lifecycle-state='disabled'],
+.professional-application-row[data-lifecycle-state='disabled']
+  .professional-application-row__readiness {
+  color: var(--neko-desktop-text-muted);
+  background: var(--neko-desktop-control);
+}
+
+.professional-application-install-policy {
+  margin: 0 0 12px;
+  color: var(--neko-fg-secondary);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.extension-detail-overlay {
+  width: min(760px, calc(100vw - 48px));
+  max-height: calc(100vh - 64px);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--neko-desktop-surface-raised);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 28%);
+}
+
+[role='dialog'].agent-extension-detail-overlay {
+  width: min(560px, calc(100vw - 48px));
+}
+
+[role='dialog'].professional-application-detail-overlay {
+  width: min(760px, calc(100vw - 48px));
+}
+
+.extension-detail-overlay > div:first-child {
+  padding: 20px 56px 18px 24px;
+  border-bottom: 1px solid var(--neko-desktop-border);
+}
+
+.extension-detail-overlay__content {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  align-content: start;
+  gap: 14px;
+  padding: 18px 22px 22px;
+  overflow-y: auto;
+}
+
+.extension-detail-overlay__identity {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+}
+
+.extension-detail-overlay__avatar {
+  display: inline-grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--neko-accent);
+  background: color-mix(in srgb, var(--neko-accent) 14%, transparent);
+}
+
+.extension-detail-overlay__tags {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.extension-detail-overlay__tags > span {
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--neko-desktop-border) 76%, transparent);
+  border-radius: 999px;
+  color: var(--neko-fg-secondary);
+  background: var(--neko-desktop-control);
+  font-size: 9px;
+  font-weight: 620;
+}
+
+.extension-detail-overlay__section {
+  display: grid;
+  gap: 8px;
+}
+
+.extension-detail-overlay__section h3 {
+  margin: 0;
+  color: var(--neko-desktop-text-strong);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.extension-detail-overlay__facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  margin: 0;
+  border-top: 1px solid var(--neko-desktop-border);
+}
+
+.extension-detail-overlay__facts > div {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 12px;
+  padding: 9px 2px;
+  border-bottom: 1px solid var(--neko-desktop-border);
+}
+
+.extension-detail-overlay__facts dt {
+  color: var(--neko-desktop-text-muted);
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.extension-detail-overlay__facts dd {
+  overflow-wrap: anywhere;
+  margin: 0;
+  color: var(--neko-desktop-text-strong);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.extension-detail-overlay__long-copy {
+  margin: 0;
+  padding: 11px 13px;
+  border-radius: 9px;
+  color: var(--neko-fg-secondary);
+  background: var(--neko-desktop-control);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.professional-application-detail__section {
+  display: grid;
+  gap: 12px;
+  padding-top: 20px;
+  border-top: 1px solid var(--neko-desktop-border);
+}
+
+.professional-application-detail__form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.professional-application-detail__form label {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  color: var(--neko-fg-secondary);
+  font-size: 10px;
+}
+
+.professional-application-detail__form input,
+.professional-application-detail__form select {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--neko-desktop-border);
+  border-radius: 8px;
+  outline: 0;
+  color: var(--neko-fg);
+  background: var(--neko-desktop-main);
+  font: inherit;
+  font-size: 11px;
+}
+
+.professional-application-detail__form input:focus-visible,
+.professional-application-detail__form select:focus-visible {
+  border-color: color-mix(in srgb, var(--neko-accent) 52%, var(--neko-desktop-border));
+  box-shadow: var(--neko-desktop-focus-ring);
+}
+
+.professional-application-detail__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.professional-application-detail__actions > a {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  padding: 0 11px;
+  border: 1px solid var(--neko-desktop-border);
+  border-radius: 8px;
+  color: var(--neko-fg);
+  background: var(--neko-desktop-control);
+  text-decoration: none;
+  font-size: 10px;
+  font-weight: 620;
+}
+
+@container extension-management (max-width: 820px) {
+  .agent-extension-management-root,
+  .professional-application-management-root {
+    width: calc(100% - 32px);
+    padding-top: 18px;
+  }
+
+  .agent-extension-management-root .management-surface-toolbar,
+  .professional-application-management-root .management-surface-toolbar {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .agent-extension-management-root .management-search-field,
+  .professional-application-management-root .management-search-field {
+    width: 100%;
+    min-width: 100%;
+    flex-basis: 100%;
+  }
+
+  .extension-management-mode-switcher {
+    max-width: calc(100% - 32px);
+  }
+
+  .extension-management-mode-switcher button {
+    padding-inline: 12px;
+  }
+}
+
+@media (max-width: 620px) {
+  .extension-detail-overlay,
+  [role='dialog'].agent-extension-detail-overlay,
+  [role='dialog'].professional-application-detail-overlay {
+    width: calc(100vw - 24px);
+    max-height: calc(100vh - 32px);
+  }
+
+  .professional-application-detail__form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

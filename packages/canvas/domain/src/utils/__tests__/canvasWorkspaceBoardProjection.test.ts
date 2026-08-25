@@ -1,24 +1,96 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createGenerationJobWorkspaceDeliveryRequest,
   type CanvasWorkspaceProjectionArtifact,
   type CanvasWorkspaceMarkdownProjectionArtifact,
   type CanvasWorkspaceResourceProjectionArtifact,
   type CanvasWorkspaceProjectionRequest,
 } from '../../types/canvas-workspace-board';
+import type { GenerationJobSnapshot } from '@neko/generation-domain/job';
 import type { CanvasNode } from '../../types/canvas';
-import type { ContentFingerprint, ContentLocator } from '@neko/content';
+import type { ContentLocator, WorkspaceFileContentLocator } from '@neko/content-domain';
 import { createEmptyCanvasData } from '../canvasHeadlessAuthoring';
 import { planCanvasWorkspaceBoardProjection } from '../canvasWorkspaceBoardProjection';
 
 const sourceLocator: ContentLocator = {
-  kind: 'media-library',
-  libraryName: 'References',
-  relativePath: 'source-image.png',
-  fingerprint: { strategy: 'sha256', value: 'sha256:source-image' },
+  file: { authority: 'workspace', path: 'neko/assets/References/source-image.png' },
 };
-const generatedLocator = generatedOutputLocator('shot-1', 'sha256:shot-1');
+const generatedLocator = generatedOutputLocator('shot-1');
 
 describe('planCanvasWorkspaceBoardProjection', () => {
+  it('updates one Generation node and binds committed result locators only after success', () => {
+    const pending = planCanvasWorkspaceBoardProjection(
+      createEmptyCanvasData('Workspace'),
+      generationRequest(generationSnapshot({ phase: 'pending' })),
+    );
+    const running = planCanvasWorkspaceBoardProjection(
+      pending.canvasData,
+      generationRequest(
+        generationSnapshot({
+          phase: 'running',
+          updatedAt: 2,
+          progress: { stage: 'waiting-provider', percent: 50 },
+        }),
+      ),
+    );
+    const succeededRequest = generationRequest(
+      generationSnapshot({
+        phase: 'succeeded',
+        updatedAt: 3,
+        progress: { stage: 'completed', percent: 100 },
+        resultLocators: [generationResultLocator('generation-result')],
+      }),
+    );
+    const succeeded = planCanvasWorkspaceBoardProjection(running.canvasData, succeededRequest);
+    const replay = planCanvasWorkspaceBoardProjection(succeeded.canvasData, succeededRequest);
+
+    expect(pending.canvasData.nodes).toHaveLength(1);
+    expect(running.canvasData.nodes).toHaveLength(1);
+    expect(succeeded.canvasData.nodes).toHaveLength(1);
+    expect(pending.nodeIds).toEqual(['generation:generation%3Aone']);
+    expect(running.nodeIds).toEqual(pending.nodeIds);
+    expect(succeeded.nodeIds).toEqual(pending.nodeIds);
+    expect(
+      succeeded.canvasData.nodes.find((node) => node.type === 'generation')?.data,
+    ).toMatchObject({
+      recipe: { kind: 'image', prompt: 'Create a concept frame' },
+      latestRun: {
+        jobRef: { kind: 'generation', jobId: 'generation:one' },
+      },
+      outputs: [
+        expect.objectContaining({
+          kind: 'image',
+          locator: generationResultLocator('generation-result'),
+        }),
+      ],
+    });
+    expect(succeeded.canvasData.connections).toHaveLength(0);
+    expect(replay.status).toBe('noop');
+    expect(replay.canvasData.nodes).toHaveLength(1);
+  });
+
+  it('deduplicates progress-only Generation snapshots that do not change Canvas state', () => {
+    const first = generationRequest(
+      generationSnapshot({
+        phase: 'running',
+        updatedAt: 2,
+        progress: { stage: 'waiting-provider', percent: 10 },
+      }),
+    );
+    const progressOnly = generationRequest(
+      generationSnapshot({
+        phase: 'running',
+        updatedAt: 3,
+        progress: { stage: 'waiting-provider', percent: 80 },
+      }),
+    );
+
+    expect(progressOnly.process.deliveryId).toBe(first.process.deliveryId);
+    expect(progressOnly.artifacts[0]?.provenance.contentFingerprint).toBe(
+      first.artifacts[0]?.provenance.contentFingerprint,
+    );
+  });
+
   it('projects a flat creative-content graph with explicit source relations', () => {
     const plan = planCanvasWorkspaceBoardProjection(createEmptyCanvasData('Workspace'), request());
 
@@ -48,7 +120,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     );
   });
 
-  it('groups one batch of generated outputs in a deterministic near-square grid', () => {
+  it('groups one batch of five generated outputs in one compact row', () => {
     const artifacts = Array.from({ length: 5 }, (_, index) =>
       generatedOutputArtifact('delivery:generated-batch', index + 1),
     );
@@ -67,7 +139,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
       type: 'group',
       container: {
         policy: 'group',
-        layout: { mode: 'grid', columns: 3 },
+        layout: { mode: 'grid', columns: 5, spacing: 12 },
       },
       data: {
         provenance: {
@@ -79,8 +151,8 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     const children = first.canvasData.nodes.filter((node) => node.parentId === group?.id);
     expect(children).toHaveLength(5);
     expect(group?.container?.childIds).toEqual(children.map((node) => node.id));
-    expect(new Set(children.map((node) => node.position.x)).size).toBe(3);
-    expect(new Set(children.map((node) => node.position.y)).size).toBe(2);
+    expect(new Set(children.map((node) => node.position.x)).size).toBe(5);
+    expect(new Set(children.map((node) => node.position.y)).size).toBe(1);
     expect(
       children.every(
         (child) =>
@@ -94,7 +166,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     expect(second.canvasData.nodes).toEqual(first.canvasData.nodes);
   });
 
-  it('places repeated one-item deliveries across bounded top-level columns', () => {
+  it('places five repeated one-item deliveries across one compact top-level row', () => {
     let canvasData = createEmptyCanvasData('Workspace');
     for (let index = 1; index <= 5; index += 1) {
       const deliveryId = `delivery:single-${index}`;
@@ -108,13 +180,68 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     }
 
     expect(canvasData.nodes.every((node) => node.type !== 'group')).toBe(true);
-    expect(new Set(canvasData.nodes.map((node) => node.position.x)).size).toBe(3);
-    expect(new Set(canvasData.nodes.map((node) => node.position.y)).size).toBe(2);
+    expect(new Set(canvasData.nodes.map((node) => node.position.x)).size).toBe(5);
+    expect(new Set(canvasData.nodes.map((node) => node.position.y)).size).toBe(1);
+    const positions = canvasData.nodes.map((node) => node.position.x).sort((a, b) => a - b);
+    expect(positions.slice(1).map((position, index) => position - positions[index]!)).toEqual([
+      136, 136, 136, 136,
+    ]);
     for (const [index, node] of canvasData.nodes.entries()) {
       expect(
         canvasData.nodes.slice(index + 1).every((candidate) => !rectanglesOverlap(node, candidate)),
       ).toBe(true);
     }
+  });
+
+  it('starts a second generated row after five columns', () => {
+    const artifacts = Array.from({ length: 6 }, (_, index) =>
+      generatedOutputArtifact('delivery:six-generated', index + 1),
+    );
+    const plan = planCanvasWorkspaceBoardProjection(
+      createEmptyCanvasData('Workspace'),
+      request({ deliveryId: 'delivery:six-generated', artifacts }),
+    );
+    const group = plan.canvasData.nodes.find((node) => node.type === 'group');
+    const children = plan.canvasData.nodes.filter((node) => node.parentId === group?.id);
+
+    expect(group?.container?.layout).toEqual({ mode: 'grid', columns: 5, spacing: 12 });
+    expect(new Set(children.map((node) => node.position.x)).size).toBe(5);
+    expect(new Set(children.map((node) => node.position.y)).size).toBe(2);
+    expect(
+      children.every(
+        (child) =>
+          child.position.x + child.size.width <= group!.position.x + group!.size.width &&
+          child.position.y + child.size.height <= group!.position.y + group!.size.height,
+      ),
+    ).toBe(true);
+  });
+
+  it('projects Markdown and text-file references with the shared reading size', () => {
+    const deliveryId = 'delivery:readable-text';
+    const textReference = {
+      kind: 'file-reference',
+      title: 'notes/readme.md',
+      mimeType: 'text/markdown',
+      contentLocator: {
+        file: { authority: 'workspace', path: 'notes/readme.md' },
+      },
+      provenance: provenance(
+        deliveryId,
+        'text-reference',
+        'sha256:text-reference',
+        'file-reference',
+        'source',
+      ),
+    } satisfies CanvasWorkspaceProjectionArtifact;
+    const plan = planCanvasWorkspaceBoardProjection(
+      createEmptyCanvasData('Workspace'),
+      request({ deliveryId, artifacts: [textReference, markdownArtifact(deliveryId)] }),
+    );
+
+    expect(plan.canvasData.nodes.map((node) => node.size)).toEqual([
+      { width: 240, height: 160 },
+      { width: 240, height: 160 },
+    ]);
   });
 
   it('does not restore generated batch grouping after creator-owned ungrouping', () => {
@@ -176,7 +303,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
 
     const node = plan.canvasData.nodes[0]!;
     expect(node.type).toBe('media');
-    expect(node.size.width).toBe(208);
+    expect(node.size).toEqual({ width: 80, height: 120 });
     expect(node.size.width / node.size.height).toBeCloseTo(1024 / 1536, 8);
   });
 
@@ -195,7 +322,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
 
     const node = plan.canvasData.nodes[0]!;
     expect(node.type).toBe('media');
-    expect(node.size.width).toBe(208);
+    expect(node.size).toEqual({ width: 67.5, height: 120 });
     expect(node.size.width / node.size.height).toBeCloseTo(900 / 1600, 8);
   });
 
@@ -273,25 +400,23 @@ describe('planCanvasWorkspaceBoardProjection', () => {
       data: { title: 'Creator title' },
     });
     const projectedOutput = second.canvasData.nodes.find((node) => node.type === 'media')!;
-    expect(projectedOutput.position.x).toBeGreaterThanOrEqual(1248);
+    expect(projectedOutput.position.x).toBeGreaterThanOrEqual(1232);
     expect(rectanglesOverlap(source, projectedOutput)).toBe(false);
     expect(second.canvasData.connections).toEqual([
       expect.objectContaining({ sourceId: source.id, targetId: projectedOutput.id }),
     ]);
   });
 
-  it('uses locator fingerprints as exact content identities', () => {
+  it('uses the canonical locator rather than provenance fingerprints as content identity', () => {
     const portablePath = 'references/books/volume-01.epub';
     const weak = sourceDocumentArtifact({
       artifactId: 'source-weak',
       portablePath,
-      fingerprint: undefined,
       contentFingerprint: portablePath,
     });
     const hashedSource = sourceDocumentArtifact({
       artifactId: 'source-hashed',
       portablePath,
-      fingerprint: { strategy: 'sha256', value: 'sha256:volume-01' },
       contentFingerprint: 'sha256:volume-01',
     });
     const hashed = {
@@ -305,26 +430,21 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     );
 
     expect(plan.status).toBe('projected');
-    expect(plan.canvasData.nodes).toHaveLength(2);
-    expect(plan.canvasData.nodes[1]).toMatchObject({
+    expect(plan.canvasData.nodes).toHaveLength(1);
+    expect(plan.canvasData.nodes[0]).toMatchObject({
       type: 'file',
       data: {
-        contentLocator: {
-          kind: 'workspace-file',
-          path: portablePath,
-          fingerprint: { strategy: 'sha256', value: 'sha256:volume-01' },
-        },
+        contentLocator: { file: { authority: 'workspace', path: portablePath } },
       },
     });
-    expect(new Set(plan.nodeIds).size).toBe(2);
+    expect(new Set(plan.nodeIds).size).toBe(1);
   });
 
-  it('does not mutate an existing locator when a new content fingerprint arrives', () => {
+  it('refreshes content provenance without changing locator or creator layout', () => {
     const portablePath = 'references/books/volume-01.epub';
     const weak = sourceDocumentArtifact({
       artifactId: 'source-weak',
       portablePath,
-      fingerprint: undefined,
       contentFingerprint: portablePath,
     });
     const first = planCanvasWorkspaceBoardProjection(
@@ -339,7 +459,6 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     const hashedSource = sourceDocumentArtifact({
       artifactId: 'source-hashed',
       portablePath,
-      fingerprint: { strategy: 'sha256', value: 'sha256:volume-01' },
       contentFingerprint: 'sha256:volume-01',
     });
     const hashed = {
@@ -353,17 +472,25 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     );
 
     expect(second.status).toBe('projected');
-    expect(second.canvasData.nodes).toHaveLength(2);
+    expect(second.canvasData.nodes).toHaveLength(1);
     expect(second.canvasData.nodes[0]).toMatchObject({
       id: existing.id,
       position: { x: 640, y: 320 },
-      data: { contentLocator: { kind: 'workspace-file', path: portablePath } },
+      data: { contentLocator: { file: { authority: 'workspace', path: portablePath } } },
+    });
+    expect(second.canvasData.nodes[0]).toMatchObject({
+      data: {
+        provenance: {
+          artifactId: 'source-weak',
+          contentFingerprint: 'sha256:volume-01',
+          role: 'source',
+        },
+      },
     });
 
     const changedSource = sourceDocumentArtifact({
       artifactId: 'source-hashed-changed',
       portablePath,
-      fingerprint: { strategy: 'sha256', value: 'sha256:volume-01-changed' },
       contentFingerprint: 'sha256:volume-01-changed',
     });
     const changed = {
@@ -379,10 +506,13 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     );
 
     expect(third.status).toBe('projected');
-    expect(third.canvasData.nodes).toHaveLength(3);
+    expect(third.canvasData.nodes).toHaveLength(1);
     expect(third.canvasData.nodes[0]).toMatchObject({
       id: existing.id,
       position: { x: 640, y: 320 },
+    });
+    expect(third.canvasData.nodes[0]).toMatchObject({
+      data: { provenance: { contentFingerprint: 'sha256:volume-01-changed' } },
     });
   });
 
@@ -434,14 +564,14 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     expect(second.canvasData.connections).toHaveLength(2);
   });
 
-  it('creates a distinct content node for a changed durable locator fingerprint', () => {
+  it('refreshes provenance without creating a distinct content node', () => {
     const first = planCanvasWorkspaceBoardProjection(
       createEmptyCanvasData('Workspace'),
       request({ artifacts: [outputArtifact('delivery:batch-1')] }),
     );
     const changed = {
       ...outputArtifact('delivery:batch-2'),
-      contentLocator: generatedOutputLocator('shot-1', 'sha256:shot-2'),
+      contentLocator: generatedOutputLocator('shot-1'),
       provenance: provenance(
         'delivery:batch-2',
         'shot-1',
@@ -457,8 +587,11 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     );
 
     expect(second.status).toBe('projected');
-    expect(second.canvasData.nodes).toHaveLength(2);
-    expect(second.canvasData.nodes[0]!.id).not.toBe(second.canvasData.nodes[1]!.id);
+    expect(second.canvasData.nodes).toHaveLength(1);
+    expect(second.canvasData.nodes[0]!.id).toBe(first.canvasData.nodes[0]!.id);
+    expect(second.canvasData.nodes[0]).toMatchObject({
+      data: { provenance: { contentFingerprint: 'generated:sha256:shot-2' } },
+    });
   });
 
   it('fails atomically when a canonical content identity is occupied by unrelated data', () => {
@@ -476,7 +609,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
           ...occupied,
           data: {
             ...occupied.data,
-            contentLocator: generatedOutputLocator('other-shot', 'sha256:other-shot'),
+            contentLocator: generatedOutputLocator('other-shot'),
           },
         },
       ],
@@ -525,6 +658,39 @@ function request(
       markdownArtifact(deliveryId, ['source-1']),
       outputArtifact(deliveryId, ['analysis-1']),
     ],
+  };
+}
+
+function generationRequest(snapshot: GenerationJobSnapshot): CanvasWorkspaceProjectionRequest {
+  return createGenerationJobWorkspaceDeliveryRequest(snapshot, {
+    workspaceId: 'workspace-1',
+    workspaceUri: 'file:///workspace/project/',
+    sourceHost: 'headless',
+    operationId: 'dsh-session:one:turn:1:tool:generation',
+  });
+}
+
+function generationResultLocator(id: string): WorkspaceFileContentLocator {
+  return {
+    file: { authority: 'workspace', path: `neko/generated/image/${id}.png` },
+  };
+}
+
+function generationSnapshot(overrides: Partial<GenerationJobSnapshot>): GenerationJobSnapshot {
+  return {
+    ref: { kind: 'generation', jobId: 'generation:one' },
+    phase: 'pending',
+    createdAt: 1,
+    updatedAt: 1,
+    lifecycleMode: 'detached',
+    request: {
+      providerId: 'provider:one',
+      modelId: 'model:one',
+      generationType: 'text-to-image',
+      request: { prompt: 'Create a concept frame', width: 1024, height: 1024 },
+    },
+    progress: { stage: 'queued', percent: 0 },
+    ...overrides,
   };
 }
 
@@ -600,7 +766,7 @@ function generatedOutputArtifact(
   return {
     ...outputArtifact(deliveryId),
     title: `Generated ${index}`,
-    contentLocator: generatedOutputLocator(outputId, digest),
+    contentLocator: generatedOutputLocator(outputId),
     provenance: provenance(deliveryId, outputId, digest, 'image', 'output'),
   };
 }
@@ -608,17 +774,12 @@ function generatedOutputArtifact(
 function sourceDocumentArtifact(input: {
   readonly artifactId: string;
   readonly portablePath: string;
-  readonly fingerprint: ContentFingerprint | undefined;
   readonly contentFingerprint: string;
 }): CanvasWorkspaceResourceProjectionArtifact {
   return {
     kind: 'file-reference',
     title: input.portablePath,
-    contentLocator: {
-      kind: 'workspace-file',
-      path: input.portablePath,
-      ...(input.fingerprint ? { fingerprint: input.fingerprint } : {}),
-    },
+    contentLocator: { file: { authority: 'workspace', path: input.portablePath } },
     provenance: provenance(
       'delivery:batch-1',
       input.artifactId,
@@ -651,11 +812,6 @@ function provenance(
   };
 }
 
-function generatedOutputLocator(id: string, digest: string): ContentLocator {
-  return {
-    kind: 'generated-output',
-    outputId: id,
-    digest,
-    path: `neko/generated/image/${id}.png`,
-  };
+function generatedOutputLocator(id: string): ContentLocator {
+  return { file: { authority: 'workspace', path: `neko/generated/image/${id}.png` } };
 }

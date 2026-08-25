@@ -1,12 +1,8 @@
 import { useMemo, useRef } from 'react';
-import type { MediaUnderstandingModels, SessionMode } from '@neko/agent-contracts';
+import type { SessionMode } from '@neko/agent-contracts';
 import type { ChatModelOption } from '@neko/ai-contracts';
 import { SettingsIcon } from '@neko/ui/icons';
-import type {
-  MediaCategory,
-  MediaModelSelection,
-  MediaUnderstandingSelection,
-} from '../InputAreaContext';
+import type { MediaCategory, MediaModelSelection } from '../InputAreaContext';
 import { useTranslation } from '../../../i18n/I18nContext';
 import { ChevronDownIcon } from './DropdownMenu';
 import { MediaCategoryIcon, SessionModeIcon } from './ComposerIcons';
@@ -38,10 +34,8 @@ interface ComposerConfigMenuProps {
   readonly onModelSelect: (modelId: string) => void;
   readonly mediaModelSelection: Readonly<MediaModelSelection>;
   readonly availableMediaModels: readonly ChatModelOption[];
-  readonly mediaUnderstandingModels?: MediaUnderstandingModels;
-  readonly mediaUnderstandingSelection: Readonly<MediaUnderstandingSelection>;
+  readonly mediaModelOptOutEnabled?: boolean;
   readonly onMediaModelSelect: (category: MediaCategory, modelId: string) => void;
-  readonly onMediaUnderstandingModelSelect: (category: MediaCategory, modelId: string) => void;
   readonly genParams: GenerationParams;
   readonly onGenParamsChange: (params: Partial<GenerationParams>) => void;
   readonly disabled?: boolean;
@@ -56,11 +50,6 @@ interface ParamOption<Value extends string = string> {
 
 const CATEGORIES: readonly ComposerConfigCategory[] = ['llm', 'image', 'video', 'audio'];
 const SECTIONS: readonly ComposerConfigSection[] = ['model', 'params'];
-const UNDERSTANDING_CAPABILITIES: Record<MediaCategory, readonly string[]> = {
-  image: ['vision', 'image.understand'],
-  video: ['vision_video', 'video.understand'],
-  audio: ['audio', 'audio.understand'],
-};
 const RATIO_OPTIONS: readonly ParamOption<GenerationParams['ratio']>[] = [
   { value: '16:9', label: '16:9' },
   { value: '9:16', label: '9:16' },
@@ -108,10 +97,8 @@ export function ComposerConfigMenu({
   onModelSelect,
   mediaModelSelection,
   availableMediaModels,
-  mediaUnderstandingModels,
-  mediaUnderstandingSelection,
+  mediaModelOptOutEnabled = true,
   onMediaModelSelect,
-  onMediaUnderstandingModelSelect,
   genParams,
   onGenParamsChange,
   disabled = false,
@@ -285,18 +272,11 @@ export function ComposerConfigMenu({
             ) : section === 'model' ? (
               <MediaModelPanel
                 category={category}
-                understandingModels={availableModels.filter((model) =>
-                  supportsUnderstanding(model, category),
-                )}
-                understandingStatus={mediaUnderstandingModels?.[category]}
-                understandingSelection={mediaUnderstandingSelection[category]}
-                onUnderstandingSelect={(modelId) =>
-                  onMediaUnderstandingModelSelect(category, modelId)
-                }
                 generationModels={availableMediaModels.filter(
                   (model) => model.category === category && isSelectable(model),
                 )}
                 generationSelection={mediaModelSelection[category]}
+                generationOptOutEnabled={mediaModelOptOutEnabled}
                 onGenerationSelect={(modelId) => onMediaModelSelect(category, modelId)}
               />
             ) : (
@@ -336,48 +316,30 @@ function ChatModelPanel({
 
 function MediaModelPanel({
   category,
-  understandingModels,
-  understandingStatus,
-  understandingSelection,
-  onUnderstandingSelect,
   generationModels,
   generationSelection,
+  generationOptOutEnabled,
   onGenerationSelect,
 }: {
   readonly category: MediaCategory;
-  readonly understandingModels: readonly ChatModelOption[];
-  readonly understandingStatus?: MediaUnderstandingModels[MediaCategory];
-  readonly understandingSelection: string;
-  readonly onUnderstandingSelect: (modelId: string) => void;
   readonly generationModels: readonly ChatModelOption[];
   readonly generationSelection: string;
+  readonly generationOptOutEnabled: boolean;
   readonly onGenerationSelect: (modelId: string) => void;
 }) {
   const { t } = useTranslation();
   const categoryLabel = getCategoryLabel(t, category);
 
   return (
-    <>
-      <ExactModelGroup
-        label={t('chat.modelMenu.understanding', { category: categoryLabel })}
-        models={understandingModels}
-        selectedId={understandingSelection}
-        onSelect={onUnderstandingSelect}
-        leadingOption={{
-          id: 'auto',
-          label: t('chat.modelMenu.autoUnderstanding', {
-            model: understandingStatus?.label ?? t('chat.mediaUnderstanding.unavailable'),
-          }),
-        }}
-      />
-      <ExactModelGroup
-        label={t('chat.modelMenu.generation', { category: categoryLabel })}
-        models={generationModels}
-        selectedId={generationSelection}
-        onSelect={onGenerationSelect}
-        leadingOption={{ id: 'none', label: t('chat.generation.model.none') }}
-      />
-    </>
+    <ExactModelGroup
+      label={t('chat.modelMenu.generation', { category: categoryLabel })}
+      models={generationModels}
+      selectedId={generationSelection}
+      onSelect={onGenerationSelect}
+      leadingOption={
+        generationOptOutEnabled ? { id: 'none', label: t('chat.generation.model.none') } : undefined
+      }
+    />
   );
 }
 
@@ -565,6 +527,7 @@ function ModelRadio({
       type="button"
       role="radio"
       aria-checked={checked}
+      aria-label={label}
       className={`agent-model-config-radio agent-model-option-row ${
         checked ? 'agent-model-config-radio-selected' : ''
       } ${muted ? 'agent-model-config-radio-muted' : ''}`}
@@ -583,14 +546,6 @@ function isSelectable(model: ChatModelOption): boolean {
 
 function isSelectableLlm(model: ChatModelOption): boolean {
   return model.category === 'llm' && isSelectable(model);
-}
-
-function supportsUnderstanding(model: ChatModelOption, category: MediaCategory): boolean {
-  if (!isSelectableLlm(model)) return false;
-  const capabilities = model.capabilities ?? [];
-  return UNDERSTANDING_CAPABILITIES[category].some((capability) =>
-    capabilities.includes(capability),
-  );
 }
 
 function getCategoryLabel(

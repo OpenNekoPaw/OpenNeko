@@ -1,98 +1,89 @@
 import type { AgentExtensionManagementRuntime } from '@neko/agent-contracts/extension-management';
-import { lazy, Suspense, useMemo } from 'react';
-import { createPortal } from 'react-dom';
-import { DesktopAutomationLocalRuntimeManagementRuntime } from './desktop-automation-local-runtime-management-runtime';
-import { DesktopAutomationPermissionManagementRuntime } from './desktop-automation-permission-management-runtime';
-import { WorkbenchMainPanelSurface } from './WorkbenchMainPanelSurface';
+import type { ProfessionalApplicationManagementRuntime } from '@neko/professional-apps-contracts';
+import { BotIcon, CodeIcon, PackageIcon } from '@neko/ui';
+import { useTranslation } from '@neko/ui/i18n/react';
+import { lazy, Suspense, useState } from 'react';
 
 const AgentExtensionManagementRoot = lazy(async () => {
   const module = await import('@neko/agent-webview/extension-management/root');
   return { default: module.AgentExtensionManagementRoot };
 });
 
-const AutomationLocalRuntimeManagementRoot = lazy(async () => {
-  const module = await import('@neko/automation-webview/local-runtime-management/root');
-  return { default: module.AutomationLocalRuntimeManagementRoot };
+const ProfessionalApplicationManagementRoot = lazy(async () => {
+  const module = await import('@neko/professional-apps-webview/root');
+  return { default: module.ProfessionalApplicationManagementRoot };
 });
 
-const AutomationPermissionManagementRoot = lazy(async () => {
-  const module = await import('@neko/automation-webview/permission-management/root');
-  return { default: module.AutomationPermissionManagementRoot };
-});
+type CapabilityIntegrationTab = 'skills' | 'mcp' | 'professional-applications';
 
 export function DesktopExtensionManagementSurface({
-  detailLabel,
-  detailTarget,
   interactive,
-  onDetailVisibilityChange,
-  runtime,
+  extensionRuntime,
+  professionalApplicationRuntime,
 }: {
-  readonly detailLabel: string;
-  readonly detailTarget: Element | undefined;
   readonly interactive: boolean;
-  readonly onDetailVisibilityChange: (visible: boolean) => void;
-  readonly runtime: AgentExtensionManagementRuntime;
+  readonly extensionRuntime: AgentExtensionManagementRuntime;
+  readonly professionalApplicationRuntime: ProfessionalApplicationManagementRuntime;
 }): JSX.Element {
-  const identity = runtime.identity;
-  const localRuntime = useMemo(
-    () => new DesktopAutomationLocalRuntimeManagementRuntime(identity, window.openNekoDesktop),
-    [identity],
-  );
-  const permissionRuntime = useMemo(
-    () => new DesktopAutomationPermissionManagementRuntime(identity, window.openNekoDesktop),
-    [identity],
+  const { t } = useTranslation();
+  const [tab, setTab] = useState<CapabilityIntegrationTab>('skills');
+  const modeSwitcher = (
+    <div
+      aria-label={t('professionalApps.managementTabs')}
+      className="extension-management-mode-switcher"
+      role="tablist"
+    >
+      <button
+        aria-selected={tab === 'skills'}
+        data-capability-integration-tab="skills"
+        onClick={() => setTab('skills')}
+        role="tab"
+        type="button"
+      >
+        <CodeIcon size={18} />
+        {t('home.capabilities.skills')}
+      </button>
+      <button
+        aria-selected={tab === 'mcp'}
+        data-capability-integration-tab="mcp"
+        onClick={() => setTab('mcp')}
+        role="tab"
+        type="button"
+      >
+        <BotIcon size={18} />
+        MCP
+      </button>
+      <button
+        aria-selected={tab === 'professional-applications'}
+        data-capability-integration-tab="professional-applications"
+        onClick={() => setTab('professional-applications')}
+        role="tab"
+        type="button"
+      >
+        <PackageIcon size={18} />
+        {t('professionalApps.tab')}
+      </button>
+    </div>
   );
   return (
     <Suspense fallback={null}>
       <div className="desktop-extension-management-composition">
-        <AgentExtensionManagementRoot
-          confirmAction={(message) => window.confirm(message)}
-          interactive={interactive}
-          onDetailVisibilityChange={onDetailVisibilityChange}
-          renderDetail={({ content, selectedItemId, tab }) =>
-            detailTarget
-              ? createPortal(
-                  <WorkbenchMainPanelSurface
-                    label={detailLabel}
-                    panelId="extension-detail"
-                    role="detail"
-                    size="compact"
-                  >
-                    <div
-                      className="desktop-extension-configuration-composition"
-                      data-extension-configuration-kind={tab}
-                    >
-                      {content}
-                      {tab === 'extensions' && selectedItemId === 'browser-use' ? (
-                        <AutomationLocalRuntimeManagementRoot
-                          confirmAction={(message) => window.confirm(message)}
-                          interactive={interactive}
-                          runtime={localRuntime}
-                          sourceId="browser-use.observe.local"
-                        />
-                      ) : null}
-                      {tab === 'extensions' && selectedItemId === 'computer-use' ? (
-                        <>
-                          <AutomationLocalRuntimeManagementRoot
-                            confirmAction={(message) => window.confirm(message)}
-                            interactive={interactive}
-                            runtime={localRuntime}
-                            sourceId="computer-use.observe.local"
-                          />
-                          <AutomationPermissionManagementRoot
-                            interactive={interactive}
-                            runtime={permissionRuntime}
-                          />
-                        </>
-                      ) : null}
-                    </div>
-                  </WorkbenchMainPanelSurface>,
-                  detailTarget,
-                )
-              : null
-          }
-          runtime={runtime}
-        />
+        {modeSwitcher}
+        {tab === 'professional-applications' ? (
+          <ProfessionalApplicationManagementRoot
+            compactHeading
+            interactive={interactive}
+            runtime={professionalApplicationRuntime}
+          />
+        ) : (
+          <AgentExtensionManagementRoot
+            compactHeading
+            interactive={interactive}
+            runtime={extensionRuntime}
+            selectedTab={tab}
+            showTabControls={false}
+          />
+        )}
       </div>
     </Suspense>
   );

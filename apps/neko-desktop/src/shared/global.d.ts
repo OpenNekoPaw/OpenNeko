@@ -1,6 +1,7 @@
 import type { OpenNekoDesktopBridge } from './bridge-contract';
-import type { OpenNekoDesktopAgentBridge } from './agent-contract';
-import type { OpenNekoDesktopAgentAutomationBridge } from './agent-automation-contract';
+import type { OpenNekoDshPermissionBridge } from '@neko/agent-contracts/dsh-permission-host';
+import type { OpenNekoDshSessionBridge } from '@neko/agent-contracts/dsh-session-host';
+import type { OpenNekoDshRuntimeBridge } from '@neko/agent-contracts/dsh-runtime-host';
 import type { OpenNekoDesktopShellBridge } from '@neko/host/desktop-shell-contract';
 import type { OpenNekoDesktopResourceBrowserBridge } from './resource-browser-bridge-contract';
 import type { OpenNekoDesktopPreviewBridge } from './preview-bridge-contract';
@@ -8,19 +9,16 @@ import type { OpenNekoDesktopTextEditorBridge } from '@neko/text-editor-domain';
 import type { OpenNekoDesktopCanvasBridge } from './canvas-bridge-contract';
 import type { OpenNekoDesktopCutBridge } from './cut-bridge-contract';
 import type { OpenNekoDesktopApplicationSettingsBridge } from '@neko/host/application-settings';
+import type { OpenNekoDesktopAiModelSettingsBridge } from '@neko/host/ai-model-settings';
+import type { OpenNekoDesktopStorageSettingsBridge } from '@neko/host/desktop-storage-settings-contract';
 import type { OpenNekoDesktopProjectPortabilityBridge } from '@neko/assets-domain/contracts';
 import type {
   OpenNekoDesktopProjectAuthoringBridge,
   OpenNekoDesktopProjectLocalAuthoringBridge,
-} from '@neko/project/contracts';
+} from '@neko/project-domain/contracts';
 import type { OpenNekoAssetCenterBridge } from '@neko/assets-domain/asset-center/host-contract';
 import type { OpenNekoAgentExtensionManagementBridge } from '@neko/agent-contracts/extension-management-host';
-import type { OpenNekoAutomationLocalRuntimeManagementBridge } from '@neko/automation-contracts/local-runtime-management';
-import type { OpenNekoAutomationPermissionManagementBridge } from '@neko/automation-contracts/permission-management';
-import type { OpenNekoDesktopAutomationTargetSelectionBridge } from './automation-target-selection-contract';
-import type { OpenNekoDesktopAutomationSessionControlBridge } from './automation-session-control-contract';
-import type { OpenNekoAgentLaunchBridge } from '@neko/agent-contracts/agent-launch-host';
-import type { OpenNekoAssistantResourceBridge } from '@neko/agent-contracts/assistant-resource-host';
+import type { OpenNekoProfessionalApplicationBridge } from '@neko/professional-apps-contracts/host';
 import type { OpenNekoDesktopWorkspaceGrantBridge } from '@neko/host/desktop-workspace-grant-contract';
 import type {
   OpenNekoDesktopCharacterBridge,
@@ -28,35 +26,33 @@ import type {
   OpenNekoDesktopCharacterPortableBridge,
   OpenNekoDesktopCharacterAvatarBridge,
   OpenNekoDesktopCharacterRoomWorkbenchBridge,
-} from '@neko/chara/contracts';
+} from '@neko/chara-domain/contracts';
 import type {
   OpenNekoDesktopWorldAuthoringBridge,
   OpenNekoDesktopWorldManagementBridge,
   OpenNekoDesktopWorldPortableBridge,
   OpenNekoDesktopWorldRuntimeBridge,
-} from '@neko/world/contracts';
+} from '@neko/world-domain/contracts';
 
 declare global {
   interface Window {
     readonly openNekoDesktop: OpenNekoDesktopBridge &
+      OpenNekoDshPermissionBridge &
+      OpenNekoDshRuntimeBridge &
+      OpenNekoDshSessionBridge &
       OpenNekoDesktopShellBridge &
-      OpenNekoDesktopAgentBridge &
-      OpenNekoDesktopAgentAutomationBridge &
       OpenNekoDesktopResourceBrowserBridge &
       OpenNekoDesktopPreviewBridge &
       OpenNekoDesktopTextEditorBridge &
       OpenNekoDesktopCanvasBridge &
       OpenNekoDesktopCutBridge &
       OpenNekoAssetCenterBridge &
-      OpenNekoAgentLaunchBridge &
-      OpenNekoAssistantResourceBridge &
       OpenNekoDesktopWorkspaceGrantBridge &
       OpenNekoAgentExtensionManagementBridge &
-      OpenNekoAutomationLocalRuntimeManagementBridge &
-      OpenNekoAutomationPermissionManagementBridge &
-      OpenNekoDesktopAutomationTargetSelectionBridge &
-      OpenNekoDesktopAutomationSessionControlBridge &
+      OpenNekoProfessionalApplicationBridge &
       OpenNekoDesktopApplicationSettingsBridge &
+      OpenNekoDesktopAiModelSettingsBridge &
+      OpenNekoDesktopStorageSettingsBridge &
       OpenNekoDesktopProjectPortabilityBridge &
       OpenNekoDesktopProjectAuthoringBridge &
       OpenNekoDesktopProjectLocalAuthoringBridge &

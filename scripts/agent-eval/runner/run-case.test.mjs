@@ -1,7 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
+import { readFile } from 'node:fs/promises';
 import { resolveExecutionCase, runCase, runCaseRepeated } from './run-case.mjs';
 
 describe('Desktop Agent evaluation driver boundary', () => {
+  it('assembles the canonical DSH scenario in the production runner', async () => {
+    const source = await readFile(new URL('./run-case.mjs', import.meta.url), 'utf8');
+    expect(source).toContain('createDesktopAgentEvaluationScenario');
+    expect(source).toContain("from '../desktop/scenario.mjs'");
+    expect(source).not.toContain('retired Pi driver');
+  });
+
   it('requires explicit provider/model/cost authorization before launch', async () => {
     await expect(runCase(selection())).rejects.toMatchObject({
       code: 'infrastructure-blocked',
@@ -82,6 +90,25 @@ describe('Desktop Agent evaluation driver boundary', () => {
         runId: 'model-switch',
       }),
     ).resolves.toMatchObject({ outcome: 'pass' });
+    expect(runDesktop).toHaveBeenCalledOnce();
+  });
+
+  it('uses the canonical DSH Desktop scenario when no factory is injected', async () => {
+    const runDesktop = vi.fn();
+
+    await expect(
+      runCase(selection(), {
+        providerAuthorization: {
+          providerId: 'provider-1',
+          modelId: 'model-1',
+          configurationFile: '/fixtures/config.toml',
+          costApproved: true,
+        },
+        runDesktop,
+      }),
+    ).rejects.not.toMatchObject({
+      message: expect.stringContaining('retired Pi driver'),
+    });
     expect(runDesktop).toHaveBeenCalledOnce();
   });
 

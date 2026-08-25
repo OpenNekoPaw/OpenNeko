@@ -85,7 +85,7 @@ export function formatDocumentAttachmentReference(
   locale?: AgentRuntimePromptLocale | string,
 ): string {
   const labels = getAttachmentLabels(locale);
-  return `\n\n[${labels.attached} ${labels.document}: ${name}] (${labels.path}: ${path})\n${formatReadDocumentInstruction(path, locale)}`;
+  return `\n\n[${labels.attached} ${labels.document}: ${name}] (${labels.path}: ${path})\n${formatDocumentReadInstruction(path, locale)}`;
 }
 
 export function extractFileReferencePaths(message: string): string[] {
@@ -172,14 +172,14 @@ export async function projectAgentMessageAttachments(
   return { textContent, imageAttachments };
 }
 
-export function formatReadDocumentInstruction(
+export function formatDocumentReadInstruction(
   path: string,
   locale?: AgentRuntimePromptLocale | string,
 ): string {
   if (normalizeAgentRuntimePromptLocale(locale) === 'zh') {
-    return `分析该文档前，先调用 ReadDocument，参数使用 source={"kind":"file","path":"${path}"}。不要把整本文档直接内联到聊天上下文。`;
+    return `分析该文档前，先调用 openneko.document 的 read 操作，使用当前会话授权的 workspace-file ContentLocator。不要把整本文档直接内联到聊天上下文。`;
   }
-  return `Use ReadDocument with source={"kind":"file","path":"${path}"} before analyzing this document. Do not inline the whole document as chat context.`;
+  return `Use openneko.document with the read operation and the authorized workspace-file ContentLocator before analyzing this document. Do not inline the whole document as chat context.`;
 }
 
 function getAttachmentLabels(locale?: AgentRuntimePromptLocale | string): {

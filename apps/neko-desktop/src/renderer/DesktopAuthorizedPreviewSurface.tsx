@@ -21,10 +21,12 @@ export function DesktopAuthorizedPreviewSurface({
   bridge,
   previewSessionId,
   projection,
+  rendererSessionId,
 }: {
   readonly bridge: OpenNekoAssetCenterBridge;
   readonly previewSessionId: string;
   readonly projection: AssetCenterSessionProjection;
+  readonly rendererSessionId: string;
 }): JSX.Element {
   const { locale } = useTranslation();
   const snapshotStore = usePreviewViewerSnapshotStore();
@@ -45,6 +47,7 @@ export function DesktopAuthorizedPreviewSurface({
             itemId: selection.itemId,
           },
         },
+        rendererSessionId,
         bridge,
       ),
     [
@@ -52,6 +55,7 @@ export function DesktopAuthorizedPreviewSurface({
       previewSessionId,
       projection.identity.assetCenterSessionId,
       projection.identity.windowId,
+      rendererSessionId,
       selection.itemId,
       selection.owner,
     ],
@@ -72,6 +76,7 @@ export function DesktopAuthorizedPreviewSurface({
 class DesktopAuthorizedPreviewRuntime implements AuthorizedPreviewSessionRuntime {
   constructor(
     readonly identity: AuthorizedPreviewSessionIdentity,
+    private readonly rendererSessionId: string,
     private readonly bridge: OpenNekoAssetCenterBridge,
   ) {}
 
@@ -81,6 +86,7 @@ class DesktopAuthorizedPreviewRuntime implements AuthorizedPreviewSessionRuntime
     }
     const request = createAssetCenterHostRequest({
       requestId: crypto.randomUUID(),
+      rendererSessionId: this.rendererSessionId,
       identity: {
         assetCenterSessionId: this.identity.owner.assetCenterSessionId,
         windowId: this.identity.windowId,

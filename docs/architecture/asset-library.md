@@ -1,26 +1,15 @@
 # 资源库架构：媒体库与素材库
 
-更新日期：2026-08-14
-
-> 当前稳定约束仍是：普通文件通过 **Media Library / 媒体库** 和 `ContentLocator`
-> 直接访问，不需要 catalog membership。独立 **Asset Library / 素材库** 仅管理显式导入
-> 或安装的本地版本化素材包，其完整实现由活跃 OpenSpec
-> [`establish-manifest-backed-asset-library`](../../openspec/changes/establish-manifest-backed-asset-library/)
-> 跟踪；项目本机绑定、同步与便携性的新边界由
-> [`restore-workspace-linked-media-access`](../../openspec/changes/restore-workspace-linked-media-access/)
-> 负责收敛；资源展示与 Entity/Character/World 的边界由
-> [`simplify-resource-entity-character-world-boundaries`](../../openspec/changes/simplify-resource-entity-character-world-boundaries/)
-> 与 [`unify-workspace-resource-and-project-content-browser`](../../openspec/changes/unify-workspace-resource-and-project-content-browser/)
-> 收敛。远程分发、发布、账户与云同步不属于当前 Asset change；未来需要独立 OpenSpec。
-> 项目媒体继续使用 `MediaLibraryContentLocator`、target-free `.neko/media-libraries` binding 与
+> 普通文件通过 **Media Library / 媒体库** 和 `ContentLocator` 直接访问，不需要 catalog membership。
+> **Asset Library / 素材库** 只管理用户显式导入或安装的本地版本化素材包。项目媒体使用 Workspace
+> authority 的 canonical `ContentLocator`、target-free `.neko/media-libraries` binding 与
 > 用户全局 Media Library connection。`neko/assets/<libraryName>` 下的受管软链接（Windows 使用
 > directory junction）是由该授权链派生的 Workspace 访问投影，供 Agent 等仅能访问工作区的消费者
 > 使用；它不是媒体身份、项目 binding 或全局登记的替代品。
 
 本文定义媒体库文件入口、素材包生命周期、项目受管链接、搜索投影、显式操作及其与
-Project Entity、Content I/O、DocumentAccess、生成结果和 package owner 的边界。跨领域决策见
-[`adr-asset-library-sources-and-unified-entity-boundary.md`](adr-asset-library-sources-and-unified-entity-boundary.md)，
-路径安全见 [`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)，跨领域 owner 模型见
+Project Entity、Content I/O、DocumentAccess、生成结果和 package owner 的边界。路径安全见
+[`content-access-and-paths.md`](content-access-and-paths.md)，跨领域 owner 模型见
 [`creative-resource-semantic-boundaries.md`](creative-resource-semantic-boundaries.md)。
 
 Media Library 是可选的专业能力，不是创建或打开项目的前置条件。项目文件始终是文档和普通导入的默认
@@ -31,7 +20,7 @@ Media Library。Character、World、Entity 等语义复用属于对应领域或 
 
 媒体库只负责：
 
-- 从权威项目 `MediaLibraryContentLocator` 引用派生必需库，并检查 target-free binding、全局 connection
+- 从权威项目 `ContentLocator` 引用派生必需库，并检查 target-free binding、全局 connection
   与同名受管 Workspace 链接是否一致；
 - 按 canonical owner-qualified `ContentLocator` 浏览、搜索、打开和诊断文件；
 - 维护可重建的文件树、recent-use、technical metadata 和 availability projection；
@@ -63,7 +52,7 @@ Media Library file 和 provider 已同步到本地目录的文件仍走原 owner
 ## Canonical 模型
 
 ```text
-Project fact: MediaLibraryContentLocator(libraryName, relativePath)
+Project fact: Workspace authority ContentLocator(file.path)
                   |
                   v
 Project local: .neko/media-libraries/<binding>       target-free authorization
@@ -88,8 +77,9 @@ AssetManifest: assetId + immutable revision + digest + dependencies
 
 项目事实只保存逻辑 library name、relative descendant 与可选 fingerprint。项目 `.neko` binding 只保存
 本机已确认的全局 connection identity，不保存物理 target；全局 connection owner 解析 target，并要求
-同名受管 Workspace 链接精确指向该 target。普通项目文件使用 `workspace-file`，外部媒体使用
-`media-library`；只有 Agent handoff 将已授权媒体投影为 `workspace-file:neko/assets/...`。
+同名受管 Workspace 链接精确指向该 target。普通项目文件和外部媒体都使用
+`ContentLocator.file.authority = workspace`；文件内部内容使用可选 selector。只有 Agent handoff
+才能使用受控 `neko/assets/...` Workspace 投影，不能把物理 target 写入项目事实。
 
 ## Link 与安全边界
 
@@ -108,7 +98,7 @@ binding、connection 或 link 不可用时，媒体库显示 safe diagnostic 与
 
 ## 同步、恢复与便携快照
 
-普通 Git 或产品文件夹同步只传输项目事实中的 portable `MediaLibraryContentLocator`，不传输 `.neko`
+普通 Git 或产品文件夹同步只传输项目事实中的 portable `ContentLocator`，不传输 `.neko`
 binding、软链接或 external Media Library 字节。项目打开时，Desktop 从 Canvas、Cut、Entity
 representation 等 owning codec 的权威引用重建必需库；本机授权缺失只影响依赖该库的资源。
 
@@ -143,7 +133,7 @@ tab strip。
 application service 通过 Host port 授权 exact `ContentLocator` 并创建短生命周期 PreviewSession，
 Preview Root 只进入可选 Secondary Main。Desktop 不拥有 selection，不从扩展名推断 preview kind，
 renderer 不接收 raw path。scene switch、renderer reload、Window teardown 或 selection replacement
-必须释放旧 Preview handle，同时保留 Assets session facts。项目 Workspace 的右侧 Project Browser
+必须释放被替换的 Preview handle，同时保留 Assets session facts。项目 Workspace 的右侧 Project Browser
 继续使用自己的 workspace-scoped presentation state，不得复用全局资源中心 session。
 
 Asset Management 与 authorized Preview 使用两个独立、无单项 tab strip 的共享 Workbench panel shell，
@@ -153,17 +143,16 @@ panel shell 内重复 descriptor header。Preview 内容背景保持透明并继
 Assets management 均不得实现第二套 viewer 或复制 Preview 主题。
 
 普通删除按钮只执行“从素材库移除记录”：它更新用户级 SQLite 中的 mutable membership state，
-不得移动源文件到系统废纸篓，也不得卸载 immutable revision、删除 blob 或修改项目引用。首次升级时可将
-现有 flat managed files 原子登记为 membership；初始化完成后，文件扫描不得把已移除记录自动恢复。
+不得移动源文件到系统废纸篓，也不得卸载 immutable revision、删除 blob 或修改项目引用。文件扫描不得
+把用户已移除的记录自动恢复。
 真正的 uninstall 和无引用字节回收必须是独立、显式且可报告 blocker 的操作。
 
 ### 远程分发边界
 
-当前 Asset Library 只处理本地素材包。canonical contract、runtime、Resources intent 和 Desktop IPC
+Asset Library 只处理本地素材包。Canonical contract、runtime、Resources intent 和 Desktop IPC
 不得为远程 repository、publish、sync、account、credential、remote head、CAS、tombstone、cursor 或
-transfer checkpoint 预留平行路径。现有实验性 `remote` / `registry` shape 不构成可调用 resolver，必须
-在本地 manifest 收敛时退出 canonical contract。未来若出现真实分发需求，必须由独立 OpenSpec 定义
-provider、authority、用户数据保护、失败语义和真实 Electron 验收。
+transfer checkpoint 预留平行路径。远程分发能力只有在产品功能明确建立 provider、authority、用户数据
+保护、失败语义和真实 Electron 验收后才能加入。
 
 ## Projection
 
@@ -207,7 +196,7 @@ Search 只返回 canonical locator。绝对路径、变量路径、cache path �
 | 创建可独立移动的项目 | portable snapshot                 | 复制被引用字节到新项目并重写 staged 项目事实                       |
 | 整理已有文件         | copy to selected writable library | 复制真实字节，保留 source identity                                 |
 | 删除库内文件         | authorized delete                 | 明确修改 external target，需用户确认与 fingerprint precondition    |
-| 保留生成结果         | retain generated                  | generated-output owner 负责 revision/digest/lineage                |
+| 保留生成结果         | retain generated                  | Generation owner 负责 output identity/revision/digest/lineage      |
 | 导入可复用素材包     | Asset import/install              | Asset Library 负责 manifest、revision、digest、dependency 与 trust |
 | 关联创作身份         | bind/rebind                       | Creative Entity owner 只更新 binding fact                          |
 
@@ -216,15 +205,15 @@ link 存在不等于目标可写。复制与删除必须明确选择 library、�
 ## 与 Project Entity 的关系
 
 Project Entity 是 character、scene、object、location 和 style 在项目内唯一的可变语义身份
-authority。`EntityRepresentationBinding` 直接保存 workspace、media-library、document-entry、
-generated-output 或精确 package-resource reference；不得把 `neko/assets/...` 运行时投影写回 binding。
+authority。`EntityRepresentationBinding` 保存 canonical `ContentLocator`；文件内部内容使用 selector，
+Generation output identity/provenance 与 package owner identity 由各自领域记录旁置。项目媒体链接通过其
+授权后的 Workspace 文件地址引用；不得把物理 target、cache path 或 runtime projection 写回 binding。
 
 文件移动或 fingerprint 不匹配时，binding 变为 orphaned。Search 可以给出候选，但只有显式 rebind 可以修改 confirmed binding；不得通过旁路 catalog、fingerprint registry 或文件名猜测自动迁移。
 
 Asset package 只打包普通可复用资源。Project Entity 保持项目本地语义事实；Character portability 使用
-Chara-owned `.neko-character`；World portability/publication 由 World 在依赖闭包完整时定义。Entity Asset
-publish、instantiate、provenance 和 three-way update 已退出当前 canonical 产品路径。已存在的相关 bytes
-必须保留并显示 unsupported diagnostic，不得经普通 Asset import 推断或迁移为其他领域记录。
+Chara-owned `.neko-character`；World portability/publication 由 World owner 定义。Asset import 不得推断
+或改写其他领域记录。
 
 ## 存储归属
 
@@ -243,14 +232,14 @@ publish、instantiate、provenance 和 three-way update 已退出当前 canonica
 | Asset Library mutable membership / removed state             | 用户级 `~/.neko/neko.db`      | 有价值的用户选择；普通移除只更新记录，文件扫描不得重建                      |
 | Asset manifest/search projection                             | 用户级 `~/.neko/neko.db`      | 可重建本地查询状态；不得充当 installed package authority                    |
 
-## 已知限制与发布风险
+## 失败边界
 
 - 权威 reference reader 未覆盖的项目 document kind 必须返回 `coverage-incomplete`，不能声明
   linked-ready 或 portable-snapshot-ready。
 - 第三方工具可能复制或跟随软链接；产品自有 sync/package 必须按入口强制跳过且不得 follow。产品只能承诺
   同步 portable Media Library references，不能承诺同步 external bytes。
-- macOS 与 Windows 的本地目录、可移动磁盘和真实 UNC/NAS target 必须分别验收。缺少对应平台证据时，
-  该平台网络媒体库属于 release blocker。
+- 本地目录、可移动磁盘和网络 target 必须按实际发布平台分别资格化；一个 target 的失败不得影响其他
+  Media Library connection。
 - 大型便携快照需要在写入前验证 destination conflict 与可用空间；中途取消或 fingerprint
   变化只能清理 staging，不能产生部分成功 destination。
 

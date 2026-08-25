@@ -56,6 +56,7 @@ describe('Desktop Asset Center preload bridge', () => {
       const request = createAssetCenterHostRequest({
         route,
         requestId: `asset-center-${route}`,
+        rendererSessionId: 'renderer-session-1',
         identity,
         itemIds: ['global-asset-library:item-1', 'global-asset-library:item-2'],
       });
@@ -88,6 +89,7 @@ describe('Desktop Asset Center preload bridge', () => {
     const request = createAssetCenterHostRequest({
       route: 'items.move',
       requestId: 'asset-center-move-stale',
+      rendererSessionId: 'renderer-session-1',
       identity,
       itemIds: ['global-asset-library:item-1'],
     });

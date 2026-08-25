@@ -1,12 +1,10 @@
 import type {
-  ContentRepresentationLocator,
+  ContentRepresentationHandle,
   ContentLocator,
-  DocumentBatchCursor,
   DocumentImageInfo,
-  DocumentManifest,
-  DocumentRange,
   DocumentReadResult,
-} from '@neko/content';
+} from '@neko/content-domain';
+import type { ContentDocumentCursor, ContentDocumentManifest } from '@neko/content-domain/document';
 
 export type AgentContentAccessStatus =
   'ready' | 'missing-source' | 'unsupported-source' | 'unauthorized' | 'failed';
@@ -38,8 +36,7 @@ export interface AgentContentAccessBaseInput {
 
 export interface AgentDocumentContentInput extends AgentContentAccessBaseInput {
   readonly mode?: 'content' | 'manifest' | 'range' | 'next';
-  readonly range?: DocumentRange;
-  readonly cursor?: DocumentBatchCursor;
+  readonly cursor?: ContentDocumentCursor;
   readonly startBatch?: boolean;
   readonly includeManifest?: boolean;
   readonly includeImages?: boolean;
@@ -58,11 +55,9 @@ export interface AgentContentAccessOperationResult {
 export interface AgentDocumentContentResult extends AgentContentAccessOperationResult {
   readonly contentLocator?: ContentLocator;
   readonly text?: string;
-  readonly manifest?: DocumentManifest;
-  readonly range?: DocumentRange;
-  readonly locator?: DocumentReadResult['locator'];
+  readonly manifest?: ContentDocumentManifest;
   readonly excerpt?: DocumentReadResult['excerpt'];
-  readonly cursor?: DocumentBatchCursor;
+  readonly cursor?: ContentDocumentCursor;
   readonly imageInfo?: readonly DocumentImageInfo[];
   readonly imageCount?: number;
   readonly imagesTruncated?: boolean;
@@ -81,7 +76,7 @@ export interface AgentProviderAssetResult extends AgentContentAccessOperationRes
 export interface AgentContentAccessRuntime {
   resolveDocumentContent(input: AgentDocumentContentInput): Promise<AgentDocumentContentResult>;
   loadRepresentationAsset?(input: {
-    readonly locator: ContentRepresentationLocator;
+    readonly handle: ContentRepresentationHandle;
     readonly maxBytes: number;
   }): Promise<AgentProviderAssetResult>;
   loadContentAsset(input: {

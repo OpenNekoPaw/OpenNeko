@@ -171,7 +171,7 @@ function scanFiles(sourceFiles) {
           term,
           text: line.trim(),
           isTest: isTestPath(relPath),
-          semanticClass: classifySurface(relPath, line, term),
+          semanticClass: classifySurface(relPath, line, term, match[0]),
         });
         match = termPattern.exec(line);
       }
@@ -245,7 +245,6 @@ function buildQualityGate(nonTestMatches) {
       examples: matches.slice(0, 50).map(formatExample),
     };
   }
-
 
   return {
     scope: 'all-production',
@@ -398,7 +397,7 @@ function formatExample(match) {
   };
 }
 
-function classifySurface(file, line, term) {
+function classifySurface(file, line, term, observedTerm = term) {
   const lowerFile = file.toLowerCase();
   const lowerLine = line.toLowerCase();
 
@@ -407,6 +406,16 @@ function classifySurface(file, line, term) {
   }
   if (isGeneratedPath(file)) {
     return 'generated-source';
+  }
+  if (term === 'shim' && !['shim', 'Shim', 'SHIM'].includes(observedTerm)) {
+    return 'false-positive-word';
+  }
+  if (
+    term === 'fallback' &&
+    /^(?:\/\/|\/\*|\*)/u.test(line.trim()) &&
+    /\b(?:no|without)\b.{0,80}\bfallback\b/iu.test(line)
+  ) {
+    return 'false-positive-word';
   }
   if (containsAny(lowerLine, ['false positive', 'knip', 'dynamic import']) && term !== 'fallback') {
     return 'false-positive-word';
@@ -526,8 +535,8 @@ function isExternalContractSurface(lowerFile, lowerLine, term) {
   }
   if (term !== 'compat') return false;
   return (
-    lowerFile === 'packages/generation/src/media/adapters/openai-compat-media-adapter.ts' ||
-    (lowerFile === 'packages/generation/src/media/index.ts' &&
+    lowerFile === 'packages/generation/domain/src/media/adapters/openai-compat-media-adapter.ts' ||
+    (lowerFile === 'packages/generation/domain/src/media/index.ts' &&
       containsAny(lowerLine, ['openaicompat', 'openai-compat', 'openai-compatible'])) ||
     (lowerFile === 'packages/agent/runtime/src/pi/capability-tool-bridge.ts' &&
       lowerLine.includes('openai_compatible_tool_name'))
@@ -601,7 +610,6 @@ function isBoundaryCanonicalizerSurface(lowerFile, lowerLine) {
       'types/skill.ts',
       'tool-planning.ts',
       'fieldbinding.ts',
-      'canvas-semantic-storyboard.ts',
       'node-workspace-storage-inspection.ts',
       'node-workspace-resource-cache-binding.ts',
       'project-authoring/index.ts',
@@ -654,7 +662,6 @@ function isRuntimeResilienceSurface(lowerFile, lowerLine) {
       'types.ts',
       'plan-parser',
       'stage-planner',
-      'tier-resolver',
       'agent-session',
       'media-routing-manager',
       'media-file-downloader',
@@ -918,6 +925,23 @@ function runSelfTest() {
         'legacy',
       ),
       expected: 'migrate-now',
+    },
+    {
+      value: classifySurface(
+        'packages/agent/contracts/src/dsh-session-host.ts',
+        'export interface DshImageAttachmentPreviewHostResult {}',
+        'shim',
+        'shIm',
+      ),
+      expected: 'false-positive-word',
+    },
+    {
+      value: classifySurface(
+        'packages/canvas/domain/src/canvas-generation-projection.ts',
+        '* deliberately has no active Canvas identity fallback.',
+        'fallback',
+      ),
+      expected: 'false-positive-word',
     },
     {
       value: buildQualityGate([

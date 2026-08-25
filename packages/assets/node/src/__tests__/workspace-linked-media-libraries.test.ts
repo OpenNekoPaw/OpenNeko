@@ -13,7 +13,7 @@ import {
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createNodeHostContentReadService } from '@neko/content/node';
+import { createNodeHostContentReadService } from '@neko/content-domain/node';
 import {
   createWorkspaceLinkedMediaLibrary,
   listWorkspaceLinkedMediaLibraries,
@@ -47,7 +47,7 @@ describe('Node workspace-linked media libraries', () => {
     });
 
     const result = await content.read(
-      { kind: 'workspace-file', path: 'neko/assets/Footage/referenced.mov' },
+      { file: { authority: 'workspace', path: 'neko/assets/Footage/referenced.mov' } },
       { maxBytes: 1024 },
     );
 

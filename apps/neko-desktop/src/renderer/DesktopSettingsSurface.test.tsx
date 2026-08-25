@@ -5,9 +5,11 @@ import { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type DesktopApplicationSettingsProjection } from '@neko/host/application-settings';
+import type { OpenNekoDesktopAiModelSettingsBridge } from '@neko/host/ai-model-settings';
 import {
   DesktopSettingsMainSurface,
   DesktopSettingsNavigationSurface,
+  DesktopSettingsOverlaySurface,
   type DesktopSettingsSection,
 } from './DesktopSettingsSurface';
 import { DesktopApplicationSettingsProvider } from './application-settings-context';
@@ -15,13 +17,13 @@ import { createDesktopI18n } from './i18n';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
-describe('Desktop Settings scene surfaces', () => {
+describe('Desktop Settings surfaces', () => {
   afterEach(() => {
     document.body.replaceChildren();
     vi.restoreAllMocks();
   });
 
-  it('keeps navigation and settings mutations in separate Workbench slots', async () => {
+  it('keeps navigation and settings mutations in separate overlay regions', async () => {
     const update = vi.fn(async () => undefined);
     const openAgentAdvanced = vi.fn(async () => undefined);
     const { container, root } = await renderSettings({ update, openAgentAdvanced });
@@ -36,10 +38,10 @@ describe('Desktop Settings scene surfaces', () => {
     expect(update).not.toHaveBeenCalled();
 
     await act(async () => findButton(container, 'Agent').click());
-    expect(container.textContent).toContain(
-      'Desktop preferences are stored separately and never written to that file.',
-    );
-    await act(async () => findButton(container, 'Open Agent config').click());
+    expect(container.textContent).not.toContain('Advanced Agent settings');
+    const openConfig = findButton(container, 'Open Agent config');
+    expect(openConfig.closest('.desktop-settings__group-heading')).not.toBeNull();
+    await act(async () => openConfig.click());
     expect(openAgentAdvanced).toHaveBeenCalledTimes(1);
     await act(async () => root.unmount());
   });
@@ -49,6 +51,7 @@ describe('Desktop Settings scene surfaces', () => {
     const heading = container.querySelector('.desktop-settings__title');
 
     expect(heading?.querySelector('svg')).toBeNull();
+    expect(heading?.classList.contains('home-launchpad-heading')).toBe(false);
     expect(heading?.textContent).toContain('Settings');
     await act(async () => root.unmount());
   });
@@ -73,7 +76,7 @@ describe('Desktop Settings scene surfaces', () => {
     await act(async () => root.unmount());
   });
 
-  it('restores only the Host-owned section and resets transient search on remount', async () => {
+  it('uses the supplied overlay section and resets transient search on remount', async () => {
     const first = await renderSettings();
     const search = first.container.querySelector<HTMLInputElement>('input[type="search"]');
     if (!search) throw new Error('Settings fixture requires a search field.');
@@ -92,15 +95,530 @@ describe('Desktop Settings scene surfaces', () => {
     ).toContain('Theme');
     await act(async () => restored.root.unmount());
   });
+
+  it('renders a modal overlay and closes without a Scene transition', async () => {
+    const onClose = vi.fn();
+    const { container, root } = await renderSettings({ overlay: true, onClose });
+
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.querySelector('[data-settings-overlay="true"]')).not.toBeNull();
+    expect(document.querySelectorAll('h1')).toHaveLength(0);
+
+    const close = document.querySelector<HTMLButtonElement>('button[aria-label="Close settings"]');
+    if (!close) throw new Error('Settings overlay fixture requires a close action.');
+    await act(async () => close.click());
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
+  it('shows provider groups directly while keeping provider editing on demand', async () => {
+    const projection = {
+      providers: [
+        {
+          id: 'deepseek',
+          displayName: 'DeepSeek Provider',
+          type: 'generic' as const,
+          apiUrl: 'https://api.deepseek.com/v1',
+          protocol: 'openai-chat' as const,
+          connectionKind: 'direct' as const,
+          enabled: true,
+          supportedModelFamilies: ['dialogue', 'generation'] as const,
+          credentialStatus: 'configured' as const,
+        },
+      ],
+      models: [
+        {
+          id: 'deepseek-chat',
+          providerId: 'deepseek',
+          apiName: 'deepseek-chat',
+          displayName: 'DeepSeek Dialogue',
+          type: 'llm' as const,
+          enabled: true,
+        },
+        {
+          id: 'image-model',
+          providerId: 'deepseek',
+          apiName: 'image-model',
+          displayName: 'Image Model',
+          type: 'image' as const,
+          enabled: true,
+        },
+        {
+          id: 'audio-model',
+          providerId: 'deepseek',
+          apiName: 'audio-model',
+          displayName: 'Audio Model',
+          type: 'audio' as const,
+          enabled: true,
+        },
+      ],
+      defaults: {
+        llm: { providerId: 'deepseek', modelId: 'deepseek-chat' },
+        image: { providerId: 'deepseek', modelId: 'image-model' },
+      },
+    };
+    const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
+    const setDefault = vi.fn(async () => response);
+    const deleteModel = vi.fn(async () => response);
+    const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
+      get: async () => projection,
+      saveProvider: async () => response,
+      saveModel: async () => response,
+      deleteProvider: async () => response,
+      deleteModel,
+      setDefault,
+    };
+    const { container, root } = await renderSettings({
+      aiModelSettings,
+      initialSection: 'agent',
+    });
+    await act(async () => Promise.resolve());
+
+    expect(container.textContent).not.toContain('Dialogue models');
+    expect(container.textContent).not.toContain('Generation models');
+    expect(container.querySelectorAll('select')).toHaveLength(0);
+    expect(container.querySelectorAll('.desktop-settings__management-summary')).toHaveLength(0);
+    expect(container.querySelectorAll('.desktop-settings__provider-card')).toHaveLength(2);
+    expect(container.querySelectorAll('.desktop-settings__model-chip')).toHaveLength(0);
+    expect(container.textContent).not.toContain('Model catalog');
+    expect(container.querySelector('[data-provider-group="dialogue"]')?.textContent).toContain(
+      'DeepSeek Provider',
+    );
+    expect(container.querySelector('[data-provider-group="generation"]')?.textContent).toContain(
+      'DeepSeek Provider',
+    );
+    expect(container.querySelectorAll('.desktop-settings__model-chip')).toHaveLength(0);
+
+    const providerCard = container.querySelector<HTMLButtonElement>(
+      '.desktop-settings__provider-card-main',
+    );
+    if (!providerCard) throw new Error('Provider settings fixture requires a provider card.');
+    await act(async () => providerCard.click());
+    expect(container.textContent).toContain('Provider settings');
+    expect(container.textContent).toContain('Model catalog');
+    expect(container.textContent).toContain('Dialogue models');
+    expect(container.textContent).toContain('Generation models');
+    expect(container.querySelectorAll('.desktop-settings__model-group')).toHaveLength(2);
+    expect(container.querySelectorAll('.desktop-settings__model-chip')).toHaveLength(3);
+    expect(container.querySelectorAll('.desktop-settings__model-default-badge')).toHaveLength(2);
+    expect(container.querySelectorAll('.desktop-settings__model-default-action')).toHaveLength(1);
+    expect(
+      container
+        .querySelector<HTMLButtonElement>('.desktop-settings__editor-disclosure')
+        ?.getAttribute('aria-expanded'),
+    ).toBe('false');
+
+    await act(async () => findButtonContaining(container, 'Set as default').click());
+    expect(setDefault).toHaveBeenCalledWith('audio', {
+      providerId: 'deepseek',
+      modelId: 'audio-model',
+    });
+    const deleteAction = [
+      ...container.querySelectorAll<HTMLButtonElement>('.desktop-settings__model-delete-action'),
+    ].find((candidate) => !candidate.disabled && candidate.textContent?.trim() === 'Delete');
+    if (!deleteAction) throw new Error('Model fixture requires an enabled delete action.');
+    await act(async () => deleteAction.click());
+    await act(async () => findButton(container, 'Confirm delete').click());
+    expect(deleteModel).toHaveBeenCalledWith('audio-model');
+    await act(async () => root.unmount());
+  });
+
+  it('projects a local Ollama provider as dialogue-only without a credential field', async () => {
+    const projection = {
+      providers: [
+        {
+          id: 'ollama-local',
+          displayName: 'Ollama Local',
+          type: 'ollama' as const,
+          apiUrl: 'http://localhost:11434',
+          protocol: 'ollama' as const,
+          connectionKind: 'local' as const,
+          enabled: true,
+          supportedModelFamilies: ['dialogue'] as const,
+          credentialStatus: 'not-required' as const,
+        },
+      ],
+      models: [modelFixture('qwen-local', 'ollama-local', 'llm')],
+      defaults: {},
+    };
+    const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
+    const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
+      get: async () => projection,
+      saveProvider: async () => response,
+      saveModel: async () => response,
+      deleteProvider: async () => response,
+      deleteModel: async () => response,
+      setDefault: async () => response,
+    };
+    const { container, root } = await renderSettings({
+      aiModelSettings,
+      initialSection: 'agent',
+    });
+    await act(async () => Promise.resolve());
+
+    const dialogue = container.querySelector('[data-provider-group="dialogue"]');
+    expect(dialogue?.textContent).toContain('Ollama Local');
+    expect(dialogue?.textContent).toContain('Local');
+    expect(dialogue?.textContent).toContain('No credential required');
+    const providerCard = dialogue?.querySelector<HTMLButtonElement>(
+      '.desktop-settings__provider-card-main',
+    );
+    if (!providerCard) throw new Error('Ollama fixture requires a provider card.');
+    await act(async () => providerCard.click());
+    expect(container.querySelector('input[type="password"]')).toBeNull();
+    expect(container.textContent).toContain('Delete provider');
+    await act(async () => findButtonContaining(container, 'Add model').click());
+    expect(container.querySelectorAll('.desktop-settings__model-editor option')).toHaveLength(1);
+    expect(container.querySelector('.desktop-settings__model-editor option')?.textContent).toBe(
+      'Dialogue',
+    );
+    await act(async () => root.unmount());
+  });
+
+  it('keeps the selected Provider identity aligned with API and credential fields', async () => {
+    const projection = {
+      providers: [
+        {
+          id: 'deepseek-chat',
+          displayName: 'DeepSeek Chat',
+          type: 'generic' as const,
+          apiUrl: 'https://api.deepseek.com/v1',
+          protocol: 'openai-chat' as const,
+          connectionKind: 'direct' as const,
+          enabled: true,
+          supportedModelFamilies: ['dialogue'] as const,
+          credentialStatus: 'configured' as const,
+        },
+        {
+          id: 'neko-chat',
+          displayName: 'Neko API Chat',
+          type: 'generic' as const,
+          apiUrl: 'https://www.nekoapi.com/v1',
+          protocol: 'openai-responses' as const,
+          connectionKind: 'direct' as const,
+          enabled: true,
+          supportedModelFamilies: ['dialogue'] as const,
+          credentialStatus: 'configured' as const,
+        },
+      ],
+      models: [],
+      defaults: {},
+    };
+    const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
+    const saveProvider = vi.fn(async () => response);
+    const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
+      get: async () => projection,
+      saveProvider,
+      saveModel: async () => response,
+      deleteProvider: async () => response,
+      deleteModel: async () => response,
+      setDefault: async () => response,
+    };
+    const { container, root } = await renderSettings({
+      aiModelSettings,
+      initialSection: 'agent',
+    });
+    await act(async () => Promise.resolve());
+
+    const cards = [...container.querySelectorAll<HTMLElement>('.desktop-settings__provider-card')];
+    const deepSeekCard = cards.find((card) => card.textContent?.includes('DeepSeek Chat'));
+    const nekoCard = cards.find((card) => card.textContent?.includes('Neko API Chat'));
+    if (!deepSeekCard || !nekoCard) throw new Error('Provider identity fixture is incomplete.');
+    const deepSeekButton = deepSeekCard.querySelector<HTMLButtonElement>('button');
+    const nekoButton = nekoCard.querySelector<HTMLButtonElement>('button');
+    if (!deepSeekButton || !nekoButton)
+      throw new Error('Provider cards require selection buttons.');
+
+    await act(async () => deepSeekButton.click());
+    expect(deepSeekCard.dataset.selected).toBe('true');
+    expect(nekoCard.dataset.selected).toBe('false');
+    await act(async () => findButtonContaining(container, 'Custom settings').click());
+    expect(container.querySelector<HTMLInputElement>('input[type="url"]')?.value).toBe(
+      'https://api.deepseek.com/v1',
+    );
+    const deepSeekKey = container.querySelector<HTMLInputElement>('input[type="password"]');
+    if (!deepSeekKey) throw new Error('Remote Provider requires an API Key field.');
+    await act(async () => {
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      if (!setValue) throw new Error('HTMLInputElement value setter is unavailable.');
+      setValue.call(deepSeekKey, 'deepseek-draft-key');
+      deepSeekKey.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(deepSeekKey.value).toBe('deepseek-draft-key');
+
+    await act(async () => nekoButton.click());
+    expect(deepSeekCard.dataset.selected).toBe('false');
+    expect(nekoCard.dataset.selected).toBe('true');
+    await act(async () => findButtonContaining(container, 'Custom settings').click());
+    expect(container.querySelector<HTMLInputElement>('input[type="url"]')?.value).toBe(
+      'https://www.nekoapi.com/v1',
+    );
+    expect(container.querySelector<HTMLSelectElement>('select')?.value).toBe('openai-responses');
+    const nekoKey = container.querySelector<HTMLInputElement>('input[type="password"]');
+    expect(nekoKey?.value).toBe('');
+    if (!nekoKey) throw new Error('Neko API Provider requires an API Key field.');
+    await act(async () => {
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      if (!setValue) throw new Error('HTMLInputElement value setter is unavailable.');
+      setValue.call(nekoKey, 'neko-draft-key');
+      nekoKey.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => findButton(container, 'Save').click());
+    expect(saveProvider).toHaveBeenCalledWith(
+      {
+        id: 'neko-chat',
+        displayName: 'Neko API Chat',
+        type: 'generic',
+        apiUrl: 'https://www.nekoapi.com/v1',
+        protocol: 'openai-responses',
+        supportedModelFamilies: ['dialogue'],
+        enabled: true,
+      },
+      'neko-draft-key',
+    );
+    await act(async () => root.unmount());
+  });
+
+  it('requires explicit confirmation before deleting an empty configured provider', async () => {
+    const projection = {
+      providers: [
+        {
+          id: 'custom-empty',
+          displayName: 'Custom Empty',
+          type: 'generic' as const,
+          apiUrl: 'https://custom.example/v1',
+          protocol: 'openai-chat' as const,
+          connectionKind: 'direct' as const,
+          enabled: true,
+          supportedModelFamilies: ['dialogue'] as const,
+          credentialStatus: 'configured' as const,
+        },
+      ],
+      models: [],
+      defaults: {},
+    };
+    const response = { requestId: 'fixture', projection, runtimeEffect: 'pending' as const };
+    const deleteProvider = vi.fn(async () => response);
+    const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
+      get: async () => projection,
+      saveProvider: async () => response,
+      saveModel: async () => response,
+      deleteProvider,
+      deleteModel: async () => response,
+      setDefault: async () => response,
+    };
+    const { container, root } = await renderSettings({
+      aiModelSettings,
+      initialSection: 'agent',
+    });
+    await act(async () => Promise.resolve());
+    await act(async () => findButton(container, 'Delete provider').click());
+    expect(deleteProvider).not.toHaveBeenCalled();
+    expect(
+      container.querySelector('.desktop-settings__provider-card-actions')?.textContent,
+    ).toContain('Cancel');
+    await act(async () => findButton(container, 'Cancel').click());
+    expect(deleteProvider).not.toHaveBeenCalled();
+    expect(
+      container.querySelector('.desktop-settings__provider-card-actions')?.textContent,
+    ).toContain('Delete provider');
+    await act(async () => findButton(container, 'Delete provider').click());
+    await act(async () => findButton(container, 'Confirm delete').click());
+    expect(deleteProvider).toHaveBeenCalledWith('custom-empty');
+    expect(container.textContent).toContain(
+      'Configuration saved. DSH will refresh after the active task finishes, then new conversations will use the latest model catalog.',
+    );
+    await act(async () => root.unmount());
+  });
+
+  it('renders only the two canonical Provider directories without an outer or pending group', async () => {
+    const providers = (
+      [
+        ['chat', 'Dialogue Provider', ['dialogue']],
+        ['media', 'Generation Provider', ['generation']],
+        ['hybrid', 'Hybrid Provider', ['dialogue', 'generation']],
+        ['empty', 'Provider Without Models', ['dialogue']],
+      ] as const
+    ).map(([id, displayName, supportedModelFamilies]) => ({
+      id,
+      displayName,
+      type: 'generic' as const,
+      apiUrl: `https://${id}.example/v1`,
+      protocol: 'openai-chat' as const,
+      connectionKind: 'direct' as const,
+      enabled: true,
+      supportedModelFamilies,
+      credentialStatus: 'configured' as const,
+    }));
+    const projection = {
+      providers,
+      models: [
+        modelFixture('chat-model', 'chat', 'llm'),
+        modelFixture('image-model', 'media', 'image'),
+        modelFixture('hybrid-chat', 'hybrid', 'llm'),
+        modelFixture('hybrid-video', 'hybrid', 'video'),
+      ],
+      defaults: {},
+    };
+    const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
+    const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
+      get: async () => projection,
+      saveProvider: async () => response,
+      saveModel: async () => response,
+      deleteProvider: async () => response,
+      deleteModel: async () => response,
+      setDefault: async () => response,
+    };
+    const { container, root } = await renderSettings({
+      aiModelSettings,
+      initialSection: 'agent',
+    });
+    await act(async () => Promise.resolve());
+
+    const dialogue = container.querySelector('[data-provider-group="dialogue"]');
+    const generation = container.querySelector('[data-provider-group="generation"]');
+    expect(dialogue?.textContent).toContain('Dialogue Provider');
+    expect(dialogue?.textContent).toContain('Hybrid Provider');
+    expect(dialogue?.textContent).toContain('Provider Without Models');
+    expect(generation?.textContent).toContain('Generation Provider');
+    expect(generation?.textContent).toContain('Hybrid Provider');
+    expect(container.querySelectorAll('[data-provider-group]')).toHaveLength(2);
+    expect(container.querySelector('[data-provider-group="mixed"]')).toBeNull();
+    expect(container.querySelector('[data-provider-group="unconfigured"]')).toBeNull();
+    expect(container.querySelectorAll('.desktop-settings__provider-card')).toHaveLength(5);
+    expect(container.querySelectorAll('.desktop-settings__card')).toHaveLength(0);
+    await act(async () => root.unmount());
+  });
+
+  it('prefills the official MiniMax generation Provider before model configuration', async () => {
+    const projection = { providers: [], models: [], defaults: {} };
+    const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
+    const saveProvider = vi.fn(async () => response);
+    const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
+      get: async () => projection,
+      saveProvider,
+      saveModel: async () => response,
+      deleteProvider: async () => response,
+      deleteModel: async () => response,
+      setDefault: async () => response,
+    };
+    const { container, root } = await renderSettings({
+      aiModelSettings,
+      initialSection: 'agent',
+    });
+    await act(async () => Promise.resolve());
+
+    await act(async () => findButton(container, 'Add generation provider').click());
+
+    expect(container.textContent).toContain('Add provider');
+    expect(container.querySelectorAll('.desktop-settings__editor input')).toHaveLength(5);
+    expect(container.querySelectorAll('.desktop-settings__editor select')).toHaveLength(1);
+    expect(
+      [...container.querySelectorAll('.desktop-settings__editor option')].map(
+        (option) => option.textContent,
+      ),
+    ).toEqual(['MiniMax H3', 'ByteDance Ark / Seedance', 'Custom NewAPI Media']);
+    expect(container.querySelector<HTMLInputElement>('input[type="url"]')?.value).toBe(
+      'https://api.minimaxi.com/v2',
+    );
+    expect(
+      [...container.querySelectorAll<HTMLInputElement>('.desktop-settings__editor input')].some(
+        (input) => input.value === 'minimax',
+      ),
+    ).toBe(true);
+    expect(container.textContent).toContain(
+      'Save the provider before configuring its model catalog.',
+    );
+    expect(container.querySelectorAll('.desktop-settings__model-editor')).toHaveLength(0);
+    expect(saveProvider).not.toHaveBeenCalled();
+    await act(async () => findButton(container, 'Save').click());
+    expect(saveProvider).toHaveBeenCalledWith(
+      {
+        id: 'minimax-media',
+        displayName: 'MiniMax H3',
+        type: 'minimax',
+        apiUrl: 'https://api.minimaxi.com/v2',
+        presetId: 'generation-minimax-h3',
+        supportedModelFamilies: ['generation'],
+        enabled: true,
+      },
+      undefined,
+    );
+    await act(async () => root.unmount());
+  });
+
+  it('adds MiniMax H3 through its canonical model template', async () => {
+    const projection = {
+      providers: [
+        {
+          id: 'minimax-media',
+          displayName: 'MiniMax H3',
+          type: 'minimax' as const,
+          apiUrl: 'https://api.minimaxi.com/v2',
+          connectionKind: 'direct' as const,
+          enabled: true,
+          supportedModelFamilies: ['generation'] as const,
+          credentialStatus: 'configured' as const,
+        },
+      ],
+      models: [],
+      defaults: {},
+    };
+    const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
+    const saveModel = vi.fn(async () => response);
+    const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
+      get: async () => projection,
+      saveProvider: async () => response,
+      saveModel,
+      deleteProvider: async () => response,
+      deleteModel: async () => response,
+      setDefault: async () => response,
+    };
+    const { container, root } = await renderSettings({
+      aiModelSettings,
+      initialSection: 'agent',
+    });
+    await act(async () => Promise.resolve());
+
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('.desktop-settings__provider-card-main')?.click(),
+    );
+    await act(async () => findButtonContaining(container, 'Add model').click());
+    const modelEditor = container.querySelector<HTMLElement>('.desktop-settings__model-editor');
+    if (!modelEditor) throw new Error('MiniMax fixture requires a model editor.');
+    expect(modelEditor.textContent).toContain('MiniMax H3 · MiniMax-H3');
+    expect(modelEditor.querySelectorAll('select')).toHaveLength(2);
+    expect(modelEditor.querySelector<HTMLSelectElement>('select')?.value).toBe('minimax-h3');
+    const save = modelEditor.querySelector<HTMLButtonElement>('button.desktop-settings__action');
+    if (!save) throw new Error('MiniMax model fixture requires a save action.');
+    await act(async () => save.click());
+    expect(saveModel).toHaveBeenCalledWith({
+      id: 'minimax-media-minimax-h3',
+      providerId: 'minimax-media',
+      apiName: 'MiniMax-H3',
+      displayName: 'MiniMax H3',
+      type: 'video',
+      enabled: true,
+      templateId: 'minimax-h3',
+    });
+    await act(async () => root.unmount());
+  });
 });
 
 async function renderSettings({
+  aiModelSettings,
   openAgentAdvanced = vi.fn(async () => undefined),
   initialSection = 'general',
+  onClose = vi.fn(),
+  overlay = false,
   update = vi.fn(async () => undefined),
 }: {
+  readonly aiModelSettings?: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'];
   readonly openAgentAdvanced?: () => Promise<void>;
   readonly initialSection?: DesktopSettingsSection;
+  readonly onClose?: () => void;
+  readonly overlay?: boolean;
   readonly update?: (
     preferences: DesktopApplicationSettingsProjection['preferences'],
   ) => Promise<void>;
@@ -111,7 +629,13 @@ async function renderSettings({
   const root = createRoot(container);
   function Fixture(): JSX.Element {
     const [section, setSection] = useState<DesktopSettingsSection>(initialSection);
-    return (
+    return overlay ? (
+      <DesktopSettingsOverlaySurface
+        onClose={onClose}
+        onSectionChange={setSection}
+        section={section}
+      />
+    ) : (
       <>
         <DesktopSettingsNavigationSurface activeSection={section} onSectionChange={setSection} />
         <DesktopSettingsMainSurface section={section} />
@@ -129,10 +653,13 @@ async function renderSettings({
                 theme: 'system',
                 locale: 'system',
                 resourceBrowserView: 'list',
+                fontSize: 'default',
+                defaultWorkspaceLocator: '${HOME}/OpenNeko',
               },
             },
             update,
             openAgentAdvanced,
+            aiModelSettings,
           }}
         >
           <Fixture />
@@ -149,4 +676,23 @@ function findButton(container: HTMLElement, label: string): HTMLButtonElement {
   );
   if (!button) throw new Error(`Settings fixture requires button '${label}'.`);
   return button;
+}
+
+function findButtonContaining(container: HTMLElement, label: string): HTMLButtonElement {
+  const button = [...container.querySelectorAll('button')].find((candidate) =>
+    candidate.textContent?.includes(label),
+  );
+  if (!button) throw new Error(`Settings fixture requires button containing '${label}'.`);
+  return button;
+}
+
+function modelFixture(id: string, providerId: string, type: 'llm' | 'image' | 'video' | 'audio') {
+  return {
+    id,
+    providerId,
+    apiName: id,
+    displayName: id,
+    type,
+    enabled: true,
+  } as const;
 }

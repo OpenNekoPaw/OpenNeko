@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CUSTOM_NEWAPI_PROVIDER_ID,
   DEFAULT_USER_CONFIG,
-  GOOGLE_GEMINI_MEDIA_UNDERSTAND_MODEL_ID,
+  GOOGLE_GEMINI_MULTIMODAL_MODEL_ID,
   GOOGLE_PROVIDER_ID,
   NEKO_GATEWAY_DEFAULT_AUDIO_MODEL_ID,
   NEKO_GATEWAY_DEFAULT_CHAT_MODEL_ID,
@@ -93,16 +93,14 @@ describe('default agent provider configuration', () => {
     if (!musicModel) throw new Error('Expected default music model');
     expect(modelSupportsPurpose(musicModel, 'audio.music.generate')).toBe(true);
 
-    const geminiVideoModel = models.get(GOOGLE_GEMINI_MEDIA_UNDERSTAND_MODEL_ID);
+    const geminiVideoModel = models.get(GOOGLE_GEMINI_MULTIMODAL_MODEL_ID);
     expect(geminiVideoModel).toMatchObject({
       providerId: GOOGLE_PROVIDER_ID,
+      displayName: 'Gemini 2.5 Flash Multimodal',
       type: 'llm',
       enabled: false,
       capabilities: expect.arrayContaining(['vision', 'audio', 'vision_video', 'llm.chat']),
     });
-    if (!geminiVideoModel) throw new Error('Expected default Gemini media understanding model');
-    expect(modelSupportsPurpose(geminiVideoModel, 'image.understand')).toBe(true);
-    expect(modelSupportsPurpose(geminiVideoModel, 'audio.understand')).toBe(true);
-    expect(modelSupportsPurpose(geminiVideoModel, 'video.understand')).toBe(true);
+    if (!geminiVideoModel) throw new Error('Expected default Gemini multimodal model');
   });
 });

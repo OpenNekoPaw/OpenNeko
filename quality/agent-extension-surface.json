@@ -1,88 +1,89 @@
 {
   "portableSkill": {
     "standard": "Agent Skills",
-    "classification": "portable-standard",
-    "definition": "SKILL.md",
+    "classification": "dsh-skill",
+    "definition": "dsh-filesystem-skill",
     "hostManifestRequired": false,
     "mcpRequired": false,
-    "sourceKinds": ["builtin", "personal", "plugin", "project"],
-    "fixedRoots": ["packages/skills/skills", ".agents/skills", "~/.agents/skills"],
+    "layouts": ["directory-skill-md", "flat-markdown"],
+    "sourceKinds": [
+      "project-dsh",
+      "project-agents",
+      "runtime",
+      "custom",
+      "user-dsh",
+      "user-agents",
+      "bundled"
+    ],
+    "frontmatter": [
+      "name",
+      "description",
+      "whenToUse",
+      "metadata",
+      "disable-model-invocation",
+      "user-invocable"
+    ],
+    "multiSkill": true,
+    "relativeResources": "on-demand-guidance",
     "evidence": [
-      "packages/skills/README.md",
-      "packages/agent/runtime/src/pi/skill-host.ts",
-      "packages/agent/runtime/src/workspace/agent-skill-layout.ts",
-      "packages/agent/runtime/src/pi/__tests__/builtin-skills.test.ts"
-    ]
-  },
-  "skillAuthoringMetadata": {
-    "allowedTools": {
-      "classification": "internal-experimental",
-      "acceptedByCreator": true,
-      "runtimeEnforced": false,
-      "supportClaim": "none"
-    },
-    "evidence": [
-      "packages/agent/contracts/src/portable-skill.ts",
-      "packages/agent/runtime/src/pi/skill-package-creation-service.ts",
-      "packages/agent/runtime/src/pi/skill-host.ts"
+      "packages/dsh-bridge/package.json",
+      "packages/skills/README.md"
     ]
   },
   "compositionPackage": {
-    "classification": "portable-plugin-subset",
+    "classification": "official-dsh-profile",
     "manifest": "plugin.json",
-    "requiredOnlyFor": "shared-install-lifecycle",
+    "requiredOnlyFor": "dsh-extension-composition",
     "skillContributionOptional": true,
     "mcpContributionOptional": true,
     "appContributionStatus": "unsupported",
     "evidence": [
-      "packages/agent/runtime/src/extensions/extension-manager.ts",
-      "packages/agent/runtime/src/extensions/plugin-runtime.ts"
-    ]
-  },
-  "pluginState": {
-    "classification": "sqlite-local-application-state",
-    "packageBytesAuthority": false,
-    "requiredForPortableSkill": false,
-    "evidence": [
-      "packages/local-metadata/src/plugin-state.ts",
-      "packages/local-metadata/src/sqlite/plugin-state-schema.ts",
-      "packages/agent/runtime/src/extensions/extension-manager.ts"
+      "packages/dsh-bridge/cordis.patch.yml",
+      "openspec/changes/replace-pi-with-dsh-runtime-atomically/specs/dsh-extension-runtime-boundary/spec.md"
     ]
   },
   "extensionManagement": {
-    "classification": "management-only",
+    "classification": "dsh-skill-mcp-projection-only",
+    "visibleTypes": ["skill", "mcp"],
+    "pluginVisible": false,
     "runtimeContributionAuthority": false,
     "evidence": [
       "packages/agent/contracts/src/extension-management.ts",
-      "packages/agent/runtime/src/extensions/extension-manager.ts"
+      "packages/agent/contracts/src/dsh-acp.ts"
     ]
   },
   "mcp": {
     "standard": "Model Context Protocol",
-    "classification": "partial-optional-adapter",
-    "supportedCapability": "tools",
+    "classification": "dsh-owned",
+    "supportedCapability": "dsh-profile",
     "supportedTransports": ["stdio", "streamable-http-https"],
     "skillDiscoveryDependency": false,
     "skillCreationDependency": false,
     "hostCapabilityDependency": false,
     "connectionFailureIsolation": "contribution",
     "evidence": [
-      "packages/agent/runtime/src/mcp/mcp-client.ts",
-      "packages/agent/runtime/src/extensions/plugin-runtime.ts"
+      "packages/dsh-bridge/cordis.patch.yml",
+      "openspec/changes/replace-pi-with-dsh-runtime-atomically/specs/dsh-extension-runtime-boundary/spec.md"
     ]
   },
   "hostCapability": {
-    "classification": "internal-executable-composition",
+    "classification": "host-domain-tool-adapter",
     "mcpRequired": false,
-    "runtimeAuthority": "package-owned-capability-provider",
+    "runtimeAuthority": "owning-domain-application-service",
     "evidence": [
-      "packages/agent/contracts/src/capability.ts",
-      "packages/agent/runtime/src/pi/capability-tool-bridge.ts"
+      "packages/agent/contracts/src/dsh-acp.ts",
+      "packages/dsh-bridge/src/index.ts",
+      "packages/agent/dsh-plugin/src/index.ts",
+      "packages/generation/dsh-plugin/src/index.ts",
+      "packages/canvas/dsh-plugin/src/index.ts",
+      "packages/cut/dsh-plugin/src/index.ts",
+      "packages/chara/dsh-plugin/src/index.ts",
+      "packages/world/dsh-plugin/src/index.ts"
     ]
   },
   "standardsSupport": {
-    "agentSkills": "core-supported",
-    "agentPlugins": "not-conformant-host-extension-only",
-    "mcp": "partial-tools-client"
+    "agentSkills": "dsh-owned",
+    "agentPlugins": "official-first-party-only",
+    "mcp": "dsh-owned"
   }
 }

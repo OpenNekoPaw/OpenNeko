@@ -1,358 +1,149 @@
 import { describe, expect, it } from 'vitest';
 import {
   createAgentExtensionManagementHostRequest,
-  parseAgentExtensionManagementHostRequest,
   parseAgentExtensionManagementHostResult,
 } from '../extension-management-host';
 
-const identity = {
-  windowId: 'window-1',
-};
+const identity = { windowId: 'window-1' };
 
-function createRequest() {
-  return createAgentExtensionManagementHostRequest({
-    route: 'snapshot.get',
-    requestId: 'extensions-1',
-    identity,
-  });
-}
-
-function createProjection() {
+function projection() {
   return {
     identity,
+    catalogScope: 'global' as const,
     skills: [
       {
-        id: 'personal:personal:story-planner',
-        name: 'story-planner',
-        description: 'Plan a story.',
-        source: 'personal',
-        sourceId: 'personal',
-        managementId: `skill:${'b'.repeat(64)}`,
-        canOpenInEditor: true,
-        canShowInFolder: true,
-        canRemove: true,
-      },
-    ],
-    skillDiscovery: {
-      diagnostics: [{ code: 'invalid_metadata', source: 'personal', count: 1 }],
-      duplicateCount: 0,
-    },
-    extensions: [
-      {
-        id: 'computer-use',
-        name: 'computer-use',
-        displayName: 'Computer Use',
-        description: 'Control Mac apps.',
-        localization: {
-          'zh-cn': { description: '控制 Mac 应用。' },
-        },
-        version: '1.0.2',
-        developer: 'OpenAI',
+        id: 'dsh-skill:storyboard',
+        name: 'storyboard',
+        description: 'Create a storyboard.',
+        source: 'bundled',
+        provider: 'openneko-builtin',
+        userInvocable: true,
+        modelInvocable: true,
         enabled: true,
-        canEnable: false,
-        canDisable: true,
-        canRemove: false,
-        deliverySource: 'bundled',
-        agentStatus: 'ready',
-        runtimeDiagnosticCode: '',
-        componentReadiness: {
-          skills: { status: 'ready', diagnosticCode: '' },
-          mcp: { status: 'ready', diagnosticCode: '' },
-          apps: { status: 'absent', diagnosticCode: '' },
-        },
-        iconDataUrl: '',
-        mcpServerIds: ['computer-use'],
-        hasSkills: true,
-        appIds: [],
+        manageable: false,
+        removable: false,
       },
     ],
-    extensionDiscovery: { diagnostics: [{ code: 'runtime_failed', count: 1 }] },
+    mcp: [],
+    diagnostics: [],
   };
 }
 
-describe('Agent Extension Management Host contract', () => {
-  it('parses exact owner-qualified requests and projections', () => {
-    const request = createRequest();
-    expect(parseAgentExtensionManagementHostRequest(request)).toEqual(request);
+describe('DSH extension management contract', () => {
+  it('accepts the canonical lifecycle routes and rejects unknown Plugin commands', () => {
     expect(
       createAgentExtensionManagementHostRequest({
-        route: 'sources.rescan',
-        requestId: 'extensions-rescan-1',
+        requestId: 'request-1',
         identity,
+        route: 'snapshot.get',
       }),
-    ).toMatchObject({ route: 'sources.rescan' });
+    ).toEqual({ requestId: 'request-1', identity, route: 'snapshot.get' });
     expect(
       createAgentExtensionManagementHostRequest({
-        route: 'plugin.install',
-        requestId: 'extensions-install-1',
+        requestId: 'request-skill',
         identity,
+        route: 'skill.enablement.update',
+        name: 'review',
+        source: 'user-dsh',
+        enabled: false,
       }),
-    ).toMatchObject({ route: 'plugin.install' });
-    expect(
-      createAgentExtensionManagementHostRequest({
-        route: 'plugin.remove',
-        requestId: 'extensions-remove-1',
-        identity,
-        pluginId: 'computer-use',
-      }),
-    ).toMatchObject({
-      route: 'plugin.remove',
-      pluginId: 'computer-use',
+    ).toEqual({
+      requestId: 'request-skill',
+      identity,
+      route: 'skill.enablement.update',
+      name: 'review',
+      source: 'user-dsh',
+      enabled: false,
     });
     expect(
       createAgentExtensionManagementHostRequest({
-        route: 'skill.open',
-        requestId: 'skill-open-1',
+        requestId: 'request-mcp',
         identity,
-        managementId: `skill:${'b'.repeat(64)}`,
-      }),
-    ).toMatchObject({ route: 'skill.open' });
-    expect(
+        route: 'mcp.add',
+        server: {
+          serverName: 'filesystem',
+          description: 'Approved files',
+          transport: 'stdio',
+          command: 'mcp-filesystem',
+          args: ['--readonly'],
+        },
+      }).route,
+    ).toBe('mcp.add');
+    expect(() =>
       createAgentExtensionManagementHostRequest({
-        route: 'skill.reveal',
-        requestId: 'skill-reveal-1',
+        requestId: 'request-2',
         identity,
-        managementId: `skill:${'b'.repeat(64)}`,
-      }),
-    ).toMatchObject({ route: 'skill.reveal' });
-    expect(
-      parseAgentExtensionManagementHostResult(
-        {
-          requestId: request.requestId,
-          route: request.route,
-          projection: createProjection(),
-        },
-        request,
-      ),
-    ).toMatchObject({ projection: { identity } });
-    expect(
-      parseAgentExtensionManagementHostResult(
-        {
-          requestId: request.requestId,
-          route: request.route,
-          projection: {
-            ...createProjection(),
-            extensions: [
-              {
-                ...createProjection().extensions[0],
-                enabled: false,
-                canEnable: true,
-                canDisable: false,
-                canRemove: false,
-                agentStatus: 'disabled',
-              },
-            ],
-          },
-        },
-        request,
-      ),
-    ).toMatchObject({
-      projection: {
-        extensions: [
-          expect.objectContaining({
-            enabled: false,
-            agentStatus: 'disabled',
-          }),
-        ],
-      },
-    });
-    expect(
-      parseAgentExtensionManagementHostResult(
-        {
-          requestId: request.requestId,
-          route: request.route,
-          projection: {
-            ...createProjection(),
-            extensions: [
-              {
-                ...createProjection().extensions[0],
-                enabled: false,
-                canEnable: true,
-                canDisable: false,
-                deliverySource: 'local',
-                canRemove: true,
-                agentStatus: 'disabled',
-              },
-            ],
-          },
-        },
-        request,
-      ),
-    ).toMatchObject({
-      projection: {
-        extensions: [
-          expect.objectContaining({
-            deliverySource: 'local',
-            canRemove: true,
-          }),
-        ],
-      },
-    });
-    expect(
-      parseAgentExtensionManagementHostResult(
-        {
-          requestId: request.requestId,
-          route: request.route,
-          projection: {
-            ...createProjection(),
-            extensions: [
-              {
-                ...createProjection().extensions[0],
-                enabled: false,
-                canEnable: false,
-                canDisable: false,
-                deliverySource: 'local',
-                canRemove: true,
-                agentStatus: 'error',
-                runtimeDiagnosticCode: 'state-invalid',
-              },
-            ],
-          },
-        },
-        request,
-      ),
-    ).toMatchObject({
-      projection: {
-        extensions: [
-          expect.objectContaining({
-            agentStatus: 'error',
-            canEnable: false,
-            canRemove: true,
-          }),
-        ],
-      },
-    });
+        route: 'plugin.enable',
+      } as never),
+    ).toThrow('Unknown DSH extension management route');
   });
 
-  it('rejects stale owners, unknown fields and physical paths', () => {
-    const request = createRequest();
-    const result = {
-      requestId: request.requestId,
-      route: request.route,
-      projection: createProjection(),
-    };
+  it('rejects a stale owner while preserving the canonical empty MCP catalog', () => {
+    const request = createAgentExtensionManagementHostRequest({
+      requestId: 'request-3',
+      identity,
+      route: 'snapshot.get',
+    });
+    expect(
+      parseAgentExtensionManagementHostResult(
+        { requestId: request.requestId, route: request.route, projection: projection() },
+        request,
+      ).projection.mcp,
+    ).toEqual([]);
     expect(() =>
       parseAgentExtensionManagementHostResult(
         {
-          ...result,
-          projection: { ...result.projection, identity: { ...identity, windowId: 'window-2' } },
+          requestId: request.requestId,
+          route: request.route,
+          projection: { ...projection(), identity: { windowId: 'window-2' } },
         },
         request,
       ),
     ).toThrow('owner identity is stale');
-    expect(() =>
-      parseAgentExtensionManagementHostResult(
-        { ...result, projection: { ...result.projection, absolutePath: '/Users/private' } },
-        request,
-      ),
-    ).toThrow('projection is invalid');
-    expect(() =>
-      parseAgentExtensionManagementHostResult(
-        {
-          ...result,
-          projection: {
-            ...result.projection,
-            extensions: [{ ...result.projection.extensions[0], command: ['install', '--force'] }],
-          },
-        },
-        request,
-      ),
-    ).toThrow('extension item is invalid');
-    expect(() =>
-      parseAgentExtensionManagementHostResult(
-        {
-          ...result,
-          projection: {
-            ...result.projection,
-            extensions: [
-              { ...result.projection.extensions[0], marketplace: 'foreign-marketplace' },
-            ],
-          },
-        },
-        request,
-      ),
-    ).toThrow('extension item is invalid');
-    expect(() =>
-      parseAgentExtensionManagementHostResult(
-        {
-          ...result,
-          projection: {
-            ...result.projection,
-            extensions: [
-              {
-                ...result.projection.extensions[0],
-                localization: { zh_CN: { description: '无效语言标识' } },
-              },
-            ],
-          },
-        },
-        request,
-      ),
-    ).toThrow('localization locale is invalid');
   });
 
-  it('rejects inconsistent management capabilities and discovery diagnostics', () => {
-    const request = createRequest();
-    const result = {
-      requestId: request.requestId,
-      route: request.route,
-      projection: createProjection(),
-    };
+  it('rejects Plugin inventory from the Skill/MCP-only projection', () => {
+    const request = createAgentExtensionManagementHostRequest({
+      requestId: 'request-4',
+      identity,
+      route: 'snapshot.get',
+    });
     expect(() =>
       parseAgentExtensionManagementHostResult(
         {
-          ...result,
-          projection: {
-            ...result.projection,
-            skills: [{ ...result.projection.skills[0], canRemove: false }],
-          },
+          requestId: request.requestId,
+          route: request.route,
+          projection: { ...projection(), plugins: [] },
         },
         request,
       ),
-    ).toThrow('capabilities are inconsistent');
-    expect(() =>
-      parseAgentExtensionManagementHostResult(
-        {
-          ...result,
-          projection: {
-            ...result.projection,
-            extensionDiscovery: { diagnostics: [{ code: 'unknown', count: 1 }] },
-          },
-        },
-        request,
-      ),
-    ).toThrow('diagnostic code is invalid');
-    expect(() =>
-      parseAgentExtensionManagementHostResult(
-        {
-          ...result,
-          projection: {
-            ...result.projection,
-            extensions: [{ ...result.projection.extensions[0], canUpdate: true }],
-          },
-        },
-        request,
-      ),
-    ).toThrow('extension item is invalid');
-    expect(() =>
-      parseAgentExtensionManagementHostResult(
-        {
-          ...result,
-          projection: {
-            ...result.projection,
-            extensions: [
-              {
-                ...result.projection.extensions[0],
-                enabled: false,
-                canEnable: true,
-                canDisable: false,
-                canRemove: true,
-              },
-            ],
-          },
-        },
-        request,
-      ),
-    ).toThrow('extension flags are inconsistent');
+    ).toThrow('DSH extension management projection is invalid.');
   });
+
+  it.each(['path', 'resourceBase', 'content', 'metadata'])(
+    'rejects private Skill field %s from the Renderer projection',
+    (field) => {
+      const request = createAgentExtensionManagementHostRequest({
+        requestId: `request-private-${field}`,
+        identity,
+        route: 'snapshot.get',
+      });
+      const [skill] = projection().skills;
+      if (skill === undefined) throw new Error('Skill projection fixture is empty.');
+
+      expect(() =>
+        parseAgentExtensionManagementHostResult(
+          {
+            requestId: request.requestId,
+            route: request.route,
+            projection: {
+              ...projection(),
+              skills: [{ ...skill, [field]: field === 'metadata' ? {} : '/private/value' }],
+            },
+          },
+          request,
+        ),
+      ).toThrow('DSH Skill item is invalid.');
+    },
+  );
 });

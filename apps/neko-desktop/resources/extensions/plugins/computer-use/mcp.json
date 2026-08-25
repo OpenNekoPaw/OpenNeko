@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "cua-driver": {
-      "type": "stdio",
-      "command": "./runtime/bin/cua-driver",
-      "args": ["mcp", "--direct"]
-    }
-  }
-}

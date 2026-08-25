@@ -23,6 +23,7 @@ import {
   UserIcon,
 } from '@neko/ui/icons';
 import { ModeSelector } from './ModeSelector';
+import type { ModeSelectorOption } from './ModeSelector';
 import { ComposerConfigMenu } from './ComposerConfigMenu';
 import { CharacterConversationModeSelector } from './CharacterConversationModeSelector';
 import { EntryPromptMenu as ComposerEntryPromptMenu } from './EntryPromptMenu';
@@ -58,6 +59,7 @@ import { findTrailingMentionRange, projectTrailingMention } from './mention-inpu
 import { AgentContextChip } from './AgentContextChip';
 import { SuggestionChips } from './SuggestionChips';
 import { AmbientCanvasContextBar } from './AmbientCanvasContextBar';
+import { WorkspaceCanvasContextBar } from './WorkspaceCanvasContextBar';
 import { UsageIndicator } from './UsageIndicator';
 import { useTranslation } from '../../../i18n/I18nContext';
 import { useInputHistory } from '../../../hooks/useInputHistory';
@@ -67,23 +69,26 @@ import { projectInputAreaUi } from '../../../presenters/input-area-presenter';
 import { isOptimisticQueuedMessageItem } from '../../../presenters/message-queue-presenter';
 import { projectClipboardTextToContextPayload } from '../../../presenters/clipboard-context-presenter';
 import { type ChatModelOption } from '@neko/ai-contracts';
-import { contentLocatorKey, type ContentLocator } from '@neko/content';
-import type { AgentContextPayload } from '@neko/agent-contracts';
+import { contentLocatorKey, type ContentLocator } from '@neko/content-domain';
+import type { AgentContextPayload, ShellExecutionMode } from '@neko/agent-contracts';
 import { projectContentLocatorPath } from '../../../presenters/content-locator-presenter';
 import type { AgentModelSlots, AgentQueuedMessageItem, SessionMode } from '@neko/agent-contracts';
 import {
-  useComposerWorkspacePresentation,
+  type AgentComposerCanvasPresentation,
   type AgentComposerWorkspaceTarget,
 } from '../../ComposerWorkspaceContext';
+import { formatMessageTime } from '../message-time';
 
 interface InputAreaProps {
-  presentation?: 'entry' | 'conversation';
+  presentation?: 'entry' | 'workspace' | 'conversation';
   composerPresentation?: 'default' | 'compact';
   approvalSurface?: ReactNode;
   inputValue: string;
   isThinking: boolean;
   /** Conversation-owned run state for queue/send/stop behavior. */
   isRunActive?: boolean;
+  /** Whether the owning runtime accepts a new queued prompt while a run is active. */
+  queueingEnabled?: boolean;
   queuedMessageCount?: number;
   queuedMessages?: readonly AgentQueuedMessageItem[];
   droppedFiles?: MessageAttachment[];
@@ -100,7 +105,9 @@ interface InputAreaProps {
     contextPayloads?: AgentContextPayload[];
     fileReferences?: SelectedFileReference[];
     agentModels?: AgentModelSlots;
-  }) => boolean;
+  }) => boolean | Promise<boolean>;
+  onDraftConsumed?: () => void;
+  onRejectedDraftRestored?: () => void;
   onCancel?: () => void;
   entryPromptMenu?: EntryPromptMenu | null;
   onEntryPromptMenuChange?: (menu: EntryPromptMenu | null) => void;
@@ -109,11 +116,21 @@ interface InputAreaProps {
   disabled?: boolean;
   submissionBlocked?: boolean;
   submissionBlockedReason?: string;
+  availableExecutionModes?: Readonly<Record<ShellExecutionMode, boolean>>;
+  runtimeMode?: {
+    readonly current: string;
+    readonly options: readonly ModeSelectorOption[];
+    readonly onChange: (mode: string) => void;
+    readonly disabled?: boolean;
+  };
   /** Session-bound attached files (managed by parent for conversation isolation) */
   attachedFiles?: MessageAttachment[];
   /** Callback to update attached files (when managed externally) */
   onAttachedFilesChange?: (files: MessageAttachment[]) => void;
   onAuthorizeResource?: () => Promise<AgentContextPayload | undefined>;
+  onMaterializeAsset?: (assetId: string) => Promise<MentionItem | undefined>;
+  attachmentsDisabled?: boolean;
+  attachmentAccept?: string;
   entryContextActions?: readonly {
     readonly kind: 'project' | 'character' | 'world';
     readonly label: string;
@@ -121,7 +138,16 @@ interface InputAreaProps {
     readonly disabled?: boolean;
     readonly disabledReason?: string;
   }[];
-  entryWorkspaceTarget?: AgentComposerWorkspaceTarget;
+  entryContextActionsDisabled?: boolean;
+  entryWorkspaceTarget?: {
+    readonly label: string;
+    readonly target?: AgentComposerWorkspaceTarget['target'];
+  };
+  workspaceCanvas?: {
+    readonly workspaceLabel: string;
+    readonly canvas?: AgentComposerCanvasPresentation;
+    readonly showCanvasIndex?: boolean;
+  };
   onClearEntryWorkspaceTarget?: () => Promise<void>;
   selectedCharacterLaunches?: readonly SelectedCharacterLaunch[];
   selectedWorldLaunch?: SelectedWorldLaunch;
@@ -219,6 +245,7 @@ export function InputArea({
   inputValue,
   isThinking,
   isRunActive = isThinking,
+  queueingEnabled = true,
   queuedMessageCount = 0,
   queuedMessages = [],
   droppedFiles,
@@ -228,6 +255,8 @@ export function InputArea({
   onCancelQueuedMessage,
   onEditQueuedMessage,
   onSend,
+  onDraftConsumed,
+  onRejectedDraftRestored,
   onCancel,
   entryPromptMenu,
   onEntryPromptMenuChange,
@@ -236,11 +265,18 @@ export function InputArea({
   disabled = false,
   submissionBlocked = false,
   submissionBlockedReason,
+  availableExecutionModes,
+  runtimeMode,
   attachedFiles: externalAttachedFiles,
   onAttachedFilesChange,
   onAuthorizeResource,
+  onMaterializeAsset,
+  attachmentsDisabled = false,
+  attachmentAccept = 'image/*,video/*,audio/*,.txt,.md,.json,.js,.ts,.tsx,.jsx,.py,.go,.rs,.java,.c,.cpp,.h,.hpp,.css,.html,.xml,.yaml,.yml,.toml',
   entryContextActions = [],
+  entryContextActionsDisabled = false,
   entryWorkspaceTarget,
+  workspaceCanvas,
   onClearEntryWorkspaceTarget,
   selectedCharacterLaunches = [],
   selectedWorldLaunch,
@@ -259,7 +295,6 @@ export function InputArea({
   focusRequestTarget = 'none',
   focusRequestId,
 }: InputAreaProps) {
-  const composerWorkspace = useComposerWorkspacePresentation();
   // Global configuration from context (model, modes, compression, skills)
   const {
     sessionMode,
@@ -277,10 +312,8 @@ export function InputArea({
     mediaModelCallCount,
     mediaModelSelection,
     availableMediaModels,
-    mediaUnderstandingModels,
-    mediaUnderstandingSelection,
+    mediaModelOptOutEnabled,
     onMediaModelSelect,
-    onMediaUnderstandingModelSelect,
     inputCatalog,
     configurationPolicy,
     inputCatalogPhase,
@@ -380,7 +413,16 @@ export function InputArea({
   const [internalSelectedFileReferences, setInternalSelectedFileReferences] = useState<
     SelectedFileReference[]
   >([]);
+  const [pendingAssetSelectionCount, setPendingAssetSelectionCount] = useState(0);
   const selectedFileReferences = externalSelectedFileReferences ?? internalSelectedFileReferences;
+  const inputValueRef = useRef(inputValue);
+  const attachedFilesRef = useRef(attachedFiles);
+  const selectedFileReferencesRef = useRef(selectedFileReferences);
+  const contextChipsRef = useRef(contextChips);
+  inputValueRef.current = inputValue;
+  attachedFilesRef.current = attachedFiles;
+  selectedFileReferencesRef.current = selectedFileReferences;
+  contextChipsRef.current = contextChips;
 
   // Create a unified setter that works with both internal state and external callback
   const updateAttachedFiles = useCallback(
@@ -565,18 +607,20 @@ export function InputArea({
     resizeTextarea(e.target, value);
   };
 
-  // Cycle execution mode: plan → ask → auto → plan
-  const EXECUTION_MODES: import('@neko/agent-contracts').ShellExecutionMode[] = [
-    'plan',
-    'ask',
-    'auto',
-  ];
+  // Cycle the mode catalog owned by the active runtime.
   const cycleExecutionMode = useCallback(() => {
     if (executionModeLocked) return;
-    const idx = EXECUTION_MODES.indexOf(executionMode);
-    const next = EXECUTION_MODES[(idx + 1) % EXECUTION_MODES.length];
-    onExecutionModeChange(next!);
-  }, [executionMode, executionModeLocked, onExecutionModeChange]);
+    if (runtimeMode !== undefined) {
+      const available = runtimeMode.options.filter((option) => !option.disabled);
+      const index = available.findIndex((option) => option.id === runtimeMode.current);
+      const next = available[(index + 1) % available.length];
+      if (next !== undefined) runtimeMode.onChange(next.id);
+      return;
+    }
+    const modes: readonly ShellExecutionMode[] = ['plan', 'ask', 'auto'];
+    const index = modes.indexOf(executionMode);
+    onExecutionModeChange(modes[(index + 1) % modes.length]!);
+  }, [executionMode, executionModeLocked, onExecutionModeChange, runtimeMode]);
 
   // Handle keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -751,13 +795,13 @@ export function InputArea({
   };
 
   const replaceActiveMention = (replacement: string) => {
-    onInputChange(replaceTrailingMention(inputValue, replacement));
+    onInputChange(replaceTrailingMention(inputValueRef.current, replacement));
   };
 
-  const addSelectedFileReference = (item: MentionItem) => {
+  const addSelectedFileReference = (item: MentionItem, removeActiveMention = true) => {
     if (!item.contentLocator) return;
     const reference = projectSelectedFileReference(item);
-    replaceActiveMention('');
+    if (removeActiveMention) replaceActiveMention('');
     updateSelectedFileReferences((prev) =>
       prev.some(
         (existing) =>
@@ -784,6 +828,20 @@ export function InputArea({
       textareaRef.current?.focus();
     } else if (item.contentLocator) {
       addSelectedFileReference(item);
+    } else if (item.assetId) {
+      if (!onMaterializeAsset) {
+        throw new Error(`Asset mention "${item.id}" requires onMaterializeAsset.`);
+      }
+      const selectedFromInput = inputValueRef.current;
+      setShowAtMenu(false);
+      setPendingAssetSelectionCount((count) => count + 1);
+      void onMaterializeAsset(item.assetId)
+        .then((materialized) => {
+          if (materialized) {
+            addSelectedFileReference(materialized, inputValueRef.current === selectedFromInput);
+          }
+        })
+        .finally(() => setPendingAssetSelectionCount((count) => Math.max(0, count - 1)));
     } else if (item.contextPayload) {
       if (!onAddContextChip) {
         throw new Error(`Context-backed mention "${item.id}" requires onAddContextChip.`);
@@ -797,8 +855,7 @@ export function InputArea({
   };
 
   const handleSend = () => {
-    if (disabled) return;
-    if (isRunActive && !inputAreaProjection.canQueue) return;
+    if (!inputAreaProjection.canSend) return;
     closeEntryPromptMenu();
     const hasSelectedFileReferences = selectedFileReferences.length > 0;
     if (
@@ -811,7 +868,16 @@ export function InputArea({
     }
     const files = attachedFiles.length > 0 ? attachedFiles : undefined;
     const contextPayloads = contextChips.length > 0 ? contextChips : undefined;
-    const consumed = onSend({
+    const submittedInputValue = inputValue;
+    const submittedContextChips = [...contextChips];
+    const submittedFiles = [...attachedFiles];
+    const submittedFileReferences = [...selectedFileReferences];
+    const submittedFileIds = new Set(attachedFiles.map((file) => file.id));
+    const submittedReferenceKeys = new Set(
+      selectedFileReferences.map((reference) => contentLocatorKey(reference.contentLocator)),
+    );
+    const submittedContextChipIds = new Set(contextChips.map((chip) => chip.id));
+    const receipt = onSend({
       messageText: inputValue,
       displayMessageText: inputValue,
       sessionMode,
@@ -820,14 +886,64 @@ export function InputArea({
       fileReferences: hasSelectedFileReferences ? selectedFileReferences : undefined,
       ...(sessionMode === 'agent' ? buildAgentModelSendConfig(selectedModel, availableModels) : {}),
     });
-    if (consumed === false) return;
-    if (inputValue.trim()) {
-      addToHistory(inputValue);
+    const clearSubmittedDraft = (): void => {
+      if (submittedInputValue.trim()) addToHistory(submittedInputValue);
+      if (inputValueRef.current === submittedInputValue) {
+        onDraftConsumed?.();
+        onInputChange('');
+      }
+      for (const chip of contextChipsRef.current) {
+        if (submittedContextChipIds.has(chip.id)) onRemoveContextChip(chip.id);
+      }
+      const remainingFiles = attachedFilesRef.current.filter(
+        (file) => !submittedFileIds.has(file.id),
+      );
+      if (onAttachedFilesChange) onAttachedFilesChange(remainingFiles);
+      else setInternalAttachedFiles(remainingFiles);
+      const remainingReferences = selectedFileReferencesRef.current.filter(
+        (reference) => !submittedReferenceKeys.has(contentLocatorKey(reference.contentLocator)),
+      );
+      if (onSelectedFileReferencesChange) onSelectedFileReferencesChange(remainingReferences);
+      else setInternalSelectedFileReferences(remainingReferences);
+    };
+    const restoreRejectedDraft = (): void => {
+      // Preserve a failed submission unless the user has already started a new draft.
+      if (
+        inputValueRef.current !== '' ||
+        contextChipsRef.current.length > 0 ||
+        attachedFilesRef.current.length > 0 ||
+        selectedFileReferencesRef.current.length > 0
+      ) {
+        return;
+      }
+      onRejectedDraftRestored?.();
+      onInputChange(submittedInputValue);
+      if (submittedContextChips.length > 0) {
+        if (!onAddContextChip) {
+          throw new Error('Rejected submission cannot restore context chips without an owner.');
+        }
+        for (const chip of submittedContextChips) onAddContextChip(chip);
+      }
+      if (onAttachedFilesChange) onAttachedFilesChange(submittedFiles);
+      else setInternalAttachedFiles(submittedFiles);
+      if (onSelectedFileReferencesChange) onSelectedFileReferencesChange(submittedFileReferences);
+      else setInternalSelectedFileReferences(submittedFileReferences);
+    };
+    if (typeof receipt === 'boolean') {
+      if (receipt) clearSubmittedDraft();
+      return;
     }
-    contextChips.forEach((c) => onRemoveContextChip(c.id));
-    onInputChange('');
-    updateAttachedFiles([]);
-    updateSelectedFileReferences([]);
+    // Submission acceptance is asynchronous for DSH turns. Consume this draft
+    // immediately so the textarea can accept the next draft while the turn runs;
+    // restore it only when the owning runtime rejects the request before a new
+    // draft has been entered.
+    clearSubmittedDraft();
+    void receipt.then(
+      (accepted) => {
+        if (!accepted) restoreRejectedDraft();
+      },
+      () => restoreRejectedDraft(),
+    );
   };
 
   const handleRemoveFile = (id: string) => {
@@ -905,7 +1021,7 @@ export function InputArea({
       }
 
       const items = e.clipboardData?.items;
-      if (!items) return;
+      if (!items || attachmentsDisabled) return;
 
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
@@ -930,7 +1046,7 @@ export function InputArea({
         }
       }
     },
-    [onAddContextChip, updateAttachedFiles],
+    [attachmentsDisabled, onAddContextChip, updateAttachedFiles],
   );
 
   const handleEntryRoleplaySelect = (item: MentionItem) => {
@@ -948,6 +1064,10 @@ export function InputArea({
   };
 
   const projectedQueuedMessageCount = Math.max(queuedMessageCount, queuedMessages.length);
+  const materializingAsset = pendingAssetSelectionCount > 0;
+  const effectiveSubmissionBlockedReason = materializingAsset
+    ? t('chat.input.assetMaterializing')
+    : submissionBlockedReason;
   const inputAreaProjection = projectInputAreaUi({
     presentation,
     inputValue,
@@ -956,6 +1076,7 @@ export function InputArea({
     ambientNodeCount: ambientNodes.length,
     mediaModelCallCount,
     isThinking: isRunActive,
+    queueingEnabled,
     queuedMessageCount: projectedQueuedMessageCount,
     disabled,
     sessionMode,
@@ -963,7 +1084,7 @@ export function InputArea({
     configurationPolicy,
     currentSessionMediaModelCount,
     compactControls: composerPresentation === 'compact',
-    submissionBlocked: submissionBlocked || submissionBlockedReason !== undefined,
+    submissionBlocked: submissionBlocked || effectiveSubmissionBlockedReason !== undefined,
   });
   const queuePanelCount = inputAreaProjection.queuedMessageCount;
   const attachmentInputDisabled = disabled;
@@ -996,6 +1117,67 @@ export function InputArea({
         )}
 
         {approvalSurface}
+
+        {workspaceCanvas ? (
+          <WorkspaceCanvasContextBar
+            workspaceLabel={workspaceCanvas.workspaceLabel}
+            canvas={workspaceCanvas.canvas}
+            disabled={disabled}
+            showCanvasIndex={workspaceCanvas.showCanvasIndex}
+          />
+        ) : null}
+
+        {presentation === 'entry' &&
+        (entryContextActions.length > 0 ||
+          entryWorkspaceTarget ||
+          selectedCharacterLaunches.length > 0 ||
+          selectedWorldLaunch) ? (
+          <div
+            className="agent-entry-binding-bar"
+            aria-label={t('chat.entryContext.bindingBar')}
+            data-entry-binding-bar="true"
+            data-entry-context-actions="true"
+          >
+            {entryContextActions.map((action) => (
+              <EntryContextActionButton
+                key={action.kind}
+                action={action}
+                composerDisabled={entryContextActionsDisabled}
+              />
+            ))}
+            {entryWorkspaceTarget ? (
+              <EntryBindingItem
+                kind={entryWorkspaceTarget.target?.kind ?? 'content-document'}
+                label={entryWorkspaceTarget.label}
+                removeLabel={t('chat.entryContext.clearTarget')}
+                onRemove={
+                  onClearEntryWorkspaceTarget ? () => void onClearEntryWorkspaceTarget() : undefined
+                }
+              />
+            ) : null}
+            {selectedCharacterLaunches.map((selection) => (
+              <EntryBindingItem
+                key={selection.characterVersionId}
+                kind="character-dialogue"
+                label={selection.label}
+                removeLabel={t('chat.entryContext.clearTarget')}
+                onRemove={
+                  onRemoveCharacterLaunch
+                    ? () => onRemoveCharacterLaunch(selection.characterVersionId)
+                    : undefined
+                }
+              />
+            ))}
+            {selectedWorldLaunch ? (
+              <EntryBindingItem
+                kind="world-experience"
+                label={selectedWorldLaunch.label}
+                removeLabel={t('chat.entryContext.clearTarget')}
+                onRemove={onRemoveWorldLaunch}
+              />
+            ) : null}
+          </div>
+        ) : null}
 
         {/* ── Input container ── */}
         <div className="agent-composer-shell relative">
@@ -1064,6 +1246,8 @@ export function InputArea({
           <div className="agent-composer-input-row">
             <textarea
               ref={textareaRef}
+              data-agent-composer-input="true"
+              aria-label={t('chat.input.message')}
               value={inputValue}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
@@ -1079,9 +1263,9 @@ export function InputArea({
             />
           </div>
 
-          {submissionBlockedReason ? (
+          {effectiveSubmissionBlockedReason ? (
             <p className="agent-composer-validation" role="status">
-              {submissionBlockedReason}
+              {effectiveSubmissionBlockedReason}
             </p>
           ) : null}
 
@@ -1099,7 +1283,7 @@ export function InputArea({
                 }
                 fileInputRef.current?.click();
               }}
-              disabled={attachmentInputDisabled}
+              disabled={attachmentInputDisabled || attachmentsDisabled}
               className="agent-composer-tool-button"
               title={t('chat.input.attach')}
             >
@@ -1109,23 +1293,11 @@ export function InputArea({
               ref={fileInputRef}
               type="file"
               multiple
-              accept="image/*,video/*,audio/*,.txt,.md,.json,.js,.ts,.tsx,.jsx,.py,.go,.rs,.java,.c,.cpp,.h,.hpp,.css,.html,.xml,.yaml,.yml,.toml"
+              accept={attachmentAccept}
               className="hidden"
               onChange={handleFileSelect}
               disabled={attachmentInputDisabled || onAuthorizeResource !== undefined}
             />
-
-            {composerWorkspace?.kind === 'workspace' && composerPresentation === 'default' ? (
-              <div
-                className="agent-composer-workspace"
-                aria-label={t('chat.input.workspace.label')}
-              >
-                <FolderIcon size={14} />
-                <span className="agent-composer-workspace-label" title={composerWorkspace.label}>
-                  {composerWorkspace.label}
-                </span>
-              </div>
-            ) : null}
 
             {inputAreaProjection.showModelConfig && (
               <ComposerMenuRuntimeProvider state={composerMenuState} update={setComposerMenuState}>
@@ -1142,10 +1314,8 @@ export function InputArea({
                       onModelSelect={onModelSelect}
                       mediaModelSelection={mediaModelSelection}
                       availableMediaModels={availableMediaModels}
-                      mediaUnderstandingModels={mediaUnderstandingModels}
-                      mediaUnderstandingSelection={mediaUnderstandingSelection}
+                      mediaModelOptOutEnabled={mediaModelOptOutEnabled}
                       onMediaModelSelect={onMediaModelSelect}
-                      onMediaUnderstandingModelSelect={onMediaUnderstandingModelSelect}
                       genParams={genParams}
                       onGenParamsChange={onGenParamsChange}
                       disabled={isBusy || modelConfigurationLocked}
@@ -1171,7 +1341,7 @@ export function InputArea({
             )}
 
             {/* Token usage pie */}
-            {presentation !== 'entry' ? (
+            {presentation === 'conversation' ? (
               <UsageIndicator
                 tokenCount={contextTokenCount}
                 maxTokens={maxContextTokens}
@@ -1199,14 +1369,25 @@ export function InputArea({
             {inputAreaProjection.showExecutionModeSelector && (
               <ComposerMenuRuntimeProvider state={composerMenuState} update={setComposerMenuState}>
                 <ModeSelector
-                  mode={executionMode}
-                  onChange={onExecutionModeChange}
-                  disabled={executionModeLocked}
+                  mode={runtimeMode?.current ?? executionMode}
+                  onChange={(mode) => {
+                    if (runtimeMode !== undefined) {
+                      runtimeMode.onChange(mode);
+                      return;
+                    }
+                    if (mode !== 'plan' && mode !== 'ask' && mode !== 'auto') {
+                      throw new Error(`Unsupported shell execution mode '${mode}'.`);
+                    }
+                    onExecutionModeChange(mode);
+                  }}
+                  options={runtimeMode?.options}
+                  disabled={executionModeLocked || runtimeMode?.disabled === true}
                   disabledReason={
                     executionModePolicy?.status === 'locked'
                       ? executionModePolicy.reason
                       : undefined
                   }
+                  availableModes={availableExecutionModes}
                 />
               </ComposerMenuRuntimeProvider>
             )}
@@ -1215,6 +1396,7 @@ export function InputArea({
             {(!isRunActive || inputAreaProjection.canQueue) && (
               <button
                 type="button"
+                data-agent-composer-submit={inputAreaProjection.canQueue ? 'queue' : 'send'}
                 onClick={handleSend}
                 disabled={!inputAreaProjection.canSend}
                 className={`agent-composer-action-button ${
@@ -1224,8 +1406,8 @@ export function InputArea({
                       ? 'agent-composer-send'
                       : 'bg-[var(--agent-control-muted-bg)] text-[var(--neko-descriptionForeground)]'
                 }`}
-                title={submissionBlockedReason ?? t(inputAreaProjection.sendTitleKey)}
-                aria-label={submissionBlockedReason ?? t(inputAreaProjection.sendTitleKey)}
+                title={effectiveSubmissionBlockedReason ?? t(inputAreaProjection.sendTitleKey)}
+                aria-label={effectiveSubmissionBlockedReason ?? t(inputAreaProjection.sendTitleKey)}
               >
                 <SendIcon className="w-3.5 h-3.5" />
               </button>
@@ -1246,57 +1428,6 @@ export function InputArea({
             )}
           </div>
         </div>
-
-        {presentation === 'entry' &&
-        (entryContextActions.length > 0 ||
-          entryWorkspaceTarget ||
-          selectedCharacterLaunches.length > 0 ||
-          selectedWorldLaunch) ? (
-          <div
-            className="agent-entry-binding-bar"
-            aria-label={t('chat.entryContext.bindingBar')}
-            data-entry-binding-bar="true"
-          >
-            {entryContextActions.map((action) => (
-              <EntryContextActionButton
-                key={action.kind}
-                action={action}
-                composerDisabled={disabled}
-              />
-            ))}
-            {entryWorkspaceTarget ? (
-              <EntryBindingItem
-                kind={entryWorkspaceTarget.target?.kind ?? 'content-document'}
-                label={entryWorkspaceTarget.label}
-                removeLabel={t('chat.entryContext.clearTarget')}
-                onRemove={
-                  onClearEntryWorkspaceTarget ? () => void onClearEntryWorkspaceTarget() : undefined
-                }
-              />
-            ) : null}
-            {selectedCharacterLaunches.map((selection) => (
-              <EntryBindingItem
-                key={selection.characterVersionId}
-                kind="character-dialogue"
-                label={selection.label}
-                removeLabel={t('chat.entryContext.clearTarget')}
-                onRemove={
-                  onRemoveCharacterLaunch
-                    ? () => onRemoveCharacterLaunch(selection.characterVersionId)
-                    : undefined
-                }
-              />
-            ))}
-            {selectedWorldLaunch ? (
-              <EntryBindingItem
-                kind="world-experience"
-                label={selectedWorldLaunch.label}
-                removeLabel={t('chat.entryContext.clearTarget')}
-                onRemove={onRemoveWorldLaunch}
-              />
-            ) : null}
-          </div>
-        ) : null}
       </div>
     </div>
   );
@@ -1568,48 +1699,69 @@ function QueuedMessageRow({
   const isOptimistic = isOptimisticQueuedMessageItem(item);
 
   return (
-    <div className="agent-composer-queue-row agent-composer-popover-row">
+    <div
+      className="agent-composer-queue-row agent-composer-popover-row"
+      data-agent-queue-item-id={item.id}
+    >
       <span className="agent-composer-queue-index" aria-hidden="true">
         {position}
       </span>
-      <span className="agent-composer-queue-text" title={item.content}>
-        {item.content}
+      <span className="agent-composer-queue-content">
+        <span className="agent-composer-queue-text" title={item.content}>
+          {item.content}
+        </span>
+        <span className="agent-composer-queue-meta" data-queued-message-status>
+          {t('chat.input.queueItemWaiting')} · {formatMessageTime(item.createdAt)}
+        </span>
       </span>
-      <div className="agent-composer-queue-actions" aria-label={label}>
-        <QueueActionButton
-          title={t('chat.input.queueSendNow')}
-          disabled={isOptimistic || !onSendNow}
-          onClick={() => onSendNow?.(item.id)}
-        >
-          <SendIcon size={13} strokeWidth={2.1} />
-        </QueueActionButton>
-        <QueueActionButton
-          title={t('chat.input.queueEdit')}
-          disabled={isOptimistic || !onEdit}
-          onClick={() => onEdit?.(item.id)}
-        >
-          <EditIcon size={13} strokeWidth={2.1} />
-        </QueueActionButton>
-        <QueueActionButton
-          title={t('chat.input.queueCancel')}
-          disabled={isOptimistic || !onCancel}
-          danger
-          onClick={() => onCancel?.(item.id)}
-        >
-          <CloseIcon size={13} strokeWidth={2.1} />
-        </QueueActionButton>
-      </div>
+      {onSendNow || onEdit || onCancel ? (
+        <div className="agent-composer-queue-actions" aria-label={label}>
+          {onSendNow ? (
+            <QueueActionButton
+              action="send-now"
+              title={t('chat.input.queueSendNow')}
+              disabled={isOptimistic}
+              onClick={() => onSendNow(item.id)}
+            >
+              <SendIcon size={13} strokeWidth={2.1} />
+            </QueueActionButton>
+          ) : null}
+          {onEdit ? (
+            <QueueActionButton
+              action="edit"
+              title={t('chat.input.queueEdit')}
+              disabled={isOptimistic}
+              onClick={() => onEdit(item.id)}
+            >
+              <EditIcon size={13} strokeWidth={2.1} />
+            </QueueActionButton>
+          ) : null}
+          {onCancel ? (
+            <QueueActionButton
+              action="cancel"
+              title={t('chat.input.queueCancel')}
+              disabled={isOptimistic}
+              danger
+              onClick={() => onCancel(item.id)}
+            >
+              <CloseIcon size={13} strokeWidth={2.1} />
+            </QueueActionButton>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
 
 function QueueActionButton({
+  action,
   title,
   disabled = false,
   danger = false,
   onClick,
   children,
 }: {
+  action: 'send-now' | 'edit' | 'cancel';
   title: string;
   disabled?: boolean;
   danger?: boolean;
@@ -1619,6 +1771,7 @@ function QueueActionButton({
   return (
     <button
       type="button"
+      data-agent-queue-action={action}
       className={`agent-composer-queue-action${danger ? ' is-danger' : ''}`}
       title={title}
       aria-label={title}

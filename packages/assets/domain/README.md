@@ -1,75 +1,17 @@
 # @neko/assets-domain
 
-Neko Assets owns the Desktop Resources surface for local files, linked Media Libraries, and installed Assets. It does not own project semantic content or a second semantic identity model.
+`@neko/assets-domain` 拥有本地文件、Media Library 与已安装 Asset 的 host-neutral 领域能力，不拥有
+项目语义内容、Character、World 或第二套内容身份。
 
-## Responsibilities
+## 公共边界
 
-- Derive Media Library roots from direct filesystem links under `neko/assets/<libraryName>`.
-- Project required-but-unlinked libraries from authoritative project `ContentLocator` references.
-- Browse, search, preview, and diagnose files by canonical workspace-relative `ContentLocator` values.
-- Add, relink, and remove library links. Link removal never mutates target contents.
-- Copy to or delete from a selected writable library through authorized Content I/O operations.
-- Build rebuildable technical metadata, recent-use, and search projections.
-- Generate thumbnail bytes for the shared representation/cache boundary without exposing cache paths.
+- 使用 canonical `ContentLocator` 浏览、搜索和诊断授权内容。
+- 管理 Media Library 的显式连接、重连与移除；移除连接不修改目标内容。
+- 管理 manifest-backed Asset 的本地生命周期与可重建技术投影。
+- 通过注入的 Content/Host ports 请求 IO、授权与缩略图，不暴露物理路径或 cache path。
 
-## Boundaries
+Desktop Main 只负责 Electron 授权和 public port wiring；Renderer 只消费 opaque identity、相对 locator
+与 typed projection。项目事实、外部目录授权和 Workspace 访问投影保持独立 owner。
 
-- The OS link is the only mapping from a Media Library name to its target. No settings variable, source registry, or `library.json` duplicates that mapping.
-- Files use `neko/assets/<libraryName>/...` locators directly. Discovery does not create entities or bindings.
-- Project Entity owns project-local semantic identity and accepted representation bindings outside this package.
-- Generated outputs, document entries, and package resources retain their owner-specific identities and lifecycle.
-- Cache paths, absolute link targets, Webview URIs, and runtime tokens are implementation details that never become durable content identity.
-
-## Runtime
-
-Desktop Main composes the package's host-neutral services through public entries.
-`WorkspaceLinkedMediaLibraryService` manages links, `MediaLibrarySearchService` owns search/recent
-projections, and `SemanticSourceDiscoveryService` emits reviewable semantic evidence without writing
-Entity facts. The package-owned renderer root projects those services through typed Desktop IPC.
-
-The project Resource Browser is independent from the global Library Browser. It exposes exactly three
-owner-preserving `files`, `media`, and `assets` sources and keeps per-source selection, navigation,
-query, and list/grid state. Asset results retain exact Asset identity. Project Characters, Worlds, other
-confirmed elements, and candidates are presented by the separate Project-owned Project Content read
-model; Entity is not a Resource Browser source or mutation route.
-
-The `files` facet is a live projection of the authorized Workspace system directory. Assets Node owns
-Workspace-scoped observation and treats filesystem notifications only as invalidation hints before an
-authoritative reread. Files added through Finder, Explorer, a terminal, or another tool appear without
-an application import operation or a normal Refresh command. Observation failure retains the last valid
-projection and exposes a recovery-only Rescan action.
-
-Creation follows one explicit Resource Browser target: selected directory, selected-file parent, or
-Workspace root; directory and blank-area context menus target the invoked directory and root
-respectively. `@neko/content/project-file-io` owns ordinary zero-byte file and empty-directory creation,
-while Canvas and Cut exclusively produce valid `.nkc` and `.otio` bytes. Generic New File rejects those
-reserved extensions. Renderer receives only opaque projection identities and workspace-relative
-`ContentLocator` values. Import, normal Refresh, rename, and a generic filesystem bridge are not routes
-of the project Resource Browser.
-
-The browser projects safe required, unavailable, incomplete, conflict, and unreferenced statuses without
-receiving a physical target. Recovery is an explicit revisioned plan followed by confirmation and apply;
-generic repair routes fail closed. Add and relink create OS links through the machine-global alias
-topology and never copy a whole library.
-
-The Asset source covers only the local manifest-backed package lifecycle. Cloud distribution is outside
-this package's current product path, and the flat global Asset file surface is not a fallback package
-provider.
-
-Portable snapshot execution is owned by the Desktop project lifecycle surface, not this browser.
-That operation creates a new independent project, collects only authoritative referenced bytes, and
-leaves the source workspace and external Media Library unchanged.
-
-## Global Library Browser
-
-The browser-safe `global-library` entry owns the shared list/grid presentation for global Media
-Library connections and OpenNeko-owned Asset Library files. It accepts only opaque owner/item
-identities, catalog revisions, relative Media Library locators, and revisioned `icon`/`hover`
-thumbnail descriptors. Basenames beginning with `.` never enter either projection.
-
-Desktop Main remains the authority for native selection and Electron wiring. Assets Node owns
-absolute-path resolution, thumbnail input authorization, operation-owned import staging, and the
-persistent Asset Library membership lifecycle. Removing a Media Library connection unlinks only the
-managed connection; the ordinary Asset remove action marks only its membership record as removed and
-preserves the source file. Uninstall and unreferenced-byte garbage collection are separate explicit
-operations. Hover previews are static images and do not open or autoplay a media session.
+系统级资源边界见 [`docs/architecture/asset-library.md`](../../../docs/architecture/asset-library.md) 和
+[`docs/architecture/content-access-and-paths.md`](../../../docs/architecture/content-access-and-paths.md)。

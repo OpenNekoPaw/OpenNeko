@@ -1,0 +1,29 @@
+{
+  "name": "@neko/project-domain",
+  "description": "Host-neutral mixed-domain Project facts and rebuildable projection services",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./contracts": "./src/contracts/index.ts",
+    "./application": "./src/application/index.ts",
+    "./testing": "./src/testing/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@neko/chara-domain": "workspace:*",
+    "@neko/content-domain": "workspace:*",
+    "@neko/entity-domain": "workspace:*",
+    "@neko/search-domain": "workspace:*",
+    "@neko/world-domain": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "6.0.3",
+    "vitest": "4.1.2"
+  },
+  "license": "AGPL-3.0-or-later"
+}

@@ -19,6 +19,7 @@ import {
   type CutHostRuntimeSnapshot,
 } from '@neko/cut-domain';
 import { CutApplicationRuntime, type CutApplicationRuntimeOptions } from '@neko/cut-node';
+import type { CutExportApplicationService, ExportJobStore } from '@neko/cut-node';
 import type { NekoHostPorts } from '@neko/host/ports';
 import type {
   ResourceBrowserContentItem,
@@ -30,8 +31,8 @@ import {
   type ContentLocator,
   type AuthorizedWorkspaceWriter,
   type WorkspaceFileContentLocator,
-} from '@neko/content';
-import { NodeAuthorizedWorkspaceWriter } from '@neko/content/node';
+} from '@neko/content-domain';
+import { NodeAuthorizedWorkspaceWriter } from '@neko/content-domain/node';
 import { resolveWorkspaceContentLocator } from '@neko/assets-node';
 
 import type { DesktopShellService } from '@neko/host/desktop-shell-service';
@@ -73,6 +74,7 @@ export interface DesktopCutRuntimeOptions {
   readonly createAuthoringMediaAdapter?: CutApplicationRuntimeOptions['createAuthoringMediaAdapter'];
   readonly createPreviewMediaAdapter?: CutApplicationRuntimeOptions['createPreviewMediaAdapter'];
   readonly createExportMediaAdapter?: CutApplicationRuntimeOptions['createExportMediaAdapter'];
+  readonly createExportJobStore?: (workspaceId: string) => ExportJobStore;
   readonly selectExportDestination?: CutApplicationRuntimeOptions['selectExportDestination'];
   readonly selectMediaFiles?: CutApplicationRuntimeOptions['selectMediaFiles'];
   readonly selectDraftDestination?: (input: {
@@ -99,8 +101,7 @@ export class DesktopCutRuntime {
       authorizeSession: async (windowId, identity) => {
         const grant = await options.shell.resolveCutViewGrant(windowId, identity);
         const documentPath = await resolveWorkspaceContentLocator(grant.workspace, {
-          kind: 'workspace-file',
-          path: identity.documentId,
+          file: { authority: 'workspace', path: identity.documentId },
         });
         return {
           documentPath,
@@ -135,8 +136,8 @@ export class DesktopCutRuntime {
       },
       resolveResourcePath: async (identity, locator) => {
         const workspace = await options.shell.resolveAgentWorkspace(identity.workspaceId);
-        if (locator.kind === 'workspace-file' || locator.kind === 'generated-output') {
-          return resolveWorkspaceContentLocator(workspace, locator);
+        if (locator.file.authority === 'workspace' && locator.selector === undefined) {
+          return resolveWorkspaceContentLocator(workspace, { file: locator.file });
         }
         throw new Error('Desktop Cut resource has no directly resolvable Host file path.');
       },
@@ -164,6 +165,9 @@ export class DesktopCutRuntime {
       ...(options.createExportMediaAdapter === undefined
         ? {}
         : { createExportMediaAdapter: options.createExportMediaAdapter }),
+      ...(options.createExportJobStore === undefined
+        ? {}
+        : { createExportJobStore: options.createExportJobStore }),
       ...(options.selectExportDestination === undefined
         ? {}
         : { selectExportDestination: options.selectExportDestination }),
@@ -190,8 +194,9 @@ export class DesktopCutRuntime {
     if (item.source !== 'files' && item.source !== 'media') return false;
     if (item.role === 'library-root') return false;
     return (
-      item.locator.kind === 'workspace-file' &&
-      item.locator.path.toLocaleLowerCase().endsWith('.otio')
+      item.locator.file.authority === 'workspace' &&
+      item.locator.selector === undefined &&
+      item.locator.file.path.toLocaleLowerCase().endsWith('.otio')
     );
   }
 
@@ -257,25 +262,27 @@ export class DesktopCutRuntime {
       workbench.layout.cutPanel?.presentation === 'docked'
         ? getActiveCutView(workbench.layout)
         : undefined;
-    if (activeCut && !activeCut.projectId) {
-      throw new Error('Desktop Cut active View has no exact Project owner.');
-    }
+    const activeCutTarget = activeCut
+      ? (() => {
+          const projectId = activeCut.projectId;
+          if (!projectId) {
+            throw new Error('Desktop Cut active View has no exact Project owner.');
+          }
+          return {
+            kind: 'cut' as const,
+            projectId,
+            workspaceId: activeCut.workspaceId,
+            viewId: activeCut.viewId,
+            viewInstanceId: activeCut.viewInstanceId,
+            ...(activeCut.documentId ? { documentId: activeCut.documentId } : {}),
+            ownerId: activeCut.ownerId,
+          };
+        })()
+      : undefined;
     return resolveCutCanvasHandoffTarget({
       source: identity,
       workbenchInstanceId: workbench.workbenchInstanceId,
-      ...(activeCut
-        ? {
-            activeCut: {
-              kind: 'cut' as const,
-              projectId: activeCut.projectId!,
-              workspaceId: activeCut.workspaceId,
-              viewId: activeCut.viewId,
-              viewInstanceId: activeCut.viewInstanceId,
-              ...(activeCut.documentId ? { documentId: activeCut.documentId } : {}),
-              ownerId: activeCut.ownerId,
-            },
-          }
-        : {}),
+      ...(activeCutTarget ? { activeCut: activeCutTarget } : {}),
     });
   }
 
@@ -574,7 +581,7 @@ export class DesktopCutRuntime {
         view.kind === 'cut' &&
         view.projectId === project.projectId &&
         view.workspaceId === project.workspaceId &&
-        view.documentId === locator.path,
+        view.documentId === locator.file.path,
     );
     const viewId = existing?.viewId ?? `cut:${tab.viewId}:${randomUUID()}`;
     const ownerId = existing?.ownerId ?? createCutHostSessionId(viewId, tab.viewInstanceId);
@@ -586,7 +593,7 @@ export class DesktopCutRuntime {
       kind: 'cut' as const,
       ownerId,
       displayLabel: input.item.label,
-      documentId: locator.path,
+      documentId: locator.file.path,
     };
     const workbench = openOrFocusCutView(workspaceWorkbench.layout, view);
     await this.options.shell.updateWorkbench(
@@ -615,6 +622,23 @@ export class DesktopCutRuntime {
   getSnapshot(windowId: string, identity: CutHostRuntimeIdentity): Promise<CutHostRuntimeSnapshot> {
     this.requireActive();
     return this.application.getSnapshot(windowId, identity);
+  }
+
+  recoverExportJobs(input: {
+    readonly workspaceId: string;
+    readonly workspacePath: string;
+  }): Promise<void> {
+    this.requireActive();
+    return this.application.recoverExportJobs(input);
+  }
+
+  resolveExportService(input: {
+    readonly workspaceId: string;
+    readonly workspacePath: string;
+    readonly authoring: Pick<import('@neko/cut-domain').CutProjectAuthoringService, 'query'>;
+  }): CutExportApplicationService {
+    this.requireActive();
+    return this.application.resolveExportService(input);
   }
 
   execute(
@@ -811,17 +835,21 @@ function createCutDocumentStorage(
     },
     async write(documentUri, bytes, options) {
       assertOtioDocument(documentUri);
-      const result = await writer.write({ kind: 'workspace-file', path: documentId }, bytes, {
-        conflict: options.expectedFingerprint === undefined ? 'fail-if-exists' : 'replace',
-        ...(options.expectedFingerprint === undefined
-          ? {}
-          : {
-              expectedFingerprint: {
-                strategy: 'mtime-size' as const,
-                value: options.expectedFingerprint,
-              },
-            }),
-      });
+      const result = await writer.write(
+        { file: { authority: 'workspace', path: documentId } },
+        bytes,
+        {
+          conflict: options.expectedFingerprint === undefined ? 'fail-if-exists' : 'replace',
+          ...(options.expectedFingerprint === undefined
+            ? {}
+            : {
+                expectedFingerprint: {
+                  strategy: 'mtime-size' as const,
+                  value: options.expectedFingerprint,
+                },
+              }),
+        },
+      );
       if (result.status !== 'written') {
         throw new Error(`Desktop Cut authorized project write failed: ${result.diagnostic.code}`);
       }

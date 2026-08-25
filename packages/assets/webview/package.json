@@ -22,7 +22,7 @@
     "@neko/ui": "workspace:*",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "@neko/content": "workspace:*"
+    "@neko/content-domain": "workspace:*"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",
@@ -31,7 +31,7 @@
     "@types/react-dom": "18.3.7",
     "@vitejs/plugin-react": "^4.3.4",
     "jsdom": "^27.0.1",
-    "typescript": "^5.3.2",
+    "typescript": "6.0.3",
     "vite": "^6.4.2",
     "vitest": "^4.1.2"
   },

@@ -1,13 +1,12 @@
-export * from './canvas-cut-draft';
 export * from './canvas-generation-application-port';
 export * from './canvas-generation-authoring';
 export * from './canvas-generation-inputs';
+export * from './canvas-generation-model-catalog';
 export * from './canvas-node-sizing';
 export * from './canvas-drop';
 export * from './canvas-markdown-capabilities';
 export * from './canvas-text-file-preview';
 export * from './canvas-projection';
-export * from './canvas-semantic-storyboard';
 export * from './types/index';
 export * from './utils/index';
 export * from './nkc/index';
@@ -31,6 +30,12 @@ export type {
   CanvasOperationMeta,
   CanvasOperationSource,
 } from './edit-operations';
+export {
+  createCanvasWorkspaceIndexService,
+  type CanvasWorkspaceIndexReadPort,
+  type CanvasWorkspaceIndexService,
+  type CanvasWorkspaceIndexServiceOptions,
+} from './canvas-workspace-index-service';
 export {
   CANVAS_HOST_RUNTIME_ROUTES,
   CanvasHostRuntimeContractError,
@@ -119,9 +124,12 @@ export {
   type CanvasProjectSnapshot,
 } from './canvas-project-authoring-service';
 export {
+  isCanvasGenerationProjectionSnapshot,
   projectGenerationSnapshotToCanvas,
+  projectGenerationSnapshotToWorkspaceBoard,
   type CanvasGenerationProjectionInput,
   type CanvasGenerationProjectionSnapshot,
+  type CanvasWorkspaceGenerationProjectionInput,
 } from './canvas-generation-projection';
 export {
   projectCanvasMaterialActionCatalog,
@@ -132,3 +140,4 @@ export type {
   CanvasHostRuntimeSessionEffects,
   CanvasHostRuntimeSessionOptions,
 } from './canvas-host-runtime-session';
+export * from './dsh-tool';

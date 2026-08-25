@@ -13,94 +13,11 @@ import type {
   PreviewVariant,
   PreviewVariantRequest,
 } from '@neko/preview-domain';
-import type {
-  HtmlVideoDescriptor,
-  HtmlVideoNativeCapabilities,
-  PcmStreamDescriptor,
-} from '@neko/media';
-
-// =============================================================================
-// Media Info (from Desktop host probe)
-// =============================================================================
-
-export interface MediaInfo {
-  duration: number;
-  width: number;
-  height: number;
-  fps: number;
-  codec: string;
-  format: string;
-  bitrate?: number;
-  hasAudio: boolean;
-  audioCodec?: string;
-  audioSampleRate?: number;
-  audioChannels?: number;
-  metadata?: Record<string, string>;
-  coverArt?: { mimeType: string; dataBase64: string };
-}
+import type { HtmlVideoNativeCapabilities } from '@neko/media';
 
 // =============================================================================
 // Desktop host → Webview messages
 // =============================================================================
-
-export interface PreviewInitMessage {
-  type: 'preview:init';
-  payload: {
-    mediaInfo: MediaInfo;
-    displayName: string;
-  };
-}
-
-export interface PreviewPlaybackReadyMessage {
-  type: 'preview:playbackReady';
-  payload: {
-    video?: HtmlVideoDescriptor;
-    audio?: PcmStreamDescriptor;
-    startTime: number;
-    playbackRate: number;
-  };
-}
-
-export interface PreviewFrameDataMessage {
-  type: 'preview:frameData';
-  payload: {
-    imageDataUrl: string;
-  };
-}
-
-export type PreviewOperation = 'captureFrame' | 'playback' | 'protocol';
-
-export type PreviewOperationDiagnosticCode =
-  | 'hardware-decoder-unavailable'
-  | 'hardware-preview-unavailable'
-  | 'hdr-poster-unavailable'
-  | 'frame-capture-failed'
-  | 'playback-failed'
-  | 'protocol-failed';
-
-export interface PreviewOperationFailedMessage {
-  type: 'preview:operationFailed';
-  payload: {
-    operation: PreviewOperation;
-    code: PreviewOperationDiagnosticCode;
-  };
-}
-
-export interface PreviewWaveformMessage {
-  type: 'preview:waveform';
-  payload: {
-    peaks: number[];
-    duration: number;
-    sampleRate: number;
-  };
-}
-
-export interface PreviewLyricsMessage {
-  type: 'preview:lyrics';
-  payload: {
-    lrcContent: string;
-  };
-}
 
 export interface PanoramaInitMessage {
   type: 'panorama:init';
@@ -124,16 +41,7 @@ export interface PanoramaErrorMessage {
 }
 
 export type HostMessage =
-  | PreviewInitMessage
-  | PreviewPlaybackReadyMessage
-  | PreviewFrameDataMessage
-  | PreviewOperationFailedMessage
-  | PreviewWaveformMessage
-  | PreviewLyricsMessage
-  | PanoramaInitMessage
-  | PanoramaVariantReadyMessage
-  | PanoramaErrorMessage
-  | DocumentHostMessage;
+  PanoramaInitMessage | PanoramaVariantReadyMessage | PanoramaErrorMessage | DocumentHostMessage;
 
 // =============================================================================
 // Webview → Desktop host messages

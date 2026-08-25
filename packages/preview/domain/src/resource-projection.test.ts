@@ -38,16 +38,15 @@ describe('Preview resource projection service', () => {
 
     const video = await service.project({
       descriptorId: 'preview-video',
-      locator: { kind: 'workspace-file', path: 'media/video.webm' },
+      source: { file: { authority: 'workspace', path: 'media/video.webm' } },
       displayName: 'video.webm',
       owner: { surface: 'canvas' },
     });
     const image = await service.project({
       descriptorId: 'preview-image',
-      locator: {
-        kind: 'document-entry',
-        source: { kind: 'workspace-file', path: 'book.epub' },
-        entryPath: 'images/page.jpg',
+      source: {
+        file: { authority: 'workspace', path: 'book.epub' },
+        selector: { kind: 'entry', path: 'images/page.jpg' },
       },
       displayName: 'page.jpg',
       owner: { surface: 'agent' },
@@ -61,7 +60,7 @@ describe('Preview resource projection service', () => {
       status: 'ready',
       descriptor: {
         contentKind: 'image',
-        contentLocator: { kind: 'document-entry', entryPath: 'images/page.jpg' },
+        contentLocator: { selector: { kind: 'entry', path: 'images/page.jpg' } },
       },
     });
     expect(registerSource.mock.calls.map(([input]) => input.source.kind)).toEqual([
@@ -84,7 +83,7 @@ describe('Preview resource projection service', () => {
     await expect(
       service.project({
         descriptorId: 'preview-denied',
-        locator: { kind: 'workspace-file', path: 'private/image.png' },
+        source: { file: { authority: 'workspace', path: 'private/image.png' } },
         displayName: 'image.png',
         owner: { surface: 'agent' },
       }),
@@ -93,6 +92,49 @@ describe('Preview resource projection service', () => {
       diagnostic: { code: 'content-unauthorized', message: 'Content is not authorized.' },
     });
     expect(registerSource).not.toHaveBeenCalled();
+    service.dispose();
+  });
+
+  it('passes an opaque representation handle to the resolver without persisting it', async () => {
+    const resolveSource = vi.fn(async () => ({
+      status: 'ready' as const,
+      source: {
+        kind: 'bytes' as const,
+        bytes: new Uint8Array([1]),
+        mediaType: 'image/png',
+        sourceFingerprint: 'sha256:preview',
+        byteLength: 1,
+      },
+    }));
+    const service = createPreviewResourceProjectionService({
+      resolveSource,
+      registerSource: vi.fn(async () => ({
+        status: 'ready' as const,
+        lease: { url: `openneko://resource/${'h'.repeat(32)}`, release: vi.fn() },
+      })),
+    });
+    const source = { file: { authority: 'workspace' as const, path: 'document.pdf' } };
+    const representationHandle = {
+      kind: 'content-representation-handle' as const,
+      id: 'page-1',
+    };
+
+    const result = await service.project({
+      descriptorId: 'preview-page',
+      source,
+      representationHandle,
+      displayName: 'page.png',
+      owner: { surface: 'agent' },
+    });
+
+    expect(resolveSource).toHaveBeenCalledWith(
+      expect.objectContaining({ source, representationHandle }),
+    );
+    expect(result).toMatchObject({
+      status: 'ready',
+      descriptor: { contentLocator: source },
+    });
+    expect(JSON.stringify(result)).not.toContain('content-representation-handle');
     service.dispose();
   });
 
@@ -118,7 +160,7 @@ describe('Preview resource projection service', () => {
     await expect(
       service.project({
         descriptorId: 'invalid\\descriptor',
-        locator: { kind: 'workspace-file', path: 'image.png' },
+        source: { file: { authority: 'workspace', path: 'image.png' } },
         displayName: 'image.png',
         owner: { surface: 'agent' },
       }),
@@ -148,7 +190,7 @@ describe('Preview resource projection service', () => {
     });
     const input = {
       descriptorId: 'preview-audio',
-      locator: { kind: 'workspace-file' as const, path: 'audio.mp3' },
+      source: { file: { authority: 'workspace' as const, path: 'audio.mp3' } },
       displayName: 'audio.mp3',
       owner: { surface: 'asset-center' },
     };
@@ -191,7 +233,7 @@ describe('Preview resource projection service', () => {
     });
     const input = {
       descriptorId: 'preview-video',
-      locator: { kind: 'workspace-file' as const, path: 'video.webm' },
+      source: { file: { authority: 'workspace' as const, path: 'video.webm' } },
       displayName: 'video.webm',
       owner: { surface: 'canvas' },
     };
@@ -229,7 +271,7 @@ describe('Preview resource projection service', () => {
     });
     const input = {
       descriptorId: 'preview-concurrent',
-      locator: { kind: 'workspace-file' as const, path: 'video.webm' },
+      source: { file: { authority: 'workspace' as const, path: 'video.webm' } },
       displayName: 'video.webm',
       owner: { surface: 'canvas' },
     };
@@ -279,7 +321,7 @@ describe('Preview resource projection service', () => {
     const descriptorId = 'preview-release-race';
     const pending = service.project({
       descriptorId,
-      locator: { kind: 'workspace-file', path: 'audio.mp3' },
+      source: { file: { authority: 'workspace', path: 'audio.mp3' } },
       displayName: 'audio.mp3',
       owner: { surface: 'agent' },
     });

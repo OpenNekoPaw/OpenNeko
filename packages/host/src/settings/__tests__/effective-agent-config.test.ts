@@ -7,7 +7,6 @@ import {
   createEffectiveAgentConfigurationProjection,
   resolveEffectiveAgentWorkspaceConfigSnapshot,
 } from '../effective-agent-config';
-import type { MCPServerPreset } from '../types/config';
 import type { Model, Provider } from '../types/provider';
 
 const USER_CONFIG_PATH = '/home/.neko/config.toml';
@@ -63,18 +62,6 @@ function createUserConfig(): UnifiedConfig {
         enabled: true,
       },
     ],
-    mcpServers: [
-      {
-        id: 'user-files',
-        name: 'User Files',
-        description: 'User-level filesystem MCP.',
-        category: 'filesystem',
-        transport: 'stdio',
-        command: 'node',
-        args: ['user-files.js'],
-        enabled: true,
-      },
-    ],
   };
 }
 
@@ -86,16 +73,11 @@ function models(config: UnifiedConfig): readonly Model[] {
   return (config.models ?? []) as readonly Model[];
 }
 
-function mcpServers(config: UnifiedConfig): readonly MCPServerPreset[] {
-  return (config.mcpServers ?? []) as readonly MCPServerPreset[];
-}
-
 function resolve(config: UnifiedConfig, runtimeOverrides = {}) {
   return resolveEffectiveAgentWorkspaceConfigSnapshot({
     userConfigReadResult: okConfig(config),
     providers: providers(config),
     models: models(config),
-    mcpServers: mcpServers(config),
     runtimeOverrides,
   });
 }
@@ -121,7 +103,6 @@ describe('resolveEffectiveAgentWorkspaceConfigSnapshot', () => {
         executionMode: 'user',
       },
     });
-    expect(snapshot.mcpServers.map((server) => server.id)).toEqual(['user-files']);
     expect(snapshot.diagnostics).toEqual([]);
   });
 
@@ -241,7 +222,6 @@ describe('resolveEffectiveAgentWorkspaceConfigSnapshot', () => {
       },
       providers: providers(config),
       models: models(config),
-      mcpServers: mcpServers(config),
     });
 
     expect(snapshot.diagnostics).toEqual([
@@ -267,7 +247,6 @@ describe('resolveEffectiveAgentWorkspaceConfigSnapshot', () => {
       },
       providers: providers(config),
       models: models(config),
-      mcpServers: mcpServers(config),
     });
 
     expect(snapshot.blockingDiagnostic).toEqual(

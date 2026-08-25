@@ -7,36 +7,32 @@
   "evidenceContract": {
     "userBehavior": "Stream text, execute one Tool, continue streaming a table, and preserve the final answer markers.",
     "canonicalPath": [
-      "Desktop Agent input queue",
-      "Pi Agent event stream",
-      "shared Pi Timeline projector",
+      "public DSH Session submit",
+      "DSH ACP event stream",
+      "DSH Session event projection",
       "conversation projection store",
-      "terminal Timeline presenter",
+      "existing Timeline presenter",
       "Markdown session finalize"
     ],
     "observables": [
       {
         "ref": "stream-facts",
         "kind": "runtime-fact",
-        "description": "Exact Timeline and Item identity, Tool result, one exact terminal patch, Markdown path, structured table, and final answer facts.",
+        "description": "Exact DSH Session, turn, and Tool-call identity, Tool result, one exact turn-end reason, Markdown path, structured table, and final answer facts.",
         "required": true
       }
     ],
     "expectedResult": "Opening text, Tool result, closing text, table, and final marker preserve canonical order and delivery.",
     "expectedFailure": "Missing Tool execution, reordered Timeline rows, invalid table, incomplete Markdown path, or changed marker fails."
   },
-  "fixtureRefs": [
-    "empty-workspace"
-  ],
+  "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "markdown",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "严格按以下顺序完成：先单独输出 STREAM_OPENING_MARKER；调用 GetContext 一次且不调用其他工具；工具结果后单独输出 STREAM_FINAL_MARKER；再输出至少 12 行的 GFM 表格，列名为 序号、镜头、动作、时长；最后单独输出 UNCHANGED_FINAL_ANSWER_MARKER。"
+      "prompt": "严格按以下顺序完成：先单独输出 STREAM_OPENING_MARKER；调用 ListDirectory 一次查看当前工作区且不调用其他工具；工具结果后单独输出 STREAM_FINAL_MARKER；再输出至少 12 行的 GFM 表格，列名为 序号、镜头、动作、时长；最后单独输出 UNCHANGED_FINAL_ANSWER_MARKER。"
     },
     {
       "id": "idle",
@@ -56,27 +52,16 @@
       "evidenceRef": "stream-facts"
     },
     {
-      "id": "pi-runtime",
-      "kind": "pi-runtime",
-      "implementation": "pi-agent-core",
-      "transcriptAuthority": "pi-session",
-      "productMetadataAuthority": "sqlite",
-      "purpose": "agent.main",
-      "workspaceLocatorKind": "virtual",
-      "turnDurability": "durable",
-      "evidenceRef": "stream-facts"
-    },
-    {
       "id": "projection",
       "kind": "timeline-projection",
-      "terminalStatus": "completed",
-      "toolName": "GetContext",
+      "turnEndReason": "completed",
+      "toolName": "ListDirectory",
       "evidenceRef": "stream-facts"
     },
     {
       "id": "tool",
       "kind": "tool-call",
-      "name": "GetContext",
+      "name": "ListDirectory",
       "status": "success",
       "evidenceRef": "stream-facts"
     },
@@ -92,7 +77,7 @@
         {
           "kind": "timeline",
           "eventKind": "tool",
-          "toolName": "GetContext",
+          "toolName": "ListDirectory",
           "status": "success"
         },
         {
@@ -107,15 +92,8 @@
       "id": "table",
       "kind": "structured-output",
       "format": "table",
-      "requiredFields": [
-        "序号",
-        "镜头",
-        "动作",
-        "时长"
-      ],
-      "requiredReferences": [
-        "UNCHANGED_FINAL_ANSWER_MARKER"
-      ],
+      "requiredFields": ["序号", "镜头", "动作", "时长"],
+      "requiredReferences": ["UNCHANGED_FINAL_ANSWER_MARKER"],
       "locale": "zh-cn",
       "evidenceRef": "stream-facts"
     },

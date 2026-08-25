@@ -6,9 +6,13 @@
 
 import type {
   ImageModelV3,
+  ImageModelV4,
   Experimental_VideoModelV3,
+  Experimental_VideoModelV4,
   LanguageModelV3,
+  LanguageModelV4,
   SpeechModelV3,
+  SpeechModelV4,
 } from '@ai-sdk/provider';
 
 /**
@@ -19,8 +23,6 @@ export interface ProviderConfig {
   apiUrl: string;
   /** API key for authentication */
   apiKey: string;
-  /** Optional task callback for providers that expose external task IDs */
-  onExternalTaskId?: (externalTaskId: string) => void | Promise<void>;
 }
 
 /**
@@ -35,11 +37,13 @@ export interface ResolvedProvider {
   /** Provider execution ownership classification */
   source: ResolvedProviderSource;
   /** Create an image model by model ID, or null if not supported */
-  image(modelId: string): ImageModelV3 | null;
+  image(modelId: string): ImageModelV3 | ImageModelV4 | null;
   /** Create an OpenAI-compatible language model by model ID, or null if not supported. */
-  language(modelId: string): LanguageModelV3 | null;
+  language(modelId: string): LanguageModelV3 | LanguageModelV4 | null;
   /** Create a video model by model ID, or null if not supported */
-  video(modelId: string): Experimental_VideoModelV3 | null;
+  video(modelId: string): Experimental_VideoModelV3 | Experimental_VideoModelV4 | null;
   /** Create a speech model by model ID, or null if not supported */
-  speech(modelId: string): SpeechModelV3 | null;
+  speech(modelId: string): SpeechModelV3 | SpeechModelV4 | null;
+  /** Cancel the exact provider video task when the provider exposes that operation. */
+  cancelVideoTask?(modelId: string, externalTaskId: string): Promise<void>;
 }

@@ -1,13 +1,6 @@
 # Unified Entity Architecture
 
-Updated: 2026-08-12
-
 [中文](unified-entity.md)
-
-> The canonical direction is tracked by
-> [`simplify-resource-entity-character-world-boundaries`](../../openspec/changes/simplify-resource-entity-character-world-boundaries/).
-> Entity Asset and Entity-owned Character interaction are being removed from the canonical product path.
-> Strict record narrowing follows an explicit existing-data qualification step.
 
 Project Entity is the project-local authority for “who or what is this.” It is not a superclass or payload
 container for Character or World. See [Creative Resource and Semantic Boundaries](creative-resource-semantic-boundaries.md)
@@ -40,7 +33,7 @@ target, cache path, provider URL, Renderer URL, runtime handle, or retired catal
 
 Availability is derived through the resource owner. Missing or mismatched content produces a visible
 orphan/needs-attention state and an explicit rebind, reinstall, or reconnect action. It never triggers a
-same-name, latest-revision, active-workspace, or legacy-catalog fallback.
+same-name, latest-revision, active-workspace, or side-catalog fallback.
 
 ## Character and World Composition
 

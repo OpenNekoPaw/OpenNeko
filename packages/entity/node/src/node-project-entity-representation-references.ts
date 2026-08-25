@@ -5,7 +5,7 @@ import {
   type ProjectEntityDocumentRepository,
   type ProjectEntityDiagnostic,
 } from '@neko/entity-domain';
-import { contentLocatorKey, type ContentLocator } from '@neko/content';
+import { contentLocatorKey, type ContentLocator } from '@neko/content-domain';
 import {
   NodeProjectEntityRepository,
   type ProjectEntityAvailableDocumentReader,
@@ -56,7 +56,10 @@ export class NodeProjectEntityRepresentationReferenceService {
             const replacement = input.replacements.get(contentLocatorKey(binding.target));
             if (!replacement) return binding;
             rewrittenCount += 1;
-            return { ...binding, target: { kind: 'workspace-file' as const, path: replacement } };
+            return {
+              ...binding,
+              target: { file: { authority: 'workspace' as const, path: replacement } },
+            };
           }),
         }));
         if (rewrittenCount === 0) return current;

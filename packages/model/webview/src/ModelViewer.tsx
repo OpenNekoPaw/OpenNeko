@@ -1,0 +1,922 @@
+import { useEffect, useRef, useState } from 'react';
+import {
+  isThreeReferenceDiagnostic,
+  isThreeReferenceRequestIdentity,
+  isThreeReferencePanoramaRuntimeDescriptor,
+  isThreeReferencePanelSubject,
+  isThreeReferencePresetOption,
+  isThreeReferencePurpose,
+  isThreeReferenceStagingSnapshot,
+  type ModelPreviewDiagnostic,
+  type ModelPreviewSourceDescriptor,
+  type ModelPreviewStagingState,
+  type NormalizedModelFacts,
+  type ThreeReferenceHostMessage,
+  type ThreeReferencePanelSubject,
+  type ThreeReferencePanoramaRuntimeDescriptor,
+  type ThreeReferencePresetOption,
+  type ThreeReferencePoseState,
+  type ThreeReferencePurpose,
+  type ThreeReferenceStagingSnapshot,
+} from '@neko/model-domain';
+import { contentLocatorsEqual } from '@neko/content-domain';
+import { useTranslation } from '@neko/ui/i18n/react';
+import {
+  browserThreeRuntimeFactory,
+  DEFAULT_MODEL_VIEW_STATE,
+  type ModelPreviewNode,
+  type ModelViewState,
+  type ThreeModelRuntimeFactory,
+  type ThreeModelRuntimePort,
+} from './threeRuntime';
+import {
+  addModelCamera,
+  addModelLight,
+  duplicateModelCamera,
+  MAX_MODEL_PREVIEW_DIRECTIONAL_LIGHTS,
+  patchModelTransform,
+  removeModelCamera,
+  selectModelCamera,
+  selectModelNode,
+  updateModelCamera,
+  updateModelLight,
+} from './modelStagingStore';
+import {
+  resolveModelCameraPlacement,
+  resolveModelLightPlacement,
+  type ModelCameraPlacementId,
+  type ModelLightPlacementId,
+} from './modelCreationPresets';
+import type { ModelViewerHostPort } from './modelViewerHost';
+import type { ModelSceneSelection } from './modelSceneSelection';
+import { ModelInspectorPanel } from './components/ModelInspectorPanel';
+import { ModelScenePanel } from './components/ModelScenePanel';
+import { ModelOrientationGizmo } from './components/ModelOrientationGizmo';
+import './model.css';
+import { ThreeReferencePurposeControls } from './components/ThreeReferencePurposeControls';
+import {
+  ModelViewportControls,
+  type ModelTransformMode,
+  type ModelViewportMode,
+} from './components/ModelViewportControls';
+
+export interface ModelViewerProps {
+  readonly host: ModelViewerHostPort;
+  readonly runtimeFactory?: ThreeModelRuntimeFactory;
+  readonly sessionId?: string;
+}
+
+type ViewerStatus = 'waiting' | 'loading' | 'ready' | 'error';
+
+export function ModelViewer({
+  host,
+  runtimeFactory = browserThreeRuntimeFactory,
+  sessionId: sessionIdOverride,
+}: ModelViewerProps): React.JSX.Element {
+  const { t } = useTranslation();
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const runtimeRef = useRef<ThreeModelRuntimePort | undefined>(undefined);
+  const stagingRef = useRef<ModelPreviewStagingState | undefined>(undefined);
+  const referenceStagingRef = useRef<ThreeReferenceStagingSnapshot | undefined>(undefined);
+  const [status, setStatus] = useState<ViewerStatus>('waiting');
+  const [staging, setStaging] = useState<ModelPreviewStagingState>();
+  const [facts, setFacts] = useState<NormalizedModelFacts>();
+  const [nodes, setNodes] = useState<readonly ModelPreviewNode[]>([]);
+  const [diagnostic, setDiagnostic] = useState<ModelPreviewDiagnostic>();
+  const [transformMode, setTransformMode] = useState<ModelTransformMode>('translate');
+  const [viewportMode, setViewportMode] = useState<ModelViewportMode>('navigate');
+  const [gridVisible, setGridVisible] = useState(true);
+  const [axesVisible, setAxesVisible] = useState(true);
+  const [viewState, setViewState] = useState<ModelViewState>(DEFAULT_MODEL_VIEW_STATE);
+  const [sceneSelection, setSceneSelection] = useState<ModelSceneSelection>({ kind: 'scene' });
+  const [panelSubject, setPanelSubject] = useState<ThreeReferencePanelSubject>();
+  const [eligiblePurposes, setEligiblePurposes] = useState<readonly ThreeReferencePurpose[]>([]);
+  const [availablePresets, setAvailablePresets] = useState<readonly ThreeReferencePresetOption[]>(
+    [],
+  );
+  const [referenceStaging, setReferenceStaging] = useState<ThreeReferenceStagingSnapshot>();
+  const [panoramaRuntime, setPanoramaRuntime] = useState<ThreeReferencePanoramaRuntimeDescriptor>();
+  const [outputPreview, setOutputPreview] = useState<string>();
+  const sessionId = sessionIdOverride ?? document.body.dataset.modelSessionId;
+
+  useEffect(() => {
+    stagingRef.current = staging;
+    if (staging) runtimeRef.current?.applyStaging(staging);
+  }, [staging]);
+
+  useEffect(() => {
+    runtimeRef.current?.setTransformEnabled(
+      viewportMode === 'inspect' && sceneSelection.kind === 'node',
+    );
+    runtimeRef.current?.setDirectDragEnabled(
+      viewportMode === 'inspect' &&
+        (sceneSelection.kind === 'camera' || sceneSelection.kind === 'light'),
+    );
+  }, [sceneSelection.kind, viewportMode]);
+
+  useEffect(() => {
+    runtimeRef.current?.setLightGuide(
+      sceneSelection.kind === 'light' ? sceneSelection.lightId : undefined,
+    );
+  }, [sceneSelection]);
+
+  useEffect(() => {
+    const camera =
+      sceneSelection.kind === 'camera'
+        ? staging?.cameraPresets.find((preset) => preset.id === sceneSelection.cameraId)
+        : undefined;
+    runtimeRef.current?.setCameraGuide(camera);
+  }, [sceneSelection, staging]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    if (!sessionId) {
+      setStatus('error');
+      setDiagnostic({
+        code: 'message-invalid',
+        message: 'Model Preview Webview started without a session identity.',
+        severity: 'error',
+      });
+      return;
+    }
+    let runtime: ThreeModelRuntimePort;
+    try {
+      runtime = runtimeFactory.create(canvas, {
+        onTransformChanged(nodePath, transform) {
+          setStaging((current) => {
+            if (!current) return current;
+            const next = patchModelTransform(current, nodePath, transform);
+            stagingRef.current = next;
+            const referenceStaging = referenceStagingRef.current;
+            if (!referenceStaging) throw new Error('3D Reference staging is unavailable.');
+            referenceStagingRef.current = postState(host, next, referenceStaging);
+            return next;
+          });
+        },
+        onLightPositionChanged(lightId, position) {
+          setStaging((current) => {
+            if (!current) return current;
+            const light = current.lightRig.lights.find((entry) => entry.id === lightId);
+            if (!light) throw new Error(`Unknown Model Preview light: ${lightId}`);
+            const next = updateModelLight(current, { ...light, position });
+            stagingRef.current = next;
+            const referenceStaging = referenceStagingRef.current;
+            if (!referenceStaging) throw new Error('3D Reference staging is unavailable.');
+            referenceStagingRef.current = postState(host, next, referenceStaging);
+            return next;
+          });
+        },
+        onCameraPositionChanged(cameraId, position) {
+          setStaging((current) => {
+            if (!current) return current;
+            const camera = current.cameraPresets.find((entry) => entry.id === cameraId);
+            if (!camera) throw new Error(`Unknown Model Preview camera: ${cameraId}`);
+            const next = updateModelCamera(current, { ...camera, position });
+            stagingRef.current = next;
+            const referenceStaging = referenceStagingRef.current;
+            if (!referenceStaging) throw new Error('3D Reference staging is unavailable.');
+            referenceStagingRef.current = postState(host, next, referenceStaging);
+            return next;
+          });
+        },
+        onViewChanged: setViewState,
+        onDiagnostic(message) {
+          setDiagnostic({ code: 'load-failed', message, severity: 'error' });
+        },
+        onRendererLost() {
+          const diagnostic = {
+            code: 'renderer-lost' as const,
+            message: 'The 3D Reference renderer context was lost.',
+            severity: 'error' as const,
+            identity: { sessionId },
+          };
+          setDiagnostic(diagnostic);
+          setStatus('error');
+          host.postMessage({
+            type: '3d-reference/diagnostic',
+            identity: createRequestIdentity(sessionId),
+            diagnostic,
+          });
+        },
+      });
+    } catch (error) {
+      const diagnostic = {
+        code: 'renderer-unavailable' as const,
+        message: error instanceof Error ? error.message : String(error),
+        severity: 'error' as const,
+        identity: { sessionId },
+      };
+      setDiagnostic(diagnostic);
+      setStatus('error');
+      host.postMessage({
+        type: '3d-reference/diagnostic',
+        identity: createRequestIdentity(sessionId),
+        diagnostic,
+      });
+      return;
+    }
+    runtimeRef.current = runtime;
+    const resize = () => {
+      const bounds = canvas.getBoundingClientRect();
+      runtime.resize(Math.max(1, Math.floor(bounds.width)), Math.max(1, Math.floor(bounds.height)));
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(canvas);
+    resize();
+
+    const readyIdentity = createRequestIdentity(sessionId);
+    const disposeMessages = host.subscribe((value) => {
+      const message = parseHostMessage(value);
+      if (!message) {
+        const identity = createRequestIdentity(sessionId);
+        const invalidMessage = {
+          code: 'message-invalid' as const,
+          message: 'Model Preview received an invalid panel message.',
+          severity: 'error' as const,
+          identity: { sessionId },
+        };
+        setDiagnostic(invalidMessage);
+        setStatus('error');
+        host.postMessage({
+          type: '3d-reference/diagnostic',
+          identity,
+          diagnostic: invalidMessage,
+        });
+        return;
+      }
+      void handleHostMessage({
+        message,
+        runtime,
+        sessionId,
+        readyRequestId: readyIdentity.requestId,
+        host,
+        setStatus,
+        setStaging,
+        setFacts,
+        setNodes,
+        setSceneSelection,
+        setPanelSubject,
+        setAvailablePresets,
+        setEligiblePurposes,
+        setReferenceStaging,
+        setPanoramaRuntime,
+        setDiagnostic,
+        stagingRef,
+        referenceStagingRef,
+      });
+    });
+    host.postMessage({
+      type: '3d-reference/ready',
+      identity: readyIdentity,
+    });
+    return () => {
+      observer.disconnect();
+      disposeMessages();
+      runtime.dispose();
+      runtimeRef.current = undefined;
+    };
+  }, [host, runtimeFactory, sessionId]);
+
+  const updateStaging = (next: ModelPreviewStagingState) => {
+    stagingRef.current = next;
+    setStaging(next);
+    const referenceStaging = referenceStagingRef.current;
+    if (!referenceStaging) throw new Error('3D Reference staging is unavailable.');
+    const nextReferenceStaging = postState(host, next, referenceStaging);
+    referenceStagingRef.current = nextReferenceStaging;
+    setReferenceStaging(nextReferenceStaging);
+  };
+  const updateReferenceStaging = (
+    update: (current: ThreeReferenceStagingSnapshot) => ThreeReferenceStagingSnapshot,
+  ): void => {
+    const current = referenceStagingRef.current;
+    if (!current) throw new Error('3D Reference staging is unavailable.');
+    const candidate = update(current);
+    const next = candidate;
+    referenceStagingRef.current = next;
+    setReferenceStaging(next);
+    host.setState({ threeReferenceStaging: next });
+    host.postMessage({
+      type: '3d-reference/staging-changed',
+      identity: createRequestIdentity(next.sessionId),
+      staging: next,
+    });
+  };
+  const controlsDisabled = !staging || status !== 'ready';
+  const duplicateCamera = (cameraId: string): void => {
+    if (!staging) throw new Error('Model Preview staging is unavailable.');
+    const sourceCamera = staging.cameraPresets.find((camera) => camera.id === cameraId);
+    if (!sourceCamera) throw new Error(`Unknown Model Preview camera: ${cameraId}`);
+    const next = duplicateModelCamera(
+      staging,
+      cameraId,
+      `${sourceCamera.label} ${t('preview.model.copySuffix')}`,
+    );
+    const previousIds = new Set(staging.cameraPresets.map((camera) => camera.id));
+    const duplicate = next.cameraPresets.find((camera) => !previousIds.has(camera.id));
+    if (!duplicate) throw new Error('Model Preview camera duplication produced no camera.');
+    updateStaging(next);
+    setSceneSelection({ kind: 'camera', cameraId: duplicate.id });
+    setViewportMode('inspect');
+  };
+  const addCamera = (placementId: ModelCameraPlacementId): void => {
+    if (!staging) throw new Error('Model Preview staging is unavailable.');
+    const placement = resolveModelCameraPlacement(placementId);
+    const previousIds = new Set(staging.cameraPresets.map((camera) => camera.id));
+    const next = addModelCamera(staging, placement, t(placement.labelKey));
+    const added = next.cameraPresets.find((camera) => !previousIds.has(camera.id));
+    if (!added) throw new Error('Model Preview camera creation produced no camera.');
+    updateStaging(next);
+    setSceneSelection({ kind: 'camera', cameraId: added.id });
+    setViewportMode('inspect');
+  };
+  const addLight = (placementId: ModelLightPlacementId): void => {
+    if (!staging) throw new Error('Model Preview staging is unavailable.');
+    const placement = resolveModelLightPlacement(placementId);
+    const previousIds = new Set(staging.lightRig.lights.map((light) => light.id));
+    const next = addModelLight(staging, placement);
+    const added = next.lightRig.lights.find((light) => !previousIds.has(light.id));
+    if (!added) throw new Error('Model Preview light creation produced no light.');
+    updateStaging(next);
+    setSceneSelection({ kind: 'light', lightId: added.id });
+    setViewportMode('inspect');
+  };
+  const removeCamera = (cameraId: string): void => {
+    if (!staging) throw new Error('Model Preview staging is unavailable.');
+    const next = removeModelCamera(staging, cameraId);
+    updateStaging(next);
+    setSceneSelection({ kind: 'camera', cameraId: next.activeCameraId });
+    setViewportMode('navigate');
+  };
+  const viewCamera = (cameraId: string): void => {
+    if (!staging) throw new Error('Model Preview staging is unavailable.');
+    const camera = staging.cameraPresets.find((preset) => preset.id === cameraId);
+    if (!camera) throw new Error(`Unknown Model Preview camera: ${cameraId}`);
+    runtimeRef.current?.frameCamera(camera);
+    if (staging.activeCameraId !== cameraId) {
+      updateStaging(selectModelCamera(staging, cameraId));
+    }
+    setSceneSelection({ kind: 'camera', cameraId });
+    setViewportMode('navigate');
+  };
+
+  return (
+    <main
+      className="model-preview"
+      aria-label={t('preview.model.title')}
+      data-testid="model-preview-ready"
+      data-viewer-status={status}
+      data-mesh-count={facts?.meshCount ?? 0}
+      data-active-camera-id={staging?.activeCameraId ?? ''}
+      data-key-light-intensity={
+        staging?.lightRig.lights.find((light) => light.id === 'key')?.intensity ?? ''
+      }
+      data-view-distance={viewState.distance}
+      data-view-target={`${viewState.target.x},${viewState.target.y},${viewState.target.z}`}
+      data-selection-kind={sceneSelection.kind}
+    >
+      <ModelScenePanel
+        disabled={controlsDisabled}
+        nodes={nodes}
+        selection={sceneSelection}
+        staging={staging}
+        onCameraAction={(cameraId, action) => {
+          switch (action) {
+            case 'edit':
+              setSceneSelection({ kind: 'camera', cameraId });
+              setViewportMode('inspect');
+              break;
+            case 'duplicate': {
+              duplicateCamera(cameraId);
+              break;
+            }
+            case 'view': {
+              viewCamera(cameraId);
+              break;
+            }
+            case 'remove': {
+              removeCamera(cameraId);
+              break;
+            }
+          }
+        }}
+        onSelectionChange={(selection) => {
+          setSceneSelection(selection);
+          if (selection.kind === 'node') {
+            if (!staging) throw new Error('Model Preview staging is unavailable.');
+            updateStaging(selectModelNode(staging, selection.nodePath));
+            setViewportMode('inspect');
+          } else if (selection.kind === 'light' || selection.kind === 'camera') {
+            setViewportMode('inspect');
+          } else {
+            setViewportMode('navigate');
+          }
+        }}
+      />
+      <section className="model-preview__viewport" aria-label={t('preview.model.viewport')}>
+        <canvas ref={canvasRef} tabIndex={0} aria-label={t('preview.model.canvas')} />
+        {axesVisible ? (
+          <ModelOrientationGizmo
+            disabled={controlsDisabled}
+            orientation={viewState.orientation}
+            onResetView={() => runtimeRef.current?.frameModel()}
+          />
+        ) : null}
+        <ModelViewportControls
+          activePresetId={
+            panelSubject?.kind === 'builtin-preset' ? panelSubject.subject.presetId : undefined
+          }
+          axesVisible={axesVisible}
+          availablePresets={availablePresets}
+          canAddLight={
+            (staging?.lightRig.lights.length ?? MAX_MODEL_PREVIEW_DIRECTIONAL_LIGHTS) <
+            MAX_MODEL_PREVIEW_DIRECTIONAL_LIGHTS
+          }
+          disabled={controlsDisabled}
+          gridVisible={gridVisible}
+          hasTransformSelection={
+            sceneSelection.kind === 'node' && staging?.selectedNodePath !== undefined
+          }
+          viewportMode={viewportMode}
+          transformMode={transformMode}
+          onAxesVisibleChange={setAxesVisible}
+          onAddCamera={addCamera}
+          onAddLight={addLight}
+          onGridVisibleChange={(visible) => {
+            runtimeRef.current?.setGroundGridVisible(visible);
+            setGridVisible(visible);
+          }}
+          onPanoramaRequest={() => {
+            const current = referenceStagingRef.current;
+            if (!current) throw new Error('3D Reference staging is unavailable.');
+            host.postMessage({
+              type: '3d-reference/panorama-picker-requested',
+              identity: createRequestIdentity(current.sessionId),
+            });
+          }}
+          onPresetRequest={(presetId) => {
+            const current = referenceStagingRef.current;
+            if (!current) throw new Error('3D Reference staging is unavailable.');
+            host.postMessage({
+              type: '3d-reference/preset-subject-requested',
+              identity: createRequestIdentity(current.sessionId),
+              presetId,
+            });
+          }}
+          onViewportModeChange={setViewportMode}
+          onTransformModeChange={(mode) => {
+            runtimeRef.current?.setTransformMode(mode);
+            setTransformMode(mode);
+          }}
+          onFrameModel={() => runtimeRef.current?.frameModel()}
+        />
+        {status !== 'ready' ? (
+          <div className="model-preview__overlay" role={status === 'error' ? 'alert' : 'status'}>
+            {status === 'loading'
+              ? t('preview.model.loading')
+              : status === 'error'
+                ? (diagnostic?.message ?? t('preview.model.error'))
+                : t('preview.model.waiting')}
+          </div>
+        ) : null}
+      </section>
+      <ModelInspectorPanel
+        diagnostic={status === 'ready' ? diagnostic : undefined}
+        disabled={controlsDisabled}
+        facts={facts}
+        nodes={nodes}
+        selection={sceneSelection}
+        staging={staging}
+        onDuplicateCamera={duplicateCamera}
+        onRemoveCamera={removeCamera}
+        onUpdateStaging={updateStaging}
+        onViewCamera={viewCamera}
+      >
+        <ThreeReferencePurposeControls
+          disabled={controlsDisabled}
+          eligiblePurposes={eligiblePurposes}
+          panelSubject={panelSubject}
+          staging={referenceStaging}
+          outputPreview={outputPreview}
+          onCapture={(purpose, poseControlMode) => {
+            const current = referenceStagingRef.current;
+            if (!current) throw new Error('3D Reference staging is unavailable.');
+            const image = runtimeRef.current?.capturePurpose(
+              purpose,
+              staging?.capture ?? { width: 1024, height: 1024 },
+              {
+                poseControlMode,
+              },
+            );
+            if (!image) throw new Error('3D Reference runtime produced no capture image.');
+            setOutputPreview(image);
+            host.postMessage({
+              type: '3d-reference/capture-requested',
+              identity: createRequestIdentity(current.sessionId),
+              purpose,
+              imageDataUrl: image,
+              width: staging?.capture.width ?? 1024,
+              height: staging?.capture.height ?? 1024,
+              ...(poseControlMode ? { poseControlMode } : {}),
+            });
+          }}
+          onPoseChange={(pose: ThreeReferencePoseState) => {
+            runtimeRef.current?.applyReferencePose(pose);
+            updateReferenceStaging((current) => ({ ...current, pose }));
+          }}
+          onPurposeChange={(purposes) =>
+            updateReferenceStaging((current) => ({ ...current, selectedPurposes: purposes }))
+          }
+          onCameraAspectRatioChange={(aspectRatio) =>
+            updateReferenceStaging((current) => ({
+              ...current,
+              camera: { ...current.camera, aspectRatio },
+            }))
+          }
+          onPanoramaOrientationChange={(orientation) => {
+            if (!panoramaRuntime) {
+              throw new Error('3D Reference panorama runtime is unavailable.');
+            }
+            const projection = runtimeRef.current?.setPanoramaEnvironment({
+              runtime: panoramaRuntime,
+              orientation,
+            });
+            void projection?.catch((error: unknown) => {
+              setDiagnostic({
+                code: 'load-failed',
+                message: error instanceof Error ? error.message : String(error),
+                severity: 'error',
+              });
+            });
+            updateReferenceStaging((current) => {
+              if (!current.environment) {
+                throw new Error('3D Reference panorama environment is unavailable.');
+              }
+              return {
+                ...current,
+                environment: { ...current.environment, orientation },
+              };
+            });
+          }}
+        />
+      </ModelInspectorPanel>
+    </main>
+  );
+}
+
+async function handleHostMessage(input: {
+  readonly message: ThreeReferenceHostMessage;
+  readonly runtime: ThreeModelRuntimePort;
+  readonly sessionId: string;
+  readonly readyRequestId: string;
+  readonly host: ModelViewerHostPort;
+  readonly setStatus: (status: ViewerStatus) => void;
+  readonly setStaging: (state: ModelPreviewStagingState) => void;
+  readonly setFacts: (facts: NormalizedModelFacts | undefined) => void;
+  readonly setNodes: (nodes: readonly ModelPreviewNode[]) => void;
+  readonly setSceneSelection: (selection: ModelSceneSelection) => void;
+  readonly setPanelSubject: (subject: ThreeReferencePanelSubject) => void;
+  readonly setAvailablePresets: (presets: readonly ThreeReferencePresetOption[]) => void;
+  readonly setEligiblePurposes: React.Dispatch<
+    React.SetStateAction<readonly ThreeReferencePurpose[]>
+  >;
+  readonly setReferenceStaging: (staging: ThreeReferenceStagingSnapshot) => void;
+  readonly setPanoramaRuntime: (runtime: ThreeReferencePanoramaRuntimeDescriptor) => void;
+  readonly setDiagnostic: (diagnostic: ModelPreviewDiagnostic | undefined) => void;
+  readonly stagingRef: React.MutableRefObject<ModelPreviewStagingState | undefined>;
+  readonly referenceStagingRef: React.MutableRefObject<ThreeReferenceStagingSnapshot | undefined>;
+}): Promise<void> {
+  const { message } = input;
+  if (message.identity.sessionId !== input.sessionId) {
+    const diagnostic = {
+      code: 'session-mismatch' as const,
+      message: '3D Reference message belongs to another Preview panel.',
+      severity: 'error' as const,
+      identity: { sessionId: input.sessionId },
+    };
+    input.setDiagnostic(diagnostic);
+    input.setStatus('error');
+    input.host.postMessage({
+      type: '3d-reference/diagnostic',
+      identity: createRequestIdentity(input.sessionId),
+      diagnostic,
+    });
+    return;
+  }
+  try {
+    switch (message.type) {
+      case '3d-reference/session-init': {
+        if (
+          message.identity.requestId !== input.readyRequestId ||
+          message.staging.sessionId !== input.sessionId
+        ) {
+          throw new Error('3D Reference initialization request does not match this Preview panel.');
+        }
+        input.setStatus('loading');
+        input.setDiagnostic(undefined);
+        input.setSceneSelection({ kind: 'scene' });
+        input.referenceStagingRef.current = message.staging;
+        input.setPanelSubject(message.panelSubject);
+        input.setAvailablePresets(message.availablePresets);
+        input.setEligiblePurposes(message.eligiblePurposes);
+        input.setReferenceStaging(message.staging);
+        const viewportStaging = toViewportStaging(message.staging, input.stagingRef.current);
+        input.stagingRef.current = viewportStaging;
+        input.setStaging(viewportStaging);
+        let facts: NormalizedModelFacts | undefined;
+        if (message.panelSubject.kind === 'source-model') {
+          facts = await input.runtime.load(toModelSourceDescriptor(message.panelSubject));
+          input.runtime.applyStaging(viewportStaging);
+          input.setFacts(facts);
+          input.setNodes(input.runtime.getNodes());
+        } else if (message.panelSubject.kind === 'builtin-preset') {
+          facts = await input.runtime.loadPreset(message.panelSubject);
+          if (message.staging.pose) input.runtime.applyReferencePose(message.staging.pose);
+          input.runtime.applyStaging(viewportStaging);
+          input.setFacts(facts);
+          input.setNodes(input.runtime.getNodes());
+        } else {
+          input.setFacts(undefined);
+          input.setNodes([]);
+        }
+        input.setStatus('ready');
+        input.host.postMessage({
+          type: '3d-reference/load-completed',
+          identity: message.identity,
+          ...(facts ? { facts } : {}),
+        });
+        break;
+      }
+      case '3d-reference/diagnostic':
+        input.setDiagnostic(toModelDiagnostic(message.diagnostic));
+        if (message.diagnostic.severity === 'error') {
+          if (isViewerFatalDiagnostic(message.diagnostic.code)) {
+            input.setStatus('error');
+          }
+        }
+        break;
+      case '3d-reference/environment-runtime': {
+        input.referenceStagingRef.current = message.staging;
+        input.setReferenceStaging(message.staging);
+        input.setPanoramaRuntime(message.runtime);
+        input.setEligiblePurposes((current) =>
+          current.includes('panorama-scene') ? current : [...current, 'panorama-scene'],
+        );
+        const viewportStaging = toViewportStaging(message.staging, input.stagingRef.current, true);
+        input.stagingRef.current = viewportStaging;
+        input.setStaging(viewportStaging);
+        await input.runtime.setPanoramaEnvironment({
+          runtime: message.runtime,
+          orientation: message.staging.environment?.orientation ?? missingPanoramaOrientation(),
+        });
+        break;
+      }
+      case '3d-reference/cancel':
+        input.setStatus('error');
+        input.setDiagnostic({
+          code: 'disposed',
+          message: message.reason,
+          severity: 'error',
+        });
+        break;
+    }
+  } catch (error) {
+    const diagnostic: ModelPreviewDiagnostic = {
+      code: 'load-failed',
+      message: error instanceof Error ? error.message : String(error),
+      severity: 'error',
+      identity: input.stagingRef.current
+        ? {
+            sessionId: input.sessionId,
+          }
+        : { sessionId: input.sessionId },
+    };
+    input.setDiagnostic(diagnostic);
+    if (isViewerFatalDiagnostic(diagnostic.code)) {
+      input.setStatus('error');
+    }
+    input.host.postMessage({
+      type: '3d-reference/diagnostic',
+      identity: message.identity,
+      diagnostic: {
+        code: 'source-load-failed',
+        message: diagnostic.message,
+        severity: 'error',
+        ...(diagnostic.identity ? { identity: diagnostic.identity } : {}),
+      },
+    });
+  }
+}
+
+function isViewerFatalDiagnostic(code: string): boolean {
+  return code !== 'request-mismatch' && code !== 'staging-invalid';
+}
+
+function toModelDiagnostic(
+  diagnostic: Extract<ThreeReferenceHostMessage, { type: '3d-reference/diagnostic' }>['diagnostic'],
+): ModelPreviewDiagnostic {
+  return {
+    code:
+      diagnostic.code === 'renderer-lost'
+        ? 'renderer-lost'
+        : diagnostic.code === 'renderer-unavailable'
+          ? 'renderer-unavailable'
+          : diagnostic.code === 'session-mismatch'
+            ? 'session-mismatch'
+            : diagnostic.code === 'message-invalid'
+              ? 'message-invalid'
+              : 'load-failed',
+    message: diagnostic.message,
+    severity: diagnostic.severity,
+    identity: diagnostic.identity,
+  };
+}
+
+function postState(
+  host: ModelViewerHostPort,
+  viewportStaging: ModelPreviewStagingState,
+  staging: ThreeReferenceStagingSnapshot,
+): ThreeReferenceStagingSnapshot {
+  const activeCamera = viewportStaging.cameraPresets.find(
+    (camera) => camera.id === viewportStaging.activeCameraId,
+  );
+  if (!activeCamera) throw new Error('3D Reference active camera is unavailable.');
+  const next: ThreeReferenceStagingSnapshot = {
+    ...staging,
+    camera: {
+      cameraId: activeCamera.id,
+      position: activeCamera.position,
+      target: activeCamera.target,
+      fieldOfViewDeg: activeCamera.fieldOfViewDeg,
+      aspectRatio: staging.camera.aspectRatio,
+    },
+  };
+  host.setState({ threeReferenceStaging: next });
+  host.postMessage({
+    type: '3d-reference/staging-changed',
+    identity: createRequestIdentity(next.sessionId),
+    staging: next,
+  });
+  return next;
+}
+
+function createRequestIdentity(sessionId: string) {
+  return {
+    sessionId,
+    requestId: crypto.randomUUID(),
+  };
+}
+
+function parseHostMessage(value: unknown): ThreeReferenceHostMessage | undefined {
+  if (!isRecord(value) || typeof value['type'] !== 'string') return undefined;
+  switch (value['type']) {
+    case '3d-reference/session-init':
+      return hasOnlyKeys(value, [
+        'type',
+        'identity',
+        'panelSubject',
+        'availablePresets',
+        'eligiblePurposes',
+        'staging',
+      ]) &&
+        isThreeReferenceRequestIdentity(value['identity']) &&
+        isThreeReferencePanelSubject(value['panelSubject']) &&
+        Array.isArray(value['availablePresets']) &&
+        value['availablePresets'].every(isThreeReferencePresetOption) &&
+        Array.isArray(value['eligiblePurposes']) &&
+        value['eligiblePurposes'].every(isThreeReferencePurpose) &&
+        isThreeReferenceStagingSnapshot(value['staging'])
+        ? {
+            type: '3d-reference/session-init',
+            identity: value['identity'],
+            panelSubject: value['panelSubject'],
+            availablePresets: value['availablePresets'],
+            eligiblePurposes: value['eligiblePurposes'],
+            staging: value['staging'],
+          }
+        : undefined;
+    case '3d-reference/diagnostic':
+      return hasOnlyKeys(value, ['type', 'identity', 'diagnostic']) &&
+        isThreeReferenceRequestIdentity(value['identity']) &&
+        isThreeReferenceDiagnostic(value['diagnostic'])
+        ? {
+            type: '3d-reference/diagnostic',
+            identity: value['identity'],
+            diagnostic: value['diagnostic'],
+          }
+        : undefined;
+    case '3d-reference/environment-runtime':
+      return hasOnlyKeys(value, ['type', 'identity', 'staging', 'runtime']) &&
+        isThreeReferenceRequestIdentity(value['identity']) &&
+        isThreeReferenceStagingSnapshot(value['staging']) &&
+        isThreeReferencePanoramaRuntimeDescriptor(value['runtime']) &&
+        value['identity'].sessionId === value['staging'].sessionId &&
+        value['staging'].environment !== undefined &&
+        contentLocatorsEqual(value['staging'].environment.source, value['runtime'].source) &&
+        value['staging'].environment?.fingerprint === value['runtime'].fingerprint
+        ? {
+            type: '3d-reference/environment-runtime',
+            identity: value['identity'],
+            staging: value['staging'],
+            runtime: value['runtime'],
+          }
+        : undefined;
+    case '3d-reference/cancel':
+      return hasOnlyKeys(value, ['type', 'identity', 'reason']) &&
+        isThreeReferenceRequestIdentity(value['identity']) &&
+        typeof value['reason'] === 'string'
+        ? {
+            type: '3d-reference/cancel',
+            identity: value['identity'],
+            reason: value['reason'],
+          }
+        : undefined;
+    default:
+      return undefined;
+  }
+}
+
+function missingPanoramaOrientation(): never {
+  throw new Error('3D Reference environment runtime is missing panorama orientation.');
+}
+
+function toModelSourceDescriptor(
+  panelSubject: Extract<ThreeReferencePanelSubject, { kind: 'source-model' }>,
+): ModelPreviewSourceDescriptor {
+  return {
+    source: panelSubject.runtime.source,
+    sourceFingerprint: panelSubject.runtime.fingerprint,
+    format: panelSubject.runtime.format,
+    entryUri: panelSubject.runtime.entryUri,
+    uriMap: panelSubject.runtime.uriMap,
+    sizeBytes: panelSubject.runtime.sizeBytes,
+  };
+}
+
+function toViewportStaging(
+  staging: ThreeReferenceStagingSnapshot,
+  previous?: ModelPreviewStagingState,
+  preserveLocalState = false,
+): ModelPreviewStagingState {
+  const sourceFingerprint = subjectFingerprint(staging);
+  if (
+    previous?.sessionId === staging.sessionId &&
+    (preserveLocalState || previous.sourceFingerprint !== sourceFingerprint)
+  ) {
+    const hasReferenceCamera = previous.cameraPresets.some(
+      (camera) => camera.id === staging.camera.cameraId,
+    );
+    return {
+      ...previous,
+      sourceFingerprint,
+      transformPatches: [],
+      ...(hasReferenceCamera ? { activeCameraId: staging.camera.cameraId } : {}),
+    };
+  }
+  return {
+    sessionId: staging.sessionId,
+    sourceFingerprint: subjectFingerprint(staging),
+    transformPatches: [],
+    cameraPresets: [
+      {
+        id: staging.camera.cameraId,
+        label: staging.camera.cameraId === 'camera-front' ? 'Front' : staging.camera.cameraId,
+        position: staging.camera.position,
+        target: staging.camera.target,
+        fieldOfViewDeg: staging.camera.fieldOfViewDeg,
+      },
+    ],
+    activeCameraId: staging.camera.cameraId,
+    lightRig: {
+      environmentIntensity: 0.7,
+      lights: [
+        { id: 'key', color: '#ffffff', intensity: 3, position: { x: 3, y: 4, z: 4 } },
+        { id: 'fill', color: '#b8d8ff', intensity: 1.2, position: { x: -3, y: 2, z: 2 } },
+        { id: 'rim', color: '#ffd2a8', intensity: 1.8, position: { x: 0, y: 3, z: -4 } },
+      ],
+    },
+    background: '#f5f6f8',
+    capture: { width: 1024, height: 1024 },
+  };
+}
+
+function subjectFingerprint(staging: ThreeReferenceStagingSnapshot): string {
+  switch (staging.subject.kind) {
+    case 'source-model':
+      return staging.subject.fingerprint;
+    case 'builtin-preset':
+      return staging.subject.fingerprint;
+    case 'environment-only':
+      return 'environment-only';
+  }
+  throw new Error('Unknown 3D Reference subject kind.');
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasOnlyKeys(record: Record<string, unknown>, keys: readonly string[]): boolean {
+  return Object.keys(record).every((key) => keys.includes(key));
+}

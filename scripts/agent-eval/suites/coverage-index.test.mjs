@@ -1,39 +1,40 @@
 import { describe, expect, it } from 'vitest';
-import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
-import { PiSkillHost } from '../../../packages/agent/runtime/src/pi/skill-host.ts';
 import { discoverSuites } from './discovery.mjs';
-import { EXPECTED_BUILTIN_SKILLS, loadCoverageIndex } from './coverage-index.mjs';
+import {
+  EXPECTED_BUILTIN_SKILLS,
+  EXPECTED_RUNTIME_CAPABILITIES,
+  loadCoverageIndex,
+} from './coverage-index.mjs';
 
 describe('Agent Evaluation coverage index', () => {
-  it('covers every current builtin Skill with exact Host identity and fingerprint', async () => {
+  it('covers every current builtin Skill with exact portable Host identity and fingerprint', async () => {
     const suites = await discoverSuites();
     const coverage = await loadCoverageIndex({ suites });
-    const env = new NodeExecutionEnv({ cwd: process.cwd() });
-    const builtins = (
-      await new PiSkillHost(env, {
-        isTrusted: () => true,
-        isEnabled: () => true,
-      }).discover([
-        { path: 'packages/skills/skills', source: { kind: 'builtin' } },
-      ])
-    ).records;
-    await env.cleanup();
-    expect(builtins.map((skill) => skill.name).sort()).toEqual(
+    const builtinSuites = suites.filter(
+      (entry) =>
+        entry.suite.target.kind === 'skill' &&
+        entry.suite.target.identity.source === 'builtin' &&
+        entry.suite.target.identity.provenance === 'builtin',
+    );
+
+    expect(builtinSuites.map((entry) => entry.suite.target.identity.name).sort()).toEqual(
       [...EXPECTED_BUILTIN_SKILLS].sort(),
     );
-    for (const skill of builtins) {
+
+    for (const entry of builtinSuites) {
+      const identity = entry.suite.target.identity;
       const target = coverage.targets.find(
-        (item) => item.kind === 'builtin-skill' && item.id === skill.name,
+        (item) => item.kind === 'builtin-skill' && item.id === identity.name,
       );
       expect(target?.disposition).toBe('suite');
-      const suite = suites.find((item) => item.suite.id === target.suiteIds[0]);
-      expect(suite.suite.target.identity).toMatchObject({
-        name: skill.name,
+      expect(target?.suiteIds).toContain(entry.suite.id);
+      expect(identity).toMatchObject({
+        name: identity.name,
         source: 'builtin',
         provenance: 'builtin',
         rootId: 'builtin-skills',
-        relativePath: skill.name,
-        fingerprint: `sha256:${skill.fingerprint}`,
+        relativePath: identity.name,
+        fingerprint: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
       });
     }
   });
@@ -46,5 +47,63 @@ describe('Agent Evaluation coverage index', () => {
         (item) => item.kind === 'builtin-skill' && item.disposition === 'excluded',
       ),
     ).toEqual([]);
+  });
+
+  it('keeps DSH-owned generic behavior excluded while evaluating the public active inbox path', async () => {
+    const coverage = await loadCoverageIndex();
+    const dshTargets = coverage.targets.filter(
+      (item) => item.kind === 'agent-runtime-capability' && item.id.startsWith('dsh-'),
+    );
+
+    expect(dshTargets.map((item) => item.id).sort()).toEqual(
+      EXPECTED_RUNTIME_CAPABILITIES.filter((id) => id.startsWith('dsh-')).sort(),
+    );
+    const inbox = dshTargets.find((item) => item.id === 'dsh-active-session-inbox');
+    expect(inbox).toMatchObject({
+      disposition: 'suite',
+      suiteIds: ['agent-runtime.workflow-controller'],
+    });
+    const generic = dshTargets.filter((item) => item.id !== 'dsh-active-session-inbox');
+    expect(generic.every((item) => item.disposition === 'excluded')).toBe(true);
+    expect(generic.every((item) => item.deterministicValidation.reason.includes('DSH'))).toBe(true);
+  });
+
+  it('keeps active scenarios free of retired Pi runtime assertions', async () => {
+    const suites = await discoverSuites();
+    const retired = suites.flatMap((entry) =>
+      entry.cases.flatMap((item) =>
+        item.scenario.assertions
+          .filter((assertion) => assertion.kind === 'pi-runtime')
+          .map((assertion) => `${entry.suite.id}/${item.scenario.id}/${assertion.id}`),
+      ),
+    );
+    expect(retired).toEqual([]);
+  });
+
+  it('keeps retired OpenNeko queue operations out of active scenarios', async () => {
+    const suites = await discoverSuites();
+    const retired = suites.flatMap((entry) =>
+      entry.cases.flatMap((item) => [
+        ...item.scenario.steps
+          .filter((step) => step.kind === 'queue' || step.kind === 'send-queued-now')
+          .map((step) => `${entry.suite.id}/${item.scenario.id}/step/${step.id}`),
+        ...item.scenario.assertions
+          .filter((assertion) => assertion.kind === 'queue-state')
+          .map((assertion) => `${entry.suite.id}/${item.scenario.id}/assertion/${assertion.id}`),
+      ]),
+    );
+    expect(retired).toEqual([]);
+  });
+
+  it('keeps the retired OpenNeko resource-display assertion out of active scenarios', async () => {
+    const suites = await discoverSuites();
+    const retired = suites.flatMap((entry) =>
+      entry.cases.flatMap((item) =>
+        item.scenario.assertions
+          .filter((assertion) => assertion.kind === 'resource-display-projection')
+          .map((assertion) => `${entry.suite.id}/${item.scenario.id}/${assertion.id}`),
+      ),
+    );
+    expect(retired).toEqual([]);
   });
 });

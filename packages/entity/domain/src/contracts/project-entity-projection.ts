@@ -3,7 +3,7 @@ import {
   isProjectDurableContentLocator,
   type ContentIoDiagnostic,
   type ContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 import type {
   CreativeEntityOccurrenceProjection,
   CreativeEntityRelationshipProjection,
@@ -17,9 +17,7 @@ import {
 
 export const PROJECT_ENTITY_BINDING_RESOURCE_OWNERS = [
   'workspace-file',
-  'media-library',
   'document',
-  'generated-output',
   'asset',
 ] as const;
 export const PROJECT_ENTITY_BINDING_AVAILABILITY_STATES = ['available', 'needs-attention'] as const;

@@ -3,7 +3,10 @@ import {
   DESKTOP_BACKGROUND_COLORS,
   type DesktopResolvedTheme,
 } from '../shared/desktop-presentation-contract';
-import type { DesktopThemePreference } from '@neko/host/application-settings';
+import type {
+  DesktopFontSizePreference,
+  DesktopThemePreference,
+} from '@neko/host/application-settings';
 
 const DESKTOP_DARK_THEME_QUERY = '(prefers-color-scheme: dark)';
 
@@ -34,12 +37,12 @@ export const desktopNativeThemeTokens = {
   light: {
     ...desktopThemeGeometryTokens,
     '--neko-desktop-window': DESKTOP_BACKGROUND_COLORS.light,
-    '--neko-desktop-window-top': '#fbfbfa',
-    '--neko-desktop-chrome': 'rgba(247, 247, 246, 0.94)',
+    '--neko-desktop-window-top': '#ffffff',
+    '--neko-desktop-chrome': 'rgba(255, 255, 255, 0.96)',
     '--neko-desktop-main': '#ffffff',
-    '--neko-desktop-surface': '#fafafa',
+    '--neko-desktop-surface': '#ffffff',
     '--neko-desktop-surface-raised': '#ffffff',
-    '--neko-desktop-surface-muted': '#f3f3f2',
+    '--neko-desktop-surface-muted': '#f7f7f6',
     '--neko-desktop-overlay': 'rgba(255, 255, 255, 0.97)',
     '--neko-desktop-control': 'rgba(31, 31, 30, 0.04)',
     '--neko-desktop-control-hover': 'rgba(31, 31, 30, 0.065)',
@@ -47,9 +50,9 @@ export const desktopNativeThemeTokens = {
     '--neko-desktop-border': 'rgba(0, 0, 0, 0.075)',
     '--neko-desktop-border-strong': 'rgba(0, 0, 0, 0.13)',
     '--neko-desktop-text-strong': '#20201f',
-    '--neko-desktop-text': '#5f5f5c',
-    '--neko-desktop-text-muted': '#858582',
-    '--neko-desktop-text-subtle': '#9b9b98',
+    '--neko-desktop-text': '#3f3f3c',
+    '--neko-desktop-text-muted': '#6b6b67',
+    '--neko-desktop-text-subtle': '#72726e',
     '--neko-desktop-accent': '#5f6361',
     '--neko-desktop-accent-hover': '#4c504e',
     '--neko-desktop-accent-border': '#c7c9c8',
@@ -100,21 +103,22 @@ export const desktopNativeThemeTokens = {
 const desktopWebviewThemeTokens = {
   light: {
     '--neko-foreground': '#20201f',
-    '--neko-descriptionForeground': '#777774',
+    '--neko-descriptionForeground': '#5f5f5b',
+    '--neko-fg-muted': '#70706c',
     '--neko-editor-foreground': '#20201f',
-    '--neko-sideBar-foreground': '#555552',
+    '--neko-sideBar-foreground': '#3f3f3c',
     '--neko-input-foreground': '#20201f',
-    '--neko-input-placeholderForeground': '#969693',
-    '--neko-button-background': '#343735',
+    '--neko-input-placeholderForeground': '#72726e',
+    '--neko-button-background': '#20201f',
     '--neko-button-foreground': '#ffffff',
-    '--neko-button-hoverBackground': '#242725',
-    '--neko-button-secondaryForeground': '#4f5250',
+    '--neko-button-hoverBackground': '#111312',
+    '--neko-button-secondaryForeground': '#3f3f3c',
     '--neko-focusBorder': '#6d716f',
-    '--neko-list-activeSelectionBackground': '#e8e8e7',
+    '--neko-list-activeSelectionBackground': '#f3f3f2',
     '--neko-list-activeSelectionForeground': '#20201f',
     '--neko-menu-foreground': '#20201f',
     '--neko-dropdown-foreground': '#20201f',
-    '--neko-icon-foreground': '#6c6f6d',
+    '--neko-icon-foreground': '#525552',
     '--neko-scrollbarSlider-background': 'rgba(0, 0, 0, 0.12)',
     '--neko-scrollbarSlider-hoverBackground': 'rgba(0, 0, 0, 0.21)',
     '--neko-scrollbarSlider-activeBackground': 'rgba(0, 0, 0, 0.30)',
@@ -123,6 +127,7 @@ const desktopWebviewThemeTokens = {
   dark: {
     '--neko-foreground': '#e7eae8',
     '--neko-descriptionForeground': '#a4aba6',
+    '--neko-fg-muted': '#9aa19c',
     '--neko-editor-foreground': '#e7eae8',
     '--neko-sideBar-foreground': '#d1d6d2',
     '--neko-input-foreground': '#e7eae8',
@@ -183,6 +188,18 @@ export function applyResolvedDesktopTheme(target: Document, theme: DesktopResolv
   applyTokens(root, desktopNativeThemeTokens[theme]);
   applyTokens(root, desktopWebviewSharedThemeTokens);
   applyTokens(root, desktopWebviewThemeTokens[theme]);
+}
+
+export function applyDesktopFontSize(
+  target: Document,
+  preference: DesktopFontSizePreference,
+): void {
+  const root = target.documentElement;
+  const scale = preference === 'small' ? 0.92 : preference === 'large' ? 1.12 : 1;
+  const rootFontSize = Math.round(13 * scale * 100) / 100;
+  root.dataset.nekoFontSize = preference;
+  root.style.setProperty('--neko-font-size', `${rootFontSize}px`);
+  root.style.zoom = String(scale);
 }
 
 export function startDesktopSystemTheme(

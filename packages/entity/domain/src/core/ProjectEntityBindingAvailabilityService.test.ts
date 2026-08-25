@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ContentLocator, ContentReadOptions, ContentStat } from '@neko/content';
+import type { ContentLocator, ContentReadOptions, ContentStat } from '@neko/content-domain';
 import {
   ProjectEntityBindingAvailabilityService,
   type ProjectEntityBindingResourcePort,
@@ -7,15 +7,20 @@ import {
 } from '../index';
 
 describe('ProjectEntityBindingAvailabilityService', () => {
-  it('routes every binding kind to its owner and derives attention without editing facts', async () => {
-    const calls: string[] = [];
-    const service = new ProjectEntityBindingAvailabilityService({
-      workspaceFile: port('workspace-file', calls, ready),
-      mediaLibrary: port('media-library', calls, ready),
-      documentEntry: port('document-entry', calls, unavailable('content-changed')),
-      generatedOutput: port('generated-output', calls, unavailable('content-unauthorized')),
-      packageResource: port('package-resource', calls, unavailable('content-missing')),
-    });
+  it('checks every binding through the canonical Content port and derives owner semantics', async () => {
+    const calls: ContentLocator[] = [];
+    const content: ProjectEntityBindingResourcePort = {
+      stat: vi.fn(async (locator: ContentLocator, _options: ContentReadOptions) => {
+        calls.push(locator);
+        if (locator.file.authority === 'package') return unavailable(locator, 'content-missing');
+        if (locator.selector) return unavailable(locator, 'content-changed');
+        if (locator.file.path === 'neko/generated/rin.png') {
+          return unavailable(locator, 'content-unauthorized');
+        }
+        return ready(locator);
+      }),
+    };
+    const service = new ProjectEntityBindingAvailabilityService({ content });
     const before = structuredClone(DOCUMENT);
 
     await expect(service.project(DOCUMENT, CHECKED_AT)).resolves.toEqual([
@@ -32,7 +37,7 @@ describe('ProjectEntityBindingAvailabilityService', () => {
       }),
       expect.objectContaining({
         bindingId: 'binding-generated',
-        owner: 'generated-output',
+        owner: 'workspace-file',
         availability: 'needs-attention',
         attention: { diagnostic: { code: 'content-unauthorized' }, action: 'reconnect' },
       }),
@@ -43,29 +48,18 @@ describe('ProjectEntityBindingAvailabilityService', () => {
         attention: { diagnostic: { code: 'content-missing' }, action: 'reinstall' },
       }),
     ]);
-    expect(calls).toEqual([
-      'workspace-file',
-      'document-entry',
-      'generated-output',
-      'package-resource',
-    ]);
+    expect(calls).toEqual(DOCUMENT.entities[0]?.representations.map(({ target }) => target));
+    expect(content.stat).toHaveBeenCalledTimes(4);
     expect(DOCUMENT).toEqual(before);
   });
 
-  it('fails visibly when an owner returns a foreign locator', async () => {
+  it('fails visibly when Content returns a foreign locator', async () => {
     const service = new ProjectEntityBindingAvailabilityService({
-      workspaceFile: {
-        stat: async () => ready({ kind: 'workspace-file', path: 'other.png' }),
+      content: {
+        stat: async () => ready({ file: { authority: 'workspace', path: 'other.png' } }),
       },
-      mediaLibrary: unusedPort(),
-      documentEntry: unusedPort(),
-      generatedOutput: unusedPort(),
-      packageResource: unusedPort(),
     });
-    const document = {
-      ...DOCUMENT,
-      entities: [{ ...DOCUMENT.entities[0]!, representations: [WORKSPACE] }],
-    };
+    const document = documentWithOnly(WORKSPACE);
 
     await expect(service.project(document, CHECKED_AT)).rejects.toMatchObject({
       diagnostics: [{ code: 'project-entity-binding-unavailable', bindingId: 'binding-workspace' }],
@@ -74,39 +68,16 @@ describe('ProjectEntityBindingAvailabilityService', () => {
 
   it('propagates cancellation as an operation diagnostic instead of needs-attention', async () => {
     const service = new ProjectEntityBindingAvailabilityService({
-      workspaceFile: port('workspace-file', [], unavailable('content-cancelled')),
-      mediaLibrary: unusedPort(),
-      documentEntry: unusedPort(),
-      generatedOutput: unusedPort(),
-      packageResource: unusedPort(),
+      content: {
+        stat: async (locator) => unavailable(locator, 'content-cancelled'),
+      },
     });
-    const document = {
-      ...DOCUMENT,
-      entities: [{ ...DOCUMENT.entities[0]!, representations: [WORKSPACE] }],
-    };
 
-    await expect(service.project(document, CHECKED_AT)).rejects.toMatchObject({
+    await expect(service.project(documentWithOnly(WORKSPACE), CHECKED_AT)).rejects.toMatchObject({
       diagnostics: [{ code: 'project-entity-operation-cancelled' }],
     });
   });
 });
-
-function port<TLocator extends ContentLocator>(
-  kind: TLocator['kind'],
-  calls: string[],
-  result: (locator: TLocator) => ContentStat,
-): ProjectEntityBindingResourcePort<TLocator> {
-  return {
-    stat: vi.fn(async (locator: TLocator, _options: ContentReadOptions) => {
-      calls.push(kind);
-      return result(locator);
-    }),
-  };
-}
-
-function unusedPort<TLocator>(): ProjectEntityBindingResourcePort<TLocator> {
-  return { stat: vi.fn(async () => Promise.reject(new Error('Unexpected binding owner.'))) };
-}
 
 function ready(locator: ContentLocator): ContentStat {
   return {
@@ -118,15 +89,25 @@ function ready(locator: ContentLocator): ContentStat {
 }
 
 function unavailable(
+  locator: ContentLocator,
   code: Extract<ContentStat, { status: 'unavailable' }>['diagnostic']['code'],
-): (locator: ContentLocator) => ContentStat {
-  return (locator) => ({ status: 'unavailable', locator, diagnostic: { code } });
+): ContentStat {
+  return { status: 'unavailable', locator, diagnostic: { code } };
+}
+
+function documentWithOnly(
+  binding: ProjectEntityDocument['entities'][number]['representations'][number],
+): ProjectEntityDocument {
+  return {
+    ...DOCUMENT,
+    entities: [{ ...DOCUMENT.entities[0]!, representations: [binding] }],
+  };
 }
 
 const WORKSPACE: ProjectEntityDocument['entities'][number]['representations'][number] = {
   bindingId: 'binding-workspace',
   role: 'portrait',
-  target: { kind: 'workspace-file', path: 'rin.png' },
+  target: { file: { authority: 'workspace', path: 'rin.png' } },
   source: 'user',
   acceptedAt: '2026-08-05T00:00:00.000Z',
 };
@@ -134,9 +115,8 @@ const DOCUMENT_ENTRY: ProjectEntityDocument['entities'][number]['representations
   bindingId: 'binding-document',
   role: 'reference',
   target: {
-    kind: 'document-entry',
-    source: { kind: 'workspace-file', path: 'story.epub' },
-    entryPath: 'images/rin.png',
+    file: { authority: 'workspace', path: 'story.epub' },
+    selector: { kind: 'entry', path: 'images/rin.png' },
   },
   source: 'user',
   acceptedAt: '2026-08-05T00:00:00.000Z',
@@ -144,12 +124,7 @@ const DOCUMENT_ENTRY: ProjectEntityDocument['entities'][number]['representations
 const GENERATED: ProjectEntityDocument['entities'][number]['representations'][number] = {
   bindingId: 'binding-generated',
   role: 'reference',
-  target: {
-    kind: 'generated-output',
-    outputId: 'output-rin',
-    digest: 'b'.repeat(64),
-    path: 'neko/generated/rin.png',
-  },
+  target: { file: { authority: 'workspace', path: 'neko/generated/rin.png' } },
   source: 'agent',
   acceptedAt: '2026-08-05T00:00:00.000Z',
 };
@@ -157,11 +132,12 @@ const PACKAGE: ProjectEntityDocument['entities'][number]['representations'][numb
   bindingId: 'binding-package',
   role: 'live2d',
   target: {
-    kind: 'package-resource',
-    packageId: 'asset-rin',
-    revision: '2',
-    digest: 'c'.repeat(64),
-    resourcePath: 'model/model.json',
+    file: {
+      authority: 'package',
+      packageId: 'asset-rin',
+      revision: '2',
+      path: 'model/model.json',
+    },
   },
   source: 'import',
   acceptedAt: '2026-08-05T00:00:00.000Z',

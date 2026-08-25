@@ -78,16 +78,6 @@ describe('project cache/search contracts', () => {
   });
 
   it('represents normalized search items with source and freshness metadata', () => {
-    const representationLocator = {
-      kind: 'content-representation' as const,
-      id: 'thumbnail:hero',
-      representationKind: 'thumbnail' as const,
-      source: { kind: 'workspace-file' as const, path: 'assets/hero.png' },
-      spec: { kind: 'thumbnail' as const, maxWidth: 256, maxHeight: 256 },
-      generatorId: 'media-thumbnail',
-      sourceFingerprint: 'hero.png',
-      specFingerprint: 'thumbnail-256',
-    };
     const item: ProjectSearchItem = {
       id: 'script-role:/workspace/cases/test.fountain:小橘',
       kind: 'script-role',
@@ -98,9 +88,7 @@ describe('project cache/search contracts', () => {
         sourceKind: 'fountain',
         filePath: '/workspace/cases/test.fountain',
         contentLocator: {
-          kind: 'media-library',
-          libraryName: 'Characters',
-          relativePath: 'hero.png',
+          file: { authority: 'workspace', path: 'neko/assets/Characters/hero.png' },
         },
       },
       projectRoot: '/workspace',
@@ -109,7 +97,7 @@ describe('project cache/search contracts', () => {
       aliases: [],
       searchText: '小橘 Script role /workspace/cases/test.fountain',
       visualResource: {
-        representationLocator,
+        projectedUri: 'openneko://thumbnail/hero',
         status: 'ready',
         alt: '小橘',
       },
@@ -131,13 +119,7 @@ describe('project cache/search contracts', () => {
         ...item,
         visualResource: {
           ...item.visualResource,
-          representationLocator: {
-            ...representationLocator,
-            source: {
-              kind: 'workspace-file',
-              path: 'neko/assets/Characters/hero.png',
-            },
-          },
+          representationLocator: { kind: 'content-representation-handle', id: 'thumbnail:hero' },
         },
       }),
     ).toBe(false);
@@ -387,7 +369,6 @@ describe('project cache/search contracts', () => {
     expect(canRunSemanticIndexingWorkOnTrigger('ocr', 'project-open')).toBe(false);
     expect(canRunSemanticIndexingWorkOnTrigger('asr', 'project-open')).toBe(false);
     expect(canRunSemanticIndexingWorkOnTrigger('embedding', 'project-open')).toBe(false);
-    expect(canRunSemanticIndexingWorkOnTrigger('perception-refresh', 'project-open')).toBe(false);
     expect(canRunSemanticIndexingWorkOnTrigger('ocr', 'on-demand')).toBe(true);
     expect(canSemanticIndexingWorkBlockProjectOpen('sidecar-projection')).toBe(false);
     expect(canSemanticIndexingWorkBlockProjectOpen('embedding')).toBe(false);

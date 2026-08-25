@@ -21,21 +21,15 @@
       "targetKind": "workflow"
     },
     {
-      "suiteId": "agent-runtime.media-library-content",
-      "path": "media-library-content/suite.json",
-      "ownerId": "media-library-content",
-      "targetKind": "capability"
-    },
-    {
       "suiteId": "agent-runtime.model-binding",
       "path": "model-binding/suite.json",
       "ownerId": "session-model-binding",
       "targetKind": "model"
     },
     {
-      "suiteId": "agent-runtime.perception-routing",
-      "path": "perception-routing/suite.json",
-      "ownerId": "perception-routing",
+      "suiteId": "agent-runtime.media-tool-routing",
+      "path": "media-tool-routing/suite.json",
+      "ownerId": "media-tool-routing",
       "targetKind": "capability"
     },
     {

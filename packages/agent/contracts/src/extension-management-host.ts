@@ -1,4 +1,5 @@
 import {
+  type AgentMcpServerInput,
   parseAgentExtensionManagementProjection,
   parseAgentExtensionManagementSessionIdentity,
   type AgentExtensionManagementProjection,
@@ -13,18 +14,25 @@ interface RequestBase {
 }
 
 export type AgentExtensionManagementHostRequest =
-  | (RequestBase & { readonly route: 'snapshot.get' })
+  | (RequestBase & { readonly route: 'snapshot.get' | 'skill.add' })
   | (RequestBase & {
-      readonly route: 'plugin.enable' | 'plugin.disable' | 'plugin.remove';
-      readonly pluginId: string;
+      readonly route: 'skill.enablement.update';
+      readonly name: string;
+      readonly source: string;
+      readonly enabled: boolean;
     })
   | (RequestBase & {
-      readonly route: 'plugin.install' | 'sources.rescan' | 'skill.install';
+      readonly route: 'skill.remove';
+      readonly name: string;
+      readonly source: string;
     })
+  | (RequestBase & { readonly route: 'mcp.add'; readonly server: AgentMcpServerInput })
   | (RequestBase & {
-      readonly route: 'skill.open' | 'skill.reveal' | 'skill.remove';
-      readonly managementId: string;
-    });
+      readonly route: 'mcp.enablement.update';
+      readonly id: string;
+      readonly enabled: boolean;
+    })
+  | (RequestBase & { readonly route: 'mcp.remove'; readonly id: string });
 
 export interface AgentExtensionManagementHostResult {
   readonly requestId: string;
@@ -40,10 +48,8 @@ export interface OpenNekoAgentExtensionManagementBridge {
   };
 }
 
-type RequestInput = AgentExtensionManagementHostRequest;
-
 export function createAgentExtensionManagementHostRequest(
-  input: RequestInput,
+  input: AgentExtensionManagementHostRequest,
 ): AgentExtensionManagementHostRequest {
   return parseAgentExtensionManagementHostRequest(input);
 }
@@ -51,71 +57,69 @@ export function createAgentExtensionManagementHostRequest(
 export function parseAgentExtensionManagementHostRequest(
   value: unknown,
 ): AgentExtensionManagementHostRequest {
-  const record = requireRecord(value, 'Agent Extension Management request must be an object.');
+  const record = requireRecord(value, 'DSH extension management request must be an object.');
+  const route = record.route;
   const base = {
-    requestId: requireId(record['requestId'], 'request'),
-    identity: parseIdentity(record['identity']),
-  } as const;
-  switch (record['route']) {
-    case 'snapshot.get':
-      requireExactKeys(record, BASE_KEYS);
-      return { ...base, route: 'snapshot.get' };
-    case 'plugin.enable':
-    case 'plugin.disable':
-    case 'plugin.remove':
-      requireExactKeys(record, [...BASE_KEYS, 'pluginId']);
-      return {
-        ...base,
-        route: record['route'],
-        pluginId: requireId(record['pluginId'], 'plugin'),
-      };
-    case 'plugin.install':
-    case 'sources.rescan':
-    case 'skill.install':
-      requireExactKeys(record, BASE_KEYS);
-      return {
-        ...base,
-        route: record['route'],
-      };
-    case 'skill.open':
-    case 'skill.reveal':
-    case 'skill.remove':
-      requireExactKeys(record, [...BASE_KEYS, 'managementId']);
-      return {
-        ...base,
-        route: record['route'],
-        managementId: requireId(record['managementId'], 'Skill management'),
-      };
-    default:
-      throw new Error(`Unknown Agent Extension Management route '${String(record['route'])}'.`);
+    requestId: requireId(record.requestId, 'request'),
+    identity: parseAgentExtensionManagementSessionIdentity(record.identity),
+  };
+  if (route === 'snapshot.get' || route === 'skill.add') {
+    requireExactKeys(record, ['requestId', 'identity', 'route']);
+    return { ...base, route };
   }
+  if (route === 'skill.enablement.update') {
+    requireExactKeys(record, ['requestId', 'identity', 'route', 'name', 'source', 'enabled']);
+    return {
+      ...base,
+      route,
+      name: requireId(record.name, 'Skill'),
+      source: requireId(record.source, 'Skill source'),
+      enabled: requireBoolean(record.enabled, 'Skill enabled'),
+    };
+  }
+  if (route === 'skill.remove') {
+    requireExactKeys(record, ['requestId', 'identity', 'route', 'name', 'source']);
+    return {
+      ...base,
+      route,
+      name: requireId(record.name, 'Skill'),
+      source: requireId(record.source, 'Skill source'),
+    };
+  }
+  if (route === 'mcp.add') {
+    requireExactKeys(record, ['requestId', 'identity', 'route', 'server']);
+    return { ...base, route, server: parseMcpServer(record.server) };
+  }
+  if (route === 'mcp.enablement.update') {
+    requireExactKeys(record, ['requestId', 'identity', 'route', 'id', 'enabled']);
+    return {
+      ...base,
+      route,
+      id: requireId(record.id, 'MCP'),
+      enabled: requireBoolean(record.enabled, 'MCP enabled'),
+    };
+  }
+  if (route === 'mcp.remove') {
+    requireExactKeys(record, ['requestId', 'identity', 'route', 'id']);
+    return { ...base, route, id: requireId(record.id, 'MCP') };
+  }
+  throw new Error(`Unknown DSH extension management route '${String(route)}'.`);
 }
 
 export function parseAgentExtensionManagementHostResult(
   value: unknown,
   request: AgentExtensionManagementHostRequest,
 ): AgentExtensionManagementHostResult {
-  const record = requireRecord(value, 'Agent Extension Management result must be an object.');
+  const record = requireRecord(value, 'DSH extension management result must be an object.');
   requireExactKeys(record, ['requestId', 'route', 'projection']);
-  if (record['requestId'] !== request.requestId || record['route'] !== request.route) {
-    throw new Error('Agent Extension Management result identity is stale.');
+  if (record.requestId !== request.requestId || record.route !== request.route) {
+    throw new Error('DSH extension management result identity is stale.');
   }
-  const projection = parseAgentExtensionManagementProjection(record['projection']);
-  const identity = projection.identity;
-  if (identity.windowId !== request.identity.windowId) {
-    throw new Error('Agent Extension Management projection owner identity is stale.');
+  const projection = parseAgentExtensionManagementProjection(record.projection);
+  if (projection.identity.windowId !== request.identity.windowId) {
+    throw new Error('DSH extension management projection owner identity is stale.');
   }
-  return {
-    requestId: request.requestId,
-    route: request.route,
-    projection,
-  };
-}
-
-const BASE_KEYS = ['requestId', 'identity', 'route'] as const;
-
-function parseIdentity(value: unknown): AgentExtensionManagementSessionIdentity {
-  return parseAgentExtensionManagementSessionIdentity(value);
+  return { requestId: request.requestId, route: request.route, projection };
 }
 
 function requireRecord(value: unknown, message: string): Readonly<Record<string, unknown>> {
@@ -127,14 +131,54 @@ function requireExactKeys(
   record: Readonly<Record<string, unknown>>,
   keys: readonly string[],
 ): void {
-  if (Object.keys(record).some((key) => !keys.includes(key))) {
-    throw new Error('Agent Extension Management payload contains unsupported fields.');
+  if (
+    Object.keys(record).length !== keys.length ||
+    Object.keys(record).some((key) => !keys.includes(key))
+  ) {
+    throw new Error('DSH extension management payload contains unsupported fields.');
   }
 }
 
 function requireId(value: unknown, label: string): string {
-  if (typeof value !== 'string' || value.length === 0) {
-    throw new Error(`Agent Extension Management ${label} identity is required.`);
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error(`DSH extension management ${label} identity is required.`);
   }
+  return value;
+}
+
+function requireBoolean(value: unknown, label: string): boolean {
+  if (typeof value !== 'boolean') throw new Error(`DSH extension management ${label} is invalid.`);
+  return value;
+}
+
+function parseMcpServer(value: unknown): AgentMcpServerInput {
+  const record = requireRecord(value, 'DSH extension management MCP server must be an object.');
+  if (record.transport === 'stdio') {
+    requireExactKeys(record, ['serverName', 'description', 'transport', 'command', 'args']);
+    if (!Array.isArray(record.args) || record.args.some((item) => typeof item !== 'string')) {
+      throw new Error('DSH extension management MCP arguments are invalid.');
+    }
+    return {
+      serverName: requireId(record.serverName, 'MCP server'),
+      description: requireString(record.description, 'MCP description'),
+      transport: 'stdio',
+      command: requireId(record.command, 'MCP command'),
+      args: record.args,
+    };
+  }
+  if (record.transport === 'streamable-http') {
+    requireExactKeys(record, ['serverName', 'description', 'transport', 'url']);
+    return {
+      serverName: requireId(record.serverName, 'MCP server'),
+      description: requireString(record.description, 'MCP description'),
+      transport: 'streamable-http',
+      url: requireId(record.url, 'MCP URL'),
+    };
+  }
+  throw new Error('DSH extension management MCP transport is invalid.');
+}
+
+function requireString(value: unknown, label: string): string {
+  if (typeof value !== 'string') throw new Error(`DSH extension management ${label} is invalid.`);
   return value;
 }

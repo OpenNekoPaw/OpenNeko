@@ -2,12 +2,10 @@
  * Configuration Manager
  *
  * Providers/models: user config only (~/.neko/config.toml).
- * MCP servers: user configuration only.
  */
 
 import type { Provider, Model } from './types/provider';
 import type { RetryTimeoutPreset, BuiltinPresetName } from './types/error';
-import type { MCPServerPreset } from './types/config';
 import type {
   ChatModelOption,
   MediaModelType,
@@ -43,10 +41,6 @@ import {
   type AssistantRuntimeSettingsSnapshot,
   type AssistantSettingsData,
   type AssistantSettingsSnapshot,
-  type MediaUnderstandingCategory,
-  type MediaUnderstandingModelStatus,
-  type MediaUnderstandingModels,
-  type MediaUnderstandingPurpose,
 } from './assistant-config';
 import {
   buildAssistantConfigAvailabilityDiagnostic,
@@ -83,7 +77,6 @@ export interface MergedConfig {
   providers: Map<string, Provider>;
   models: Map<string, Model>;
   retryTimeoutPresets: Map<string, RetryTimeoutPreset>;
-  mcpServers: Map<string, MCPServerPreset>;
 }
 
 /**
@@ -91,7 +84,6 @@ export interface MergedConfig {
  */
 export interface ConfigManagerOptions {
   userConfigManager?: IUserConfigManager;
-  workspacePath?: string;
   assistantRuntimeSettings?: AssistantRuntimeSettingsPort;
 }
 
@@ -99,13 +91,11 @@ export interface ConfigManagerOptions {
  * ConfigManager - Unified configuration management
  *
  * - Providers/Models: user config only (~/.neko/config.toml)
- * - MCP Servers: user configuration only
  */
 export class ConfigManager {
   private userConfigManager: IUserConfigManager | null = null;
   private userConfigReadResult: ConfigReadResult | null = null;
   private configDiagnostic: AssistantConfigDiagnostic | undefined;
-  private workspacePath: string | null = null;
   private configMerged = false;
   private cachedConfig: MergedConfig | null = null;
   private readonly assistantRuntimeSettings: AssistantRuntimeSettingsPort | undefined;
@@ -113,7 +103,6 @@ export class ConfigManager {
   // Merged data
   private providers: Map<string, Provider> = new Map();
   private models: Map<string, Model> = new Map();
-  private mcpServers: Map<string, MCPServerPreset> = new Map();
 
   // Specialized services
   private readonly chatModelService = new ChatModelService();
@@ -122,10 +111,6 @@ export class ConfigManager {
   constructor(options: ConfigManagerOptions = {}) {
     this.userConfigManager = options.userConfigManager ?? null;
     this.assistantRuntimeSettings = options.assistantRuntimeSettings;
-
-    if (options.workspacePath) {
-      this.workspacePath = options.workspacePath;
-    }
 
     this.reloadConfig();
   }
@@ -142,7 +127,6 @@ export class ConfigManager {
       providers: new Map(this.providers),
       models: new Map(this.models),
       retryTimeoutPresets: new Map(Object.entries(RETRY_TIMEOUT_PRESETS)),
-      mcpServers: new Map(this.mcpServers),
     };
     return this.cachedConfig;
   }
@@ -155,7 +139,6 @@ export class ConfigManager {
       this.userConfigManager?.load() ?? {
         providers: [],
         models: [],
-        mcpServers: [],
       }
     );
   }
@@ -276,7 +259,6 @@ export class ConfigManager {
         chatModelOptions,
         models: config.models.values(),
       }),
-      mediaUnderstandingModels: this.buildMediaUnderstandingModels(),
       ...(configDiagnostic ? { configDiagnostic } : {}),
     };
   }
@@ -352,7 +334,6 @@ export class ConfigManager {
       userConfigReadResult: this.userConfigReadResult,
       providers: [...config.providers.values()],
       models: [...config.models.values()],
-      mcpServers: [...config.mcpServers.values()],
       runtimeOverrides: {
         ...projectRuntimeAssistantSettingsOverrides(runtimeSettings),
         ...runtimeOverrides,
@@ -384,7 +365,6 @@ export class ConfigManager {
         chatModelOptions,
         models: config.models.values(),
       }),
-      mediaUnderstandingModels: this.buildMediaUnderstandingModels(),
       ...(settingsDiagnostic ? { configDiagnostic: settingsDiagnostic } : {}),
     };
   }
@@ -398,37 +378,6 @@ export class ConfigManager {
   async removeModel(modelId: string): Promise<void> {
     this.ensureUserConfigManager();
     await this.userConfigManager!.removeModel(modelId);
-    this.reloadConfig();
-  }
-
-  // ==========================================================================
-  // MCP Server Methods
-  // ==========================================================================
-
-  getMCPServer(id: string): MCPServerPreset | undefined {
-    this.ensureMerged();
-    return this.mcpServers.get(id);
-  }
-
-  getMCPServers(): MCPServerPreset[] {
-    this.ensureMerged();
-    return Array.from(this.mcpServers.values());
-  }
-
-  getEnabledMCPServers(): MCPServerPreset[] {
-    this.ensureMerged();
-    return Array.from(this.mcpServers.values()).filter((s) => s.enabled !== false);
-  }
-
-  async setMCPServer(server: MCPServerPreset): Promise<void> {
-    this.ensureUserConfigManager();
-    await this.userConfigManager!.addMCPServer(server);
-    this.reloadConfig();
-  }
-
-  async removeMCPServer(serverId: string): Promise<void> {
-    this.ensureUserConfigManager();
-    await this.userConfigManager!.removeMCPServer(serverId);
     this.reloadConfig();
   }
 
@@ -451,7 +400,39 @@ export class ConfigManager {
     return defaults[type];
   }
 
+  async setDefaultModelRef(type: ModelType, ref: ModelRefConfig): Promise<void> {
+    this.ensureUserConfigManager();
+    this.ensureMerged();
+    const provider = this.providers.get(ref.providerId);
+    const model = this.models.get(ref.modelId);
+    if (!provider || provider.enabled === false) {
+      throw new Error(`Provider ${ref.providerId} is unavailable for default ${type} model.`);
+    }
+    if (!model || model.enabled === false) {
+      throw new Error(
+        `Model ${ref.providerId}/${ref.modelId} is unavailable for default ${type} model.`,
+      );
+    }
+    if (model.providerId !== provider.id) {
+      throw new Error(
+        `Model ${model.id} belongs to provider ${model.providerId}, not ${provider.id}.`,
+      );
+    }
+    if ((model.type ?? 'llm') !== type) {
+      throw new Error(`Model ${provider.id}/${model.id} is not a ${type} model.`);
+    }
+
+    await this.userConfigManager!.updateScalars({
+      defaultModels: {
+        ...(this.getScalar('defaultModels') ?? {}),
+        [type]: ref,
+      },
+    });
+    this.reloadConfig();
+  }
+
   getDefaultModelPurposeRef(purpose: string): ModelRefConfig | undefined {
+    if (!isAgentModelPurpose(purpose)) return undefined;
     return this.getScalar('defaultModelPurposes')?.[purpose];
   }
 
@@ -673,51 +654,6 @@ export class ConfigManager {
     });
   }
 
-  private buildMediaUnderstandingModels(): MediaUnderstandingModels {
-    return {
-      image: this.buildMediaUnderstandingModelStatus('image', 'image.understand'),
-      audio: this.buildMediaUnderstandingModelStatus('audio', 'audio.understand'),
-      video: this.buildMediaUnderstandingModelStatus('video', 'video.understand'),
-    };
-  }
-
-  private buildMediaUnderstandingModelStatus(
-    category: MediaUnderstandingCategory,
-    purpose: MediaUnderstandingPurpose,
-  ): MediaUnderstandingModelStatus {
-    const resolvedRef = this.resolveModelRefForPurpose(purpose);
-
-    if (!resolvedRef) {
-      return { category, purpose, status: 'missing' };
-    }
-
-    this.ensureMerged();
-    const provider = this.providers.get(resolvedRef.providerId);
-    const model = this.models.get(resolvedRef.modelId);
-    const providerLabel = provider
-      ? provider.displayName || provider.name || provider.id
-      : undefined;
-    const modelLabel = model ? model.displayName || model.name || model.id : undefined;
-    const status: MediaUnderstandingModelStatus = {
-      category,
-      purpose,
-      status: 'configured',
-      providerId: resolvedRef.providerId,
-      modelId: resolvedRef.modelId,
-      optionId: toModelOptionId(resolvedRef),
-      source: 'explicit-config',
-    };
-    if (providerLabel && modelLabel) {
-      status.label = `${providerLabel} / ${modelLabel}`;
-    } else if (modelLabel) {
-      status.label = modelLabel;
-    }
-    if (providerLabel) {
-      status.providerLabel = providerLabel;
-    }
-    return status;
-  }
-
   private resolveProviderSources(): AiProviderSourceProjection {
     this.ensureMerged();
     return resolveAiProviderSources({
@@ -833,6 +769,13 @@ export class ConfigManager {
     const purposeDefaults = result.config.defaultModelPurposes ?? {};
     for (const [purpose, ref] of Object.entries(purposeDefaults)) {
       if (!ref) continue;
+      if (!isAgentModelPurpose(purpose)) {
+        return buildAssistantConfigAvailabilityDiagnostic(
+          'invalidDefaultModelBinding',
+          result.filePath,
+          `default_model_purposes.${purpose}`,
+        );
+      }
       const provider = this.providers.get(ref.providerId);
       const model = this.models.get(ref.modelId);
       if (
@@ -871,7 +814,6 @@ export class ConfigManager {
    * Project user configuration into flat runtime maps.
    *
    * - Providers/Models: user config only (no workspace layer)
-   * - MCP Servers: user configuration only
    */
   private ensureMerged(): void {
     if (this.configMerged) {
@@ -893,17 +835,6 @@ export class ConfigManager {
       this.mergeArrayToMap(this.models, userConfig?.models as Model[] | undefined);
     }
 
-    // --- MCP Servers (user only) ---
-    this.mcpServers.clear();
-    if (userConfigResult.status === 'ok') {
-      this.mergeArrayToMap(
-        this.mcpServers,
-        userConfig?.mcpServers as MCPServerPreset[] | undefined,
-      );
-    }
-    // Substitute workspace path in MCP server configurations
-    this.substituteMCPWorkspacePath();
-
     this.configMerged = true;
   }
 
@@ -916,21 +847,6 @@ export class ConfigManager {
     for (const item of items) {
       target.set(item.id, { ...item });
     }
-  }
-
-  /**
-   * Substitute ${workspaceFolder} placeholder in MCP server configurations.
-   */
-  private substituteMCPWorkspacePath(): void {
-    if (!this.workspacePath) return;
-
-    this.mcpServers.forEach((server, id) => {
-      if (!server.args) return;
-      const updatedArgs = server.args.map((arg) =>
-        arg.replace(/\$\{workspaceFolder\}/g, this.workspacePath!),
-      );
-      this.mcpServers.set(id, { ...server, args: updatedArgs });
-    });
   }
 }
 

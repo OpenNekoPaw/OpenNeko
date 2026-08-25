@@ -16,7 +16,7 @@ const identity: TextDocumentIdentity = {
   owner: { kind: 'window', windowId: 'window-1', projectId: 'project-1' },
   workspaceId: 'workspace-1',
   documentId: 'notes/draft.md',
-  locator: { kind: 'workspace-file', path: 'notes/draft.md' },
+  locator: { file: { authority: 'workspace', path: 'notes/draft.md' } },
 };
 
 describe('TextEditorMarkdownReferenceCatalog', () => {
@@ -161,7 +161,7 @@ describe('TextEditorMarkdownReferenceCatalog', () => {
           ...request('mention', ''),
           identity: {
             ...identity,
-            locator: { kind: 'workspace-file', path: 'notes/other.md' },
+            locator: { file: { authority: 'workspace', path: 'notes/other.md' } },
           },
         },
         active(),

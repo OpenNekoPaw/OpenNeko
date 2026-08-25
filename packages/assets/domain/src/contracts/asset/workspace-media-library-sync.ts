@@ -1,10 +1,11 @@
 import {
   contentLocatorKey,
+  isWorkspaceFileContentLocator,
   normalizeWorkspaceContentPath,
   validateContentLocator,
   type ContentLocator,
-  type MediaLibraryContentLocator,
-} from '@neko/content';
+  type WorkspaceFileContentLocator,
+} from '@neko/content-domain';
 import { isPortablePathSegment } from '@neko/shared/path';
 
 export type ProjectContentReferenceOwnerKind = 'canvas' | 'cut' | 'entity-representation';
@@ -25,7 +26,7 @@ export interface WorkspaceMediaLibraryReference {
   readonly ownerKind: ProjectContentReferenceOwnerKind;
   readonly ownerId: string;
   readonly ownerFingerprint: string;
-  readonly locator: MediaLibraryContentLocator;
+  readonly locator: WorkspaceFileContentLocator;
   readonly descendantPath: string;
 }
 
@@ -422,14 +423,21 @@ function workspaceMediaLibraryReference(
   if (!validated.ok) {
     throw new Error(`Project content owner '${owner.ownerId}' returned an invalid ContentLocator.`);
   }
-  if (validated.locator.kind !== 'media-library') return undefined;
+  if (!isWorkspaceFileContentLocator(validated.locator) || validated.locator.selector) {
+    return undefined;
+  }
+  const segments = validated.locator.file.path.split('/');
+  if (segments[0] !== 'neko' || segments[1] !== 'assets' || segments.length < 4) return undefined;
+  const libraryName = segments[2];
+  const descendantPath = segments.slice(3).join('/');
+  if (!libraryName || !descendantPath) return undefined;
   return {
-    libraryName: validated.locator.libraryName,
+    libraryName,
     ownerKind: owner.ownerKind,
     ownerId: owner.ownerId,
     ownerFingerprint: owner.sourceFingerprint,
     locator: validated.locator,
-    descendantPath: validated.locator.relativePath,
+    descendantPath,
   };
 }
 

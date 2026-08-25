@@ -1,5 +1,5 @@
-import type { CharacterMemorySourceRange, EntityMention } from '@neko/chara';
-import { isCharacterMemorySourceRef, type CharacterMemorySourceRef } from '@neko/chara';
+import type { CharacterMemorySourceRange, EntityMention } from '@neko/chara-domain';
+import { isCharacterMemorySourceRef, type CharacterMemorySourceRef } from '@neko/chara-domain';
 import type {
   CreativeEntityKind,
   CreativeEntityRef,
@@ -8,7 +8,7 @@ import type {
   ProjectEntityCandidateSourceOwner,
   ProjectEntityRecord,
 } from '@neko/entity-domain';
-import { parseDocumentLocator, type DocumentLocator } from '@neko/content';
+import { isContentLocator, type ContentLocator } from '@neko/content-domain';
 import type {
   MediaSemanticIndex,
   MediaTextRange,
@@ -93,7 +93,7 @@ export interface SemanticTextSegment {
   readonly unitId: string;
   readonly kind: SemanticTextSegmentKind;
   readonly text: string;
-  readonly locator: DocumentLocator;
+  readonly locator: ContentLocator;
   readonly contentHash: string;
   readonly range: CharacterMemorySourceRange & {
     readonly startOffset: number;
@@ -116,7 +116,7 @@ export interface SemanticEvidenceProjection {
   readonly unitId: string;
   readonly kind: SemanticTextSegmentKind | MediaTextSegmentKind;
   readonly sourceRef: CharacterMemorySourceRef;
-  readonly locator: DocumentLocator;
+  readonly locator: ContentLocator;
   readonly range?: SemanticTextSegment['range'] | MediaTextRange;
   readonly contentHash: string;
   readonly entityMentionIds?: readonly string[];
@@ -244,7 +244,7 @@ export function isSemanticEvidenceProjection(value: unknown): value is SemanticE
     isNonEmptyString(value['unitId']) &&
     (isSemanticTextSegmentKind(value['kind']) || isMediaTextSegmentKind(value['kind'])) &&
     isCharacterMemorySourceRef(value['sourceRef']) &&
-    parseDocumentLocator(value['locator']) !== undefined &&
+    isContentLocator(value['locator']) &&
     isNonEmptyString(value['contentHash']) &&
     (value['entityMentionIds'] === undefined ||
       (Array.isArray(value['entityMentionIds']) &&

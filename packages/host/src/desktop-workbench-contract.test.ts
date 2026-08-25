@@ -41,6 +41,63 @@ describe('Desktop Workbench contract', () => {
     expect(parseDesktopWorkbenchLayout(current)).toEqual(current);
   });
 
+  it('accepts ContentLocator only as Preview recovery identity', () => {
+    const preview = openOrFocusMainView(
+      createDefaultDesktopWorkbenchLayout('window-1'),
+      viewRef('preview-1', 'preview'),
+    );
+
+    expect(parseDesktopWorkbenchLayout(preview).main.views[0]).toMatchObject({
+      previewContentLocator: {
+        file: { authority: 'workspace', path: 'documents/preview-1.epub' },
+        selector: { kind: 'entry', path: 'OPS/chapter-1.xhtml' },
+      },
+    });
+    expect(() =>
+      parseDesktopWorkbenchLayout({
+        ...preview,
+        main: {
+          ...preview.main,
+          views: [{ ...preview.main.views[0]!, previewContentLocator: { file: {} } }],
+        },
+      }),
+    ).toThrow('Preview ContentLocator is invalid');
+    expect(() =>
+      parseDesktopWorkbenchLayout({
+        ...preview,
+        main: {
+          ...preview.main,
+          views: [
+            {
+              ...viewRef('canvas-1', 'canvas'),
+              previewContentLocator: {
+                file: { authority: 'workspace', path: 'documents/canvas-1.nkc' },
+              },
+            },
+          ],
+        },
+      }),
+    ).toThrow('Preview presentation metadata belongs only to Preview Views');
+  });
+
+  it('keeps dock widths lower-bounded without imposing an artificial upper bound', () => {
+    const current = createDefaultDesktopWorkbenchLayout('window-1');
+    const resized = parseDesktopWorkbenchLayout({
+      ...current,
+      resourceDock: { presentation: 'docked', width: 720 },
+      display: { mode: 'chat-main', chatPosition: 'left', chatWidth: 680 },
+    });
+
+    expect(resized.resourceDock.width).toBe(720);
+    expect(resized.display.chatWidth).toBe(680);
+    expect(() =>
+      parseDesktopWorkbenchLayout({
+        ...current,
+        display: { mode: 'chat-main', chatPosition: 'left', chatWidth: 279 },
+      }),
+    ).toThrow('Desktop Workbench Chat width is invalid.');
+  });
+
   it('opens, focuses and splits Main Views without changing Chat presentation', () => {
     const initial = {
       ...createDefaultDesktopWorkbenchLayout('window-1'),
@@ -416,6 +473,10 @@ function viewRef(
       ? {
           previewPresentation: 'pinned' as const,
           previewContentKind: 'model' as const,
+          previewContentLocator: {
+            file: { authority: 'workspace' as const, path: `documents/${viewId}.epub` },
+            selector: { kind: 'entry' as const, path: 'OPS/chapter-1.xhtml' },
+          },
         }
       : {}),
   } as const;

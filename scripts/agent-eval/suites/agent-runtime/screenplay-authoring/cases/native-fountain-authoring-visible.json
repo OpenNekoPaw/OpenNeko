@@ -14,7 +14,7 @@
     "userBehavior": "Read one existing Fountain file, freshness-replace it through the native Workspace file path, then create one new Fountain file.",
     "canonicalPath": [
       "Desktop Agent public composer",
-      "Pi Conversation runtime",
+      "exact DSH Session",
       "core Read",
       "Workspace-relative path plus fingerprint",
       "core Write",
@@ -81,7 +81,10 @@
       "name": "Read",
       "status": "success",
       "expectedArguments": { "file_path": "screenplay.fountain" },
-      "resultIncludes": { "path": "screenplay.fountain", "fingerprint": { "strategy": "mtime-size" } },
+      "resultIncludes": {
+        "path": "screenplay.fountain",
+        "fingerprint": { "strategy": "mtime-size" }
+      },
       "evidenceRef": "native-fountain-authoring-facts"
     },
     {
@@ -126,6 +129,12 @@
       "kind": "final-answer",
       "mode": "contains",
       "text": ["NATIVE_FOUNTAIN_AUTHORING_OK"],
+      "evidenceRef": "native-fountain-authoring-facts"
+    },
+    {
+      "id": "lifecycle",
+      "kind": "desktop-lifecycle",
+      "checks": ["composer-focus", "graceful-close"],
       "evidenceRef": "native-fountain-authoring-facts"
     }
   ],

@@ -122,7 +122,11 @@ function selection(rubricRef) {
     scenario: {
       id: 'explicit-chat-model',
       evidenceContract: {
-        canonicalPath: ['Desktop renderer bridge', 'sender-bound controller', 'Pi Session'],
+        canonicalPath: [
+          'Desktop renderer bridge',
+          'sender-bound Desktop Session Host',
+          'DSH Session through ACP',
+        ],
         observables: [{ ref: 'model-facts', required: true }],
       },
       assertions: [{ id: 'runtime' }, { id: 'model' }],

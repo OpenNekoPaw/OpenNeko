@@ -7,10 +7,7 @@ import type {
 import { resolveCanvasMaterialPresentation } from './materialPresentation';
 
 const generatedLocator = {
-  kind: 'generated-output',
-  outputId: 'generated-image-1',
-  digest: 'sha256:generated-image-1',
-  path: 'neko/generated/image/generated-image-1.png',
+  file: { authority: 'workspace', path: 'neko/generated/image/generated-image-1.png' },
 } as const;
 
 describe('resolveCanvasMaterialPresentation', () => {
@@ -18,10 +15,7 @@ describe('resolveCanvasMaterialPresentation', () => {
     const node = mediaNode('reference', {
       assetPath: 'assets/reference.png',
       mediaType: 'image',
-      contentLocator: {
-        kind: 'workspace-file',
-        path: 'assets/reference.png',
-      },
+      contentLocator: { file: { authority: 'workspace', path: 'assets/reference.png' } },
     });
 
     expect(resolveCanvasMaterialPresentation(node)).toEqual({
@@ -34,7 +28,7 @@ describe('resolveCanvasMaterialPresentation', () => {
 
   it('projects generated media provenance without deriving execution authority from lineage', () => {
     const node = mediaNode('generated', {
-      assetPath: generatedLocator.path,
+      assetPath: generatedLocator.file.path,
       mediaType: 'image',
       contentLocator: generatedLocator,
       generation: generationEvidence({
@@ -65,9 +59,7 @@ describe('resolveCanvasMaterialPresentation', () => {
       mediaType: 'audio',
       contentLocator: {
         ...generatedLocator,
-        outputId: 'generated-audio-1',
-        digest: 'sha256:generated-audio-1',
-        path: 'neko/generated/audio/shot-1.wav',
+        file: { ...generatedLocator.file, path: 'neko/generated/audio/shot-1.wav' },
       },
       generation: generationEvidence({
         prompt: 'Low industrial ambience',
@@ -100,9 +92,10 @@ describe('resolveCanvasMaterialPresentation', () => {
         mediaKind: 'document',
         contentLocator: {
           ...generatedLocator,
-          outputId: 'generated-document-1',
-          digest: 'sha256:generated-document-1',
-          path: 'neko/generated/document/storyboard.md',
+          file: {
+            ...generatedLocator.file,
+            path: 'neko/generated/document/storyboard.md',
+          },
         },
         generation: generationEvidence({
           prompt: 'Create a six-shot storyboard',
@@ -133,14 +126,19 @@ describe('resolveCanvasMaterialPresentation', () => {
     expect(resolveCanvasMaterialPresentation(node)).toBeUndefined();
   });
 
-  it('fails closed when a generated locator lacks canonical Generation evidence', () => {
+  it('treats the same canonical locator as referenced when Generation evidence is absent', () => {
     const node = mediaNode('generated-without-job', {
-      assetPath: generatedLocator.path,
+      assetPath: generatedLocator.file.path,
       contentLocator: generatedLocator,
       mediaType: 'image',
     });
 
-    expect(resolveCanvasMaterialPresentation(node)).toBeUndefined();
+    expect(resolveCanvasMaterialPresentation(node)).toEqual({
+      source: 'referenced',
+      mediaType: 'image',
+      canPreview: true,
+      canCopyToMediaLibrary: true,
+    });
   });
 });
 

@@ -29,13 +29,9 @@
     "expectedResult": "The source excerpt becomes flexible Markdown with scene/shot, visual action, camera, dialogue or sound, duration guidance, and explicit uncertainty where details are absent.",
     "expectedFailure": "Missing Skill injection, invented authoritative source facts, or structured fallback fails."
   },
-  "fixtureRefs": [
-    "empty-workspace"
-  ],
+  "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "markdown",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "submit",
@@ -63,7 +59,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "storyboard",
-        "fingerprint": "sha256:bca4ab8f29d1ef1b5a0fef44bf2856d0ba908b9b61e9c9dd8b76b13bc8ea325b"
+        "fingerprint": "sha256:1319707ec9c960b1e60193dc9d329aa937683b8e6ac497483ef194c616a297f9"
       },
       "status": "injected",
       "evidenceRef": "skill-facts"
@@ -72,14 +68,7 @@
       "id": "table",
       "kind": "structured-output",
       "format": "table",
-      "requiredFields": [
-        "scene",
-        "shot",
-        "action",
-        "camera",
-        "dialogue",
-        "duration"
-      ],
+      "requiredFields": ["scene", "shot", "action", "camera", "dialogue", "duration"],
       "locale": "zh-cn",
       "evidenceRef": "output-contract"
     }

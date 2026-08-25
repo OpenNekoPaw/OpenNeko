@@ -126,12 +126,17 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
         `${JSON.stringify(
           canvasDocument('Audio View', 'audio-node', media.audio, 'audio', [
             markdownNode('markdown-node'),
+            textFileNode('text-file-node', 'copied-reference.md'),
           ]),
           null,
           2,
         )}\n`,
       ),
       writeFile(join(workspacePath, 'story.otio'), `${JSON.stringify(emptyOtioDocument())}\n`),
+      writeFile(
+        join(workspacePath, 'copied-reference.md'),
+        '# Copied reference\n\nThis file preview must remain available immediately after duplication.\n',
+      ),
     ]);
     return {
       workspacePath,
@@ -149,6 +154,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     pressKey,
     restartApplication,
     screenshot,
+    scroll,
     waitForSelector,
   }) {
     await resizeWindow(evaluate, 1200, 800);
@@ -226,6 +232,9 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     await waitForSelector(
       '[data-owner-view-id="canvas:functional:audio"] [data-node-presentation][data-node-id="markdown-node"] [data-markdown-document="ready"]',
     );
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:audio"] [data-node-presentation][data-node-id="text-file-node"] [data-text-preview-status="ready"]',
+    );
     await waitForCondition(
       evaluate,
       `(() => {
@@ -269,6 +278,18 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       resourceStatus: epubResourceStatus,
     });
     const epubImageScreenshot = await screenshot('canvas-epub-document-entry-image');
+    await click(
+      '[data-owner-view-id="canvas:functional:audio"] [data-node-presentation][data-node-id="text-file-node"]',
+    );
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:audio"] [data-selection-action="node:duplicate"]',
+    );
+    await click(
+      '[data-owner-view-id="canvas:functional:audio"] [data-selection-action="node:duplicate"]',
+    );
+    const duplicatedFilePreview = await waitForCopiedFilePreview(evaluate);
+    checkpoint('canvas-copied-file-preview-ready', duplicatedFilePreview);
+    const duplicatedFilePreviewScreenshot = await screenshot('canvas-copied-file-preview-ready');
     const markdownSelector =
       '[data-owner-view-id="canvas:functional:audio"] [data-node-presentation][data-node-id="markdown-node"]';
     const markdownPreview = await inspectCanvasMarkdownNode(evaluate, markdownSelector);
@@ -276,6 +297,8 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       markdownPreview.editing ||
       markdownPreview.textareaCount !== 0 ||
       markdownPreview.proseMirrorCount !== 0 ||
+      markdownPreview.wheelOwner !== 'content' ||
+      markdownPreview.scrollHeight <= markdownPreview.clientHeight ||
       markdownPreview.headingSize > 18 ||
       markdownPreview.width > 262 ||
       markdownPreview.height > 182
@@ -285,6 +308,23 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       );
     }
     const markdownPreviewScreenshot = await screenshot('canvas-markdown-node-compact-preview');
+    await scroll(`${markdownSelector} .canvas-markdown-node__preview`, 0, { deltaY: 120 });
+    await evaluate('new Promise((resolve) => setTimeout(resolve, 100))');
+    const markdownScrolled = await inspectCanvasMarkdownNode(evaluate, markdownSelector);
+    if (
+      markdownScrolled.scrollTop <= markdownPreview.scrollTop ||
+      Math.abs(markdownScrolled.left - markdownPreview.left) > 0.5 ||
+      Math.abs(markdownScrolled.top - markdownPreview.top) > 0.5
+    ) {
+      throw new Error(
+        `Canvas Markdown wheel ownership is invalid: ${JSON.stringify({ before: markdownPreview, after: markdownScrolled })}`,
+      );
+    }
+    checkpoint('canvas-markdown-node-nested-scroll', {
+      before: markdownPreview,
+      after: markdownScrolled,
+    });
+    const markdownScrolledScreenshot = await screenshot('canvas-markdown-node-nested-scroll');
     await click(markdownSelector);
     const selectedMarkdownPreview = await inspectCanvasMarkdownNode(evaluate, markdownSelector);
     if (
@@ -296,31 +336,125 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
         `Canvas Markdown selection mounted a mutable editor: ${JSON.stringify(selectedMarkdownPreview)}`,
       );
     }
+    const markdownActions = await inspectCanvasSelectionActions(
+      evaluate,
+      'canvas:functional:audio',
+    );
+    if (
+      markdownActions.actionIds.join('|') !== 'canvas:edit-markdown|node:duplicate|preview:open' ||
+      markdownActions.disabledActionIds.length !== 0 ||
+      markdownActions.overflowActionIds.length !== 0
+    ) {
+      throw new Error(`Canvas Markdown actions are invalid: ${JSON.stringify(markdownActions)}`);
+    }
+    const markdownEditorContextBefore = await inspectCanvasSelectionAndViewport(
+      evaluate,
+      'canvas:functional:audio',
+    );
+    await click(
+      '[data-owner-view-id="canvas:functional:audio"] [data-selection-action="canvas:edit-markdown"]',
+    );
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:audio"] [data-canvas-markdown-editor="true"] .ProseMirror[contenteditable="true"]',
+    );
+    const markdownEditing = await inspectCanvasMarkdownEditor(evaluate, 'canvas:functional:audio');
+    if (
+      markdownEditing.overlayCount !== 1 ||
+      markdownEditing.modal !== 'true' ||
+      markdownEditing.editorState !== 'ready' ||
+      markdownEditing.canvasInteractionSuspended !== 'true' ||
+      markdownEditing.nodeProseMirrorCount !== 0 ||
+      markdownEditing.editorProseMirrorCount !== 1 ||
+      markdownEditing.contentEditable !== 'true' ||
+      markdownEditing.wheelOwner !== 'content' ||
+      markdownEditing.overlayWidth < markdownEditing.viewportWidth - 1 ||
+      markdownEditing.overlayHeight < markdownEditing.viewportHeight - 1 ||
+      !markdownEditing.text.includes('这是一个紧凑的画布分析节点')
+    ) {
+      throw new Error(
+        `Canvas Markdown immersive editing is invalid: ${JSON.stringify(markdownEditing)}`,
+      );
+    }
+    const markdownEditingScreenshot = await screenshot('canvas-markdown-immersive-editing');
+    await scroll(
+      '[data-owner-view-id="canvas:functional:audio"] .canvas-markdown-editor-overlay__body',
+      0,
+      { deltaY: 180 },
+    );
+    await evaluate('new Promise((resolve) => setTimeout(resolve, 100))');
+    const markdownEditorScrolled = await inspectCanvasMarkdownEditor(
+      evaluate,
+      'canvas:functional:audio',
+    );
+    if (
+      markdownEditorScrolled.scrollTop <= markdownEditing.scrollTop ||
+      markdownEditorScrolled.viewportTransform !== markdownEditing.viewportTransform
+    ) {
+      throw new Error(
+        `Canvas Markdown immersive scroll changed the Canvas viewport: ${JSON.stringify({ before: markdownEditing, after: markdownEditorScrolled })}`,
+      );
+    }
+    await evaluate(`(() => {
+      const editor = document.querySelector(
+        '[data-owner-view-id="canvas:functional:audio"] [data-canvas-markdown-editor="true"] .ProseMirror[contenteditable="true"]',
+      );
+      if (!(editor instanceof HTMLElement)) throw new Error('Canvas Markdown editor is unavailable.');
+      editor.focus();
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      if (!document.execCommand('insertText', false, ' 沉浸式编辑验收')) {
+        throw new Error('Canvas Markdown editor rejected inserted text.');
+      }
+    })()`);
+    await evaluate('new Promise((resolve) => setTimeout(resolve, 100))');
+    const markdownEdited = await inspectCanvasMarkdownEditor(evaluate, 'canvas:functional:audio');
+    if (!markdownEdited.text.includes('沉浸式编辑验收')) {
+      throw new Error(
+        `Canvas Markdown edit did not update the Rich Surface: ${JSON.stringify(markdownEdited)}`,
+      );
+    }
+    await click(
+      '[data-owner-view-id="canvas:functional:audio"] [data-canvas-markdown-editor-action="close"]',
+    );
+    await waitForSelector(`${markdownSelector} [data-markdown-document="ready"]`);
+    const markdownEditorContextAfter = await inspectCanvasSelectionAndViewport(
+      evaluate,
+      'canvas:functional:audio',
+    );
+    const markdownAfterEdit = await inspectCanvasMarkdownNode(evaluate, markdownSelector);
+    if (
+      JSON.stringify(markdownEditorContextAfter) !== JSON.stringify(markdownEditorContextBefore) ||
+      !markdownAfterEdit.text.includes('沉浸式编辑验收')
+    ) {
+      throw new Error(
+        `Canvas Markdown immersive editor did not preserve return state: ${JSON.stringify({ markdownEditorContextBefore, markdownEditorContextAfter, markdownAfterEdit })}`,
+      );
+    }
     await evaluate(`(() => {
       const node = document.querySelector(${JSON.stringify(markdownSelector)});
       if (!(node instanceof HTMLElement)) throw new Error('Canvas Markdown node is unavailable.');
       node.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
     })()`);
-    await waitForSelector(`${markdownSelector} .ProseMirror[contenteditable="true"]`);
-    const markdownEditing = await inspectCanvasMarkdownNode(evaluate, markdownSelector);
-    if (
-      !markdownEditing.editing ||
-      markdownEditing.textareaCount !== 0 ||
-      markdownEditing.proseMirrorCount !== 1 ||
-      !markdownEditing.text.includes('这是一个紧凑的画布分析节点')
-    ) {
-      throw new Error(
-        `Canvas Markdown Rich editing is invalid: ${JSON.stringify(markdownEditing)}`,
-      );
-    }
-    const markdownEditingScreenshot = await screenshot('canvas-markdown-node-rich-editing');
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:audio"] [data-canvas-markdown-editor="true"]',
+    );
     await pressKey('Escape');
     await waitForSelector(`${markdownSelector} [data-markdown-document="ready"]`);
     await pressKey('Escape');
-    checkpoint('canvas-markdown-node-rich-surface', {
+    checkpoint('canvas-markdown-immersive-editor', {
       preview: markdownPreview,
       selectedPreview: selectedMarkdownPreview,
+      actions: markdownActions,
       editing: markdownEditing,
+      scrolled: markdownEditorScrolled,
+      edited: markdownEdited,
+      afterEdit: markdownAfterEdit,
+      contextBefore: markdownEditorContextBefore,
+      contextAfter: markdownEditorContextAfter,
     });
     await evaluate(`(() => {
       const view = document.querySelector('[data-owner-view-id="canvas:functional:video"]');
@@ -443,6 +577,83 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     ) {
       throw new Error(`Canvas video primary actions are invalid: ${JSON.stringify(videoActions)}`);
     }
+    const multiSelectionBefore = await evaluate(`(() => {
+      const view = document.querySelector('[data-owner-view-id="canvas:functional:video"]');
+      const image = view?.querySelector('[data-node-id="epub-image-node"]');
+      if (!(view instanceof HTMLElement) || !(image instanceof HTMLElement)) {
+        throw new Error('Canvas multi-selection fixture nodes are unavailable.');
+      }
+      image.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+      const readPosition = (nodeId) => {
+        const node = view.querySelector('[data-node-id="' + nodeId + '"]');
+        if (!(node instanceof HTMLElement)) throw new Error('Canvas node is unavailable: ' + nodeId);
+        return { left: Number.parseFloat(node.style.left), top: Number.parseFloat(node.style.top) };
+      };
+      return {
+        first: readPosition('video-node'),
+        second: readPosition('epub-image-node'),
+      };
+    })()`);
+    await waitForCondition(
+      evaluate,
+      `(() => {
+        const view = document.querySelector('[data-owner-view-id="canvas:functional:video"]');
+        const toolbar = view?.querySelector('[data-selection-context-toolbar="true"]');
+        return toolbar?.getAttribute('data-selection-count') === '2';
+      })()`,
+      'Canvas did not retain two selected nodes.',
+    );
+    const multiSelectionPresentation = await evaluate(`(() => {
+      const view = document.querySelector('[data-owner-view-id="canvas:functional:video"]');
+      if (!(view instanceof HTMLElement)) throw new Error('Canvas View is unavailable.');
+      return {
+        selectedNodeIds: [...view.querySelectorAll('[data-node-selected="true"]')].map((node) =>
+          node.getAttribute('data-node-id'),
+        ),
+        actionIds: [...view.querySelectorAll('[data-selection-action]')].map((action) =>
+          action.getAttribute('data-selection-action'),
+        ),
+        transformHandleCount: view.querySelectorAll('[data-node-transform-handle]').length,
+      };
+    })()`);
+    checkpoint('canvas-multi-selection-ready', multiSelectionPresentation);
+    const multiSelectionScreenshot = await screenshot('canvas-multi-selection-ready');
+    await drag(
+      '[data-owner-view-id="canvas:functional:video"] [data-node-id="video-node"]',
+      '[data-owner-view-id="canvas:functional:video"] [data-canvas-viewport-root="true"]',
+      {
+        sourcePosition: { xRatio: 0.5, yRatio: 0.5 },
+        targetPosition: { xRatio: 0.42, yRatio: 0.62 },
+      },
+    );
+    const multiSelectionAfter = await evaluate(`(() => {
+      const view = document.querySelector('[data-owner-view-id="canvas:functional:video"]');
+      if (!(view instanceof HTMLElement)) throw new Error('Canvas View is unavailable.');
+      const readPosition = (nodeId) => {
+        const node = view.querySelector('[data-node-id="' + nodeId + '"]');
+        if (!(node instanceof HTMLElement)) throw new Error('Canvas node is unavailable: ' + nodeId);
+        return { left: Number.parseFloat(node.style.left), top: Number.parseFloat(node.style.top) };
+      };
+      const first = readPosition('video-node');
+      const second = readPosition('epub-image-node');
+      return {
+        first,
+        second,
+        firstDelta: {
+          x: first.left - ${String(multiSelectionBefore.first.left)},
+          y: first.top - ${String(multiSelectionBefore.first.top)},
+        },
+        secondDelta: {
+          x: second.left - ${String(multiSelectionBefore.second.left)},
+          y: second.top - ${String(multiSelectionBefore.second.top)},
+        },
+        selectedNodeIds: [...view.querySelectorAll('[data-node-selected="true"]')].map((node) =>
+          node.getAttribute('data-node-id'),
+        ),
+      };
+    })()`);
+    checkpoint('canvas-multi-selection-moved', multiSelectionAfter);
+    const multiSelectionMovedScreenshot = await screenshot('canvas-multi-selection-moved');
     await click(
       '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="epub-image-node"]',
     );
@@ -498,19 +709,26 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       evaluate,
       'canvas:functional:video',
     );
+    const duplicatedImagePreview = await waitForCopiedImagePreview(evaluate);
     if (
       duplicatedImageActions.actionIds.join('|') !==
         'image:crop|image:upscale|image:redraw|node:duplicate|preview:open' ||
       duplicatedImageActions.disabledActionIds.join('|') !==
         'image:crop|image:upscale|image:redraw' ||
       duplicatedImageActions.overflowActionIds.length !== 0 ||
-      duplicatedImageActions.hasError
+      duplicatedImageActions.hasError ||
+      !duplicatedImagePreview.src.startsWith('openneko://resource/') ||
+      duplicatedImagePreview.naturalWidth <= 0 ||
+      duplicatedImagePreview.naturalHeight <= 0
     ) {
       throw new Error(
         `Duplicated Canvas image actions are invalid: ${JSON.stringify(duplicatedImageActions)}`,
       );
     }
-    checkpoint('canvas-duplicated-image-actions', duplicatedImageActions);
+    checkpoint('canvas-duplicated-image-actions', {
+      actions: duplicatedImageActions,
+      preview: duplicatedImagePreview,
+    });
     const duplicatedImageActionsScreenshot = await screenshot('canvas-duplicated-image-actions');
     const imagePreviewContextBefore = await inspectCanvasSelectionAndViewport(
       evaluate,
@@ -857,10 +1075,20 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       epubImageProjection,
       epubResourceStatus,
       epubImageScreenshot,
+      duplicatedFilePreview,
+      duplicatedFilePreviewScreenshot,
       markdownPreview,
       markdownPreviewScreenshot,
+      markdownScrolled,
+      markdownScrolledScreenshot,
+      markdownActions,
       markdownEditing,
       markdownEditingScreenshot,
+      markdownEditorScrolled,
+      markdownEdited,
+      markdownAfterEdit,
+      markdownEditorContextBefore,
+      markdownEditorContextAfter,
       quietConnections,
       quietConnectionsScreenshot,
       selectedConnectionVisual,
@@ -869,10 +1097,15 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       generationAuthoring,
       selectedNodePresentation,
       selectedNodeScreenshot,
+      multiSelectionPresentation,
+      multiSelectionScreenshot,
+      multiSelectionAfter,
+      multiSelectionMovedScreenshot,
       videoActions,
       imageActions,
       imageActionsScreenshot,
       duplicatedImageActions,
+      duplicatedImagePreview,
       duplicatedImageActionsScreenshot,
       imagePreviewScreenshot,
       audioActions,
@@ -930,11 +1163,25 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       evidence.markdownPreview.editing ||
       evidence.markdownPreview.textareaCount !== 0 ||
       evidence.markdownPreview.proseMirrorCount !== 0 ||
-      !evidence.markdownEditing.editing ||
-      evidence.markdownEditing.proseMirrorCount !== 1 ||
-      evidence.markdownEditing.textareaCount !== 0
+      evidence.markdownPreview.wheelOwner !== 'content' ||
+      evidence.markdownScrolled.scrollTop <= evidence.markdownPreview.scrollTop ||
+      Math.abs(evidence.markdownScrolled.left - evidence.markdownPreview.left) > 0.5 ||
+      Math.abs(evidence.markdownScrolled.top - evidence.markdownPreview.top) > 0.5 ||
+      evidence.markdownActions.actionIds.join('|') !==
+        'canvas:edit-markdown|node:duplicate|preview:open' ||
+      evidence.markdownEditing.overlayCount !== 1 ||
+      evidence.markdownEditing.editorProseMirrorCount !== 1 ||
+      evidence.markdownEditing.nodeProseMirrorCount !== 0 ||
+      evidence.markdownEditing.canvasInteractionSuspended !== 'true' ||
+      evidence.markdownEditorScrolled.scrollTop <= evidence.markdownEditing.scrollTop ||
+      evidence.markdownEditorScrolled.viewportTransform !==
+        evidence.markdownEditing.viewportTransform ||
+      !evidence.markdownEdited.text.includes('沉浸式编辑验收') ||
+      !evidence.markdownAfterEdit.text.includes('沉浸式编辑验收') ||
+      JSON.stringify(evidence.markdownEditorContextAfter) !==
+        JSON.stringify(evidence.markdownEditorContextBefore)
     ) {
-      throw new Error('Canvas Markdown preview and Rich activation were not proven.');
+      throw new Error('Canvas Markdown preview and immersive editing were not proven.');
     }
     if (
       evidence.quietConnections.connectionCount !== 6 ||
@@ -962,6 +1209,19 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
         evidence.generationAuthoring.kinds[0]?.compact?.bodyClientWidth ||
       evidence.selectedNodePresentation.nodeLocalActionCount === 0 ||
       evidence.selectedNodePresentation.propertyDockCount !== 0 ||
+      evidence.multiSelectionPresentation.selectedNodeIds.length !== 2 ||
+      !evidence.multiSelectionPresentation.actionIds.includes('group-selection') ||
+      !evidence.multiSelectionPresentation.actionIds.includes('node:duplicate') ||
+      evidence.multiSelectionPresentation.transformHandleCount !== 0 ||
+      evidence.multiSelectionAfter.selectedNodeIds.length !== 2 ||
+      Math.abs(
+        evidence.multiSelectionAfter.firstDelta.x - evidence.multiSelectionAfter.secondDelta.x,
+      ) > 0.5 ||
+      Math.abs(
+        evidence.multiSelectionAfter.firstDelta.y - evidence.multiSelectionAfter.secondDelta.y,
+      ) > 0.5 ||
+      (Math.abs(evidence.multiSelectionAfter.firstDelta.x) < 1 &&
+        Math.abs(evidence.multiSelectionAfter.firstDelta.y) < 1) ||
       !evidence.isolatedUrls ||
       evidence.newDraftHandoff.clipCount !== 1 ||
       !evidence.otioActions.actionIds.includes('cut:open') ||
@@ -979,6 +1239,12 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
         'image:crop|image:upscale|image:redraw' ||
       evidence.duplicatedImageActions.overflowActionIds.length !== 0 ||
       evidence.duplicatedImageActions.hasError ||
+      !evidence.duplicatedImagePreview.src.startsWith('openneko://resource/') ||
+      evidence.duplicatedImagePreview.naturalWidth <= 0 ||
+      evidence.duplicatedImagePreview.naturalHeight <= 0 ||
+      evidence.duplicatedFilePreview.status !== 'ready' ||
+      evidence.duplicatedFilePreview.kind !== 'markdown' ||
+      !evidence.duplicatedFilePreview.text.includes('Copied reference') ||
       evidence.audioActions.actionIds.join('|') !==
         'cut:add-resource|audio:voice-denoise|node:duplicate|preview:open' ||
       evidence.audioActions.disabledActionIds.join('|') !== 'audio:voice-denoise' ||
@@ -1093,7 +1359,7 @@ async function exerciseCanvasGenerationAuthoring({
       label: ['Text', '文本'],
       modelLabel: 'Canvas Text',
       emptyIconClass: 'codicon-file-text',
-      expectedSize: { width: 240, height: 160 },
+      expectedSize: { width: 120, height: 80 },
     },
     {
       actionId: 'image',
@@ -1102,7 +1368,7 @@ async function exerciseCanvasGenerationAuthoring({
       label: ['Image', '图片'],
       modelLabel: 'Canvas Image',
       emptyIconClass: 'codicon-file-media',
-      expectedSize: { width: 240, height: 180 },
+      expectedSize: { width: 120, height: 90 },
     },
     {
       actionId: 'video',
@@ -1111,7 +1377,7 @@ async function exerciseCanvasGenerationAuthoring({
       label: ['Video', '视频'],
       modelLabel: 'Canvas Video',
       emptyIconClass: 'codicon-play',
-      expectedSize: { width: 240, height: 180 },
+      expectedSize: { width: 120, height: 90 },
     },
     {
       actionId: 'audio',
@@ -1120,7 +1386,7 @@ async function exerciseCanvasGenerationAuthoring({
       label: ['Audio', '音频'],
       modelLabel: 'Canvas Audio',
       emptyIconClass: 'codicon-music',
-      expectedSize: { width: 240, height: 120 },
+      expectedSize: { width: 120, height: 60 },
     },
   ];
   let maximumNodeCount = 0;
@@ -2021,7 +2287,7 @@ function canvasDocument(name, nodeId, path, mediaType, extraNodes = [], connecti
         data: {
           title: `${name} locator-backed node`,
           assetPath: path,
-          contentLocator: { kind: 'workspace-file', path },
+          contentLocator: { file: { authority: 'workspace', path } },
           mediaType,
         },
       },
@@ -2064,7 +2330,7 @@ function cutDocumentNode(nodeId, path) {
       title: path,
       path,
       mediaKind: 'document',
-      contentLocator: { kind: 'workspace-file', path },
+      contentLocator: { file: { authority: 'workspace', path } },
     },
   };
 }
@@ -2080,9 +2346,8 @@ function epubImageNode(nodeId) {
       title: 'EPUB page 1',
       assetPath: 'OEBPS/images/page-1.png',
       contentLocator: {
-        kind: 'document-entry',
-        source: { kind: 'workspace-file', path: 'synthetic-document.epub' },
-        entryPath: 'OEBPS/images/page-1.png',
+        file: { authority: 'workspace', path: 'synthetic-document.epub' },
+        selector: { kind: 'entry', path: 'OEBPS/images/page-1.png' },
       },
       mediaType: 'image',
     },
@@ -2104,10 +2369,102 @@ function markdownNode(nodeId) {
         '这是一个紧凑的画布分析节点，默认显示所见所得内容。',
         '',
         '- 选中保持阅读模式',
-        '- 双击进入富文本编辑',
+        '- 双击进入画布内全屏编辑',
+        '- 节点内容独立滚动',
+        '- 画布空白区域继续平移',
+        '- 修饰键滚轮继续缩放画布',
+        '- 滚动边界不会把手势交还画布',
+        '- 文件预览采用相同滚动契约',
+        '- 生成文本输出采用相同滚动契约',
       ].join('\n'),
     },
   };
+}
+
+function textFileNode(nodeId, path) {
+  return {
+    id: nodeId,
+    type: 'file',
+    position: { x: 440, y: 360 },
+    size: { width: 280, height: 180 },
+    zIndex: 2,
+    data: {
+      title: 'copied-reference.md',
+      path,
+      mediaType: 'text/markdown',
+      contentLocator: { file: { authority: 'workspace', path } },
+    },
+  };
+}
+
+async function waitForCopiedFilePreview(evaluate) {
+  return evaluate(`new Promise((resolve, reject) => {
+    const deadline = Date.now() + 5000;
+    const inspect = () => {
+      const view = document.querySelector('[data-owner-view-id="canvas:functional:audio"]');
+      const copiedNode = [...(view?.querySelectorAll('[data-node-selected="true"]') ?? [])].find(
+        (node) =>
+          node.getAttribute('data-node-id') !== 'text-file-node' &&
+          node.querySelector('[data-canvas-content-kind="file"]')
+      );
+      const preview = copiedNode?.querySelector('[data-canvas-content-kind="file"]');
+      const status = preview?.getAttribute('data-text-preview-status');
+      if (copiedNode && preview && status === 'ready') {
+        resolve({
+          nodeId: copiedNode.getAttribute('data-node-id'),
+          status,
+          kind: preview.getAttribute('data-text-preview-kind'),
+          text: preview.textContent ?? '',
+        });
+        return;
+      }
+      if (status === 'unavailable' || status === 'local-error') {
+        reject(new Error('Copied Canvas file preview failed: ' + (preview?.textContent ?? status)));
+        return;
+      }
+      if (Date.now() >= deadline) {
+        reject(new Error('Copied Canvas file preview did not become ready.'));
+        return;
+      }
+      window.setTimeout(inspect, 25);
+    };
+    inspect();
+  })`);
+}
+
+async function waitForCopiedImagePreview(evaluate) {
+  return evaluate(`new Promise((resolve, reject) => {
+    const deadline = Date.now() + 5000;
+    const inspect = () => {
+      const view = document.querySelector('[data-owner-view-id="canvas:functional:video"]');
+      const copiedNode = [...(view?.querySelectorAll('[data-node-selected="true"]') ?? [])].find(
+        (node) =>
+          node.getAttribute('data-node-id') !== 'epub-image-node' &&
+          node.querySelector('[data-testid="canvas-media-node"][data-media-type="image"]')
+      );
+      const image = copiedNode?.querySelector('img');
+      if (image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0) {
+        resolve({
+          nodeId: copiedNode.getAttribute('data-node-id'),
+          src: image.currentSrc || image.src,
+          naturalWidth: image.naturalWidth,
+          naturalHeight: image.naturalHeight,
+        });
+        return;
+      }
+      const diagnostic = copiedNode?.querySelector('[role="status"]');
+      if (diagnostic && !image) {
+        reject(new Error('Copied Canvas image preview failed: ' + (diagnostic.textContent ?? '')));
+        return;
+      }
+      if (Date.now() >= deadline) {
+        reject(new Error('Copied Canvas image preview did not decode.'));
+        return;
+      }
+      window.setTimeout(inspect, 25);
+    };
+    inspect();
+  })`);
 }
 
 function emptyOtioDocument() {
@@ -2153,17 +2510,60 @@ function inspectCanvasMarkdownNode(evaluate, selector) {
     const node = document.querySelector(${JSON.stringify(selector)});
     if (!(node instanceof HTMLElement)) throw new Error('Canvas Markdown node is unavailable.');
     const card = node.querySelector('.node-card');
-    const markdown = node.querySelector('.canvas-markdown-node');
     const heading = node.querySelector('h1');
+    const scrollSurface = node.querySelector('.canvas-markdown-node__preview');
     const rect = card?.getBoundingClientRect();
+    const nodeRect = node.getBoundingClientRect();
     return {
-      editing: markdown?.getAttribute('data-editing') === 'true',
+      editing: false,
       textareaCount: node.querySelectorAll('textarea').length,
       proseMirrorCount: node.querySelectorAll('.ProseMirror').length,
       headingSize: heading ? Number.parseFloat(getComputedStyle(heading).fontSize) : 0,
       width: rect?.width ?? 0,
       height: rect?.height ?? 0,
+      left: nodeRect.left,
+      top: nodeRect.top,
+      scrollTop: scrollSurface instanceof HTMLElement ? scrollSurface.scrollTop : 0,
+      scrollHeight: scrollSurface instanceof HTMLElement ? scrollSurface.scrollHeight : 0,
+      clientHeight: scrollSurface instanceof HTMLElement ? scrollSurface.clientHeight : 0,
+      wheelOwner:
+        scrollSurface instanceof HTMLElement
+          ? scrollSurface.getAttribute('data-canvas-wheel-owner')
+          : null,
       text: node.textContent ?? '',
+    };
+  })()`);
+}
+
+function inspectCanvasMarkdownEditor(evaluate, viewId) {
+  return evaluate(`(() => {
+    const root = document.querySelector('[data-owner-view-id=${JSON.stringify(viewId)}]');
+    const viewport = root?.querySelector('[data-canvas-viewport-root="true"]');
+    const overlay = root?.querySelector('[data-canvas-markdown-editor="true"]');
+    const body = overlay?.querySelector('.canvas-markdown-editor-overlay__body');
+    const editor = overlay?.querySelector('.ProseMirror');
+    const overlayRect = overlay?.getBoundingClientRect();
+    const viewportRect = viewport?.getBoundingClientRect();
+    return {
+      overlayCount: root?.querySelectorAll('[data-canvas-markdown-editor="true"]').length ?? 0,
+      modal: overlay?.getAttribute('aria-modal'),
+      editorState: overlay?.getAttribute('data-editor-state'),
+      canvasInteractionSuspended: viewport?.getAttribute('data-canvas-interaction-suspended'),
+      nodeProseMirrorCount:
+        root?.querySelectorAll('[data-node-id="markdown-node"] .ProseMirror').length ?? 0,
+      editorProseMirrorCount: overlay?.querySelectorAll('.ProseMirror').length ?? 0,
+      contentEditable: editor?.getAttribute('contenteditable'),
+      wheelOwner: body?.getAttribute('data-canvas-wheel-owner'),
+      scrollTop: body instanceof HTMLElement ? body.scrollTop : 0,
+      scrollHeight: body instanceof HTMLElement ? body.scrollHeight : 0,
+      clientHeight: body instanceof HTMLElement ? body.clientHeight : 0,
+      overlayWidth: overlayRect?.width ?? 0,
+      overlayHeight: overlayRect?.height ?? 0,
+      viewportWidth: viewportRect?.width ?? 0,
+      viewportHeight: viewportRect?.height ?? 0,
+      viewportTransform:
+        root?.querySelector('[data-canvas-viewport-layer]')?.getAttribute('style') ?? '',
+      text: overlay?.textContent ?? '',
     };
   })()`);
 }

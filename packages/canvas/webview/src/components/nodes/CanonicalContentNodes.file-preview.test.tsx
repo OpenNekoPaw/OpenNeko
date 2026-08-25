@@ -74,6 +74,9 @@ describe('Canvas File node text preview', () => {
     expect(container.querySelector('.canvas-file-node__text')?.textContent).toContain(
       '"name": "OpenNeko"',
     );
+    expect(
+      container.querySelector('.canvas-file-node__scroll')?.getAttribute('data-canvas-wheel-owner'),
+    ).toBe('content');
     expect(container.querySelectorAll('.canvas-node-external-label')).toHaveLength(1);
     expect(container.querySelector('.canvas-node-external-label')?.textContent).toContain(
       'project.json',
@@ -94,10 +97,7 @@ describe('Canvas File node text preview', () => {
       ...fileNode('invalid-file', 'neko/assets/Books/story.epub', 'application/epub+zip'),
       data: {
         ...fileNode('invalid-file', 'neko/assets/Books/story.epub', 'application/epub+zip').data,
-        contentLocator: {
-          kind: 'workspace-file',
-          path: 'neko/assets/Books/story.epub',
-        },
+        contentLocator: { file: { authority: 'workspace', path: '/Users/example/private.epub' } },
       },
     } as unknown as FileCanvasNode;
 
@@ -167,7 +167,7 @@ describe('Canvas File node text preview', () => {
         (request) =>
           new Promise<CanvasTextFilePreviewResult>((resolve) => {
             pending.set(
-              request.nodeId + ':' + request.locator.kind + ':' + request.requestId,
+              request.nodeId + ':' + request.locator.file.path + ':' + request.requestId,
               resolve,
             );
           }),
@@ -184,7 +184,9 @@ describe('Canvas File node text preview', () => {
         ...first.data,
         path: 'data/second.json',
         title: 'second.json',
-        contentLocator: { kind: 'workspace-file' as const, path: 'data/second.json' },
+        contentLocator: {
+          file: { authority: 'workspace' as const, path: 'data/second.json' },
+        },
       },
     };
     await renderFile(root, host, second);
@@ -216,6 +218,39 @@ describe('Canvas File node text preview', () => {
     });
     expect(container.querySelector('.canvas-file-node__text')?.textContent).toContain('second');
     expect(container.querySelector('.canvas-file-node__text')?.textContent).not.toContain('first');
+  });
+
+  it('reloads the same locator when its source fingerprint changes', async () => {
+    const readTextFilePreview = vi.fn(async (request) => ({
+      requestId: request.requestId,
+      nodeId: request.nodeId,
+      status: 'ready' as const,
+      kind: 'plain' as const,
+      text: 'latest',
+      truncated: false,
+      empty: false,
+    }));
+    const host = createCanvasWebviewHost(runtime(readTextFilePreview));
+    const first = {
+      ...fileNode('file-text', 'notes/readme.txt', 'text/plain'),
+      data: {
+        ...fileNode('file-text', 'notes/readme.txt', 'text/plain').data,
+        provenance: { contentFingerprint: 'content:sha256:first' },
+      },
+    };
+    await renderFile(root, host, first);
+    await renderFile(root, host, {
+      ...first,
+      data: {
+        ...first.data,
+        provenance: { contentFingerprint: 'content:sha256:second' },
+      },
+    });
+
+    expect(readTextFilePreview).toHaveBeenCalledTimes(2);
+    expect(readTextFilePreview.mock.calls[0]?.[0].locator).toEqual(
+      readTextFilePreview.mock.calls[1]?.[0].locator,
+    );
   });
 
   it('isolates a failed sibling and keeps unsupported files on the generic icon', async () => {
@@ -326,7 +361,7 @@ function fileNode(id: string, path: string, mediaType: string): FileCanvasNode {
       path,
       title: path.split('/').at(-1) ?? path,
       mediaType,
-      contentLocator: { kind: 'workspace-file', path },
+      contentLocator: { file: { authority: 'workspace', path } },
     },
   };
 }

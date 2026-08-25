@@ -15,15 +15,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@neko/chara": "workspace:*",
-    "@neko/content": "workspace:*",
+    "@neko/chara-domain": "workspace:*",
+    "@neko/content-domain": "workspace:*",
     "@neko/entity-domain": "workspace:*",
     "@neko/markdown": "workspace:*",
     "@neko/screenplay-domain": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "typescript": "^5.8.3",
+    "typescript": "6.0.3",
     "vitest": "^4.1.2"
   },
   "license": "AGPL-3.0-or-later"

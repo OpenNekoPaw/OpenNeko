@@ -36,11 +36,12 @@ import {
 } from '../types/canvas-material-contracts';
 import { isCanvasGenerationNodeData } from '../types/canvas-generation-node';
 import { isJobRef } from '@neko/shared/job-lifecycle';
-import { validateContentLocator } from '@neko/content';
+import { validateContentLocator } from '@neko/content-domain';
 import { isJsonPointerPath, writeJsonPointer } from './fieldBinding';
 import { assertNoRuntimeResourceIdentity } from './canvasDurableResourceIdentity';
 import {
   CANVAS_AUDIO_NODE_DEFAULT_SIZE,
+  resolveCanvasFileNodeDefaultSize,
   resolveCanvasGenerationNodeDefaultSize,
   resolveCanvasNodeDefaultSize,
 } from '../canvas-node-sizing';
@@ -55,6 +56,10 @@ export {
 export interface CanvasHeadlessAuthoringPlannerContext {
   readonly canvasData: CanvasData;
   readonly generateId?: () => string;
+}
+
+export interface CanvasNodeCreationPlanInput extends CanvasNodeCreateSpec {
+  readonly size?: { readonly width: number; readonly height: number };
 }
 
 export interface CanvasHeadlessAuthoringIdFactoryOptions {
@@ -111,7 +116,7 @@ export function createEmptyCanvasData(name = DEFAULT_CANVAS_DATA.name): CanvasDa
 
 export function planCanvasNodeCreation(
   context: CanvasHeadlessAuthoringPlannerContext,
-  request: CanvasNodeCreateSpec,
+  request: CanvasNodeCreationPlanInput,
 ): CanvasHeadlessAuthoringPlan<{ nodeId: string; node: CanvasNode }> {
   const type = requireCanonicalNodeType(request.type);
   const provenanceMessageId = readProvenanceMessageId(request.data);
@@ -501,7 +506,7 @@ function applyAgentContentToNode(
 
 function createNodeFromSpec(
   type: CanonicalCanvasNodeType,
-  spec: CanvasNodeCreateSpec,
+  spec: CanvasNodeCreationPlanInput,
   id: string,
   zIndex: number,
 ): CanvasNode {
@@ -509,7 +514,7 @@ function createNodeFromSpec(
   const base = {
     id,
     position: spec.position ?? DEFAULT_INSERT_POSITION,
-    size: resolveCanvasNodeDefaultSize(type),
+    size: readOptionalNodeSize(spec.size) ?? resolveCanvasNodeDefaultSize(type),
     zIndex,
   };
   switch (type) {
@@ -591,6 +596,13 @@ function createNodeFromSpec(
       return {
         ...base,
         type,
+        size:
+          spec.size === undefined
+            ? resolveCanvasFileNodeDefaultSize({
+                path: path || readString(input, 'title'),
+                ...readOptionalStringField(input, 'mediaType'),
+              })
+            : base.size,
         data: {
           path,
           title: readString(input, 'title') || path.split('/').pop() || 'File',
@@ -630,6 +642,21 @@ function createNodeFromSpec(
         data: input,
       };
   }
+}
+
+function readOptionalNodeSize(
+  size: CanvasNodeCreationPlanInput['size'],
+): { width: number; height: number } | undefined {
+  if (size === undefined) return undefined;
+  if (
+    !Number.isFinite(size.width) ||
+    size.width <= 0 ||
+    !Number.isFinite(size.height) ||
+    size.height <= 0
+  ) {
+    throw new Error('Canvas node size must contain finite positive width and height');
+  }
+  return { width: size.width, height: size.height };
 }
 
 function readRequiredJobRef(value: unknown): import('@neko/shared/job-lifecycle').JobRef {

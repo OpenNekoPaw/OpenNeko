@@ -1,8 +1,8 @@
 # Chara 领域架构
 
-## 当前状态与收敛方向
+## Authority
 
-`@neko/chara` 是 CharacterProject/Version、CharacterStoryline authoring、Companion continuity、Dialogue/Room、CharacterRun、UserCharacterRelationship 和角色语义的 host-neutral owner。当前 foundation 中的 `CharacterStorylineRun`、运行时 transition/revision、run-scoped `CharacterMemoryScope`、Narrative external Composition requirement 和固定 Avatar Runtime Manager 是待删除的原型路径，不构成目标架构。
+`@neko/chara-domain` 是 CharacterProject/Version、CharacterStoryline authoring、Companion continuity、Dialogue/Room、CharacterRun、UserCharacterRelationship 和角色语义的 host-neutral owner。
 
 目标调用链是：Chara 产出精确角色/模式/上下文投影，Agent application/session owner 执行 Conversation/turn，Host 组合 owner-qualified Scene surfaces，Desktop 只完成 Electron trust-boundary wiring。跨资源、Entity 与 World 的组合边界见 [`creative-resource-semantic-boundaries.md`](../../architecture/creative-resource-semantic-boundaries.md)。
 
@@ -40,7 +40,7 @@ userId + CharacterProjectId
 CharacterConversationSelection
   -> companion | narrative
   -> CharacterRun / CharacterRoom / RoomRun
-  -> primary AgentSession per agent-controlled participant
+  -> primary DSH Session per agent-controlled participant
 ```
 
 | 数据                                                                 | 唯一 owner                                              |
@@ -101,9 +101,10 @@ type CharacterConversationSelection =
 
 Companion participant 只携带精确 CharacterVersion 和 Chara 解析的 continuity identity。Narrative participant 携带精确 CharacterVersion 和可选的精确 Storyline/Version/Node ref。任一模式出现另一模式字段必须 decode/validation 失败；不得通过空字段、default 或 provider failure 改变模式。
 
-模式与所有 participant 选择在首次 submit 前冻结。改变模式或节点只能建立新的 launch draft 和 Conversation，不能重解释旧 transcript。
+模式与所有 participant 选择在首次 submit 前冻结。改变模式或节点只能建立新的 launch draft 和
+Conversation，不能重解释已有 transcript。
 
-一个 participant 创建 Dialogue，多个 participant 创建 Room。每个 agent-controlled participant 都有独立 primary AgentSession、provider/model/TTS receipt、上下文和 RoomView；human-controlled participant 不创建隐藏 AgentSession。
+一个 participant 创建 Dialogue，多个 participant 创建 Room。每个 agent-controlled participant 都有独立 primary DSH Session、provider/model/TTS receipt、上下文和 RoomView；human-controlled participant 不创建隐藏 DSH Session。
 
 ## CharacterStoryline authoring
 
@@ -125,7 +126,7 @@ Runtime 不拥有 Storyline 状态。Narrative 只物化用户确认的 exact pu
 
 ## Companion continuity
 
-CompanionContinuity 在 `userId + CharacterProjectId` 下稳定存在，与任一 CharacterRun、Conversation、AgentSession 或 CharacterVersion 解耦。Character subjective memory 与 relationship memory 是两个独立集合和 review policy。
+CompanionContinuity 在 `userId + CharacterProjectId` 下稳定存在，与任一 CharacterRun、Conversation、DSH Session 或 CharacterVersion 解耦。Character subjective memory 与 relationship memory 是两个独立集合和 review policy。
 
 已接受 entry 必须保存精确来源 CharacterVersion 以及 Conversation/Turn 或 RoomEvent ref。发布新 CharacterVersion 不改写历史 entry；canonical projector 根据新 publication 的知识/行为边界决定当前 turn 是否可用。不兼容或非法 entry 保留原内容并携带局部 diagnostic。
 
@@ -135,7 +136,7 @@ Narrative 在 validation/materialization 边界拒绝 continuity read/write/cand
 
 ## Agent context 与 transcript
 
-AgentSession 是完整消息的唯一 owner。Chara context materializer 按模式生成有界、participant-specific projection：
+DSH Session 是完整消息的唯一 owner。Chara context materializer 按模式生成有界、participant-specific projection：
 
 ```text
 Companion:
@@ -153,7 +154,7 @@ Narrative:
 
 Narrative started turn 保存紧凑 receipt：ConversationId、TurnId、CharacterVersionId 和可选 StorylineId/StorylineVersionId/StorylineNodeId。receipt 不复制消息或 node content，不表达 progress。Agent compaction 不能删除 Chara authoring facts；重开时从 exact immutable source rematerialize。source 缺失时只让受影响 Conversation fail-visible，禁止解析 newer/latest publication。
 
-Companion native-model lane 使用单独 Assistant-owned Conversation/AgentSession。它拥有明确 Assistant identity、provider/model receipt、transcript、取消和失败生命周期；不得在 Character AgentSession 内切换 System Prompt，也不得提交 Character/Room response。
+Companion native-model lane 使用单独 Assistant-owned Conversation/DSH Session。它拥有明确 Assistant identity、provider/model receipt、transcript、取消和失败生命周期；不得在 Character DSH Session 内切换 System Prompt，也不得提交 Character/Room response。
 
 ## 外部资料与 Presentation
 
@@ -198,10 +199,10 @@ Node adapter 在 staging 中验证路径 containment、链接、重复条目、�
 ## 分层与依赖
 
 ```text
-@neko/chara contracts/core
+@neko/chara-domain contracts/core
   -> shared stable refs / domain values
 
-@neko/chara application
+@neko/chara-domain application
   -> chara core
   -> package-local Agent / Context / Asset / Voice / Presentation ports
 
@@ -236,11 +237,13 @@ Character Interaction Scene 只有以下有界 slots：
 
 离开场景时 React Roots 卸载，无保护 Presentation/Web/Game resource 释放。运行、排队、审批或未完成外部操作由 exact runtime owner 保护，不得因此保留 hidden Root。重开从 exact identities 和最小 presentation snapshot 重建。
 
-## 持久化、旧记录和错误隔离
+## 持久化与错误隔离
 
 Chara Node 分别持久化 Character/Storyline authoring、Companion continuity、Dialogue/Room 和 mode receipts。repository 逐条 strict decode；一条非法 record 不阻止 sibling 或 workspace startup。
 
-旧 `CharacterStorylineRun`、observation/transition 和 run-scoped memory bytes 必须保留为 owner-qualified invalid/obsolete records，但不得进入新 reader 的成功集合。用户通过显式 offline inspect/export/cleanup 操作处理；不得自动转成 Storyline publication、continuity memory 或空默认值。
+Repository 只将 canonical records 纳入成功集合。无法解析的 owner-qualified bytes 必须原样保留并返回
+局部 diagnostic；用户通过显式 offline inspect/export/cleanup 操作处理，不得自动转成 Storyline
+publication、continuity memory 或空默认值。
 
 以下情况必须 fail-visible、fail-local：
 
@@ -251,19 +254,18 @@ Chara Node 分别持久化 Character/Storyline authoring、Companion continuity�
 - unknown/mismatched Presentation surface；
 - malformed continuity/memory/receipt record。
 
-Pre-commit launch failure 不得留下 partial CharacterRun、Room、AgentSession 或 first message。Post-commit provider failure 保留已创建的 Conversation owner 并记录 failed turn。所有失败都不得选择 active/recent/latest identity、另一 provider/source/renderer、旧 contract 或空成功值。
+Pre-commit launch failure 不得留下 partial CharacterRun、Room、DSH Session 或 first message。Post-commit
+provider failure 保留已创建的 Conversation owner 并记录 failed turn。所有失败都不得选择
+active/recent/latest identity、另一 provider/source/renderer、非 canonical contract 或空成功值。
 
-## Product promotion 与验证
-
-Character production entry 仍受独立 promotion gate 保护。package implementation、deterministic fixture、test route 或保存的 experimental Scene 不得使生产入口成功。
+## 验证
 
 验证必须覆盖：
 
-- strict producer/consumer codecs 与旧 shape poison；
+- strict producer/consumer codecs 拒绝 non-canonical shape；
 - Storyline publication immutability 和 node context filtering；
 - Companion cross-Conversation continuity 与 Narrative isolation；
-- independent AgentSession/model/TTS/RoomView；
+- independent DSH Session/model/TTS/RoomView；
 - Host/Webview owner matching、slot-local failure 和 UI lifetime；
 - Desktop delegation/trust boundary；
-- key-free Evaluation authoring、provider-backed complete Desktop session 和 visible Electron flow；
-- promotion gate 继续 fail-visible。
+- key-free Evaluation authoring、provider-backed complete Desktop session 和 visible Electron flow。

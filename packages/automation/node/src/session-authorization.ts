@@ -14,7 +14,12 @@ import {
   type AutomationTargetSelectionCandidate,
   type AutomationTargetSelectionProjection,
 } from '@neko/automation-contracts/target-selection';
-import type { AutomationTargetRevalidationPort } from './session-owned-mcp-runtime';
+export interface AutomationTargetRevalidationPort {
+  revalidate(input: {
+    readonly target: AutomationTarget;
+    readonly signal?: AbortSignal;
+  }): Promise<AutomationTarget>;
+}
 
 const MAX_SELECTION_CANDIDATES = 100;
 

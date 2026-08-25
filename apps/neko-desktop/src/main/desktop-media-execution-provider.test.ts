@@ -1,4 +1,4 @@
-import type { MediaProvider } from '@neko/generation/media';
+import type { MediaProvider } from '@neko/generation-domain/media';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createDesktopMediaExecutionProviderResolver } from './desktop-media-execution-provider';
@@ -41,21 +41,14 @@ describe('Desktop media execution provider resolver', () => {
     expect(read).toHaveBeenCalledTimes(2);
   });
 
-  it('fails visibly for a non-API-key credential instead of changing provider', async () => {
+  it('does not read a credential for a disabled provider', async () => {
+    const read = vi.fn(async () => ({ type: 'api_key' as const, key: 'must-not-be-read' }));
     const resolver = createDesktopMediaExecutionProviderResolver({
-      config: { getProvider: () => configuredProvider },
-      credentials: {
-        read: async () => ({
-          type: 'oauth',
-          access: 'access-token',
-          refresh: 'refresh-token',
-          expires: Date.now() + 60_000,
-        }),
-      },
+      config: { getProvider: () => ({ ...configuredProvider, enabled: false }) },
+      credentials: { read },
     });
 
-    await expect(resolver.resolveProvider(configuredProvider.id)).rejects.toThrow(
-      "Media provider 'image-provider' requires an API-key credential.",
-    );
+    await expect(resolver.resolveProvider(configuredProvider.id)).resolves.toBeUndefined();
+    expect(read).not.toHaveBeenCalled();
   });
 });

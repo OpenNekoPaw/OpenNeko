@@ -30,13 +30,13 @@ const COVERAGE_INDEX_SCHEMA = s.object({
 
 export const EXPECTED_BUILTIN_SKILLS = Object.freeze([
   'skill-creator',
+  'content-authoring',
   'character-creator',
   'world-creator',
   'storyboard',
   'image',
   'video',
   'media-production',
-  'media-quality-review',
   'scene-to-music',
   'video-editing',
   'color-grading',
@@ -52,8 +52,16 @@ const EXPECTED_PROMPT_LAYERS = Object.freeze([
   'environment',
   'ephemeral',
 ]);
-const EXPECTED_RUNTIME_CAPABILITIES = Object.freeze([
+export const EXPECTED_RUNTIME_CAPABILITIES = Object.freeze([
   'evaluation-platform',
+  // DSH owns these generic Agent behaviors. OpenNeko only validates the
+  // public ACP/bridge boundary where it contributes product-specific policy.
+  'dsh-standard-agent-loop',
+  'dsh-standard-session-history',
+  'dsh-standard-skill-runtime',
+  'dsh-standard-tool-scheduling',
+  'dsh-standard-permission-presets',
+  'dsh-active-session-inbox',
   'desktop-session-driver',
   'launch-domain-binding',
   'prompt-composition',
@@ -69,7 +77,6 @@ const EXPECTED_RUNTIME_CAPABILITIES = Object.freeze([
   'timeline-projection-authority',
   'tool-result-delivery',
   'desktop-event-projection',
-  'resource-display-projection',
 ]);
 export async function loadCoverageIndex(options = {}) {
   const root = resolve(options.root ?? DEFAULT_ROOT);

@@ -12,8 +12,11 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { assertDshRuntimeDirectory } from '../dsh-runtime-closure.mjs';
+import { prepareDshDevelopmentRuntime } from '../prepare-dsh-development-runtime.mjs';
 
 const desktopAppRoot = resolve(fileURLToPath(new URL('../../apps/neko-desktop/', import.meta.url)));
 
@@ -51,7 +54,7 @@ export function acquireDesktopDevelopmentBundleOwner(options = {}) {
     const existing = readOwnerRecord(lockPath, appRoot);
     if (isProcessAlive(existing.pid)) {
       throw new Error(
-        `Desktop development process ${String(existing.pid)} already owns the Vite bundle for this checkout. Stop that process before starting another development app or functional scenario.`,
+        `Desktop process ${String(existing.pid)} already owns the Vite bundle for this checkout. Stop that process before starting another development app, package build, or functional scenario.`,
       );
     }
 
@@ -66,6 +69,50 @@ export function acquireDesktopDevelopmentBundleOwner(options = {}) {
 }
 
 export async function runDesktopDevelopment(options = {}) {
+  return runWithDesktopViteBundleOwner(options, async (appRoot) => {
+    const command = (options.platform ?? process.platform) === 'win32' ? 'pnpm.cmd' : 'pnpm';
+    const argv = normalizeForwardedArguments(options.argv ?? process.argv.slice(2));
+    const environment = resolveDesktopDevelopmentEnvironment({
+      appRoot,
+      environment: options.environment ?? process.env,
+      ...(options.prepareRuntime === undefined ? {} : { prepareRuntime: options.prepareRuntime }),
+      ...(options.qualifyRuntime === undefined ? {} : { qualifyRuntime: options.qualifyRuntime }),
+    });
+    const child = (options.spawnProcess ?? spawn)(
+      command,
+      ['exec', 'electron-forge', 'start', '--', ...argv],
+      {
+        cwd: appRoot,
+        env: environment,
+        stdio: 'inherit',
+      },
+    );
+    return await waitForChild(child);
+  });
+}
+
+export async function runDesktopForgeBuild(options = {}) {
+  const forgeCommand = options.forgeCommand;
+  if (forgeCommand !== 'package' && forgeCommand !== 'make') {
+    throw new Error('Desktop Forge build command must be package or make.');
+  }
+  return runWithDesktopViteBundleOwner(options, async (appRoot) => {
+    const command = (options.platform ?? process.platform) === 'win32' ? 'pnpm.cmd' : 'pnpm';
+    const argv = normalizeForwardedArguments(options.argv ?? []);
+    const child = (options.spawnProcess ?? spawn)(
+      command,
+      ['exec', 'electron-forge', forgeCommand, ...argv],
+      {
+        cwd: appRoot,
+        env: options.environment ?? process.env,
+        stdio: 'inherit',
+      },
+    );
+    return await waitForChild(child);
+  });
+}
+
+async function runWithDesktopViteBundleOwner(options, execute) {
   const appRoot = realpathSync(options.appRoot ?? desktopAppRoot);
   const ownership = acquireDesktopDevelopmentBundleOwner({
     appRoot,
@@ -81,22 +128,38 @@ export async function runDesktopDevelopment(options = {}) {
   process.once('exit', releaseOnExit);
 
   try {
-    const command = (options.platform ?? process.platform) === 'win32' ? 'pnpm.cmd' : 'pnpm';
-    const argv = normalizeForwardedArguments(options.argv ?? process.argv.slice(2));
-    const child = (options.spawnProcess ?? spawn)(
-      command,
-      ['exec', 'electron-forge', 'start', '--', ...argv],
-      {
-        cwd: appRoot,
-        env: options.environment ?? process.env,
-        stdio: 'inherit',
-      },
-    );
-    return await waitForChild(child);
+    return await execute(appRoot);
   } finally {
     process.off('exit', releaseOnExit);
     ownership.release();
   }
+}
+
+function resolveDesktopDevelopmentEnvironment(options) {
+  const environment = { ...options.environment };
+  const configuredRuntimeRoot = environment.NEKO_DSH_RUNTIME_ROOT;
+  let runtimeRoot;
+  if (configuredRuntimeRoot === undefined) {
+    runtimeRoot = (options.prepareRuntime ?? prepareDshDevelopmentRuntime)({
+      appRoot: options.appRoot,
+    });
+    if (!isAbsolute(runtimeRoot)) {
+      throw new Error('Desktop development runtime builder must return an absolute path.');
+    }
+    runtimeRoot = realpathSync(runtimeRoot);
+  } else {
+    if (!isAbsolute(configuredRuntimeRoot)) {
+      throw new Error('NEKO_DSH_RUNTIME_ROOT must be absolute when explicitly configured.');
+    }
+    runtimeRoot = realpathSync(configuredRuntimeRoot);
+    (options.qualifyRuntime ?? qualifyDshDevelopmentRuntime)(runtimeRoot);
+  }
+  environment.NEKO_DSH_RUNTIME_ROOT = runtimeRoot;
+  return environment;
+}
+
+function qualifyDshDevelopmentRuntime(runtimeRoot) {
+  assertDshRuntimeDirectory(runtimeRoot, 'darwin-arm64', { qualify: true, verifyTree: true });
 }
 
 function writeOwnerRecord(lockPath, record) {

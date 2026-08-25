@@ -14,7 +14,6 @@ const preview: MessageBundle = {
   // Video player
   'preview.video.loading': '正在加载视频...',
   'preview.video.error': '错误：{error}',
-  'preview.video.noMediaInfo': '无媒体信息',
   'preview.video.pipActive': '正在画中画播放',
   'preview.video.pauseButton': '暂停 (空格)',
   'preview.video.playButton': '播放 (空格)',
@@ -40,7 +39,6 @@ const preview: MessageBundle = {
   // Audio player
   'preview.audio.loading': '正在加载音频...',
   'preview.audio.error': '错误：{error}',
-  'preview.audio.noMediaInfo': '无媒体信息',
   'preview.audio.defaultFilename': '音频文件',
   'preview.audio.unknownCodec': '未知',
   'preview.audio.mono': '单声道',
@@ -66,6 +64,7 @@ const preview: MessageBundle = {
   'preview.document.sendFileToAgent': '发送文件到 Agent',
   'preview.document.loading': '加载中...',
   'preview.document.error': '错误：{error}',
+  'preview.document.previewUnavailable': '无法预览此文档',
   'preview.document.pageOf': '第 {current} 页 / 共 {total} 页',
   'preview.document.zoomIn': '放大',
   'preview.document.zoomOut': '缩小',

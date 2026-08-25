@@ -57,7 +57,7 @@ export const CbzViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
   // Track active waterfall images for region selection
   const waterfallImgRefs = useRef<Map<number, HTMLImageElement>>(new Map());
 
-  const getPageLocator = useCallback(
+  const getPageCoordinate = useCallback(
     ({ pageNumber }: { pageNumber?: number }) => {
       const page = pageNumber ?? currentPage + 1;
       return {
@@ -72,7 +72,7 @@ export const CbzViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
 
   const { sendRegionToAgent, sendFileToAgent } = useDocumentSelection({
     pageNumber: currentPage + 1,
-    getLocator: getPageLocator,
+    getCoordinate: getPageCoordinate,
     enabled: false, // CBZ uses region selection, not text
   });
 
@@ -94,9 +94,11 @@ export const CbzViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
     } else if (!sourceUrl && msg.type === 'document:data') {
       void loadCbzFromUrl(msg.payload.url);
     } else if (msg.type === 'document:navigate') {
-      const locator = msg.payload.locator;
+      const coordinate = msg.payload.coordinate;
       const pageNumber =
-        locator.kind === 'page' || locator.kind === 'region' ? locator.pageNumber : undefined;
+        coordinate.kind === 'page' || coordinate.kind === 'region'
+          ? coordinate.pageNumber
+          : undefined;
       if (pageNumber !== undefined) {
         if (imageEntries.length === 0) {
           pendingPageRef.current = pageNumber;

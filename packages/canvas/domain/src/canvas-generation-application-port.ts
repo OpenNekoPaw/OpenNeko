@@ -4,28 +4,33 @@ import type {
   CanvasGenerationRunBinding,
 } from './types/canvas-generation-node';
 import type { CanvasHostRuntimeIdentity } from './canvas-host-runtime-contract';
-import type { GeneratedOutputContentLocator } from '@neko/content';
-import type { GenerationJobRef, GenerationJobSnapshot } from '@neko/generation';
+import type { WorkspaceFileContentLocator } from '@neko/content-domain';
+import type { GenerationJobRef, GenerationJobSnapshot } from '@neko/generation-domain';
 
 export interface CanvasGenerationWorkspace {
   readonly workspaceId: string;
   readonly workspacePath: string;
 }
 
-export interface CanvasGenerationRuntimeProjection {
+interface CanvasGenerationRuntimeProjectionBase {
   readonly nodeId: string;
-  readonly submissionId: string;
   readonly recipeInputFingerprint: string;
-  readonly jobRef?: GenerationJobRef;
   readonly phase: GenerationJobSnapshot['phase'] | 'binding';
   readonly createdAt?: number;
   readonly updatedAt?: number;
   readonly progress?: GenerationJobSnapshot['progress'];
-  readonly resultLocators?: readonly GeneratedOutputContentLocator[];
+  readonly resultLocators?: readonly WorkspaceFileContentLocator[];
   readonly text?: string;
   readonly recipeStale?: boolean;
   readonly diagnostic?: CanvasGenerationDiagnostic;
 }
+
+export type CanvasGenerationRuntimeIdentity =
+  | { readonly submissionId: string; readonly jobRef?: undefined }
+  | { readonly jobRef: GenerationJobRef; readonly submissionId?: string };
+
+export type CanvasGenerationRuntimeProjection = CanvasGenerationRuntimeProjectionBase &
+  CanvasGenerationRuntimeIdentity;
 
 export interface CanvasGenerationStartResult {
   /** The latest durably persisted Canvas state, including the run and optional Job binding. */

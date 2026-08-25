@@ -117,6 +117,7 @@ export type ProviderType =
   | 'runway'
   | 'luma'
   | 'minimax'
+  | 'bytedance'
   | 'jimeng'
   | 'liblib'
   | 'suno'
@@ -139,6 +140,7 @@ export const PROVIDER_TYPES = [
   'runway',
   'luma',
   'minimax',
+  'bytedance',
   'jimeng',
   'liblib',
   'suno',
@@ -190,6 +192,14 @@ export const PROVIDER_SUPPORT_LEVELS = [
   'custom',
 ] as const satisfies readonly ProviderSupportLevel[];
 
+/** Product model families exposed by a provider. */
+export type ProviderModelFamily = 'dialogue' | 'generation';
+
+export const PROVIDER_MODEL_FAMILIES = [
+  'dialogue',
+  'generation',
+] as const satisfies readonly ProviderModelFamily[];
+
 /**
  * AI service provider configuration
  */
@@ -214,6 +224,8 @@ export interface ProviderConfig {
   protocolProfile?: ProviderProtocolProfile;
   /** Product support confidence for this provider profile */
   supportLevel?: ProviderSupportLevel;
+  /** Model families intentionally exposed by this provider in product settings */
+  supportedModelFamilies?: readonly ProviderModelFamily[];
   /** Whether this provider requires an API key to be considered configured */
   requiresApiKey?: boolean;
   /** Whether this is a builtin provider */
@@ -249,7 +261,6 @@ export type ModelCapability =
   | 'llm.chat'
   | 'llm.plan'
   | 'llm.judge'
-  | 'llm.vision'
   | 'completion'
   | 'vision'
   | 'function_calling'
@@ -264,11 +275,9 @@ export type ModelCapability =
   | 'text_to_image'
   | 'image.generate'
   | 'image.edit'
-  | 'image.understand'
   | 'image_to_image'
   | 'text_to_video'
   | 'video.generate'
-  | 'video.understand'
   | 'video.safety'
   | 'image_to_video'
   | 'video_to_video'
@@ -276,7 +285,6 @@ export type ModelCapability =
   | 'audio.generate'
   | 'audio.tts'
   | 'audio.asr'
-  | 'audio.understand'
   | 'audio.music.generate'
   | 'content.safety.moderate'
   | 'local.video.probe'
@@ -297,7 +305,6 @@ export const KNOWN_MODEL_CAPABILITIES = [
   'llm.chat',
   'llm.plan',
   'llm.judge',
-  'llm.vision',
   'completion',
   'vision',
   'function_calling',
@@ -311,11 +318,9 @@ export const KNOWN_MODEL_CAPABILITIES = [
   'text_to_image',
   'image.generate',
   'image.edit',
-  'image.understand',
   'image_to_image',
   'text_to_video',
   'video.generate',
-  'video.understand',
   'video.safety',
   'image_to_video',
   'video_to_video',
@@ -323,7 +328,6 @@ export const KNOWN_MODEL_CAPABILITIES = [
   'audio.generate',
   'audio.tts',
   'audio.asr',
-  'audio.understand',
   'audio.music.generate',
   'content.safety.moderate',
   'local.video.probe',
@@ -438,10 +442,10 @@ export type TypeDefaultModels = Partial<Record<ModelType, ModelRefConfig>>;
 /**
  * Default model bindings by product purpose.
  *
- * These bindings are intentionally separate from TypeDefaultModels: for
- * example `video.understand` is served by an LLM with native video input, while
- * `defaultModels.video` remains reserved for video generation models. The same
- * separation applies to `image.understand` and `audio.understand`.
+ * These bindings are intentionally separate from TypeDefaultModels for
+ * product-owned roles such as Canvas prompting, Character dialogue, and exact
+ * media generation operations. Native media understanding is a capability of
+ * the selected Agent model and is not configured through a purpose binding.
  */
 export type PurposeDefaultModels = Partial<Record<string, ModelRefConfig>>;
 

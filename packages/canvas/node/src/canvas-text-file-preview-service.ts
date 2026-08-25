@@ -1,4 +1,4 @@
-import type { ContentLocator, ContentReadService } from '@neko/content';
+import type { ContentLocator, ContentReadService } from '@neko/content-domain';
 import {
   CANVAS_TEXT_FILE_PREVIEW_MAX_BYTES,
   createUnavailableCanvasTextFilePreview,

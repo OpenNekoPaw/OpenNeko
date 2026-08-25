@@ -8,9 +8,9 @@ const desktopCanvasRuntimePath = 'apps/neko-desktop/src/main/desktop-canvas-runt
 describe('project file I/O guardrails', () => {
   it('keeps browser-visible add-source helpers free of Node builtins', () => {
     const browserVisibleFiles = [
-      'packages/content/src/project-file-io/add-source.ts',
-      'packages/content/src/project-file-io/ingest.ts',
-      'packages/content/src/project-file-io/add-source-flow.ts',
+      'packages/content/domain/src/project-file-io/add-source.ts',
+      'packages/content/domain/src/project-file-io/ingest.ts',
+      'packages/content/domain/src/project-file-io/add-source-flow.ts',
       'packages/canvas/webview/src/hooks/useDragDrop.ts',
     ];
 
@@ -37,7 +37,7 @@ describe('project file I/O guardrails', () => {
     expect(source).not.toMatch(/from ['"]vscode['"]/);
   });
 
-  it('keeps open/load paths read-only until an explicit Canvas save intent', () => {
+  it('keeps open/load paths read-only while Host session policy owns every save', () => {
     const source = readSource(desktopCanvasRuntimePath);
     const loadBody = extractMethodBody(source, 'private async loadDocument(');
 
@@ -81,7 +81,9 @@ describe('project file I/O guardrails', () => {
   it('keeps drag-and-drop acquisition on the canonical project:addSource path', () => {
     const dragDropPath = 'packages/canvas/webview/src/hooks/useDragDrop.ts';
     const dragDropSource = readSource(dragDropPath);
-    const protocolSource = readSource('packages/content/src/project-file-io/add-source-flow.ts');
+    const protocolSource = readSource(
+      'packages/content/domain/src/project-file-io/add-source-flow.ts',
+    );
 
     expect(dragDropSource).toContain('createProjectSourceAddClient({');
     expect(protocolSource).toContain("readonly type: 'project:addSource'");
@@ -131,7 +133,9 @@ describe('project file I/O guardrails', () => {
   });
 
   it('keeps save-reason diagnostics broad enough to distinguish add-source saves', () => {
-    expect(readSource('packages/content/src/project-file-io/store.ts')).toContain("| 'add-source'");
+    expect(readSource('packages/content/domain/src/project-file-io/store.ts')).toContain(
+      "| 'add-source'",
+    );
   });
 });
 

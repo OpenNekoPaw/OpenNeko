@@ -9,6 +9,7 @@ import {
   acquireDesktopDevelopmentBundleOwner,
   resolveDesktopDevelopmentOwnerPath,
   runDesktopDevelopment,
+  runDesktopForgeBuild,
 } from '../desktop-functional/run-development.mjs';
 
 const repositoryRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)));
@@ -107,8 +108,11 @@ describe('Desktop development bundle ownership', () => {
     const fixtureRoot = await mkdtemp(join(tmpdir(), 'openneko-development-owner-launch-'));
     try {
       const appRoot = join(fixtureRoot, 'app');
-      await mkdir(appRoot);
+      const runtimeRoot = join(fixtureRoot, 'runtime');
+      await Promise.all([mkdir(appRoot), mkdir(runtimeRoot)]);
+      const canonicalAppRoot = await realpath(appRoot);
       const calls = [];
+      let prepareCount = 0;
       const result = runDesktopDevelopment({
         appRoot,
         temporaryDirectory: fixtureRoot,
@@ -116,6 +120,12 @@ describe('Desktop development bundle ownership', () => {
         argv: ['--openneko-functional-fixture'],
         pid: 505,
         token: 'owner-launch',
+        environment: { OPENNEKO_TEST_ENV: 'preserved' },
+        prepareRuntime({ appRoot: preparedAppRoot }) {
+          prepareCount += 1;
+          assert.equal(preparedAppRoot, canonicalAppRoot);
+          return runtimeRoot;
+        },
         spawnProcess(command, args, options) {
           calls.push({ command, args, options });
           const child = new EventEmitter();
@@ -125,6 +135,7 @@ describe('Desktop development bundle ownership', () => {
       });
 
       assert.equal(await result, 7);
+      assert.equal(prepareCount, 1);
       assert.equal(calls.length, 1);
       assert.equal(calls[0].command, 'pnpm');
       assert.deepEqual(calls[0].args, [
@@ -136,9 +147,86 @@ describe('Desktop development bundle ownership', () => {
       ]);
       assert.equal(calls[0].options.cwd, await realpath(resolve(appRoot)));
       assert.equal(calls[0].options.stdio, 'inherit');
+      assert.equal(calls[0].options.env.OPENNEKO_TEST_ENV, 'preserved');
+      assert.equal(calls[0].options.env.NEKO_DSH_RUNTIME_ROOT, await realpath(runtimeRoot));
       await assert.rejects(() => stat(resolveDesktopDevelopmentOwnerPath(appRoot, fixtureRoot)), {
         code: 'ENOENT',
       });
+    } finally {
+      await rm(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('qualifies an explicit runtime and never replaces invalid explicit configuration', async () => {
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'openneko-development-runtime-explicit-'));
+    try {
+      const appRoot = join(fixtureRoot, 'app');
+      const runtimeRoot = join(fixtureRoot, 'runtime');
+      await Promise.all([mkdir(appRoot), mkdir(runtimeRoot)]);
+      const canonicalRuntimeRoot = await realpath(runtimeRoot);
+      const launches = [];
+      let prepareCount = 0;
+      let qualifyCount = 0;
+      const spawnProcess = (_command, _args, options) => {
+        launches.push(options);
+        const child = new EventEmitter();
+        void Promise.resolve().then(() => child.emit('exit', 0, null));
+        return child;
+      };
+
+      assert.equal(
+        await runDesktopDevelopment({
+          appRoot,
+          temporaryDirectory: fixtureRoot,
+          pid: 506,
+          token: 'owner-explicit-valid',
+          environment: { NEKO_DSH_RUNTIME_ROOT: runtimeRoot },
+          prepareRuntime() {
+            prepareCount += 1;
+            return runtimeRoot;
+          },
+          qualifyRuntime(root) {
+            qualifyCount += 1;
+            assert.equal(root, canonicalRuntimeRoot);
+          },
+          spawnProcess,
+        }),
+        0,
+      );
+      assert.equal(prepareCount, 0);
+      assert.equal(qualifyCount, 1);
+      assert.equal(launches[0].env.NEKO_DSH_RUNTIME_ROOT, await realpath(runtimeRoot));
+
+      for (const [configured, qualifyRuntime, message] of [
+        ['relative/runtime', () => undefined, /must be absolute/u],
+        [
+          runtimeRoot,
+          () => {
+            throw new Error('runtime closure is damaged');
+          },
+          /closure is damaged/u,
+        ],
+      ]) {
+        await assert.rejects(
+          () =>
+            runDesktopDevelopment({
+              appRoot,
+              temporaryDirectory: fixtureRoot,
+              pid: 507,
+              token: `owner-explicit-invalid-${launches.length}`,
+              environment: { NEKO_DSH_RUNTIME_ROOT: configured },
+              prepareRuntime() {
+                prepareCount += 1;
+                return runtimeRoot;
+              },
+              qualifyRuntime,
+              spawnProcess,
+            }),
+          message,
+        );
+      }
+      assert.equal(prepareCount, 0);
+      assert.equal(launches.length, 1);
     } finally {
       await rm(fixtureRoot, { recursive: true, force: true });
     }
@@ -182,6 +270,77 @@ describe('Desktop development bundle ownership', () => {
     }
   });
 
+  it('holds the same bundle owner for package construction and forwards Forge once', async () => {
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'openneko-package-owner-launch-'));
+    try {
+      const appRoot = join(fixtureRoot, 'app');
+      await mkdir(appRoot);
+      const calls = [];
+      const result = runDesktopForgeBuild({
+        appRoot,
+        temporaryDirectory: fixtureRoot,
+        forgeCommand: 'package',
+        argv: ['--arch=arm64'],
+        pid: 808,
+        token: 'owner-package',
+        environment: { OPENNEKO_PACKAGE_ENV: 'preserved' },
+        spawnProcess(command, args, options) {
+          calls.push({ command, args, options });
+          const child = new EventEmitter();
+          void Promise.resolve().then(() => child.emit('exit', 0, null));
+          return child;
+        },
+      });
+
+      assert.equal(await result, 0);
+      assert.equal(calls.length, 1);
+      assert.deepEqual(calls[0].args, ['exec', 'electron-forge', 'package', '--arch=arm64']);
+      assert.equal(calls[0].options.env.OPENNEKO_PACKAGE_ENV, 'preserved');
+      await assert.rejects(() => stat(resolveDesktopDevelopmentOwnerPath(appRoot, fixtureRoot)), {
+        code: 'ENOENT',
+      });
+    } finally {
+      await rm(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects package construction before Forge while development owns the bundle', async () => {
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'openneko-package-owner-conflict-'));
+    try {
+      const appRoot = join(fixtureRoot, 'app');
+      await mkdir(appRoot);
+      const lockPath = resolveDesktopDevelopmentOwnerPath(appRoot, fixtureRoot);
+      const owner = acquireDesktopDevelopmentBundleOwner({
+        appRoot,
+        lockPath,
+        pid: 909,
+        token: 'owner-development',
+      });
+      let spawnCount = 0;
+
+      await assert.rejects(
+        () =>
+          runDesktopForgeBuild({
+            appRoot,
+            lockPath,
+            forgeCommand: 'package',
+            pid: 1001,
+            token: 'owner-package-rejected',
+            isProcessAlive: (pid) => pid === 909,
+            spawnProcess() {
+              spawnCount += 1;
+              return new EventEmitter();
+            },
+          }),
+        /already owns the Vite bundle/u,
+      );
+      assert.equal(spawnCount, 0);
+      assert.equal(owner.release(), true);
+    } finally {
+      await rm(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+
   it('keeps root development and functional scenarios on the guarded package command', async () => {
     const [rootManifest, desktopManifest, runnerSource] = await Promise.all([
       readFile(join(repositoryRoot, 'package.json'), 'utf8').then(JSON.parse),
@@ -195,6 +354,10 @@ describe('Desktop development bundle ownership', () => {
       'node ../../scripts/assert-supported-desktop-host.mjs && node ../../scripts/desktop-functional/run-development.mjs',
     );
     assert.doesNotMatch(desktopManifest.scripts.dev, /electron-forge start/u);
+    for (const script of ['build', 'package', 'make']) {
+      assert.match(desktopManifest.scripts[script], /run-forge-build\.mjs/u);
+      assert.doesNotMatch(desktopManifest.scripts[script], /&& electron-forge (?:package|make)/u);
+    }
     assert.match(
       runnerSource,
       /Object\.freeze\(\['--filter', '@neko\/app-desktop', 'dev', '--', \.\.\.commonArgs\]\)/u,

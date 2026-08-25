@@ -4,8 +4,9 @@ import {
   selectedCanvasGenerationOutput,
   type CanvasGenerationOutputBinding,
   type CanvasNode,
+  type CanvasSerializableRecord,
 } from '@neko/canvas-domain';
-import { validateContentLocator } from '@neko/content';
+import { validateContentLocator } from '@neko/content-domain';
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon } from '@neko/ui/icons';
 import { IconButton } from '@neko/ui/primitives';
@@ -92,6 +93,7 @@ export function resolveCanvasFullscreenPreviewRequest(
               : {}),
           },
           contentLocator: validation.locator,
+          sourceFingerprint: readSourceFingerprint(node.data.provenance),
           metadata: {},
         },
       ],
@@ -121,6 +123,7 @@ export function resolveCanvasFullscreenPreviewRequest(
           title: basename(node.data.title) || basename(node.data.path) || t(`node.${previewKind}`),
           asset: { kind: 'asset-identity', mediaType: previewKind },
           contentLocator: validation.locator,
+          sourceFingerprint: readSourceFingerprint(node.data.provenance),
           metadata: {},
         },
       ],
@@ -129,6 +132,13 @@ export function resolveCanvasFullscreenPreviewRequest(
   }
 
   return undefined;
+}
+
+function readSourceFingerprint(
+  provenance: CanvasSerializableRecord | undefined,
+): string | undefined {
+  const value = provenance?.['contentFingerprint'];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 export function CanvasFullscreenPreviewOverlay({
@@ -303,6 +313,7 @@ function generationPreviewSource(
   const previewKind = output.kind === 'prompt' ? 'text' : output.kind;
   return {
     id: `canvas-fullscreen:generation:${node.id}:${output.outputId}`,
+    outputId: output.outputId,
     role: previewRole(previewKind),
     previewKind,
     title: node.data.recipe.prompt || t(`node.${output.kind}`),
@@ -375,7 +386,7 @@ function CanvasFullscreenPreviewBody({
       type: 'preview:resolveResource',
       requestId,
       nodeId: request.nodeId,
-      outputId: locator.kind === 'generated-output' ? locator.outputId : request.nodeId,
+      outputId: source.outputId ?? request.nodeId,
       contentLocator: locator,
       contentKind: source.previewKind,
       mediaType: getPreviewMediaType(fileName) ?? defaultMediaType(source.previewKind),
@@ -458,17 +469,7 @@ function basename(value: string | undefined): string | undefined {
 function contentLocatorFileName(
   locator: NonNullable<CanvasFullscreenPreviewSource['contentLocator']>,
 ): string {
-  switch (locator.kind) {
-    case 'workspace-file':
-    case 'generated-output':
-      return locator.path;
-    case 'media-library':
-      return locator.relativePath;
-    case 'document-entry':
-      return locator.entryPath;
-    case 'package-resource':
-      return locator.resourcePath;
-  }
+  return locator.selector?.kind === 'entry' ? locator.selector.path : locator.file.path;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

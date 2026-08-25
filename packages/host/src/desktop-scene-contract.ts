@@ -5,7 +5,7 @@ import {
   type AgentConversationOwnerRef,
   type AgentHomeNavigationIdentity,
 } from '@neko/agent-contracts';
-import { parseWorldRuntimeBinding, type WorldRuntimeBinding } from '@neko/world/contracts';
+import { parseWorldRuntimeBinding, type WorldRuntimeBinding } from '@neko/world-domain/contracts';
 
 export const DESKTOP_APPLICATION_SIDEBAR_DEFAULT_WIDTH = 240;
 export const DESKTOP_APPLICATION_SIDEBAR_WIDTH_LIMITS = { min: 208, max: 360 } as const;
@@ -45,10 +45,10 @@ export type DesktopWorkbenchSceneContext =
       readonly catalog: DesktopCreativeManagementCatalog;
       readonly detail?: DesktopCharacterDetailSelection | DesktopWorldDetailSelection;
     }
-  | { readonly kind: 'extensions' }
-  | { readonly kind: 'settings'; readonly settingsSectionId: string };
+  | { readonly kind: 'extensions' };
 
-export type DesktopCreativeManagementCatalog = 'content-projects' | 'characters' | 'worlds';
+export type DesktopCreativeManagementCatalog =
+  'content-projects' | 'works' | 'characters' | 'worlds';
 
 export interface DesktopAgentInteractionSurfaceRef {
   readonly kind: 'agent';
@@ -140,9 +140,7 @@ export type DesktopWorkbenchMainSurfaceRef =
   | { readonly kind: 'world-detail'; readonly selection: DesktopWorldDetailSelection }
   | DesktopCharacterPresentationSurfaceRef
   | { readonly kind: 'extension-management' }
-  | { readonly kind: 'extension-detail' }
-  | { readonly kind: 'project-detail' }
-  | { readonly kind: 'settings-main'; readonly settingsSectionId: string };
+  | { readonly kind: 'project-detail' };
 
 export type DesktopWorkbenchManagerSurfaceRef =
   | { readonly kind: 'workspace-resources'; readonly workspaceId: string }
@@ -150,8 +148,7 @@ export type DesktopWorkbenchManagerSurfaceRef =
       readonly kind: 'character-runtime-manager';
       readonly owner: Extract<AgentConversationOwnerRef, { readonly kind: 'character' | 'room' }>;
     }
-  | ({ readonly kind: 'world-runtime-manager' } & DesktopWorldRuntimeSurfaceIdentity)
-  | { readonly kind: 'settings-navigation'; readonly settingsSectionId: string };
+  | ({ readonly kind: 'world-runtime-manager' } & DesktopWorldRuntimeSurfaceIdentity);
 
 export type DesktopCharacterTimelineSurfaceRef =
   | {
@@ -240,7 +237,6 @@ export type DesktopSceneTransitionIntent =
       readonly selection: DesktopWorldDetailSelection;
     }
   | { readonly kind: 'open-extensions' }
-  | { readonly kind: 'open-settings'; readonly sectionId?: string }
   | { readonly kind: 'restore-conversation'; readonly navigation: AgentHomeNavigationIdentity };
 
 export interface DesktopSceneTransitionRequest {
@@ -266,6 +262,10 @@ export interface DesktopSceneUnavailableDiagnostic {
       | 'open-project-workspace'
       | 'open-character-authoring'
       | 'open-world-authoring'
+      | 'open-world-runtime'
+      | 'open-creative-management'
+      | 'select-character-detail'
+      | 'select-world-detail'
       | 'restore-conversation';
     readonly conversationOwnerKind?: AgentConversationOwnerRef['kind'] | 'world';
   };
@@ -361,6 +361,10 @@ export function parseDesktopSceneTransitionResult(value: unknown): DesktopSceneT
       intentKind !== 'open-project-workspace' &&
       intentKind !== 'open-character-authoring' &&
       intentKind !== 'open-world-authoring' &&
+      intentKind !== 'open-world-runtime' &&
+      intentKind !== 'open-creative-management' &&
+      intentKind !== 'select-character-detail' &&
+      intentKind !== 'select-world-detail' &&
       intentKind !== 'restore-conversation'
     ) {
       throw invalid(`Unknown Desktop Scene unavailable intent '${String(intentKind)}'.`);
@@ -688,13 +692,6 @@ function parseSceneContext(value: unknown): DesktopWorkbenchSceneContext {
     requireExactKeys(record, ['kind'], 'Extensions Scene context');
     return { kind };
   }
-  if (kind === 'settings') {
-    requireExactKeys(record, ['kind', 'settingsSectionId'], 'Settings Scene context');
-    return {
-      kind,
-      settingsSectionId: requireIdentity(record['settingsSectionId'], 'Settings Section'),
-    };
-  }
   throw unsupported(`Unknown Desktop Scene context kind '${String(kind)}'.`);
 }
 
@@ -912,20 +909,9 @@ function parseMainSurface(value: unknown): DesktopWorkbenchMainSurfaceRef {
     requireExactKeys(record, ['kind'], 'Extension Management Surface ref');
     return { kind };
   }
-  if (kind === 'extension-detail') {
-    requireExactKeys(record, ['kind'], 'Extension Detail Surface ref');
-    return { kind };
-  }
   if (kind === 'project-detail') {
     requireExactKeys(record, ['kind'], 'Project Detail Surface ref');
     return { kind };
-  }
-  if (kind === 'settings-main') {
-    requireExactKeys(record, ['kind', 'settingsSectionId'], 'Settings Main Surface ref');
-    return {
-      kind,
-      settingsSectionId: requireIdentity(record['settingsSectionId'], 'Settings Section'),
-    };
   }
   throw unsupported(`Unknown Main Surface kind '${String(kind)}'.`);
 }
@@ -975,13 +961,6 @@ function parseManagerSurface(value: unknown): DesktopWorkbenchManagerSurfaceRef 
     return {
       kind,
       ...parseWorldRuntimeSurfaceIdentity(record, 'World Runtime Manager Surface ref'),
-    };
-  }
-  if (kind === 'settings-navigation') {
-    requireExactKeys(record, ['kind', 'settingsSectionId'], 'Settings Navigation Surface ref');
-    return {
-      kind,
-      settingsSectionId: requireIdentity(record['settingsSectionId'], 'Settings Section'),
     };
   }
   throw unsupported(`Unknown Manager Surface kind '${String(kind)}'.`);
@@ -1177,15 +1156,6 @@ function parseSceneTransitionIntent(value: unknown): DesktopSceneTransitionInten
     requireExactKeys(record, ['kind', 'binding'], 'Open World Runtime intent');
     return { kind, binding: parseWorldRuntimeBinding(record['binding']) };
   }
-  if (kind === 'open-settings') {
-    requireExactKeys(record, ['kind', 'sectionId'], 'Open Settings intent', ['sectionId']);
-    return {
-      kind,
-      ...(record['sectionId'] === undefined
-        ? {}
-        : { sectionId: requireIdentity(record['sectionId'], 'Settings Section') }),
-    };
-  }
   if (kind === 'restore-conversation') {
     requireExactKeys(record, ['kind', 'navigation'], 'Restore Conversation intent');
     return { kind, navigation: parseAgentHomeNavigationIdentity(record['navigation']) };
@@ -1358,18 +1328,12 @@ function validateSceneProjection(projection: DesktopWorkbenchSceneProjection): v
   }
   if (context.kind === 'extensions') {
     assertManagerKinds(slots, []);
-    assertMainKinds(slots, ['extension-management', 'extension-detail']);
+    assertMainKinds(slots, ['extension-management']);
     if (slots.main?.kind !== 'extension-management') {
       throw mismatch('Extensions Scene requires its Extension Management Main Surface.');
     }
-    if (slots.secondaryMain?.kind !== 'extension-detail') {
-      throw mismatch('Extensions Scene requires its Extension Detail Secondary Main Surface.');
-    }
     return;
   }
-  assertManagerKinds(slots, ['settings-navigation']);
-  assertMainKinds(slots, ['settings-main']);
-  validateManagementIdentity(slots, context.settingsSectionId);
 }
 
 function parseCharacterDetailSelection(value: unknown): DesktopCharacterDetailSelection {
@@ -1399,7 +1363,14 @@ function parseWorldDetailSelection(value: unknown): DesktopWorldDetailSelection 
 }
 
 function parseCreativeManagementCatalog(value: unknown): DesktopCreativeManagementCatalog {
-  if (value === 'content-projects' || value === 'characters' || value === 'worlds') return value;
+  if (
+    value === 'content-projects' ||
+    value === 'works' ||
+    value === 'characters' ||
+    value === 'worlds'
+  ) {
+    return value;
+  }
   throw invalid(`Unknown Creative Management catalog '${String(value)}'.`);
 }
 
@@ -1505,23 +1476,6 @@ function assertMainKinds(
       throw mismatch(`Main Surface '${ref.kind}' is not valid for this Scene.`);
     }
   }
-}
-
-function validateManagementIdentity(
-  slots: DesktopWorkbenchSceneProjection['slots'],
-  expected: string,
-): void {
-  for (const ref of [slots.leftManager, slots.rightManager, slots.main, slots.secondaryMain]) {
-    if (ref && readManagementIdentity(ref) !== expected) {
-      throw mismatch(`Management Surface '${ref.kind}' does not match its Scene identity.`);
-    }
-  }
-}
-
-function readManagementIdentity(
-  ref: DesktopWorkbenchMainSurfaceRef | DesktopWorkbenchManagerSurfaceRef,
-): string | undefined {
-  return 'settingsSectionId' in ref ? ref.settingsSectionId : undefined;
 }
 
 function equalAgentScope(

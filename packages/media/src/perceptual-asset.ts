@@ -1,4 +1,4 @@
-import type { ContentLocator, ContentRepresentationLocator } from '@neko/content';
+import type { ContentLocator, ContentRepresentationHandle } from '@neko/content-domain';
 
 /** Stable media evidence reference shared by Agent projection and generation records. */
 export interface PerceptualAssetRef {
@@ -8,7 +8,7 @@ export interface PerceptualAssetRef {
   readonly previewUri?: string;
   readonly previewDiagnostic?: string;
   readonly contentLocator?: ContentLocator;
-  readonly representationLocator?: ContentRepresentationLocator;
+  readonly representationHandle?: ContentRepresentationHandle;
   readonly label?: string;
   readonly timestampMs?: number;
 }

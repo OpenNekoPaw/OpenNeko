@@ -37,6 +37,8 @@ dist/
 out/
 build/
 .vite/
+.dsh-development-runtime/
+.dsh-runtime-stage/
 
 # 测试与本地 fixture 产物；不得忽略源码中的 test/ 或 tests/
 test-results/

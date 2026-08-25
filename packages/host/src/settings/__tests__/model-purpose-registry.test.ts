@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Model } from '../types/provider';
 import {
   getModelPurposeCapabilityMatches,
-  MEDIA_UNDERSTANDING_PURPOSE_CAPABILITIES,
+  isAgentModelPurpose,
   modelSupportsPurpose,
 } from '../model-purpose-registry';
 
@@ -45,100 +45,8 @@ describe('model-purpose-registry', () => {
     ).toBe(true);
   });
 
-  it('requires explicit native video understanding instead of generic vision', () => {
-    expect(
-      modelSupportsPurpose(
-        createModel({ id: 'vision-only', type: 'llm', capabilities: ['chat', 'vision'] }),
-        'video.understand',
-      ),
-    ).toBe(false);
-    expect(
-      modelSupportsPurpose(
-        createModel({
-          id: 'gemini-video',
-          type: 'llm',
-          capabilities: ['chat', 'vision_video'],
-        }),
-        'video.understand',
-      ),
-    ).toBe(true);
-  });
-
-  it('requires explicit native image and audio understanding capabilities', () => {
-    expect(
-      modelSupportsPurpose(
-        createModel({ id: 'vision-only', type: 'llm', capabilities: ['chat', 'vision'] }),
-        'image.understand',
-      ),
-    ).toBe(true);
-    expect(
-      modelSupportsPurpose(
-        createModel({ id: 'tts', type: 'audio', capabilities: ['text_to_audio', 'audio'] }),
-        'audio.understand',
-      ),
-    ).toBe(false);
-    expect(
-      modelSupportsPurpose(
-        createModel({
-          id: 'gemini-media',
-          type: 'llm',
-          capabilities: ['chat', 'vision', 'audio'],
-        }),
-        'image.understand',
-      ),
-    ).toBe(true);
-    expect(
-      modelSupportsPurpose(
-        createModel({
-          id: 'gemini-media',
-          type: 'llm',
-          capabilities: ['chat', 'vision', 'audio'],
-        }),
-        'audio.understand',
-      ),
-    ).toBe(true);
-  });
-
-  it('maps media understanding purposes to canonical current and alternate capability names', () => {
-    expect(MEDIA_UNDERSTANDING_PURPOSE_CAPABILITIES).toEqual({
-      'image.understand': 'vision',
-      'audio.understand': 'audio',
-      'video.understand': 'vision_video',
-    });
-    expect(getModelPurposeCapabilityMatches('image.understand')).toEqual([
-      'vision',
-      'image.understand',
-    ]);
-    expect(getModelPurposeCapabilityMatches('audio.understand')).toEqual([
-      'audio',
-      'audio.understand',
-    ]);
-    expect(getModelPurposeCapabilityMatches('video.understand')).toEqual([
-      'vision_video',
-      'video.understand',
-    ]);
-
-    expect(
-      modelSupportsPurpose(
-        createModel({
-          id: 'alternate-video-capability',
-          type: 'llm',
-          capabilities: ['chat', 'video.understand'],
-        }),
-        'video.understand',
-      ),
-    ).toBe(true);
-  });
-
-  it('does not infer image or standalone audio understanding from video understanding', () => {
-    const videoOnly = createModel({
-      id: 'video-only',
-      type: 'llm',
-      capabilities: ['chat', 'vision_video'],
-    });
-
-    expect(modelSupportsPurpose(videoOnly, 'video.understand')).toBe(true);
-    expect(modelSupportsPurpose(videoOnly, 'image.understand')).toBe(false);
-    expect(modelSupportsPurpose(videoOnly, 'audio.understand')).toBe(false);
+  it('rejects purposes outside the canonical registry', () => {
+    expect(isAgentModelPurpose('media.analysis')).toBe(false);
+    expect(getModelPurposeCapabilityMatches('llm.chat')).toEqual(['llm.chat', 'chat']);
   });
 });

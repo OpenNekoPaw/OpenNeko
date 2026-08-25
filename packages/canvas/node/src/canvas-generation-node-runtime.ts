@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { createNodeHostContentReadService } from '@neko/content/node';
-import { type ContentReadService, type GeneratedOutputContentLocator } from '@neko/content';
+import { createNodeHostContentReadService } from '@neko/content-domain/node';
+import { type ContentReadService, type WorkspaceFileContentLocator } from '@neko/content-domain';
 import {
   beginCanvasGenerationRun,
   bindCanvasGenerationNodeJob,
@@ -23,7 +23,7 @@ import {
   type GenerationJobRequest,
   type GenerationJobSnapshot,
   type SubmitGenerationJobInput,
-} from '@neko/generation';
+} from '@neko/generation-domain';
 import { isTerminalJobPhase } from '@neko/shared/job-lifecycle';
 
 export interface CanvasGenerationWorkspaceJobResolver {
@@ -95,7 +95,7 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
   ): Promise<CanvasGenerationStartResult> {
     this.requireActive();
     const node = requireCanvasGenerationNode(input.canvas, input.nodeId);
-    if (node.data.latestRun?.submissionId !== input.run.submissionId) {
+    if (!sameRunBinding(node.data.latestRun, input.run)) {
       throw new Error(`Canvas Generation resume target "${input.nodeId}" is stale.`);
     }
     if (input.run.jobRef) {
@@ -282,7 +282,7 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
     nodeId: string,
     run: CanvasGenerationRunBinding,
     snapshot: GenerationJobSnapshot,
-    selectedPromptLocator?: GeneratedOutputContentLocator,
+    selectedPromptLocator?: WorkspaceFileContentLocator,
   ): Promise<CanvasGenerationRuntimeProjection> {
     const projection = projectSnapshot(nodeId, run, snapshot);
     if (
@@ -326,9 +326,9 @@ function projectSnapshot(
   assertSnapshotBinding(run, snapshot);
   return {
     nodeId,
-    submissionId: run.submissionId,
     recipeInputFingerprint: run.recipeInputFingerprint,
     jobRef: snapshot.ref,
+    ...(run.submissionId ? { submissionId: run.submissionId } : {}),
     phase: snapshot.phase,
     createdAt: snapshot.createdAt,
     updatedAt: snapshot.updatedAt,
@@ -342,12 +342,28 @@ function assertSnapshotBinding(
   run: CanvasGenerationRunBinding,
   snapshot: GenerationJobSnapshot,
 ): void {
-  if (snapshot.submissionId !== run.submissionId || run.jobRef?.jobId !== snapshot.ref.jobId) {
+  if (
+    run.jobRef?.jobId !== snapshot.ref.jobId ||
+    (run.submissionId !== undefined &&
+      snapshot.submissionId !== undefined &&
+      snapshot.submissionId !== run.submissionId)
+  ) {
     throw new GenerationJobError(
       'generation-job-binding-mismatch',
       'Canvas Generation Job snapshot does not match the exact persisted run binding.',
     );
   }
+}
+
+function sameRunBinding(
+  current: CanvasGenerationRunBinding | undefined,
+  expected: CanvasGenerationRunBinding,
+): boolean {
+  if (current?.recipeInputFingerprint !== expected.recipeInputFingerprint) return false;
+  if (current.jobRef || expected.jobRef) {
+    return current.jobRef?.jobId === expected.jobRef?.jobId;
+  }
+  return current.submissionId === expected.submissionId;
 }
 
 function replaceNodeData(

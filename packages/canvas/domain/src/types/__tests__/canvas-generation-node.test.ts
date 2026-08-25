@@ -99,15 +99,13 @@ describe('Canvas Generation Node contract', () => {
 
     expect(
       applyCanvasGenerationOutputs(bound.data, {
-        submissionId: 'stale-submission',
-        recipeInputFingerprint: 'sha256:recipe-1',
-        jobRef,
+        recipeInputFingerprint: 'sha256:stale-recipe',
+        jobRef: { kind: 'generation', jobId: 'stale-job' },
         outputs: [output('output-1', jobRef, 'image', 'sha256:recipe-1')],
       }),
     ).toMatchObject({ status: 'rejected', diagnostic: { code: 'stale-result' } });
 
     const applied = applyCanvasGenerationOutputs(bound.data, {
-      submissionId: 'submission-1',
       recipeInputFingerprint: 'sha256:recipe-1',
       jobRef,
       outputs: [output('output-1', jobRef, 'image', 'sha256:recipe-1')],
@@ -195,10 +193,10 @@ function output(
     kind,
     recipeInputFingerprint,
     locator: {
-      kind: 'generated-output' as const,
-      outputId,
-      digest: `sha256:${outputId}`,
-      path: `neko/generated/${outputId}.png`,
+      file: {
+        authority: 'workspace' as const,
+        path: `neko/generated/${outputId}.png`,
+      },
     },
   };
 }

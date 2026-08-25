@@ -6,7 +6,7 @@
 // facts, media payloads, Webview URIs, or provider runtime handles.
 // =============================================================================
 
-import { isHostProjectedRuntimeValue, type ContentStableSourceRef } from '@neko/content';
+import { isHostProjectedRuntimeValue, type ContentStableSourceRef } from '@neko/content-domain';
 import {
   CHARACTER_MEMORY_OBSERVATION_SOURCES,
   CHARACTER_MEMORY_SOURCE_REF_KINDS,
@@ -21,7 +21,7 @@ import {
   type CharacterObservation,
   type CharacterObservationSource,
   type EntityMention,
-} from '@neko/chara';
+} from '@neko/chara-domain';
 import type { ProjectEntityCandidateProjection } from '@neko/entity-domain';
 
 export const MEDIA_TEXT_SEGMENT_KINDS = [
@@ -104,14 +104,6 @@ export interface MediaTextRange extends CharacterMemorySourceRange {
   readonly boundingBox?: MediaBoundingBox;
 }
 
-export interface PerceptionCardRef {
-  readonly assetId: string;
-  readonly cacheKey?: string;
-  readonly sourceToolCallId?: string;
-  readonly contextPacketId?: string;
-  readonly createdAt?: number;
-}
-
 export interface SemanticTag {
   readonly tagId: string;
   readonly label: string;
@@ -151,7 +143,6 @@ export interface MediaSemanticIndex {
   readonly sourceRef: MediaSemanticSourceRef;
   readonly textSegments?: readonly MediaTextSegment[];
   readonly entityMentions?: readonly EntityMention[];
-  readonly perceptionRefs?: readonly PerceptionCardRef[];
   readonly semanticTags?: readonly SemanticTag[];
   readonly updatedAt?: string;
   readonly metadata?: CharacterMemoryJsonRecord;
@@ -179,43 +170,6 @@ export interface EntityMemoryContribution {
   readonly createdAt?: string;
   readonly updatedAt?: string;
   readonly metadata?: CharacterMemoryJsonRecord;
-}
-
-export interface ProjectPerceptionCardToSemanticIndexInput {
-  readonly card: SemanticPerceptionCard;
-  readonly sourceRef: MediaSemanticSourceRef;
-  readonly evidenceSourceRef?: MediaEvidenceSourceRef;
-  readonly providerId?: string;
-  readonly sourceKind?: MediaTextSourceKind;
-  readonly indexId?: string;
-  readonly updatedAt?: string;
-}
-
-export interface SemanticPerceptionEvidenceEntry {
-  readonly kind:
-    | 'description'
-    | 'transcript'
-    | 'loudness'
-    | 'clip-score'
-    | 'shot-boundaries'
-    | 'tags'
-    | 'custom';
-  readonly confidence: number;
-  readonly value: unknown;
-}
-
-export interface SemanticPerceptionCard {
-  readonly assetId: string;
-  readonly modality: 'image' | 'video' | 'audio' | 'data' | 'text' | 'mixed';
-  readonly sourceToolCallId?: string;
-  readonly contextPacketId?: string;
-  readonly createdAt: number;
-  readonly cacheKey?: string;
-  readonly semantic?: {
-    readonly evidences: readonly SemanticPerceptionEvidenceEntry[];
-  };
-  readonly layerStatus?: Readonly<Record<string, unknown>>;
-  readonly structural?: Readonly<Record<string, unknown>>;
 }
 
 export function isMediaTextSourceKind(value: unknown): value is MediaTextSourceKind {
@@ -255,92 +209,6 @@ export function mediaTextSegmentToCharacterObservationProvenance(
     ...(provenance.observedAt ? { observedAt: provenance.observedAt } : {}),
     ...(provenance.metadata ? { metadata: provenance.metadata } : {}),
   };
-}
-
-export function projectPerceptionCardToMediaSemanticIndex(
-  input: ProjectPerceptionCardToSemanticIndexInput,
-): MediaSemanticIndex {
-  const textSegments = (input.card.semantic?.evidences ?? []).flatMap((evidence, index) =>
-    projectPerceptionEvidenceToTextSegment(input, evidence, index),
-  );
-  return {
-    ...(input.indexId ? { indexId: input.indexId } : {}),
-    assetId: input.card.assetId,
-    sourceRef: input.sourceRef,
-    ...(textSegments.length > 0 ? { textSegments } : {}),
-    perceptionRefs: [
-      {
-        assetId: input.card.assetId,
-        ...(input.card.cacheKey ? { cacheKey: input.card.cacheKey } : {}),
-        ...(input.card.sourceToolCallId ? { sourceToolCallId: input.card.sourceToolCallId } : {}),
-        ...(input.card.contextPacketId ? { contextPacketId: input.card.contextPacketId } : {}),
-        createdAt: input.card.createdAt,
-      },
-    ],
-    ...(input.updatedAt ? { updatedAt: input.updatedAt } : {}),
-  };
-}
-
-function projectPerceptionEvidenceToTextSegment(
-  input: ProjectPerceptionCardToSemanticIndexInput,
-  evidence: SemanticPerceptionEvidenceEntry,
-  index: number,
-): readonly MediaTextSegment[] {
-  if (!isTextualPerceptionEvidence(evidence)) return [];
-  const text = typeof evidence.value === 'string' ? evidence.value : JSON.stringify(evidence.value);
-  if (!text || text.trim().length === 0) return [];
-  return [
-    {
-      segmentId: `${input.card.assetId}:perception:${index}`,
-      kind: perceptionEvidenceKindToTextKind(evidence.kind),
-      text,
-      sourceRef:
-        input.evidenceSourceRef ??
-        ({
-          kind: 'generated-asset',
-          assetId: input.card.assetId,
-        } satisfies MediaEvidenceSourceRef),
-      confidence: evidence.confidence,
-      provenance: {
-        providerId: input.providerId ?? 'perception-card',
-        sourceKind: input.sourceKind ?? perceptionCardModalityToSourceKind(input.card),
-        ...(input.card.sourceToolCallId ? { toolCallId: input.card.sourceToolCallId } : {}),
-      },
-      metadata: {
-        perceptionEvidenceKind: evidence.kind,
-      },
-    },
-  ];
-}
-
-function isTextualPerceptionEvidence(evidence: SemanticPerceptionEvidenceEntry): boolean {
-  return (
-    evidence.kind === 'description' ||
-    evidence.kind === 'transcript' ||
-    evidence.kind === 'tags' ||
-    typeof evidence.value === 'string'
-  );
-}
-
-function perceptionEvidenceKindToTextKind(
-  kind: SemanticPerceptionEvidenceEntry['kind'],
-): MediaTextSegmentKind {
-  if (kind === 'transcript') return 'asr';
-  if (kind === 'description' || kind === 'tags') return 'caption';
-  return 'agent';
-}
-
-function perceptionCardModalityToSourceKind(card: SemanticPerceptionCard): MediaTextSourceKind {
-  switch (card.modality) {
-    case 'image':
-      return 'comic';
-    case 'video':
-      return 'video';
-    case 'audio':
-      return 'audio';
-    default:
-      return 'generated-asset';
-  }
 }
 
 export function validateMediaSemanticIndex(
@@ -421,7 +289,6 @@ function validateIndex(
       'sourceRef',
       'textSegments',
       'entityMentions',
-      'perceptionRefs',
       'semanticTags',
       'updatedAt',
       'metadata',
@@ -439,12 +306,6 @@ function validateIndex(
     [...path, 'entityMentions'],
     diagnostics,
     (item, itemPath) => validateEntityMention(item, itemPath, diagnostics),
-  );
-  validateArray(
-    value['perceptionRefs'],
-    [...path, 'perceptionRefs'],
-    diagnostics,
-    (item, itemPath) => validatePerceptionRef(item, itemPath, diagnostics),
   );
   validateArray(value['semanticTags'], [...path, 'semanticTags'], diagnostics, (item, itemPath) =>
     validateSemanticTag(item, itemPath, diagnostics),
@@ -597,19 +458,6 @@ function validateBoundingBox(
       ),
     );
   }
-  validateSerializableValue(value, path, diagnostics);
-}
-
-function validatePerceptionRef(
-  value: unknown,
-  path: readonly CharacterMemoryPathSegment[],
-  diagnostics: MediaSemanticDiagnostic[],
-): void {
-  if (!isRecord(value)) {
-    diagnostics.push(invalidFieldDiagnostic(path, 'object', value));
-    return;
-  }
-  requireString(value['assetId'], [...path, 'assetId'], diagnostics);
   validateSerializableValue(value, path, diagnostics);
 }
 

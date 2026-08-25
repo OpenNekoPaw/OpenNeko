@@ -1,23 +1,24 @@
 import type { SupportedLocale } from '@neko/ui/i18n';
 
 export interface GlobalLibraryLabels {
-  readonly eyebrow: string;
   readonly titleMedia: string;
   readonly titleAssets: string;
-  readonly descriptionMedia: string;
-  readonly descriptionAssets: string;
+  readonly catalogMode: string;
   readonly searchMedia: string;
   readonly searchAssets: string;
   readonly list: string;
   readonly grid: string;
-  readonly refresh: string;
   readonly importAssets: string;
   readonly addLibrary: string;
   readonly location: string;
   readonly local: string;
   readonly nas: string;
   readonly cloud: string;
-  readonly empty: string;
+  readonly emptyMedia: string;
+  readonly emptyMediaDescription: string;
+  readonly emptyAssets: string;
+  readonly emptyAssetsDescription: string;
+  readonly noResults: string;
   readonly loading: string;
   readonly actions: string;
   readonly reveal: string;
@@ -48,24 +49,24 @@ export interface GlobalLibraryLabels {
 
 const labels: Record<'en' | 'zh-cn', GlobalLibraryLabels> = {
   en: {
-    eyebrow: 'Global catalog',
     titleMedia: 'Media Library',
     titleAssets: 'Asset Library',
-    descriptionMedia:
-      'Manage reusable media connections without copying source files into every project.',
-    descriptionAssets: 'Manage reusable creative assets available across projects.',
+    catalogMode: 'Library mode',
     searchMedia: 'Search media libraries',
     searchAssets: 'Search assets',
     list: 'List view',
     grid: 'Grid view',
-    refresh: 'Refresh',
     importAssets: 'Import assets',
     addLibrary: 'Connect directory',
     location: 'Location type',
     local: 'Local',
     nas: 'NAS',
     cloud: 'Cloud',
-    empty: 'No matching content',
+    emptyMedia: 'No media directories connected',
+    emptyMediaDescription: 'Connect a local, NAS, or cloud directory to reuse media in projects.',
+    emptyAssets: 'No assets imported',
+    emptyAssetsDescription: 'Import reusable creative assets for use across projects.',
+    noResults: 'No matching results',
     loading: 'Loading library',
     actions: 'Library actions',
     reveal: 'Show in file manager',
@@ -96,23 +97,24 @@ const labels: Record<'en' | 'zh-cn', GlobalLibraryLabels> = {
     moved: 'Files moved.',
   },
   'zh-cn': {
-    eyebrow: '全局目录',
     titleMedia: '媒体库',
     titleAssets: '资产库',
-    descriptionMedia: '管理可复用的媒体连接，无需将源文件复制到每个项目。',
-    descriptionAssets: '管理可供多个项目复用的创作素材。',
+    catalogMode: '资源库模式',
     searchMedia: '搜索媒体库',
     searchAssets: '搜索资产',
     list: '列表视图',
     grid: '网格视图',
-    refresh: '刷新',
     importAssets: '导入资产',
     addLibrary: '连接目录',
     location: '位置类型',
     local: '本地',
     nas: 'NAS',
     cloud: '云端',
-    empty: '没有匹配内容',
+    emptyMedia: '尚未连接媒体目录',
+    emptyMediaDescription: '连接本地、NAS 或云端目录，在不同项目中复用媒体。',
+    emptyAssets: '尚未导入资产',
+    emptyAssetsDescription: '导入可供多个项目复用的创作素材。',
+    noResults: '没有匹配结果',
     loading: '正在加载',
     actions: '媒体库操作',
     reveal: '在文件管理器中显示',

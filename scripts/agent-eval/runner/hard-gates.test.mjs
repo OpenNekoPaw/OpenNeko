@@ -100,7 +100,7 @@ describe('M1 deterministic hard gates', () => {
     });
   });
 
-  it('fails process assertions when controller trace is unavailable', () => {
+  it('rejects process assertions at the neutral evidence boundary', () => {
     const [result] = evaluateHardGates(
       [
         {
@@ -117,7 +117,7 @@ describe('M1 deterministic hard gates', () => {
     );
     expect(result).toMatchObject({
       status: 'fail',
-      message: 'workflow controller trace is unavailable',
+      message: expect.stringContaining('unsupported hard-gate evaluator'),
     });
   });
 
@@ -228,14 +228,6 @@ const M2_ASSERTIONS = [
     evidenceRef: 'model-facts',
   },
   {
-    id: 'tool',
-    kind: 'tool-call',
-    name: 'canvas.create',
-    status: 'success',
-    expectedArguments: { title: 'Scene 1' },
-    evidenceRef: 'tool-facts',
-  },
-  {
     id: 'artifact',
     kind: 'artifact',
     artifactRef: 'asset:scene-1',
@@ -259,7 +251,7 @@ const M2_CONTEXT = {
 };
 
 describe('M2 typed path hard gates', () => {
-  it('passes Pi Skill receipt, actual model, Tool, and artifact facts', () => {
+  it('passes Skill receipt, actual model, and artifact facts', () => {
     const results = evaluateHardGates(M2_ASSERTIONS, m2Facts(), M2_CONTEXT);
     expect(results.every((result) => result.status === 'pass')).toBe(true);
   });
@@ -287,10 +279,13 @@ describe('M2 typed path hard gates', () => {
       ],
       facts,
     );
-    expect(result.status).toBe('pass');
+    expect(result).toMatchObject({
+      status: 'fail',
+      message: expect.stringContaining('unsupported hard-gate evaluator'),
+    });
   });
 
-  it('evaluates Automation Tool result evidence from neutral complete-session facts', () => {
+  it('rejects Automation Tool result evidence from neutral facts', () => {
     const facts = m2Facts();
     facts.turns[1].toolCalls[0] = {
       id: 'automation-call-1',
@@ -339,12 +334,8 @@ describe('M2 typed path hard gates', () => {
       facts,
     );
     expect(result).toMatchObject({
-      status: 'pass',
-      details: {
-        sessionId: 'session-1',
-        targetKey: 'computer-target:opaque-1',
-        evidenceKinds: ['text', 'transient-image'],
-      },
+      status: 'fail',
+      message: expect.stringContaining('unsupported hard-gate evaluator'),
     });
   });
 
@@ -428,7 +419,7 @@ describe('M2 typed path hard gates', () => {
       },
       {
         id: 'read-1',
-        name: 'ReadImage',
+        name: 'read_image',
         status: 'success',
         arguments: { images: [{ contentLocator: locator }] },
         result: { analysis: 'visible' },
@@ -453,7 +444,7 @@ describe('M2 typed path hard gates', () => {
       id: 'locator-handoff',
       kind: 'content-locator-handoff',
       producerToolName: 'GenerateImage',
-      consumerToolName: 'ReadImage',
+      consumerToolName: 'read_image',
       locatorKind: 'generated-output',
       artifactKind: 'generated-asset',
       provenanceSource: 'generated-output',
@@ -557,12 +548,7 @@ describe('M2 typed path hard gates', () => {
         facts.configuration.chat.modelId = 'unexpected-model';
       },
     ],
-    [
-      'Tool result not observed',
-      2,
-      (facts) => (facts.turns[1].toolCalls[0].resultObservation = 'missing'),
-    ],
-    ['artifact not delivered', 3, (facts) => (facts.artifacts[0].deliveryStatus = 'failed')],
+    ['artifact not delivered', 2, (facts) => (facts.artifacts[0].deliveryStatus = 'failed')],
   ])('fails a correct-looking answer when %s', (_label, assertionIndex, mutate) => {
     const facts = m2Facts();
     mutate(facts);
@@ -586,98 +572,15 @@ describe('M2 typed path hard gates', () => {
 function m3Facts() {
   const facts = m2Facts();
   facts.conversationId = 'conversation-1';
-  facts.piRuntime = {
-    implementation: 'pi-agent-core',
-    transcriptAuthority: 'pi-session',
-    productMetadataAuthority: 'sqlite',
-    conversationId: 'conversation-1',
-    branchId: 'main',
-    piSessionId: 'pi-session-1',
-    workspaceLocator: { kind: 'virtual', value: '/__neko_workspaces/workspace-1' },
-    lastTurn: {
-      turnId: 'turn-1',
-      runId: 'run-1',
-      purpose: 'agent.main',
-      providerId: 'openai',
-      modelId: 'gpt-5',
-      parametersDigest: HASH,
-      snapshotDigest: HASH_B,
-      protocol: 'openai-completions',
-      authMechanism: 'bearer',
-      credentialSource: 'environment',
-      durability: 'durable',
-    },
-  };
-  facts.timelineProjection = {
-    implementation: 'shared-pi-timeline-projector',
-    store: 'conversation-projection-store',
-    presenter: 'terminal-timeline-presenter',
-    path: [
-      'pi-product-event',
-      'shared-pi-timeline-projector',
-      'conversation-projection-store',
-      'terminal-timeline-presenter',
-    ],
-    conversationId: 'conversation-1',
-    turnId: 'turn-1',
-    runId: 'run-1',
-    messageId: 'assistant-turn-1',
-    completionStatus: 'completed',
-    patches: [
-      {
-        conversationId: 'conversation-1',
-        turnId: 'turn-1',
-        runId: 'run-1',
-        messageId: 'assistant-turn-1',
-      },
-      {
-        conversationId: 'conversation-1',
-        turnId: 'turn-1',
-        runId: 'run-1',
-        messageId: 'assistant-turn-1',
-      },
-      {
-        conversationId: 'conversation-1',
-        turnId: 'turn-1',
-        runId: 'run-1',
-        messageId: 'assistant-turn-1',
-        completionStatus: 'completed',
-      },
-    ],
-    droppedPatchCount: 0,
-    acceptedPostTerminalPatchCount: 0,
-    items: [
-      {
-        itemId: 'tool-call-1',
-        kind: 'tool_call',
-        sequence: 0,
-        toolCallId: 'call-1',
-        toolName: 'GetContext',
-      },
-      { itemId: 'text-1-0', kind: 'assistant_text', sequence: 1 },
-    ],
-  };
-  facts.resourceDisplayProjections = [
-    {
-      conversationId: 'conversation-1',
-      toolCallId: 'tool-1',
-      projectionKind: 'tool-result',
-      status: 'authorized',
-      locatorKind: 'workspace-file',
-      transport: 'openneko-resource',
-      renderTarget: 'agent-webview',
-      diagnosticCodes: [],
-    },
-  ];
   facts.conversationPersistence = {
-    authority: 'pi-session',
-    catalog: 'sqlite',
+    authority: 'dsh-session',
+    catalog: 'openneko-conversation-catalog',
     databaseScope: 'user-global',
     resume: {
       status: 'restored',
       requestedConversationId: 'conversation-1',
       restoredConversationId: 'conversation-1',
-      recordSource: 'pi-session',
+      recordSource: 'dsh-session',
       restoredMessageCount: 2,
     },
   };
@@ -702,18 +605,7 @@ function m3Facts() {
         id: 'submit',
         kind: 'submit',
         method: 'message.submit',
-        queued: false,
         snapshot: snapshot({ turns: [facts.turns[0]] }),
-      },
-      {
-        id: 'queue',
-        kind: 'queue',
-        method: 'message.submit',
-        queued: true,
-        snapshot: snapshot({
-          pendingCount: 1,
-          turns: [facts.turns[0], facts.turns[1]],
-        }),
       },
       {
         id: 'idle',
@@ -721,7 +613,6 @@ function m3Facts() {
         method: 'session.waitForIdle',
         fullyIdle: true,
         snapshot: snapshot({
-          pendingCount: 0,
           turns: facts.turns,
           continuations: facts.continuations,
         }),
@@ -731,7 +622,7 @@ function m3Facts() {
         kind: 'cancel',
         method: 'message.cancel',
         accepted: true,
-        snapshot: snapshot({ paused: true, pendingCount: 1, turns: facts.turns }),
+        snapshot: snapshot({ turns: facts.turns }),
       },
       {
         id: 'resume',
@@ -763,13 +654,7 @@ function m3Facts() {
 function snapshot(options = {}) {
   return {
     conversationId: options.conversationId ?? 'conversation-1',
-    idle: { fullyIdle: options.pendingCount !== 1 },
-    messageQueue: {
-      sequence: 1,
-      pendingCount: options.pendingCount ?? 0,
-      paused: options.paused ?? false,
-      items: [],
-    },
+    idle: { fullyIdle: true },
     turns: options.turns ?? [],
     continuations: options.continuations ?? [],
     evidenceCompleteness: {},
@@ -777,55 +662,6 @@ function snapshot(options = {}) {
 }
 
 const M3_ASSERTIONS = [
-  {
-    id: 'pi-runtime',
-    kind: 'pi-runtime',
-    implementation: 'pi-agent-core',
-    transcriptAuthority: 'pi-session',
-    productMetadataAuthority: 'sqlite',
-    purpose: 'agent.main',
-    workspaceLocatorKind: 'virtual',
-    turnDurability: 'durable',
-    evidenceRef: 'runtime-facts',
-  },
-  {
-    id: 'timeline-projection',
-    kind: 'timeline-projection',
-    terminalStatus: 'completed',
-    toolName: 'GetContext',
-    evidenceRef: 'projection-facts',
-  },
-  {
-    id: 'order',
-    kind: 'process-order',
-    evidenceRef: 'process-facts',
-    events: [
-      { kind: 'workflow-step', stepId: 'submit', method: 'message.submit' },
-      { kind: 'turn', role: 'user', source: 'user' },
-      { kind: 'workflow-step', stepId: 'queue', method: 'message.submit' },
-      { kind: 'tool', name: 'canvas.create', status: 'success' },
-      {
-        kind: 'continuation',
-        source: 'subagent-result-continuation',
-        status: 'completed',
-      },
-    ],
-  },
-  {
-    id: 'queued',
-    kind: 'queue-state',
-    stepId: 'queue',
-    status: 'queued',
-    minPending: 1,
-    evidenceRef: 'queue-facts',
-  },
-  {
-    id: 'drained',
-    kind: 'queue-state',
-    stepId: 'idle',
-    status: 'drained',
-    evidenceRef: 'queue-facts',
-  },
   {
     id: 'cancelled',
     kind: 'cancellation',
@@ -844,11 +680,11 @@ const M3_ASSERTIONS = [
   {
     id: 'persistence',
     kind: 'conversation-persistence',
-    authority: 'pi-session',
-    catalog: 'sqlite',
+    authority: 'dsh-session',
+    catalog: 'openneko-conversation-catalog',
     databaseScope: 'user-global',
     resumeStatus: 'restored',
-    recordSource: 'pi-session',
+    recordSource: 'dsh-session',
     minRestoredMessages: 2,
     evidenceRef: 'recovery-facts',
   },
@@ -861,109 +697,24 @@ const M3_ASSERTIONS = [
 ];
 
 describe('M3 process hard gates', () => {
-  it('passes ordered workflow, queue, cancellation, persistence, and idle evidence', () => {
+  it('passes cancellation, recovery, persistence, and idle evidence', () => {
     const results = evaluateHardGates(M3_ASSERTIONS, m3Facts());
     expect(results.every((result) => result.status === 'pass')).toBe(true);
   });
 
-  it('requires exact configured and wire identities for every flat purpose in the model profile', () => {
-    const facts = m3Facts();
-    facts.piRuntime.lastTurn.modelPurposes = [
-      {
-        purpose: 'image.understand',
-        execution: 'pi',
-        providerId: 'vision-provider',
-        configuredModelId: 'vision-config',
-        apiModelId: 'vision-wire',
-        parametersDigest: HASH,
-      },
-    ];
-    const assertion = { ...M3_ASSERTIONS[0], modelProfileId: 'flat-purpose' };
-    const context = {
-      modelProfiles: [
-        {
-          id: 'flat-purpose',
-          purposes: {
-            'image.understand': {
-              providerId: 'vision-provider',
-              modelId: 'vision-config',
-            },
-          },
-        },
-      ],
-    };
-
-    expect(evaluateHardGates([assertion], facts, context)[0].status).toBe('pass');
-    facts.piRuntime.lastTurn.modelPurposes[0].configuredModelId = 'fallback-model';
-    expect(evaluateHardGates([assertion], facts, context)[0]).toMatchObject({
-      status: 'fail',
-      message: expect.stringContaining('image.understand mismatch'),
-    });
-  });
-
-  it('proves a locator-backed Tool result received a redacted OpenNeko display projection', () => {
-    const assertion = {
-      id: 'resource-display',
-      kind: 'resource-display-projection',
-      projectionKind: 'tool-result',
-      status: 'authorized',
-      locatorKind: 'workspace-file',
-      transport: 'openneko-resource',
-      renderTarget: 'agent-webview',
-      diagnosticsEmpty: true,
-      evidenceRef: 'display-facts',
-    };
-    const facts = m3Facts();
-
-    expect(evaluateHardGates([assertion], facts)[0]).toMatchObject({
-      status: 'pass',
-      details: {
-        projectionKind: 'tool-result',
-        status: 'authorized',
-        locatorKind: 'workspace-file',
-        transport: 'openneko-resource',
-        renderTarget: 'agent-webview',
-      },
-    });
-
-    facts.resourceDisplayProjections[0].url =
-      'http://127.0.0.1:43125/resources/must-not-enter-evidence';
-    expect(evaluateHardGates([assertion], facts)[0]).toMatchObject({
-      status: 'fail',
-      message: expect.stringContaining('non-redacted field'),
-    });
-  });
-
   it.each([
-    [
-      'runtime implementation mismatch',
-      0,
-      (facts) => (facts.piRuntime.implementation = 'AgentSession'),
-    ],
-    [
-      'projection owner mismatch',
-      1,
-      (facts) => (facts.timelineProjection.patches[1].runId = 'run-other'),
-    ],
-    ['out-of-order event', 2, (facts) => facts.automation.steps.splice(1, 1)],
-    ['queue not accepted', 3, (facts) => (facts.automation.steps[1].queued = false)],
-    [
-      'queue not drained',
-      4,
-      (facts) => (facts.automation.steps[2].snapshot.messageQueue.pendingCount = 1),
-    ],
-    ['cancel rejected', 5, (facts) => (facts.automation.steps[3].accepted = false)],
+    ['cancel rejected', 0, (facts) => (facts.automation.steps[2].accepted = false)],
     [
       'resume changed conversation',
-      6,
-      (facts) => (facts.automation.steps[5].snapshot.conversationId = 'other'),
+      1,
+      (facts) => (facts.automation.steps[4].snapshot.conversationId = 'other'),
     ],
     [
       'persistence source mismatch',
-      7,
+      2,
       (facts) => (facts.conversationPersistence.catalog = 'memory'),
     ],
-    ['idle concern non-terminal', 8, (facts) => (facts.idle.turnIdle.terminal = false)],
+    ['idle concern non-terminal', 3, (facts) => (facts.idle.turnIdle.terminal = false)],
   ])('fails when %s', (_label, assertionIndex, mutate) => {
     const facts = m3Facts();
     mutate(facts);
@@ -971,13 +722,16 @@ describe('M3 process hard gates', () => {
     expect(result.status).toBe('fail');
   });
 
-  it('fails ordering when dependent evidence was dropped', () => {
-    const facts = m3Facts();
-    facts.evidenceCompleteness.turnToolCalls.droppedCount = 1;
-    const [result] = evaluateHardGates([M3_ASSERTIONS[2]], facts);
-    expect(result).toMatchObject({
+  it('rejects Timeline assertions at the neutral evidence boundary', () => {
+    const assertion = {
+      id: 'timeline-projection',
+      kind: 'timeline-projection',
+      turnEndReason: 'completed',
+      evidenceRef: 'projection-facts',
+    };
+    expect(evaluateHardGates([assertion], m3Facts())[0]).toMatchObject({
       status: 'fail',
-      message: expect.stringContaining('turnToolCalls is incomplete'),
+      message: expect.stringContaining('unsupported hard-gate evaluator'),
     });
   });
 

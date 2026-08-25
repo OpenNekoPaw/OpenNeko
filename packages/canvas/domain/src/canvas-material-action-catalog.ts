@@ -1,4 +1,4 @@
-import { validateContentLocator, type ContentLocator } from '@neko/content';
+import { validateContentLocator, type ContentLocator } from '@neko/content-domain';
 import {
   deriveCanvasMaterialOrigin,
   isCanvasDurableMaterialContentLocator,
@@ -88,7 +88,10 @@ export function resolveCanvasMaterialActionTargets(
     targets.push({
       nodeId,
       mediaKind,
-      origin: deriveCanvasMaterialOrigin(locatorResult.locator),
+      origin: deriveCanvasMaterialOrigin(
+        locatorResult.locator,
+        isCanvasGenerationEvidence(node.data.generation) ? node.data.generation : undefined,
+      ),
       locator: locatorResult.locator,
       ...(isCanvasGenerationEvidence(node.data.generation)
         ? { generation: structuredClone(node.data.generation) }

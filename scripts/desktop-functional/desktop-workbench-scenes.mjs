@@ -174,7 +174,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       await resizeWindow(evaluate, 1440, 960);
 
       const assetsProjectionStart = await readShellProjectionProbe(evaluate);
-      await clickApplicationNavigation(evaluate, click, 3);
+      await clickApplicationNavigation(evaluate, click, 'assets');
       await waitForSelector('[data-owner-root="asset-management"]');
       await waitForSelector('[data-owner-root="asset-management"][data-catalog-status="ready"]');
       const assetsProjection = await assertSingleShellProjection(
@@ -246,7 +246,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       const assetPreviewScreenshot = await screenshot('asset-management-with-preview-large');
       checkpoint('asset-management-with-preview-large', { ...assetPreview, assetPreviewResize });
 
-      await clickApplicationNavigation(evaluate, click, 2);
+      await clickApplicationNavigation(evaluate, click, 'extensions');
       await waitForSelector('.agent-extension-management-root');
       const extensionsGrid = await inspectExtensionsManagement(evaluate);
       assertExtensionsCatalogOnly(extensionsGrid, 'grid', 'skills');
@@ -260,26 +260,20 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       const extensionsListScreenshot = await screenshot('extension-management-skills-list-large');
       checkpoint('extension-management-skills-list-large', extensionsList);
 
-      await click('[data-extension-catalog-tab="extensions"]');
-      await click(
-        '.agent-extension-management-root .agent-extension-catalog-row .management-surface-row__select',
-      );
-      await waitForSelector('[data-workbench-main-panel="extension-detail"]');
-      await waitForSelector('[data-automation-endpoint-management="true"]');
-      await waitForSelector('[data-automation-permission-management="true"]');
-      const extensionsConfiguration = await inspectExtensionsManagement(evaluate);
-      assertExtensionsManagement(extensionsConfiguration, 'list', 'extensions');
+      await click('[data-extension-catalog-tab="mcp"]');
+      const extensionsMcp = await inspectExtensionsManagement(evaluate);
+      assertExtensionsCatalogOnly(extensionsMcp, 'list', 'mcp');
       const extensionsResize = await exerciseManagementMainSplit(evaluate, drag);
-      const extensionsScreenshot = await screenshot('extension-management-configuration-large');
+      const extensionsScreenshot = await screenshot('extension-management-mcp-list-large');
       const extensions = {
         grid: extensionsGrid,
         list: extensionsList,
-        configuration: extensionsConfiguration,
+        mcp: extensionsMcp,
         resize: extensionsResize,
       };
-      checkpoint('extension-management-configuration-large', extensions);
+      checkpoint('extension-management-mcp-list-large', extensions);
 
-      await clickApplicationNavigation(evaluate, click, 3);
+      await clickApplicationNavigation(evaluate, click, 'projects');
       await waitForSelector('.project-management-catalog');
       const projects = await inspectWorkbench(evaluate, 'management', 'project-management');
       assertManagementMain(projects, 'project-management');
@@ -302,7 +296,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       );
       checkpoint('settings-workbench-large', settings);
 
-      await clickApplicationNavigation(evaluate, click, 0);
+      await clickApplicationNavigation(evaluate, click, 'start');
       await waitForSelector('.desktop-scene-workbench--agent-only');
       const workspaceCancellation = await assertFixtureWorkspaceCancellation(evaluate);
       checkpoint('workspace-picker-cancellation', workspaceCancellation);
@@ -356,7 +350,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
         evaluate,
         measureRendererResources,
       );
-      await clickApplicationNavigation(evaluate, click, 0);
+      await clickApplicationNavigation(evaluate, click, 'start');
       await waitForSelector('.desktop-scene-workbench--agent-only');
       const secondaryWorkspaceActivation = await chooseFixtureWorkspace(evaluate);
       if (
@@ -413,7 +407,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       });
 
       await waitForNavigationButton(evaluate, 3);
-      await clickApplicationNavigation(evaluate, click, 3);
+      await clickApplicationNavigation(evaluate, click, 'projects');
       await waitForSelector(
         `${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} .project-management-catalog .management-surface-row`,
       );
@@ -422,9 +416,9 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       if (
         projectCatalog.projectDetailInSecondary ||
         projectCatalog.mainPanelIds.includes('project-detail') ||
-        projectCatalog.projectRowActionCount !== 2 ||
+        projectCatalog.projectRowActionCount !== 1 ||
         !projectCatalog.projectOpenTargetVisible ||
-        projectCatalog.projectCatalogViewMode !== 'grid'
+        !projectCatalog.projectCatalogUsesGrid
       ) {
         throw new Error('Project catalog lost its direct-open grid presentation.');
       }
@@ -440,7 +434,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       checkpoint('project-management-direct-open-exact-restore', catalogDirectRestore);
 
       await waitForNavigationButton(evaluate, 1);
-      await clickApplicationNavigation(evaluate, click, 1);
+      await clickApplicationNavigation(evaluate, click, 'assets');
       await waitForSelector('[data-owner-root="asset-management"]');
       await openProjectWorkspace(evaluate, workspaceActivation.projectId);
       await waitForSelector('.desktop-scene-workbench--workspace');
@@ -490,7 +484,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       });
 
       await waitForNavigationButton(evaluate, 1);
-      await clickApplicationNavigation(evaluate, click, 1);
+      await clickApplicationNavigation(evaluate, click, 'assets');
       await waitForSelector('[data-owner-root="asset-management"]');
       const retainedMediaLibrary = await openPersistedFixtureAssetPreview(evaluate);
       checkpoint('asset-management-media-library-restart-restore', retainedMediaLibrary);
@@ -508,7 +502,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       checkpoint('asset-management-with-preview-small', smallAssets);
 
       await resizeWindow(evaluate, 1440, 960);
-      await clickApplicationNavigation(evaluate, click, 0);
+      await clickApplicationNavigation(evaluate, click, 'start');
       await waitForSelector(
         `.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`,
       );
@@ -578,7 +572,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
           `Assistant endpoint replacement emitted identity errors: ${JSON.stringify(projectionEndpointErrors)}`,
         );
       }
-      await clickApplicationNavigation(evaluate, click, 1);
+      await clickApplicationNavigation(evaluate, click, 'assets');
       await waitForSelector('[data-owner-root="asset-management"]');
       await waitForSelector('.home-conversation-link');
       await openAssistantConversation(evaluate, assistantActivation.conversationId);
@@ -681,7 +675,7 @@ export const desktopAgentEntryWorkspaceSkillScenario = Object.freeze({
       const workspaceActivation = await chooseFixtureWorkspace(evaluate);
       await waitForSelector('.desktop-scene-workbench--workspace');
 
-      await clickApplicationNavigation(evaluate, click, 0);
+      await clickApplicationNavigation(evaluate, click, 'start');
       await waitForSelector(
         `.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`,
       );
@@ -1020,92 +1014,60 @@ export const desktopAgentMessageQueueScenario = Object.freeze({
       );
       checkpoint('agent-message-queue-running-pending', await inspectMessageQueueUi(evaluate));
 
-      await click(`${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-stop`);
+      await waitForCondition(
+        evaluate,
+        `(() => {
+          const surface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+          const firstRow = surface?.querySelector('.agent-composer-queue-row');
+          return surface?.querySelector('.agent-composer-stop') instanceof HTMLButtonElement &&
+            surface?.querySelector('.agent-composer-queue-title')
+                ?.textContent?.includes('3') === true &&
+            firstRow?.querySelector('[data-queued-message-status]')
+                ?.textContent?.includes('等待中') === true &&
+            firstRow?.querySelectorAll('.agent-composer-queue-action:not(:disabled)').length === 2;
+        })()`,
+        'Running turn did not expose send-now and cancel for all pending queue items.',
+        10_000,
+      );
+
+      await clickQueuedMessageAction(evaluate, priorityPrompt, 0);
       try {
         await waitForCondition(
           evaluate,
           `(() => {
             const surface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
-            const firstRow = surface?.querySelector('.agent-composer-queue-row');
-            return surface?.querySelector('.agent-composer-queue-title')
-                ?.textContent?.includes('3') === true &&
-              firstRow?.querySelectorAll('.agent-composer-queue-action:not(:disabled)').length === 3;
+            const rows = [...(surface?.querySelectorAll('.agent-composer-queue-row') ?? [])];
+            return surface?.querySelector('.agent-composer-stop') instanceof HTMLButtonElement &&
+              [...(surface?.querySelectorAll('.agent-user-prompt') ?? [])].some(
+                (item) => item.textContent?.trim() === ${JSON.stringify(priorityPrompt)},
+              ) && rows.length === 2 &&
+              !rows.some((row) => row.textContent?.includes(${JSON.stringify(priorityPrompt)}));
           })()`,
-          'Explicit stop did not leave all pending queue items available.',
-          10_000,
-        );
-      } catch (error) {
-        throw new Error(
-          `${error instanceof Error ? error.message : String(error)} State: ${JSON.stringify(await inspectMessageQueueUi(evaluate))}`,
-        );
-      }
-      const pausedToggleVisible = await evaluate(
-        `document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-queue-toggle') instanceof HTMLButtonElement`,
-      );
-      if (pausedToggleVisible) {
-        await click(`${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-queue-toggle`);
-      }
-      await waitForCondition(
-        evaluate,
-        `document.querySelectorAll('${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-queue-row').length === 3`,
-        'Paused queue could not expand all three retained items.',
-      );
-      const pausedScreenshot = await captureSettledScreenshot(
-        screenshot,
-        'agent-message-queue-paused-after-stop',
-      );
-      checkpoint('agent-message-queue-paused-after-stop', await inspectMessageQueueUi(evaluate));
-
-      await clickQueuedMessageAction(evaluate, editPrompt, 1);
-      await waitForCondition(
-        evaluate,
-        `document.querySelector('${ACTIVE_AGENT_TEXTAREA_SELECTOR}')?.value === ${JSON.stringify(editPrompt)} &&
-          document.querySelectorAll('${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-queue-row').length === 2`,
-        'Queued edit did not restore the selected message into the owning Composer.',
-      );
-      const edited = await inspectMessageQueueUi(evaluate);
-      checkpoint('agent-message-queue-edit-restored', edited);
-      await replaceActiveAgentComposerText({ evaluate, pressKey, type }, '');
-      await evaluate(
-        `new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))`,
-      );
-
-      await clickQueuedMessageAction(evaluate, ordinaryPrompt, 2);
-      try {
-        await waitForCondition(
-          evaluate,
-          `(() => {
-            const rows = [...document.querySelectorAll(
-              '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-queue-row',
-            )];
-            return rows.length === 1 && rows[0]?.textContent?.includes(${JSON.stringify(priorityPrompt)});
-          })()`,
-          'Queue delete did not remove only the selected pending message.',
+          'Send-now did not interrupt the active turn and claim the selected exact message.',
+          20_000,
         );
       } catch (error) {
         throw new Error(
           `${error instanceof Error ? error.message : String(error)} State: ${JSON.stringify({ state: await inspectMessageQueueUi(evaluate), provider: providerServer.snapshot() })}`,
         );
       }
-      checkpoint('agent-message-queue-item-deleted', await inspectMessageQueueUi(evaluate));
-
-      await clickQueuedMessageAction(evaluate, priorityPrompt, 0);
-      await waitForCondition(
-        evaluate,
-        `(() => {
-          const surface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
-          return surface?.querySelector('.agent-composer-stop') instanceof HTMLButtonElement &&
-            [...surface.querySelectorAll('.agent-user-prompt')].some(
-              (item) => item.textContent?.trim() === ${JSON.stringify(priorityPrompt)},
-            ) && !surface.querySelector('.agent-composer-queue-panel');
-        })()`,
-        'Send-now did not resume the queue with the selected exact message.',
-      );
       const sendNowScreenshot = await captureSettledScreenshot(
         screenshot,
         'agent-message-queue-send-now-running',
       );
       checkpoint('agent-message-queue-send-now-running', await inspectMessageQueueUi(evaluate));
+
+      await clickQueuedMessageAction(evaluate, editPrompt, 1);
+      await clickQueuedMessageAction(evaluate, ordinaryPrompt, 1);
+      await waitForCondition(
+        evaluate,
+        `!document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-queue-panel')`,
+        'Queue cancel did not remove the two unselected pending messages.',
+      );
+      checkpoint(
+        'agent-message-queue-unselected-items-cancelled',
+        await inspectMessageQueueUi(evaluate),
+      );
 
       await waitForCondition(
         evaluate,
@@ -1151,13 +1113,11 @@ export const desktopAgentMessageQueueScenario = Object.freeze({
         ordinaryPrompt,
         editPrompt,
         priorityPrompt,
-        edited,
         completed,
         provider: providerEvidence,
         screenshots: [
           activeScreenshot,
           denseScreenshot,
-          pausedScreenshot,
           sendNowScreenshot,
           completedScreenshot,
           narrowScreenshot,
@@ -1283,7 +1243,7 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
         libraryName: 'workspace',
       });
 
-      await clickApplicationNavigation(evaluate, click, 0);
+      await clickApplicationNavigation(evaluate, click, 'start');
       await waitForSelector(
         `.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`,
       );
@@ -1384,6 +1344,115 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
         provider: providerEvidence,
       });
 
+      const pastedImagePrompt = '请分析刚刚粘贴的图片。';
+      await replaceActiveAgentComposerText({ evaluate, pressKey, type }, pastedImagePrompt);
+      await evaluate(`(() => {
+        const textarea = document.querySelector('${ACTIVE_AGENT_TEXTAREA_SELECTOR}');
+        if (!(textarea instanceof HTMLTextAreaElement)) {
+          throw new Error('Active Agent Composer is unavailable for image paste.');
+        }
+        const binary = atob(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+        );
+        const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+        const transfer = new DataTransfer();
+        transfer.items.add(new File([bytes], 'clipboard.png', { type: 'image/png' }));
+        textarea.dispatchEvent(
+          new ClipboardEvent('paste', {
+            bubbles: true,
+            cancelable: true,
+            clipboardData: transfer,
+          }),
+        );
+        return true;
+      })()`);
+      await waitForCondition(
+        evaluate,
+        `(() => {
+          const token = document.querySelector(
+            '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-reference-row-attached [data-reference-kind="image"]',
+          );
+          const send = document.querySelector('${ACTIVE_AGENT_SEND_SELECTOR}');
+          return token?.textContent?.includes('pasted-image-') &&
+            send instanceof HTMLButtonElement && !send.disabled;
+        })()`,
+        'Pasted image did not become a sendable Composer attachment.',
+      );
+      const pastedPreviewScreenshot = await captureSettledScreenshot(
+        screenshot,
+        'workspace-pasted-image-composer-preview',
+      );
+      await click(ACTIVE_AGENT_SEND_SELECTOR);
+      await waitForFunctionalProviderRequests(providerServer, 2);
+      await waitForCondition(
+        evaluate,
+        `(() => {
+          const surface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+          const transcript = surface?.textContent ?? '';
+          const imageTokens = [...(surface?.querySelectorAll(
+            '.agent-user-prompt [data-reference-kind="image"]',
+          ) ?? [])];
+          const imagePreview = [...(surface?.querySelectorAll(
+            '[data-agent-message-image="true"][data-image-preview-status="ready"]',
+          ) ?? [])].find((item) => item.textContent?.includes('pasted-image-'));
+          const thumbnail = imagePreview?.querySelector('.agent-message-image-thumbnail');
+          return transcript.includes(${JSON.stringify(pastedImagePrompt)}) &&
+            transcript.includes('OPENNEKO_FUNCTIONAL_RESPONSE_2') &&
+            imageTokens.some((token) => token.textContent?.includes('pasted-image-')) &&
+            thumbnail instanceof HTMLImageElement &&
+            thumbnail.getAttribute('loading') === 'lazy' &&
+            thumbnail.src.startsWith('openneko://resource/') &&
+            !surface?.querySelector('.agent-run-status') &&
+            !surface?.querySelector('.agent-execution-activity') &&
+            !surface?.querySelector('.agent-composer-stop');
+        })()`,
+        'Pasted image submit did not complete with an authorized replay thumbnail.',
+        45_000,
+      );
+      const finalProviderEvidence = providerServer.snapshot();
+      assertFunctionalProviderEvidence(finalProviderEvidence, 2);
+      if (
+        finalProviderEvidence.requests.length !== 2 ||
+        finalProviderEvidence.requests[1]?.nativeImageCount !== 1
+      ) {
+        throw new Error(
+          `Pasted image submit did not produce one exact native image request: ${JSON.stringify(finalProviderEvidence)}`,
+        );
+      }
+      const pastedCompletedScreenshot = await captureSettledScreenshot(
+        screenshot,
+        'workspace-pasted-image-session-complete',
+      );
+      await evaluate(`(() => {
+        const previews = [...document.querySelectorAll(
+          '${ACTIVE_AGENT_SURFACE_SELECTOR} [data-agent-message-image="true"][data-image-preview-status="ready"]',
+        )];
+        const preview = previews.find((item) => item.textContent?.includes('pasted-image-'));
+        const token = preview?.querySelector('[data-agent-reference-token="true"]');
+        if (!(token instanceof HTMLElement)) {
+          throw new Error('Replay image thumbnail token is unavailable for full preview.');
+        }
+        token.click();
+        return true;
+      })()`);
+      await waitForCondition(
+        evaluate,
+        `(() => {
+          const image = document.querySelector('.agent-image-preview-dialog .agent-image-preview-full');
+          return image instanceof HTMLImageElement && image.src.startsWith('openneko://resource/');
+        })()`,
+        'Authorized replay image did not open its full preview.',
+      );
+      const pastedFullPreviewScreenshot = await captureSettledScreenshot(
+        screenshot,
+        'workspace-pasted-image-full-preview',
+      );
+      await pressKey('Escape');
+      checkpoint('workspace-pasted-image-session-complete', {
+        prompt: pastedImagePrompt,
+        provider: finalProviderEvidence,
+      });
+
       const associationDirectory = join(
         prepared.workspacePath,
         'neko',
@@ -1480,7 +1549,7 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
         recoveryRequired,
         mentionSelection: mention.selection,
         workspaceSession,
-        provider: providerEvidence,
+        provider: finalProviderEvidence,
         unavailableLink,
         afterLocalStateDeletion,
         recoveryAfterUnlink,
@@ -1490,6 +1559,9 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
           recoveryRequired.appliedScreenshot,
           mention.screenshot,
           completedScreenshot,
+          pastedPreviewScreenshot,
+          pastedCompletedScreenshot,
+          pastedFullPreviewScreenshot,
           unavailableLinkScreenshot,
           deletedLocalStateScreenshot,
           recoveryAfterUnlink.requiredScreenshot,
@@ -1856,7 +1928,7 @@ export const desktopConversationNavigationScenario = Object.freeze({
         !['Running', '运行中'].includes(runningStatus.label) ||
         runningStatus.inlineText !== '' ||
         !runningStatus.iconVisible ||
-        runningStatus.conversationTitle.length === 0
+        runningStatus.conversationTitle !== 'Verify atomic Assistant session activation.'
       ) {
         throw new Error(
           `Conversation running status was not visible in PrimarySidebar: ${JSON.stringify(runningStatus)}`,
@@ -1882,7 +1954,7 @@ export const desktopConversationNavigationScenario = Object.freeze({
       );
       checkpoint('assistant-conversation-group-lifecycle', groupLifecycle);
 
-      await clickApplicationNavigation(evaluate, click, 1);
+      await clickApplicationNavigation(evaluate, click, 'assets');
       await waitForSelector('[data-owner-root="asset-management"]');
       await waitForSelector('.home-conversation-link');
       await openAssistantConversation(evaluate, initialSession.conversationId);
@@ -1917,21 +1989,39 @@ async function resizeWindow(evaluate, width, height) {
   await delay(250);
 }
 
-async function waitForNavigationButton(evaluate, index) {
+const APPLICATION_NAVIGATION_LABELS = Object.freeze({
+  start: ['Start creating', '开始创作'],
+  projects: ['Projects', '项目'],
+  assets: ['Asset Library', '资产库'],
+  extensions: ['Extensions', '扩展'],
+});
+
+async function waitForNavigationButton(evaluate, target) {
+  const labels = APPLICATION_NAVIGATION_LABELS[target];
+  if (!labels) throw new Error(`Unknown PrimarySidebar navigation target '${target}'.`);
   await waitForCondition(
     evaluate,
     `(() => {
-      const button = document.querySelectorAll(
+      const button = [...document.querySelectorAll(
         '${APPLICATION_NAVIGATION_BUTTON_SELECTOR}',
-      )[${String(index)}];
+      )].find((candidate) => ${JSON.stringify(labels)}.includes(candidate.textContent?.trim() ?? ''));
       return button instanceof HTMLButtonElement && !button.disabled;
     })()`,
     'PrimarySidebar navigation did not become interactive after reload.',
   );
 }
 
-async function clickApplicationNavigation(evaluate, click, index) {
-  await waitForNavigationButton(evaluate, index);
+async function clickApplicationNavigation(evaluate, click, target) {
+  const labels = APPLICATION_NAVIGATION_LABELS[target];
+  if (!labels) throw new Error(`Unknown PrimarySidebar navigation target '${target}'.`);
+  await waitForNavigationButton(evaluate, target);
+  const index = await evaluate(
+    `(() => [...document.querySelectorAll('${APPLICATION_NAVIGATION_BUTTON_SELECTOR}')]
+      .findIndex((candidate) => ${JSON.stringify(labels)}.includes(candidate.textContent?.trim() ?? '')))()`,
+  );
+  if (!Number.isInteger(index) || index < 0) {
+    throw new Error(`PrimarySidebar navigation target '${target}' is unavailable.`);
+  }
   await click(APPLICATION_NAVIGATION_BUTTON_SELECTOR, index);
 }
 
@@ -2571,7 +2661,7 @@ async function exerciseProjectConversationGroups({
   })()`);
   if (
     unavailableWorkspaceAction.actionCount !== 1 ||
-    !/Delete unavailable Workspace conversations|删除不可用工作区的会话/u.test(
+    !/Archive unavailable Workspace conversations|归档不可用工作区的会话/u.test(
       unavailableWorkspaceAction.actionLabel,
     ) ||
     unavailableWorkspaceAction.statusOpacity !== '0' ||
@@ -2677,7 +2767,7 @@ async function exerciseProjectConversationGroups({
         document.querySelector(${JSON.stringify(cleanupGroupSelector)}) !== null,
     };
   })()`);
-  await clickApplicationNavigation(evaluate, click, 3);
+  await clickApplicationNavigation(evaluate, click, 'projects');
   await waitForCondition(
     evaluate,
     `(() => {
@@ -2686,17 +2776,28 @@ async function exerciseProjectConversationGroups({
       const retainedProject = rows.find((row) =>
         row.getAttribute('data-project-id') === ${JSON.stringify(cleanup.projectId)},
       ) ?? rows[0];
-      const actions = retainedProject?.querySelectorAll(
-        '.management-surface-row-actions button',
-      );
-      const cleanupButton = actions?.[0];
-      const removalButton = actions?.[1];
+      const more = retainedProject?.querySelector('.project-catalog-card__more');
       return rows.length === 1 &&
-        cleanupButton instanceof HTMLButtonElement && cleanupButton.disabled &&
-        removalButton instanceof HTMLButtonElement && !removalButton.disabled;
+        more instanceof HTMLButtonElement && !more.disabled;
     })()`,
-    'Project catalog did not retain the cleaned Project with cleanup disabled.',
+    'Project catalog did not retain the cleaned Project with its actions available.',
   );
+  const cleanedProjectActions = await evaluate(`(async () => {
+    const more = document.querySelector('.project-management-catalog .project-catalog-card__more');
+    if (!(more instanceof HTMLButtonElement)) return null;
+    more.click();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    const actions = document.querySelectorAll('.project-catalog-card-menu [role="menuitem"]');
+    const cleanupButton = actions[0];
+    const removalButton = actions[1];
+    return {
+      cleanupDisabled: cleanupButton instanceof HTMLButtonElement && cleanupButton.disabled,
+      removalEnabled: removalButton instanceof HTMLButtonElement && !removalButton.disabled,
+    };
+  })()`);
+  if (!cleanedProjectActions?.cleanupDisabled || !cleanedProjectActions.removalEnabled) {
+    throw new Error('Cleaned Project more-actions menu has incorrect action availability.');
+  }
   const cleanedScreenshot = await captureSettledScreenshot(
     screenshot,
     'project-catalog-conversations-cleaned-project-retained',
@@ -2826,9 +2927,9 @@ function assertProjectContextMenu(menu) {
     !has('New conversation', '新建会话') ||
     !has('Project management', '项目管理') ||
     !has('Project portability', '项目可移植性') ||
-    !has('Delete Workspace conversations', '删除') ||
+    !has('Archive Workspace conversations', '归档') ||
     !has('Remove', '移除') ||
-    menu.items.filter((item) => item.danger).length !== 2
+    menu.items.filter((item) => item.danger).length !== 1
   ) {
     throw new Error(`Project context menu is incomplete: ${JSON.stringify(menu)}`);
   }
@@ -2843,8 +2944,8 @@ function assertConversationContextMenu(menu) {
     !menu.withinViewport ||
     menu.background === 'rgba(0, 0, 0, 0)' ||
     !has('Open conversation', '打开会话') ||
-    !has('Delete conversation', '删除会话') ||
-    menu.items.filter((item) => item.danger).length !== 1
+    !has('Archive conversation', '归档会话') ||
+    menu.items.filter((item) => item.danger).length !== 0
   ) {
     throw new Error(`Conversation context menu is incomplete: ${JSON.stringify(menu)}`);
   }
@@ -2858,8 +2959,8 @@ function assertWorkspaceContextMenu(menu) {
     !menu.withinViewport ||
     menu.background === 'rgba(0, 0, 0, 0)' ||
     item?.disabled ||
-    !item?.danger ||
-    !/Delete unavailable Workspace conversations|删除不可用工作区的会话/u.test(item?.text ?? '')
+    item?.danger ||
+    !/Archive unavailable Workspace conversations|归档不可用工作区的会话/u.test(item?.text ?? '')
   ) {
     throw new Error(`Unavailable Workspace context menu is incomplete: ${JSON.stringify(menu)}`);
   }
@@ -3274,10 +3375,11 @@ async function openEntrySlashMenu({ evaluate, screenshot, type }) {
     `(() => [...document.querySelectorAll(
       '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-command-menu [role="menuitem"]',
     )].some((item) => item.querySelector('.agent-composer-popover-primary')
-      ?.textContent?.trim() === '/new'))()`,
-    'Unbound Entry slash menu did not expose the Draft-safe /new command.',
+      ?.textContent?.trim() === '/permission'))()`,
+    'Unbound Entry slash menu did not expose the DSH /permission command.',
   );
-  const selection = await evaluate(`(() => {
+  const selection = await evaluate(`(async () => {
+    const projection = await window.openNekoDesktop.shell.getSnapshot();
     const activeSurface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
     const menu = activeSurface?.querySelector('.agent-composer-command-menu');
     const items = [...(menu?.querySelectorAll('[role="menuitem"]') ?? [])];
@@ -3289,6 +3391,7 @@ async function openEntrySlashMenu({ evaluate, screenshot, type }) {
       typedTriggerButtonCount:
         activeSurface?.querySelectorAll('.agent-composer-tool-button-text').length ?? -1,
       globalAlertCount: document.querySelectorAll('.shell-diagnostic[role="alert"]').length,
+      conversationCount: projection.agentHome.conversations.length,
       withinViewport:
         bounds !== undefined &&
         bounds.width > 0 &&
@@ -3300,9 +3403,10 @@ async function openEntrySlashMenu({ evaluate, screenshot, type }) {
     };
     if (
       !(menu instanceof HTMLElement) ||
-      !result.itemLabels.includes('/new') ||
+      !result.itemLabels.includes('/permission') ||
       result.typedTriggerButtonCount !== 0 ||
       result.globalAlertCount !== 0 ||
+      result.conversationCount !== 0 ||
       !result.withinViewport
     ) {
       throw new Error('Entry slash discovery is invalid: ' + JSON.stringify(result));
@@ -4179,6 +4283,21 @@ async function waitForAssistantSession(evaluate, expectedConversationId) {
     if (!(agent instanceof HTMLElement) || previousManagementVisible) {
       throw new Error('Assistant session restored through the previous management layout.');
     }
+    const conversation = projection.agentHome.conversations.find(
+      (candidate) => candidate.navigation.conversationId === context.scope.conversationId,
+    );
+    const conversationLink = [...document.querySelectorAll('.home-conversation-link')]
+      .find((candidate) => candidate.textContent?.trim() === conversation?.title);
+    const titlebar = agent.querySelector('.dsh-agent-titlebar');
+    const titlebarTitle = titlebar?.querySelector('.dsh-agent-titlebar__title');
+    const messageList = agent.querySelector('.agent-message-list');
+    const titlebarRect = titlebar?.getBoundingClientRect();
+    const titlebarTitleRect = titlebarTitle?.getBoundingClientRect();
+    const messageListRect = messageList?.getBoundingClientRect();
+    const titlebarStyle = titlebar instanceof HTMLElement ? getComputedStyle(titlebar) : undefined;
+    const titleStyle = titlebarTitle instanceof HTMLElement
+      ? getComputedStyle(titlebarTitle)
+      : undefined;
     return {
       conversationId: context.scope.conversationId,
       phase: activeWorkbench.scene.slots.interaction?.kind === 'agent'
@@ -4197,13 +4316,28 @@ async function waitForAssistantSession(evaluate, expectedConversationId) {
       packageHistoryVisible: Boolean(document.querySelector('.agent-header-action-history')),
       transcriptContainsSubmittedMessage:
         document.body.textContent?.includes('Verify atomic Assistant session activation.') ?? false,
+      conversationTitle: conversation?.title ?? '',
+      sidebarTitle: conversationLink?.textContent?.trim() ?? '',
+      titlebarTitle: titlebarTitle?.textContent?.trim() ?? '',
+      titlebarHeight: titlebarRect?.height ?? 0,
+      titlebarBorderBottomWidth: titlebarStyle?.borderBottomWidth,
+      titlebarTextAlign: titleStyle?.textAlign,
+      titlebarTitleCentered:
+        titlebarRect !== undefined && titlebarTitleRect !== undefined &&
+        Math.abs(
+          (titlebarTitleRect.left + titlebarTitleRect.width / 2) -
+          (titlebarRect.left + titlebarRect.width / 2),
+        ) <= 1,
+      titlebarPrecedesTranscript:
+        titlebarRect !== undefined && messageListRect !== undefined &&
+        titlebarRect.bottom <= messageListRect.top + 1,
     };
   })()`);
 }
 
 async function exerciseAssistantConversationGroup(evaluate, click, type, originalConversationId) {
   for (let conversationNumber = 2; conversationNumber <= 6; conversationNumber += 1) {
-    await clickApplicationNavigation(evaluate, click, 0);
+    await clickApplicationNavigation(evaluate, click, 'start');
     await waitForCondition(
       evaluate,
       `(async () => {
@@ -4284,7 +4418,7 @@ async function exerciseAssistantConversationGroup(evaluate, click, type, origina
     'Assistant group did not return to its bounded collapsed state.',
   );
 
-  const deletion = await evaluate(`(async () => {
+  const archive = await evaluate(`(async () => {
     const projection = await window.openNekoDesktop.shell.getSnapshot();
     ${requireActiveWorkbenchProjection('projection')}
     const context = activeWorkbench.scene.context;
@@ -4292,25 +4426,25 @@ async function exerciseAssistantConversationGroup(evaluate, click, type, origina
       (candidate) => candidate.kind === 'assistant',
     );
     if (context.kind !== 'agent' || context.scope.kind !== 'assistant' || !group) {
-      throw new Error('Assistant deletion requires the exact active group and Scene.');
+      throw new Error('Assistant archive requires the exact active group and Scene.');
     }
-    const deletedConversationId = group.conversations[1]?.navigation.conversationId;
-    if (!deletedConversationId || deletedConversationId === context.scope.conversationId) {
-      throw new Error('Assistant deletion fixture did not select a non-active conversation.');
+    const archivedConversationId = group.conversations[1]?.navigation.conversationId;
+    if (!archivedConversationId || archivedConversationId === context.scope.conversationId) {
+      throw new Error('Assistant archive fixture did not select a non-active conversation.');
     }
     globalThis.confirm = () => true;
-    const deleteButtons = document.querySelectorAll(
+    const archiveButtons = document.querySelectorAll(
       '.primary-conversation-group[data-group-kind="assistant"] ' +
         '.primary-recent-conversation-row > .primary-navigation-row-actions button:last-child',
     );
-    const deleteButton = deleteButtons[1];
-    if (!(deleteButton instanceof HTMLButtonElement) || deleteButton.disabled) {
-      throw new Error('Assistant conversation delete control is unavailable.');
+    const archiveButton = archiveButtons[1];
+    if (!(archiveButton instanceof HTMLButtonElement) || archiveButton.disabled) {
+      throw new Error('Assistant conversation archive control is unavailable.');
     }
-    deleteButton.click();
+    archiveButton.click();
     return {
       activeConversationId: context.scope.conversationId,
-      deletedConversationId,
+      archivedConversationId,
     };
   })()`);
   await waitForCondition(
@@ -4322,31 +4456,31 @@ async function exerciseAssistantConversationGroup(evaluate, click, type, origina
       return projection.agentHome.conversations.length === 5 &&
         !projection.agentHome.conversations.some(
           (conversation) => conversation.navigation.conversationId === ${JSON.stringify(
-            deletion.deletedConversationId,
+            archive.archivedConversationId,
           )},
         ) &&
         context.kind === 'agent' &&
         context.scope.kind === 'assistant' &&
-        context.scope.conversationId === ${JSON.stringify(deletion.activeConversationId)} &&
+        context.scope.conversationId === ${JSON.stringify(archive.activeConversationId)} &&
         !document.querySelector(
           '.primary-conversation-group[data-group-kind="assistant"] ' +
             '.primary-conversation-group__expand',
         );
     })()`,
-    'Assistant conversation deletion did not preserve the exact active session.',
+    'Assistant conversation archive did not preserve the exact active session.',
   );
-  const afterDelete = await inspectAssistantConversationGroup(evaluate);
+  const afterArchive = await inspectAssistantConversationGroup(evaluate);
   if (
-    afterDelete.totalConversationCount !== 5 ||
-    afterDelete.visibleConversationCount !== 5 ||
-    afterDelete.expandControlVisible ||
-    !afterDelete.conversationIds.includes(originalConversationId)
+    afterArchive.totalConversationCount !== 5 ||
+    afterArchive.visibleConversationCount !== 5 ||
+    afterArchive.expandControlVisible ||
+    !afterArchive.conversationIds.includes(originalConversationId)
   ) {
     throw new Error(
-      `Assistant group did not update after exact deletion: ${JSON.stringify(afterDelete)}`,
+      `Assistant group did not update after exact archive: ${JSON.stringify(afterArchive)}`,
     );
   }
-  return { collapsed, expanded, deletion, afterDelete };
+  return { collapsed, expanded, archive, afterArchive };
 }
 
 async function inspectAssistantConversationGroup(evaluate) {
@@ -5249,7 +5383,7 @@ async function registerFixtureGlobalMediaLibrary({
   waitForSelector,
   libraryName,
 }) {
-  await clickApplicationNavigation(evaluate, click, 3);
+  await clickApplicationNavigation(evaluate, click, 'assets');
   await waitForSelector('[data-owner-root="asset-management"][data-catalog-status="ready"]');
   await selectGlobalLibraryCatalog(evaluate, /^(Media Library|媒体库)$/u);
   await waitForCondition(
@@ -5805,18 +5939,19 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
         activeSecondaryMainTarget?.querySelector('.project-management-detail'),
       ),
       projectRowActionCount:
-        activeMainTarget?.querySelector(
-          '.project-management-catalog .management-surface-row-actions',
-        )?.querySelectorAll('button').length ?? -1,
+        activeMainTarget?.querySelectorAll(
+          '.project-management-catalog .project-catalog-card__more',
+        ).length ?? -1,
       projectOpenTargetVisible: Boolean(
         activeMainTarget?.querySelector(
           '.project-management-catalog .management-surface-row__open',
         ),
       ),
-      projectCatalogViewMode:
-        activeMainTarget
-          ?.querySelector('.project-management-catalog .management-surface-list')
-          ?.getAttribute('data-view-mode') ?? null,
+      projectCatalogUsesGrid: Boolean(
+        activeMainTarget?.querySelector(
+          '.project-management-catalog .management-surface-list.is-grid',
+        ),
+      ),
       mainPanelIds: [
         ...(activeMainTarget?.querySelectorAll('[data-workbench-main-panel]') ?? []),
         ...(activeSecondaryMainTarget?.querySelectorAll('[data-workbench-main-panel]') ?? []),
@@ -5960,23 +6095,12 @@ async function inspectExtensionsManagement(evaluate) {
   const workbench = await inspectWorkbench(evaluate, 'management', 'extension-management');
   const catalog = await evaluate(`(() => {
     const root = document.querySelector('.agent-extension-management-root');
-    const secondary = document.querySelector('${ACTIVE_WORKBENCH_SECONDARY_MAIN_TARGET_SELECTOR}');
     return {
       view: root?.getAttribute('data-catalog-view'),
       activeTab: root
         ?.querySelector('[data-extension-catalog-tab][aria-pressed="true"]')
         ?.getAttribute('data-extension-catalog-tab'),
-      selectedCount:
-        root?.querySelectorAll('.agent-extension-catalog-row[data-selected="true"]').length ?? 0,
-      configurationKind: secondary
-        ?.querySelector('[data-extension-configuration-kind]')
-        ?.getAttribute('data-extension-configuration-kind'),
-      endpointConfigurationVisible: Boolean(
-        secondary?.querySelector('[data-automation-endpoint-management="true"]'),
-      ),
-      permissionConfigurationVisible: Boolean(
-        secondary?.querySelector('[data-automation-permission-management="true"]'),
-      ),
+      pluginTabCount: root?.querySelectorAll('[data-extension-catalog-tab="plugin"]').length ?? 0,
     };
   })()`);
   return { ...workbench, ...catalog };
@@ -6108,40 +6232,12 @@ function assertManagementDetailSplit(detail, managementPanelId, detailPanelId) {
   }
 }
 
-function assertExtensionsManagement(detail, view, tab) {
-  assertManagementDetailSplit(detail, 'extension-management', 'extension-detail');
-  if (
-    !detail.compactPanelIds.includes('extension-detail') ||
-    detail.view !== view ||
-    detail.activeTab !== tab ||
-    detail.configurationKind !== tab ||
-    detail.selectedCount !== 1 ||
-    (tab === 'skills' &&
-      (detail.endpointConfigurationVisible || detail.permissionConfigurationVisible)) ||
-    (tab === 'extensions' &&
-      (!detail.endpointConfigurationVisible || !detail.permissionConfigurationVisible))
-  ) {
-    throw new Error(
-      `Extensions management did not preserve its catalog/configuration contract: ${JSON.stringify(detail)}`,
-    );
-  }
-}
-
 function assertExtensionsCatalogOnly(detail, view, tab) {
   assertSingleWorkbench(detail);
   assertManagementMain(detail, 'extension-management');
   assertSharedManagementPanel(detail, 'extension-management');
-  if (
-    detail.view !== view ||
-    detail.activeTab !== tab ||
-    detail.selectedCount !== 0 ||
-    detail.configurationKind !== undefined ||
-    detail.endpointConfigurationVisible ||
-    detail.permissionConfigurationVisible
-  ) {
-    throw new Error(
-      `Extensions management reserved configuration without a selection: ${JSON.stringify(detail)}`,
-    );
+  if (detail.view !== view || detail.activeTab !== tab || detail.pluginTabCount !== 0) {
+    throw new Error(`Extensions management is not Skill/MCP-only: ${JSON.stringify(detail)}`);
   }
 }
 
@@ -6197,7 +6293,7 @@ function assertSingleWorkbench(detail) {
   if (
     !detail.recentNavigationVisible ||
     detail.recentSectionCount !== 2 ||
-    JSON.stringify(detail.navigationSectionIds) !== JSON.stringify(['projects', 'conversations'])
+    JSON.stringify(detail.navigationSectionIds) !== JSON.stringify(['conversations'])
   ) {
     throw new Error(
       'PrimarySidebar did not preserve one authoritative grouped navigation surface.',
@@ -6229,7 +6325,15 @@ function assertAssistantConversationNavigation(detail) {
     detail.conversationCount < 1 ||
     detail.visibleConversationChildCount !== Math.min(detail.conversationCount, 5) ||
     detail.packageConversationTabsVisible ||
-    detail.packageHistoryVisible
+    detail.packageHistoryVisible ||
+    detail.conversationTitle !== 'Verify atomic Assistant session activation.' ||
+    detail.sidebarTitle !== detail.conversationTitle ||
+    detail.titlebarTitle !== detail.conversationTitle ||
+    detail.titlebarHeight < 40 ||
+    detail.titlebarBorderBottomWidth !== '0px' ||
+    detail.titlebarTextAlign !== 'center' ||
+    !detail.titlebarTitleCentered ||
+    !detail.titlebarPrecedesTranscript
   ) {
     throw new Error(
       `Assistant session did not use PrimarySidebar as its only conversation switcher: ${JSON.stringify(detail)}`,
@@ -6377,6 +6481,7 @@ async function inspectMessageQueueUi(evaluate) {
       queueTitle: panel?.querySelector('.agent-composer-queue-title')?.textContent?.trim(),
       queueItems: rows.map((row) => ({
         text: row.querySelector('.agent-composer-queue-text')?.textContent?.trim() ?? '',
+        status: row.querySelector('[data-queued-message-status]')?.textContent?.trim() ?? '',
         actionCount: row.querySelectorAll('.agent-composer-queue-action').length,
         enabledActionCount: row.querySelectorAll('.agent-composer-queue-action:not(:disabled)').length,
         actions: [...row.querySelectorAll('.agent-composer-queue-action')].map((action) => ({

@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 import {
   captureDesktopScreenshot,
@@ -15,10 +13,7 @@ import {
   scrollDesktopElement,
   typeDesktopText,
 } from '../desktop-functional/runner.mjs';
-import {
-  readLatestVisibleAgentLifecycleState,
-  resolveVisibleAgentProviderAuthorization,
-} from '../desktop-functional/desktop-agent-provider-ui.mjs';
+import { resolveVisibleAgentProviderAuthorization } from '../desktop-functional/desktop-agent-provider-ui.mjs';
 import {
   validateDesktopFunctionalScenario,
   validatePreparedDesktopFixture,
@@ -69,40 +64,6 @@ describe('Desktop automated functional runner contract', () => {
         ),
       /cost authorization is not approved/u,
     );
-  });
-
-  it('treats an uninitialized lifecycle database as pending without hiding query failures', async () => {
-    const fixtureRoot = await mkdtemp(join(tmpdir(), 'openneko-visible-agent-lifecycle-'));
-    const databasePath = join(fixtureRoot, 'neko.db');
-    const sqlite = await import('node:sqlite');
-    const database = new sqlite.DatabaseSync(databasePath);
-    try {
-      assert.equal(await readLatestVisibleAgentLifecycleState(databasePath), undefined);
-      database.exec(`CREATE TABLE agent_conversation_lifecycle (snapshot_json TEXT NOT NULL)`);
-      database
-        .prepare(`INSERT INTO agent_conversation_lifecycle (snapshot_json) VALUES (?)`)
-        .run(JSON.stringify({ pendingTurn: { status: 'failed' } }));
-      assert.equal(await readLatestVisibleAgentLifecycleState(databasePath), undefined);
-      database.exec(`CREATE TABLE agent_conversation_records (payload_json TEXT NOT NULL)`);
-      database.prepare(`INSERT INTO agent_conversation_records (payload_json) VALUES (?)`).run(
-        JSON.stringify({
-          conversationId: 'conversation-1',
-          pendingTurn: {
-            turnId: 'turn-1',
-            status: 'completed',
-          },
-        }),
-      );
-      assert.deepEqual(await readLatestVisibleAgentLifecycleState(databasePath), {
-        conversationId: 'conversation-1',
-        turnId: 'turn-1',
-        status: 'completed',
-        diagnostic: undefined,
-      });
-    } finally {
-      database.close();
-      await rm(fixtureRoot, { recursive: true, force: true });
-    }
   });
 
   it('launches development Electron with isolated workspace and CDP control', () => {

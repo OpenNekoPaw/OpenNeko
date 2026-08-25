@@ -22,10 +22,7 @@ const VALID_CANVAS: CanvasData = {
       zIndex: 1,
       data: {
         assetPath: 'assets/video.mp4',
-        contentLocator: {
-          kind: 'workspace-file',
-          path: 'assets/video.mp4',
-        },
+        contentLocator: { file: { authority: 'workspace', path: 'assets/video.mp4' } },
         mediaType: 'video',
       },
     },
@@ -130,15 +127,11 @@ describe('loadNkc', () => {
     expect(result.data.connections).toHaveLength(1);
   });
 
-  it('opens with a safe invalid material locator isolated to its node and preserves it unchanged', () => {
-    const unavailableLocator = {
-      kind: 'document-entry',
-      source: {
-        kind: 'workspace-file',
-        path: 'neko/assets/Books/story.epub',
-      },
-      entryPath: 'image/cover.jpg',
-    } as const;
+  it('opens a mounted Media Library material locator as one durable workspace-relative fact', () => {
+    const mountedLocator = {
+      file: { authority: 'workspace', path: 'neko/assets/Books/story.epub' },
+      selector: { kind: 'entry', path: 'image/cover.jpg' },
+    };
     const result = loadNkc(
       JSON.stringify({
         ...VALID_CANVAS,
@@ -148,7 +141,7 @@ describe('loadNkc', () => {
             data: {
               assetPath: 'Books/story.epub/image/cover.jpg',
               mediaType: 'image',
-              contentLocator: unavailableLocator,
+              contentLocator: mountedLocator,
             },
           },
           {
@@ -165,19 +158,14 @@ describe('loadNkc', () => {
 
     expect(result.validation.valid).toBe(true);
     expect(result.validation.errors).toEqual([]);
-    expect(result.validation.warnings).toContainEqual(
-      expect.objectContaining({
-        field: 'nodes[0].data.contentLocator',
-        message: expect.stringContaining('canvas-material-content-locator-invalid'),
-      }),
-    );
-    expect(result.data.nodes[0]?.data).toMatchObject({ contentLocator: unavailableLocator });
+    expect(result.validation.warnings).toEqual([]);
+    expect(result.data.nodes[0]?.data).toMatchObject({ contentLocator: mountedLocator });
     expect(result.data.nodes[1]).toMatchObject({
       id: 'sibling-note',
       data: { content: 'Sibling remains editable' },
     });
     expect(JSON.parse(saveNkc(result.data))).toMatchObject({
-      nodes: [{ data: { contentLocator: unavailableLocator } }, { id: 'sibling-note' }],
+      nodes: [{ data: { contentLocator: mountedLocator } }, { id: 'sibling-note' }],
     });
   });
 

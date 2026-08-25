@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   mapMediaTextSourceKindToCharacterObservationSource,
   mediaTextSegmentToCharacterObservationProvenance,
-  projectPerceptionCardToMediaSemanticIndex,
   validateEntityMemoryContribution,
   validateMediaSemanticIndex,
   validateMediaTextSegment,
@@ -10,7 +9,6 @@ import {
   type MediaSemanticIndex,
   type MediaTextSegment,
 } from '../media-semantic-index';
-import type { SemanticPerceptionCard } from '../media-semantic-index';
 
 describe('media semantic index contracts', () => {
   it('validates searchable media evidence with stable refs', () => {
@@ -113,68 +111,6 @@ describe('media semantic index contracts', () => {
     ]);
   });
 
-  it('projects perception cards into refs and searchable text segments without embedding full cards', () => {
-    const card: SemanticPerceptionCard = {
-      assetId: 'asset-page-1',
-      modality: 'image',
-      sourceToolCallId: 'tool-1',
-      contextPacketId: 'packet-1',
-      createdAt: 1_800_000_000,
-      cacheKey: 'perception-card',
-      layerStatus: {
-        layer0: 'complete',
-        layer1: 'complete',
-        layer2: 'skipped',
-      },
-      structural: {
-        format: 'png',
-        mimeType: 'image/png',
-        byteSize: 1024,
-      },
-      semantic: {
-        evidences: [
-          {
-            kind: 'description',
-            confidence: 0.72,
-            value: 'A panel with Rin speaking.',
-          },
-          {
-            kind: 'loudness',
-            confidence: 0.5,
-            value: { peak: -8 },
-          },
-        ],
-      },
-    };
-
-    const index = projectPerceptionCardToMediaSemanticIndex({
-      card,
-      sourceRef: {
-        kind: 'generated-asset',
-        assetId: 'asset-page-1',
-        path: '${WORKSPACE}/generated/page-1.png',
-      },
-    });
-
-    expect(index.perceptionRefs).toEqual([
-      {
-        assetId: 'asset-page-1',
-        cacheKey: 'perception-card',
-        sourceToolCallId: 'tool-1',
-        contextPacketId: 'packet-1',
-        createdAt: 1_800_000_000,
-      },
-    ]);
-    expect(index.textSegments).toEqual([
-      expect.objectContaining({
-        kind: 'caption',
-        text: 'A panel with Rin speaking.',
-      }),
-    ]);
-    expect(JSON.stringify(index)).not.toContain('layerStatus');
-    expect(validateMediaSemanticIndex(index)).toEqual({ ok: true, diagnostics: [] });
-  });
-
   it('rejects oversized inline payloads', () => {
     const result = validateMediaSemanticIndex(
       {
@@ -203,13 +139,6 @@ function makeIndex(): MediaSemanticIndex {
       sourcePath: '${WORKSPACE}/comic/page-1.png',
     },
     textSegments: [makeSegment()],
-    perceptionRefs: [
-      {
-        assetId: 'asset-page-1',
-        cacheKey: 'perception-card',
-        sourceToolCallId: 'tool-1',
-      },
-    ],
     semanticTags: [
       {
         tagId: 'tag-dialogue',

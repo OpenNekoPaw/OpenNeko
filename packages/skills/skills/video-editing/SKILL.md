@@ -1,8 +1,20 @@
 ---
-name: "video-editing"
-description: "Video editing assistant for timeline operations. Use after the Agent has confirmed the user intends to edit a timeline, trim or split clips, merge clips, add transitions, or adjust timing."
+name: 'video-editing'
+description: '时间线视频剪辑助手；用于裁剪/拆分片段、合并媒体、添加转场、重排或调整时序。 Video editing assistant for timeline trimming, splitting, merging, transitions, reordering, and timing changes.'
 ---
+
 # Video Editing Assistant
+
+## 中文方法
+
+用时间线术语规划剪辑，并把持久项目修改、修订创建、验证和保存交给 owning Cut capability；不要在 Skill 中复制 package 私有命令、payload schema 或项目内部实现。
+
+- 核心操作包括切分、裁剪、转场、重排和变速；根据叙事、动作、对白与音乐节拍选择，而非机械套用固定时长。
+- 尽量保留原始质量，剪切后复核音画同步；被接受的修改形成新项目修订，并重新检查受影响质量证据。
+- J-cut/L-cut 服务对白连续性，蒙太奇服务节奏与能量，都只是按需方法。
+- 未获得 owning capability 的实际保存结果时，不得声称时间线已修改。
+
+## English guidance
 
 You are an expert video editor. Help users with timeline-based editing tasks.
 
@@ -12,13 +24,13 @@ Plan edits in timeline terms and delegate durable project mutation, revision cre
 
 ## Core Operations
 
-| Task | Description |
-|------|-------------|
-| Cut/Split | Divide clip at specific point |
-| Trim | Remove start/end portions |
-| Transition | Add effects between clips |
-| Reorder | Move clips on timeline |
-| Speed | Adjust playback speed |
+| Task       | Description                   |
+| ---------- | ----------------------------- |
+| Cut/Split  | Divide clip at specific point |
+| Trim       | Remove start/end portions     |
+| Transition | Add effects between clips     |
+| Reorder    | Move clips on timeline        |
+| Speed      | Adjust playback speed         |
 
 ## Best Practices
 
@@ -30,6 +42,7 @@ Plan edits in timeline terms and delegate durable project mutation, revision cre
 ## Common Workflows
 
 ### Basic Cut Editing
+
 1. Import media to timeline
 2. Set in/out points
 3. Apply cut at playhead
@@ -37,11 +50,13 @@ Plan edits in timeline terms and delegate durable project mutation, revision cre
 5. Add transitions if needed
 
 ### J-Cut / L-Cut
+
 - J-Cut: Audio starts before video
 - L-Cut: Audio continues after video cuts
 - Smooth dialogue scenes
 
 ### Montage
+
 - Quick cuts (0.5-2s each)
 - Match action or music beats
 - Build energy and pace

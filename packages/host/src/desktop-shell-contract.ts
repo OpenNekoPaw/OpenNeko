@@ -32,9 +32,9 @@ export const DESKTOP_SHELL_CHANNELS = {
   projectOpenContent: 'openneko:desktop:project:content:open',
   projectOpenCatalog: 'openneko:desktop:project:catalog:open',
   projectRemove: 'openneko:desktop:project:remove',
-  projectConversationDelete: 'openneko:desktop:project:conversation:delete',
+  projectConversationArchive: 'openneko:desktop:project:conversation:archive',
   projectRequestProfile: 'openneko:desktop:project:profile:request',
-  conversationDelete: 'openneko:desktop:home:conversation:delete',
+  conversationArchive: 'openneko:desktop:home:conversation:archive',
   homeActivate: 'openneko:desktop:home:activate',
   tabActivate: 'openneko:desktop:tab:activate',
   tabClose: 'openneko:desktop:tab:close',
@@ -151,7 +151,7 @@ export type DesktopAgentHomeActivityKind = AgentHomeActivityKind;
 
 export type DesktopAgentHomeNavigationIdentity = AgentHomeNavigationIdentity;
 
-export interface DesktopConversationDeleteRequest extends DesktopWindowMutationRequest {
+export interface DesktopConversationArchiveRequest extends DesktopWindowMutationRequest {
   readonly navigations: readonly DesktopAgentHomeNavigationIdentity[];
 }
 
@@ -222,6 +222,11 @@ export type DesktopReadyDomainCapabilityProjection =
       readonly surface: 'cut';
       readonly status: 'ready';
       readonly ownerSlice: 'P1.5';
+    }
+  | {
+      readonly surface: 'character' | 'world';
+      readonly status: 'ready';
+      readonly ownerSlice: 'P1.6';
     };
 
 export interface DesktopUnavailableDomainCapabilityProjection {
@@ -268,7 +273,7 @@ interface DesktopCutPresentationResetDiagnosticProjection {
   readonly code: 'desktop-presentation-reset';
   readonly severity: 'warning';
   readonly windowId: string;
-  readonly owner: 'cut';
+  readonly owner: 'cut' | 'preview';
   readonly removedViewIds: readonly string[];
   readonly message: string;
 }
@@ -352,11 +357,11 @@ export interface OpenNekoDesktopShellBridge {
     openContent(): Promise<DesktopOpenContentResult>;
     open(projectId: string): Promise<DesktopOpenContentResult>;
     remove(projectIds: readonly string[]): Promise<DesktopShellProjection>;
-    deleteConversations(projectIds: readonly string[]): Promise<DesktopShellProjection>;
+    archiveConversations(projectIds: readonly string[]): Promise<DesktopShellProjection>;
     requestProfile(profile: DesktopUnavailableProjectProfile): Promise<DesktopProfileRequestResult>;
   };
   readonly conversations: {
-    delete(
+    archive(
       navigations: readonly DesktopAgentHomeNavigationIdentity[],
     ): Promise<DesktopShellProjection>;
   };
@@ -645,11 +650,11 @@ export function createDesktopProjectSelectionRequest(
   };
 }
 
-export function createDesktopConversationDeleteRequest(
+export function createDesktopConversationArchiveRequest(
   requestId: string,
   navigations: readonly DesktopAgentHomeNavigationIdentity[],
   rendererSessionId: string,
-): DesktopConversationDeleteRequest {
+): DesktopConversationArchiveRequest {
   return {
     ...createDesktopWindowMutationRequest(requestId, rendererSessionId),
     navigations: requireUniqueConversationNavigations(navigations),
@@ -738,17 +743,17 @@ export function parseDesktopProjectSelectionRequest(
   );
 }
 
-export function parseDesktopConversationDeleteRequest(
+export function parseDesktopConversationArchiveRequest(
   value: unknown,
-): DesktopConversationDeleteRequest {
+): DesktopConversationArchiveRequest {
   const record = requireRecord(
     value,
-    'Desktop Agent Home conversation delete request must be an object.',
+    'Desktop Agent Home conversation archive request must be an object.',
   );
   requireExactKeys(
     record,
     ['requestId', 'navigations', 'rendererSessionId'],
-    'Desktop Agent Home conversation delete request',
+    'Desktop Agent Home conversation archive request',
   );
   return {
     requestId: parseDesktopShellRequestId(record),
@@ -1045,7 +1050,10 @@ function parseDesktopShellStateDiagnosticProjection(
       ['code', 'severity', 'windowId', 'owner', 'removedViewIds', 'message'],
       'Desktop Shell state diagnostic',
     );
-    if (record['severity'] !== 'warning' || record['owner'] !== 'cut') {
+    if (
+      record['severity'] !== 'warning' ||
+      (record['owner'] !== 'cut' && record['owner'] !== 'preview')
+    ) {
       throw invalidPayload('Desktop presentation reset diagnostic identity is invalid.');
     }
     const removedViewIds = requireArray(
@@ -1066,7 +1074,7 @@ function parseDesktopShellStateDiagnosticProjection(
         record['windowId'],
         'Desktop presentation reset Window identity is required.',
       ),
-      owner: 'cut',
+      owner: record['owner'],
       removedViewIds,
       message: requireNonEmptyString(
         record['message'],
@@ -1480,7 +1488,8 @@ function parseDesktopDomainCapabilityProjection(value: unknown): DesktopDomainCa
       (surface === 'media-library' && ownerSlice === 'P1.4') ||
       (surface === 'canvas' && ownerSlice === 'P1.4') ||
       (surface === 'cut' && ownerSlice === 'P1.5') ||
-      (surface === 'preview' && ownerSlice === 'P1.5');
+      (surface === 'preview' && ownerSlice === 'P1.5') ||
+      ((surface === 'character' || surface === 'world') && ownerSlice === 'P1.6');
     if (!isReadyCapability) {
       throw invalidPayload(
         `Desktop domain capability '${surface}' cannot be ready in owner slice '${ownerSlice}'.`,
@@ -1495,6 +1504,9 @@ function parseDesktopDomainCapabilityProjection(value: unknown): DesktopDomainCa
     }
     if (surface === 'cut') {
       return { surface, status: 'ready', ownerSlice: 'P1.5' };
+    }
+    if (surface === 'character' || surface === 'world') {
+      return { surface, status: 'ready', ownerSlice: 'P1.6' };
     }
     return { surface, status: 'ready', ownerSlice: 'P1.5' };
   }

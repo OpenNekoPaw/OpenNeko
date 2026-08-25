@@ -31,7 +31,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$skill-creator Follow the portable authoring guidance, then call CreateSkill exactly once with skill { name: eval-personal-created-skill, description: Evaluation created personal portable Skill., body: # Evaluation Personal Skill\\n\\nUse canonical portable Skill guidance. }. The current Assistant Conversation owns the personal destination; do not select or navigate to a Workspace, use an ordinary write capability, or write to .neko/skills."
+      "prompt": "$skill-creator Follow the portable authoring guidance, then call CreateSkill exactly once with { layout: directory, skillMarkdown: \"---\\nname: eval-personal-created-skill\\ndescription: Evaluation created personal portable Skill.\\n---\\n# Evaluation Personal Skill\\n\\nUse canonical portable Skill guidance.\", resources: [] }. The current Assistant Conversation owns the personal destination; do not select or navigate to a Workspace, use an ordinary write capability, or write to .neko/skills."
     },
     {
       "id": "idle",
@@ -77,7 +77,7 @@
       "resultIncludes": {
         "data": {
           "name": "eval-personal-created-skill",
-          "source": "personal"
+          "source": "user-dsh"
         }
       },
       "evidenceRef": "personal-skill-facts"

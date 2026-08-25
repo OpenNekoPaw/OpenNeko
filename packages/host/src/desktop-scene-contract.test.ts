@@ -252,19 +252,14 @@ describe('Desktop Scene contract', () => {
     ).toThrow('Asset Preview Surface does not match Asset Center Session');
   });
 
-  it('keeps management Roots in Main instead of manager docks', () => {
+  it('keeps Skill/MCP management Roots in Main instead of manager docks', () => {
     const sceneId = 'scene:window-1:extensions';
     const projection = {
       sceneId,
       windowId: 'window-1',
-      context: {
-        kind: 'extensions' as const,
-      },
+      context: { kind: 'extensions' as const },
       slots: {
-        main: {
-          kind: 'extension-management' as const,
-        },
-        secondaryMain: { kind: 'extension-detail' as const },
+        main: { kind: 'extension-management' as const },
         status: { kind: 'scene-status' as const, sceneId },
       },
     };
@@ -273,9 +268,7 @@ describe('Desktop Scene contract', () => {
       parseDesktopWorkbenchSceneProjection({
         ...projection,
         slots: {
-          leftManager: {
-            kind: 'extension-catalog',
-          },
+          leftManager: { kind: 'extension-catalog' },
           status: projection.slots.status,
         },
       }),
@@ -403,6 +396,38 @@ describe('Desktop Scene contract', () => {
         },
       }),
     ).toThrow('Creative Management Scene requires its exact catalog Main Surface');
+  });
+
+  it('owns Works as one exact Creative Management scene and rejects the removed Templates path', () => {
+    const sceneId = 'scene:window-1:creative-management';
+    const projection = {
+      sceneId,
+      windowId: 'window-1',
+      context: { kind: 'creative-management' as const, catalog: 'works' as const },
+      slots: {
+        main: { kind: 'creative-management' as const, catalog: 'works' as const },
+        status: { kind: 'scene-status' as const, sceneId },
+      },
+    };
+    expect(parseDesktopWorkbenchSceneProjection(projection)).toEqual(projection);
+    expect(
+      parseDesktopSceneTransitionRequest({
+        requestId: 'request-works',
+        rendererSessionId: 'endpoint-1',
+        windowId: 'window-1',
+        sceneId: 'scene-1',
+        intent: { kind: 'open-creative-management', catalog: 'works' },
+      }).intent,
+    ).toEqual({ kind: 'open-creative-management', catalog: 'works' });
+    expect(() =>
+      parseDesktopSceneTransitionRequest({
+        requestId: 'request-templates',
+        rendererSessionId: 'endpoint-1',
+        windowId: 'window-1',
+        sceneId: 'scene-1',
+        intent: { kind: 'open-creative-management', catalog: 'templates' },
+      }),
+    ).toThrow('Creative Management catalog');
   });
 
   it('owns the World catalog and exact detail without an Experience runtime slot', () => {

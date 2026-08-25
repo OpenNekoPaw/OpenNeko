@@ -1,7 +1,7 @@
 # desktop-openneko-resource-transport Specification
 
 ## Purpose
-TBD - created by archiving change replace-desktop-media-scheme-with-http-resource-gateway. Update Purpose after archive.
+Define the sender-bound OpenNeko resource transport for authorized seekable, streaming and dependency-set resources.
 ## Requirements
 ### Requirement: Desktop SHALL register one OpenNeko scheme
 

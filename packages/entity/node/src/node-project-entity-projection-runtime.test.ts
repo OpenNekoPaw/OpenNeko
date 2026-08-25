@@ -39,7 +39,7 @@ describe('NodeProjectEntityProjectionRuntime', () => {
             representations: [
               {
                 bindingId: 'binding-rin',
-                target: { kind: 'workspace-file', path: 'characters/rin.png' },
+                target: { file: { authority: 'workspace', path: 'characters/rin.png' } },
                 role: 'portrait',
                 source: 'user',
                 acceptedAt: NOW,

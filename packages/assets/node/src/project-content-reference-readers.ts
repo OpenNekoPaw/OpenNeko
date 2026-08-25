@@ -6,19 +6,20 @@ import { PROJECT_ENTITY_DOCUMENT_WORKSPACE_PATH } from '@neko/entity-domain';
 import { NodeProjectEntityRepresentationReferenceService } from '@neko/entity-node';
 import {
   contentLocatorKey,
+  isWorkspaceFileContentLocator,
   normalizeWorkspaceContentPath,
   parseContentReferenceTarget,
   validateContentLocator,
   type ContentLocator,
-  type MediaLibraryContentLocator,
   type WorkspaceFileContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 import {
   aggregateWorkspaceMediaLibraryRequirements,
   type ProjectContentReferenceOwnerSnapshot,
   type WorkspaceMediaLibraryRequirementSnapshot,
 } from '@neko/assets-domain/contracts';
 import { loadNkc, saveNkc } from '@neko/canvas-domain';
+import { parseWorkspaceMediaLibraryPath } from './project-media-library-content-handler';
 
 const PROJECT_DOCUMENT_EXTENSIONS = new Set(['.nkc', '.otio']);
 const EXCLUDED_DIRECTORIES = new Set([
@@ -211,9 +212,7 @@ async function rewriteCutReferences(
             item.media_reference.target_url,
             ownerId,
           );
-          const replacement = replacements.get(
-            source.kind === 'media-library' ? contentLocatorKey(source) : source.path,
-          );
+          const replacement = replacements.get(contentLocatorKey(source));
           if (!replacement) return item;
           rewrittenCount += 1;
           return {
@@ -236,14 +235,14 @@ function readCutContentLocator(
   documentDirectory: string,
   targetUrl: string,
   ownerId: string,
-): MediaLibraryContentLocator | WorkspaceFileContentLocator {
+): WorkspaceFileContentLocator {
   const portable = parseContentReferenceTarget(targetUrl);
-  if (portable?.kind === 'media-library') return portable;
+  if (portable && parseWorkspaceMediaLibraryPath(portable.file.path)) return portable;
   const targetPath = normalizeWorkspaceContentPath(
     path.posix.normalize(path.posix.join(documentDirectory, targetUrl)),
   );
   if (!targetPath) throw invalidProjectDocument('cut', ownerId);
-  return { kind: 'workspace-file', path: targetPath };
+  return { file: { authority: 'workspace', path: targetPath } };
 }
 
 async function readEntityRepresentationReferences(input: {
@@ -339,18 +338,10 @@ function replaceContentLocator(
   locator: ContentLocator,
   replacements: ReadonlyMap<string, string>,
 ): ContentLocator {
-  if (locator.kind === 'media-library') {
+  if (isWorkspaceFileContentLocator(locator)) {
     const replacement = replacements.get(contentLocatorKey(locator));
-    return replacement ? { kind: 'workspace-file', path: replacement } : locator;
-  }
-  if (locator.kind === 'workspace-file') {
-    const replacement = replacements.get(locator.path);
-    return replacement ? { ...locator, path: replacement } : locator;
-  }
-  if (locator.kind === 'document-entry') {
-    const source = replaceContentLocator(locator.source, replacements);
-    return source.kind === 'workspace-file' || source.kind === 'media-library'
-      ? { ...locator, source }
+    return replacement
+      ? { ...locator, file: { authority: 'workspace', path: replacement } }
       : locator;
   }
   return locator;

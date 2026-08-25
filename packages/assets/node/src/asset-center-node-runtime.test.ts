@@ -1,8 +1,13 @@
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { TextReader, Uint8ArrayWriter, ZipWriter } from '@zip.js/zip.js';
 import { describe, expect, it, vi } from 'vitest';
-import { AssetCenterNodeRuntime } from './asset-center-node-runtime';
+import type { EpubPreviewResourceTree } from '@neko/preview-node';
+import {
+  AssetCenterNodeRuntime,
+  type AssetCenterNodeRuntimeOptions,
+} from './asset-center-node-runtime';
 
 describe('AssetCenterNodeRuntime', () => {
   it('keeps Assets facts while releasing an authorized Preview handle on view detach', async () => {
@@ -35,7 +40,9 @@ describe('AssetCenterNodeRuntime', () => {
       revealHomeMediaLibrary: vi.fn(),
       resolveAssetCenterSelection: vi.fn(async () => ({
         item,
-        contentLocator: { kind: 'workspace-file' as const, path: 'shots/shot.png' },
+        contentLocator: {
+          file: { authority: 'workspace' as const, path: 'shots/shot.png' },
+        },
         absolutePath,
       })),
     };
@@ -46,6 +53,7 @@ describe('AssetCenterNodeRuntime', () => {
         registerFile: vi.fn(async () => ({
           url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         })),
+        registerResourceTree: vi.fn(),
         releaseSession,
       },
     });
@@ -69,7 +77,7 @@ describe('AssetCenterNodeRuntime', () => {
       identity: {
         owner: { kind: 'asset-center', assetCenterSessionId: identity.assetCenterSessionId },
       },
-      descriptor: { contentLocator: { kind: 'workspace-file', path: 'shots/shot.png' } },
+      descriptor: { contentLocator: { file: { authority: 'workspace', path: 'shots/shot.png' } } },
     });
 
     const detached = await runtime.detachSession(identity);
@@ -78,10 +86,63 @@ describe('AssetCenterNodeRuntime', () => {
     expect(releaseSession).toHaveBeenCalledWith('preview:asset-center:preview-1');
   });
 
+  it('publishes EPUB through the Preview virtual directory path without single-file fallback', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'openneko-asset-center-epub-'));
+    const absolutePath = join(directory, 'book.epub');
+    const writer = new ZipWriter(new Uint8ArrayWriter(), { useWebWorkers: false });
+    await writer.add('META-INF/container.xml', new TextReader('<container/>'));
+    await writer.add('OPS/chapter.xhtml', new TextReader('<p>chapter</p>'));
+    await writeFile(absolutePath, await writer.close());
+    const item = mediaItem('book.epub');
+    const registerFile = vi.fn(async () => {
+      throw new Error('EPUB must not use registerFile.');
+    });
+    let resourceTree: EpubPreviewResourceTree | undefined;
+    const registerResourceTree = vi.fn(async (_owner: unknown, tree: EpubPreviewResourceTree) => {
+      resourceTree = tree;
+      return {
+        url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/',
+        release: vi.fn(),
+      };
+    });
+    const runtime = new AssetCenterNodeRuntime({
+      resourceBrowser: resourceBrowserWithItem(item, absolutePath),
+      createIdentity: () => 'epub-preview',
+      resources: createPreviewResources({ registerFile, registerResourceTree }),
+    });
+    const identity = sessionIdentity();
+    runtime.attach({ identity });
+    await selectMediaCatalog(runtime, identity);
+    await runtime.refresh({ identity });
+
+    const selected = await runtime.select({
+      identity,
+      owner: 'media-library',
+      itemId: item.id,
+    });
+
+    expect(selected).toMatchObject({
+      selection: { itemId: item.id },
+      preview: { status: 'ready', previewSessionId: 'preview:asset-center:epub-preview' },
+    });
+    expect(runtime.getPreview(identity, 'preview:asset-center:epub-preview')).toMatchObject({
+      descriptor: {
+        mediaType: 'application/epub+zip',
+        url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/',
+      },
+    });
+    expect(registerResourceTree).toHaveBeenCalledOnce();
+    expect(registerFile).not.toHaveBeenCalled();
+    expect(resourceTree?.entries.map((entry) => entry.virtualPath)).toEqual([
+      'META-INF/container.xml',
+      'OPS/chapter.xhtml',
+    ]);
+  });
+
   it('restores the exact Session across endpoint replacement without creating a duplicate', async () => {
     const runtime = new AssetCenterNodeRuntime({
       resourceBrowser: emptyResourceBrowser(),
-      resources: { registerFile: vi.fn(), releaseSession: vi.fn() },
+      resources: createPreviewResources(),
     });
     const identity = {
       assetCenterSessionId: 'asset-center:window-1',
@@ -114,7 +175,7 @@ describe('AssetCenterNodeRuntime', () => {
     const runtime = new AssetCenterNodeRuntime({
       resourceBrowser,
       createIdentity,
-      resources: { registerFile, releaseSession },
+      resources: createPreviewResources({ registerFile, releaseSession }),
     });
     const identity = sessionIdentity();
     runtime.attach({ identity });
@@ -157,11 +218,14 @@ describe('AssetCenterNodeRuntime', () => {
   it('does not retain an empty default presentation after Session detach', async () => {
     const runtime = new AssetCenterNodeRuntime({
       resourceBrowser: emptyResourceBrowser(),
-      resources: { registerFile: vi.fn(), releaseSession: vi.fn() },
+      resources: createPreviewResources(),
     });
     const identity = sessionIdentity();
     runtime.attach({ identity });
     await runtime.detachSession(identity);
+    await expect(runtime.detachSession(identity)).rejects.toThrow(
+      `Asset Center session '${identity.assetCenterSessionId}' is unavailable.`,
+    );
 
     expect(runtime.attach({ identity, initialViewMode: 'grid' }).filter.viewMode).toBe('grid');
     await runtime.detachSession(identity);
@@ -171,7 +235,7 @@ describe('AssetCenterNodeRuntime', () => {
   it('clears detached presentation snapshots with their owning Window', async () => {
     const runtime = new AssetCenterNodeRuntime({
       resourceBrowser: emptyResourceBrowser(),
-      resources: { registerFile: vi.fn(), releaseSession: vi.fn() },
+      resources: createPreviewResources(),
     });
     const identity = sessionIdentity();
     runtime.attach({ identity });
@@ -189,7 +253,7 @@ describe('AssetCenterNodeRuntime', () => {
     const resources = emptyResourceBrowser();
     const runtime = new AssetCenterNodeRuntime({
       resourceBrowser: resources,
-      resources: { registerFile: vi.fn(), releaseSession: vi.fn() },
+      resources: createPreviewResources(),
     });
     const identity = sessionIdentity();
     runtime.attach({ identity });
@@ -203,9 +267,9 @@ describe('AssetCenterNodeRuntime', () => {
     ).rejects.toThrow("Asset Center item 'missing-item' is unavailable");
 
     await expect(runtime.refresh({ identity })).resolves.toMatchObject({
-      catalog: { status: 'ready', owner: 'global-asset-library' },
+      catalog: { status: 'ready', owner: 'media-library' },
     });
-    expect(resources.searchHomeAssets).toHaveBeenCalledTimes(1);
+    expect(resources.searchHomeMediaLibraries).toHaveBeenCalledTimes(1);
   });
 
   it('keeps selection visible when Preview kind is unsupported', async () => {
@@ -217,7 +281,7 @@ describe('AssetCenterNodeRuntime', () => {
     const runtime = new AssetCenterNodeRuntime({
       resourceBrowser: resourceBrowserWithItem(item, absolutePath),
       createIdentity: () => 'unsupported',
-      resources: { registerFile, releaseSession: vi.fn() },
+      resources: createPreviewResources({ registerFile }),
     });
     const identity = sessionIdentity();
     runtime.attach({ identity });
@@ -247,6 +311,7 @@ describe('AssetCenterNodeRuntime', () => {
         registerFile: vi.fn(async () => {
           throw new Error('resource authorization denied');
         }),
+        registerResourceTree: vi.fn(),
         releaseSession: vi.fn(),
       },
     });
@@ -282,6 +347,7 @@ describe('AssetCenterNodeRuntime', () => {
         registerFile: vi.fn(async () => ({
           url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         })),
+        registerResourceTree: vi.fn(),
         releaseSession,
       },
     });
@@ -314,6 +380,22 @@ function emptyResourceBrowser() {
     removeHomeMediaLibrary: vi.fn(),
     revealHomeMediaLibrary: vi.fn(),
     resolveAssetCenterSelection: vi.fn(),
+  };
+}
+
+function createPreviewResources(
+  overrides: Partial<AssetCenterNodeRuntimeOptions['resources']> = {},
+): AssetCenterNodeRuntimeOptions['resources'] {
+  return {
+    registerFile: vi.fn(async () => ({
+      url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })),
+    registerResourceTree: vi.fn(async () => ({
+      url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/',
+      release: vi.fn(),
+    })),
+    releaseSession: vi.fn(),
+    ...overrides,
   };
 }
 
@@ -352,7 +434,9 @@ function resourceBrowserWithItem(item: ReturnType<typeof mediaItem>, absolutePat
     searchHomeMediaLibraries: vi.fn(async () => ({ items: [item] })),
     resolveAssetCenterSelection: vi.fn(async () => ({
       item,
-      contentLocator: { kind: 'workspace-file' as const, path: item.relativePath },
+      contentLocator: {
+        file: { authority: 'workspace' as const, path: item.relativePath },
+      },
       absolutePath,
     })),
   };

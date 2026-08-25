@@ -12,7 +12,9 @@ import type {
 } from '@neko/canvas-domain';
 import { createEmptyCanvasData } from '@neko/canvas-domain';
 import { CanvasHostProvider, type CanvasWebviewHostPort } from '../../host-runtime';
+import { useCanvasStore } from '../../stores/canvasStore';
 import { enableDefaultCanvasTestStoreScope } from '../../stores/canvasStoreScope';
+import { useHistoryStore } from '../../stores/historyStore';
 import { SelectionContextToolbar } from './SelectionContextToolbar';
 
 Object.assign(globalThis, {
@@ -26,6 +28,57 @@ Object.assign(globalThis, {
 enableDefaultCanvasTestStoreScope();
 
 describe('SelectionContextToolbar', () => {
+  it('routes inline Markdown editing to the Canvas fullscreen Surface', async () => {
+    const node: CanvasNode = {
+      id: 'markdown',
+      type: 'markdown',
+      position: { x: 100, y: 100 },
+      size: { width: 320, height: 220 },
+      zIndex: 1,
+      data: { title: 'Analysis', content: '# Analysis' },
+    };
+    const onMarkdownEdit = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <CanvasHostProvider
+          host={createMaterialHost([
+            descriptor('text:edit', 'Edit text', 'handoff'),
+            descriptor('preview:open', 'Main Preview', 'read'),
+          ])}
+        >
+          <SelectionContextToolbar
+            nodes={[node]}
+            selectedNodeIds={[node.id]}
+            viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
+            viewportSize={{ width: 800, height: 600 }}
+            onMarkdownEdit={onMarkdownEdit}
+          />
+        </CanvasHostProvider>,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(container.querySelector('[data-selection-action="text:edit"]')).toBeNull();
+    expect(container.querySelector('[data-selection-action="preview:open"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-selection-action="canvas:edit-markdown"]')?.textContent,
+    ).toContain('Edit full screen');
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('[data-selection-action="canvas:edit-markdown"]')
+        ?.click();
+    });
+    expect(onMarkdownEdit).toHaveBeenCalledWith(node.id);
+
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
   it('projects owner-contributed media preview without synthesizing unavailable or delete actions', async () => {
     const node: CanvasNode = {
       id: 'media',
@@ -36,7 +89,7 @@ describe('SelectionContextToolbar', () => {
       data: {
         mediaType: 'image',
         assetPath: 'assets/image.png',
-        contentLocator: { kind: 'workspace-file', path: 'assets/image.png' },
+        contentLocator: { file: { authority: 'workspace', path: 'assets/image.png' } },
       },
     };
     const host = createMaterialHost([
@@ -173,7 +226,7 @@ describe('SelectionContextToolbar', () => {
       data: {
         mediaType: 'video',
         assetPath: 'media/clip.mp4',
-        contentLocator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+        contentLocator: { file: { authority: 'workspace', path: 'media/clip.mp4' } },
       },
     };
     const descriptors: readonly CanvasMaterialActionDescriptor[] = [
@@ -334,12 +387,7 @@ describe('SelectionContextToolbar', () => {
       data: {
         mediaType: 'image',
         assetPath: 'neko/generated/result.png',
-        contentLocator: {
-          kind: 'generated-output',
-          outputId: 'output-1',
-          digest: 'sha256:output-1',
-          path: 'neko/generated/result.png',
-        },
+        contentLocator: { file: { authority: 'workspace', path: 'neko/generated/result.png' } },
       },
     };
     const otio = await renderToolbar(
@@ -482,10 +530,7 @@ describe('SelectionContextToolbar', () => {
             outputId: 'prompt-output-1',
             jobRef: { kind: 'generation', jobId: 'generation-job-1' },
             locator: {
-              kind: 'generated-output',
-              outputId: 'prompt-output-1',
-              digest: 'sha256:prompt-output-1',
-              path: 'neko/generated/prompt-output-1.txt',
+              file: { authority: 'workspace', path: 'neko/generated/prompt-output-1.txt' },
             },
             kind: 'prompt',
             recipeInputFingerprint: 'recipe-fingerprint-1',
@@ -535,10 +580,7 @@ describe('SelectionContextToolbar', () => {
             outputId: 'video-output-1',
             jobRef: { kind: 'generation', jobId: 'generation-job-1' },
             locator: {
-              kind: 'generated-output',
-              outputId: 'video-output-1',
-              digest: 'sha256:video-output-1',
-              path: 'neko/generated/video-output-1.mp4',
+              file: { authority: 'workspace', path: 'neko/generated/video-output-1.mp4' },
             },
             kind: 'video',
             recipeInputFingerprint: 'recipe-fingerprint-1',
@@ -719,7 +761,7 @@ describe('SelectionContextToolbar', () => {
     await toolbar.dispose();
   });
 
-  it('keeps Group visible without rendering Delete for multi-selection', () => {
+  it('keeps Group visible and exposes batch Duplicate and Delete for multi-selection', () => {
     const nodes: readonly CanvasNode[] = [
       {
         id: 'note-1',
@@ -749,9 +791,59 @@ describe('SelectionContextToolbar', () => {
 
     expect(markup).toContain('data-selection-action="group-selection"');
     expect(markup).toContain('data-selection-action-location="primary"');
-    expect(markup).not.toContain('delete-selection');
-    expect(markup).not.toContain('data-selection-overflow="true"');
-    expect(markup).not.toContain('node:duplicate');
+    expect(markup).toContain('delete-selection');
+    expect(markup).toContain('data-selection-overflow="true"');
+    expect(markup).toContain('node:duplicate');
+  });
+
+  it('duplicates the complete multi-selection through the toolbar action', async () => {
+    const nodes: readonly CanvasNode[] = [
+      {
+        id: 'note-1',
+        type: 'markdown',
+        position: { x: 20, y: 20 },
+        size: { width: 160, height: 100 },
+        zIndex: 1,
+        data: { content: 'One' },
+      },
+      {
+        id: 'note-2',
+        type: 'markdown',
+        position: { x: 220, y: 20 },
+        size: { width: 160, height: 100 },
+        zIndex: 2,
+        data: { content: 'Two' },
+      },
+    ];
+    useCanvasStore.getState().setCanvasData({
+      name: 'Toolbar batch duplicate',
+      viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+      nodes: [...nodes],
+      connections: [],
+    });
+    useCanvasStore.getState().selectNodes(nodes.map((node) => node.id));
+    useHistoryStore.setState({ undoStack: [], redoStack: [], maxHistory: 50 });
+    const toolbar = await renderToolbar(
+      nodes,
+      nodes.map((node) => node.id),
+      [],
+    );
+
+    await act(async () => {
+      toolbar.container
+        .querySelector<HTMLButtonElement>('[data-selection-action="node:duplicate"]')
+        ?.click();
+    });
+
+    const canvasData = useCanvasStore.getState().canvasData;
+    expect(canvasData?.nodes).toHaveLength(4);
+    expect(useCanvasStore.getState().selection.nodeIds).toHaveLength(2);
+    expect(useCanvasStore.getState().selection.nodeIds).not.toEqual(nodes.map((node) => node.id));
+    expect(useHistoryStore.getState().undoStack).toHaveLength(1);
+
+    await toolbar.dispose();
+    useCanvasStore.setState({ canvasData: null, selection: { nodeIds: [], connectionIds: [] } });
+    useHistoryStore.setState({ undoStack: [], redoStack: [], maxHistory: 50 });
   });
 
   it('renders outside Canvas scaling while remaining fixed to the selected node', () => {
@@ -887,7 +979,7 @@ function fileNode(
       title: path,
       path,
       mediaKind,
-      contentLocator: { kind: 'workspace-file', path },
+      contentLocator: { file: { authority: 'workspace', path } },
     },
   } as CanvasNode;
 }
@@ -902,7 +994,7 @@ function mediaNode(id: string, mediaType: 'image' | 'audio' | 'video', path: str
     data: {
       mediaType,
       assetPath: path,
-      contentLocator: { kind: 'workspace-file', path },
+      contentLocator: { file: { authority: 'workspace', path } },
     },
   };
 }

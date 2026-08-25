@@ -2,7 +2,14 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { openFixtureWorkspace } from '../../../../scripts/desktop-functional/desktop-operations.mjs';
 
-const MARKDOWN_SOURCE = '# 创作笔记\n\n第一稿。\n';
+const MARKDOWN_SOURCE = [
+  '# 创作笔记',
+  ...Array.from({ length: 14 }, (_, index) => `开篇段落 ${String(index + 1)}。`),
+  '## 中段',
+  ...Array.from({ length: 14 }, (_, index) => `中段内容 ${String(index + 1)}。`),
+  '### 收束',
+  ...Array.from({ length: 14 }, (_, index) => `收束内容 ${String(index + 1)}。`),
+].join('\n\n');
 const MARKDOWN_RICH_INPUT = '所见所得输入稳定。';
 const MARKDOWN_INCOMPLETE = '# 你好\n\n1. 目录\n2. 存在\n3. |';
 const MARKDOWN_EDITED = '# 创作笔记\n\n这是通过桌面编辑器保存的中文内容。\n';
@@ -74,7 +81,7 @@ export const desktopTextEditorScenario = Object.freeze({
 
     await openTextDocument(evaluate, 'notes.md', 'markdown');
     await waitForRichReady(evaluate);
-    await waitForRichText(evaluate, '第一稿。');
+    await waitForRichText(evaluate, '收束内容 14。');
     const markdownDefault = await inspectTextEditor(evaluate);
     if (
       markdownDefault.presentationMode !== 'rich' ||
@@ -93,6 +100,41 @@ export const desktopTextEditorScenario = Object.freeze({
       );
     }
     const markdownDefaultScreenshot = await screenshot('markdown-rich-outline-default');
+    const outlineRevealStates = [];
+    let markdownOutlineRevealScreenshot;
+    for (const [outlineIndex, heading] of ['创作笔记', '中段', '收束'].entries()) {
+      await click('.neko-text-editor-outline-section:first-child button', outlineIndex);
+      await waitForCondition(
+        evaluate,
+        `(() => {
+          const anchorNode = window.getSelection()?.anchorNode;
+          const anchorElement = anchorNode instanceof Element ? anchorNode : anchorNode?.parentElement;
+          const headingElement = anchorElement?.closest('h1, h2, h3, h4, h5, h6');
+          const scroller = document.querySelector('.neko-text-editor-rich');
+          if (!(headingElement instanceof HTMLElement) || !(scroller instanceof HTMLElement)) return false;
+          const headingRect = headingElement.getBoundingClientRect();
+          const scrollerRect = scroller.getBoundingClientRect();
+          return headingElement.textContent === ${JSON.stringify(heading)} &&
+            headingRect.top >= scrollerRect.top - 1 &&
+            headingRect.bottom <= scrollerRect.bottom + 1;
+        })()`,
+        `Markdown outline did not reveal the exact ${heading} heading.`,
+      );
+      outlineRevealStates.push(await inspectTextEditor(evaluate));
+      if (outlineIndex === 1) {
+        markdownOutlineRevealScreenshot = await screenshot('markdown-rich-outline-exact-reveal');
+      }
+    }
+    if (!markdownOutlineRevealScreenshot) {
+      throw new Error('Markdown outline reveal screenshot was not captured.');
+    }
+    checkpoint('markdown-rich-outline-exact-reveal', {
+      states: outlineRevealStates.map((state) => ({
+        selectedRichHeading: state.selectedRichHeading,
+        richScrollTop: state.richScrollTop,
+      })),
+      screenshot: markdownOutlineRevealScreenshot,
+    });
     await type('.neko-text-editor-rich .ProseMirror', MARKDOWN_RICH_INPUT);
     await waitForRichText(evaluate, MARKDOWN_RICH_INPUT);
     await waitForEditorDirty(evaluate);
@@ -332,6 +374,22 @@ export const desktopTextEditorScenario = Object.freeze({
     const compactScreenshot = await screenshot('text-editor-compact-cjk');
     checkpoint('compact-cjk-fit', compact);
 
+    await activateMainViewTab(evaluate, 'notes.md');
+    await waitForSelector('.neko-text-editor-root[data-document-mode="markdown"]');
+    await selectTextEditorMode(evaluate, 'rich');
+    await waitForRichReady(evaluate);
+    const compactRich = await inspectTextEditor(evaluate);
+    assertCompactSinglePane(compactRich, 'rich');
+    const compactRichScreenshot = await screenshot('markdown-rich-compact-outline-hidden');
+    checkpoint('markdown-rich-compact-outline-hidden', compactRich);
+
+    await selectTextEditorMode(evaluate, 'source');
+    await waitForEditorSource(evaluate, MARKDOWN_EDITED);
+    const compactSource = await inspectTextEditor(evaluate);
+    assertCompactSinglePane(compactSource, 'source');
+    const compactSourceScreenshot = await screenshot('markdown-source-compact-outline-hidden');
+    checkpoint('markdown-source-compact-outline-hidden', compactSource);
+
     const activeProjectGroupId = await readActiveProjectGroupId(evaluate);
     await setDesktopThemeFromSettings(evaluate, 'dark');
     await returnToProject(evaluate, activeProjectGroupId);
@@ -455,6 +513,8 @@ export const desktopTextEditorScenario = Object.freeze({
       html,
       conflict,
       compact,
+      compactRich,
+      compactSource,
       darkCompact,
       cleanSessionRecovery,
       capacityRejected,
@@ -472,6 +532,8 @@ export const desktopTextEditorScenario = Object.freeze({
         htmlScreenshot,
         conflictScreenshot,
         compactScreenshot,
+        compactRichScreenshot,
+        compactSourceScreenshot,
         darkCompactScreenshot,
         capacityRejectedScreenshot,
         capacityRetriedScreenshot,
@@ -877,10 +939,18 @@ async function inspectTextEditor(evaluate) {
       throw new Error('Text Editor presentation is unavailable.');
     }
     const rootStyle = getComputedStyle(root);
+    const body = root.querySelector('.neko-text-editor-body');
     const richEditor = root.querySelector('.neko-text-editor-rich .ProseMirror');
+    const richScroller = root.querySelector('.neko-text-editor-rich');
+    const outline = root.querySelector('.neko-text-editor-outline');
     const richEditorStyle = richEditor ? getComputedStyle(richEditor) : undefined;
+    const selectionAnchor = window.getSelection()?.anchorNode;
+    const selectionElement =
+      selectionAnchor instanceof Element ? selectionAnchor : selectionAnchor?.parentElement;
     const sourceRect = root.querySelector('.neko-text-editor-codemirror')?.getBoundingClientRect();
     const richRect = root.querySelector('.neko-text-editor-rich')?.getBoundingClientRect();
+    const bodyRect = body?.getBoundingClientRect();
+    const outlineRect = outline?.getBoundingClientRect();
     const controls = [...contextActions.querySelectorAll('button')].map((button) => button.getBoundingClientRect());
     const contextTargetRect = contextTarget?.getBoundingClientRect();
     const tabListRect = tabList?.getBoundingClientRect();
@@ -916,6 +986,16 @@ async function inspectTextEditor(evaluate) {
       richFocused: document.activeElement === richEditor,
       richFocusBoxShadow: richEditorStyle?.boxShadow ?? null,
       richFocusOutlineStyle: richEditorStyle?.outlineStyle ?? null,
+      selectedRichHeading:
+        selectionElement?.closest('h1, h2, h3, h4, h5, h6')?.textContent ?? null,
+      richScrollTop: richScroller?.scrollTop ?? null,
+      bodyWidth: bodyRect?.width ?? 0,
+      sourceWidth: sourceRect?.width ?? 0,
+      richWidth: richRect?.width ?? 0,
+      outlineExists: outline instanceof HTMLElement,
+      outlineDisplay: outline instanceof HTMLElement ? getComputedStyle(outline).display : null,
+      outlineWidth: outlineRect?.width ?? 0,
+      gridTemplateColumns: body instanceof HTMLElement ? getComputedStyle(body).gridTemplateColumns : null,
       splitSurfaceOrder: [...(root.querySelector('.neko-text-editor-body')?.children ?? [])]
         .flatMap((child) => {
           if (!(child instanceof HTMLElement)) return [];
@@ -968,4 +1048,20 @@ async function inspectTextEditor(evaluate) {
         : false,
     };
   })()`);
+}
+
+function assertCompactSinglePane(state, mode) {
+  const surfaceWidth = mode === 'rich' ? state.richWidth : state.sourceWidth;
+  if (
+    state.presentationMode !== mode ||
+    !state.outlineExists ||
+    state.outlineDisplay !== 'none' ||
+    state.outlineWidth !== 0 ||
+    state.bodyWidth <= 0 ||
+    Math.abs(surfaceWidth - state.bodyWidth) > 1
+  ) {
+    throw new Error(
+      `Compact Markdown ${mode} did not reclaim the hidden outline column: ${JSON.stringify(state)}`,
+    );
+  }
 }

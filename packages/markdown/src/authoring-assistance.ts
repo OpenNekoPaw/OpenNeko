@@ -62,7 +62,6 @@ const MENTION_QUERY_RE = /(?:^|[^\p{L}\p{N}_./-])(@[\p{L}\p{N}_.-]{0,80})$/u;
 const RESOURCE_QUERY_RE = /(!?)\[\[([^\]\n]*)$/u;
 const PORTABLE_MENTION_LABEL_RE = /^[\p{L}\p{N}_.-]{1,80}$/u;
 const URI_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/iu;
-const MEDIA_LIBRARY_REFERENCE_RE = /^media-library:[^/]+(?:\/[^/]+)+$/u;
 const WINDOWS_ABSOLUTE_RE = /^[a-z]:[\\/]/iu;
 const AUTHORING_PROBE = 'NekoCompletionProbe';
 
@@ -163,22 +162,9 @@ export function isPortableMarkdownResourceTarget(target: string): boolean {
     target.startsWith('/') ||
     target.startsWith('\\') ||
     WINDOWS_ABSOLUTE_RE.test(target) ||
-    (URI_SCHEME_RE.test(target) && !MEDIA_LIBRARY_REFERENCE_RE.test(target))
+    URI_SCHEME_RE.test(target)
   ) {
     return false;
-  }
-  if (MEDIA_LIBRARY_REFERENCE_RE.test(target)) {
-    return target
-      .slice('media-library:'.length)
-      .split('/')
-      .every(
-        (segment) =>
-          segment.length > 0 &&
-          segment !== '.' &&
-          segment !== '..' &&
-          !segment.startsWith('.') &&
-          !segment.includes(':'),
-      );
   }
   const path = target.split('#', 1)[0] ?? '';
   if (path.length === 0) return false;

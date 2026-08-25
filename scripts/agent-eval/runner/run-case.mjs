@@ -15,10 +15,8 @@ export async function runCase(selection, options = {}) {
   const authorization = readProviderAuthorization(options.providerAuthorization, options.env ?? {});
   assertAuthorizedModelProfiles(executionCase.modelProfiles, authorization);
   const runDesktop = options.runDesktop ?? runAutomatedDesktopFunctional;
-  const scenario = (options.createScenario ?? createDesktopAgentEvaluationScenario)(
-    executionCase,
-    authorization,
-  );
+  const scenarioFactory = options.createScenario ?? createDesktopAgentEvaluationScenario;
+  const scenario = scenarioFactory(executionCase, authorization);
   const runId = options.runId ?? `${executionCase.caseId}-${Date.now().toString(36)}`;
   const outputRoot = resolve(options.outputRoot ?? 'reports/agent-eval');
   const startedAt = Date.now();
@@ -193,11 +191,8 @@ export function resolveExecutionCase(selection) {
 }
 
 const DESKTOP_WORKFLOW_STEP_KINDS = new Set([
-  'draft-bind',
-  'draft-submit',
   'submit',
-  'queue',
-  'send-queued-now',
+  'submit-with-followup',
   'wait-for-idle',
   'cancel',
   'confirm',

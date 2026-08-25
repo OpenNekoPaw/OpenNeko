@@ -23,23 +23,6 @@ describe('neko-search architecture boundaries', () => {
     }
   });
 
-  it('keeps the Agent capability provider from parsing cache files directly', () => {
-    const source = readFileSync(
-      resolve(
-        packageRoot,
-        '../../agent/runtime/src/tools/search/project-search-capability-provider.ts',
-      ),
-      'utf8',
-    );
-
-    expect(source).toContain('createProjectSearchHeadlessCapabilityProvider');
-    expect(source).toContain('runtime.query(query)');
-    expect(source).not.toContain('resolveStorageLayout');
-    expect(source).not.toContain('asset-graph.json');
-    expect(source).not.toContain('search-index.json');
-    expect(source).not.toContain('media-metadata.json');
-  });
-
   it('keeps Agent and Webview consumers behind the semantic coverage facade', () => {
     const consumerRoots = [
       resolve(packageRoot, '../../agent/runtime/src'),

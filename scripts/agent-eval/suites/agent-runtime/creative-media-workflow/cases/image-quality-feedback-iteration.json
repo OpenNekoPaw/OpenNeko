@@ -8,8 +8,8 @@
     "userBehavior": "Execute an explicitly approved image scope, review the real output, then feed the observed review into a bounded second improvement turn.",
     "canonicalPath": [
       "creator-approved scope",
-      "Desktop Agent queue",
-      "Pi Agent turn",
+      "Desktop Agent public composer",
+      "DSH Turn",
       "flat image.generate domain-model snapshot",
       "terminal GenerateImage Tool call",
       "bounded TODO",
@@ -31,13 +31,9 @@
     "expectedResult": "The second turn is generated from the first assistant review, completes a second terminal GenerateImage Tool call, retains generated-output identity, and projects outputs to the Workspace Board without Asset lookup/import.",
     "expectedFailure": "Missing first review, static feedback, fewer than two terminal GenerateImage Tool results, pre-promotion Asset participation, multi-Board or runtime-draft routing, active-Canvas fallback, or incomplete idle fails."
   },
-  "fixtureRefs": [
-    "empty-workspace"
-  ],
+  "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": [
-    "nekoapi-chat-image-purpose"
-  ],
+  "modelProfileIds": ["nekoapi-chat-image-purpose"],
   "steps": [
     {
       "id": "round-one",
@@ -65,18 +61,6 @@
     {
       "id": "runtime",
       "kind": "runtime-errors-empty",
-      "evidenceRef": "workflow-facts"
-    },
-    {
-      "id": "pi-runtime",
-      "kind": "pi-runtime",
-      "implementation": "pi-agent-core",
-      "transcriptAuthority": "pi-session",
-      "productMetadataAuthority": "sqlite",
-      "purpose": "agent.main",
-      "workspaceLocatorKind": "virtual",
-      "turnDurability": "durable",
-      "modelProfileId": "nekoapi-chat-image-purpose",
       "evidenceRef": "workflow-facts"
     },
     {
@@ -109,10 +93,7 @@
     {
       "id": "terminal",
       "kind": "terminal-idle",
-      "concerns": [
-        "turnIdle",
-        "continuationQueueIdle"
-      ],
+      "concerns": ["turnIdle", "continuationQueueIdle"],
       "evidenceRef": "workflow-facts"
     },
     {
@@ -120,9 +101,7 @@
       "kind": "todo-projection",
       "maxItems": 6,
       "atMostOneInProgress": true,
-      "requiredStatuses": [
-        "completed"
-      ],
+      "requiredStatuses": ["completed"],
       "evidenceRef": "workflow-facts"
     },
     {

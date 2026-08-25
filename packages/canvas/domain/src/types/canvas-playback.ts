@@ -1,6 +1,6 @@
 import type { CanvasConnection, CanvasData, CanvasNode } from './canvas';
 import type { CanvasSerializableRecord } from './canvas-serializable';
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 import { getContainerChildIds, getNodeParentId } from '../utils/canvasLayered';
 
 export const CANVAS_PLAYBACK_ADAPTER_IDS = ['auto', 'generic'] as const;

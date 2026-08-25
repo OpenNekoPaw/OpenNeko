@@ -2,7 +2,7 @@
 
 ### Requirement: Every product surface uses one window-owned Workbench
 
-Every Desktop product surface, including Agent, Workspace, resource center, extensions, project management and Settings, SHALL be represented as a scene inside one window-owned `ControlledWorkbenchShell`. Desktop SHALL mount exactly one Application PrimarySidebar and MUST NOT create a Home page shell, Project-owned Workbench, Settings top-level branch or scene-owned application sidebar.
+Every Desktop product surface, including Agent, Workspace, resource center, Extensions, project management and Settings, SHALL be represented as a scene inside one window-owned `ControlledWorkbenchShell`. Desktop SHALL mount exactly one Application PrimarySidebar and MUST NOT create a Home page shell, Project-owned Workbench, Settings top-level branch or scene-owned application sidebar.
 
 The PrimarySidebar SHALL retain application navigation, recent Projects, recent Agent conversations, attention and Settings/status controls in every scene. Removing the Home page MUST NOT remove these window-level projections or their explicit open/restore/delete operations.
 
@@ -492,7 +492,7 @@ The resource center SHALL use one Assets-owned `AssetCenterSession` for catalog,
 
 ### Requirement: Management and Settings surfaces use the same scene model
 
-Extensions and project management SHALL place their package-owned management Roots in Main, with content-rich owner-qualified detail as optional Secondary Main. Settings SHALL compose its navigation and Main in the same Workbench. Their domain facts and mutations SHALL remain with their owning package or Host service; Desktop only places Roots and binds typed adapters.
+Extensions and project management SHALL place their package-owned management Roots in Main. Settings SHALL compose its navigation and Main in the same Workbench. Their domain facts and mutations SHALL remain with their owning package or Host service; Desktop only places Roots and binds typed adapters.
 
 #### Scenario: User opens Extensions or project management
 
@@ -501,35 +501,26 @@ Extensions and project management SHALL place their package-owned management Roo
 - **AND** selection does not implicitly open a Workspace or create an Agent conversation
 - **AND** the management Root retains the bounded page width, header hierarchy, toolbar grouping and scan-friendly catalog density of the established management presentation instead of stretching controls across the full Main canvas
 
-#### Scenario: Management selection opens Preview or Detail
-
-- **WHEN** Assets, Extensions or Projects provides a selected Preview/Detail Surface
-- **THEN** Workbench composes management beside Preview/Detail using the shared Workspace panel chrome and resize primitive, with management occupying at least half of the available split area
-- **AND** Preview content continues through the canonical `@neko/preview-webview` presentation and viewer registry
-- **AND** Desktop does not implement another viewer, nested page card or management-owned preview renderer
-
-#### Scenario: Extensions management separates catalog and configuration
+#### Scenario: Extensions presents only Skill and MCP
 
 - **WHEN** the Extensions Scene is active
-- **THEN** Main renders the package-owned Skill/extension catalog without a preselected item or reserved Secondary Main column
-- **AND** category, query, grid/list mode and exact selection remain package-owned disposable presentation state
-- **AND** selecting an item mounts Secondary Main and updates only that configuration panel without opening a Workspace, creating a conversation or changing durable extension facts
-- **AND** when the selection is absent or becomes invalid, management returns to full width with no empty configuration panel or resize gutter
-- **AND** leaving the Scene unmounts both Roots and reconstructs their canonical presentation defaults when the Scene is opened again
-
-#### Scenario: Skill configuration excludes extension-only settings
-
-- **WHEN** the Skill category is visible
-- **THEN** Secondary Main is absent until a Skill is selected, then displays only that Skill's source, description and allowed personal-Skill management actions
-- **AND** Automation endpoint, Host permission, extension runtime status and plugin lifecycle controls are not mounted in that configuration Root
-- **AND** switching to Extensions does not mount those extension-only settings until an extension is selected
+- **THEN** Main renders one full-width package-owned catalog with exactly Skill and MCP tabs
+- **AND** query and grid/list mode remain package-owned disposable presentation state
+- **AND** no Plugin category, package install/enable/configuration action, Secondary Main, empty detail panel or resize gutter is mounted
+- **AND** leaving the Scene unmounts the Root and reconstructs its canonical presentation defaults when reopened
 
 #### Scenario: Extensions catalog switches between grid and list
 
 - **WHEN** the user activates the grid or list presentation control in Extensions management
-- **THEN** the same filtered Skill or extension catalog is rendered in the selected presentation
-- **AND** the exact current selection and configuration identity are preserved
-- **AND** both presentations expose an accessible selected state, bounded item geometry and a compact one-column layout when the management panel is narrow
+- **THEN** the same filtered Skill or MCP catalog is rendered in the selected presentation
+- **AND** both presentations expose bounded item geometry and a compact one-column layout when the management panel is narrow
+
+#### Scenario: Management selection opens Preview or Detail
+
+- **WHEN** Assets or Projects provides a selected Preview/Detail Surface
+- **THEN** Workbench composes management beside Preview/Detail using the shared Workspace panel chrome and resize primitive, with management occupying at least half of the available split area
+- **AND** Preview content continues through the canonical `@neko/preview-webview` presentation and viewer registry
+- **AND** Desktop does not implement another viewer, nested page card or management-owned preview renderer
 
 #### Scenario: Low-information Project selection remains in management Main
 
@@ -539,7 +530,7 @@ Extensions and project management SHALL place their package-owned management Roo
 
 #### Scenario: Management and detail use adjacent tabless panels
 
-- **WHEN** Assets, Extensions or Projects composes management beside Preview/Detail
+- **WHEN** Assets or Projects composes management beside Preview/Detail
 - **THEN** management and Preview/Detail occupy two sibling panel DOM and overflow boundaries connected by the shared resize primitive
 - **AND** both panels use zero-radius boundaries and meet edge-to-edge without blank margin or gap
 - **AND** the resize handle overlays their shared divider without reserving visible layout space
@@ -548,7 +539,7 @@ Extensions and project management SHALL place their package-owned management Roo
 
 #### Scenario: User resizes a management and detail split
 
-- **WHEN** Assets, Extensions or Projects displays a qualified Preview/Detail and the user drags the shared resize handle
+- **WHEN** Assets or Projects displays a qualified Preview/Detail and the user drags the shared resize handle
 - **THEN** the management Main remains at least as wide as the Preview/Detail panel
 - **AND** the resize contract rejects ratios below one half while preserving the full-width management layout when Secondary Main is absent
 

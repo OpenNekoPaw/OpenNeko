@@ -1,5 +1,5 @@
 import type { CanvasMaterialGenerationContext, CanvasNode } from '@neko/canvas-domain';
-import { validateContentLocator } from '@neko/content';
+import { validateContentLocator } from '@neko/content-domain';
 import { deriveCanvasMaterialOrigin, isCanvasGenerationEvidence } from '@neko/canvas-domain';
 
 export type CanvasMaterialSource = 'referenced' | 'generated';
@@ -45,7 +45,10 @@ function resolveMaterialPresentation(
         ? node.data.mediaKind
         : undefined;
 
-  const source = deriveCanvasMaterialOrigin(locator.locator);
+  const source = deriveCanvasMaterialOrigin(
+    locator.locator,
+    isCanvasGenerationEvidence(data.generation) ? data.generation : undefined,
+  );
   if (source === 'referenced') {
     if (data.generation !== undefined) return undefined;
     return {

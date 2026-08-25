@@ -9,6 +9,8 @@
     "./application-settings": "./src/application-settings-contract.ts",
     "./application-settings-service": "./src/application-settings-service.ts",
     "./application-settings-state": "./src/application-settings-state.ts",
+    "./ai-model-settings": "./src/ai-model-settings-contract.ts",
+    "./ai-model-settings-service": "./src/ai-model-settings-service.ts",
     "./desktop-shell-contract": "./src/desktop-shell-contract.ts",
     "./desktop-project-registration-service": "./src/desktop-project-registration-service.ts",
     "./desktop-shell-service": "./src/desktop-shell-service.ts",
@@ -16,6 +18,7 @@
     "./desktop-scene-contract": "./src/desktop-scene-contract.ts",
     "./desktop-workspace-grant-authority": "./src/desktop-workspace-grant-authority.ts",
     "./desktop-workspace-grant-contract": "./src/desktop-workspace-grant-contract.ts",
+    "./desktop-storage-settings-contract": "./src/desktop-storage-settings-contract.ts",
     "./desktop-workbench-contract": "./src/desktop-workbench-contract.ts",
     "./desktop-window-composition-contract": "./src/desktop-window-composition-contract.ts",
     "./character-presentation-surface-registry": "./src/character-presentation-surface-registry.ts",
@@ -34,16 +37,17 @@
     "@neko/assets-domain": "workspace:*",
     "@neko/agent-contracts": "workspace:*",
     "@neko/canvas-domain": "workspace:*",
+    "@neko/content-domain": "workspace:*",
     "@neko/cut-domain": "workspace:*",
     "@neko/local-metadata": "workspace:*",
     "@neko/preview-domain": "workspace:*",
     "@neko/shared": "workspace:*",
-    "@neko/world": "workspace:*",
+    "@neko/world-domain": "workspace:*",
     "smol-toml": "1.6.1"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "typescript": "^5.8.3",
+    "typescript": "6.0.3",
     "vitest": "^4.1.2"
   },
   "license": "AGPL-3.0-or-later"

@@ -3,19 +3,50 @@ import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 import { parse } from 'yaml';
 
-import { resolveMacOSForgeTrust } from '../resolve-macos-forge-trust.mjs';
+import {
+  preservePackagedDshRuntimeSignature,
+  resolveMacOSForgeTrust,
+} from '../resolve-macos-forge-trust.mjs';
 
 describe('macOS Forge trust configuration', () => {
-  it('keeps every local package explicitly ad-hoc signed', () => {
+  it('keeps the enclosing local package explicitly ad-hoc signed', () => {
     const trust = resolveMacOSForgeTrust();
     assert.equal(trust.osxSign.identity, '-');
     assert.equal(trust.osxSign.identityValidation, false);
+    assert.equal(trust.osxSign.ignore, preservePackagedDshRuntimeSignature);
     assert.equal(trust.osxNotarize, undefined);
     assert.equal(Object.isFrozen(trust.osxSign), false);
     assert.deepEqual(trust.osxSign.optionsForFile(), {
       additionalArguments: ['--options', '0'],
       hardenedRuntime: false,
     });
+  });
+
+  it('preserves verified DSH payload signatures while signing the enclosing application', () => {
+    assert.equal(
+      preservePackagedDshRuntimeSignature(
+        '/tmp/OpenNeko.app/Contents/Resources/dsh-runtime/darwin-arm64/payload/bin/node',
+      ),
+      true,
+    );
+    assert.equal(
+      preservePackagedDshRuntimeSignature(
+        '/tmp/OpenNeko.app/Contents/Resources/dsh-runtime/darwin-arm64/payload/lib/node_modules/node-pty/prebuilds/darwin-arm64/pty.node',
+      ),
+      true,
+    );
+    assert.equal(
+      preservePackagedDshRuntimeSignature(
+        '/tmp/OpenNeko.app/Contents/Frameworks/Electron Framework.framework/Electron Framework',
+      ),
+      false,
+    );
+    assert.equal(
+      preservePackagedDshRuntimeSignature(
+        '/tmp/OpenNeko.app/Contents/Resources/dsh-runtime/darwin-arm64/descriptor.json',
+      ),
+      false,
+    );
   });
 
   it('has no paid Apple credential or notarization branch', async () => {

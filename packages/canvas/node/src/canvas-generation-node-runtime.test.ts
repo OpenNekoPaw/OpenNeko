@@ -12,7 +12,7 @@ import {
   type GenerationJobPort,
   type GenerationJobSnapshot,
   type SubmitGenerationJobInput,
-} from '@neko/generation';
+} from '@neko/generation-domain';
 import { describe, expect, it, vi } from 'vitest';
 import { CanvasGenerationNodeRuntime } from './canvas-generation-node-runtime';
 
@@ -228,6 +228,59 @@ describe('CanvasGenerationNodeRuntime', () => {
     expect(submitGeneration).not.toHaveBeenCalled();
   });
 
+  it('reattaches an Agent-created Job by JobRef when no submission identity exists', async () => {
+    const run = {
+      recipeInputFingerprint: 'sha256:recipe-input',
+      jobRef: { kind: 'generation' as const, jobId: 'job-1' },
+    };
+    const describeGeneration = vi.fn(async () => snapshot({ phase: 'running' }));
+    const runtime = createRuntime(createJobs({ describeGeneration }));
+    const canvas = withRun(configuredCanvas(), run);
+
+    await expect(
+      runtime.resumeNode({
+        identity,
+        workspace,
+        canvas,
+        nodeId: 'generation-1',
+        run,
+        persistCanvas: async () => undefined,
+      }),
+    ).resolves.toMatchObject({
+      canvas,
+      projection: {
+        jobRef: run.jobRef,
+        phase: 'running',
+      },
+    });
+    expect(describeGeneration).toHaveBeenCalledWith(run.jobRef);
+  });
+
+  it('reattaches a bound Job by JobRef when its runtime snapshot omits submission metadata', async () => {
+    const run = boundRun();
+    const describeGeneration = vi.fn(async () => snapshot({ phase: 'running' }));
+    const runtime = createRuntime(createJobs({ describeGeneration }));
+    const canvas = withRun(configuredCanvas(), run);
+
+    await expect(
+      runtime.resumeNode({
+        identity,
+        workspace,
+        canvas,
+        nodeId: 'generation-1',
+        run,
+        persistCanvas: async () => undefined,
+      }),
+    ).resolves.toMatchObject({
+      canvas,
+      projection: {
+        jobRef: run.jobRef,
+        phase: 'running',
+      },
+    });
+    expect(describeGeneration).toHaveBeenCalledWith(run.jobRef);
+  });
+
   it('observes the authoritative snapshot first and drops older updates', async () => {
     const run = boundRun();
     const describeGeneration = vi.fn(async () =>
@@ -429,10 +482,10 @@ function snapshot(input: {
 
 function resultLocator() {
   return {
-    kind: 'generated-output' as const,
-    outputId: 'output-1',
-    digest: 'sha256:output-1',
-    path: 'neko/generated/image/output-1.png',
+    file: {
+      authority: 'workspace' as const,
+      path: 'neko/generated/image/output-1.png',
+    },
   };
 }
 

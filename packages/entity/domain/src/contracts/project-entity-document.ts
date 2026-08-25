@@ -2,7 +2,7 @@ import {
   isProjectDurableContentLocator,
   validateContentLocator,
   type ContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 import { isCreativeEntityKind, type CreativeEntityKind } from './creative-entity-identity';
 import {
   isEntityRepresentationRole,
@@ -394,9 +394,6 @@ function parseRepresentation(value: unknown): ProjectEntityRepresentationBinding
     (value['isDefault'] !== undefined && typeof value['isDefault'] !== 'boolean') ||
     !isTimestamp(value['acceptedAt'])
   ) {
-    return undefined;
-  }
-  if (target.locator.kind === 'package-resource' && target.locator.digest === undefined) {
     return undefined;
   }
   return {

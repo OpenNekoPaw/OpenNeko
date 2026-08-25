@@ -1,194 +1,116 @@
 // @vitest-environment jsdom
 
-import { act, StrictMode, type ReactNode } from 'react';
-import { createRoot } from 'react-dom/client';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { I18nProvider } from '@neko/ui/i18n/react';
 import type { AgentExtensionManagementRuntime } from '@neko/agent-contracts/extension-management';
-import type { AutomationLocalRuntimeManagementRuntime } from '@neko/automation-contracts/local-runtime-management';
-import type { AutomationPermissionManagementRuntime } from '@neko/automation-contracts/permission-management';
+import type { ProfessionalApplicationManagementRuntime } from '@neko/professional-apps-contracts';
+
 import { DesktopExtensionManagementSurface } from './DesktopExtensionManagementSurface';
+import { createDesktopI18n } from './i18n';
 
-let capturedLocalRuntime: AutomationLocalRuntimeManagementRuntime | undefined;
-let capturedSourceId: string | undefined;
-let capturedPermissionRuntime: AutomationPermissionManagementRuntime | undefined;
-
-vi.mock('@neko/agent-webview/extension-management/root', async () => {
-  const { useEffect, useState } = await import('react');
-  return {
-    AgentExtensionManagementRoot: ({
-      onDetailVisibilityChange,
-      renderDetail,
-    }: {
-      readonly onDetailVisibilityChange: (visible: boolean) => void;
-      readonly renderDetail: (input: {
-        readonly content: null;
-        readonly selectedItemId: string;
-        readonly tab: 'skills' | 'extensions';
-      }) => ReactNode;
-    }) => {
-      const [tab, setTab] = useState<'skills' | 'extensions'>('skills');
-      const [selectedItemId, setSelectedItemId] = useState<string>();
-      useEffect(() => {
-        onDetailVisibilityChange(selectedItemId !== undefined);
-        return () => onDetailVisibilityChange(false);
-      }, [onDetailVisibilityChange, selectedItemId]);
-      return (
-        <>
-          <button
-            type="button"
-            onClick={() => {
-              setTab('skills');
-              setSelectedItemId('skill:test');
-            }}
-          >
-            Show skill
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setTab('extensions');
-              setSelectedItemId('computer-use');
-            }}
-          >
-            Show computer
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setTab('extensions');
-              setSelectedItemId('browser-use');
-            }}
-          >
-            Show browser
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setTab('extensions');
-              setSelectedItemId('other@third-party');
-            }}
-          >
-            Show ordinary
-          </button>
-          {selectedItemId
-            ? renderDetail({
-                content: null,
-                selectedItemId,
-                tab,
-              })
-            : null}
-        </>
-      );
-    },
-  };
-});
-
-vi.mock('@neko/automation-webview/local-runtime-management/root', () => ({
-  AutomationLocalRuntimeManagementRoot: ({
-    runtime,
-    sourceId,
+vi.mock('@neko/agent-webview/extension-management/root', () => ({
+  AgentExtensionManagementRoot: ({
+    compactHeading,
+    selectedTab,
   }: {
-    readonly runtime: AutomationLocalRuntimeManagementRuntime;
-    readonly sourceId: string;
-  }) => {
-    capturedLocalRuntime = runtime;
-    capturedSourceId = sourceId;
-    return null;
-  },
+    readonly compactHeading: boolean;
+    readonly selectedTab: string;
+  }) => <div data-agent-compact-heading={compactHeading} data-agent-extension-tab={selectedTab} />,
 }));
 
-vi.mock('@neko/automation-webview/permission-management/root', () => ({
-  AutomationPermissionManagementRoot: ({
+vi.mock('@neko/professional-apps-webview/root', () => ({
+  ProfessionalApplicationManagementRoot: ({
+    compactHeading,
     runtime,
   }: {
-    readonly runtime: AutomationPermissionManagementRuntime;
-  }) => {
-    capturedPermissionRuntime = runtime;
-    return null;
-  },
+    readonly compactHeading: boolean;
+    readonly runtime: ProfessionalApplicationManagementRuntime;
+  }) => (
+    <div
+      data-professional-application-compact-heading={compactHeading}
+      data-professional-application-window={runtime.identity.windowId}
+    />
+  ),
 }));
+
+afterEach(cleanup);
 
 describe('DesktopExtensionManagementSurface', () => {
-  it('shows only the selected bundled adapter local-runtime controls', async () => {
-    Object.defineProperty(window, 'openNekoDesktop', {
-      configurable: true,
-      value: {
-        automationLocalRuntimes: {
-          execute: vi.fn(async (request) => ({
-            requestId: request.requestId,
-            route: request.route,
-            projection: { identity: request.identity, runtimes: [] },
-          })),
-        },
-        automationPermissions: {
-          execute: vi.fn(async (request) => ({
-            requestId: request.requestId,
-            route: request.route,
-            projection: { identity: request.identity, permissions: [] },
-          })),
-        },
-      },
-    });
-    const runtime = { identity: { windowId: 'window-1' } } as AgentExtensionManagementRuntime;
-    const onDetailVisibilityChange = vi.fn();
-
-    const container = document.createElement('div');
-    const detailTarget = document.createElement('div');
-    container.append(detailTarget);
-    const root = createRoot(container);
-    await act(async () => {
-      root.render(
-        <StrictMode>
-          <DesktopExtensionManagementSurface
-            detailLabel="Configuration"
-            detailTarget={detailTarget}
-            interactive
-            onDetailVisibilityChange={onDetailVisibilityChange}
-            runtime={runtime}
-          />
-        </StrictMode>,
-      );
-    });
-
-    expect(capturedPermissionRuntime).toBeUndefined();
-    expect(detailTarget.querySelector('[data-workbench-main-panel="extension-detail"]')).toBeNull();
-    expect(onDetailVisibilityChange).toHaveBeenLastCalledWith(false);
-    const skillButton = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Show skill',
-    );
-    await act(async () => skillButton?.click());
-    expect(detailTarget.querySelector('[data-workbench-main-panel="extension-detail"]')).not.toBeNull();
-    expect(capturedPermissionRuntime).toBeUndefined();
-    expect(onDetailVisibilityChange).toHaveBeenLastCalledWith(true);
-    const browserButton = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Show browser',
-    );
-    await act(async () => browserButton?.click());
-
-    expect(capturedLocalRuntime).toBeDefined();
-    expect(capturedSourceId).toBe('browser-use.observe.local');
-    expect(capturedPermissionRuntime).toBeUndefined();
-
-    const computerButton = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Show computer',
-    );
-    await act(async () => computerButton?.click());
-    expect(capturedSourceId).toBe('computer-use.observe.local');
-    expect(capturedPermissionRuntime).toBeDefined();
-    await expect(capturedPermissionRuntime?.getSnapshot()).resolves.toMatchObject({
+  it('composes Skill, MCP and Professional applications without merging their runtimes', async () => {
+    const emptySnapshot = {
       identity: { windowId: 'window-1' },
-      permissions: [],
-    });
+      catalogScope: 'global' as const,
+      skills: [],
+      mcp: [],
+      diagnostics: [],
+    };
+    const extensionRuntime: AgentExtensionManagementRuntime = {
+      identity: { windowId: 'window-1' },
+      addSkill: vi.fn(async () => emptySnapshot),
+      setSkillEnabled: vi.fn(async () => emptySnapshot),
+      removeSkill: vi.fn(async () => emptySnapshot),
+      addMcp: vi.fn(async () => emptySnapshot),
+      setMcpEnabled: vi.fn(async () => emptySnapshot),
+      removeMcp: vi.fn(async () => emptySnapshot),
+      getSnapshot: vi.fn(async () => ({
+        identity: { windowId: 'window-1' },
+        catalogScope: 'global' as const,
+        skills: [],
+        mcp: [],
+        diagnostics: [],
+      })),
+      dispose: vi.fn(),
+    };
+    const professionalApplicationRuntime: ProfessionalApplicationManagementRuntime = {
+      identity: { windowId: 'window-1' },
+      getSnapshot: vi.fn(async () => ({ identity: { windowId: 'window-1' }, items: [] })),
+      addBinding: vi.fn(),
+      updateBinding: vi.fn(),
+      setEnabled: vi.fn(),
+      removeBinding: vi.fn(),
+      selectApplication: vi.fn(),
+      launch: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const i18n = createDesktopI18n('en');
 
-    capturedLocalRuntime = undefined;
-    capturedSourceId = undefined;
-    capturedPermissionRuntime = undefined;
-    const ordinaryButton = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Show ordinary',
+    render(
+      <I18nProvider service={i18n.i18nService}>
+        <DesktopExtensionManagementSurface
+          extensionRuntime={extensionRuntime}
+          interactive
+          professionalApplicationRuntime={professionalApplicationRuntime}
+        />
+      </I18nProvider>,
     );
-    await act(async () => ordinaryButton?.click());
-    expect(capturedLocalRuntime).toBeUndefined();
-    expect(capturedPermissionRuntime).toBeUndefined();
-    act(() => root.unmount());
+
+    await waitFor(() =>
+      expect(document.querySelector('[data-agent-extension-tab="skills"]')).toBeTruthy(),
+    );
+    expect(document.querySelector('[data-agent-compact-heading="true"]')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Skills' }).getAttribute('aria-selected')).toBe('true');
+    expect(
+      document.querySelector(
+        '.desktop-extension-management-composition > .management-segmented-control',
+      ),
+    ).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'MCP' }));
+    expect(document.querySelector('[data-agent-extension-tab="mcp"]')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'MCP' }).getAttribute('aria-selected')).toBe('true');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Professional applications' }));
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-professional-application-window="window-1"]'),
+      ).toBeTruthy(),
+    );
+    expect(document.querySelector('[data-agent-extension-tab]')).toBeNull();
+    expect(
+      document.querySelector('[data-professional-application-compact-heading="true"]'),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('tab', { name: 'Professional applications' }).getAttribute('aria-selected'),
+    ).toBe('true');
   });
 });
