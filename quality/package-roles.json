@@ -406,15 +406,6 @@
       "architectureState": "converged"
     },
     {
-      "path": "packages/quality",
-      "name": "@neko/quality",
-      "family": "quality",
-      "roles": ["domain", "testing"],
-      "runtimes": ["host-neutral", "test"],
-      "productStatus": "retained-kernel",
-      "architectureState": "converged"
-    },
-    {
       "path": "packages/search/domain",
       "name": "@neko/search-domain",
       "family": "search",

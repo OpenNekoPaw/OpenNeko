@@ -37,7 +37,6 @@ export const EXPECTED_BUILTIN_SKILLS = Object.freeze([
   'image',
   'video',
   'media-production',
-  'media-quality-review',
   'scene-to-music',
   'video-editing',
   'color-grading',

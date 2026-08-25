@@ -56,9 +56,6 @@ const en = {
   'skill.catalog.media-production.title': 'Media production',
   'skill.catalog.media-production.summary':
     'Guide an adaptive path from available sources to a verified deliverable.',
-  'skill.catalog.media-quality-review.title': 'Media quality review',
-  'skill.catalog.media-quality-review.summary':
-    'Review creative assets and deliverables against revision-bound evidence.',
   'skill.catalog.scene-to-music.title': 'Scene to music',
   'skill.catalog.scene-to-music.summary':
     'Plan scene-aware background music and hand off to available generation capabilities.',
@@ -138,8 +135,6 @@ const zhCn = {
   'skill.catalog.image.summary': '生成、编辑、扩展、增强、合成、拆分或准备图像。',
   'skill.catalog.media-production.title': '媒体制作',
   'skill.catalog.media-production.summary': '根据现有来源规划到可验证交付物的自适应制作路径。',
-  'skill.catalog.media-quality-review.title': '媒体质量评审',
-  'skill.catalog.media-quality-review.summary': '依据明确版本和证据评审创作素材与最终交付物。',
   'skill.catalog.scene-to-music.title': '场景配乐',
   'skill.catalog.scene-to-music.summary': '规划与场景匹配的背景音乐，并交给当前可用的生成能力。',
   'skill.catalog.script-generation.title': '剧本创作',

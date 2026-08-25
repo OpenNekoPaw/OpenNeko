@@ -635,7 +635,6 @@ const BUILTIN_SKILL_PRESENTATION_NAMES = new Set([
   'content-authoring',
   'image',
   'media-production',
-  'media-quality-review',
   'scene-to-music',
   'script-generation',
   'script-to-timeline',

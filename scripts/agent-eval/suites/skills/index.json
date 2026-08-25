@@ -9,7 +9,6 @@
     { "suiteId": "skill.evaluation-artifact-author", "path": "evaluation-artifact-author/suite.json", "ownerId": "evaluation-artifact-author", "targetKind": "skill" },
     { "suiteId": "skill.image", "path": "image/suite.json", "ownerId": "image", "targetKind": "skill" },
     { "suiteId": "skill.media-production", "path": "media-production/suite.json", "ownerId": "media-production", "targetKind": "skill" },
-    { "suiteId": "skill.media-quality-review", "path": "media-quality-review/suite.json", "ownerId": "media-quality-review", "targetKind": "skill" },
     { "suiteId": "skill.scene-to-music", "path": "scene-to-music/suite.json", "ownerId": "scene-to-music", "targetKind": "skill" },
     { "suiteId": "skill.script-generation", "path": "script-generation/suite.json", "ownerId": "script-generation", "targetKind": "skill" },
     { "suiteId": "skill.script-to-timeline", "path": "script-to-timeline/suite.json", "ownerId": "script-to-timeline", "targetKind": "skill" },

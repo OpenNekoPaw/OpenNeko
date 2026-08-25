@@ -146,8 +146,8 @@ provider、permission 或 artifact owner 的缺陷。
 
 领域输出格式、创作表、Canvas/Cut plan 与 profile 规则不得进入默认 Prompt。Skill 可以描述领域流程和
 公开工具方法，但不能声明执行成功；只读 validator 负责明确 profile 的 correctness，未注册规则不得被
-视为已验证。Quality runtime 可以聚合 provider-neutral evidence 和 Gate，但领域 rubric、repair 与 apply
-仍由 owning package 负责。
+视为已验证。领域 rubric、证据、判定、repair 与 apply 均由 owning package 负责；没有真实跨领域消费者时
+不得预设通用 Quality runtime、Gate 或 evaluator registry。
 
 DSH 组装默认 system prompt 与 Skill；OpenNeko 只通过 exact Session context extension 注入经过校验的
 Workspace、Canvas、Character、World 和引用 evidence，不建立平行 Prompt、Input、Capability 或多模态

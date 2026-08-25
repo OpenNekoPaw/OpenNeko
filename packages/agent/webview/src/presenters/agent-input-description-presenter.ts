@@ -35,7 +35,6 @@ const BUILTIN_SKILL_DESCRIPTION_KEYS = {
   'color-grading': 'skillDescriptions.color-grading',
   image: 'skillDescriptions.image',
   'media-production': 'skillDescriptions.media-production',
-  'media-quality-review': 'skillDescriptions.media-quality-review',
   'scene-to-music': 'skillDescriptions.scene-to-music',
   'script-generation': 'skillDescriptions.script-generation',
   'script-to-timeline': 'skillDescriptions.script-to-timeline',

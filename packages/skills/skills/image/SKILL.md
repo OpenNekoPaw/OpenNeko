@@ -26,6 +26,6 @@ Plan or perform one capability-neutral image operation: generation, editing, inp
 3. Negotiate adapter support, required inputs, model/provider requirements, and limits before execution.
 4. If support is degraded or unavailable, report the declared diagnostic and smallest recoverable alternative.
 5. Submit execution through the negotiated runtime capability and claim a produced asset only from a confirmed runtime capability result. Before confirmation, report only planned, submitted, pending, blocked, or failed state.
-6. Validate output existence, readability, media type, and requested basic dimensions locally. Do not claim aesthetic, character-consistency, or policy approval without QualityEvidence.
+6. Validate output existence, readability, media type, and requested basic dimensions locally. Do not claim aesthetic, character-consistency, or policy approval without evidence from the owning validator.
 
 Selection-, layer-, paint-, and project-format mutations remain owned by the relevant image authoring capability; this Skill expresses creative operation intent without importing package internals.

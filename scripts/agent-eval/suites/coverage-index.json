@@ -41,12 +41,6 @@
     },
     {
       "kind": "builtin-skill",
-      "id": "media-quality-review",
-      "disposition": "suite",
-      "suiteIds": ["skill.media-quality-review"]
-    },
-    {
-      "kind": "builtin-skill",
       "id": "scene-to-music",
       "disposition": "suite",
       "suiteIds": ["skill.scene-to-music"]

@@ -134,13 +134,6 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/quality",
-      "owner": "packages/quality",
-      "mode": "self",
-      "sourceScope": "src/**/*.{ts,tsx}",
-      "testScope": "src/**/*.test.{ts,tsx}"
-    },
-    {
       "path": "packages/cut/domain",
       "owner": "packages/cut/domain",
       "mode": "self",

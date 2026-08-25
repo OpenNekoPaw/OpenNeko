@@ -43,7 +43,7 @@ ID、公证或正常 Gatekeeper 接受资格，这些能力仍需独立验收。
 - `@neko/ui` 和一级 Webview package 只提供 browser-safe React UI。
 - Agent、Assets、Canvas、Cut、Preview 和 Generation 由各自 owning package 拥有 contract、
   runtime/node adapter 或 UI；Desktop 通过 public entry 显式注入。
-- `@neko/chara-domain`、`@neko/search-domain` 和 `@neko/quality` 仍是保留 package；
+- `@neko/chara-domain` 和 `@neko/search-domain` 仍是保留 package；
   接入前必须建立真实 Desktop composition、产品入口和路径级验收，不能因 package 存在而
   宣称能力可用。
 - 未来新增另一应用宿主必须先建立独立 OpenSpec 和真实 adapter 需求；当前不保留

@@ -132,14 +132,6 @@ const config: KnipConfig = {
         'src/prompt/index.ts',
       ],
     },
-    'packages/quality': {
-      entry: [
-        'src/index.ts',
-        'src/core/index.ts',
-        'src/project/index.ts',
-        'src/project/project-quality-test-helpers.ts',
-      ],
-    },
     'packages/entity/domain': {
       entry: [
         'src/index.ts',

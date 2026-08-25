@@ -33,7 +33,6 @@ const MATRIX_SUITES = Object.freeze([
   'skill.skill-creator',
   'skill.image',
   'skill.video',
-  'skill.media-quality-review',
 ]);
 export async function main(argv = process.argv.slice(2), io = defaultIo()) {
   const args = parseArgs(argv);

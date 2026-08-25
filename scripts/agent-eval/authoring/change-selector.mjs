@@ -66,7 +66,6 @@ const RULES = Object.freeze([
     'packages/text-editor/domain/src/text-document-session',
   ]),
   rule('capability-tool-routing', 'agent-runtime.media-tool-routing', [
-    'packages/quality/src/',
     'packages/agent/runtime/src/tools/',
     'packages/agent/runtime/src/runtime/capability/capability-runtime-bindings.ts',
   ]),
