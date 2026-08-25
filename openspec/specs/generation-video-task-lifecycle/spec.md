@@ -1,7 +1,7 @@
 # generation-video-task-lifecycle Specification
 
 ## Purpose
-TBD - created by archiving change adopt-ai-sdk-video-task-lifecycle. Update Purpose after archive.
+Define durable asynchronous video Generation tasks with exact provider submission, observation and cancellation semantics.
 ## Requirements
 ### Requirement: GenerationJob owns asynchronous generation lifecycle
 

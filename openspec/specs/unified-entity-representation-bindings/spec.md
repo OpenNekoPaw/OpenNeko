@@ -1,7 +1,7 @@
 # unified-entity-representation-bindings Specification
 
 ## Purpose
-TBD - created by archiving change retain-media-library-and-unified-entity. Update Purpose after archive.
+Define stable representation bindings between Project Entity identity and independently owned resource projections.
 ## Requirements
 ### Requirement: Creative Entity is the only semantic identity authority
 Character, scene, object, location, and style identity, names, aliases, state, semantic metadata, merge, and deprecation SHALL be owned only by Creative Entity. Media Library files and resource packages MUST NOT create a second semantic entity authority.

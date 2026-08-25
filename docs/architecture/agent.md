@@ -2,9 +2,8 @@
 
 更新日期：2026-08-25
 
-本文件定义 OpenNeko Agent 的稳定系统边界。迁移中的实现与验收状态由
-`openspec/changes/replace-pi-with-dsh-runtime-atomically/` 管理；目标决策见
-[`adr-dsh-cordis-replace-agent-extension-runtime.md`](adr-dsh-cordis-replace-agent-extension-runtime.md)。
+本文件定义 OpenNeko Agent 的稳定系统边界。尚未完成的 DSH runtime 切换由
+`openspec/changes/replace-pi-with-dsh-runtime-atomically/` 管理。
 
 ## 系统定位
 

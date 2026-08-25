@@ -243,14 +243,14 @@ publish、instantiate、provenance 和 three-way update 已退出当前 canonica
 | Asset Library mutable membership / removed state             | 用户级 `~/.neko/neko.db`      | 有价值的用户选择；普通移除只更新记录，文件扫描不得重建                      |
 | Asset manifest/search projection                             | 用户级 `~/.neko/neko.db`      | 可重建本地查询状态；不得充当 installed package authority                    |
 
-## 已知限制与发布风险
+## 失败边界
 
 - 权威 reference reader 未覆盖的项目 document kind 必须返回 `coverage-incomplete`，不能声明
   linked-ready 或 portable-snapshot-ready。
 - 第三方工具可能复制或跟随软链接；产品自有 sync/package 必须按入口强制跳过且不得 follow。产品只能承诺
   同步 portable Media Library references，不能承诺同步 external bytes。
-- macOS 与 Windows 的本地目录、可移动磁盘和真实 UNC/NAS target 必须分别验收。缺少对应平台证据时，
-  该平台网络媒体库属于 release blocker。
+- 本地目录、可移动磁盘和网络 target 必须按实际发布平台分别资格化；一个 target 的失败不得影响其他
+  Media Library connection。
 - 大型便携快照需要在写入前验证 destination conflict 与可用空间；中途取消或 fingerprint
   变化只能清理 staging，不能产生部分成功 destination。
 

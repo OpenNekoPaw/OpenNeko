@@ -1,7 +1,7 @@
 # standard-3d-model-preview Specification
 
 ## Purpose
-TBD - created by archiving change add-standard-3d-model-preview. Update Purpose after archive.
+Define authorized read-only preview, inspection and bounded evidence capture for supported standard 3D models.
 ## Requirements
 ### Requirement: Preview supports a fixed standard 3D source allowlist
 

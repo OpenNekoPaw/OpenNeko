@@ -1,7 +1,7 @@
 # workspace-resource-agent-ingest Specification
 
 ## Purpose
-TBD - created by archiving change simplify-local-resource-ingest-and-agent-mentions. Update Purpose after archive.
+Define authorized Workspace resource acquisition and exact Agent context ingestion without raw-path or active-target fallback.
 ## Requirements
 ### Requirement: Agent file resources enter through one Workspace locator path
 

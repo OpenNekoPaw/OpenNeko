@@ -27,8 +27,7 @@
     "relativeResources": "on-demand-guidance",
     "evidence": [
       "packages/dsh-bridge/package.json",
-      "packages/skills/README.md",
-      "openspec/specs/dsh-authoring-contract/spec.md"
+      "packages/skills/README.md"
     ]
   },
   "compositionPackage": {

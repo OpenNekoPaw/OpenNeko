@@ -1,8 +1,8 @@
 # Chara 领域架构
 
-## 当前状态与收敛方向
+## Authority
 
-`@neko/chara-domain` 是 CharacterProject/Version、CharacterStoryline authoring、Companion continuity、Dialogue/Room、CharacterRun、UserCharacterRelationship 和角色语义的 host-neutral owner。当前 foundation 中的 `CharacterStorylineRun`、运行时 transition/revision、run-scoped `CharacterMemoryScope`、Narrative external Composition requirement 和固定 Avatar Runtime Manager 是待删除的原型路径，不构成目标架构。
+`@neko/chara-domain` 是 CharacterProject/Version、CharacterStoryline authoring、Companion continuity、Dialogue/Room、CharacterRun、UserCharacterRelationship 和角色语义的 host-neutral owner。
 
 目标调用链是：Chara 产出精确角色/模式/上下文投影，Agent application/session owner 执行 Conversation/turn，Host 组合 owner-qualified Scene surfaces，Desktop 只完成 Electron trust-boundary wiring。跨资源、Entity 与 World 的组合边界见 [`creative-resource-semantic-boundaries.md`](../../architecture/creative-resource-semantic-boundaries.md)。
 

@@ -1,7 +1,7 @@
 # agent-generation-credential-routing Specification
 
 ## Purpose
-TBD - created by archiving change fix-agent-tool-schema-and-media-credential-routing. Update Purpose after archive.
+Keep generation credentials Host-owned while routing exact provider access into Agent generation without secret projection.
 ## Requirements
 ### Requirement: Agent generation purposes use the canonical credential authority
 

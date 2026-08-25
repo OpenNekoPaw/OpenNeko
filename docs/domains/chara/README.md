@@ -116,10 +116,6 @@ Main 不固定为 Avatar，也不尝试 first-compatible renderer。未知、失
 
 离开场景时 UI Roots 和无保护表现资源卸载；正在运行、排队或等待审批的 Agent task 由精确 DSH Session owner 继续，不得依赖隐藏 React tree。重开必须使用原 Conversation identity，禁止 active/recent fallback。
 
-## 当前状态
-
-Character 全局管理、Project Workspace 创作、Dialogue/Room 和 portable ZIP 已进入 Desktop 组合。真实 provider 驱动的 Character Creator/Conversation 完整验收仍受发布门禁约束；包内服务、fixture 和隔离 UI 不能替代可见 Electron 与真实 Agent 路径证据。
-
 ## 阅读路径
 
 - [`architecture.md`](architecture.md)：Chara owner、依赖、运行边界、上下文和错误隔离；

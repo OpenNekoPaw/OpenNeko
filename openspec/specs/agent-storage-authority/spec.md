@@ -1,7 +1,7 @@
 # agent-storage-authority Specification
 
 ## Purpose
-TBD - created by archiving change govern-local-storage-authorities. Update Purpose after archive.
+Separate OpenNeko Conversation records and bindings from DSH Session/transcript authority while isolating invalid local records.
 ## Requirements
 ### Requirement: Agent configuration authorities are separated
 

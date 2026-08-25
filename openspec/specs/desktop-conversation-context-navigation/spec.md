@@ -1,7 +1,7 @@
 # desktop-conversation-context-navigation Specification
 
 ## Purpose
-TBD - created by archiving change group-desktop-conversations-by-context. Update Purpose after archive.
+Define owner-qualified Conversation navigation across Assistant, Project, Character and Room contexts.
 ## Requirements
 ### Requirement: Every conversation navigation item has one exact context owner
 

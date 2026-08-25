@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TBD - created by archiving change replace-cut-engine-with-node-ffmpeg-runtime. Update Purpose after archive.
+Define the Cut-owned editing workflow over the canonical Node/FFmpeg media runtime and sandboxed presentation.
 ## Requirements
 ### Requirement: Cut media ports remain runtime-neutral
 

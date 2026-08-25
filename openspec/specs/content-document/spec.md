@@ -1,7 +1,8 @@
 # content-document Specification
 
 ## Purpose
-TBD - created by archiving change repair-dsh-document-locator-contract. Update Purpose after archive.
+Define one authorized Agent document-reading capability using canonical Workspace content identities and native
+model content blocks.
 ## Requirements
 ### Requirement: DSH document inputs expose the canonical workspace locator
 
@@ -147,6 +148,24 @@ The official `openneko.document` Tool MUST expose `operation`, `source`, and ope
 - **WHEN** the Tool receives a top-level `source` plus `input: {"mode":"manifest"}`
 - **THEN** the canonical document argument decoder rejects the unsupported `input` field before any Host call
 - **AND** no compatibility decoder or Host call is attempted
+
+### Requirement: Authorized document images use native model image context
+
+When a document result exposes an exact image ContentLocator, the Agent image reader SHALL resolve it through the
+same Conversation Workspace authorization and publish it through the DSH attachment owner as a native image block.
+It MUST NOT expose raw paths, switch provider/model, create another queue or modify the source when admission fails.
+
+#### Scenario: Model reads an EPUB image entry
+
+- **WHEN** an image-capable model requests an exact supported image entry returned by the document Tool
+- **THEN** Host reads that entry under the exact Conversation Workspace grant
+- **AND** DSH persists the admitted representation without changing the original locator or document bytes
+
+#### Scenario: Current model cannot consume images
+
+- **WHEN** the selected provider/model route does not support native image input
+- **THEN** only the current image request fails visibly
+- **AND** no alternate model, provider, source or media-analysis implementation is selected
 
 #### Scenario: Retired nested wrapper is rejected
 

@@ -77,5 +77,4 @@ license、维护状态、安全边界和真实复用成本。
 
 相关入口见 [`application-composition.md`](application-composition.md)、
 [`client-targets.md`](client-targets.md)、[`package-boundaries.md`](package-boundaries.md)、
-[`media-runtime.md`](media-runtime.md) 和
-[`adr-neko-desktop-professional-tool-handoff-and-mcp-boundary.md`](adr-neko-desktop-professional-tool-handoff-and-mcp-boundary.md)。
+[`media-runtime.md`](media-runtime.md) 和 [`agent.md`](agent.md)。

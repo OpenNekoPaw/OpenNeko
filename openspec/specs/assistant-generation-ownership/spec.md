@@ -1,7 +1,7 @@
 # assistant-generation-ownership Specification
 
 ## Purpose
-TBD - created by archiving change fix-agent-tool-schema-and-media-credential-routing. Update Purpose after archive.
+Define durable Generation Job and artifact ownership for Workspace and personal Assistant interactions.
 ## Requirements
 ### Requirement: Generation binds Jobs to an explicit owning scope
 

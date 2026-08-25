@@ -8,7 +8,6 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const surfacePath = 'quality/agent-extension-surface.json';
 const architecturePaths = [
   'AGENTS.md',
-  'docs/architecture/adr-neko-desktop-professional-tool-handoff-and-mcp-boundary.md',
   'docs/architecture/agent.md',
   'docs/architecture/README.md',
 ];

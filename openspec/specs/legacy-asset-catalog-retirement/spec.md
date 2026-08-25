@@ -1,7 +1,7 @@
 # legacy-asset-catalog-retirement Specification
 
 ## Purpose
-TBD - created by archiving change retain-media-library-and-unified-entity. Update Purpose after archive.
+Keep retired Asset catalog formats and runtime paths outside the current product while preserving untouched user bytes.
 ## Requirements
 ### Requirement: Legacy Asset data is outside product runtime
 

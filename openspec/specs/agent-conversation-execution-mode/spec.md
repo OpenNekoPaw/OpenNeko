@@ -1,7 +1,7 @@
 # agent-conversation-execution-mode Specification
 
 ## Purpose
-TBD - created by archiving change align-agent-auto-mode-and-media-http-timeout. Update Purpose after archive.
+Define approval-mode defaults and exact decision ownership for new, restored and waiting Agent conversations.
 ## Requirements
 ### Requirement: New Agent conversations default to approval mode
 

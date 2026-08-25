@@ -1,7 +1,7 @@
 # macos-desktop-release Specification
 
 ## Purpose
-TBD - created by archiving change establish-macos-release-pipeline. Update Purpose after archive.
+Define the authoritative macOS Desktop release target, trust mode, artifact closure and publication boundary.
 ## Requirements
 ### Requirement: macOS release source and version are authoritative
 

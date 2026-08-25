@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TBD - created by archiving change retain-media-library-and-unified-entity. Update Purpose after archive.
+Expose Media Library connections as authorized resource sources without turning ordinary files into catalog entities.
 
 ## Requirements
 

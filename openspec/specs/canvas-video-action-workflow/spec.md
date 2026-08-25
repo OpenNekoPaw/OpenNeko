@@ -1,7 +1,7 @@
 # canvas-video-action-workflow Specification
 
 ## Purpose
-TBD - created by archiving change streamline-canvas-video-actions. Update Purpose after archive.
+Define the canonical Canvas video actions and their exact Generation, Cut and media-runtime handoffs.
 ## Requirements
 ### Requirement: Canvas distinguishes Cut document opening from media insertion
 

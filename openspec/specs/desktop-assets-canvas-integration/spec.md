@@ -1,7 +1,7 @@
 # desktop-assets-canvas-integration Specification
 
 ## Purpose
-TBD - created by archiving change integrate-desktop-assets-canvas. Update Purpose after archive.
+Integrate authorized Workspace and Media Library resources into Canvas through package-owned resource and mutation paths.
 ## Requirements
 ### Requirement: Canvas add-node catalog is owned by the Desktop Canvas surface
 

@@ -1,7 +1,7 @@
 # dsh-conversation-archive Specification
 
 ## Purpose
-TBD - created by archiving change archive-dsh-conversations. Update Purpose after archive.
+Define user-controlled Conversation archival without changing DSH Session ownership or background execution.
 ## Requirements
 ### Requirement: DSH owns durable Conversation archive
 

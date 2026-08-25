@@ -1,7 +1,7 @@
 # agent-visual-review-workflow Specification
 
 ## Purpose
-TBD - created by archiving change expand-agent-visual-ui-validation. Update Purpose after archive.
+Define an evidence-backed Agent visual review workflow that preserves exact UI, artifact and execution ownership.
 ## Requirements
 ### Requirement: Direct visual artifact inspection
 

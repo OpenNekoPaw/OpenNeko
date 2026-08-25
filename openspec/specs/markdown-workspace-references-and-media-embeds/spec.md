@@ -1,7 +1,7 @@
 # markdown-workspace-references-and-media-embeds Specification
 
 ## Purpose
-TBD - created by archiving change add-markdown-workspace-references-and-media-embeds. Update Purpose after archive.
+Define portable Workspace references and authorized media embedding across Markdown authoring and presentation surfaces.
 ## Requirements
 ### Requirement: Markdown Source provides canonical context-aware assistance
 

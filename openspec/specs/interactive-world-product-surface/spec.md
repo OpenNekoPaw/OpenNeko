@@ -2,7 +2,8 @@
 
 ## Purpose
 
-TBD - created by archiving change define-ai-native-interactive-world. Update Purpose after archive.
+Define the product-level World authoring, publication and runtime boundaries without duplicating Character,
+creative-tool, presentation-engine or Agent authority.
 
 ## Requirements
 
@@ -169,3 +170,41 @@ An available World application SHALL provide exact WorldExperienceVersion or Wor
 - **WHEN** the World owner supplies an exact qualified binding for a participant interaction
 - **THEN** Agent attaches only the requested Conversation or AI role scope and returns proposals through the World intent boundary
 - **AND** only World runtime can validate and commit resulting WorldEvents or state
+
+### Requirement: Published Experience and runtime state remain separate
+
+A published WorldExperienceVersion SHALL be immutable and SHALL lock its required World, Story, Character,
+Gameplay and content dependencies. WorldRun, Save, branch, participant state and presentation preferences SHALL
+remain independently owned runtime facts. Publishing or installing another version MUST NOT redirect an existing
+Run or rewrite an existing Save.
+
+#### Scenario: Author publishes an updated Experience
+
+- **WHEN** an author publishes a new version while users have Saves on an earlier version
+- **THEN** those Saves remain bound to their original immutable baseline
+- **AND** moving to the new version requires an explicit product workflow
+
+### Requirement: World facts change only through typed committed events
+
+All participant, Agent, Story, Gameplay, engine and generative outputs that can change a World SHALL enter the
+World owner as typed intents or owner-qualified candidates. Only the World runtime may validate and commit
+WorldEvents. AI receipts, narration, renderer state, engine objects and generated media SHALL remain evidence or
+presentation until the owning service accepts them.
+
+#### Scenario: AI proposes a runtime transformation
+
+- **WHEN** an AI role proposes a new location or rule during a Run
+- **THEN** the user can inspect an owner-qualified semantic diff and capability diagnostic
+- **AND** rejecting or failing that candidate leaves the current branch and sibling owners unchanged
+
+### Requirement: Realtime generation is optional and declared
+
+Consumption-time generation SHALL be required only by an Experience that declares a bounded, testable realtime
+contract. The contract SHALL identify output owner, deadline, cancellation and late-result behavior. Missed
+deadlines or unsupported capabilities MUST fail visibly, and late output MUST NOT mutate the current World.
+
+#### Scenario: Optional realtime presentation misses its deadline
+
+- **WHEN** a declared realtime presentation request exceeds its deadline
+- **THEN** only that presentation request fails with a diagnostic
+- **AND** the Run continues from already committed World facts without selecting another provider or profile

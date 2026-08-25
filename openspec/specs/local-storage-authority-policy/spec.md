@@ -1,7 +1,7 @@
 # local-storage-authority-policy Specification
 
 ## Purpose
-TBD - created by archiving change govern-local-storage-authorities. Update Purpose after archive.
+Define ownership and failure isolation for local user records, project facts, projections, credentials and package data.
 ## Requirements
 ### Requirement: Durable data declares one authority
 

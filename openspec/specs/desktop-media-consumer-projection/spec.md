@@ -1,7 +1,7 @@
 # desktop-media-consumer-projection Specification
 
 ## Purpose
-TBD - created by archiving change replace-desktop-media-scheme-with-http-resource-gateway. Update Purpose after archive.
+Define media projections for Cut, Canvas, Preview and Agent consumers without creating alternate content authority.
 ## Requirements
 ### Requirement: Domain content SHALL retain canonical locator identity
 

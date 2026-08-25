@@ -1,7 +1,7 @@
 # desktop-creative-workbench-layout Specification
 
 ## Purpose
-TBD - created by archiving change integrate-desktop-assets-canvas. Update Purpose after archive.
+Define the stable Desktop creative Workbench composition and visible package-owned surface boundaries.
 ## Requirements
 ### Requirement: Desktop exposes one primary navigation sidebar
 

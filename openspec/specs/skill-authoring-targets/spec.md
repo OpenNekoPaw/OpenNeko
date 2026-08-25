@@ -1,7 +1,7 @@
 # skill-authoring-targets Specification
 
 ## Purpose
-TBD - created by archiving change unify-skill-creator-authoring-targets. Update Purpose after archive.
+Define explicit personal and Workspace targets for approval-bound DSH-native Skill authoring.
 ## Requirements
 ### Requirement: Skill Creator is an ordinary portable Skill
 
