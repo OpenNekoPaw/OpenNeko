@@ -273,6 +273,10 @@ export type DshSessionHostRequest =
       readonly messageId: string;
     })
   | (DshSessionHostConversationRequest & {
+      readonly operation: 'inbox-send-now';
+      readonly messageId: string;
+    })
+  | (DshSessionHostConversationRequest & {
       readonly operation: 'inbox-remove';
       readonly messageId: string;
     })
@@ -371,6 +375,10 @@ export interface OpenNekoDshSessionBridge {
     getSnapshot(conversationId: string): Promise<DshSessionHostProjection>;
     submit(conversationId: string, input: DshComposerSubmitInput): Promise<DshSessionHostResult>;
     cancel(conversationId: string): Promise<DshSessionHostProjection>;
+    sendInboxMessageNow(
+      conversationId: string,
+      messageId: string,
+    ): Promise<DshSessionHostProjection>;
     removeInboxMessage(
       conversationId: string,
       messageId: string,
@@ -540,7 +548,7 @@ export function parseDshSessionHostRequest(value: unknown): DshSessionHostReques
       attachmentId: requireIdentity(record.attachmentId, 'attachmentId'),
     };
   }
-  if (record.operation === 'inbox-remove') {
+  if (record.operation === 'inbox-send-now' || record.operation === 'inbox-remove') {
     requireExactKeys(record, [
       'requestId',
       'operation',
@@ -551,7 +559,7 @@ export function parseDshSessionHostRequest(value: unknown): DshSessionHostReques
     ]);
     return {
       ...base,
-      operation: 'inbox-remove',
+      operation: record.operation,
       conversationId,
       messageId: requireIdentity(record.messageId, 'messageId'),
     };

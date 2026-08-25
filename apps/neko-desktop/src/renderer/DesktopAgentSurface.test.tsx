@@ -174,6 +174,7 @@ const dshSessions = {
     stopReason: 'end_turn',
   })),
   cancel: vi.fn(async () => projection),
+  sendInboxMessageNow: vi.fn(async () => projection),
   removeInboxMessage: vi.fn(async () => projection),
   openTerminalArtifact: vi.fn(async () => undefined),
   getImageAttachmentPreview: vi.fn(async () => ({
@@ -242,6 +243,7 @@ beforeEach(() => {
     stopReason: 'end_turn',
   });
   dshSessions.cancel.mockResolvedValue(projection);
+  dshSessions.sendInboxMessageNow.mockResolvedValue(projection);
   dshSessions.removeInboxMessage.mockResolvedValue(projection);
   dshSessions.openTerminalArtifact.mockResolvedValue(undefined);
   dshSessions.releaseImageAttachmentPreviews.mockResolvedValue(undefined);
@@ -500,6 +502,61 @@ describe('DesktopAgentSurface', () => {
     );
   });
 
+  it('sends the exact queued DSH message now and keeps Draft context adjacent to the composer', async () => {
+    const queuedProjection: DshSessionHostProjection = {
+      ...projection,
+      inbox: {
+        nextTurn: [
+          {
+            messageId: 'message-send-now',
+            createdAt: 1_000,
+            content: [{ type: 'text', text: 'Send this immediately' }],
+          },
+        ],
+        nextStep: [],
+      },
+    };
+    dshSessions.getSnapshot.mockResolvedValue(queuedProjection);
+    dshSessions.sendInboxMessageNow.mockResolvedValue({
+      ...queuedProjection,
+      inbox: { nextTurn: [], nextStep: [] },
+    });
+    const view = render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
+        agentSurfaceId="surface-1"
+        conversationId="conversation-1"
+        surfaceKind="workspace"
+      />,
+    );
+
+    expect(await screen.findByText('Send this immediately')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Re-edit queued message' })).toBeNull();
+
+    const rail = view.container.querySelector('.agent-composer-rail');
+    const queue = rail?.querySelector('.agent-composer-queue-panel');
+    const context = rail?.querySelector('.agent-workspace-canvas-context-bar');
+    const composer = rail?.querySelector('.agent-composer-shell');
+    expect(queue).toBeInstanceOf(Node);
+    expect(context).toBeInstanceOf(Node);
+    expect(composer).toBeInstanceOf(Node);
+    expect(queue!.compareDocumentPosition(context!) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(context!.compareDocumentPosition(composer!) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send now' }));
+    await waitFor(() =>
+      expect(dshSessions.sendInboxMessageNow).toHaveBeenCalledWith(
+        'conversation-1',
+        'message-send-now',
+      ),
+    );
+  });
+
   it('keeps the existing transcript and draft when a DSH submit fails visibly', async () => {
     dshSessions.getSnapshot.mockResolvedValueOnce({ ...projection, currentTurn: undefined });
     dshPermissions.list.mockResolvedValueOnce([]);
@@ -622,7 +679,7 @@ describe('DesktopAgentSurface', () => {
       'Preserve this draft',
     );
     expect(await screen.findByText('My Film')).toBeTruthy();
-    expect(screen.getByText('Board')).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Workspace Board' })).toBeTruthy();
     expect(view.container.querySelector('[data-workspace-canvas-context="true"]')).toBeTruthy();
     expect(dshSessions.getComposerConfiguration).toHaveBeenNthCalledWith(
       2,
@@ -858,7 +915,7 @@ describe('DesktopAgentSurface', () => {
       />,
     );
     expect(await screen.findByText('My Film')).toBeTruthy();
-    expect(screen.getByText('Board')).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Workspace Board' })).toBeTruthy();
     expect(container.querySelector('[data-workspace-canvas-context="true"]')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Configure models' }));

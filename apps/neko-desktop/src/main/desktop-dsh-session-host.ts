@@ -60,11 +60,16 @@ export class DesktopDshSessionHost {
         | 'readInbox'
         | 'readImageAttachment'
         | 'enqueueInboxMessage'
+        | 'sendInboxMessageNow'
         | 'removeInboxMessage'
       >;
       readonly turnCanvasTargets: Pick<
         DshTurnCanvasTargetOwner,
-        'admit' | 'bindQueuedMessage' | 'releaseAdmission' | 'releaseQueuedMessage'
+        | 'admit'
+        | 'bindQueuedMessage'
+        | 'prioritizeQueuedMessage'
+        | 'releaseAdmission'
+        | 'releaseQueuedMessage'
       >;
       readonly imagePreviews: {
         project(input: {
@@ -357,6 +362,18 @@ export class DesktopDshSessionHost {
     } else if (request.operation === 'cancel') {
       conversationId = request.conversationId;
       await this.options.conversations.cancel(request.conversationId);
+    } else if (request.operation === 'inbox-send-now') {
+      conversationId = request.conversationId;
+      const priority = this.options.turnCanvasTargets.prioritizeQueuedMessage(request.messageId);
+      try {
+        await this.options.conversations.sendInboxMessageNow({
+          conversationId,
+          messageId: request.messageId,
+        });
+      } catch (error) {
+        priority.rollback();
+        throw error;
+      }
     } else if (request.operation === 'inbox-remove') {
       conversationId = request.conversationId;
       await this.options.conversations.removeInboxMessage({

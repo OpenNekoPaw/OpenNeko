@@ -315,6 +315,28 @@ export function DesktopAgentSurface({
     }
   };
 
+  const sendQueuedMessageNow = async (messageId: string): Promise<void> => {
+    const targetConversationId =
+      conversationId ?? (state.kind === 'ready' ? state.projection.conversationId : undefined);
+    if (!targetConversationId) {
+      throw new Error('DSH Inbox send-now requires an exact Conversation identity.');
+    }
+    setOperationError(undefined);
+    try {
+      const projection = await window.openNekoDesktop.dshSessions.sendInboxMessageNow(
+        targetConversationId,
+        messageId,
+      );
+      setState((current) =>
+        current.kind === 'ready'
+          ? requireReadyState(targetConversationId, projection, current.permissions)
+          : current,
+      );
+    } catch (error) {
+      setOperationError(describeError(error));
+    }
+  };
+
   const requestMentions = async (filter: string): Promise<void> => {
     const sequence = ++mentionRequestSequence.current;
     try {
@@ -498,6 +520,7 @@ export function DesktopAgentSurface({
       onPermissionPresetChange={(permissionPresetId) =>
         void selectPermissionPreset(permissionPresetId)
       }
+      onSendQueuedMessageNow={(messageId) => void sendQueuedMessageNow(messageId)}
       onRemoveQueuedMessage={(messageId) => void removeQueuedMessage(messageId)}
       onRestartRuntime={() => void restartRuntime()}
       onRequestMentions={(filter) => void requestMentions(filter)}

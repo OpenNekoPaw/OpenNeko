@@ -60,6 +60,65 @@ describe('DSH turn Canvas target owner', () => {
     });
   });
 
+  it('prioritizes the exact queued admission and can roll its order back', () => {
+    const owner = createDshTurnCanvasTargetOwner();
+    const first = owner.admit('dsh-1', {
+      kind: 'exact-canvas',
+      workspaceId: 'workspace-1',
+      canvasId: 'boards/first.nkc',
+    });
+    const selected = owner.admit('dsh-1', {
+      kind: 'exact-canvas',
+      workspaceId: 'workspace-1',
+      canvasId: 'boards/selected.nkc',
+    });
+    owner.bindQueuedMessage(first.admissionId, 'message-1');
+    owner.bindQueuedMessage(selected.admissionId, 'message-2');
+
+    const reservation = owner.prioritizeQueuedMessage('message-2');
+    reservation.rollback();
+    reservation.rollback();
+    owner.bindStartedTurn('dsh-1', 1);
+    owner.bindStartedTurn('dsh-1', 2);
+
+    expect(owner.read('dsh-1', 1)).toMatchObject({ canvasId: 'boards/first.nkc' });
+    expect(owner.read('dsh-1', 2)).toMatchObject({ canvasId: 'boards/selected.nkc' });
+  });
+
+  it('keeps a prioritized queued admission first after a successful reservation', () => {
+    const owner = createDshTurnCanvasTargetOwner();
+    const first = owner.admit('dsh-1', {
+      kind: 'exact-canvas',
+      workspaceId: 'workspace-1',
+      canvasId: 'boards/first.nkc',
+    });
+    const selected = owner.admit('dsh-1', {
+      kind: 'exact-canvas',
+      workspaceId: 'workspace-1',
+      canvasId: 'boards/selected.nkc',
+    });
+    owner.bindQueuedMessage(first.admissionId, 'message-1');
+    owner.bindQueuedMessage(selected.admissionId, 'message-2');
+
+    owner.prioritizeQueuedMessage('message-2');
+    owner.bindStartedTurn('dsh-1', 1);
+    owner.bindStartedTurn('dsh-1', 2);
+
+    expect(owner.read('dsh-1', 1)).toMatchObject({ canvasId: 'boards/selected.nkc' });
+    expect(owner.read('dsh-1', 2)).toMatchObject({ canvasId: 'boards/first.nkc' });
+  });
+
+  it('rejects a stale queued identity without changing sibling admission order', () => {
+    const owner = createDshTurnCanvasTargetOwner();
+    owner.admit('dsh-1', { kind: 'workspace-board', workspaceId: 'workspace-1' });
+
+    expect(() => owner.prioritizeQueuedMessage('message-stale')).toThrow(
+      'has no pending Canvas target admission',
+    );
+    owner.bindStartedTurn('dsh-1', 1);
+    expect(owner.read('dsh-1', 1)).toMatchObject({ kind: 'workspace-board' });
+  });
+
   it('accepts a queued-message identity that arrives after the turn already started', () => {
     const owner = createDshTurnCanvasTargetOwner();
     const admission = owner.admit('dsh-1', {

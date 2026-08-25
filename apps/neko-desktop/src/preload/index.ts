@@ -495,6 +495,22 @@ const bridge: OpenNekoDesktopBridge &
         conversationId,
       ).projection;
     },
+    async sendInboxMessageNow(conversationId, messageId) {
+      const context = requireDesktopWindowContext();
+      const request = {
+        requestId: nextRequestId('dsh-session-inbox-send-now'),
+        operation: 'inbox-send-now' as const,
+        windowId: context.windowId,
+        rendererSessionId: context.rendererSessionId,
+        conversationId,
+        messageId,
+      };
+      const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
+      return requireDshSessionConversation(
+        parseDshSessionHostResult(response, request.requestId),
+        conversationId,
+      ).projection;
+    },
     async removeInboxMessage(conversationId, messageId) {
       const context = requireDesktopWindowContext();
       const request = {

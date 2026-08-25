@@ -29,6 +29,32 @@ describe('canonical DSH Desktop evaluation driver', () => {
     expect(expression).toContain('turnCountAfter');
   });
 
+  it('drives active-session follow-up through the visible Composer and exact queue row', () => {
+    const composer = dshDriverExpression({
+      kind: 'composer-submit',
+      conversationId: 'conversation-1',
+      prompt: 'Queued follow-up',
+      expectedMode: 'queue',
+      timeoutMs: 1000,
+    });
+    const sendNow = dshDriverExpression({
+      kind: 'queue-send-now',
+      conversationId: 'conversation-1',
+      messageId: 'message-1',
+      timeoutMs: 1000,
+    });
+
+    expect(composer).toContain('data-agent-composer-input');
+    expect(composer).toContain('data-agent-composer-submit');
+    expect(sendNow).toContain('data-agent-queue-item-id');
+    expect(sendNow).toContain('data-agent-queue-action');
+    const sendNowBranch = sendNow.slice(
+      sendNow.indexOf("case 'queue-send-now'"),
+      sendNow.indexOf("case 'snapshot'"),
+    );
+    expect(sendNowBranch).not.toContain('sessions.submit(conversationId');
+  });
+
   it('rejects construction without the renderer boundary', () => {
     expect(() => createDshDesktopAgentDriver({})).toThrow('renderer evaluate function');
   });

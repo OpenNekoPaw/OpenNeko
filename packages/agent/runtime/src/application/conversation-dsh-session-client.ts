@@ -63,6 +63,10 @@ export interface ConversationDshSessionAcpClient {
     readonly messageId: string;
     readonly content: readonly DshAcpContentBlock[];
   }): Promise<DshAcpInboxSnapshot>;
+  sendInboxMessageNow(input: {
+    readonly sessionId: string;
+    readonly messageId: string;
+  }): Promise<DshAcpInboxSnapshot>;
   removeInboxMessage(input: {
     readonly sessionId: string;
     readonly messageId: string;
@@ -110,6 +114,10 @@ export interface ConversationDshSessionBoundClient {
     readonly conversationId: string;
     readonly messageId: string;
     readonly content: readonly DshAcpContentBlock[];
+  }): Promise<DshAcpInboxSnapshot>;
+  sendInboxMessageNow(input: {
+    readonly conversationId: string;
+    readonly messageId: string;
   }): Promise<DshAcpInboxSnapshot>;
   removeInboxMessage(input: {
     readonly conversationId: string;
@@ -216,6 +224,10 @@ export function createConversationDshSessionBoundClient(
     async replaceInboxMessage({ conversationId, ...request }) {
       const dshSessionId = await resolveForOperation(options, conversationId);
       return options.client.replaceInboxMessage({ ...request, sessionId: dshSessionId });
+    },
+    async sendInboxMessageNow({ conversationId, ...request }) {
+      const dshSessionId = await resolveForOperation(options, conversationId);
+      return options.client.sendInboxMessageNow({ ...request, sessionId: dshSessionId });
     },
     async removeInboxMessage({ conversationId, ...request }) {
       const dshSessionId = await resolveForOperation(options, conversationId);

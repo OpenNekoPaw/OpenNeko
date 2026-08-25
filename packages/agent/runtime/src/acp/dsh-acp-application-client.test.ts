@@ -310,6 +310,24 @@ describe('DshAcpApplicationClient', () => {
     });
   });
 
+  it('sends one exact inbox send-now extension request and decodes its DSH snapshot', async () => {
+    const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
+    const client = await DshAcpApplicationClient.connect({
+      transport: unusedTransport,
+      virtualCwd: '/virtual/workspace',
+      handlers: createHandlers(),
+      createConnection: fixture.createConnection,
+    });
+
+    await expect(
+      client.sendInboxMessageNow({ sessionId: 'session-1', messageId: 'message-1' }),
+    ).resolves.toEqual({ nextTurn: [], nextStep: [] });
+    expect(fixture.connection.extMethod).toHaveBeenCalledWith('openneko/session/inbox/send-now', {
+      sessionId: 'session-1',
+      messageId: 'message-1',
+    });
+  });
+
   it('reads one exact native image attachment through the bounded ACP extension', async () => {
     const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
     fixture.connection.extMethod = vi.fn(async () => ({

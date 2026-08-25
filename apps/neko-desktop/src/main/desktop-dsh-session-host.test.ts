@@ -604,6 +604,92 @@ describe('Desktop DSH Session Host', () => {
     });
   });
 
+  it('prioritizes the exact Canvas admission before delegating inbox send-now', async () => {
+    const targets = createDshTurnCanvasTargetOwner();
+    const first = targets.admit(identity.dshSessionId, {
+      kind: 'exact-canvas',
+      workspaceId: 'workspace-1',
+      canvasId: 'boards/first.nkc',
+    });
+    const selected = targets.admit(identity.dshSessionId, {
+      kind: 'exact-canvas',
+      workspaceId: 'workspace-1',
+      canvasId: 'boards/selected.nkc',
+    });
+    targets.bindQueuedMessage(first.admissionId, 'message-1');
+    targets.bindQueuedMessage(selected.admissionId, 'message-2');
+    const sendInboxMessageNow = vi.fn(async () => ({ nextTurn: [], nextStep: [] }));
+    const host = createHost({ turnCanvasTargets: targets, sendInboxMessageNow });
+
+    await host.execute(
+      { webContentsId: 1, frameUrl: 'openneko://app' },
+      {
+        requestId: 'request-send-now',
+        operation: 'inbox-send-now',
+        windowId: 'window-1',
+        rendererSessionId: 'renderer-1',
+        conversationId: identity.conversationId,
+        messageId: 'message-2',
+      },
+    );
+
+    expect(sendInboxMessageNow).toHaveBeenCalledWith({
+      conversationId: identity.conversationId,
+      messageId: 'message-2',
+    });
+    targets.bindStartedTurn(identity.dshSessionId, 2);
+    targets.bindStartedTurn(identity.dshSessionId, 3);
+    expect(targets.read(identity.dshSessionId, 2)).toMatchObject({
+      canvasId: 'boards/selected.nkc',
+    });
+    expect(targets.read(identity.dshSessionId, 3)).toMatchObject({
+      canvasId: 'boards/first.nkc',
+    });
+  });
+
+  it('restores Canvas admission order when inbox send-now rejects', async () => {
+    const targets = createDshTurnCanvasTargetOwner();
+    const first = targets.admit(identity.dshSessionId, {
+      kind: 'exact-canvas',
+      workspaceId: 'workspace-1',
+      canvasId: 'boards/first.nkc',
+    });
+    const selected = targets.admit(identity.dshSessionId, {
+      kind: 'exact-canvas',
+      workspaceId: 'workspace-1',
+      canvasId: 'boards/selected.nkc',
+    });
+    targets.bindQueuedMessage(first.admissionId, 'message-1');
+    targets.bindQueuedMessage(selected.admissionId, 'message-2');
+    const host = createHost({
+      turnCanvasTargets: targets,
+      sendInboxMessageNow: vi.fn(async () => {
+        throw new Error('stale inbox message');
+      }),
+    });
+
+    await expect(
+      host.execute(
+        { webContentsId: 1, frameUrl: 'openneko://app' },
+        {
+          requestId: 'request-send-now',
+          operation: 'inbox-send-now',
+          windowId: 'window-1',
+          rendererSessionId: 'renderer-1',
+          conversationId: identity.conversationId,
+          messageId: 'message-2',
+        },
+      ),
+    ).rejects.toThrow('stale inbox message');
+
+    targets.bindStartedTurn(identity.dshSessionId, 2);
+    targets.bindStartedTurn(identity.dshSessionId, 3);
+    expect(targets.read(identity.dshSessionId, 2)).toMatchObject({ canvasId: 'boards/first.nkc' });
+    expect(targets.read(identity.dshSessionId, 3)).toMatchObject({
+      canvasId: 'boards/selected.nkc',
+    });
+  });
+
   it('adds an admitted native image block after its resource identity', async () => {
     const prompt = vi.fn(async () => ({ stopReason: 'end_turn' as const }));
     const admitPromptImages = vi.fn(async () => [
@@ -1494,6 +1580,7 @@ function createHost(overrides: {
     windowId: string,
   ) => Promise<{ readonly supportsImageInput: boolean }>;
   readonly enqueueInboxMessage?: ConversationDshSessionBoundClient['enqueueInboxMessage'];
+  readonly sendInboxMessageNow?: ConversationDshSessionBoundClient['sendInboxMessageNow'];
   readonly readImageAttachment?: ConversationDshSessionBoundClient['readImageAttachment'];
   readonly projectImagePreview?: ConstructorParameters<
     typeof DesktopDshSessionHost
@@ -1580,6 +1667,8 @@ function createHost(overrides: {
           nextTurn: [{ messageId: 'queued-default', createdAt: 1, content: [] }],
           nextStep: [],
         })),
+      sendInboxMessageNow:
+        overrides.sendInboxMessageNow ?? vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
       removeInboxMessage: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
     },
     turnCanvasTargets: overrides.turnCanvasTargets ?? createDshTurnCanvasTargetOwner(),

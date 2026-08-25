@@ -121,6 +121,7 @@ interface OwnedSession {
   readonly handle: AgentHandle;
   readonly configuration: DshSessionConfiguration;
   readonly runtimeContext: DshSessionRuntimeContext;
+  replacement: Promise<void> | undefined;
   inflight: InflightPrompt | undefined;
   commandAbort: AbortController | undefined;
   outputTail: Promise<void>;
@@ -194,6 +195,14 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
     }
     return record;
   };
+  const requireReadyOwned = async (sessionId: string): Promise<OwnedSession> => {
+    for (;;) {
+      const record = requireOwned(sessionId);
+      const replacement = record.replacement;
+      if (replacement === undefined) return record;
+      await replacement;
+    }
+  };
   const notify = (notification: SessionNotification): Promise<void> =>
     connection.sessionUpdate(notification);
   const hostTools: DshAcpHostToolPort<ToolRunContext> = {
@@ -203,7 +212,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
       if (agent === undefined) {
         throw new Error(`OpenNeko Host Tool ${execution.callId} has no DSH Agent owner.`);
       }
-      const record = requireOwned(agent.id);
+      const record = await requireReadyOwned(agent.id);
       if (record.handle.agent !== agent) {
         throw new Error(`OpenNeko Host Tool ${execution.callId} has a stale DSH Agent owner.`);
       }
@@ -350,7 +359,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
   ): Promise<PromptResponse> =>
     promptAdmission.run(sessionId, async () => {
       requireOpen();
-      const record = requireOwned(sessionId);
+      const record = await requireReadyOwned(sessionId);
       if (record.commandAbort !== undefined) {
         throw RequestError.invalidParams(
           undefined,
@@ -487,7 +496,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
       },
       async closeSession(params) {
         requireOpen();
-        const record = requireOwned(params.sessionId);
+        const record = await requireReadyOwned(params.sessionId);
         promptAdmission.cancel(params.sessionId);
         owned.delete(params.sessionId);
         record.commandAbort?.abort(new Error('DSH Session closed.'));
@@ -500,7 +509,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
       },
       async setSessionMode(params) {
         requireOpen();
-        const record = requireOwned(params.sessionId);
+        const record = await requireReadyOwned(params.sessionId);
         if (!ctx.permissionPresets.names.includes(params.modeId)) {
           throw RequestError.invalidParams(undefined, `Unsupported Session mode: ${params.modeId}`);
         }
@@ -516,7 +525,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
           );
         }
         const selected = decodeDshAcpModelConfiguration(params.value);
-        const current = requireOwned(params.sessionId);
+        const current = await requireReadyOwned(params.sessionId);
         if (current.handle.agent.status !== 'idle' || current.inflight !== undefined) {
           throw RequestError.invalidParams(
             undefined,
@@ -536,7 +545,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
       },
       async prompt(params) {
         requireOpen();
-        requireOwned(params.sessionId);
+        await requireReadyOwned(params.sessionId);
         const content = await admitAcpPrompt(params.prompt, ctx.attachments);
         const displayContent = projectAcpDisplayContent(params.prompt, content);
         return runPrompt(params.sessionId, content, displayContent);
@@ -570,7 +579,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
           }
           case DSH_ACP_EXTENSION_METHODS.setSessionContext: {
             const request = decodeDshAcpSessionContextSetRequest(params);
-            const record = requireOwned(request.sessionId);
+            const record = await requireReadyOwned(request.sessionId);
             if (record.handle.agent.status !== 'idle' || record.inflight !== undefined) {
               throw RequestError.invalidParams(
                 undefined,
@@ -651,7 +660,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
                 `Invalid DSH Skill name: ${request.name}`,
               );
             }
-            const record = requireOwned(request.sessionId);
+            const record = await requireReadyOwned(request.sessionId);
             const snapshot = await readSkillCatalog(ctx, {
               kind: 'session',
               agent: record.handle.agent,
@@ -690,7 +699,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
             return {
               ...projectPermissionPresets(
                 ctx,
-                sessionId === undefined ? undefined : requireOwned(sessionId),
+                sessionId === undefined ? undefined : await requireReadyOwned(sessionId),
               ),
             };
           }
@@ -708,12 +717,14 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
               const cwd = requireAbsoluteCwd(params.cwd, 'Input catalog cwd');
               return { ...(await readPreTurnInputCatalog(ctx, preset, cwd, config)) };
             }
-            const record = requireOwned(requireNonEmptyString(params.sessionId, 'sessionId'));
+            const record = await requireReadyOwned(
+              requireNonEmptyString(params.sessionId, 'sessionId'),
+            );
             return { ...(await readAgentInputCatalog(ctx, record.handle.agent)) };
           }
           case DSH_ACP_EXTENSION_METHODS.executeCommand: {
             const request = decodeDshAcpCommandExecuteRequest(params);
-            const record = requireOwned(request.sessionId);
+            const record = await requireReadyOwned(request.sessionId);
             if (
               record.handle.agent.status !== 'idle' ||
               record.inflight !== undefined ||
@@ -760,7 +771,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
                 );
               }
             }
-            const record = requireOwned(request.sessionId);
+            const record = await requireReadyOwned(request.sessionId);
             const agent = record.handle.agent;
             const snapshot = await readSkillCatalog(ctx, { kind: 'session', agent });
             if (!snapshot.complete) {
@@ -803,7 +814,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
           }
           case DSH_ACP_EXTENSION_METHODS.enqueueInboxMessage: {
             const request = decodeDshAcpInboxEnqueueRequest(params);
-            const record = requireOwned(request.sessionId);
+            const record = await requireReadyOwned(request.sessionId);
             if (record.handle.agent.status !== 'running' || record.inflight === undefined) {
               throw RequestError.invalidParams(
                 undefined,
@@ -833,12 +844,14 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
             return projectInbox(record);
           }
           case DSH_ACP_EXTENSION_METHODS.readInbox: {
-            const record = requireOwned(requireNonEmptyString(params.sessionId, 'sessionId'));
+            const record = await requireReadyOwned(
+              requireNonEmptyString(params.sessionId, 'sessionId'),
+            );
             return projectInbox(record);
           }
           case DSH_ACP_EXTENSION_METHODS.readImageAttachment: {
             const request = decodeDshAcpImageAttachmentReadRequest(params);
-            const record = requireOwned(request.sessionId);
+            const record = await requireReadyOwned(request.sessionId);
             const ref = findDisplayedImageAttachment(record, request.attachmentId);
             if (ref.bytes > AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES) {
               throw RequestError.invalidParams(
@@ -853,7 +866,9 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
             };
           }
           case DSH_ACP_EXTENSION_METHODS.replaceInboxMessage: {
-            const record = requireOwned(requireNonEmptyString(params.sessionId, 'sessionId'));
+            const record = await requireReadyOwned(
+              requireNonEmptyString(params.sessionId, 'sessionId'),
+            );
             const messageId = requireNonEmptyString(params.messageId, 'messageId');
             const current = findInboxMessage(record, messageId);
             const replacement = createUserMessage({
@@ -869,8 +884,46 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
             await ctx.sessions.flush(record.handle.agent.session);
             return projectInbox(record);
           }
+          case DSH_ACP_EXTENSION_METHODS.sendInboxMessageNow: {
+            const record = await requireReadyOwned(
+              requireNonEmptyString(params.sessionId, 'sessionId'),
+            );
+            if (record.handle.agent.status !== 'running' || record.inflight === undefined) {
+              throw RequestError.invalidParams(
+                undefined,
+                `Inbox send-now requires a running Session: ${record.handle.agent.id}`,
+              );
+            }
+            const messageId = requireNonEmptyString(params.messageId, 'messageId');
+            const index = record.handle.agent.inbox.nextTurn.findIndex(
+              (candidate) => candidate.id === messageId,
+            );
+            if (index < 0) {
+              findInboxMessage(record, messageId);
+              throw RequestError.invalidParams(
+                undefined,
+                `Inbox message is not pending for a future Turn: ${messageId}`,
+              );
+            }
+            if (index > 0) {
+              const selected = record.handle.agent.inbox.nextTurn[index];
+              if (selected === undefined) {
+                throw RequestError.internalError(
+                  undefined,
+                  `Inbox send-now lost Message identity: ${messageId}`,
+                );
+              }
+              record.handle.agent.inbox.splice('next-turn', index, 1, []);
+              record.handle.agent.inbox.prepend('next-turn', selected);
+            }
+            record.handle.agent.cancel({ kind: 'user' }, { keepInbox: true });
+            await ctx.sessions.flush(record.handle.agent.session);
+            return projectInbox(record);
+          }
           case DSH_ACP_EXTENSION_METHODS.removeInboxMessage: {
-            const record = requireOwned(requireNonEmptyString(params.sessionId, 'sessionId'));
+            const record = await requireReadyOwned(
+              requireNonEmptyString(params.sessionId, 'sessionId'),
+            );
             const messageId = requireNonEmptyString(params.messageId, 'messageId');
             const current = findInboxMessage(record, messageId);
             if (!record.handle.agent.inbox.remove(current.id)) {
@@ -906,6 +959,10 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
     }
     teardown = Promise.all(
       records.map(async (record) => {
+        if (record.replacement !== undefined) {
+          await record.replacement.catch(() => undefined);
+          return;
+        }
         await record.handle.agent.whenIdle();
         await record.outputTail;
         await ctx.sessions.flush(record.handle.agent.session);
@@ -2195,18 +2252,36 @@ async function replaceOwnedAgent(
   preset: string,
 ): Promise<OwnedSession> {
   const sessionId = SessionId(rawSessionId);
-  owned.delete(rawSessionId);
-  await current.outputTail;
-  await ctx.sessions.flush(current.handle.agent.session);
-  await current.handle.dispose();
-  const handle = await ctx.agents.resume({
-    resumeSessionId: sessionId,
-    agentOptions: agentOptions(configuration),
-    setup: setupSessionRuntimeContext(ctx, preset, current.runtimeContext),
-  });
-  const next = createOwnedSession(handle, configuration, current.runtimeContext);
-  owned.set(rawSessionId, next);
-  return next;
+  if (current.replacement !== undefined) {
+    throw new Error(`DSH Session replacement is already in progress: ${rawSessionId}`);
+  }
+  const replacement = (async () => {
+    await current.outputTail;
+    await ctx.sessions.flush(current.handle.agent.session);
+    await current.handle.dispose();
+    const handle = await ctx.agents.resume({
+      resumeSessionId: sessionId,
+      agentOptions: agentOptions(configuration),
+      setup: setupSessionRuntimeContext(ctx, preset, current.runtimeContext),
+    });
+    if (owned.get(rawSessionId) !== current) {
+      await handle.dispose();
+      throw new Error(`DSH Session owner changed during replacement: ${rawSessionId}`);
+    }
+    owned.set(rawSessionId, createOwnedSession(handle, configuration, current.runtimeContext));
+  })();
+  current.replacement = replacement;
+  try {
+    await replacement;
+    return owned.get(rawSessionId) ?? requireMissingReplacement(rawSessionId);
+  } catch (error) {
+    if (owned.get(rawSessionId) === current) owned.delete(rawSessionId);
+    throw error;
+  }
+}
+
+function requireMissingReplacement(sessionId: string): never {
+  throw new Error(`DSH Session replacement completed without an owner: ${sessionId}`);
 }
 
 function createOwnedSession(
@@ -2218,6 +2293,7 @@ function createOwnedSession(
     handle,
     configuration,
     runtimeContext,
+    replacement: undefined,
     inflight: undefined,
     commandAbort: undefined,
     outputTail: Promise.resolve(),

@@ -78,10 +78,12 @@ describe('DshAgentView content-creation composer', () => {
 
   it('keeps the OpenNeko composer active and projects the DSH inbox queue during a turn', () => {
     const onRemoveQueuedMessage = vi.fn();
+    const onSendQueuedMessageNow = vi.fn();
     renderAgent(
       <DshComposerHarness
         onSubmit={vi.fn(async () => true)}
         onRemoveQueuedMessage={onRemoveQueuedMessage}
+        onSendQueuedMessageNow={onSendQueuedMessageNow}
         projection={{
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
@@ -107,6 +109,9 @@ describe('DshAgentView content-creation composer', () => {
     expect(titlebar.nextElementSibling?.classList.contains('agent-message-list')).toBe(true);
     expect(screen.getByText('消息队列（1 条待处理）')).toBeTruthy();
     expect(screen.getByText('queued request')).toBeTruthy();
+    expect(screen.queryByTitle('重新编辑排队消息')).toBeNull();
+    fireEvent.click(screen.getByTitle('立即发送'));
+    expect(onSendQueuedMessageNow).toHaveBeenCalledWith('message-next');
     fireEvent.click(screen.getByTitle('取消排队消息'));
     expect(onRemoveQueuedMessage).toHaveBeenCalledWith('message-next');
   });
@@ -1770,6 +1775,7 @@ function DshComposerHarness({
   onRequestMentions = vi.fn(),
   onMaterializeAsset,
   onRemoveQueuedMessage,
+  onSendQueuedMessageNow,
   projection,
   onSubmit,
 }: {
@@ -1783,6 +1789,9 @@ function DshComposerHarness({
   readonly onRemoveQueuedMessage?: React.ComponentProps<
     typeof DshAgentView
   >['onRemoveQueuedMessage'];
+  readonly onSendQueuedMessageNow?: React.ComponentProps<
+    typeof DshAgentView
+  >['onSendQueuedMessageNow'];
   readonly projection?: React.ComponentProps<typeof DshAgentView>['projection'];
   readonly onSubmit: React.ComponentProps<typeof DshAgentView>['onSubmit'];
 }): JSX.Element {
@@ -1859,6 +1868,7 @@ function DshComposerHarness({
       onModelChange={vi.fn()}
       onPermissionPresetChange={vi.fn()}
       onRemoveQueuedMessage={onRemoveQueuedMessage}
+      onSendQueuedMessageNow={onSendQueuedMessageNow}
       onRequestMentions={onRequestMentions}
       onMaterializeAsset={onMaterializeAsset}
       onRestartRuntime={vi.fn()}

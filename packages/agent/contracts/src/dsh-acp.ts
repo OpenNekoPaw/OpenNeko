@@ -10,6 +10,7 @@ export const DSH_ACP_EXTENSION_METHODS = {
   enqueueInboxMessage: 'openneko/session/inbox/enqueue',
   readInbox: 'openneko/session/inbox/read',
   replaceInboxMessage: 'openneko/session/inbox/replace',
+  sendInboxMessageNow: 'openneko/session/inbox/send-now',
   removeInboxMessage: 'openneko/session/inbox/remove',
   readImageAttachment: 'openneko/session/attachment/image/read',
   readInputCatalog: 'openneko/session/input-catalog/read',

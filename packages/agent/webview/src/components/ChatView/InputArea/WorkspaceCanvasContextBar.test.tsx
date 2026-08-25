@@ -138,6 +138,7 @@ describe('WorkspaceCanvasContextBar', () => {
     renderBar(canvas);
     expect(screen.getByText('Workspace')).toBeTruthy();
     expect(screen.getByText('Workspace Board')).toBeTruthy();
+    expect(screen.queryByText('workspace.nkc')).toBeNull();
     const select = document.querySelector('select');
     expect(select?.closest('.agent-workspace-canvas-select-control')).toBeTruthy();
     expect(select?.value).toBe('workspace-board');

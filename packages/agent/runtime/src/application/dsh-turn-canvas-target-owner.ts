@@ -11,6 +11,7 @@ export interface DshTurnCanvasTargetOwner {
     target: CanvasWorkspaceTurnTarget | undefined,
   ): DshTurnCanvasTargetAdmission;
   bindQueuedMessage(admissionId: string, messageId: string): void;
+  prioritizeQueuedMessage(messageId: string): { readonly rollback: () => void };
   bindStartedTurn(dshSessionId: string, turn: number): void;
   read(dshSessionId: string, turn: number): CanvasWorkspaceTurnTarget | undefined;
   releaseQueuedMessage(messageId: string): void;
@@ -64,6 +65,35 @@ export function createDshTurnCanvasTargetOwner(): DshTurnCanvasTargetOwner {
         throw new Error(`DSH Inbox message '${identity}' already has a Canvas target admission.`);
       }
       admissionByMessageId.set(identity, admission);
+    },
+
+    prioritizeQueuedMessage(messageId) {
+      const identity = requireIdentity(messageId, 'Inbox message');
+      const admission = admissionByMessageId.get(identity);
+      if (admission === undefined) {
+        throw new Error(`DSH Inbox message '${identity}' has no pending Canvas target admission.`);
+      }
+      const queue = pendingBySession.get(admission.dshSessionId);
+      const index = queue?.indexOf(admission) ?? -1;
+      if (queue === undefined || index < 0) {
+        throw new Error(`DSH Inbox message '${identity}' lost its pending admission order.`);
+      }
+      if (index > 0) {
+        queue.splice(index, 1);
+        queue.unshift(admission);
+      }
+      let rolledBack = false;
+      return Object.freeze({
+        rollback: () => {
+          if (rolledBack) return;
+          rolledBack = true;
+          const currentQueue = pendingBySession.get(admission.dshSessionId);
+          const currentIndex = currentQueue?.indexOf(admission) ?? -1;
+          if (currentQueue === undefined || currentIndex < 0 || currentIndex === index) return;
+          currentQueue.splice(currentIndex, 1);
+          currentQueue.splice(Math.min(index, currentQueue.length), 0, admission);
+        },
+      });
     },
 
     bindStartedTurn(dshSessionId, turn) {

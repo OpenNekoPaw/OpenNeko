@@ -170,9 +170,10 @@ Scenario schema 拒绝已退休的 `draft-bind`、预 Session `draft-submit` 与
 当前可执行 contract 表达 `submit`、延迟 `submit`、`wait-for-idle`、`cancel`、`confirm`、`resume`、
 Conversation `update-configuration`、typed `invoke-input`、closed-loop `feedback` 和 terminal
 `resize`。
-活跃 turn 中不得再次 `submit`；当前 Desktop 没有公开 DSH inbox 产品操作，因此 Evaluation 不
-声明 queue/send-now DSL，也不得恢复 OpenNeko shadow queue。case 必须以 terminal idle 收敛。
-每条消息都通过公开 DSH Session submit 操作，不能直接注入 Agent turn 或 history。当前通用 workflow interpreter
+活跃 turn 中的普通后续消息必须通过可见 Composer 进入 DSH Inbox；立即发送必须点击该精确队列行的
+send-now 操作。Evaluation 只在专用 `submit-with-followup` 步骤表达这条真实 UI 路径，不声明通用
+queue/send-now DSL，也不得恢复 OpenNeko shadow queue。case 必须以 terminal idle 收敛。
+每条消息都通过公开 DSH Session 产品操作，不能直接注入 Agent turn 或 history。当前通用 workflow interpreter
 执行上述除 `resize` 外的步骤；不得用 mock Draft receipt 冒充完整用户路径。
 模型配置只允许 exact visible Conversation 的 idle DSH Session 更新，并证明操作不创建 Turn。
 `resize` 尚未接入 Desktop Agent runner，必须在启动前以

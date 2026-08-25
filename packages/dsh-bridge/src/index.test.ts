@@ -113,12 +113,10 @@ describe('OpenNeko DSH ACP bridge projections', () => {
     process.env.DSH_HOME = root;
     const firstCreate = createVoidDeferred();
     const loader = {
-      create: vi.fn(
-        async (input: { readonly config: { readonly serverName: string } }) => {
-          if (input.config.serverName === 'alpha') await firstCreate.promise;
-          return `loader-${input.config.serverName}`;
-        },
-      ),
+      create: vi.fn(async (input: { readonly config: { readonly serverName: string } }) => {
+        if (input.config.serverName === 'alpha') await firstCreate.promise;
+        return `loader-${input.config.serverName}`;
+      }),
       update: vi.fn(async () => undefined),
       remove: vi.fn(async () => undefined),
       resolve: vi.fn(() => ({ fiber: { state: 2 } })),
@@ -769,6 +767,20 @@ describe('OpenNeko DSH ACP bridge boundaries', () => {
     );
     expect(source).toMatch(/resumeSessionId: sessionId/u);
     expect(source).toMatch(/isSameModelConfiguration\(current\.configuration, configuration\)/u);
+    expect(source).toContain('const requireReadyOwned = async');
+    expect(source).toContain('current.replacement = replacement');
+    expect(source).toMatch(
+      /DSH_ACP_EXTENSION_METHODS\.readPermissionPresets[\s\S]*await requireReadyOwned\(sessionId\)/u,
+    );
+    expect(source).not.toMatch(
+      /async function replaceOwnedAgent[\s\S]*owned\.delete\(rawSessionId\);\s*await current\.outputTail/u,
+    );
+    expect(source).toMatch(
+      /catch \(error\) \{\s*if \(owned\.get\(rawSessionId\) === current\) owned\.delete\(rawSessionId\);\s*throw error/u,
+    );
+    expect(source).toMatch(
+      /const quiesce[\s\S]*record\.replacement !== undefined[\s\S]*await record\.replacement\.catch/u,
+    );
     expect(source).not.toMatch(/fallbackProvider|fallbackModel|tryNextProvider/u);
   });
 
@@ -787,6 +799,18 @@ describe('OpenNeko DSH ACP bridge boundaries', () => {
     expect(source).toMatch(/ctx\.agentPresets\.mount\(agentCtx, preset\)/u);
     expect(source).toMatch(/createOwnedSession\(handle, configuration, current\.runtimeContext\)/u);
     expect(source).toMatch(/record\.handle\.agent\.status !== 'idle'/u);
+  });
+
+  it('implements inbox send-now only through the public DSH Inbox and keepInbox cancellation', () => {
+    const source = readPackageFile('src/index.ts');
+
+    expect(source).toMatch(/DSH_ACP_EXTENSION_METHODS\.sendInboxMessageNow/u);
+    expect(source).toMatch(
+      /agent\.inbox\.nextTurn\.findIndex[\s\S]*agent\.inbox\.splice\('next-turn'[\s\S]*agent\.inbox\.prepend\('next-turn'[\s\S]*agent\.cancel\(\{ kind: 'user' \}, \{ keepInbox: true \}\)/u,
+    );
+    expect(source).toContain('Inbox send-now requires a running Session');
+    expect(source).toContain('Inbox message is not pending for a future Turn');
+    expect(source).not.toMatch(/sendInboxMessageNow[\s\S]*agent\.steer\(/u);
   });
 
   it('selects the official standard DSH preset in the ACP profile', () => {

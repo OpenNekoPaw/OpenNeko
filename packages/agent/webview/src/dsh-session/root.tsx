@@ -101,6 +101,7 @@ export interface DshAgentViewProps {
   ) => void;
   readonly onPermissionPresetChange: (permissionPresetId: string) => void;
   readonly onRemoveQueuedMessage?: (messageId: string) => void;
+  readonly onSendQueuedMessageNow?: (messageId: string) => void;
   readonly onRestartRuntime: () => void;
   readonly onRequestMentions?: (filter: string) => void;
   readonly onMaterializeAsset?: (
@@ -332,6 +333,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
       onMediaModelChange={props.onMediaModelChange}
       onPermissionPresetChange={props.onPermissionPresetChange}
       onRemoveQueuedMessage={props.onRemoveQueuedMessage}
+      onSendQueuedMessageNow={props.onSendQueuedMessageNow}
       onRequestMentions={props.onRequestMentions}
       onMaterializeAsset={props.onMaterializeAsset}
       onSubmit={props.onSubmit}
@@ -538,6 +540,7 @@ function DshComposer({
   onMediaModelChange,
   onPermissionPresetChange,
   onRemoveQueuedMessage,
+  onSendQueuedMessageNow,
   onRequestMentions,
   onMaterializeAsset,
   onSubmit,
@@ -578,6 +581,7 @@ function DshComposer({
   ) => void;
   readonly onPermissionPresetChange: (permissionPresetId: string) => void;
   readonly onRemoveQueuedMessage?: (messageId: string) => void;
+  readonly onSendQueuedMessageNow?: (messageId: string) => void;
   readonly onRequestMentions?: (filter: string) => void;
   readonly onMaterializeAsset?: (
     assetId: string,
@@ -843,6 +847,7 @@ function DshComposer({
           queueingEnabled={currentTurn !== undefined}
           queuedMessageCount={queuedMessages.length}
           queuedMessages={queuedMessages}
+          onSendQueuedMessageNow={onSendQueuedMessageNow}
           onCancelQueuedMessage={onRemoveQueuedMessage}
           onInputChange={(value) => {
             if (suppressInputDiagnosticClearRef.current) {

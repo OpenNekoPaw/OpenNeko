@@ -55,7 +55,6 @@ const TIMESTAMP = s.string({ format: 'timestamp' });
 const EXTERNAL_ID = s.string({ minLength: 1, maxLength: 300, pattern: /^\S+$/u });
 const STRING_LIST = s.array(SHORT_TEXT, { minLength: 1, maxLength: 100 });
 const ID_LIST = s.array(ID, { minLength: 1, maxLength: 100 });
-const EXTERNAL_ID_LIST = s.array(EXTERNAL_ID, { minLength: 1, maxLength: 100 });
 const ENV_NAME = s.string({ pattern: /^[A-Z][A-Z0-9_]*$/u });
 
 const AGENT_CONTEXT_PAYLOAD_SCHEMA = s.object(
@@ -300,6 +299,7 @@ const STEP_SCHEMA = s.union([
     kind: s.literal('submit-with-followup'),
     prompt: TEXT,
     followupPrompt: TEXT,
+    delivery: s.literal('send-now'),
     activeTimeoutMs: s.integer({ min: 1, max: 600_000 }),
   }),
   s.object({ id: ID, kind: s.literal('wait-for-idle'), timeoutMs: s.integer({ min: 1 }) }),

@@ -461,6 +461,17 @@ export class DshAcpApplicationClient {
     return decodeDshAcpInboxSnapshot(response);
   }
 
+  async sendInboxMessageNow(input: {
+    readonly sessionId: string;
+    readonly messageId: string;
+  }): Promise<DshAcpInboxSnapshot> {
+    const response = await this.connection.extMethod(
+      DSH_ACP_EXTENSION_METHODS.sendInboxMessageNow,
+      input,
+    );
+    return decodeDshAcpInboxSnapshot(response);
+  }
+
   async removeInboxMessage(input: {
     readonly sessionId: string;
     readonly messageId: string;

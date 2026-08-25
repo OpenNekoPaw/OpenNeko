@@ -124,6 +124,36 @@ describe('DSH Session preload bridge', () => {
     });
   });
 
+  it('routes inbox send-now with exact Conversation and Message identities', async () => {
+    state.invoke.mockImplementation(async (channel: string, request: Record<string, unknown>) => {
+      if (channel.endsWith('bootstrap:get')) return bootstrap(request.requestId as string);
+      expect(channel).toBe(DSH_SESSION_HOST_CHANNEL);
+      return {
+        requestId: request.requestId,
+        projection: {
+          conversationId: 'conversation-1',
+          dshSessionId: 'session-1',
+          title: 'Hello',
+          inbox: { nextTurn: [], nextStep: [] },
+          events: [],
+        },
+      };
+    });
+    const bridge = requireBridge();
+    await bridge.bootstrap.get();
+
+    await bridge.dshSessions.sendInboxMessageNow('conversation-1', 'message-1');
+
+    expect(state.invoke).toHaveBeenLastCalledWith(DSH_SESSION_HOST_CHANNEL, {
+      requestId: expect.any(String),
+      operation: 'inbox-send-now',
+      windowId: 'window-1',
+      rendererSessionId: 'renderer-1',
+      conversationId: 'conversation-1',
+      messageId: 'message-1',
+    });
+  });
+
   it('opens a terminal artifact by exact message identity without exposing its path', async () => {
     state.invoke.mockImplementation(async (channel: string, request: Record<string, unknown>) => {
       if (channel.endsWith('bootstrap:get')) return bootstrap(request.requestId as string);

@@ -14,8 +14,10 @@ Desktop drivers have been removed. Desktop Evaluation now uses the public DSH Se
 Runtime and Shell bridges inside the complete application owner. The focused runner has no case-id
 whitelist: it resolves an indexed Scenario into an immutable execution case and interprets canonical
 submit, idle-only model configuration, typed Command/Skill invocation, approval, cancellation,
-resume/restart, feedback, lifecycle and idle steps through one driver. Retired queue/send-now paths
-cannot execute. Pi-era Draft binding replacement, pre-Session Draft input and their synthetic
+resume/restart, feedback, lifecycle and idle steps through one driver. The focused
+`submit-with-followup` step drives the visible Composer and exact DSH Inbox row's send-now action;
+the retired generic queue/send-now DSL cannot execute. Pi-era Draft binding replacement,
+pre-Session Draft input and their synthetic
 rejection facts are no longer part of the Scenario contract; ordinary first submit stays on the
 visible Composer path.
 
@@ -47,9 +49,10 @@ Agent development uses two complementary local lanes:
 The foundational regression matrix covers basic and multi-turn conversation, context compaction
 with continuation, transcript restoration after a real owner/application reopen, generation
 Tool/Job/artifact record restoration, switching between multiple conversations, and isolation of
-transcripts, configuration, context, artifacts and asynchronous state. DSH active-session inbox is
-excluded until the public Desktop product operation and release-preservation semantics are
-qualified. A focused change may run only the affected cells, but its report must record the
+transcripts, configuration, context, artifacts and asynchronous state. DSH active-session Inbox
+follow-up and send-now behavior is covered by the focused visible-Desktop workflow-controller case;
+it must remain DSH-owned and must not introduce an OpenNeko shadow queue. A focused change may run
+only the affected cells, but its report must record the
 disposition of every cell. Session, persistence, projection and release acceptance require the full
 applicable matrix.
 

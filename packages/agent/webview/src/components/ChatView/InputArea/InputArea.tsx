@@ -1246,6 +1246,7 @@ export function InputArea({
           <div className="agent-composer-input-row">
             <textarea
               ref={textareaRef}
+              data-agent-composer-input="true"
               aria-label={t('chat.input.message')}
               value={inputValue}
               onChange={handleInputChange}
@@ -1395,6 +1396,7 @@ export function InputArea({
             {(!isRunActive || inputAreaProjection.canQueue) && (
               <button
                 type="button"
+                data-agent-composer-submit={inputAreaProjection.canQueue ? 'queue' : 'send'}
                 onClick={handleSend}
                 disabled={!inputAreaProjection.canSend}
                 className={`agent-composer-action-button ${
@@ -1697,7 +1699,10 @@ function QueuedMessageRow({
   const isOptimistic = isOptimisticQueuedMessageItem(item);
 
   return (
-    <div className="agent-composer-queue-row agent-composer-popover-row">
+    <div
+      className="agent-composer-queue-row agent-composer-popover-row"
+      data-agent-queue-item-id={item.id}
+    >
       <span className="agent-composer-queue-index" aria-hidden="true">
         {position}
       </span>
@@ -1709,41 +1714,54 @@ function QueuedMessageRow({
           {t('chat.input.queueItemWaiting')} · {formatMessageTime(item.createdAt)}
         </span>
       </span>
-      <div className="agent-composer-queue-actions" aria-label={label}>
-        <QueueActionButton
-          title={t('chat.input.queueSendNow')}
-          disabled={isOptimistic || !onSendNow}
-          onClick={() => onSendNow?.(item.id)}
-        >
-          <SendIcon size={13} strokeWidth={2.1} />
-        </QueueActionButton>
-        <QueueActionButton
-          title={t('chat.input.queueEdit')}
-          disabled={isOptimistic || !onEdit}
-          onClick={() => onEdit?.(item.id)}
-        >
-          <EditIcon size={13} strokeWidth={2.1} />
-        </QueueActionButton>
-        <QueueActionButton
-          title={t('chat.input.queueCancel')}
-          disabled={isOptimistic || !onCancel}
-          danger
-          onClick={() => onCancel?.(item.id)}
-        >
-          <CloseIcon size={13} strokeWidth={2.1} />
-        </QueueActionButton>
-      </div>
+      {onSendNow || onEdit || onCancel ? (
+        <div className="agent-composer-queue-actions" aria-label={label}>
+          {onSendNow ? (
+            <QueueActionButton
+              action="send-now"
+              title={t('chat.input.queueSendNow')}
+              disabled={isOptimistic}
+              onClick={() => onSendNow(item.id)}
+            >
+              <SendIcon size={13} strokeWidth={2.1} />
+            </QueueActionButton>
+          ) : null}
+          {onEdit ? (
+            <QueueActionButton
+              action="edit"
+              title={t('chat.input.queueEdit')}
+              disabled={isOptimistic}
+              onClick={() => onEdit(item.id)}
+            >
+              <EditIcon size={13} strokeWidth={2.1} />
+            </QueueActionButton>
+          ) : null}
+          {onCancel ? (
+            <QueueActionButton
+              action="cancel"
+              title={t('chat.input.queueCancel')}
+              disabled={isOptimistic}
+              danger
+              onClick={() => onCancel(item.id)}
+            >
+              <CloseIcon size={13} strokeWidth={2.1} />
+            </QueueActionButton>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
 
 function QueueActionButton({
+  action,
   title,
   disabled = false,
   danger = false,
   onClick,
   children,
 }: {
+  action: 'send-now' | 'edit' | 'cancel';
   title: string;
   disabled?: boolean;
   danger?: boolean;
@@ -1753,6 +1771,7 @@ function QueueActionButton({
   return (
     <button
       type="button"
+      data-agent-queue-action={action}
       className={`agent-composer-queue-action${danger ? ' is-danger' : ''}`}
       title={title}
       aria-label={title}

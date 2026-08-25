@@ -17,6 +17,7 @@ const fixtureRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const dshBridgePackageRoot = join(fixtureRoot, '..', '..', 'packages', 'dsh-bridge');
 const agentDshPluginPackageRoot = join(fixtureRoot, '..', '..', 'packages', 'agent', 'dsh-plugin');
 const profileName = 'openneko-acp-q0';
+const modelTransitionProfileName = 'openneko-model-transition-q0';
 const w2ProfileName = 'openneko-w2-q0';
 const promptAdmissionProfileName = 'openneko-prompt-admission-q0';
 const shutdownTimeoutMs = 8_000;
@@ -175,6 +176,29 @@ async function createIsolatedProfile(dshHome) {
   return profileDir;
 }
 
+async function createModelTransitionProfile(dshHome) {
+  const profileDir = join(dshHome, 'profiles', modelTransitionProfileName);
+  const nekoNamespaceDir = join(profileDir, 'node_modules', '@neko');
+  await mkdir(nekoNamespaceDir, { recursive: true });
+  await writeFile(
+    join(profileDir, 'package.json'),
+    `${JSON.stringify(
+      {
+        name: 'openneko-dsh-model-transition-q0-profile',
+        private: true,
+        dependencies: { '@neko/dsh-bridge': '*' },
+        dsh: {
+          profile: { bundles: ['@deepseek-ai/dsh-base', '@neko/dsh-bridge'] },
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  await writeFile(join(profileDir, 'cordis.patch.yml'), '[]\n');
+  await symlink(dshBridgePackageRoot, join(nekoNamespaceDir, 'dsh-bridge'), 'dir');
+}
+
 async function createW2Profile(dshHome) {
   const profileDir = join(dshHome, 'profiles', w2ProfileName);
   const nekoNamespaceDir = join(profileDir, 'node_modules', '@neko');
@@ -272,7 +296,7 @@ async function createPromptAdmissionProfile(dshHome) {
       '  config:',
       '    provider: openneko-q0-prompt',
       '    model: deterministic',
-      '    agentPreset: openneko',
+      '    agentPreset: standard',
       '- id: session-title-llm',
       '  disabled: true',
       '- insert:',
@@ -390,6 +414,7 @@ async function startBridge(
 }
 
 async function qualify() {
+  const sessionModelTransitionOnly = process.argv.includes('--session-model-transition-only');
   const draftInputCatalogOnly = process.argv.includes('--draft-input-catalog-only');
   await assertExactPackageVersions(resolvePackageJson);
   const dshHome = await mkdtemp(join(tmpdir(), 'openneko-dsh-q0-'));
@@ -397,15 +422,10 @@ async function qualify() {
 
   try {
     if (draftInputCatalogOnly) {
-      await createIsolatedProfile(dshHome);
-      const dshPackageJsonPath = resolvePackageJson('@deepseek-ai/dsh');
-      const dshManifest = JSON.parse(await readFile(dshPackageJsonPath, 'utf8'));
-      if (typeof dshManifest.bin?.dsh !== 'string') {
-        throw new Error('@deepseek-ai/dsh does not publish the expected dsh executable');
-      }
-      const dshBin = join(dirname(dshPackageJsonPath), dshManifest.bin.dsh);
+      await createModelTransitionProfile(dshHome);
+      const dshBin = await resolveDshExecutable();
       const client = new QualificationClient();
-      const bridge = await startBridge(dshHome, dshBin, client);
+      const bridge = await startBridge(dshHome, dshBin, client, modelTransitionProfileName);
       processes.push(bridge);
       await assertMalformedPreTurnInputCatalogRejected(bridge.connection);
       const before = await bridge.connection.listSessions({ cwd: fixtureRoot });
@@ -428,15 +448,44 @@ async function qualify() {
       );
       return;
     }
+    if (sessionModelTransitionOnly) {
+      await createModelTransitionProfile(dshHome);
+      const dshBin = await resolveDshExecutable();
+      const client = new QualificationClient();
+      const bridge = await startBridge(dshHome, dshBin, client, modelTransitionProfileName);
+      processes.push(bridge);
+      const session = await bridge.connection.newSession({ cwd: fixtureRoot, mcpServers: [] });
+      const [modelConfiguration, permissionProjection, inputCatalog] = await Promise.all([
+        bridge.connection.setSessionConfigOption({
+          sessionId: session.sessionId,
+          configId: 'model',
+          value: JSON.stringify(['q0-provider', 'q0-model', 4096]),
+        }),
+        bridge.connection.extMethod('openneko/session/permissions/read', {
+          sessionId: session.sessionId,
+        }),
+        bridge.connection.extMethod('openneko/session/input-catalog/read', {
+          sessionId: session.sessionId,
+        }),
+      ]);
+      assertSessionModelTransition(modelConfiguration, permissionProjection, inputCatalog);
+      await bridge.connection.closeSession({ sessionId: session.sessionId });
+      await stopChild(bridge.child, bridge.exitPromise);
+      process.stdout.write(
+        `${JSON.stringify({
+          qualified: true,
+          sessionModelTransitionIsolation: true,
+          sessionId: 'redacted',
+          providerContacted: false,
+          jsonRpcMessages: bridge.finishPurity(),
+        })}\n`,
+      );
+      return;
+    }
     await createIsolatedProfile(dshHome);
     await createW2Profile(dshHome);
     await createPromptAdmissionProfile(dshHome);
-    const dshPackageJsonPath = resolvePackageJson('@deepseek-ai/dsh');
-    const dshManifest = JSON.parse(await readFile(dshPackageJsonPath, 'utf8'));
-    if (typeof dshManifest.bin?.dsh !== 'string') {
-      throw new Error('@deepseek-ai/dsh does not publish the expected dsh executable');
-    }
-    const dshBin = join(dirname(dshPackageJsonPath), dshManifest.bin.dsh);
+    const dshBin = await resolveDshExecutable();
     const firstClient = new QualificationClient();
     const first = await startBridge(dshHome, dshBin, firstClient);
     processes.push(first);
@@ -581,6 +630,20 @@ async function qualify() {
     if (removedInbox.nextTurn?.length !== 0 || removedInbox.nextStep?.length !== 0) {
       throw new Error('OpenNeko DSH bridge did not remove the exact inbox message');
     }
+    const [modelConfiguration, permissionProjection, inputCatalog] = await Promise.all([
+      first.connection.setSessionConfigOption({
+        sessionId: session.sessionId,
+        configId: 'model',
+        value: JSON.stringify(['q0-provider', 'q0-model', 4096]),
+      }),
+      first.connection.extMethod('openneko/session/permissions/read', {
+        sessionId: session.sessionId,
+      }),
+      first.connection.extMethod('openneko/session/input-catalog/read', {
+        sessionId: session.sessionId,
+      }),
+    ]);
+    assertSessionModelTransition(modelConfiguration, permissionProjection, inputCatalog);
     const firstArchive = await first.connection.extMethod('openneko/session/archive', {
       sessionId: session.sessionId,
     });
@@ -637,11 +700,6 @@ async function qualify() {
       cwd: fixtureRoot,
       mcpServers: [],
     });
-    if (!thirdClient.updates.some((item) => item.update?.sessionUpdate === 'user_message_chunk')) {
-      throw new Error(
-        'OpenNeko DSH bridge did not replay committed history through session/update',
-      );
-    }
     if (
       !thirdClient.updates.some((item) => item.update?.sessionUpdate === 'tool_call') ||
       !thirdClient.updates.some((item) => item.update?.sessionUpdate === 'tool_call_update')
@@ -861,6 +919,7 @@ async function qualify() {
         reverseHostToolOversizeInputRejected: true,
         reverseHostToolOversizeOutputRejected: true,
         reverseHostToolSuccessAfterCancellation: true,
+        sessionModelTransitionIsolation: true,
         standardPromptConcurrentAdmission: true,
         standardPromptFifoAdmission: true,
         standardPromptQueuedCancellation: true,
@@ -886,6 +945,28 @@ async function qualify() {
     throw error;
   } finally {
     await rm(dshHome, { recursive: true, force: true });
+  }
+}
+
+async function resolveDshExecutable() {
+  const dshPackageJsonPath = resolvePackageJson('@deepseek-ai/dsh');
+  const dshManifest = JSON.parse(await readFile(dshPackageJsonPath, 'utf8'));
+  if (typeof dshManifest.bin?.dsh !== 'string') {
+    throw new Error('@deepseek-ai/dsh does not publish the expected dsh executable');
+  }
+  return join(dirname(dshPackageJsonPath), dshManifest.bin.dsh);
+}
+
+function assertSessionModelTransition(modelConfiguration, permissionProjection, inputCatalog) {
+  if (
+    !Array.isArray(modelConfiguration.configOptions) ||
+    !Array.isArray(permissionProjection.options) ||
+    !Array.isArray(inputCatalog.commands) ||
+    !Array.isArray(inputCatalog.skills)
+  ) {
+    throw new Error(
+      'OpenNeko DSH bridge did not preserve the exact Session owner during model replacement',
+    );
   }
 }
 

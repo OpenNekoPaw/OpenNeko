@@ -540,6 +540,7 @@ function createClient(
     readImageAttachment: async () => unsupported(),
     enqueueInboxMessage: async () => unsupported(),
     replaceInboxMessage: async () => unsupported(),
+    sendInboxMessageNow: async () => unsupported(),
     removeInboxMessage: async () => unsupported(),
   };
 }

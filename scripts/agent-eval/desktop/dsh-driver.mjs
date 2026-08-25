@@ -24,47 +24,57 @@ export function createDshDesktopAgentDriver(input) {
       return evaluate({ kind: 'submit', ...command });
     },
     async submitWithFollowup(command) {
-      const firstSubmission = evaluate({
-        kind: 'submit',
+      const firstSubmission = await evaluate({
+        kind: 'composer-submit',
         conversationId: command.conversationId,
         prompt: command.prompt,
+        expectedMode: 'send',
+        timeoutMs: command.activeTimeoutMs,
       });
-      const guardedFirstSubmission = firstSubmission.then(
-        (receipt) => ({ ok: true, receipt }),
-        (error) => ({ ok: false, error }),
-      );
       const deadline = Date.now() + command.activeTimeoutMs;
-      let activeSnapshot;
+      let activeSnapshot = firstSubmission.projection;
       while (Date.now() < deadline) {
+        if (activeSnapshot?.currentTurn !== undefined) break;
+        await delay(25);
         activeSnapshot = await evaluate({
           kind: 'snapshot',
           conversationId: command.conversationId,
         });
-        if (activeSnapshot?.currentTurn !== undefined) break;
-        await delay(25);
       }
       if (activeSnapshot?.currentTurn === undefined) {
-        await guardedFirstSubmission;
         throw new Error('DSH Desktop Session did not expose an active turn for inbox enqueue.');
       }
       const followup = await evaluate({
-        kind: 'submit',
+        kind: 'composer-submit',
         conversationId: command.conversationId,
         prompt: command.followupPrompt,
+        expectedMode: 'queue',
+        timeoutMs: command.activeTimeoutMs,
       });
       const queued = followup?.projection?.inbox?.nextTurn;
       if (!Array.isArray(queued) || queued.length === 0) {
-        await guardedFirstSubmission;
         throw new Error('DSH Desktop follow-up did not project a pending next-turn inbox item.');
       }
-      const first = await guardedFirstSubmission;
-      if (!first.ok) throw first.error;
+      const queuedMessageId = queued[queued.length - 1]?.messageId;
+      if (typeof queuedMessageId !== 'string' || queuedMessageId.length === 0) {
+        throw new Error('DSH Desktop follow-up did not expose an exact inbox Message identity.');
+      }
+      if (command.delivery !== 'send-now') {
+        throw new Error('DSH Desktop follow-up delivery must use the visible send-now action.');
+      }
+      const promoted = await evaluate({
+        kind: 'queue-send-now',
+        conversationId: command.conversationId,
+        messageId: queuedMessageId,
+        timeoutMs: command.activeTimeoutMs,
+      });
       return {
-        ...followup,
+        ...promoted,
         accepted: true,
         facts: {
           inboxEnqueued: true,
-          queuedMessageId: queued[queued.length - 1]?.messageId,
+          sendNowRequested: true,
+          queuedMessageId,
           activeTurn: activeSnapshot.currentTurn,
         },
       };
@@ -234,6 +244,22 @@ export function dshDriverExpression(command) {
       }
       return { kind: 'surface' };
     };
+    const waitFor = async (label, timeoutMs, read) => {
+      const deadline = Date.now() + (Number.isFinite(timeoutMs) ? timeoutMs : 180000);
+      while (Date.now() < deadline) {
+        const value = await read();
+        if (value !== undefined) return value;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      throw new Error(label + ' did not become observable before timeout.');
+    };
+    const requireVisibleConversation = async (conversationId) => {
+      const surface = await readSurface();
+      if (surface.scope?.conversationId !== conversationId) {
+        throw new Error('Visible DSH Composer does not own the exact requested Conversation.');
+      }
+      return surface;
+    };
     switch (command.kind) {
       case 'connect': {
         const surface = await readSurface();
@@ -277,6 +303,56 @@ export function dshDriverExpression(command) {
         const result = await sessions.submit(conversationId, input);
         state().conversationId = conversationId;
         return { ...result, projection: decorateSnapshot(result.projection), identity: { conversationId, dshSessionId: result.projection.dshSessionId, turn: latestTurn(result.projection)?.turn } };
+      }
+      case 'composer-submit': {
+        const conversationId = text(command.conversationId ?? state().conversationId, 'conversation');
+        await requireVisibleConversation(conversationId);
+        const input = document.querySelector('[data-agent-composer-input="true"]');
+        if (!(input instanceof HTMLTextAreaElement)) {
+          throw new Error('Visible DSH Composer input is unavailable.');
+        }
+        const mode = command.expectedMode === 'queue' ? 'queue' : 'send';
+        const before = await sessions.getSnapshot(conversationId);
+        const beforeIds = new Set((before.inbox?.nextTurn ?? []).map((item) => item.messageId));
+        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+        if (!setter) throw new Error('Visible DSH Composer value setter is unavailable.');
+        setter.call(input, text(command.prompt, 'prompt'));
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        const submit = document.querySelector('[data-agent-composer-submit="' + mode + '"]');
+        if (!(submit instanceof HTMLButtonElement) || submit.disabled) {
+          throw new Error('Visible DSH Composer ' + mode + ' action is unavailable.');
+        }
+        submit.click();
+        const projection = await waitFor('Visible DSH Composer submission', command.timeoutMs, async () => {
+          const snapshot = await sessions.getSnapshot(conversationId);
+          if (mode === 'send') return snapshot.currentTurn === undefined ? undefined : snapshot;
+          return (snapshot.inbox?.nextTurn ?? []).some((item) => !beforeIds.has(item.messageId))
+            ? snapshot
+            : undefined;
+        });
+        state().conversationId = conversationId;
+        return { accepted: true, projection: decorateSnapshot(projection) };
+      }
+      case 'queue-send-now': {
+        const conversationId = text(command.conversationId ?? state().conversationId, 'conversation');
+        const messageId = text(command.messageId, 'inbox Message');
+        await requireVisibleConversation(conversationId);
+        const row = [...document.querySelectorAll('[data-agent-queue-item-id]')].find(
+          (item) => item.getAttribute('data-agent-queue-item-id') === messageId,
+        );
+        const action = row?.querySelector('[data-agent-queue-action="send-now"]');
+        if (!(action instanceof HTMLButtonElement) || action.disabled) {
+          throw new Error('Visible DSH queue send-now action is unavailable for the exact Message.');
+        }
+        action.click();
+        const projection = await waitFor('Visible DSH queue send-now action', command.timeoutMs, async () => {
+          const snapshot = await sessions.getSnapshot(conversationId);
+          return (snapshot.inbox?.nextTurn ?? []).some((item) => item.messageId === messageId)
+            ? undefined
+            : snapshot;
+        });
+        return { accepted: true, projection: decorateSnapshot(projection) };
       }
       case 'snapshot': {
         const conversationId = text(command.conversationId ?? state().conversationId, 'conversation');

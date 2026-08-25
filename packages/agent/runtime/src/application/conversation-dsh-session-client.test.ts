@@ -166,6 +166,15 @@ describe('Conversation DSH Session bound client', () => {
       },
     },
     {
+      name: 'sendInboxMessageNow',
+      invoke: (
+        bound: ReturnType<typeof createConversationDshSessionBoundClient>,
+        conversationId: string,
+      ) => bound.sendInboxMessageNow({ conversationId, messageId: 'message-1' }),
+      expectedMethod: 'sendInboxMessageNow' as const,
+      expectedArgs: { messageId: 'message-1', sessionId: 'dsh-session-table' },
+    },
+    {
       name: 'removeInboxMessage',
       invoke: (
         bound: ReturnType<typeof createConversationDshSessionBoundClient>,
@@ -354,6 +363,7 @@ function createFixture(
     })),
     enqueueInboxMessage: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
     replaceInboxMessage: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
+    sendInboxMessageNow: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
     removeInboxMessage: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
   } satisfies ConversationDshSessionAcpClient;
   return { store, binding, client };

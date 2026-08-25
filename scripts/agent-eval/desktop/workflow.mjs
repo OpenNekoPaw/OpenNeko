@@ -62,6 +62,7 @@ async function executeStep(input) {
         conversationId: requireConversationId(conversationId),
         prompt: step.prompt,
         followupPrompt: step.followupPrompt,
+        delivery: step.delivery,
         activeTimeoutMs: step.activeTimeoutMs,
       });
     case 'wait-for-idle': {

@@ -456,6 +456,9 @@ function createStableDesktopDshAgentClient(
     async replaceInboxMessage(input) {
       return requireClient().replaceInboxMessage(input);
     },
+    async sendInboxMessageNow(input) {
+      return requireClient().sendInboxMessageNow(input);
+    },
     async removeInboxMessage(input) {
       return requireClient().removeInboxMessage(input);
     },

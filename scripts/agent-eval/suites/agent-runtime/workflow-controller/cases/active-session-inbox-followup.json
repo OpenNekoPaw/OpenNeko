@@ -11,13 +11,15 @@
     "lifecycleChecks": ["composer-focus", "graceful-close"]
   },
   "evidenceContract": {
-    "userBehavior": "While one visible Desktop turn is running, submit a second ordinary message through the same OpenNeko composer and let DSH execute it as the next turn.",
+    "userBehavior": "While one visible Desktop turn is running, submit a second ordinary message through the same OpenNeko composer, then use that exact queue row's send-now action.",
     "canonicalPath": [
       "visible OpenNeko composer",
+      "exact visible queue row send-now action",
       "sender-bound Desktop DSH Session host",
       "exact Conversation-to-DSH Session binding",
       "DSH Agent inbox nextTurn",
-      "DSH inbox claim",
+      "DSH nextTurn reorder and keepInbox cancellation",
+      "DSH inbox claim after the interrupted turn is terminal",
       "same DSH Session turn lineage",
       "terminal sidebar and transcript projection"
     ],
@@ -25,12 +27,12 @@
       {
         "ref": "active-inbox-facts",
         "kind": "runtime-fact",
-        "description": "The follow-up submit receipt contains a pending DSH next-turn Message identity while the first turn remains active, followed by two terminal turns in the exact Session.",
+        "description": "The visible Composer creates a pending DSH next-turn Message identity while the first turn remains active; the exact row's send-now action removes it from pending state and the promoted turn reaches terminal state in the same Session.",
         "required": true
       }
     ],
-    "expectedResult": "The second message is observed in the DSH inbox, is claimed as the next turn, and completes in the same Conversation and DSH Session.",
-    "expectedFailure": "An idle fallback submit, changed Session identity, missing inbox Message, shadow queue, runtime diagnostic, or non-terminal follow-up fails visibly."
+    "expectedResult": "The second message is observed in the DSH inbox, its visible send-now action interrupts the current turn, and it completes in the same Conversation and DSH Session.",
+    "expectedFailure": "An idle fallback submit, disabled or missing send-now action, changed Session identity, missing inbox Message, shadow queue, runtime diagnostic, or non-terminal promoted turn fails visibly."
   },
   "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
@@ -41,6 +43,7 @@
       "kind": "submit-with-followup",
       "prompt": "Give a careful multi-paragraph explanation of why local-first applications need explicit state ownership, then end with ACTIVE_FIRST_DONE.",
       "followupPrompt": "After the current response finishes, reply with exactly QUEUED_SECOND_DONE.",
+      "delivery": "send-now",
       "activeTimeoutMs": 120000
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
