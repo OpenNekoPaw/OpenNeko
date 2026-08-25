@@ -10,7 +10,7 @@ import type {
 } from './dsh-conversation-catalog-repository';
 
 describe('Conversation DSH Session publication', () => {
-  it('reserves before session/new and publishes only after complete session/list verification', async () => {
+  it('reserves before session/new and publishes the binding before the resumed Session emits notifications', async () => {
     const order: string[] = [];
     const catalog = memoryCatalog(order);
     const store = memoryBindingStore(order);
@@ -38,10 +38,10 @@ describe('Conversation DSH Session publication', () => {
     expect(order.filter((entry) => entry !== 'catalog-read')).toEqual([
       'catalog-reserve',
       'session-new',
-      'session-close',
-      'session-resume',
       'session-list',
       'binding-write',
+      'session-close',
+      'session-resume',
     ]);
     expect(catalog.records).toHaveLength(1);
     await expect(application.catalog.get(result.conversationId)).resolves.toMatchObject({
@@ -51,6 +51,44 @@ describe('Conversation DSH Session publication', () => {
       conversationId: result.conversationId,
       dshSessionId: 'dsh-session-new',
     });
+  });
+
+  it('makes the reverse Conversation binding visible to notifications emitted by session/resume', async () => {
+    const catalog = memoryCatalog([]);
+    const store = memoryBindingStore([]);
+    const conversationId = createConversationId('/workspace/resume-notification', {
+      now: 1,
+      random: new Uint8Array(10),
+    });
+    const client = clientWith({
+      onResume: async (dshSessionId) => {
+        await expect(store.getByDshSessionId(dshSessionId)).resolves.toEqual({
+          conversationId,
+          dshSessionId,
+        });
+      },
+    });
+    const application = createConversationDshSessionApplication({
+      client,
+      store,
+      catalog,
+      staleConversations: memoryStaleCleanup(catalog, store),
+      conversationIdentitySeed: '/workspace/resume-notification',
+      activity: idleActivity(),
+      lookupCwd: testLookupCwd(),
+    });
+
+    await expect(
+      application.publication.publish({
+        conversationId,
+        title: 'Resume notification',
+        context: {
+          kind: 'assistant',
+          assistantSpaceId: 'assistant:one',
+          baseGrantIds: [],
+        },
+      }),
+    ).resolves.toEqual({ conversationId, dshSessionId: 'dsh-session-new' });
   });
 
   it('keeps the Host catalog record unavailable when session/new fails', async () => {
@@ -342,7 +380,11 @@ function testLookupCwd() {
   return { resolve: async () => '/workspace' };
 }
 
-function clientWith(options: { readonly order?: string[]; readonly createError?: Error }) {
+function clientWith(options: {
+  readonly order?: string[];
+  readonly createError?: Error;
+  readonly onResume?: (dshSessionId: string) => Promise<void>;
+}) {
   const order = options.order ?? [];
   const archived = new Set<string>();
   const sessionIds = new Set(['dsh-session-new']);
@@ -360,8 +402,9 @@ function clientWith(options: { readonly order?: string[]; readonly createError?:
       };
     },
     loadSession: vi.fn(async () => ({})),
-    async resumeSession() {
+    async resumeSession(input: { readonly sessionId: string }) {
       order.push('session-resume');
+      await options.onResume?.(input.sessionId);
       return {};
     },
     async closeSession() {

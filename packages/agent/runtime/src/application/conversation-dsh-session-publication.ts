@@ -67,15 +67,15 @@ export function createConversationDshSessionPublication(options: {
       const cwd = requireAbsoluteCwd(await options.lookupCwd.resolve(input.context));
       const created = await options.client.createSession({ cwd, mcpServers: [] });
       const dshSessionId = requireSessionId(created.sessionId);
-      await options.client.closeSession(dshSessionId);
-      options.activation.markClosed(dshSessionId);
-      await options.client.resumeSession({ sessionId: dshSessionId, cwd, mcpServers: [] });
-      options.activation.markLoaded(dshSessionId);
       const result = await options.binding.bind({ conversationId, dshSessionId });
       if (!result.ok) {
         await options.home.refresh();
         throw new Error(`DSH Conversation publication failed: ${result.code}: ${result.message}`);
       }
+      await options.client.closeSession(dshSessionId);
+      options.activation.markClosed(dshSessionId);
+      await options.client.resumeSession({ sessionId: dshSessionId, cwd, mcpServers: [] });
+      options.activation.markLoaded(dshSessionId);
       await options.home.refresh();
       return Object.freeze({ conversationId, dshSessionId });
     },
