@@ -1,11 +1,8 @@
 # package-product-status-reachability Specification
 
 ## Purpose
-
 TBD - created by archiving change align-package-product-status. Update Purpose after archive.
-
 ## Requirements
-
 ### Requirement: Active package status follows production reachability
 
 Production-reachable packages SHALL be declared `active-product`. Reachability follows production

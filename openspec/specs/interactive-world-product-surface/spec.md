@@ -1,11 +1,14 @@
 # interactive-world-product-surface Specification
 
 ## Purpose
+
 TBD - created by archiving change define-ai-native-interactive-world. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Basic World promotion does not bypass complete Experience qualification
 
-The production Desktop MAY expose basic World Management, directory World Authoring and deterministic Foundation Runtime only after `refine-world-management-authoring-and-runtime` provides their exact package producers, consumers, persistence, scenes, visible Electron evidence and fail-local diagnostics. That basic promotion MUST NOT mark World Story, Gameplay, complete WorldExperience, Agent Play or realtime presentation ready. Before the basic owner path is qualified, the affected operation SHALL remain owner-qualified unavailable without changing durable World facts.
+The production Desktop MAY expose basic World Management, directory World Authoring and deterministic Foundation Runtime only after their owning packages provide exact producers, consumers, persistence, scenes, visible Electron evidence and fail-local diagnostics. That basic promotion MUST NOT mark World Story, Gameplay, complete WorldExperience, Agent Play or realtime presentation ready. Before the basic owner path is qualified, the affected operation SHALL remain owner-qualified unavailable without changing durable World facts.
 
 #### Scenario: User opens qualified basic World management
 
