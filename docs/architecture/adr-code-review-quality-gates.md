@@ -5,7 +5,7 @@
 范围：全仓库 TypeScript、React renderer/Webview、Electron Desktop、Node/FFmpeg、Proto、文档、打包和 OpenSpec 变更。
 
 本文记录当前稳定的代码审查与质量门禁规则。它补充根目录 `AGENTS.md` 和
-`openspec/project.md`，不保存单次实现日志或历史进度。
+`openspec/config.yaml`，不保存单次实现日志或历史进度。
 
 ## 决策
 

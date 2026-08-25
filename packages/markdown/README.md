@@ -16,5 +16,5 @@
 - 第三方 AST、DOM、selection、runtime URL 与 cache path 不跨公共边界。
 - 不支持或失效的语义返回局部 diagnostic，不切换 parser、renderer 或事实来源。
 
-系统级渲染与资源边界见
-[`docs/architecture/adr-unified-markdown-resource-rendering.md`](../../docs/architecture/adr-unified-markdown-resource-rendering.md)。
+跨运行边界的内容授权与资源投影规则见
+[`docs/architecture/cache-file-access-and-paths.md`](../../docs/architecture/cache-file-access-and-paths.md)。
