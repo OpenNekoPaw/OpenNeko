@@ -64,6 +64,7 @@ const preview: MessageBundle = {
   'preview.document.sendFileToAgent': '发送文件到 Agent',
   'preview.document.loading': '加载中...',
   'preview.document.error': '错误：{error}',
+  'preview.document.previewUnavailable': '无法预览此文档',
   'preview.document.pageOf': '第 {current} 页 / 共 {total} 页',
   'preview.document.zoomIn': '放大',
   'preview.document.zoomOut': '缩小',

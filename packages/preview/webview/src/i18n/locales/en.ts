@@ -65,6 +65,7 @@ const preview: MessageBundle = {
   'preview.document.sendFileToAgent': 'Send File to Agent',
   'preview.document.loading': 'Loading...',
   'preview.document.error': 'Error: {error}',
+  'preview.document.previewUnavailable': 'This document cannot be previewed',
   'preview.document.pageOf': 'Page {current} of {total}',
   'preview.document.zoomIn': 'Zoom in',
   'preview.document.zoomOut': 'Zoom out',

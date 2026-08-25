@@ -1364,11 +1364,11 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
 
   if (error) {
     return (
-      <div
-        className="flex h-full items-center justify-center"
-        style={{ color: 'var(--neko-errorForeground)' }}
-      >
-        {t('preview.document.error', { error })}
+      <div className="epub-viewer__error" role="alert">
+        <div className="epub-viewer__error-card">
+          <strong>{t('preview.document.previewUnavailable')}</strong>
+          <span>{error}</span>
+        </div>
       </div>
     );
   }

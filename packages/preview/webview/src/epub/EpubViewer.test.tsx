@@ -294,6 +294,8 @@ describe('EPUB waterfall progressive rendering', () => {
     expect(source).not.toContain('measureContainerRef');
     expect(source).not.toContain('measurementQueueRef');
     expect(source).not.toContain('warmChapterHeights');
+    expect(source).toContain('className="epub-viewer__error" role="alert"');
+    expect(source).toContain("t('preview.document.previewUnavailable')");
   });
 });
 
