@@ -72,7 +72,7 @@ The Renderer SHALL never read stored provider secrets. A submitted API key SHALL
 
 ### Requirement: Existing sessions are not silently reconfigured
 
-Default dialogue changes SHALL refresh the execution configuration used by future conversations. Provider catalog and default changes SHALL replace only the ephemeral DSH runtime generation and SHALL preserve existing Conversation records, DSH session identities, bindings and transcripts.
+Default dialogue changes SHALL refresh the execution configuration used by future conversations. Provider catalog and default changes SHALL replace only the ephemeral DSH runtime instance and SHALL preserve existing Conversation records, DSH session identities, bindings and transcripts.
 
 #### Scenario: Runtime is refreshed after a Provider edit
 
