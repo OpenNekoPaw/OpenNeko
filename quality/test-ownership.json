@@ -22,6 +22,13 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
+      "path": "packages/agent/dsh-plugin",
+      "owner": "packages/agent/dsh-plugin",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
       "path": "packages/ai/contracts",
       "owner": "packages/ai/contracts",
       "mode": "self",
@@ -225,8 +232,36 @@
       "testScope": "src/**/*.test.ts"
     },
     {
+      "path": "packages/preview/node",
+      "owner": "packages/preview/node",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
       "path": "packages/preview/webview",
       "owner": "packages/preview/webview",
+      "mode": "self",
+      "sourceScope": "src/**/*.{ts,tsx}",
+      "testScope": "src/**/*.test.{ts,tsx}"
+    },
+    {
+      "path": "packages/professional-apps/contracts",
+      "owner": "packages/professional-apps/contracts",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/professional-apps/node",
+      "owner": "packages/professional-apps/node",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/professional-apps/webview",
+      "owner": "packages/professional-apps/webview",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"

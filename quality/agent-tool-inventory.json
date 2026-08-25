@@ -1,6 +1,17 @@
 {
   "tools": [
     {
+      "tool": "CreateSkill",
+      "operations": ["create"],
+      "registration": "packages/agent/dsh-plugin/src/index.ts",
+      "schemaOwner": "packages/agent/contracts/src/dsh-skill-authoring.ts",
+      "validator": "decodeCreateDshSkillInput",
+      "permissionOwner": "packages/agent/runtime/src/acp/skill-authoring-host-adapter.ts",
+      "authorizationOwner": "apps/neko-desktop/src/main/desktop-dsh-product-handlers.ts",
+      "applicationService": "DshSkillAuthoringService",
+      "durableOwner": "Conversation-scoped DSH Skill package"
+    },
+    {
       "tool": "openneko.world",
       "operations": ["query", "fill-draft"],
       "registration": "packages/world/dsh-plugin/src/index.ts",
@@ -35,7 +46,7 @@
     },
     {
       "tool": "openneko.generation",
-      "operations": ["submit", "describe"],
+      "operations": ["submit", "submit-comfyui", "describe"],
       "registration": "packages/generation/dsh-plugin/src/index.ts",
       "schemaOwner": "packages/generation/domain/src/dsh-tool.ts",
       "validator": "decodeGenerationDshToolInput",

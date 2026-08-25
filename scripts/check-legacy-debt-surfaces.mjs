@@ -171,7 +171,7 @@ function scanFiles(sourceFiles) {
           term,
           text: line.trim(),
           isTest: isTestPath(relPath),
-          semanticClass: classifySurface(relPath, line, term),
+          semanticClass: classifySurface(relPath, line, term, match[0]),
         });
         match = termPattern.exec(line);
       }
@@ -397,7 +397,7 @@ function formatExample(match) {
   };
 }
 
-function classifySurface(file, line, term) {
+function classifySurface(file, line, term, observedTerm = term) {
   const lowerFile = file.toLowerCase();
   const lowerLine = line.toLowerCase();
 
@@ -406,6 +406,16 @@ function classifySurface(file, line, term) {
   }
   if (isGeneratedPath(file)) {
     return 'generated-source';
+  }
+  if (term === 'shim' && !['shim', 'Shim', 'SHIM'].includes(observedTerm)) {
+    return 'false-positive-word';
+  }
+  if (
+    term === 'fallback' &&
+    /^(?:\/\/|\/\*|\*)/u.test(line.trim()) &&
+    /\b(?:no|without)\b.{0,80}\bfallback\b/iu.test(line)
+  ) {
+    return 'false-positive-word';
   }
   if (containsAny(lowerLine, ['false positive', 'knip', 'dynamic import']) && term !== 'fallback') {
     return 'false-positive-word';
@@ -915,6 +925,23 @@ function runSelfTest() {
         'legacy',
       ),
       expected: 'migrate-now',
+    },
+    {
+      value: classifySurface(
+        'packages/agent/contracts/src/dsh-session-host.ts',
+        'export interface DshImageAttachmentPreviewHostResult {}',
+        'shim',
+        'shIm',
+      ),
+      expected: 'false-positive-word',
+    },
+    {
+      value: classifySurface(
+        'packages/canvas/domain/src/canvas-generation-projection.ts',
+        '* deliberately has no active Canvas identity fallback.',
+        'fallback',
+      ),
+      expected: 'false-positive-word',
     },
     {
       value: buildQualityGate([

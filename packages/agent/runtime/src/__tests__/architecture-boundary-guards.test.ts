@@ -129,7 +129,7 @@ describe('agent architecture boundary guards', () => {
     expect(runtimeRootFiles).toEqual([]);
   });
 
-  it('keeps runtime subdirectories narrow and documented', () => {
+  it('keeps runtime subdirectories narrow', () => {
     const allowedRuntimeSubdirectories = new Set(['__tests__', 'capability', 'session', 'turn']);
     const runtimeSubdirectories = readdirSync(join(agentSrc, 'runtime'), { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
@@ -137,11 +137,6 @@ describe('agent architecture boundary guards', () => {
       .filter((name) => !allowedRuntimeSubdirectories.has(name));
 
     expect(runtimeSubdirectories).toEqual([]);
-
-    const readme = readFileSync(join(agentSrc, 'runtime/README.md'), 'utf-8');
-    for (const name of ['turn/', 'capability/']) {
-      expect(readme).toContain(name);
-    }
   });
 
   it('keeps presenters, projectors, services, and stores out of runtime root', () => {

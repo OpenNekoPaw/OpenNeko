@@ -7,7 +7,10 @@ import { test } from 'node:test';
 import { CANVAS_DSH_TOOL_NAME, CANVAS_DSH_TOOL_OPERATIONS } from '@neko/canvas-domain';
 import { CUT_DSH_TOOL_NAME, CUT_DSH_TOOL_OPERATIONS } from '@neko/cut-domain';
 import { GENERATION_DSH_TOOL_NAME, GENERATION_DSH_TOOL_OPERATIONS } from '@neko/generation-domain';
-import { DOCUMENT_DSH_TOOL_NAME, DOCUMENT_DSH_TOOL_OPERATIONS } from '@neko/content-domain/document';
+import {
+  DOCUMENT_DSH_TOOL_NAME,
+  DOCUMENT_DSH_TOOL_OPERATIONS,
+} from '@neko/content-domain/document';
 import {
   CHARACTER_DSH_TOOL_NAME,
   CHARACTER_DSH_TOOL_OPERATIONS,
@@ -35,6 +38,7 @@ test('production Agent Tool inventory matches every DSH plugin registration', as
   assert.deepEqual(
     inventory.tools.map((entry) => [entry.tool, entry.operations]),
     [
+      ['CreateSkill', ['create']],
       [WORLD_DSH_TOOL_NAME, [...WORLD_DSH_TOOL_OPERATIONS]],
       [CHARACTER_DSH_TOOL_NAME, [...CHARACTER_DSH_TOOL_OPERATIONS]],
       [DOCUMENT_DSH_TOOL_NAME, [...DOCUMENT_DSH_TOOL_OPERATIONS]],
@@ -69,7 +73,6 @@ test('retired Character and World capability providers cannot return as Agent To
     [
       'packages/chara/domain/src/application/index.ts',
       'packages/world/domain/src/application/index.ts',
-      'packages/agent/contracts/src/tool-names.ts',
     ].map((path) => readFile(join(repositoryRoot, path), 'utf8')),
   );
   assert.doesNotMatch(

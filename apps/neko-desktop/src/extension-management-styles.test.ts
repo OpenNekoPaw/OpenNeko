@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-const styles = readFileSync(new URL('./extension-management.css', import.meta.url), 'utf8');
+const styles = readFileSync(
+  new URL('./renderer/extension-management.css', import.meta.url),
+  'utf8',
+);
 
 describe('Extension management styles', () => {
   it('keeps one prominent mode selector with accessible selected and focus states', () => {
