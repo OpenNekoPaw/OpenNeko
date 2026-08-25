@@ -2,6 +2,8 @@
 
 审计日期：2026-08-20
 
+> 2026-08-25 设计更新：本文第 3–5 条冻结边界记录的是当时的候选方案。当前 canonical 设计已删除独立感知模型配置与 fallback，改为当前 Agent 模型加 package-owned Content/Media Tool；以本变更的 `design.md` 与 `dsh-agent-runtime-authority` spec 为准。
+
 审计对象是产品锁定的 DSH `0.1.0-rc.7` 与 ACP SDK `0.25.1` 公开 package surface。本文只记录当前能力和阻塞项，不把 `node_modules` 私有实现、旧 OpenNeko runtime 或设计推测当作可用 API。
 
 ## 结论

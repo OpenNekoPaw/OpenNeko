@@ -164,7 +164,7 @@ runtime，不能跳过 Desktop composition、持久化或 projection。
 基础回归矩阵包含：正常对话、上下文压缩后 continuation、完整重开后的 transcript 恢复、生成
 Job/Tool/产物记录恢复、会话切换展示、会话隔离。DSH Session、持久化、生成 workflow 或 Desktop
 projection 变更必须运行受影响子集并记录整套矩阵 disposition；发布验收必须关闭全部适用项。UI
-报告与 batch report 均需记录 provider/model、Conversation/DSH Session/turn/step/toolCall identity、permission preset、Skill/MCP/attachment/perception/domain Job provenance、terminal state、canonical/no-fallback evidence 和脱敏 artifact refs。
+报告与 batch report 均需记录 provider/model、Conversation/DSH Session/turn/step/toolCall identity、permission preset、Skill/MCP/attachment/media Tool/domain Job provenance、terminal state、canonical/no-fallback evidence 和脱敏 artifact refs。
 
 原始 Evaluation 报告写入 gitignored `reports/agent-eval/`。长期文档只提交脱敏摘要，保留
 suite/case/run、identity、assertion/artifact refs、failure classification 和 residual risk，

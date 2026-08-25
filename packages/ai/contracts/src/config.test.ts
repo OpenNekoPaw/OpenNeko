@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  KNOWN_MODEL_CAPABILITIES,
   MEDIA_MODEL_TYPES,
   MODEL_TYPES,
   PROVIDER_CONNECTION_KINDS,
@@ -40,5 +41,17 @@ describe('AI configuration contracts', () => {
     expect(PROVIDER_MODEL_FAMILIES).toEqual(['dialogue', 'generation']);
     expect(MODEL_TYPES).toEqual(['llm', 'image', 'video', 'audio']);
     expect(MEDIA_MODEL_TYPES).toEqual(['image', 'video', 'audio']);
+  });
+
+  it('does not expose retired perception-routing capability aliases', () => {
+    expect(KNOWN_MODEL_CAPABILITIES).toContain('vision');
+    expect(KNOWN_MODEL_CAPABILITIES).not.toEqual(
+      expect.arrayContaining([
+        'llm.vision',
+        'image.understand',
+        'video.understand',
+        'audio.understand',
+      ]),
+    );
   });
 });

@@ -56,7 +56,7 @@ Browser Use 需要独立选择 Chrome/Chromium-compatible executable，不能控
 - Browser session 首版绑定一个用户确认的 HTTP(S) origin、一个 session-owned client 和一个 page；额外页面、跨 origin navigation 或 target transfer fail-visible。
 - Computer session 在 approval 和 input 前重新校验 exact target 与 OS permission。
 - Pause、Stop 与 Take over 只作用于 exact Automation session。
-- Screenshot/observation 通过短生命周期授权进入 bounded evidence；是否作为模型图片输入由 Agent attachment/perception contract 决定，不能直接持久化 raw Host path。
+- Screenshot/observation 通过短生命周期授权进入 bounded evidence；是否作为模型图片输入由 Agent attachment 或 package-owned media Tool contract 决定，不能直接持久化 raw Host path。
 
 ## Current Status
 

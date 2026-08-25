@@ -12,7 +12,6 @@ import type {
   AgentInteractionPhase,
   AgentConfigurationPolicyProjection,
   AmbientCanvasNode,
-  MediaUnderstandingModels,
   ShellExecutionMode,
   SessionMode,
 } from '@neko/agent-contracts';
@@ -23,12 +22,6 @@ import type { SlashCommand, MentionItem, GenCategory, GenerationParams } from '.
 export type MediaCategory = 'image' | 'video' | 'audio';
 
 export interface MediaModelSelection {
-  image: string;
-  video: string;
-  audio: string;
-}
-
-export interface MediaUnderstandingSelection {
   image: string;
   video: string;
   audio: string;
@@ -47,11 +40,7 @@ export interface InputAreaContextValue {
   mediaModelSelection: MediaModelSelection;
   availableMediaModels: ChatModelOption[];
   mediaModelOptOutEnabled?: boolean;
-  /** Read-only model routing for native media understanding. */
-  mediaUnderstandingModels?: MediaUnderstandingModels;
-  mediaUnderstandingSelection: MediaUnderstandingSelection;
   onMediaModelSelect: (category: MediaCategory, modelId: string) => void;
-  onMediaUnderstandingModelSelect: (category: MediaCategory, modelId: string) => void;
   // Session mode (top-level workflow routing)
   sessionMode: SessionMode;
   conversationKind?: ConversationKind;
@@ -108,10 +97,7 @@ export function InputAreaProvider({
       mediaModelSelection: value.mediaModelSelection,
       availableMediaModels: value.availableMediaModels,
       mediaModelOptOutEnabled: value.mediaModelOptOutEnabled,
-      mediaUnderstandingModels: value.mediaUnderstandingModels,
-      mediaUnderstandingSelection: value.mediaUnderstandingSelection,
       onMediaModelSelect: value.onMediaModelSelect,
-      onMediaUnderstandingModelSelect: value.onMediaUnderstandingModelSelect,
       sessionMode: value.sessionMode,
       conversationKind: value.conversationKind,
       onSessionModeChange: value.onSessionModeChange,
@@ -149,10 +135,7 @@ export function InputAreaProvider({
       value.mediaModelSelection,
       value.availableMediaModels,
       value.mediaModelOptOutEnabled,
-      value.mediaUnderstandingModels,
-      value.mediaUnderstandingSelection,
       value.onMediaModelSelect,
-      value.onMediaUnderstandingModelSelect,
       value.sessionMode,
       value.conversationKind,
       value.onSessionModeChange,

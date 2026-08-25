@@ -219,10 +219,7 @@ function toDshReasoningEffort(
 }
 
 function modelSupportsImageInput(capabilities: readonly string[]): boolean {
-  return capabilities.some(
-    (capability) =>
-      capability === 'vision' || capability === 'llm.vision' || capability === 'image.understand',
-  );
+  return capabilities.includes('vision');
 }
 
 function resolveDshProtocol(provider: Provider): DshProviderProfile['api'] | undefined {

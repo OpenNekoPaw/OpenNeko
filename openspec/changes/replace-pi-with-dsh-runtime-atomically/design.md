@@ -15,7 +15,7 @@ DSH 官方 rc.8 profile 仍未完整覆盖 OpenNeko 所需的 session list/load/
 - 删除 OpenNeko 对内嵌 Cordis/`ctx.agents`、DSH Web/Client Runtime、TS SDK、Remote API、Pi 和自研 runtime fallback 的依赖。
 - OpenNeko 保留 Electron 原生 UI、Conversation/Workspace binding、凭据、Host 权限/信任、extension 管理 UI/命令入口与短生命周期 projection、领域事实/Job、typed domain tool contracts 与 Host adapters；DSH 保留 extension catalog/config/readiness facts。
 - 用户可见扩展面只保留 Skill 与 MCP；DSH Plugin 是官方 profile 的内部装配机制，不成为第三类用户扩展或通用第三方执行平台。
-- 保留并接通内容创作所需的附件、多模态、感知模型与 Generation 参数，同时让每项配置与执行仍由其 canonical owner 管理。
+- 保留并接通内容创作所需的附件、多模态 Tool 与 Generation 参数，同时让读取/预处理、当前模型理解和媒体生成分别由其 canonical owner 管理。
 - Agent UI 的既有最终视觉和交互是 retained product surface，不属于待删除的 Pi runtime。`@neko/agent-webview` 继续拥有纯 presentation component、既有 `agent-*` DOM/CSS 契约和最终版样式；Desktop Renderer 只拥有 DSH Host bridge 状态编排并向该 presentation 传入 canonical DSH Session/Permission projection。不得在 Desktop 私建平行 Agent 样式或复制消息、Tool、approval、composer 设计。Tool projection 必须保留 ACP 已提供且通过 bounded lossless JSON 校验的 `rawInput`/`rawOutput`，用于原 Tool activity 的可展开详情；单个非法 payload 只产生对应 diagnostic，不得清空 sibling event。不得恢复旧 Host runtime adapter、旧 message handler 或 Pi contract，也不得用 ACP 原始事件调试列表替代产品 UI。未绑定 Draft 的首条输入必须通过一个 sender-bound `create(initialInput)` Host command 完成 Conversation publication 和同一输入的 DSH 提交；Renderer 不得在 `create` 成功后再发送第二个 `submit`。这项原子性只约束产品命令和输入消费：DSH/Provider 在 durable publication 后失败时保留 exact Conversation 并返回显式错误，不删除 Session、不恢复旧 first-submit lifecycle，也不隐式重试同一输入。
 - 最终版 composer 中的模型选择、执行模式、Workspace/Canvas 上下文栏、附件入口和引用 token 是 OpenNeko 内容创作产品能力，不是 DSH Web 或 ACP 的调试控件。`@neko/host/settings` 继续拥有 secret-free 模型目录、用户选择和 execution mode；Shell/对应领域 owner 继续拥有 exact Workspace/Canvas/引用事实；`@neko/agent-webview` 只渲染 typed presentation。Desktop 只能从 sender-bound Agent Surface 和 exact Conversation context 解析这些 authority，禁止从 active/recent Workspace、DSH 默认模型或旧 Pi 状态猜测。没有 authoritative attachment/reference projection 时不得伪造 token 或把 `+` 显示成可成功的入口。
 - Agent presentation 的用户可见文案由 `@neko/agent-webview` 的精简 package-owned locale bundle 负责，并跟随 Desktop locale；外层 Desktop i18n 只提供 locale，不得要求其复制 Agent `chat.*` keys，也不得让缺失 key 直接泄漏到 UI。该 bundle 只覆盖保留的 presentation component，不恢复已删除的 SkillHost、MCP、Plugin 或 Pi runtime 文案与注册面。
@@ -128,11 +128,11 @@ Session 同样保持可见但不可执行；不得把它改绑到另一 DSH Sess
 
 Window 的当前 scene/presentation snapshot 必须保存并恢复 exact Conversation identity。应用进程重开时，Host 只能用已持久化 scene 中的 `conversationId` 和 owner 对 Home catalog/context/binding 做资格校验；合法记录原样恢复，单条失效只把该 Surface 重置为新的 canonical Draft 并保留 catalog diagnostic。禁止在重开时无条件进入 Entry，也禁止选择 first/active/recent Conversation。Renderer reload 只重建当前 Root，不改变 durable scene selection。
 
-### 4.1 附件、多模态与感知模型遵循能力协商
+### 4.1 附件与多模态 Tool 遵循当前模型能力
 
 ACP Prompt content block 是 Desktop 到 DSH 的唯一消息输入协议。Bridge 必须按实际能力广告并严格接收 text、resource link、image、audio 与 embedded resource；不得把 resource link 降成模型可见的伪文本，也不得在广告 `false` 时让 UI 显示可成功的附件入口。
 
-DSH rc.8 当前只为 PNG、JPEG、WebP 与 GIF 提供持久 image attachment 和 provider-neutral `ImageBlock`。图片通过 Host 资源授权、字节/MIME 校验和 DSH attachment admission 后进入 exact Session，并由当前模型的 modality 声明决定能否直接执行。音频、视频、文档和其他文件尚无 DSH 原生持久 block：在上游公开契约补齐前，owning media/content service 只能产生有界、带来源 identity 的文本或感知 evidence，再通过 exact turn context 注入；原始资源、路径和 bearer URL 不进入 DSH Session。
+DSH rc.8 当前只为 PNG、JPEG、WebP 与 GIF 提供持久 image attachment 和 provider-neutral `ImageBlock`。Composer 图片通过 Host 资源授权、字节/MIME 校验和 DSH attachment admission 后进入 exact Session，并由当前模型的 modality 声明决定能否执行。运行中发现的文档图片只通过 `@neko/content` 拥有的 `openneko.read_image` Tool 完成 exact `ContentLocator` 授权读取、边界校验、必要的有界缩放和 DSH attachment 持久化；Tool 返回原生 image block，语义理解仍由同一当前模型完成。音频、视频、文档和其他文件尚无 DSH 原生持久 block：在上游公开契约补齐前，只能由 owning media/content Tool 产生有界、带来源 identity 的文本、metadata、转写或采样表示；原始资源、路径和 bearer URL 不进入 DSH Session。
 
 Composer 选择或粘贴的内联图片使用同一 canonical image path，不转换为 Workspace 文件、不恢复旧 Pi attachment projector，也不把 Renderer `MessageAttachment` 直接作为 IPC/Session contract。`@neko/agent-webview` 只把用户手势产生的 Data URL 投影为最小 `name`/`mimeType`/canonical base64 input；package-owned DSH Session Host contract 限定图片 MIME、数量与源字节，Desktop Main 在 exact sender-bound submit 边界重新解码、校验并与 `@` Workspace 图片一起交给同一 image admission/normalization owner。当前模型不声明 image input、任一图片非法或完整批次超限时，整个当前 submit 必须在 ACP Prompt 发布前失败并恢复 Composer 草稿；不得继续纯文本 Turn、丢弃单项或切换 provider/source。
 
@@ -140,7 +140,11 @@ Desktop 到 DSH 的普通 Prompt 和 live inbox 都携带 admission 后的同一
 
 对话中的图片展示继续消费同一 DSH attachment identity，但不把 attachment bytes、Data URL、原始文件路径或长期 URL 写回 Session projection。`@neko/dsh-bridge` 只允许读取 exact Session 已引用的图片 attachment；Desktop Main 在校验 sender-bound Window、exact Conversation 与该 attachment 引用后，才将读取能力注册为当前 Renderer Session 拥有的短生命周期 `openneko://resource`。Webview 只接收 opaque resource URL 和受限的 MIME/宽高元数据，以 lazy thumbnail 展示，并在用户显式点击时复用同一资源打开完整预览。图片读取、授权或解码失败必须只在对应消息图片位置显示明确 unavailable diagnostic，保留名称 token 和 sibling 消息；不得回退到 raw path、旧缓存、另一 Conversation 或文本伪装。Surface 卸载或切换 Conversation 时必须释放对应 resource lease，Window teardown 仍作为最终安全释放边界。
 
-感知模型由独立的 product perception configuration owner 选择。当前模型声明支持输入模态时直接处理；不支持时才由显式配置的感知模型处理资源并返回结构化 evidence。选择发生在提交前的单一 modality routing policy 中，必须记录 exact source/model/evidence identity；感知模型缺失或失败只拒绝当前附件，不得隐式切换 provider、伪造描述或把附件静默丢弃后继续普通文本 turn。Generation 模型与参数继续由 `@neko/generation` owning configuration/application service 管理，与 Agent LLM/感知模型目录分离。
+产品不拥有独立感知模型 selector、purpose binding、catalog 或跨模型路由。当前 Agent 模型是媒体语义理解的唯一 LLM authority：支持 Tool 结果所需模态时继续同一 Turn，不支持时当前附件提交或 Tool call 必须 fail-visible，并给出切换到相应多模态 Agent 模型的明确 diagnostic；不得隐式切换 provider/model、调用隐藏感知模型、伪造描述或丢弃媒体后继续成功。若未来音频转写、OCR 或安全审核需要专用外部模型，它必须作为对应 owning Tool/service 的显式能力与审批边界独立设计，不能重新成为 Composer 级“感知模型”或 Agent fallback。Generation 模型与参数继续由 `@neko/generation` owning configuration/application service 管理，与 Agent LLM 选择分离。
+
+本替换由 `@neko/host/settings` 删除 `image.understand`、`video.understand`、`audio.understand` 的 purpose binding 和 Assistant projection，由 `@neko/agent-webview` 删除未接通的 Composer selector/type/copy。模型 catalog 只使用 canonical 原生输入 capability（当前为 `vision`、`vision_video`、`audio`）；`llm.vision` 与 `*.understand` 不再作为 capability alias 参与 DSH 输入能力判定。无产品消费者的 `@neko/quality/model` 直连 LLM 感知 adapter 同批删除，Quality core 只保留 provider-neutral evaluator/evidence contract；未来真实质量分析必须由 owning Tool/service 产生 evidence 后注入，不能恢复独立模型引用。生产者是 Host 当前模型 capability projection 与 package-owned 媒体 Tool，消费者是 DSH current Agent route。用户创作数据不受影响；退休的非 authoritative purpose 参数只在配置解码边界被识别、局部丢弃并返回 diagnostic，不再成为执行事实或成功路径。
+
+Agent Evaluation 选择 `update` 并将 owner 原子重命名为 `agent-runtime.media-tool-routing`：保留 native image/`openneko.read_image` 正向 case，把外部感知模型 case 替换为当前文本模型调用图片 Tool 时的 fail-visible case，并 poison `perception.image.understand` 与理解 purpose binding。旧 suite identity、目录和索引引用同批删除，不保留 alias。真实行为仍需完整 Desktop Session、真实 provider 和可见 Composer/Tool 路径；key-free schema/dry-run 只证明 authoring readiness。
 
 ### 5. 领域 Tools 是官方 DSH Tools，不是 MCP
 
@@ -249,7 +253,7 @@ Provider credential 的 host-neutral owner 是 `@neko/host/settings` public entr
 
 已知 dsh CLI 可正常使用，因此不重复安装验证。`scripts/dsh-q0` 非发布 fixture 必须验证：subprocess lifecycle、stdout purity、handshake/capability、session recovery/history、progress、permission、cancel、inbox、Host tool reverse requests、Skill/MCP 管理投影、crash/restart/fail-local。真实 Provider 基线已通过可见 Desktop UI、产品 Composer、DSH/ACP 和真实 API 验证，并保留 exact provider/model、turn terminal 与 no-fallback 证据；Q0 结果仍不得冒充该证据，也不得被提升为 Desktop 发布产物。完整发布矩阵仍 fail-closed。
 
-Agent Evaluation 必须使用完整 Desktop Session owner 与公开 Composer input path，facts 以 `conversationId`、`dshSessionId`、DSH turn/step/toolCall、permission preset、model receipt、Skill/Command invocation、MCP/Tool provenance、attachment/perception evidence 和 domain Job/artifact identity 为准。Pi `runId/branchId/queue` assertions 与 direct runtime driver 必须原子删除；visible UI + real provider 负责产品验收，hidden full Desktop + real provider 负责批量回归。缺少 canonical driver 或 API 授权时返回 `infrastructure-blocked`，不能用 Q0、mock 或最终文本 fixture 冒充行为证据。
+Agent Evaluation 必须使用完整 Desktop Session owner 与公开 Composer input path，facts 以 `conversationId`、`dshSessionId`、DSH turn/step/toolCall、permission preset、model receipt、Skill/Command invocation、MCP/Tool provenance、attachment/media Tool evidence 和 domain Job/artifact identity 为准。Pi `runId/branchId/queue` assertions 与 direct runtime driver 必须原子删除；visible UI + real provider 负责产品验收，hidden full Desktop + real provider 负责批量回归。缺少 canonical driver 或 API 授权时返回 `infrastructure-blocked`，不能用 Q0、mock 或最终文本 fixture 冒充行为证据。
 
 ### 8. 删除优先、原子发布与并行工作流
 
@@ -297,5 +301,5 @@ D0 只删除仓库代码和依赖，不得读取、修改或删除旧 Pi Session
 - 虚拟 cwd 配置如何在不暴露真实 Workspace path 的情况下满足 DSH rc.8 absolute-cwd contract；由 W1 contract 与完整 Desktop fixture 冻结。`DSH_HOME=userData/dsh`、`sessions/` authority、只读 closure 与可写官方 profile materialization 已冻结，不再作为开放设计项。
 - 首批纵向 Tool slice 之外的后续领域迁移顺序与每个 domain 的 typed tool contract 冻结范围；W6 按 inventory 逐项推进。
 - DSH MCP 官方公开 package/management API 的交付时间，以及 browser/computer MCP contribution 的精确配置与 readiness contract。
-- DSH audio/video/document attachment 的公开生命周期与 provider adapter 支持；在此之前产品只承诺图片原生附件和经授权的感知 evidence。
+- DSH audio/video/document attachment 的公开生命周期与 provider adapter 支持；在此之前产品只承诺图片原生附件和经授权的 package-owned media Tool evidence。
 - 完整 Provider/Model、approval、领域 Tool、应用重开与恢复矩阵的执行范围和成本预算；当前仅完成 `nekoapi-chat / gpt-5.6-luna` 的可见 Desktop 双轮基线，不改变其余发布门禁。

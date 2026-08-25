@@ -3,30 +3,16 @@ import {
   qualityTargetsMatch,
   validateQualityEvidence,
   validateQualityTarget,
-  type QualityCoverage,
   type QualityDiagnostic,
   type QualityEvaluatorClass,
   type QualityEvidence,
   type QualityGateIssue as QualityIssue,
   type QualityGatePolicy,
   type QualityGateResult,
-  type QualityMetric,
   type QualityRepairAction,
   type QualityTarget,
   type QualityTargetKind,
 } from '@neko/generation';
-
-export interface MediaQualityLLMService {
-  chat(
-    messages: unknown[],
-    options?: { maxTokens?: number; providerId?: string; modelId?: string },
-  ): Promise<{ message: { content: string | unknown[] } }>;
-}
-
-export interface MediaQualityChatModelRef {
-  readonly providerId: string;
-  readonly modelId: string;
-}
 
 export const QUALITY_PROFILE_IDS = [
   'image',
@@ -148,22 +134,6 @@ export function selectQualityProfile(
     throw new Error(`Quality profile ${profile.id} does not accept target kind ${target.kind}.`);
   }
   return profile;
-}
-
-export function assertExternalPerceptionTarget(target: QualityTarget): ContentLocator {
-  const validation = validateQualityTarget(target);
-  if (!validation.ok) throw new Error(validation.diagnostics.map((item) => item.code).join(', '));
-  if (
-    target.kind === 'project-artifact' ||
-    target.projectRef ||
-    !target.contentLocator ||
-    target.contentLocator.selector !== undefined
-  ) {
-    throw new Error(
-      'invalid-quality-target: External perception cannot receive project archives or project paths; use an owning-package ContentLocator.',
-    );
-  }
-  return target.contentLocator;
 }
 
 export interface QualityGateRuntimeDeps {
@@ -364,119 +334,6 @@ function ownerForTarget(kind: QualityTargetKind): QualityRepairAction['owner'] {
   return 'project';
 }
 
-export function createMultimodalPerceptionEvaluator(deps: {
-  readonly createService: () => MediaQualityLLMService;
-  readonly chatModel: MediaQualityChatModelRef;
-}): PerceptionEvaluator {
-  return {
-    evaluatorClass: 'perception',
-    id: 'multimodal-media-perception',
-    supports: (profile) =>
-      [
-        'image',
-        'video-clip',
-        'storyboard',
-        'cross-shot-consistency',
-        'timeline-final-cut',
-        'deliverable',
-      ].includes(profile.id),
-    evaluate: async (context) => {
-      assertExternalPerceptionTarget(context.target);
-      const materialized = await context.materializer.materialize({
-        target: context.target,
-        consumer: 'perception',
-        representation: 'base64',
-      });
-      try {
-        if (!materialized.base64 || !materialized.mimeType)
-          throw new Error('Perception materialization requires base64 and mimeType.');
-        const response = await deps.createService().chat(
-          [
-            {
-              role: 'system',
-              content:
-                'Evaluate media quality. Return JSON with score 0-100 and issues [{category,severity,message}].',
-            },
-            {
-              role: 'user',
-              content: [
-                { type: 'text', text: JSON.stringify(context.target.expectedIntent ?? {}) },
-                {
-                  type: 'image',
-                  imageUrl: `data:${materialized.mimeType};base64,${materialized.base64}`,
-                  detail: 'low',
-                },
-              ],
-            },
-          ],
-          {
-            maxTokens: 800,
-            providerId: deps.chatModel.providerId,
-            modelId: deps.chatModel.modelId,
-          },
-        );
-        const parsed = parsePerceptionResponse(response.message.content);
-        return evidence(
-          context,
-          {
-            id: 'multimodal-media-perception',
-            evaluatorClass: 'perception',
-            providerId: deps.chatModel.providerId,
-            modelId: deps.chatModel.modelId,
-          },
-          [metric('visual-score', parsed.score, 'score', 60, parsed.score >= 60)],
-          parsed.issues,
-          context.target.kind === 'image'
-            ? { mode: 'complete' }
-            : {
-                mode: 'sampled',
-                description: 'Provider reviewed authorized sampled visual content.',
-              },
-          parsed.score / 100,
-        );
-      } finally {
-        await materialized.release?.();
-      }
-    },
-  };
-}
-
-function evidence(
-  context: QualityEvaluationContext,
-  evaluator: QualityEvidence['evaluator'],
-  metrics: readonly QualityMetric[],
-  issues: readonly QualityIssue[],
-  coverage: QualityCoverage,
-  confidence?: number,
-): QualityEvidence {
-  return {
-    evidenceId: context.createId('evidence'),
-    evaluator,
-    target: context.target,
-    state: 'current',
-    metrics,
-    issues,
-    coverage,
-    ...(confidence !== undefined ? { confidence } : {}),
-    createdAt: context.now(),
-    sourceEvidenceLocators: context.target.contentLocator ? [context.target.contentLocator] : [],
-  };
-}
-function metric(
-  id: string,
-  value: QualityMetric['value'],
-  unit?: string,
-  threshold?: QualityMetric['threshold'],
-  passed?: boolean,
-): QualityMetric {
-  return {
-    id,
-    value,
-    ...(unit ? { unit } : {}),
-    ...(threshold !== undefined ? { threshold } : {}),
-    ...(passed !== undefined ? { passed } : {}),
-  };
-}
 function createEvaluatorFailureEvidence(
   evaluator: QualityEvaluator,
   target: QualityTarget,
@@ -508,58 +365,4 @@ function createEvaluatorFailureEvidence(
     createdAt,
     sourceEvidenceLocators: target.contentLocator ? [target.contentLocator] : [],
   };
-}
-function parsePerceptionResponse(content: string | unknown[]): {
-  score: number;
-  issues: QualityIssue[];
-} {
-  const text =
-    typeof content === 'string'
-      ? content
-      : content
-          .map((item) => (isRecord(item) && typeof item['text'] === 'string' ? item['text'] : ''))
-          .join('');
-  try {
-    const raw = JSON.parse(text.replace(/```(?:json)?|```/g, '').trim()) as Record<string, unknown>;
-    const score = typeof raw['score'] === 'number' ? Math.max(0, Math.min(100, raw['score'])) : 0;
-    const issues = Array.isArray(raw['issues'])
-      ? raw['issues'].flatMap((item, index) => {
-          if (
-            !isRecord(item) ||
-            typeof item['category'] !== 'string' ||
-            typeof item['message'] !== 'string'
-          )
-            return [];
-          const severity = ['info', 'warning', 'error', 'critical'].includes(
-            String(item['severity']),
-          )
-            ? (item['severity'] as QualityIssue['severity'])
-            : 'warning';
-          return [
-            {
-              id: `perception-issue-${index}`,
-              category: item['category'],
-              severity,
-              message: item['message'],
-            },
-          ];
-        })
-      : [];
-    return { score, issues };
-  } catch {
-    return {
-      score: 0,
-      issues: [
-        {
-          id: 'perception-parse-failure',
-          category: 'evaluator-failure',
-          severity: 'error',
-          message: 'Perception provider returned invalid JSON.',
-        },
-      ],
-    };
-  }
-}
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
 }

@@ -19,7 +19,7 @@ export const NEKO_GATEWAY_DEFAULT_IMAGE_MODEL_ID = 'neko-gateway-gpt-image-2';
 export const NEKO_GATEWAY_DEFAULT_VIDEO_MODEL_ID = 'neko-gateway-seedance-lite';
 export const NEKO_GATEWAY_DEFAULT_AUDIO_MODEL_ID = 'neko-gateway-tts';
 export const NEKO_GATEWAY_DEFAULT_MUSIC_MODEL_ID = 'neko-gateway-suno';
-export const GOOGLE_GEMINI_MEDIA_UNDERSTAND_MODEL_ID = 'google-gemini-2.5-flash';
+export const GOOGLE_GEMINI_MULTIMODAL_MODEL_ID = 'google-gemini-2.5-flash';
 
 const DEFAULT_NEKO_GATEWAY_BASE_URL = 'https://www.nekoapi.com';
 const DEFAULT_CUSTOM_NEWAPI_BASE_URL = '';
@@ -164,16 +164,15 @@ const DEFAULT_MODELS: ModelConfig[] = [
     enabled: true,
   },
   {
-    id: GOOGLE_GEMINI_MEDIA_UNDERSTAND_MODEL_ID,
+    id: GOOGLE_GEMINI_MULTIMODAL_MODEL_ID,
     name: 'gemini-2.5-flash',
-    displayName: 'Gemini 2.5 Flash Media Understanding',
+    displayName: 'Gemini 2.5 Flash Multimodal',
     providerId: GOOGLE_PROVIDER_ID,
     type: 'llm',
     capabilities: [
       'chat',
       'llm.chat',
       'vision',
-      'llm.vision',
       'audio',
       'vision_video',
       'function_calling',

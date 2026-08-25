@@ -148,7 +148,7 @@ export function apply(ctx: Context): void {
               );
               if (attachmentImage.bytes.byteLength > byteCap) {
                 throw new Error(
-                  `Content image perception representation exceeds the active DSH attachment limit of ${byteCap} bytes.`,
+                  `Content image payload exceeds the active DSH attachment limit of ${byteCap} bytes.`,
                 );
               }
               const ref = await attachments.saveImage({
@@ -212,17 +212,14 @@ async function prepareContentImageAttachment(
   const bounded = new Uint8Array(resized);
   const boundedMetadata = probeImageMetadata(bounded);
   if (boundedMetadata === null || boundedMetadata.mimeType !== image.mimeType) {
-    throw new Error('Content image perception representation exceeds the active DSH limits.');
+    throw new Error('Content image payload exceeds the active DSH limits.');
   }
-  const boundedDimensions = requireRasterDimensions(
-    boundedMetadata,
-    'Content image perception representation',
-  );
+  const boundedDimensions = requireRasterDimensions(boundedMetadata, 'Content image payload');
   if (
     Math.max(boundedDimensions.width, boundedDimensions.height) > limits.maxImageDimension ||
     boundedDimensions.width * boundedDimensions.height > limits.maxImagePixels
   ) {
-    throw new Error('Content image perception representation exceeds the active DSH limits.');
+    throw new Error('Content image payload exceeds the active DSH limits.');
   }
   return { bytes: bounded, mimeType: image.mimeType };
 }
@@ -302,7 +299,7 @@ async function assertImageCapableRoute(
   const active = await llm.resolveModelInfo(provider, model, execution.signal);
   if (active.inputModalities?.includes('image') !== true) {
     throw new Error(
-      `Cannot read ${contentImageName(source)}: model "${model}" does not declare image input.`,
+      `Cannot read ${contentImageName(source)}: current Agent model "${model}" does not declare image input. Select an image-capable Agent model and retry.`,
     );
   }
 }

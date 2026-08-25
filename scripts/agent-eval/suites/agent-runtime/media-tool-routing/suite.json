@@ -1,11 +1,11 @@
 {
   "schema": "neko.agent-eval.suite",
-  "id": "agent-runtime.perception-routing",
-  "owner": { "kind": "agent-runtime", "id": "perception-routing" },
+  "id": "agent-runtime.media-tool-routing",
+  "owner": { "kind": "agent-runtime", "id": "media-tool-routing" },
   "target": {
     "kind": "capability",
-    "id": "perception-routing",
-    "contractHash": "sha256:7f3fe0a5b76ab079a9027616050805d5a57e21db40b37387529d0e17231601a0"
+    "id": "media-tool-routing",
+    "contractHash": "sha256:bc7266a46abdced8a681733f606e5fd8fa29d72aeef1cd6a23ee748974653304"
   },
   "runtimeProfiles": [
     {
@@ -16,29 +16,16 @@
   ],
   "modelProfiles": [
     {
-      "id": "deepseek-no-native-vision",
+      "id": "text-only",
       "selection": "explicit",
-      "chat": { "providerId": "deepseek-chat", "modelId": "deepseek-v4-flash" },
-      "purposes": {
-        "image.generate": { "providerId": "nekoapi-media", "modelId": "gpt-image-2" },
-        "image.understand": { "providerId": "nekoapi-chat", "modelId": "gpt-5.6-luna" }
-      },
-      "configurationHash": "sha256:122329df27a50ad4004406693380c867f40eac431286f155edd119d38981becf"
+      "chat": { "providerId": "deepseek-chat", "modelId": "deepseek-chat" },
+      "configurationHash": "sha256:575b043a55fba285c14290167b176da449fc5a58c180666a3c390d9dbf9ace4a"
     },
     {
       "id": "native-vision",
       "selection": "explicit",
       "chat": { "providerId": "nekoapi-chat", "modelId": "gpt-5.5" },
       "configurationHash": "sha256:930c70d9deb59dd74a0b97d009020e5aae62f04593bc76090c20986097c766fe"
-    },
-    {
-      "id": "deepseek-missing-image-understanding",
-      "selection": "explicit",
-      "chat": { "providerId": "deepseek-chat", "modelId": "deepseek-chat" },
-      "purposes": {
-        "image.generate": { "providerId": "nekoapi-media", "modelId": "gpt-image-2" }
-      },
-      "configurationHash": "sha256:a11061bf8992c2f50b30dea14bf135d40fb89be652ebd8abfb73ee0cad748a68"
     }
   ],
   "judgeProfiles": [],
@@ -60,20 +47,8 @@
   ],
   "cases": [
     {
-      "id": "external-perception-when-chat-differs",
-      "file": "cases/external-perception-when-chat-differs.json",
-      "group": "canonical",
-      "visibility": "public"
-    },
-    {
-      "id": "native-vision-without-perception-tool",
-      "file": "cases/native-vision-without-perception-tool.json",
-      "group": "boundary",
-      "visibility": "public"
-    },
-    {
-      "id": "missing-image-understanding-binding",
-      "file": "cases/missing-image-understanding-binding.json",
+      "id": "current-model-image-tool-unavailable",
+      "file": "cases/current-model-image-tool-unavailable.json",
       "group": "boundary",
       "visibility": "public"
     },

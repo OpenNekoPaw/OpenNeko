@@ -187,12 +187,9 @@ const MODEL_PURPOSES_SCHEMA = s.object(
   {
     'image.generate': MODEL_BINDING_SCHEMA,
     'image.edit': MODEL_BINDING_SCHEMA,
-    'image.understand': MODEL_BINDING_SCHEMA,
     'video.generate': MODEL_BINDING_SCHEMA,
-    'video.understand': MODEL_BINDING_SCHEMA,
     'audio.generate': MODEL_BINDING_SCHEMA,
     'audio.tts': MODEL_BINDING_SCHEMA,
-    'audio.understand': MODEL_BINDING_SCHEMA,
     'audio.music.generate': MODEL_BINDING_SCHEMA,
   },
 );

@@ -2,7 +2,6 @@ export {
   QUALITY_PROFILE_IDS,
   QualityGateRuntime,
   aggregateQualityGate,
-  assertExternalPerceptionTarget,
   createQualityGateRuntime,
   selectQualityProfile,
 } from './core/index';

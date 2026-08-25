@@ -67,12 +67,13 @@ to Assistant presentation and MUST NOT alter durable records.
 - **THEN** the Agent Entry model catalog still exposes them as available generation choices
 - **AND** the explicit image, video, and audio defaults are selected without an inferred fallback
 
-#### Scenario: Configured media understanding bindings are shown
+#### Scenario: Media configuration does not expose a perception-model selector
 
-- **GIVEN** `config.toml` declares explicit image, video, and audio understanding purpose bindings
+- **GIVEN** the selected Agent model declares its native input capabilities
 - **WHEN** the Agent Entry configuration menu opens
-- **THEN** it shows the Host-resolved understanding model identity for each category
-- **AND** Renderer does not read the config file or infer another provider or model
+- **THEN** media categories expose only their Generation model choices and parameters
+- **AND** no image, video, audio or generic perception-model selector is rendered
+- **AND** Renderer does not read the config file, infer another provider/model or create a fallback purpose binding
 
 ### Requirement: Workspace requires explicit Project authority
 

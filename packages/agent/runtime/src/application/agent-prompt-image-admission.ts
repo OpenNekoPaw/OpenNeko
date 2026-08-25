@@ -94,7 +94,9 @@ export function createAgentPromptImageAdmissionService(options?: {
 
       if (candidates.length === 0) return [];
       if (!input.modelSupportsImageInput) {
-        throw new Error('The selected chat model does not support image input.');
+        throw new Error(
+          'The selected Agent model does not support image input. Select an image-capable Agent model and retry.',
+        );
       }
       if (candidates.length > AGENT_IMAGE_TRANSPORT_MAX_PAYLOADS) {
         throw new Error(

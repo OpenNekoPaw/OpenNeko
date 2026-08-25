@@ -2,6 +2,8 @@
 
 Date: 2026-08-22
 
+> 2026-08-25 suite identity update: references below to `agent-runtime.perception-routing` record the name used when this evidence was produced. The canonical owner is now `agent-runtime.media-tool-routing`; no alias is retained.
+
 ## Planned canonical path
 
 ```text

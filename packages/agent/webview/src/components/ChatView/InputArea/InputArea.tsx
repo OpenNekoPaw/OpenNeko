@@ -313,10 +313,7 @@ export function InputArea({
     mediaModelSelection,
     availableMediaModels,
     mediaModelOptOutEnabled,
-    mediaUnderstandingModels,
-    mediaUnderstandingSelection,
     onMediaModelSelect,
-    onMediaUnderstandingModelSelect,
     inputCatalog,
     configurationPolicy,
     inputCatalogPhase,
@@ -1317,10 +1314,7 @@ export function InputArea({
                       mediaModelSelection={mediaModelSelection}
                       availableMediaModels={availableMediaModels}
                       mediaModelOptOutEnabled={mediaModelOptOutEnabled}
-                      mediaUnderstandingModels={mediaUnderstandingModels}
-                      mediaUnderstandingSelection={mediaUnderstandingSelection}
                       onMediaModelSelect={onMediaModelSelect}
-                      onMediaUnderstandingModelSelect={onMediaUnderstandingModelSelect}
                       genParams={genParams}
                       onGenParamsChange={onGenParamsChange}
                       disabled={isBusy || modelConfigurationLocked}

@@ -61,7 +61,7 @@ const RULES = Object.freeze([
     'packages/content/src/node/workspace-content-writer',
     'packages/text-editor/domain/src/text-document-session',
   ]),
-  rule('capability-tool-routing', 'agent-runtime.perception-routing', [
+  rule('capability-tool-routing', 'agent-runtime.media-tool-routing', [
     'packages/quality/src/',
     'packages/agent/runtime/src/tools/',
     'packages/agent/runtime/src/runtime/capability/capability-runtime-bindings.ts',

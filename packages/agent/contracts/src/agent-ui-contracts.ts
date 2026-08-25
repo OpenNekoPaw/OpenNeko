@@ -5,7 +5,6 @@ import type { MessageAttachment } from './message-attachment';
 export type SessionMode = 'agent';
 export type ConversationKind = 'chat' | 'character-dialogue' | 'embody-character';
 export type ShellExecutionMode = 'plan' | 'ask' | 'auto';
-export type MediaUnderstandingModels = Record<string, { readonly label?: string }>;
 export type AgentModelSlots = Partial<
   Record<
     string,

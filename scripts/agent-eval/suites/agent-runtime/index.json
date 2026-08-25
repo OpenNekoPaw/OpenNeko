@@ -27,9 +27,9 @@
       "targetKind": "model"
     },
     {
-      "suiteId": "agent-runtime.perception-routing",
-      "path": "perception-routing/suite.json",
-      "ownerId": "perception-routing",
+      "suiteId": "agent-runtime.media-tool-routing",
+      "path": "media-tool-routing/suite.json",
+      "ownerId": "media-tool-routing",
       "targetKind": "capability"
     },
     {

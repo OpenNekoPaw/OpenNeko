@@ -10,13 +10,10 @@ export interface AgentPurposeModelRef<Category extends ModelType = ModelType> {
 export interface AgentFlatPurposeModelRefMap {
   readonly 'image.generate': AgentPurposeModelRef<'image'>;
   readonly 'image.edit': AgentPurposeModelRef<'image'>;
-  readonly 'image.understand': AgentPurposeModelRef<'llm'>;
   readonly 'video.generate': AgentPurposeModelRef<'video'>;
-  readonly 'video.understand': AgentPurposeModelRef<'llm'>;
   readonly 'audio.generate': AgentPurposeModelRef<'audio'>;
   readonly 'audio.tts': AgentPurposeModelRef<'audio'>;
   readonly 'audio.music.generate': AgentPurposeModelRef<'audio'>;
-  readonly 'audio.understand': AgentPurposeModelRef<'llm'>;
 }
 
 export type AgentFlatPurposeModelRefs = Partial<AgentFlatPurposeModelRefMap>;
@@ -37,14 +34,8 @@ export function parseAgentFlatPurposeModelRefs(value: unknown): AgentFlatPurpose
       case 'image.edit':
         selections['image.edit'] = model as AgentPurposeModelRef<'image'>;
         break;
-      case 'image.understand':
-        selections['image.understand'] = model as AgentPurposeModelRef<'llm'>;
-        break;
       case 'video.generate':
         selections['video.generate'] = model as AgentPurposeModelRef<'video'>;
-        break;
-      case 'video.understand':
-        selections['video.understand'] = model as AgentPurposeModelRef<'llm'>;
         break;
       case 'audio.generate':
         selections['audio.generate'] = model as AgentPurposeModelRef<'audio'>;
@@ -54,9 +45,6 @@ export function parseAgentFlatPurposeModelRefs(value: unknown): AgentFlatPurpose
         break;
       case 'audio.music.generate':
         selections['audio.music.generate'] = model as AgentPurposeModelRef<'audio'>;
-        break;
-      case 'audio.understand':
-        selections['audio.understand'] = model as AgentPurposeModelRef<'llm'>;
         break;
     }
   }
@@ -93,13 +81,6 @@ function purposeModelCategory(value: string): ModelType | undefined {
   if (value === 'video.generate') return 'video';
   if (value === 'audio.generate' || value === 'audio.tts' || value === 'audio.music.generate') {
     return 'audio';
-  }
-  if (
-    value === 'image.understand' ||
-    value === 'video.understand' ||
-    value === 'audio.understand'
-  ) {
-    return 'llm';
   }
   return undefined;
 }

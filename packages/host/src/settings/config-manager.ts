@@ -41,10 +41,6 @@ import {
   type AssistantRuntimeSettingsSnapshot,
   type AssistantSettingsData,
   type AssistantSettingsSnapshot,
-  type MediaUnderstandingCategory,
-  type MediaUnderstandingModelStatus,
-  type MediaUnderstandingModels,
-  type MediaUnderstandingPurpose,
 } from './assistant-config';
 import {
   buildAssistantConfigAvailabilityDiagnostic,
@@ -263,7 +259,6 @@ export class ConfigManager {
         chatModelOptions,
         models: config.models.values(),
       }),
-      mediaUnderstandingModels: this.buildMediaUnderstandingModels(),
       ...(configDiagnostic ? { configDiagnostic } : {}),
     };
   }
@@ -370,7 +365,6 @@ export class ConfigManager {
         chatModelOptions,
         models: config.models.values(),
       }),
-      mediaUnderstandingModels: this.buildMediaUnderstandingModels(),
       ...(settingsDiagnostic ? { configDiagnostic: settingsDiagnostic } : {}),
     };
   }
@@ -438,6 +432,7 @@ export class ConfigManager {
   }
 
   getDefaultModelPurposeRef(purpose: string): ModelRefConfig | undefined {
+    if (!isAgentModelPurpose(purpose)) return undefined;
     return this.getScalar('defaultModelPurposes')?.[purpose];
   }
 
@@ -659,51 +654,6 @@ export class ConfigManager {
     });
   }
 
-  private buildMediaUnderstandingModels(): MediaUnderstandingModels {
-    return {
-      image: this.buildMediaUnderstandingModelStatus('image', 'image.understand'),
-      audio: this.buildMediaUnderstandingModelStatus('audio', 'audio.understand'),
-      video: this.buildMediaUnderstandingModelStatus('video', 'video.understand'),
-    };
-  }
-
-  private buildMediaUnderstandingModelStatus(
-    category: MediaUnderstandingCategory,
-    purpose: MediaUnderstandingPurpose,
-  ): MediaUnderstandingModelStatus {
-    const resolvedRef = this.resolveModelRefForPurpose(purpose);
-
-    if (!resolvedRef) {
-      return { category, purpose, status: 'missing' };
-    }
-
-    this.ensureMerged();
-    const provider = this.providers.get(resolvedRef.providerId);
-    const model = this.models.get(resolvedRef.modelId);
-    const providerLabel = provider
-      ? provider.displayName || provider.name || provider.id
-      : undefined;
-    const modelLabel = model ? model.displayName || model.name || model.id : undefined;
-    const status: MediaUnderstandingModelStatus = {
-      category,
-      purpose,
-      status: 'configured',
-      providerId: resolvedRef.providerId,
-      modelId: resolvedRef.modelId,
-      optionId: toModelOptionId(resolvedRef),
-      source: 'explicit-config',
-    };
-    if (providerLabel && modelLabel) {
-      status.label = `${providerLabel} / ${modelLabel}`;
-    } else if (modelLabel) {
-      status.label = modelLabel;
-    }
-    if (providerLabel) {
-      status.providerLabel = providerLabel;
-    }
-    return status;
-  }
-
   private resolveProviderSources(): AiProviderSourceProjection {
     this.ensureMerged();
     return resolveAiProviderSources({
@@ -819,6 +769,13 @@ export class ConfigManager {
     const purposeDefaults = result.config.defaultModelPurposes ?? {};
     for (const [purpose, ref] of Object.entries(purposeDefaults)) {
       if (!ref) continue;
+      if (!isAgentModelPurpose(purpose)) {
+        return buildAssistantConfigAvailabilityDiagnostic(
+          'invalidDefaultModelBinding',
+          result.filePath,
+          `default_model_purposes.${purpose}`,
+        );
+      }
       const provider = this.providers.get(ref.providerId);
       const model = this.models.get(ref.modelId);
       if (

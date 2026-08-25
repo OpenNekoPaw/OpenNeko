@@ -1,7 +1,7 @@
 {
   "schema": "neko.agent-eval.scenario",
   "id": "content-locator-document-manifest",
-  "suiteId": "agent-runtime.perception-routing",
+  "suiteId": "agent-runtime.media-tool-routing",
   "caseGroup": "canonical",
   "visibility": "public",
   "evidenceContract": {

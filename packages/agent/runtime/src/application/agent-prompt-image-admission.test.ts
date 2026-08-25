@@ -54,7 +54,9 @@ describe('Agent Prompt image admission', () => {
         modelSupportsImageInput: false,
         referenceBytes: { stat, read },
       }),
-    ).rejects.toThrow(/does not support image input/u);
+    ).rejects.toThrow(
+      'The selected Agent model does not support image input. Select an image-capable Agent model and retry.',
+    );
     expect(read).not.toHaveBeenCalled();
   });
 

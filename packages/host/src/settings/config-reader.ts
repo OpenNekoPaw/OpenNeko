@@ -41,6 +41,7 @@ export type ConfigReadErrorCode =
   | 'unsupportedModelType'
   | 'unsupportedDefaultModelType'
   | 'unsupportedDefaultModelPurpose'
+  | 'retiredDefaultModelPurpose'
   | 'readError';
 
 export type ConfigReadBlockingErrorCode = 'empty' | 'invalidToml' | 'readError';

@@ -135,7 +135,7 @@ const DEFAULT_ANTHROPIC_REASONING_EFFORT_VALUES: readonly AgentReasoningEffort[]
 
 const CAPABILITY_ALIASES = {
   tools: ['function_calling', 'function_call', 'tools', 'tool_use'],
-  vision: ['vision', 'llm.vision'],
+  vision: ['vision'],
   reasoningEffort: ['reasoning', 'reasoning_effort', 'reasoning.effort'],
   thinkingBudget: ['thinking', 'thinking_budget', 'extended_thinking', 'anthropic.thinking'],
   verbosity: ['verbosity', 'text_verbosity', 'text.verbosity'],

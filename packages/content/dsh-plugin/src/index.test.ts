@@ -193,6 +193,54 @@ describe('OpenNeko Document DSH plugin', () => {
     ]);
   });
 
+  it('rejects a text-only current model before reading Content bytes', async () => {
+    const definitions: Array<{
+      readonly name: string;
+      readonly execute: (args: unknown, execution: unknown) => Promise<unknown>;
+    }> = [];
+    const execute = vi.fn();
+    const ctx = {
+      effect: (register: () => () => void) => register(),
+      inject: (_services: readonly string[], callback: (child: unknown) => void) => callback(ctx),
+      get: (service: string) =>
+        service === 'llm'
+          ? { resolveModelInfo: vi.fn(async () => ({ inputModalities: ['text'] })) }
+          : undefined,
+      attachments: attachmentStore(),
+      tools: {
+        register: vi.fn((value) => {
+          definitions.push(value);
+          return () => undefined;
+        }),
+      },
+      opennekoHostTools: { execute },
+    };
+
+    apply(ctx as never);
+    const definition = definitions.find((candidate) => candidate.name === 'openneko.read_image');
+    if (!definition) throw new Error('Content image DSH Tool was not registered.');
+    await expect(
+      definition.execute(
+        {
+          source: {
+            file: { authority: 'workspace', path: 'story.epub' },
+            selector: { kind: 'entry', path: 'OEBPS/images/page.png' },
+          },
+        },
+        {
+          signal: new AbortController().signal,
+          agent: {
+            options: { provider: 'provider', model: 'text-model' },
+            session: { requestHeader: () => undefined },
+          },
+        },
+      ),
+    ).rejects.toThrow(
+      'current Agent model "text-model" does not declare image input. Select an image-capable Agent model and retry.',
+    );
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it('fits a dimension-only oversized EPUB cover into the active attachment limit', async () => {
     const definitions: Array<{
       readonly name: string;

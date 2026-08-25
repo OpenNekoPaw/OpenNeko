@@ -76,12 +76,17 @@ describe('Desktop DSH provider runtime projection', () => {
     expect(projection.diagnostics).toEqual([]);
   });
 
-  it('advertises image input only for models with an explicit understanding capability', async () => {
+  it('advertises image input only for models with the canonical vision capability', async () => {
     const projection = await createDesktopDshProviderRuntimeProjection({
       providers: [provider({ id: 'vision-provider', requiresApiKey: false })],
       models: [
         model({
           id: 'vision-model',
+          providerId: 'vision-provider',
+          capabilities: ['chat', 'vision'],
+        }),
+        model({
+          id: 'retired-alias-model',
           providerId: 'vision-provider',
           capabilities: ['chat', 'image.understand'],
         }),
@@ -97,6 +102,9 @@ describe('Desktop DSH provider runtime projection', () => {
     expect(projection.executionCatalog.resolve('vision-provider', 'text-model')?.input).toEqual([
       'text',
     ]);
+    expect(
+      projection.executionCatalog.resolve('vision-provider', 'retired-alias-model')?.input,
+    ).toEqual(['text']);
     expect(JSON.stringify(projection.profilePatchEntries)).toContain('"input":["text","image"]');
   });
 

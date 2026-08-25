@@ -2,6 +2,8 @@
 
 Date: 2026-08-22
 
+> 2026-08-25 suite identity update: `perception-routing` below is the historical name used for this run. The canonical owner is now `media-tool-routing`; no alias is retained.
+
 ## Evaluation Scope
 
 - Change/feature: DSH foundational product behavior after the atomic runtime cutover.

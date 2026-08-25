@@ -138,11 +138,11 @@ OpenNeko 不再直接拥有、实例化或调用 Pi Agent、Session、Skill、To
 
 DSH 当前 provider adapter 可能内部依赖 `@earendil-works/pi-ai`。在 DSH native adapter 尚未覆盖 OpenNeko 所需 provider 时，允许通过 DSH 的 `dsh-llm-pi-ai` 间接使用该第三方依赖；该依赖必须封闭在 DSH provider-specific adapter 中，不得重新扩散为 OpenNeko runtime authority。满足 provider 覆盖后可独立移除，不影响产品 contract 和 Session owner。
 
-### 11. 附件、感知与领域 Tool
+### 11. 附件、媒体理解与领域 Tool
 
-ACP content block 是 Desktop 到 DSH 的唯一输入协议。DSH rc.7 原生 attachment 当前只覆盖 PNG、JPEG、WebP 与 GIF；图片通过 Host 授权和 DSH admission 后进入 Session。音频、视频、文档与其他文件在 DSH 公开生命周期补齐前，只由 owning media/content service 生成有界、带来源的 evidence，不恢复旧 Agent 多模态 packet 或把 raw path 写入 Session。
+ACP content block 是 Desktop 到 DSH 的唯一输入协议。DSH rc.7 原生 attachment 当前只覆盖 PNG、JPEG、WebP 与 GIF；Composer 图片通过 Host 授权和 DSH admission 后进入 Session，运行中图片通过 package-owned Content Tool 返回同一原生 image block。音频、视频、文档与其他文件在 DSH 公开生命周期补齐前，只由 owning media/content Tool 生成有界、带来源的文本、metadata、转写或采样表示，不恢复旧 Agent 多模态 packet 或把 raw path 写入 Session。
 
-当前模型支持输入模态时直接处理；否则只调用用户显式配置的感知模型。Agent LLM、感知模型和 Generation 媒体模型/参数分别由对应配置 owner 管理。Generation、Canvas、Cut、Assets、Character 与 World 作为 first-party DSH Tools 通过 typed reverse Host adapter 调用 owning service，不包装成 MCP。Browser Use 与 Computer Use 则作为官方 DSH MCP contributions：DSH 拥有 MCP lifecycle，OpenNeko 只拥有 OS/target/grant/approval 边界。
+当前 Agent 模型是媒体语义理解的唯一 LLM authority；缺少 Tool 结果所需模态时当前输入或 Tool call fail-visible，不配置独立感知模型，也不切换 provider/model。Generation 媒体模型/参数仍由 Generation owner 管理。Generation、Canvas、Cut、Assets、Character 与 World 作为 first-party DSH Tools 通过 typed reverse Host adapter 调用 owning service，不包装成 MCP。Browser Use 与 Computer Use 则作为官方 DSH MCP contributions：DSH 拥有 MCP lifecycle，OpenNeko 只拥有 OS/target/grant/approval 边界。
 
 ## 实施边界与顺序
 

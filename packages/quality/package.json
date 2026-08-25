@@ -1,12 +1,11 @@
 {
   "name": "@neko/quality",
-  "description": "Canonical quality Gate, evaluator ports, and model evidence adapters for OpenNeko",
+  "description": "Canonical quality Gate, evaluator ports, and evidence aggregation for OpenNeko",
   "private": true,
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
     "./core": "./src/core/index.ts",
-    "./model": "./src/model/index.ts",
     "./project": "./src/project/index.ts",
     "./project/testing": "./src/project/project-quality-test-helpers.ts"
   },

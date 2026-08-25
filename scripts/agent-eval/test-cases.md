@@ -231,7 +231,7 @@ Skill suites：
 Agent-runtime suites：
 
 - `agent-runtime.prompt-composition`、`agent-runtime.skill-runtime`；
-- `agent-runtime.model-binding`、`agent-runtime.perception-routing`；
+- `agent-runtime.model-binding`、`agent-runtime.media-tool-routing`；
 - `agent-runtime.workflow-controller`、`agent-runtime.stream-delivery`；
 - `agent-runtime.creative-media-workflow`。
 

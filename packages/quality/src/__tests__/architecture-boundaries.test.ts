@@ -2,17 +2,29 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import * as core from '../core/index';
-import * as model from '../model/index';
 import * as project from '../project/index';
 
 const packageRoot = resolve(import.meta.dirname, '../..');
 
 describe('@neko/quality architecture boundaries', () => {
-  it('exposes core, model, and project behavior through distinct public entries', () => {
+  it('exposes core and project behavior through distinct public entries', () => {
     expect(core.createQualityGateRuntime).toBeTypeOf('function');
-    expect(model.createMultimodalPerceptionEvaluator).toBeTypeOf('function');
     expect(project.collectProjectQualityEvidence).toBeTypeOf('function');
     expect(Reflect.has(core, 'createMultimodalPerceptionEvaluator')).toBe(false);
+    expect(Reflect.has(core, 'assertExternalPerceptionTarget')).toBe(false);
+  });
+
+  it('does not retain an independently configured model execution adapter', () => {
+    const manifest = readFileSync(resolve(packageRoot, 'package.json'), 'utf8');
+    const runtime = readFileSync(
+      resolve(packageRoot, 'src/internal/quality-gate-runtime.ts'),
+      'utf8',
+    );
+
+    expect(manifest).not.toContain('"./model"');
+    expect(runtime).not.toMatch(
+      /createMultimodalPerceptionEvaluator|MediaQualityChatModelRef|MediaQualityLLMService/u,
+    );
   });
 
   it('depends only on explicit domain contracts', () => {

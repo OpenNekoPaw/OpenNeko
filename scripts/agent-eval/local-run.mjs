@@ -27,7 +27,7 @@ const MATRIX_SUITES = Object.freeze([
   'agent-runtime.prompt-composition',
   'agent-runtime.skill-runtime',
   'agent-runtime.workflow-controller',
-  'agent-runtime.perception-routing',
+  'agent-runtime.media-tool-routing',
   'agent-runtime.creative-media-workflow',
   'skill.storyboard',
   'skill.skill-creator',

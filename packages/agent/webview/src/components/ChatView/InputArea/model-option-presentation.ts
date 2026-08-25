@@ -11,7 +11,7 @@ export interface ProviderModelGroup {
 
 const VISIBLE_CAPABILITY_TAGS_BY_CATEGORY = {
   llm: [
-    ['vision', ['vision', 'llm.vision']],
+    ['vision', ['vision']],
     ['tools', ['function_calling']],
     ['streaming', ['streaming']],
   ],

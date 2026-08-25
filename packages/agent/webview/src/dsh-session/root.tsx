@@ -805,9 +805,7 @@ function DshComposer({
       }}
       availableMediaModels={models.filter((model) => model.category !== 'llm')}
       mediaModelOptOutEnabled={false}
-      mediaUnderstandingSelection={{ image: '', video: '', audio: '' }}
       onMediaModelSelect={onMediaModelChange ?? (() => undefined)}
-      onMediaUnderstandingModelSelect={() => undefined}
       sessionMode="agent"
       onSessionModeChange={() => undefined}
       executionMode="ask"

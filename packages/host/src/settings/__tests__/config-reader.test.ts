@@ -316,7 +316,7 @@ describe('config-reader typed results', () => {
     );
   });
 
-  it('preserves purpose-specific default model bindings from TOML', () => {
+  it('resets retired media-understanding bindings while preserving valid sibling purposes', () => {
     const filePath = path.join(createTempRoot(), 'config.toml');
     fs.writeFileSync(
       filePath,
@@ -333,12 +333,16 @@ describe('config-reader typed results', () => {
         'provider_id = "google"',
         'model_id = "google-gemini-2.5-flash"',
         '',
+        '[default_model_purposes.character_dialogue]',
+        'provider_id = "google"',
+        'model_id = "google-gemini-2.5-flash"',
+        '',
         '[[models]]',
         'id = "google-gemini-2.5-flash"',
         'name = "gemini-2.5-flash"',
         'provider_id = "google"',
         'type = "llm"',
-        'capabilities = ["chat", "vision", "image.understand", "audio.understand", "video.understand"]',
+        'capabilities = ["chat", "vision", "audio", "vision_video"]',
       ].join('\n'),
       'utf-8',
     );
@@ -348,30 +352,32 @@ describe('config-reader typed results', () => {
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') throw new Error('Expected ok result');
     expect(result.config.defaultModelPurposes).toEqual({
-      'image.understand': {
-        providerId: 'google',
-        modelId: 'google-gemini-2.5-flash',
-      },
-      'audio.understand': {
-        providerId: 'google',
-        modelId: 'google-gemini-2.5-flash',
-      },
-      'video.understand': {
+      'character.dialogue': {
         providerId: 'google',
         modelId: 'google-gemini-2.5-flash',
       },
     });
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'retiredDefaultModelPurpose',
+        path: 'default_model_purposes.image_understand',
+      }),
+      expect.objectContaining({
+        code: 'retiredDefaultModelPurpose',
+        path: 'default_model_purposes.audio_understand',
+      }),
+      expect.objectContaining({
+        code: 'retiredDefaultModelPurpose',
+        path: 'default_model_purposes.video_understand',
+      }),
+    ]);
 
     writeConfigFile(filePath, result.config);
-    expect(fs.readFileSync(filePath, 'utf-8')).toContain(
-      '[default_model_purposes.image_understand]',
-    );
-    expect(fs.readFileSync(filePath, 'utf-8')).toContain(
-      '[default_model_purposes.audio_understand]',
-    );
-    expect(fs.readFileSync(filePath, 'utf-8')).toContain(
-      '[default_model_purposes.video_understand]',
-    );
+    const rewritten = fs.readFileSync(filePath, 'utf-8');
+    expect(rewritten).toContain('[default_model_purposes.character_dialogue]');
+    expect(rewritten).not.toContain('image_understand');
+    expect(rewritten).not.toContain('audio_understand');
+    expect(rewritten).not.toContain('video_understand');
   });
 
   it('preserves model protocol profile overrides from TOML', () => {
@@ -815,7 +821,7 @@ describe('config-reader typed results', () => {
     const filePath = path.join(createTempRoot(), 'config.toml');
     fs.writeFileSync(
       filePath,
-      ['[default_model_purposes.video_understand]', 'provider_id = "google"'].join('\n'),
+      ['[default_model_purposes.character_dialogue]', 'provider_id = "google"'].join('\n'),
       'utf-8',
     );
 
@@ -827,7 +833,7 @@ describe('config-reader typed results', () => {
     expect(result.diagnostics).toEqual([
       expect.objectContaining({
         code: 'unsupportedDefaultModelPurpose',
-        path: 'default_model_purposes.video_understand',
+        path: 'default_model_purposes.character_dialogue',
       }),
     ]);
   });

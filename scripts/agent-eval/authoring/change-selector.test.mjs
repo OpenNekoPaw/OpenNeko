@@ -89,7 +89,7 @@ describe('Agent Evaluation change-to-suite selector', () => {
         }),
         expect.objectContaining({
           behaviorId: 'capability-tool-routing',
-          suiteId: 'agent-runtime.perception-routing',
+          suiteId: 'agent-runtime.media-tool-routing',
         }),
         expect.objectContaining({
           behaviorId: 'provider-model-routing',
@@ -284,7 +284,7 @@ describe('Agent Evaluation change-to-suite selector', () => {
         suiteId: 'agent-runtime.external-automation',
         suiteIds: [
           'agent-runtime.external-automation',
-          'agent-runtime.perception-routing',
+          'agent-runtime.media-tool-routing',
           'skill.skill-creator',
           'skill.image',
           'skill.video',

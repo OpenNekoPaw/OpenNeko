@@ -121,7 +121,8 @@ export interface TomlConfigValidationIssue {
     | 'invalidProviderApiKey'
     | 'unsupportedModelType'
     | 'unsupportedDefaultModelType'
-    | 'unsupportedDefaultModelPurpose';
+    | 'unsupportedDefaultModelPurpose'
+    | 'retiredDefaultModelPurpose';
   readonly path: string;
   readonly message: string;
 }
@@ -248,7 +249,7 @@ function rejectRetiredAgentConfiguration(
     diagnostics.push(
       invalidField(
         'external_research',
-        'external_research is retired; DSH Tool and perception owners provide this capability.',
+        'external_research is retired; package-owned DSH Tools provide this capability.',
       ),
     );
   }
@@ -485,6 +486,14 @@ function decodeModelRefs(
   const result: Record<string, TomlModelRefConfig> = {};
   for (const [key, entry] of Object.entries(record)) {
     const path = `${section}.${key}`;
+    if (section === 'default_model_purposes' && isRetiredMediaUnderstandingPurpose(key)) {
+      issues.push({
+        code: 'retiredDefaultModelPurpose',
+        path,
+        message: `${path} is retired; media understanding uses the selected Agent model and package-owned Tools.`,
+      });
+      continue;
+    }
     if (restrictKeys && !isModelType(key)) {
       issues.push({
         code: 'unsupportedDefaultModelType',
@@ -520,6 +529,19 @@ function decodeModelRefs(
     result[key] = { provider_id: providerId, model_id: modelId };
   }
   return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function isRetiredMediaUnderstandingPurpose(value: string): boolean {
+  return (
+    value === 'image_understand' ||
+    value === 'video_understand' ||
+    value === 'audio_understand' ||
+    value === 'image.understand' ||
+    value === 'video.understand' ||
+    value === 'audio.understand' ||
+    value === 'llm_vision' ||
+    value === 'llm.vision'
+  );
 }
 
 function decodeDefaults(

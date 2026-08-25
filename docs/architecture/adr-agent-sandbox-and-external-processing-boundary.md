@@ -55,7 +55,7 @@ stdout/stderr 有界采集并脱敏；退出码、signal、timeout、cancel、sc
 图片 metadata、缩放、最多五张图片的 overview/detail/contact sheet，以及无网络的媒体 metadata/抽帧/OCR
 属于自动允许的只读能力。
 
-以下行为必须进入明确审批：扩大 Workspace 或资源 grant、访问网络、调用专用付费感知模型、预计产生显著
+以下行为必须进入明确审批：扩大 Workspace 或资源 grant、访问网络、通过 owning Tool 调用专用付费 ASR/OCR/安全审核模型、预计产生显著
 token/cost、执行用户代码或可执行文件、递归/大规模解包、覆盖或批量写入以及不可逆外部副作用。审批快照
 必须冻结 exact Conversation/Turn/Tool、输入短引用解析出的 canonical locator、provider/model、成本等级、
 读写范围与输出 owner。批准一个操作不得提升 sibling Tool、后续 Turn、其他 Conversation 或整个 Workspace

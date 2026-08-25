@@ -57,7 +57,7 @@ describe('Agent Evaluation local runner', () => {
       ),
     ).resolves.toEqual([
       'agent-runtime.model-binding',
-      'agent-runtime.perception-routing',
+      'agent-runtime.media-tool-routing',
       'agent-runtime.workflow-controller',
     ]);
   });

@@ -36,7 +36,7 @@ export interface UnifiedConfig {
   /** Default models by broad model type */
   defaultModels?: TypeDefaultModels;
 
-  /** Default models by product purpose, e.g. image.understand or video.understand */
+  /** Default models for explicit product roles such as Canvas, Character, or generation. */
   defaultModelPurposes?: PurposeDefaultModels;
 
   /** Global default max output tokens */

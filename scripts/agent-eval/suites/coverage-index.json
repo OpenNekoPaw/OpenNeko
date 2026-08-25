@@ -215,7 +215,7 @@
       "disposition": "suite",
       "suiteIds": [
         "agent-runtime.external-automation",
-        "agent-runtime.perception-routing",
+        "agent-runtime.media-tool-routing",
         "skill.skill-creator",
         "skill.image",
         "skill.video"
@@ -225,7 +225,7 @@
       "kind": "agent-runtime-capability",
       "id": "provider-model-routing",
       "disposition": "suite",
-      "suiteIds": ["agent-runtime.model-binding", "agent-runtime.perception-routing"]
+      "suiteIds": ["agent-runtime.model-binding", "agent-runtime.media-tool-routing"]
     },
     {
       "kind": "agent-runtime-capability",
@@ -254,7 +254,7 @@
       "kind": "agent-runtime-capability",
       "id": "media-library-content",
       "disposition": "suite",
-      "suiteIds": ["agent-runtime.perception-routing"]
+      "suiteIds": ["agent-runtime.media-tool-routing"]
     },
     {
       "kind": "agent-runtime-capability",

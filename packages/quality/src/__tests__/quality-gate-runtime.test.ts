@@ -2,13 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { type QualityEvidence, type QualityGatePolicy, type QualityTarget } from '@neko/generation';
 import {
   aggregateQualityGate,
-  assertExternalPerceptionTarget,
   createQualityGateRuntime,
   selectQualityProfile,
   type QualityEvaluator,
   type QualityTargetMaterializer,
 } from '../core/index';
-import { createMultimodalPerceptionEvaluator } from '../model/index';
 
 const contentLocator = {
   file: { authority: 'workspace' as const, path: 'assets/hero.png' },
@@ -172,39 +170,5 @@ describe('canonical quality gate runtime', () => {
     });
     expect(result.verdict).toBe('fail');
     expect(result.staleEvidenceIds).toEqual(['old']);
-  });
-
-  it('rejects project archives from external perception materialization', () => {
-    expect(() => assertExternalPerceptionTarget(target({ kind: 'project-artifact' }))).toThrow(
-      'project archives',
-    );
-  });
-
-  it('rejects invalid absolute-path locators from external perception', () => {
-    const invalid = target();
-    Reflect.set(invalid, 'contentLocator', {
-      file: { authority: 'workspace', path: '/tmp/untrusted.png' },
-    });
-    expect(() => assertExternalPerceptionTarget(invalid)).toThrow('content-locator-invalid');
-  });
-
-  it('records complete multimodal perception evidence through the model entry', async () => {
-    const llm = createMultimodalPerceptionEvaluator({
-      createService: () => ({
-        chat: vi
-          .fn()
-          .mockResolvedValue({ message: { content: JSON.stringify({ score: 92, issues: [] }) } }),
-      }),
-      chatModel: { providerId: 'vision-provider', modelId: 'vision-model' },
-    });
-    const runtime = fixedRuntime([llm]);
-    const result = await runtime.review({
-      target: target(),
-      policy: policy({ requiredEvaluatorClasses: ['perception'] }),
-    });
-    expect(result.verdict).toBe('pass');
-    expect(materializer.materialize).toHaveBeenCalledWith(
-      expect.objectContaining({ consumer: 'perception' }),
-    );
   });
 });

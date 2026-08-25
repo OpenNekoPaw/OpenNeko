@@ -21,7 +21,7 @@ OpenNeko 保留：
 - ACP application client、事件 projection 与 DSH reverse Host request adapter；
 - Generation、Canvas 等 typed domain Tool contract，以及 owning-domain facts/Jobs；
 - Skill/MCP management 的只读 presentation 与精确命令入口；
-- 附件授权、感知配置、媒体预处理与 first-party domain Tool Host adapters。
+- 附件授权、媒体预处理与 first-party Content/Media/domain Tool Host adapters。
 
 ## 唯一生产路径
 
@@ -87,11 +87,11 @@ cross-session identity、过大 payload 或权限拒绝必须 fail-local、fail-
 - Browser Use 与 Computer Use 是官方 DSH MCP integrations。DSH 拥有 MCP connection、Tool discovery/call/cancel；OpenNeko Host 只拥有 OS 权限、exact target、sender-bound grant、approval 与 evidence。
 - DSH 公开 inventory/settings API 不能形成 secret-safe 完整 contract 时，对应配置保持 visible unavailable；禁止读取私有模块或恢复旧 MCP/Plugin catalog。
 
-## 附件、感知与模型
+## 附件、媒体 Tool 与模型
 
-ACP content block 是 Desktop 到 DSH 的唯一消息输入协议。图片通过 Host 授权和 DSH attachment admission 后以 DSH 原生 image block 进入 exact Session。当前 DSH 只原生持久化 PNG、JPEG、WebP 与 GIF；音频、视频、文档和其他文件在公开 block/lifecycle 补齐前，由 owning media/content service 生成有界、带来源的 evidence，不把 raw path、bearer URL 或旧多模态 packet 写入 Session。
+ACP content block 是 Desktop 到 DSH 的唯一消息输入协议。Composer 图片通过 Host 授权和 DSH attachment admission 后以 DSH 原生 image block 进入 exact Session；运行中发现的文档图片通过 `openneko.read_image` Tool 返回同一原生 image block。当前 DSH 只原生持久化 PNG、JPEG、WebP 与 GIF；音频、视频、文档和其他文件在公开 block/lifecycle 补齐前，只能由 owning media/content Tool 生成有界、带来源的文本、metadata、转写或采样表示，不把 raw path、bearer URL 或旧多模态 packet 写入 Session。
 
-当前 Agent 模型声明支持输入模态时直接处理；不支持时只调用用户显式配置的感知模型，并把结构化 evidence 注入同一 turn。缺少感知模型或处理失败时拒绝当前附件，不静默丢弃、不隐式换 provider。Agent LLM、感知模型与 Generation 媒体模型/参数分别由其 owner 管理，不能混入一个模型目录或通用 DSH 设置。
+当前 Agent 模型是媒体语义理解的唯一 LLM authority。附件或 Tool 结果所需模态受支持时由同一模型继续处理；不支持时只拒绝当前 submit 或 Tool call，并明确提示切换模型。产品不配置独立感知模型，不隐式切换 provider/model，也不允许 Tool 用隐藏模型伪造成功。Generation 媒体模型/参数继续由 `@neko/generation` owner 独立管理；未来专用 ASR/OCR/安全审核模型只能属于对应 Tool/service 的显式能力与审批边界。
 
 ## Credential 与安全
 
@@ -121,11 +121,11 @@ Desktop 原生 Agent surface 只选择并渲染 DSH-derived projection；卸载 
 ## 验收
 
 确定性门禁至少覆盖 ACP purity、subprocess lifecycle、exact binding、Session replay、permission/cancel、reverse
-Tool request、Skill/MCP inventory、attachment/perception、bounded payload、迟到 frame 隔离、唯一 registration 与 retired-path poison。`pnpm test:agent:eval`
+Tool request、Skill/MCP inventory、attachment/media Tool evidence、bounded payload、迟到 frame 隔离、唯一 registration 与 retired-path poison。`pnpm test:agent:eval`
 只证明 key-free harness/schema readiness；真实行为必须通过完整 Desktop session owner、用户可操作 UI 和真实
 provider 验证，并记录 effective model、terminal state、artifact/path evidence 与 no-fallback facts。
 
-Evaluation canonical facts 使用 Conversation、DSH Session、turn/step/toolCall、permission preset、model receipt、Command/Skill、MCP/Tool provenance、attachment/perception evidence 和 domain Job/artifact identity。Pi run/branch/queue assertions 与 direct runtime driver 不得保留；visible UI 与 hidden full Desktop 都必须通过公开 Composer input path，缺少 driver/API 时报告 `infrastructure-blocked`。
+Evaluation canonical facts 使用 Conversation、DSH Session、turn/step/toolCall、permission preset、model receipt、Command/Skill、MCP/Tool provenance、attachment/media Tool evidence 和 domain Job/artifact identity。Pi run/branch/queue assertions 与 direct runtime driver 不得保留；visible UI 与 hidden full Desktop 都必须通过公开 Composer input path，缺少 driver/API 时报告 `infrastructure-blocked`。
 
 发布前必须证明旧 Pi runtime、Webview message protocol、queue/confirmation、Skill Host、MCP Manager、Plugin
 runtime 与平行 client 路径均不可达；真实 provider/API 或可见 UI 验收未执行时，发布门禁保持关闭。

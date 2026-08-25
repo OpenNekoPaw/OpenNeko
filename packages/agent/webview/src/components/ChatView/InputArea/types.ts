@@ -92,7 +92,6 @@ export type ComposerControlMenuId =
   | 'session-mode'
   | 'composer-config'
   | 'agent-model'
-  | 'understanding-model'
   | 'character-conversation-mode'
   | 'execution-mode';
 
