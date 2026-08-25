@@ -20,9 +20,9 @@
       "source": "apps/neko-desktop/src/main/desktop-dsh-profile-materializer.ts",
       "targetPackage": "@neko/chara-dsh-plugin",
       "owner": "Desktop DSH profile materializer",
-      "reason": "The packaged DSH subprocess loads the exact Character Tool bundle declared by the verified profile rather than through an Electron value import.",
+      "reason": "The Development DSH subprocess loads the exact Character Tool bundle declared by the verified profile; Release composition explicitly omits it.",
       "validationPath": "apps/neko-desktop/src/main/desktop-dsh-profile-materializer.test.ts",
-      "reviewCondition": "Remove when the product-status graph derives exact packaged DSH profile bundle edges directly.",
+      "reviewCondition": "Remove when Character is either promoted into Release or retired from Development composition.",
       "expiresOn": "2027-08-19"
     },
     {
@@ -30,9 +30,9 @@
       "source": "apps/neko-desktop/src/main/desktop-dsh-profile-materializer.ts",
       "targetPackage": "@neko/world-dsh-plugin",
       "owner": "Desktop DSH profile materializer",
-      "reason": "The packaged DSH subprocess loads the exact World Tool bundle declared by the verified profile rather than through an Electron value import.",
+      "reason": "The Development DSH subprocess loads the exact World Tool bundle declared by the verified profile; Release composition explicitly omits it.",
       "validationPath": "apps/neko-desktop/src/main/desktop-dsh-profile-materializer.test.ts",
-      "reviewCondition": "Remove when the product-status graph derives exact packaged DSH profile bundle edges directly.",
+      "reviewCondition": "Remove when World is either promoted into Release or retired from Development composition.",
       "expiresOn": "2027-08-19"
     },
     {

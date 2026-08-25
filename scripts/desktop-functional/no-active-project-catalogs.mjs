@@ -180,7 +180,7 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     }
     return { workspacePath };
   },
-  async run({ checkpoint, click, evaluate, hover, pressKey, screenshot, scroll, waitForSelector }) {
+  async run({ checkpoint, evaluate, hover, pressKey, screenshot, scroll, waitForSelector }) {
     await waitForSelector('.shell-diagnostic');
     const startupNotice = await evaluate(`(() => {
       const notice = document.querySelector('.shell-diagnostic');
@@ -254,8 +254,12 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     if (
       JSON.stringify(navigationSections.sections) !==
         JSON.stringify([
-          { id: 'projects', label: 'Projects', count: '2', groupKinds: ['project', 'workspace'] },
-          { id: 'conversations', label: 'Conversations', count: '6', groupKinds: ['assistant'] },
+          {
+            id: 'conversations',
+            label: 'Conversations',
+            count: '7',
+            groupKinds: ['assistant', 'project', 'workspace'],
+          },
         ]) ||
       navigationSections.assistantCount !== '6' ||
       navigationSections.assistantVisibleRows !== 5 ||
@@ -460,9 +464,6 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
         catalogProjectCount: projection.catalog.projects.length,
         conversationGroupCount: document.querySelectorAll('.primary-conversation-group').length,
         projectGroupCount: groups.length,
-        projectSectionCount:
-          document.querySelector('[data-navigation-section="projects"] .home-sidebar-heading > span:last-child')
-            ?.textContent?.trim() ?? '',
         conversationSectionCount:
           document.querySelector('[data-navigation-section="conversations"] .home-sidebar-heading > span:last-child')
             ?.textContent?.trim() ?? '',
@@ -485,7 +486,6 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       primaryProjects.catalogProjectCount !== expectedProjectCount ||
       primaryProjects.conversationGroupCount !== 2 ||
       primaryProjects.projectGroupCount !== 1 ||
-      primaryProjects.projectSectionCount !== '1' ||
       primaryProjects.conversationSectionCount !== '6' ||
       primaryProjects.assistantGroupCount !== 1 ||
       !primaryProjects.everyProjectEmpty ||
@@ -574,7 +574,7 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       'empty-project-keyboard-actions-visible',
     );
 
-    await clickNavigation(evaluate, 3);
+    await clickNavigation(evaluate, 'projects');
     await waitForSelector(`${ACTIVE_WORKBENCH} .project-management-catalog`);
     await waitForCondition(
       evaluate,
@@ -593,11 +593,18 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
         diagnostic: row?.querySelector('.management-surface-row__diagnostic')?.textContent?.trim() ?? '',
         openDisabled: row?.getAttribute('data-workspace-open-disabled') === 'true',
         gridMode: document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog .management-surface-list.is-grid`)}) !== null,
+        viewModeAbsent:
+          document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog [data-view-mode]`)}) === null,
         batchToolbarAbsent:
           document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-batch-toolbar`)}) === null,
       };
     })()`);
-    if (!project.openDisabled || !project.gridMode || !project.batchToolbarAbsent) {
+    if (
+      !project.openDisabled ||
+      !project.gridMode ||
+      !project.viewModeAbsent ||
+      !project.batchToolbarAbsent
+    ) {
       throw new Error('Unavailable Workspace actions or default grid mode are incorrect.');
     }
     if (await evaluate(`(() => document.querySelector('.shell-diagnostic') !== null)()`)) {
@@ -629,39 +636,40 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       throw new Error(`Project direct open is incorrect: ${JSON.stringify(directOpen)}`);
     }
     checkpoint('project-catalog-direct-open', directOpen);
-    await clickNavigation(evaluate, 3);
+    await clickNavigation(evaluate, 'projects');
     await waitForSelector(`${ACTIVE_WORKBENCH} .project-management-catalog`);
-    const scrollSelector = `${ACTIVE_WORKBENCH} .project-management-catalog .management-surface-list`;
+    const scrollSelector = `${ACTIVE_WORKBENCH} .project-management-catalog__content`;
     const scrollBefore = await evaluate(`(() => {
       const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
-      const header = root?.querySelector('.management-surface-header');
-      const toolbar = root?.querySelector('.management-surface-toolbar');
+      const hero = root?.querySelector('.project-catalog-hero');
+      const content = root?.querySelector('.project-management-catalog__content');
       const list = root?.querySelector('.management-surface-list');
       const finalRow = [...(list?.querySelectorAll('.management-surface-row') ?? [])].at(-1);
-      if (!(root instanceof HTMLElement) || !(header instanceof HTMLElement) ||
-          !(toolbar instanceof HTMLElement) || !(list instanceof HTMLElement) ||
+      if (!(root instanceof HTMLElement) || !(hero instanceof HTMLElement) ||
+          !(content instanceof HTMLElement) ||
+          !(list instanceof HTMLElement) ||
           !(finalRow instanceof HTMLElement)) return null;
       const rootStyle = getComputedStyle(root);
-      const listStyle = getComputedStyle(list);
+      const contentStyle = getComputedStyle(content);
       return {
         rootOverflow: rootStyle.overflow,
         rootClientHeight: root.clientHeight,
         rootScrollHeight: root.scrollHeight,
-        listOverflowY: listStyle.overflowY,
-        headerTop: header.getBoundingClientRect().top,
-        toolbarTop: toolbar.getBoundingClientRect().top,
-        listClientHeight: list.clientHeight,
-        listScrollHeight: list.scrollHeight,
+        contentOverflowY: contentStyle.overflowY,
+        heroPresent: true,
+        contentClientHeight: content.clientHeight,
+        contentScrollHeight: content.scrollHeight,
         finalRowTop: finalRow.getBoundingClientRect().top,
-        listBottom: list.getBoundingClientRect().bottom,
+        contentBottom: content.getBoundingClientRect().bottom,
       };
     })()`);
     if (
       !scrollBefore ||
       scrollBefore.rootOverflow !== 'hidden' ||
-      scrollBefore.listOverflowY !== 'auto' ||
-      scrollBefore.listScrollHeight <= scrollBefore.listClientHeight ||
-      scrollBefore.finalRowTop <= scrollBefore.listBottom
+      scrollBefore.contentOverflowY !== 'auto' ||
+      !scrollBefore.heroPresent ||
+      scrollBefore.contentScrollHeight <= scrollBefore.contentClientHeight ||
+      scrollBefore.finalRowTop <= scrollBefore.contentBottom
     ) {
       throw new Error(
         `Project catalog did not establish a bounded collection scroll owner: ${JSON.stringify(scrollBefore)}`,
@@ -670,61 +678,56 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     checkpoint('project-catalog-scroll-owner-ready', scrollBefore);
     const projectScrollStartScreenshot = await screenshot('project-catalog-scroll-start');
     checkpoint('project-catalog-scroll-start-captured', projectScrollStartScreenshot);
-    await click(scrollSelector);
-    await pressKey('End');
-    const scrollProgress = await evaluate(`(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      const list = document.querySelector(${JSON.stringify(scrollSelector)});
-      return list instanceof HTMLElement
-        ? { scrollTop: list.scrollTop, maxScrollTop: list.scrollHeight - list.clientHeight }
-        : null;
+    const scrollProgress = await evaluate(`(() => {
+      const content = document.querySelector(${JSON.stringify(scrollSelector)});
+      const finalRow = [...(content?.querySelectorAll('.management-surface-row') ?? [])].at(-1);
+      if (!(content instanceof HTMLElement) || !(finalRow instanceof HTMLElement)) return null;
+      finalRow.scrollIntoView({ block: 'end' });
+      return { scrollTop: content.scrollTop, maxScrollTop: content.scrollHeight - content.clientHeight };
     })()`);
-    if (!scrollProgress || scrollProgress.scrollTop < scrollProgress.maxScrollTop - 1) {
+    if (!scrollProgress || scrollProgress.scrollTop <= 0) {
       throw new Error(
-        `Project catalog keyboard input did not reach the final row: ${JSON.stringify(scrollProgress)}`,
+        `Project catalog did not scroll to the final row: ${JSON.stringify(scrollProgress)}`,
       );
     }
     await waitForCondition(
       evaluate,
       `(() => {
-        const list = document.querySelector(${JSON.stringify(scrollSelector)});
-        const finalRow = [...(list?.querySelectorAll('.management-surface-row') ?? [])].at(-1);
-        if (!(list instanceof HTMLElement) || !(finalRow instanceof HTMLElement)) return false;
-        const listRect = list.getBoundingClientRect();
+        const content = document.querySelector(${JSON.stringify(scrollSelector)});
+        const finalRow = [...(content?.querySelectorAll('.management-surface-row') ?? [])].at(-1);
+        if (!(content instanceof HTMLElement) || !(finalRow instanceof HTMLElement)) return false;
+        const contentRect = content.getBoundingClientRect();
         const rowRect = finalRow.getBoundingClientRect();
-        return list.scrollTop > 0 && rowRect.top >= listRect.top && rowRect.bottom <= listRect.bottom;
+        return content.scrollTop > 0 && rowRect.top >= contentRect.top && rowRect.bottom <= contentRect.bottom;
       })()`,
       'Project catalog scroll did not reveal the final retained Workspace.',
       5_000,
     );
     const scrollAfter = await evaluate(`(() => {
       const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
-      const header = root?.querySelector('.management-surface-header');
-      const toolbar = root?.querySelector('.management-surface-toolbar');
+      const content = root?.querySelector('.project-management-catalog__content');
       const list = root?.querySelector('.management-surface-list');
       const finalRow = [...(list?.querySelectorAll('.management-surface-row') ?? [])].at(-1);
-      const removal = finalRow?.querySelector(
-        '.management-surface-row-actions button:last-child',
-      );
+      const more = finalRow?.querySelector('.project-catalog-card__more');
       return {
-        scrollTop: list instanceof HTMLElement ? list.scrollTop : 0,
+        scrollTop: content instanceof HTMLElement ? content.scrollTop : 0,
         finalProject: finalRow?.querySelector('strong')?.textContent?.trim() ?? '',
-        headerTop: header instanceof HTMLElement ? header.getBoundingClientRect().top : -1,
-        toolbarTop: toolbar instanceof HTMLElement ? toolbar.getBoundingClientRect().top : -1,
+        hierarchyPresent:
+          root?.querySelector('.project-catalog-hero') !== null &&
+          root?.querySelector('.project-catalog-collection') !== null,
         diagnostic: finalRow?.querySelector('.management-surface-row__diagnostic')?.textContent?.trim() ?? '',
         openDisabled: finalRow?.getAttribute('data-workspace-open-disabled') === 'true',
-        removalEnabled: removal instanceof HTMLButtonElement && !removal.disabled,
+        moreEnabled: more instanceof HTMLButtonElement && !more.disabled,
       };
     })()`);
     if (
       scrollAfter.scrollTop <= 0 ||
-      Math.abs(scrollAfter.headerTop - scrollBefore.headerTop) > 1 ||
-      Math.abs(scrollAfter.toolbarTop - scrollBefore.toolbarTop) > 1 ||
+      !scrollAfter.hierarchyPresent ||
       !scrollAfter.diagnostic ||
       !scrollAfter.openDisabled ||
-      !scrollAfter.removalEnabled
+      !scrollAfter.moreEnabled
     ) {
-      throw new Error('Project catalog scrolling moved controls or hid unavailable-item actions.');
+      throw new Error('Project catalog scrolling hid its hierarchy or unavailable-item actions.');
     }
     checkpoint('project-catalog-final-row-reachable', { scrollBefore, scrollAfter });
     const projectScrollEndScreenshot = await screenshot('project-catalog-scroll-end');
@@ -732,24 +735,35 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     const wideGrid = await evaluate(`(() => {
       const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
       const list = root?.querySelector('.management-surface-list');
-      const gridControl = root?.querySelector('button[aria-label="Grid view"]');
-      const listControl = root?.querySelector('button[aria-label="List view"]');
+      const content = root?.querySelector('.project-management-catalog__content');
       if (!(root instanceof HTMLElement) || !(list instanceof HTMLElement) ||
-          !(gridControl instanceof HTMLButtonElement) || !(listControl instanceof HTMLButtonElement)) {
-        throw new Error('Wide Project view controls are unavailable.');
+          !(content instanceof HTMLElement)) {
+        throw new Error('Wide Project catalog is unavailable.');
       }
-      list.scrollTop = 0;
+      content.scrollTop = 0;
       const listRect = list.getBoundingClientRect();
       const rows = [...list.querySelectorAll('.management-surface-row')];
       const rowTops = new Set(rows.slice(0, 6).map((row) => Math.round(row.getBoundingClientRect().top)));
+      const templateCards = [...root.querySelectorAll('.project-template-card')];
+      const templateIdentities = templateCards.map((card) => card.getAttribute('data-project-template-id'));
       return {
         viewportWidth: window.innerWidth,
-        viewMode: list.dataset.viewMode,
-        gridPressed: gridControl.getAttribute('aria-pressed'),
-        listPressed: listControl.getAttribute('aria-pressed'),
+        viewControlsAbsent:
+          root.querySelector('button[aria-label="Grid view"], button[aria-label="List view"]') === null,
+        viewModeAbsent: root.querySelector('[data-view-mode]') === null,
         batchToolbarAbsent: root.querySelector('.project-management-batch-toolbar') === null,
         selectedStateAbsent: root.querySelector('[data-selected]') === null,
         hasMultipleColumns: rowTops.size < Math.min(rows.length, 6),
+        oneMoreTriggerPerCard:
+          root.querySelectorAll('.project-catalog-card__more').length === rows.length,
+        readableCardWidths: rows.every((row) => {
+          const width = row.getBoundingClientRect().width;
+          return width >= 360 && width <= 521;
+        }),
+        templateCount: templateCards.length,
+        projectTemplatesPresent:
+          templateIdentities.includes('storyboard') && templateIdentities.includes('video-plan'),
+        characterTemplateAbsent: !templateIdentities.includes('character-kit'),
         rowsFit: rows.every((row) => {
           const rectangle = row.getBoundingClientRect();
           return rectangle.left >= listRect.left && rectangle.right <= listRect.right;
@@ -758,65 +772,22 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     })()`);
     if (
       wideGrid.viewportWidth < 1200 ||
-      wideGrid.viewMode !== 'grid' ||
-      wideGrid.gridPressed !== 'true' ||
-      wideGrid.listPressed !== 'false' ||
+      !wideGrid.viewControlsAbsent ||
+      !wideGrid.viewModeAbsent ||
       !wideGrid.batchToolbarAbsent ||
       !wideGrid.selectedStateAbsent ||
       !wideGrid.hasMultipleColumns ||
+      !wideGrid.oneMoreTriggerPerCard ||
+      !wideGrid.readableCardWidths ||
+      wideGrid.templateCount !== 2 ||
+      !wideGrid.projectTemplatesPresent ||
+      !wideGrid.characterTemplateAbsent ||
       !wideGrid.rowsFit
     ) {
       throw new Error(`Wide Project grid is incorrect: ${JSON.stringify(wideGrid)}`);
     }
     checkpoint('project-catalog-grid-wide', wideGrid);
     const wideGridScreenshot = await screenshot('project-catalog-grid-wide');
-    const wideList = await evaluate(`(async () => {
-      const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
-      const listControl = root?.querySelector('button[aria-label="List view"]');
-      if (!(root instanceof HTMLElement) || !(listControl instanceof HTMLButtonElement)) {
-        throw new Error('Project list view control is unavailable.');
-      }
-      listControl.click();
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      const list = root.querySelector('.management-surface-list');
-      const listRect = list?.getBoundingClientRect();
-      const rows = [...(list?.querySelectorAll('.management-surface-row') ?? [])];
-      return {
-        viewMode: list?.getAttribute('data-view-mode') ?? '',
-        listPressed: listControl.getAttribute('aria-pressed'),
-        batchToolbarAbsent: root.querySelector('.project-management-batch-toolbar') === null,
-        rowsFit:
-          listRect !== undefined &&
-          rows.every((row) => {
-            const rectangle = row.getBoundingClientRect();
-            return rectangle.left >= listRect.left && rectangle.right <= listRect.right;
-          }),
-      };
-    })()`);
-    if (
-      wideList.viewMode !== 'list' ||
-      wideList.listPressed !== 'true' ||
-      !wideList.batchToolbarAbsent ||
-      !wideList.rowsFit
-    ) {
-      throw new Error(`Wide Project list is incorrect: ${JSON.stringify(wideList)}`);
-    }
-    checkpoint('project-catalog-list-wide', wideList);
-    const wideListScreenshot = await screenshot('project-catalog-list-wide');
-    await evaluate(`(() => {
-      const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
-      const grid = root?.querySelector('button[aria-label="Grid view"]');
-      if (!(grid instanceof HTMLButtonElement)) {
-        throw new Error('Project grid view control is unavailable.');
-      }
-      grid.click();
-      return true;
-    })()`);
-    await waitForCondition(
-      evaluate,
-      `document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .management-surface-list`)})?.getAttribute('data-view-mode') === 'grid'`,
-      'Project catalog did not return to grid view.',
-    );
 
     await evaluate(`(() => {
       window.resizeTo(960, 640);
@@ -829,58 +800,66 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     );
     const compactProject = await evaluate(`(() => {
       const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
+      const content = root?.querySelector('.project-management-catalog__content');
       const list = root?.querySelector('.management-surface-list');
-      if (!(root instanceof HTMLElement) || !(list instanceof HTMLElement)) return null;
+      if (!(root instanceof HTMLElement) || !(content instanceof HTMLElement) ||
+          !(list instanceof HTMLElement)) return null;
       return {
         rootHeight: root.clientHeight,
-        listClientHeight: list.clientHeight,
-        listScrollHeight: list.scrollHeight,
+        contentClientHeight: content.clientHeight,
+        contentScrollHeight: content.scrollHeight,
         viewportHeight: window.innerHeight,
       };
     })()`);
     if (
       !compactProject ||
       compactProject.rootHeight > compactProject.viewportHeight ||
-      compactProject.listScrollHeight <= compactProject.listClientHeight
+      compactProject.contentScrollHeight <= compactProject.contentClientHeight
     ) {
       throw new Error('Project catalog is not bounded at the minimum supported window size.');
     }
     checkpoint('project-catalog-minimum-window-bounded', compactProject);
     const compactProjectScreenshot = await screenshot('project-catalog-minimum-window');
 
-    const compactUnavailableItem = await evaluate(`(() => {
+    const compactUnavailableItem = await evaluate(`(async () => {
       const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
       const list = root?.querySelector('.management-surface-list');
       const row = [...(list?.querySelectorAll('.management-surface-row') ?? [])].at(-1);
       const open = row?.querySelector('.management-surface-row__open');
-      const actions = row?.querySelectorAll('.management-surface-row-actions button');
-      const cleanup = actions?.[0];
-      const removal = actions?.[1];
+      const more = row?.querySelector('.project-catalog-card__more');
       if (!(root instanceof HTMLElement) || !(list instanceof HTMLElement) ||
           !(row instanceof HTMLElement) || !(open instanceof HTMLButtonElement) ||
-          !(cleanup instanceof HTMLButtonElement) || !(removal instanceof HTMLButtonElement)) {
+          !(more instanceof HTMLButtonElement)) {
         throw new Error('Compact unavailable Project item is incomplete.');
       }
       row.scrollIntoView({ block: 'end' });
+      more.click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const actions = document.querySelectorAll('.project-catalog-card-menu [role="menuitem"]');
+      const cleanup = actions[0];
+      const removal = actions[1];
+      if (!(cleanup instanceof HTMLButtonElement) || !(removal instanceof HTMLButtonElement)) {
+        throw new Error('Compact unavailable Project menu actions are incomplete.');
+      }
       const rowRect = row.getBoundingClientRect();
-      const removalRect = removal.getBoundingClientRect();
+      const moreRect = more.getBoundingClientRect();
       return {
         projectId: row.dataset.projectId ?? '',
-        viewMode: list.dataset.viewMode,
+        viewModeAbsent: !list.hasAttribute('data-view-mode'),
         openDisabled: open.disabled,
         cleanupDisabled: cleanup.disabled,
         removalEnabled: !removal.disabled,
-        removalFits: removalRect.left >= rowRect.left && removalRect.right <= rowRect.right,
+        moreFits: moreRect.left >= rowRect.left && moreRect.right <= rowRect.right,
         batchToolbarAbsent: root.querySelector('.project-management-batch-toolbar') === null,
         selectedStateAbsent: root.querySelector('[data-selected]') === null,
       };
     })()`);
     if (
-      compactUnavailableItem.viewMode !== 'grid' ||
+      !compactUnavailableItem.viewModeAbsent ||
       !compactUnavailableItem.openDisabled ||
       !compactUnavailableItem.cleanupDisabled ||
       !compactUnavailableItem.removalEnabled ||
-      !compactUnavailableItem.removalFits ||
+      !compactUnavailableItem.moreFits ||
       !compactUnavailableItem.batchToolbarAbsent ||
       !compactUnavailableItem.selectedStateAbsent
     ) {
@@ -896,7 +875,7 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     const itemRemovalCancellation = await evaluate(`(async () => {
       const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
       const row = root?.querySelector(${JSON.stringify(`[data-project-id="${compactUnavailableItem.projectId}"]`)});
-      const removal = row?.querySelector('.management-surface-row-actions button:last-child');
+      const removal = document.querySelectorAll('.project-catalog-card-menu [role="menuitem"]')[1];
       const rowsBefore = root?.querySelectorAll('.management-surface-row').length ?? 0;
       globalThis.confirm = () => false;
       if (!(removal instanceof HTMLButtonElement)) {
@@ -919,11 +898,17 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     }
     checkpoint('project-catalog-item-removal-cancelled', itemRemovalCancellation);
 
-    await evaluate(`(() => {
+    await evaluate(`(async () => {
       const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
       const row = root?.querySelector(${JSON.stringify(`[data-project-id="${compactUnavailableItem.projectId}"]`)});
-      const removal = row?.querySelector('.management-surface-row-actions button:last-child');
+      const more = row?.querySelector('.project-catalog-card__more');
       globalThis.confirm = () => true;
+      if (!(more instanceof HTMLButtonElement)) {
+        throw new Error('Project item actions are unavailable.');
+      }
+      more.click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const removal = document.querySelectorAll('.project-catalog-card-menu [role="menuitem"]')[1];
       if (!(removal instanceof HTMLButtonElement)) {
         throw new Error('Project item removal is unavailable.');
       }
@@ -942,8 +927,8 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     );
     const itemRemoval = await evaluate(`(() => {
       const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
-      const list = root?.querySelector('.management-surface-list');
-      if (list instanceof HTMLElement) list.scrollTop = 0;
+      const content = root?.querySelector('.project-management-catalog__content');
+      if (content instanceof HTMLElement) content.scrollTop = 0;
       return {
         remainingRows: root?.querySelectorAll('.management-surface-row').length ?? -1,
         selectedStateAbsent: root?.querySelector('[data-selected]') === null,
@@ -953,7 +938,7 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     checkpoint('project-catalog-item-removed', itemRemoval);
     const itemRemovalScreenshot = await screenshot('project-catalog-item-removed-compact');
 
-    await clickNavigation(evaluate, 0);
+    await clickNavigation(evaluate, 'start');
     await waitForSelector('.desktop-scene-workbench--agent-only');
     await scroll('.home-recent-navigation', 0, { deltaY: -2_000 });
     const lightNarrowEmptyProject = await evaluate(`(() => {
@@ -1027,45 +1012,45 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       `document.documentElement.dataset.nekoTheme === 'dark'`,
       'Desktop Theme did not switch to dark through Settings.',
     );
-    await clickNavigation(evaluate, 3);
+    await clickNavigation(evaluate, 'projects');
     await waitForSelector(`${ACTIVE_WORKBENCH} .project-management-catalog`);
     const darkGrid = await evaluate(`(() => {
       const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
       const list = root?.querySelector('.management-surface-list');
       const row = list?.querySelector('.management-surface-row');
-      const actions = row?.querySelector('.management-surface-row-actions');
+      const more = row?.querySelector('.project-catalog-card__more');
       if (!(root instanceof HTMLElement) || !(list instanceof HTMLElement) ||
-          !(row instanceof HTMLElement) || !(actions instanceof HTMLElement)) {
+          !(row instanceof HTMLElement) || !(more instanceof HTMLButtonElement)) {
         throw new Error('Dark Project grid fixture is incomplete.');
       }
       const rowRect = row.getBoundingClientRect();
-      const actionsRect = actions.getBoundingClientRect();
+      const moreRect = more.getBoundingClientRect();
       const rowStyle = getComputedStyle(row);
       return {
         theme: document.documentElement.dataset.nekoTheme,
-        viewMode: list.dataset.viewMode,
+        viewModeAbsent: !list.hasAttribute('data-view-mode'),
         batchToolbarAbsent: root.querySelector('.project-management-batch-toolbar') === null,
         selectedStateAbsent: root.querySelector('[data-selected]') === null,
         rowBackground: rowStyle.backgroundColor,
         rowBorder: rowStyle.borderColor,
-        actionsFit: actionsRect.left >= rowRect.left && actionsRect.right <= rowRect.right,
+        moreFits: moreRect.left >= rowRect.left && moreRect.right <= rowRect.right,
       };
     })()`);
     if (
       darkGrid.theme !== 'dark' ||
-      darkGrid.viewMode !== 'grid' ||
+      !darkGrid.viewModeAbsent ||
       !darkGrid.batchToolbarAbsent ||
       !darkGrid.selectedStateAbsent ||
       !darkGrid.rowBackground ||
       !darkGrid.rowBorder ||
-      !darkGrid.actionsFit
+      !darkGrid.moreFits
     ) {
       throw new Error(`Dark Project grid is incorrect: ${JSON.stringify(darkGrid)}`);
     }
     checkpoint('project-catalog-grid-dark', darkGrid);
     const darkGridScreenshot = await screenshot('project-catalog-grid-dark');
 
-    await clickNavigation(evaluate, 0);
+    await clickNavigation(evaluate, 'start');
     await waitForSelector('.desktop-scene-workbench--agent-only');
     await scroll('.home-recent-navigation', 0, { deltaY: -2_000 });
     await hover(`${emptyProjectHeader} .primary-conversation-group__project-link`);
@@ -1109,7 +1094,7 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     checkpoint('empty-project-dark-narrow-hover', darkNarrowEmptyProject);
     const darkNarrowEmptyProjectScreenshot = await screenshot('empty-project-dark-narrow-hover');
 
-    await clickNavigation(evaluate, 1);
+    await clickNavigation(evaluate, 'assets');
     await waitForSelector(`${ACTIVE_WORKBENCH} [data-owner-root="asset-management"]`);
     await evaluate(`(() => {
       const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} [data-owner-root="asset-management"]`)});
@@ -1154,7 +1139,6 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       compactProject,
       directOpen,
       wideGrid,
-      wideList,
       compactUnavailableItem,
       itemRemovalCancellation,
       itemRemoval,
@@ -1171,7 +1155,6 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
         projectScrollStartScreenshot,
         projectScrollEndScreenshot,
         wideGridScreenshot,
-        wideListScreenshot,
         compactProjectScreenshot,
         compactUnavailableItemScreenshot,
         itemRemovalScreenshot,
@@ -1184,9 +1167,18 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
   },
 });
 
-async function clickNavigation(evaluate, index) {
+const NAVIGATION_LABELS = Object.freeze({
+  start: ['Start creating', '开始创作'],
+  projects: ['Projects', '项目'],
+  assets: ['Asset Library', '资产库'],
+});
+
+async function clickNavigation(evaluate, target) {
+  const labels = NAVIGATION_LABELS[target];
+  if (!labels) throw new Error(`Unknown Desktop navigation target '${target}'.`);
   await evaluate(`(() => {
-    const button = document.querySelectorAll('.home-primary-navigation .home-nav-button')[${String(index)}];
+    const button = [...document.querySelectorAll('.home-primary-navigation .home-nav-button')]
+      .find((candidate) => ${JSON.stringify(labels)}.includes(candidate.textContent?.trim() ?? ''));
     if (!(button instanceof HTMLButtonElement)) throw new Error('Desktop navigation is unavailable.');
     button.click();
     return true;

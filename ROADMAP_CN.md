@@ -13,8 +13,9 @@ GitHub Release 发布并明确披露未公证状态，Developer ID/公证仍是�
 其他架构不支持。Desktop 已有 OpenNeko 自有的 Skill/扩展目录及受支持
 Skill/MCP contribution 的 Agent 接入路径；通用扩展生态与专业工具集成尚未实现。
 
-每个阶段必须拆成边界明确的 OpenSpec change，不允许用一个长期巨型 change 同时开发 Shell、
-跨平台、插件和全部专业工具。
+每个阶段中的产品功能变更必须拆成边界明确的 OpenSpec change，不允许用一个长期巨型 change 同时开发
+Shell、跨平台、插件和全部专业工具。文档、架构整理、行为等价重构、测试与开发工具等非功能工作直接实施，
+不得为路线图切片单独创建 OpenSpec。
 
 ## 产品重点与实验晋级
 
@@ -33,7 +34,8 @@ Chara 与 Interactive World 是独立实验方向，不是当前阶段的承诺�
 - 能定义并验证一条使用真实 owner、模型和持久事实的最小创作—体验闭环。
 
 实验未晋级时，CharacterProject/Version、Character room/Play、WorldProject、WorldExperience、
-Run/Save/Branch 及其 Desktop 入口必须保持 fail-visible unavailable。多角色 Play、VLA、游戏控制、
+Run/Save/Branch 在 Development 中可继续验证；Release 必须隐藏产品入口，并让直接 Scene 调用保持
+fail-visible unavailable。领域代码与用户数据继续保留。多角色 Play、VLA、游戏控制、
 完整 3D/实时视频表现和社交分发不得作为验证基础需求提前扩大范围。OpenSpec 中存在设计或任务
 不表示路线图已经承诺交付。
 
@@ -54,8 +56,8 @@ Run/Save/Branch 及其 Desktop 入口必须保持 fail-visible unavailable。多
 
 ## 阶段 1：前端界面与现有子包功能接入
 
-开发提案与实施切片由当前 `openspec/changes/` 中的 focused change 分别承载；Phase 1 不再维护一份
-重复子提案任务和过时 runtime 目标的总控提案。
+产品功能提案与实施切片由当前 `openspec/changes/` 中的 focused change 分别承载；Phase 1 不再维护一份
+重复子提案任务和过时 runtime 目标的总控提案，非功能整改也不进入该目录。
 
 ### 目标
 
@@ -63,8 +65,9 @@ Run/Save/Branch 及其 Desktop 入口必须保持 fail-visible unavailable。多
 并把现有保留子包通过公共入口和 host-neutral adapter 接入。第一阶段交付的是可完成真实创作
 流程的 Desktop，不是静态原型或由 mock/no-op 支撑的页面集合。
 
-具体实施进度、阻塞和验证证据由对应 OpenSpec change 与日期化状态文档记录；本路线图
-不复制 task 级状态。所有 Phase 1 门禁通过前，不声明 Phase 1 完成。
+产品功能的具体实施进度、阻塞和验证证据由适用的 OpenSpec change 记录；非功能整改直接在提交、PR 或
+交付说明中记录，日期化状态文档只保存审计快照。本路线图不复制 task 级状态。所有 Phase 1 门禁通过前，
+不声明 Phase 1 完成。
 
 ### 范围
 
@@ -92,8 +95,9 @@ Run/Save/Branch 及其 Desktop 入口必须保持 fail-visible unavailable。多
 6. Chara/Entity 现有内核投影、实验隔离和 Tools/Diagnostics 接入。
 7. Content Project 端到端验收、资源释放、崩溃恢复与可访问性收口。
 
-每个切片使用独立或边界清晰的一组 OpenSpec；子包接入必须先完成公共 UI/host adapter
-复用审计，不能在 Desktop 复制 package-local store、文件 IO、媒体 client 或 DTO。
+每个产品功能切片使用独立或边界清晰的一组 OpenSpec；子包接入必须先完成公共 UI/host adapter
+复用审计。行为等价的边界整理直接实施，不能在 Desktop 复制 package-local store、文件 IO、媒体
+client 或 DTO。
 
 ### 完成门禁
 
@@ -104,7 +108,7 @@ Run/Save/Branch 及其 Desktop 入口必须保持 fail-visible unavailable。多
   切换/关闭、跨窗口订阅、自动保存、renderer reload 和 StrictMode 不产生重复执行或错写。
 - 缺失 Character/World 能力返回 unavailable diagnostic，不创建空项目或 no-op success。
 - Desktop 不导入 VS Code Extension 私有实现，不恢复旧 Desktop、Workbench、Engine 或 client。
-- 第一阶段只在实施 OpenSpec 指定的参考平台做产品验收，不因此声明完整跨平台支持。
+- 第一阶段只在适用功能 OpenSpec 或发布资格说明指定的参考平台做产品验收，不因此声明完整跨平台支持。
 
 ## 阶段 2：macOS 能力与发布资格
 
@@ -187,7 +191,7 @@ L5 Round-trip import / relink / review with evidence
 | 3D   | Unity                                  | 受控 project/package handoff、Editor/CLI/MCP 操作、明确 project/scene identity 和构建/导出证据 |
 | 3E   | Photoshop、Live2D Cubism 等            | 按各自公开稳定接口和交换格式增加 adapter，不通过私有格式猜测或像素坐标宏伪造支持               |
 
-精确交换格式、支持版本、平台矩阵和自动化接口由每个工具的实施 OpenSpec 决定。一个工具
+精确交换格式、支持版本、平台矩阵和自动化接口由每个工具的产品功能 OpenSpec 决定。一个工具
 在某个平台只有 L1/L2 时必须如实展示，不能因为另一个平台达到 L3/L5 就宣称全平台完整支持。
 
 ### Computer Use 门禁

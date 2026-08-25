@@ -52,7 +52,7 @@ canonical 内容地址只由文件 authority、规范化路径和可选文件内
 | `ContentReadService`                                 | locator stat、bounded bytes/Range、Renderer/media/processor opaque projection | cache policy、项目写入 ownership、公开 localPath    |
 | `ContentRepresentationService`                       | thumbnail/proxy/waveform/raster 等语义表现请求                                | 向调用方公开存储方式、cache status 或 root          |
 | Host derived store (`ResourceCacheService` internal) | fingerprint、生成复用、in-flight 去重、freshness、retention、quota、GC        | 产品子包协议、source identity、正式 Asset/输出      |
-| `@neko/content-domain/document`                      | 文档 format、manifest/range/locator/cursor、native entry 读取语义             | cache root、Webview URI、Agent 解包协议             |
+| `@neko/content-domain/document`                             | 文档 format、manifest/range/locator/cursor、native entry 读取语义             | cache root、Webview URI、Agent 解包协议             |
 | authorized workspace writer                          | 有界、原子、安全的 workspace bytes 写入 primitive                             | 决定 project/Asset/generated/export/cache ownership |
 | `ProjectFileStore` + domain codec                    | NK/JSON 项目事实 canonical shape、诊断与原子保存                              | 二进制表现、runtime token、cache lifecycle          |
 | Domain import/save service                           | Asset、generated output、package、export 的用户意图与 durable ownership       | 透明 cache destination、任意 absolute write         |

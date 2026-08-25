@@ -93,8 +93,8 @@ patch 目标。需要修改时回到明确内容源，或由 owning import/expor
 
 `InspectScreenplay`、`CreateScreenplayDraft`、`ReplaceScreenplayScene`、Agent Conversation-owned
 Text Document session 和 screenplay mutation provider 已原子删除。Fountain 与 Markdown 统一走
-core Workspace file Tool；Text Document 仅保留 Window owner。Canvas/Cut 更完整的 headless query
-与 revisioned authoring 验收继续由 `openspec/changes/add-ai-screenplay-authoring/` 跟踪。
+core Workspace file Tool；Text Document 仅保留 Window owner。Canvas/Cut 的 headless query 与
+revisioned authoring 由各自 owning package 的公共 contract 约束。
 
 ## 验证
 

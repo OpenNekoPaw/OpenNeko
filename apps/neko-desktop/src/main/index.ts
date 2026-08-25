@@ -532,6 +532,7 @@ async function startDesktop(): Promise<void> {
   const experimentalCreativeCapabilitiesReady = !app.isPackaged;
   const shellService = new DesktopShellService({
     applicationInstanceId,
+    experimentalCreativeCapabilitiesReady,
     stateRepository: shellStateRepository,
     workspaceRegistry,
     workspaceGrantAuthority,

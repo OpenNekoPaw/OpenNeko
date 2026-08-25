@@ -91,6 +91,24 @@ describe('Desktop DSH profile materializer', () => {
     await expectOfficialLinks(fixture.runtime.runtimeRoot, second.profileRoot);
   });
 
+  it('omits Character and World bundles and profile links from the Release composition', async () => {
+    const fixture = await createFixture();
+    const result = await materializeDesktopDshProfile({
+      ...fixture,
+      includeExperimentalCreativeCapabilities: false,
+    });
+
+    expect(JSON.parse(await readFile(join(result.profileRoot, 'package.json'), 'utf8'))).toEqual(
+      canonicalProfileManifest(false),
+    );
+    await expectOfficialLinks(fixture.runtime.runtimeRoot, result.profileRoot, false);
+    for (const packageName of ['@neko/chara-dsh-plugin', '@neko/world-dsh-plugin']) {
+      await expect(
+        lstat(join(result.profileRoot, 'node_modules', packageName)),
+      ).rejects.toMatchObject({ code: 'ENOENT' });
+    }
+  });
+
   it('rejects an invalid template before modifying the writable DSH home', async () => {
     const fixture = await createFixture();
     const sentinel = join(fixture.userDataRoot, 'dsh', 'sessions', 'sentinel.jsonl');
@@ -150,6 +168,7 @@ async function createFixture(): Promise<{
   readonly userDataRoot: string;
   readonly runtime: DesktopDshRuntimeResource;
   readonly profilePatchEntries: readonly Readonly<Record<string, unknown>>[];
+  readonly includeExperimentalCreativeCapabilities: boolean;
 }> {
   const userDataRoot = await realpath(await createRoot('openneko-dsh-user-data-'));
   const runtimeRoot = await realpath(await createRoot('openneko-dsh-runtime-'));
@@ -182,6 +201,7 @@ async function createFixture(): Promise<{
   return {
     userDataRoot,
     profilePatchEntries: [],
+    includeExperimentalCreativeCapabilities: true,
     runtime: {
       runtimeRoot,
       executable: join(runtimeRoot, 'payload', 'bin', 'node'),
@@ -192,8 +212,16 @@ async function createFixture(): Promise<{
   };
 }
 
-async function expectOfficialLinks(runtimeRoot: string, profileRoot: string): Promise<void> {
-  for (const packageName of officialPackages()) {
+async function expectOfficialLinks(
+  runtimeRoot: string,
+  profileRoot: string,
+  includeExperimentalCreativeCapabilities = true,
+): Promise<void> {
+  for (const packageName of officialPackages().filter(
+    (name) =>
+      includeExperimentalCreativeCapabilities ||
+      (name !== '@neko/chara-dsh-plugin' && name !== '@neko/world-dsh-plugin'),
+  )) {
     const link = join(profileRoot, 'node_modules', packageName);
     expect((await lstat(link)).isSymbolicLink()).toBe(true);
     expect(await readlink(link)).toBe(
@@ -202,7 +230,7 @@ async function expectOfficialLinks(runtimeRoot: string, profileRoot: string): Pr
   }
 }
 
-function canonicalProfileManifest(): object {
+function canonicalProfileManifest(includeExperimentalCreativeCapabilities = true): object {
   return {
     name: 'openneko-dsh-profile',
     private: true,
@@ -212,8 +240,9 @@ function canonicalProfileManifest(): object {
           '@deepseek-ai/dsh-base',
           '@neko/dsh-bridge',
           '@neko/agent-dsh-plugin',
-          '@neko/chara-dsh-plugin',
-          '@neko/world-dsh-plugin',
+          ...(includeExperimentalCreativeCapabilities
+            ? ['@neko/chara-dsh-plugin', '@neko/world-dsh-plugin']
+            : []),
           '@neko/generation-dsh-plugin',
           '@neko/canvas-dsh-plugin',
           '@neko/cut-dsh-plugin',

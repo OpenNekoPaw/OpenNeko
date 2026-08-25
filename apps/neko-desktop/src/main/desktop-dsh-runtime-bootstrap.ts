@@ -46,6 +46,7 @@ export async function prepareDesktopDshRuntime(options: {
     userDataRoot: options.userDataRoot,
     runtime: resource,
     profilePatchEntries: options.providers.profilePatchEntries,
+    includeExperimentalCreativeCapabilities: !options.isPackaged,
   });
   const workingDirectory = join(profile.dshHome, 'workspace');
   await mkdir(workingDirectory, { recursive: true });

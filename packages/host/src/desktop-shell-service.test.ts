@@ -479,16 +479,18 @@ describe('DesktopShellService', () => {
     first.service.setRendererSessionId(windowId, 'renderer-session-1');
     let projection = await first.service.getProjection(windowId);
 
-    const settings = await first.service.transitionScene(
+    const extensions = await first.service.transitionScene(
       createDesktopSceneTransitionRequest({
-        requestId: 'open-settings-before-invalid-session',
+        requestId: 'open-extensions-before-invalid-session',
         rendererSessionId: projection.rendererSessionId,
         windowId,
         sceneId: activeScene(projection.window).sceneId,
-        intent: { kind: 'open-settings' },
+        intent: { kind: 'open-extensions' },
       }),
     );
-    if (settings.status !== 'transitioned') throw new Error('Settings fixture is unavailable.');
+    if (extensions.status !== 'transitioned') {
+      throw new Error('Extensions fixture is unavailable.');
+    }
     projection = await first.service.getProjection(windowId);
 
     const entry = await first.service.transitionScene(
@@ -797,7 +799,13 @@ describe('DesktopShellService', () => {
     });
     expect(
       projection.domains
-        .filter((domain) => domain.surface !== 'agent' && domain.surface !== 'media-library')
+        .filter(
+          (domain) =>
+            domain.surface !== 'agent' &&
+            domain.surface !== 'media-library' &&
+            domain.surface !== 'character' &&
+            domain.surface !== 'world',
+        )
         .every((domain) => domain.status === 'unavailable'),
     ).toBe(true);
     expect(() => fixture.service.setAgentCapabilityReady(false)).toThrow(
@@ -822,22 +830,21 @@ describe('DesktopShellService', () => {
         rendererSessionId: projection.rendererSessionId,
         windowId,
         sceneId: initialScene.sceneId,
-        intent: { kind: 'open-settings', sectionId: 'agent' },
+        intent: { kind: 'open-extensions' },
       }),
     );
 
     expect(transitioned).toMatchObject({
       status: 'transitioned',
       scene: {
-        context: { kind: 'settings', settingsSectionId: 'agent' },
+        context: { kind: 'extensions' },
         slots: {
-          leftManager: { kind: 'settings-navigation', settingsSectionId: 'agent' },
-          main: { kind: 'settings-main', settingsSectionId: 'agent' },
+          main: { kind: 'extension-management' },
         },
       },
     });
     if (transitioned.status !== 'transitioned') {
-      throw new Error('Expected the Settings Scene transition to succeed.');
+      throw new Error('Expected the Extensions Scene transition to succeed.');
     }
     first.service.setRendererSessionId(windowId, 'renderer-session-2');
     expect(await first.service.getSceneProjection(windowId)).toEqual(transitioned.scene);
@@ -934,6 +941,33 @@ describe('DesktopShellService', () => {
       scene: {
         context: { kind: 'creative-management', catalog: 'characters' },
         slots: { main: { kind: 'creative-management', catalog: 'characters' } },
+      },
+    });
+  });
+
+  it('opens the Works catalog through the canonical Creative Management scene', async () => {
+    const catalog = 'works' as const;
+    const fixture = createFixture();
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const projection = await fixture.service.getProjection(windowId);
+
+    const transitioned = await fixture.service.transitionScene(
+      createDesktopSceneTransitionRequest({
+        requestId: `${catalog}-management-1`,
+        rendererSessionId: projection.rendererSessionId,
+        windowId,
+        sceneId: activeScene(projection.window).sceneId,
+        intent: { kind: 'open-creative-management', catalog },
+      }),
+    );
+
+    expect(transitioned).toMatchObject({
+      status: 'transitioned',
+      requestId: `${catalog}-management-1`,
+      scene: {
+        context: { kind: 'creative-management', catalog },
+        slots: { main: { kind: 'creative-management', catalog } },
       },
     });
   });
@@ -1040,7 +1074,111 @@ describe('DesktopShellService', () => {
     expect(await fixture.service.getSceneProjection(windowId)).toEqual(transitioned.scene);
   });
 
-  it('preserves qualified Character Interaction while resetting unavailable management scenes', async () => {
+  it('projects Development capabilities as ready and rejects every hidden Release Scene intent before side effects', async () => {
+    const development = createFixture();
+    const developmentWindowId = await development.service.claimWindowId();
+    development.service.setRendererSessionId(developmentWindowId, 'renderer-development');
+    const developmentProjection = await development.service.getProjection(developmentWindowId);
+    expect(developmentProjection.domains).toEqual(
+      expect.arrayContaining([
+        { surface: 'character', status: 'ready', ownerSlice: 'P1.6' },
+        { surface: 'world', status: 'ready', ownerSlice: 'P1.6' },
+      ]),
+    );
+
+    const release = createFixture(undefined, undefined, true, [], [], false);
+    const releaseWindowId = await release.service.claimWindowId();
+    release.service.setRendererSessionId(releaseWindowId, 'renderer-release');
+    const releaseProjection = await release.service.getProjection(releaseWindowId);
+    expect(releaseProjection.domains).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ surface: 'character', status: 'unavailable' }),
+        expect.objectContaining({ surface: 'world', status: 'unavailable' }),
+      ]),
+    );
+    const intents = [
+      { kind: 'open-creative-management' as const, catalog: 'characters' as const },
+      { kind: 'open-creative-management' as const, catalog: 'worlds' as const },
+      {
+        kind: 'open-character-authoring' as const,
+        workspaceGrantId: 'unresolved-grant',
+        authority: { kind: 'project' as const, projectId: 'missing-project' },
+        characterProjectId: 'character-project:missing',
+      },
+      {
+        kind: 'open-world-authoring' as const,
+        workspaceGrantId: 'unresolved-grant',
+        authority: { kind: 'project' as const, projectId: 'missing-project' },
+        worldProjectId: 'world-project:missing',
+      },
+      {
+        kind: 'open-world-runtime' as const,
+        binding: {
+          worldProjectId: 'world-project-1',
+          worldVersionId: 'world-version-1',
+          worldRunId: 'world-run-1',
+          worldSaveId: 'world-save-1',
+          branchId: 'branch-main',
+          participantId: 'participant-1',
+          actorId: 'actor-1',
+        },
+      },
+      {
+        kind: 'restore-conversation' as const,
+        navigation: {
+          conversationId: 'character-conversation-1',
+          owner: {
+            kind: 'character' as const,
+            characterId: 'character-1',
+            characterRunId: 'character-run-1',
+            dialogueRunId: 'dialogue-run-1',
+          },
+        },
+      },
+    ];
+    for (const [index, intent] of intents.entries()) {
+      await expect(
+        release.service.transitionScene(
+          createDesktopSceneTransitionRequest({
+            requestId: `release-hidden-${index}`,
+            rendererSessionId: releaseProjection.rendererSessionId,
+            windowId: releaseWindowId,
+            sceneId: activeScene(releaseProjection.window).sceneId,
+            intent,
+          }),
+        ),
+      ).resolves.toMatchObject({
+        status: 'unavailable',
+        diagnostic: {
+          code: 'desktop-scene-owner-unavailable',
+          metadata: { intentKind: intent.kind },
+        },
+      });
+    }
+    expect(release.registry.resolve).not.toHaveBeenCalled();
+    let stableSceneId = activeScene(releaseProjection.window).sceneId;
+    for (const [requestId, intent] of [
+      ['release-sibling-works', { kind: 'open-creative-management', catalog: 'works' }],
+      ['release-sibling-extensions', { kind: 'open-extensions' }],
+    ] as const) {
+      const result = await release.service.transitionScene(
+        createDesktopSceneTransitionRequest({
+          requestId,
+          rendererSessionId: releaseProjection.rendererSessionId,
+          windowId: releaseWindowId,
+          sceneId: stableSceneId,
+          intent,
+        }),
+      );
+      expect(result).toMatchObject({ status: 'transitioned' });
+      if (result.status !== 'transitioned') {
+        throw new Error(`Expected stable Release Scene '${requestId}' to transition.`);
+      }
+      stableSceneId = result.scene.sceneId;
+    }
+  });
+
+  it('resets Release Character and World presentations without deleting durable records', async () => {
     const windowId = 'window-experimental';
     const cases = [
       {
@@ -1187,7 +1325,7 @@ describe('DesktopShellService', () => {
           },
         ],
       });
-      const fixture = createFixture(repository);
+      const fixture = createFixture(repository, undefined, true, [], [], false);
       const persistedContext = testCase.scene.context;
       if (persistedContext.kind === 'character-interaction') {
         fixture.service.setAgentHomeProjectionSource({
@@ -1216,30 +1354,20 @@ describe('DesktopShellService', () => {
       fixture.service.setRendererSessionId(claimedWindowId, 'renderer-session-restored');
       const projection = await fixture.service.getProjection(claimedWindowId);
 
-      if (testCase.scene.context.kind === 'character-interaction') {
-        expect(activeScene(projection.window)).toEqual(testCase.scene);
-        expect(projection.stateDiagnostics).not.toContainEqual(
-          expect.objectContaining({
-            code: 'desktop-presentation-reset',
-            resetSceneId: testCase.scene.sceneId,
-          }),
-        );
-      } else {
-        expect(activeScene(projection.window).context).toMatchObject({
-          kind: 'agent',
-          scope: { kind: 'unbound' },
-        });
-        expect(projection.stateDiagnostics).toContainEqual({
-          code: 'desktop-presentation-reset',
-          severity: 'warning',
-          windowId,
-          owner: testCase.owner,
-          resetSceneId: testCase.scene.sceneId,
-          message: expect.stringContaining(
-            'Durable records and protected background runtime were preserved',
-          ),
-        });
-      }
+      expect(activeScene(projection.window).context).toMatchObject({
+        kind: 'agent',
+        scope: { kind: 'unbound' },
+      });
+      expect(projection.stateDiagnostics).toContainEqual({
+        code: 'desktop-presentation-reset',
+        severity: 'warning',
+        windowId,
+        owner: testCase.owner,
+        resetSceneId: testCase.scene.sceneId,
+        message: expect.stringContaining(
+          'Durable records and protected background runtime were preserved',
+        ),
+      });
       expect(projection.catalog.projects).toHaveLength(1);
       expect((await repository.read()).projects).toHaveLength(1);
       await fixture.service.dispose();
@@ -1321,7 +1449,7 @@ describe('DesktopShellService', () => {
       rendererSessionId: projection.rendererSessionId,
       windowId,
       sceneId: `${scene.sceneId}:stale`,
-      intent: { kind: 'open-settings' },
+      intent: { kind: 'open-extensions' },
     });
 
     await expect(fixture.service.transitionScene(staleRequest)).rejects.toMatchObject({
@@ -1974,7 +2102,7 @@ describe('DesktopShellService', () => {
       (await fixture.service.getProjection(windowId)).domains.find(
         (domain) => domain.surface === 'character',
       ),
-    ).toMatchObject({ status: 'unavailable', ownerSlice: 'P1.6' });
+    ).toMatchObject({ status: 'ready', ownerSlice: 'P1.6' });
     expect(
       (fixture.service as unknown as Record<string, unknown>)['setCharacterCapabilityReady'],
     ).toBeUndefined();
@@ -3711,6 +3839,7 @@ function createFixture(
   workspaceAuthorityEnabled = true,
   startupStateDiagnostics: readonly DesktopShellStateDiagnosticProjection[] = [],
   retainedProjects: readonly DesktopProjectCatalogItem[] = [],
+  experimentalCreativeCapabilitiesReady = true,
 ) {
   let identity = 0;
   const resolution: AssetWorkspaceResolution = {
@@ -3745,6 +3874,7 @@ function createFixture(
     registry,
     service: new DesktopShellService({
       applicationInstanceId,
+      experimentalCreativeCapabilitiesReady,
       stateRepository: repository,
       workspaceRegistry: registry,
       workspaceGrantAuthority: workspaceAuthorityEnabled ? authority : undefined,

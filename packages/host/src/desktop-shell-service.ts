@@ -87,6 +87,7 @@ const UNAVAILABLE_DOMAIN_CAPABILITIES: readonly DesktopDomainCapabilityProjectio
 
 export interface DesktopShellServiceOptions {
   readonly applicationInstanceId: string;
+  readonly experimentalCreativeCapabilitiesReady: boolean;
   readonly stateRepository: DesktopShellStateRepositoryPort;
   readonly workspaceRegistry: DesktopWorkspaceResolutionPort;
   readonly workspaceGrantAuthority?: DesktopWorkspaceGrantAuthorityPort;
@@ -298,6 +299,7 @@ export class DesktopShellService {
       const experimentalSceneReset = resetExperimentalScenePresentation(
         cutDraftCleanup.window,
         this.createIdentity,
+        this.experimentalCreativeCapabilitiesReady(),
       );
       const previewRestore = restoreWindowWorkbench(
         state,
@@ -437,6 +439,10 @@ export class DesktopShellService {
           'desktop-scene-stale-identity',
           `Desktop Scene '${request.sceneId}' is stale; current Scene is '${activeDesktopWorkbench(window).scene.sceneId}'.`,
         );
+      }
+      const hiddenCreativeIntent = classifyHiddenCreativeIntent(request.intent);
+      if (hiddenCreativeIntent !== undefined && !this.experimentalCreativeCapabilitiesReady()) {
+        return unavailableCreativeSceneTransition(request, hiddenCreativeIntent);
       }
       if (
         request.intent.kind === 'open-workspace' ||
@@ -1676,6 +1682,16 @@ export class DesktopShellService {
           ownerSlice: 'P1.4',
         };
       }
+      if (
+        (capability.surface === 'character' || capability.surface === 'world') &&
+        this.experimentalCreativeCapabilitiesReady()
+      ) {
+        return {
+          surface: capability.surface,
+          status: 'ready',
+          ownerSlice: 'P1.6',
+        };
+      }
       if (capability.surface === 'cut' && this.cutCapabilityReady) {
         return {
           surface: 'cut',
@@ -1685,6 +1701,10 @@ export class DesktopShellService {
       }
       return capability;
     });
+  }
+
+  private experimentalCreativeCapabilitiesReady(): boolean {
+    return this.options.experimentalCreativeCapabilitiesReady;
   }
 
   private startupStateDiagnostics(): readonly DesktopShellStateDiagnosticProjection[] {
@@ -2617,17 +2637,23 @@ function unavailableSceneTransition(
 function resetExperimentalScenePresentation(
   window: DesktopStoredWindow,
   createIdentity: () => string,
+  experimentalCreativeCapabilitiesReady: boolean,
 ): {
   readonly window: DesktopStoredWindow;
   readonly diagnostic?: DesktopShellStateDiagnosticProjection;
 } {
+  if (experimentalCreativeCapabilitiesReady) return { window };
   const scene = activeDesktopWorkbench(window).scene;
   const owner =
     scene.context.kind === 'creative-management' && scene.context.catalog === 'characters'
       ? 'character'
       : scene.context.kind === 'creative-management' && scene.context.catalog === 'worlds'
         ? 'world'
-        : undefined;
+        : scene.context.kind === 'character-interaction'
+          ? 'character'
+          : scene.context.kind === 'world-runtime'
+            ? 'world'
+            : undefined;
   if (!owner) return { window };
   const nextScene = createDefaultDesktopAgentScene(window.windowId, `draft:${createIdentity()}`);
   return {
@@ -2647,6 +2673,60 @@ function resetExperimentalScenePresentation(
       owner,
       resetSceneId: scene.sceneId,
       message: `${owner === 'character' ? 'Character' : 'World'} experimental presentation was reset because the capability has not passed product promotion. Durable records and protected background runtime were preserved.`,
+    },
+  };
+}
+
+type HiddenCreativeIntent = {
+  readonly owner: 'character' | 'world';
+  readonly intentKind:
+    | 'open-character-authoring'
+    | 'open-world-authoring'
+    | 'open-world-runtime'
+    | 'open-creative-management'
+    | 'select-character-detail'
+    | 'select-world-detail'
+    | 'restore-conversation';
+};
+
+function classifyHiddenCreativeIntent(
+  intent: DesktopSceneTransitionIntent,
+): HiddenCreativeIntent | undefined {
+  if (
+    intent.kind === 'open-character-authoring' ||
+    intent.kind === 'select-character-detail' ||
+    (intent.kind === 'open-creative-management' && intent.catalog === 'characters') ||
+    (intent.kind === 'restore-conversation' &&
+      (intent.navigation.owner.kind === 'character' || intent.navigation.owner.kind === 'room'))
+  ) {
+    return { owner: 'character', intentKind: intent.kind };
+  }
+  if (
+    intent.kind === 'open-world-authoring' ||
+    intent.kind === 'open-world-runtime' ||
+    intent.kind === 'select-world-detail' ||
+    (intent.kind === 'open-creative-management' && intent.catalog === 'worlds')
+  ) {
+    return { owner: 'world', intentKind: intent.kind };
+  }
+  return undefined;
+}
+
+function unavailableCreativeSceneTransition(
+  request: DesktopSceneTransitionRequest,
+  hiddenIntent: HiddenCreativeIntent,
+): DesktopSceneTransitionResult {
+  return {
+    status: 'unavailable',
+    requestId: request.requestId,
+    diagnostic: {
+      code: 'desktop-scene-owner-unavailable',
+      severity: 'error',
+      message: `${hiddenIntent.owner === 'character' ? 'Character' : 'World'} capability is unavailable in this Desktop distribution.`,
+      metadata: {
+        owner: hiddenIntent.owner === 'character' ? 'character-product' : 'world-product',
+        intentKind: hiddenIntent.intentKind,
+      },
     },
   };
 }
@@ -3421,20 +3501,6 @@ function createTransitionedScene(
       context: { kind: 'extensions' },
       slots: {
         main: { kind: 'extension-management' },
-        status: { kind: 'scene-status', sceneId },
-      },
-    });
-  }
-  if (intent.kind === 'open-settings') {
-    const settingsSectionId = intent.sectionId ?? 'general';
-    const sceneId = `scene:${windowId}:settings`;
-    return parseDesktopWorkbenchSceneProjection({
-      sceneId,
-      windowId,
-      context: { kind: 'settings', settingsSectionId },
-      slots: {
-        leftManager: { kind: 'settings-navigation', settingsSectionId },
-        main: { kind: 'settings-main', settingsSectionId },
         status: { kind: 'scene-status', sceneId },
       },
     });

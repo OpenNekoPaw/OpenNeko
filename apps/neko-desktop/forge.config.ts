@@ -5,7 +5,6 @@ import type { ForgeConfig } from '@electron-forge/shared-types';
 import { fileURLToPath } from 'node:url';
 import { resolveMacOSForgeTrust } from '../../scripts/resolve-macos-forge-trust.mjs';
 import { desktopFuseConfig } from './fuse.config.js';
-import { resolveDesktopBuiltinSkillSourceRoot } from './src/main/desktop-builtin-skill-root.js';
 
 const macOSForgeTrust = resolveMacOSForgeTrust();
 
@@ -20,7 +19,7 @@ const config: ForgeConfig = {
       },
     },
     extraResource: [
-      resolveDesktopBuiltinSkillSourceRoot(fileURLToPath(new URL('.', import.meta.url))),
+      fileURLToPath(new URL('./.dsh-runtime-stage/skills', import.meta.url)),
       fileURLToPath(new URL('./.dsh-runtime-stage/dsh-runtime', import.meta.url)),
     ],
     executableName: 'OpenNeko',

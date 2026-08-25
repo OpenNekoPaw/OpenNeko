@@ -123,10 +123,14 @@ export interface DshEntryContextPresentation {
     Extract<AgentComposerWorkspacePresentation, { readonly kind: 'entry' }>,
     'projects'
   >;
-  readonly loadCharacterTargets: () => Promise<
-    DshEntryTargetCatalog<AgentCharacterDialogueTargetOption>
-  >;
-  readonly loadWorldTargets: () => Promise<DshEntryTargetCatalog<AgentWorldExperienceTargetOption>>;
+  readonly experimentalCreative?: {
+    readonly loadCharacterTargets: () => Promise<
+      DshEntryTargetCatalog<AgentCharacterDialogueTargetOption>
+    >;
+    readonly loadWorldTargets: () => Promise<
+      DshEntryTargetCatalog<AgentWorldExperienceTargetOption>
+    >;
+  };
 }
 
 export interface DshEntryTargetCatalog<T> {
@@ -225,13 +229,14 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
     onCharacterDialogueHandoffConsumed?.(handoff.intentId);
   }, [initialCharacterDialogueHandoff, onCharacterDialogueHandoffConsumed, surfaceKind]);
   useEffect(() => {
-    if (!entryDetailExpanded || entryDetail !== 'character' || !props.entryContext) {
+    const experimentalCreative = props.entryContext?.experimentalCreative;
+    if (!entryDetailExpanded || entryDetail !== 'character' || !experimentalCreative) {
       return;
     }
     let active = true;
     setEntryCharacterTargetsStatus('loading');
     setEntryContextDiagnostic(undefined);
-    void props.entryContext.loadCharacterTargets().then(
+    void experimentalCreative.loadCharacterTargets().then(
       (catalog) => {
         if (!active) return;
         setEntryCharacterTargets(catalog.targets);
@@ -248,7 +253,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
     return () => {
       active = false;
     };
-  }, [entryDetail, entryDetailExpanded, props.entryContext]);
+  }, [entryDetail, entryDetailExpanded, props.entryContext?.experimentalCreative]);
   useEffect(() => {
     const previousConversationId = previousConversationIdRef.current;
     previousConversationIdRef.current = props.conversationId;
@@ -277,13 +282,14 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
     props.conversationId,
   ]);
   useEffect(() => {
-    if (!entryDetailExpanded || entryDetail !== 'world' || !props.entryContext) {
+    const experimentalCreative = props.entryContext?.experimentalCreative;
+    if (!entryDetailExpanded || entryDetail !== 'world' || !experimentalCreative) {
       return;
     }
     let active = true;
     setEntryWorldTargetsStatus('loading');
     setEntryContextDiagnostic(undefined);
-    void props.entryContext.loadWorldTargets().then(
+    void experimentalCreative.loadWorldTargets().then(
       (catalog) => {
         if (!active) return;
         setEntryWorldTargets(catalog.targets);
@@ -300,7 +306,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
     return () => {
       active = false;
     };
-  }, [entryDetail, entryDetailExpanded, props.entryContext]);
+  }, [entryDetail, entryDetailExpanded, props.entryContext?.experimentalCreative]);
   const chooseEntryDetail = (detail: 'project' | 'character' | 'world'): void => {
     if (!props.entryContext) {
       throw new Error('Agent Entry context presentation is unavailable.');
@@ -339,6 +345,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
       onSubmit={props.onSubmit}
       entryExperience={entryExperience}
       entryContextAvailable={props.entryContext !== undefined}
+      experimentalCreativeContextAvailable={props.entryContext?.experimentalCreative !== undefined}
       entryWorkspaceTarget={entryWorkspaceTarget}
       selectedCharacterLaunches={entryCharacterLaunches}
       entryCharacterConversationMode={entryCharacterConversationMode}
@@ -427,7 +434,9 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
             </div>
             {renderRuntimeState(props, copy)}
             {composer}
-            {props.surfaceKind === 'entry' && props.entryContext ? (
+            {props.surfaceKind === 'entry' &&
+            props.entryContext &&
+            (entryExperience === 'authoring' || props.entryContext.experimentalCreative) ? (
               <HomeExperienceQuickActions
                 key={`${entryExperience}:${entryDetail}:${entryDetailExpanded ? 'open' : 'closed'}`}
                 mode={entryExperience}
@@ -546,6 +555,7 @@ function DshComposer({
   onSubmit,
   entryExperience,
   entryContextAvailable,
+  experimentalCreativeContextAvailable,
   entryWorkspaceTarget,
   selectedCharacterLaunches,
   entryCharacterConversationMode,
@@ -592,6 +602,7 @@ function DshComposer({
   ) => Promise<boolean>;
   readonly entryExperience: 'assistant' | 'authoring';
   readonly entryContextAvailable: boolean;
+  readonly experimentalCreativeContextAvailable: boolean;
   readonly entryWorkspaceTarget?: DshEntryProjectSelection;
   readonly selectedCharacterLaunches: readonly SelectedCharacterLaunch[];
   readonly entryCharacterConversationMode: 'companion' | 'narrative';
@@ -980,26 +991,28 @@ function DshComposer({
                         : {}),
                     },
                   ]
-                : [
-                    {
-                      kind: 'character' as const,
-                      label: copy.chooseCharacter,
-                      onInvoke: () => onChooseEntryDetail('character'),
-                      disabled: !entryContextAvailable,
-                      ...(!entryContextAvailable
-                        ? { disabledReason: copy.entryContextUnavailable }
-                        : {}),
-                    },
-                    {
-                      kind: 'world' as const,
-                      label: copy.chooseWorld,
-                      onInvoke: () => onChooseEntryDetail('world'),
-                      disabled: !entryContextAvailable,
-                      ...(!entryContextAvailable
-                        ? { disabledReason: copy.entryContextUnavailable }
-                        : {}),
-                    },
-                  ]
+                : experimentalCreativeContextAvailable
+                  ? [
+                      {
+                        kind: 'character' as const,
+                        label: copy.chooseCharacter,
+                        onInvoke: () => onChooseEntryDetail('character'),
+                        disabled: !entryContextAvailable,
+                        ...(!entryContextAvailable
+                          ? { disabledReason: copy.entryContextUnavailable }
+                          : {}),
+                      },
+                      {
+                        kind: 'world' as const,
+                        label: copy.chooseWorld,
+                        onInvoke: () => onChooseEntryDetail('world'),
+                        disabled: !entryContextAvailable,
+                        ...(!entryContextAvailable
+                          ? { disabledReason: copy.entryContextUnavailable }
+                          : {}),
+                      },
+                    ]
+                  : undefined
               : undefined
           }
           entryContextActionsDisabled={false}

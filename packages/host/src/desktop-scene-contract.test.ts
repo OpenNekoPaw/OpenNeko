@@ -398,6 +398,38 @@ describe('Desktop Scene contract', () => {
     ).toThrow('Creative Management Scene requires its exact catalog Main Surface');
   });
 
+  it('owns Works as one exact Creative Management scene and rejects the removed Templates path', () => {
+    const sceneId = 'scene:window-1:creative-management';
+    const projection = {
+      sceneId,
+      windowId: 'window-1',
+      context: { kind: 'creative-management' as const, catalog: 'works' as const },
+      slots: {
+        main: { kind: 'creative-management' as const, catalog: 'works' as const },
+        status: { kind: 'scene-status' as const, sceneId },
+      },
+    };
+    expect(parseDesktopWorkbenchSceneProjection(projection)).toEqual(projection);
+    expect(
+      parseDesktopSceneTransitionRequest({
+        requestId: 'request-works',
+        rendererSessionId: 'endpoint-1',
+        windowId: 'window-1',
+        sceneId: 'scene-1',
+        intent: { kind: 'open-creative-management', catalog: 'works' },
+      }).intent,
+    ).toEqual({ kind: 'open-creative-management', catalog: 'works' });
+    expect(() =>
+      parseDesktopSceneTransitionRequest({
+        requestId: 'request-templates',
+        rendererSessionId: 'endpoint-1',
+        windowId: 'window-1',
+        sceneId: 'scene-1',
+        intent: { kind: 'open-creative-management', catalog: 'templates' },
+      }),
+    ).toThrow('Creative Management catalog');
+  });
+
   it('owns the World catalog and exact detail without an Experience runtime slot', () => {
     const sceneId = 'scene:window-1:creative-management';
     const detail = { kind: 'global' as const, globalWorldId: 'global-world:archive-city' };

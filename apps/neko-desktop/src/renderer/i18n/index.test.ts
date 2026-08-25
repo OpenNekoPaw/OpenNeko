@@ -10,6 +10,11 @@ describe('Desktop renderer i18n', () => {
 
     expect(en.t('home.start.title')).toBe('Create with OpenNeko');
     expect(zhCN.t('home.start.title')).toBe('与 OpenNeko 一起创作');
+    expect(
+      (['home.allProjects', 'home.works', 'home.mediaLibrary', 'home.capabilities'] as const).map(
+        (key) => zhCN.t(key),
+      ),
+    ).toEqual(['项目', '作品', '资产库', '扩展']);
     expect(zhCN.t('workspace.canvas.unavailable')).toBe('画布尚不可用');
     expect(en.t('workspace.quickCreate.open')).toBe('Create content');
     expect(zhCN.t('workspace.quickCreate.open')).toBe('创建内容');

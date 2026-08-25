@@ -52,7 +52,7 @@ describe('Desktop Window composition contract', () => {
         layout: createDefaultDesktopWorkbenchLayout('window:1'),
         scene: {
           ...scene,
-          slots: { ...scene.slots, anotherSecondaryMain: { kind: 'settings-main' } },
+          slots: { ...scene.slots, anotherSecondaryMain: { kind: 'unsupported-main' } },
         },
       }),
     ).toThrow("Desktop Scene slots contains unknown field 'anotherSecondaryMain'");

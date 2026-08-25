@@ -5,9 +5,10 @@
   "caseGroup": "workflow",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Submit the first message from the unbound Agent Entry and continue in the exact Assistant conversation created by that action.",
+    "userBehavior": "Submit the first message from the unbound Agent Entry without selecting an experimental creative owner and continue in the exact Assistant conversation created by that action.",
     "canonicalPath": [
       "visible unbound Entry Draft",
+      "no Character or World owner selection",
       "visible Composer submit",
       "Assistant binding materialization",
       "owner-qualified Desktop Scene",
@@ -21,8 +22,8 @@
         "required": true
       }
     ],
-    "expectedResult": "One fresh unbound Draft becomes one Assistant Session with the same Draft identity and exact new Conversation identity.",
-    "expectedFailure": "A pre-created conversation, Workspace or active-Project fallback, changed Draft identity, missing Scene handoff, or runtime error fails."
+    "expectedResult": "One fresh unbound Draft becomes one Assistant Session with the same Draft identity and exact new Conversation identity, without a Character, Room, or World owner binding.",
+    "expectedFailure": "A pre-created conversation, Workspace, Character, Room, World, or active-Project fallback, changed Draft identity, missing Scene handoff, or runtime error fails."
   },
   "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",

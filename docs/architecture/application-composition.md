@@ -3,9 +3,7 @@
 状态：Accepted
 
 更新日期：2026-08-10
-对应变更：`replace-desktop-media-scheme-with-http-resource-gateway`、
-`enforce-thin-desktop-application-root`、`compose-desktop-workbench-scenes`、
-`bound-desktop-ui-residency`
+当前相关变更：`compose-desktop-workbench-scenes`、`bound-desktop-ui-residency`
 
 OpenNeko 只有一个可执行产品组合根：`apps/neko-desktop`。`packages/*` 与 `packages/*/*` canonical workspace
 提供 host-neutral contract、领域 runtime、Node adapter 和 browser-safe UI；应用根负责把它们
@@ -72,8 +70,9 @@ test，则必须进入对应 owning package。Desktop handler 只做边界解析
 public port、投影结果和释放资源。
 
 不能以“当前只有 Desktop”“只有一个调用方”或“尚无 TUI/VS Code”为由把业务实现留在应用根；这类
-条件只意味着不应建立 speculative multi-host framework。没有明确 owner 的跨领域业务先通过 OpenSpec
-定义中立职责，不得放进 `@neko/desktop-core` 或其他 catch-all package。
+条件只意味着不应建立 speculative multi-host framework。没有明确 owner 的跨领域业务必须先定义中立职责；
+若会改变产品功能则进入对应 OpenSpec，行为等价的 ownership 整理直接实施并完成质量 review，不得放进
+`@neko/desktop-core` 或其他 catch-all package。
 
 Canvas material authoring/generation、Media Library sync、project portability、Resource Browser、
 application settings、Agent content/facts/resource projection 与 personal Skill lifecycle 已迁入各自
@@ -236,7 +235,7 @@ audio/video、Preview 与 Agent 展示使用原生 `<audio>` / `<video>`；文�
   removed-host production path。
 - `pnpm check:application-boundaries` 验证 package-to-app、renderer-to-Node/Electron 和
   Main-to-React 依赖违规。
-- 新增或实质修改 `apps/neko-desktop` 生产模块时，OpenSpec/评审证据必须说明它为何需要 Application
+- 新增或实质修改 `apps/neko-desktop` 生产模块时，适用的功能 OpenSpec、PR 或交付说明必须说明它为何需要 Application
   层、组合哪些 package public contract，以及为何不是可下沉的业务实现。
 - 业务逻辑迁移必须同时用 package producer test、Desktop consumer/path test 和旧 app path
   poison/delete 证明唯一 canonical path；涉及 IPC、窗口、安全或用户资源时增加真实 Electron 验收。

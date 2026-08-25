@@ -25,6 +25,10 @@ const OPENNEKO_PACKAGES = Object.freeze([
   '@neko/cut-dsh-plugin',
   '@neko/content-dsh-plugin',
 ]);
+const EXPERIMENTAL_CREATIVE_PACKAGES = new Set([
+  '@neko/chara-dsh-plugin',
+  '@neko/world-dsh-plugin',
+]);
 const EMPTY_DSH_PATCH = '[]\n';
 
 export interface DesktopDshProfileMaterialization {
@@ -38,6 +42,7 @@ export async function materializeDesktopDshProfile(options: {
   readonly userDataRoot: string;
   readonly runtime: DesktopDshRuntimeResource;
   readonly profilePatchEntries: readonly Readonly<Record<string, unknown>>[];
+  readonly includeExperimentalCreativeCapabilities: boolean;
 }): Promise<DesktopDshProfileMaterialization> {
   if (!isAbsolute(options.userDataRoot)) {
     throw new Error('Desktop DSH userData root must be absolute.');
@@ -48,10 +53,23 @@ export async function materializeDesktopDshProfile(options: {
   assertContained(runtimeRoot, profileTemplateRoot, 'profile template');
 
   const templateProfileRoot = join(profileTemplateRoot, 'profiles', options.runtime.profileName);
-  const manifest = await readCanonicalProfileManifest(join(templateProfileRoot, 'package.json'));
+  const includeExperimentalCreativeCapabilities =
+    options.includeExperimentalCreativeCapabilities;
+  const profileBundles = includeExperimentalCreativeCapabilities
+    ? OPENNEKO_PROFILE_BUNDLES
+    : OPENNEKO_PROFILE_BUNDLES.filter(
+        (packageName) => !EXPERIMENTAL_CREATIVE_PACKAGES.has(packageName),
+      );
+  const profilePackages = includeExperimentalCreativeCapabilities
+    ? OPENNEKO_PACKAGES
+    : OPENNEKO_PACKAGES.filter((packageName) => !EXPERIMENTAL_CREATIVE_PACKAGES.has(packageName));
+  const manifest = await readCanonicalProfileManifest(
+    join(templateProfileRoot, 'package.json'),
+    profileBundles,
+  );
   await assertCanonicalTemplatePatch(join(templateProfileRoot, 'cordis.patch.yml'));
   const patch = `${JSON.stringify(options.profilePatchEntries, null, 2)}\n`;
-  const packageTargets = await resolveOfficialPackageTargets(runtimeRoot);
+  const packageTargets = await resolveOfficialPackageTargets(runtimeRoot, profilePackages);
 
   const dshHome = join(userDataRoot, 'dsh');
   const profilesRoot = join(dshHome, 'profiles');
@@ -150,7 +168,10 @@ async function moveCurrentFile(path: string, replacement: string): Promise<boole
   }
 }
 
-async function readCanonicalProfileManifest(path: string): Promise<string> {
+async function readCanonicalProfileManifest(
+  path: string,
+  profileBundles: readonly string[],
+): Promise<string> {
   const source = await readFile(path, 'utf8');
   const parsed: unknown = JSON.parse(source);
   if (
@@ -164,14 +185,23 @@ async function readCanonicalProfileManifest(path: string): Promise<string> {
   ) {
     throw new Error('Packaged OpenNeko DSH profile manifest is not canonical.');
   }
-  return `${JSON.stringify(parsed, null, 2)}\n`;
+  return `${JSON.stringify(
+    {
+      name: parsed.name,
+      private: parsed.private,
+      dsh: { profile: { bundles: profileBundles } },
+    },
+    null,
+    2,
+  )}\n`;
 }
 
 async function resolveOfficialPackageTargets(
   runtimeRoot: string,
+  packageNames: readonly string[],
 ): Promise<ReadonlyMap<string, string>> {
   const targets = new Map<string, string>();
-  for (const packageName of OPENNEKO_PACKAGES) {
+  for (const packageName of packageNames) {
     const target = await realpath(
       join(runtimeRoot, 'payload', 'lib', 'node_modules', ...packageName.split('/')),
     );

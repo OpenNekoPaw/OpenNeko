@@ -20,6 +20,7 @@ import {
   SettingsIcon,
   SuccessIcon,
   ErrorIcon,
+  FileIcon,
   Tooltip,
   TooltipProvider,
   UserIcon,
@@ -87,9 +88,8 @@ import { executeDesktopWorkspaceQuickCreation } from './desktop-workspace-quick-
 import { createDesktopResourceBrowserIdentity } from '../shared/resource-browser-bridge-contract';
 import type { ResourceBrowserIdentity } from '@neko/assets-domain/resource-browser/contract';
 import {
-  DesktopSettingsMainSurface,
-  DesktopSettingsNavigationSurface,
-  parseDesktopSettingsSection,
+  DesktopSettingsOverlaySurface,
+  type DesktopSettingsSection,
 } from './DesktopSettingsSurface';
 import { DesktopAssetManagementSurface } from './DesktopAssetManagementSurface';
 import { DesktopExtensionManagementSurface } from './DesktopExtensionManagementSurface';
@@ -172,7 +172,8 @@ type ShellState =
   | { readonly kind: 'ready'; readonly projection: DesktopShellProjection }
   | { readonly kind: 'error'; readonly message: string };
 
-type HomeSection = 'create' | 'characters' | 'worlds' | 'assets' | 'extensions' | 'projects';
+type HomeSection =
+  'create' | 'projects' | 'works' | 'assets' | 'extensions' | 'characters' | 'worlds';
 type TranslationFunction = ReturnType<typeof useTranslation>['t'];
 type CharacterPortableWorkflow = {
   readonly kind: 'export';
@@ -196,6 +197,7 @@ interface ShellDiagnosticPresentation {
 }
 
 export const MANAGEMENT_MAIN_SPLIT_DEFAULT_RATIO = 0.5;
+export const ASSET_CENTER_MAIN_SPLIT_DEFAULT_RATIO = 0.6;
 export const MANAGEMENT_MAIN_SPLIT_MIN_RATIO = 0.5;
 const SHELL_DIAGNOSTIC_DURATION_MS = 6_000;
 
@@ -297,19 +299,15 @@ interface ShellActions {
   }) => Promise<void>;
   readonly onCharacterProductHandoff: (handoff: CharacterProductHandoff) => void;
   readonly onLoadEntryCharacterTargets: NonNullable<
-    DesktopAgentSurfaceProps['entryContext']
+    NonNullable<DesktopAgentSurfaceProps['entryContext']>['experimentalCreative']
   >['loadCharacterTargets'];
   readonly onLoadEntryWorldTargets: NonNullable<
-    DesktopAgentSurfaceProps['entryContext']
+    NonNullable<DesktopAgentSurfaceProps['entryContext']>['experimentalCreative']
   >['loadWorldTargets'];
 }
 
 export function DesktopApplication(): JSX.Element {
-  return (
-    <DshComposerPresentationSnapshotProvider>
-      <DesktopApplicationContent />
-    </DshComposerPresentationSnapshotProvider>
-  );
+  return <DesktopApplicationContent />;
 }
 
 function DesktopApplicationContent(): JSX.Element {
@@ -1230,6 +1228,7 @@ function DesktopSceneWorkbench({
   const activeWorkbench = resolveActiveDesktopWindowWorkbench(projection.window);
   const interactionLocks = projectDesktopShellInteractionLocks(pending);
   const scene = activeWorkbench.scene;
+  const [settingsOverlaySection, setSettingsOverlaySection] = useState<DesktopSettingsSection>();
   const [runtimePanelState, setRuntimePanelState] = useState<{
     readonly sceneId: string;
     readonly values: Partial<Record<RuntimePanelRegion, boolean>>;
@@ -1272,12 +1271,19 @@ function DesktopSceneWorkbench({
         : scene.context.kind === 'creative-management'
           ? scene.context.catalog === 'content-projects'
             ? 'projects'
-            : scene.context.catalog
+            : scene.context.catalog === 'works'
+              ? 'works'
+              : scene.context.catalog
           : scene.context.kind === 'extensions'
             ? 'extensions'
             : 'create';
   const workspaceProject = resolveWorkspaceSceneProject(projection, activeWorkbench);
   const cutCapability = projection.domains.find((candidate) => candidate.surface === 'cut');
+  const characterCapabilityReady =
+    projection.domains.find((candidate) => candidate.surface === 'character')?.status === 'ready';
+  const worldCapabilityReady =
+    projection.domains.find((candidate) => candidate.surface === 'world')?.status === 'ready';
+  const experimentalCreativeCapabilitiesReady = characterCapabilityReady && worldCapabilityReady;
   const workspaceScene = scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace';
   const characterInteractionScene = scene.context.kind === 'character-interaction';
   const roomInteractionOwner =
@@ -1504,8 +1510,14 @@ function DesktopSceneWorkbench({
                       ...(project.unavailable ? { disabled: true } : {}),
                     })),
                   },
-                  loadCharacterTargets: actions.onLoadEntryCharacterTargets,
-                  loadWorldTargets: actions.onLoadEntryWorldTargets,
+                  ...(experimentalCreativeCapabilitiesReady
+                    ? {
+                        experimentalCreative: {
+                          loadCharacterTargets: actions.onLoadEntryCharacterTargets,
+                          loadWorldTargets: actions.onLoadEntryWorldTargets,
+                        },
+                      }
+                    : {}),
                 },
               }
             : {}),
@@ -1612,7 +1624,9 @@ function DesktopSceneWorkbench({
         : 'management';
   const managementSplitRatio =
     managementSplitRatios.get(activeWorkbench.workbenchInstanceId) ??
-    MANAGEMENT_MAIN_SPLIT_DEFAULT_RATIO;
+    (assetPreviewVisible
+      ? ASSET_CENTER_MAIN_SPLIT_DEFAULT_RATIO
+      : MANAGEMENT_MAIN_SPLIT_DEFAULT_RATIO);
   const mainSplit =
     assetPreviewVisible || characterDetailVisible || worldDetailVisible
       ? ('columns' as const)
@@ -1754,6 +1768,7 @@ function DesktopSceneWorkbench({
           <ApplicationPrimarySidebar
             activeSection={activeSection}
             compact={compact}
+            experimentalCreativeCapabilitiesReady={experimentalCreativeCapabilitiesReady}
             disabled={interactionLocks.navigation || interactionLocks.sidebar}
             activeProjectId={workspaceProject?.projectId}
             onArchiveConversations={actions.onArchiveConversations}
@@ -1770,7 +1785,7 @@ function DesktopSceneWorkbench({
             onOpenConversation={actions.onOpenConversation}
             onOpenRecent={actions.onSelectProject}
             onRemoveProject={(project) => actions.onRemoveProjects([project])}
-            onOpenSettings={() => actions.onTransitionScene({ kind: 'open-settings' })}
+            onOpenSettings={() => setSettingsOverlaySection('general')}
             onToggle={() => actions.onUpdateApplicationSidebar(toggleApplicationSidebar(sidebar))}
             projection={projection}
             projectPortabilityPort={projectPortabilityPort}
@@ -1816,9 +1831,8 @@ function DesktopSceneWorkbench({
           (characterTimelineVisible ? 260 : worldRuntimeTimelineVisible ? 220 : undefined)
         }
         bottomPanelResize={cutPanelResize}
-        leftDock={portalDeck('leftDock', scene.context.kind === 'settings')}
-        leftDockPresentation={scene.context.kind === 'settings' ? 'docked' : 'hidden'}
-        leftDockWidth={scene.context.kind === 'settings' ? 300 : undefined}
+        leftDock={portalDeck('leftDock', false)}
+        leftDockPresentation="hidden"
         rightDock={portalDeck('rightDock', rightDockVisible)}
         rightDockPresentation={
           resourceDockVisible
@@ -1857,6 +1871,13 @@ function DesktopSceneWorkbench({
           worldRuntime={worldRuntime}
         />
       </DesktopSurfaceErrorBoundary>
+      {settingsOverlaySection ? (
+        <DesktopSettingsOverlaySurface
+          onClose={() => setSettingsOverlaySection(undefined)}
+          onSectionChange={setSettingsOverlaySection}
+          section={settingsOverlaySection}
+        />
+      ) : null}
     </>
   );
 }
@@ -1960,10 +1981,6 @@ function DesktopWorkbenchRuntimePortals({
     projection,
     project: workspaceProject,
   });
-  const settingsSection =
-    scene.context.kind === 'settings'
-      ? parseDesktopSettingsSection(scene.context.settingsSectionId)
-      : undefined;
   const assistantScope =
     scene.context.kind === 'agent' && scene.context.scope.kind === 'assistant'
       ? scene.context.scope
@@ -2013,9 +2030,7 @@ function DesktopWorkbenchRuntimePortals({
       />
     ) : undefined;
   const mainContent =
-    settingsSection !== undefined ? (
-      <DesktopSettingsMainSurface section={settingsSection} />
-    ) : scene.context.kind === 'asset-center' ? (
+    scene.context.kind === 'asset-center' ? (
       assetCenter.runtime ? (
         <DesktopAssetManagementSurface interactive={interactive} runtime={assetCenter.runtime} />
       ) : null
@@ -2056,10 +2071,13 @@ function DesktopWorkbenchRuntimePortals({
           interactive={interactive}
           onOpenDirectory={actions.onOpenWorkspaceDirectory}
           onOpen={actions.onSelectProject}
+          onStartFromTemplate={() => actions.onTransitionScene({ kind: 'open-agent-entry' })}
           onArchiveAssociatedConversations={actions.onArchiveProjectConversations}
           onRemove={actions.onRemoveProjects}
           projects={projection.catalog.projects}
         />
+      ) : scene.context.catalog === 'works' ? (
+        <CreativeWorksCatalogSurface />
       ) : scene.context.catalog === 'characters' ? (
         <CharacterCatalogSurface
           locale={locale}
@@ -2255,15 +2273,7 @@ function DesktopWorkbenchRuntimePortals({
   ) : scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace' ? (
     workspaceSlots.secondaryMain
   ) : undefined;
-  const leftDock =
-    settingsSection === undefined ? undefined : (
-      <DesktopSettingsNavigationSurface
-        activeSection={settingsSection}
-        onSectionChange={(section) =>
-          actions.onTransitionScene({ kind: 'open-settings', sectionId: section })
-        }
-      />
-    );
+  const leftDock = undefined;
   const rightDock =
     scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace'
       ? workspaceSlots.rightDock
@@ -2992,18 +3002,85 @@ function sceneIntentForSection(section: HomeSection): DesktopSceneTransitionInte
       return { kind: 'open-extensions' };
     case 'projects':
       return { kind: 'open-creative-management', catalog: 'content-projects' };
+    case 'works':
+      return { kind: 'open-creative-management', catalog: 'works' };
   }
 }
 
 function creativeManagementCatalogLabel(
   catalog: DesktopCreativeManagementCatalog,
-  translate: (key: 'home.allProjects' | 'home.characters' | 'home.worlds') => string,
+  translate: (key: 'home.allProjects' | 'home.works' | 'home.characters' | 'home.worlds') => string,
 ): string {
   return catalog === 'content-projects'
     ? translate('home.allProjects')
-    : catalog === 'characters'
-      ? translate('home.characters')
-      : translate('home.worlds');
+    : catalog === 'works'
+      ? translate('home.works')
+      : catalog === 'characters'
+        ? translate('home.characters')
+        : translate('home.worlds');
+}
+
+function CreativeWorksCatalogSurface(): JSX.Element {
+  const { t } = useTranslation();
+  const [query, setQuery] = useState('');
+  const hasQuery = query.trim().length > 0;
+  return (
+    <section
+      aria-label={t('home.works')}
+      className="creative-library-catalog"
+      data-creative-management-catalog="works"
+    >
+      <div className="creative-library-catalog__content">
+        <header className="creative-library-catalog__hero">
+          <div className="creative-library-catalog__hero-copy">
+            <h1>{t('home.works')}</h1>
+            <p>{t('home.works.description')}</p>
+          </div>
+          <div className="creative-library-catalog__hero-visual" aria-hidden="true">
+            <span className="creative-library-catalog__hero-line" />
+            <span className="creative-library-catalog__hero-tile is-file">
+              <FileIcon size={24} />
+            </span>
+            <span className="creative-library-catalog__hero-tile is-grid">
+              <GridIcon size={22} />
+            </span>
+            <span className="creative-library-catalog__hero-tile is-open">
+              <OpenIcon size={21} />
+            </span>
+          </div>
+        </header>
+        <section
+          className="creative-library-catalog__collection"
+          aria-labelledby="my-works-heading"
+        >
+          <header className="creative-library-catalog__collection-header">
+            <div className="creative-library-catalog__collection-title">
+              <h2 id="my-works-heading">{t('home.works.mine')}</h2>
+              <span aria-label={t('home.works.count', { count: 0 })}>0</span>
+            </div>
+            <div className="creative-library-catalog__controls">
+              <label className="creative-library-catalog__search">
+                <SearchIcon size={16} />
+                <input
+                  aria-label={t('home.works.search')}
+                  placeholder={t('home.works.search')}
+                  value={query}
+                  onChange={(event) => setQuery(event.currentTarget.value)}
+                />
+              </label>
+            </div>
+          </header>
+          <div className="creative-library-catalog__empty">
+            <FileIcon size={26} />
+            <strong>{hasQuery ? t('home.works.noResults') : t('home.works.empty')}</strong>
+            <span>
+              {hasQuery ? t('home.works.noResultsDescription') : t('home.works.emptyDescription')}
+            </span>
+          </div>
+        </section>
+      </div>
+    </section>
+  );
 }
 
 function foundationDetailLabel(locale: string): string {
@@ -3178,6 +3255,11 @@ function useContentProjectWorkbenchSlots({
   );
   const previewCapability = projection.domains.find((candidate) => candidate.surface === 'preview');
   const cutCapability = projection.domains.find((candidate) => candidate.surface === 'cut');
+  const characterCapabilityReady =
+    projection.domains.find((candidate) => candidate.surface === 'character')?.status === 'ready';
+  const worldCapabilityReady =
+    projection.domains.find((candidate) => candidate.surface === 'world')?.status === 'ready';
+  const experimentalCreativeCapabilitiesReady = characterCapabilityReady && worldCapabilityReady;
   const tab = projection.window.tabs.find((candidate) => candidate.projectId === project.projectId);
   if (!tab) {
     throw new Error(`Content Project '${project.projectId}' has no Window-owned View.`);
@@ -3219,6 +3301,13 @@ function useContentProjectWorkbenchSlots({
       return;
     }
     if (target.kind === 'character-project') {
+      if (!characterCapabilityReady) {
+        throw new Error(
+          locale === 'zh-cn'
+            ? '角色能力在当前发行版本中不可用。'
+            : 'Character capability is unavailable in this Release.',
+        );
+      }
       const characterProjectId = target.characterProjectId;
       const existing = workbench.main.views.find(
         (view) =>
@@ -3244,6 +3333,13 @@ function useContentProjectWorkbenchSlots({
       return;
     }
     const worldProjectId = target.worldProjectId;
+    if (!worldCapabilityReady) {
+      throw new Error(
+        locale === 'zh-cn'
+          ? '世界能力在当前发行版本中不可用。'
+          : 'World capability is unavailable in this Release.',
+      );
+    }
     const existing = workbench.main.views.find(
       (view) => view.kind === 'world-authoring' && view.worldProjectId === worldProjectId,
     );
@@ -3276,31 +3372,35 @@ function useContentProjectWorkbenchSlots({
             resources={
               assetsCapability?.status === 'ready' ? (
                 <DesktopResourceBrowserSurface
-                  characterCreationAuthority={workspaceScope}
-                  onCharacterCreated={(characterProjectId, displayName) => {
-                    const existing = workbench.main.views.find(
-                      (view) =>
-                        view.kind === 'character-authoring' &&
-                        view.characterProjectId === characterProjectId,
-                    );
-                    const view: DesktopWorkbenchViewRef = existing ?? {
-                      viewId: `character-authoring:${characterProjectId}`,
-                      viewInstanceId: `character-authoring-view:${crypto.randomUUID()}`,
-                      projectId: project.projectId,
-                      workspaceId: project.workspaceId,
-                      kind: 'character-authoring',
-                      ownerId: characterProjectId,
-                      displayLabel: displayName,
-                      characterProjectId,
-                    };
-                    actions.onUpdateWorkbench(
-                      instance.workbenchInstanceId,
-                      openOrFocusMainView(workbench, view, {
-                        groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
-                        splitAxis: 'columns',
-                      }),
-                    );
-                  }}
+                  {...(characterCapabilityReady && workspaceScope
+                    ? {
+                        characterCreationAuthority: workspaceScope,
+                        onCharacterCreated: (characterProjectId: string, displayName: string) => {
+                          const existing = workbench.main.views.find(
+                            (view) =>
+                              view.kind === 'character-authoring' &&
+                              view.characterProjectId === characterProjectId,
+                          );
+                          const view: DesktopWorkbenchViewRef = existing ?? {
+                            viewId: `character-authoring:${characterProjectId}`,
+                            viewInstanceId: `character-authoring-view:${crypto.randomUUID()}`,
+                            projectId: project.projectId,
+                            workspaceId: project.workspaceId,
+                            kind: 'character-authoring',
+                            ownerId: characterProjectId,
+                            displayLabel: displayName,
+                            characterProjectId,
+                          };
+                          actions.onUpdateWorkbench(
+                            instance.workbenchInstanceId,
+                            openOrFocusMainView(workbench, view, {
+                              groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+                              splitAxis: 'columns',
+                            }),
+                          );
+                        },
+                      }
+                    : {})}
                   project={project}
                   projection={projection}
                   tab={tab}
@@ -3324,6 +3424,7 @@ function useContentProjectWorkbenchSlots({
                     projectId: project.projectId,
                   }}
                   host={projectAuthoringHost}
+                  experimentalCreativeCapabilitiesReady={experimentalCreativeCapabilitiesReady}
                   locale={locale}
                   onOpenTarget={openWorkspaceTarget}
                   windowId={instance.scene.windowId}
@@ -3552,13 +3653,23 @@ function MainViewGroupSurface({
     new Map<string, DesktopWorkbenchLayoutProjection['main']['views'][number]>(),
   );
   const validatedSnapshots = useRef(new Map<string, ValidatedAuthoringSnapshot>());
-  const views = group.viewIds.map((viewId) => {
-    const view = workbench.main.views.find((candidate) => candidate.viewId === viewId);
-    if (!view) {
-      throw new Error(`Desktop Main Group references missing View '${viewId}'.`);
-    }
-    return view;
-  });
+  const characterCapabilityReady =
+    projection.domains.find((candidate) => candidate.surface === 'character')?.status === 'ready';
+  const worldCapabilityReady =
+    projection.domains.find((candidate) => candidate.surface === 'world')?.status === 'ready';
+  const views = group.viewIds
+    .map((viewId) => {
+      const view = workbench.main.views.find((candidate) => candidate.viewId === viewId);
+      if (!view) {
+        throw new Error(`Desktop Main Group references missing View '${viewId}'.`);
+      }
+      return view;
+    })
+    .filter(
+      (view) =>
+        (view.kind !== 'character-authoring' || characterCapabilityReady) &&
+        (view.kind !== 'world-authoring' || worldCapabilityReady),
+    );
   const activeView = views.find((view) => view.viewId === group.activeViewId);
   const requestedTarget = activeView ? projectAuthoringItemForView(activeView, project) : undefined;
   const quickCreate = useCallback(
@@ -4347,6 +4458,7 @@ function ApplicationPrimarySidebar({
   activeSection,
   compact,
   disabled = false,
+  experimentalCreativeCapabilitiesReady,
   onArchiveConversations,
   onArchiveProjectConversations,
   onManageProjects,
@@ -4363,6 +4475,7 @@ function ApplicationPrimarySidebar({
   readonly activeSection?: HomeSection;
   readonly compact: boolean;
   readonly disabled?: boolean;
+  readonly experimentalCreativeCapabilitiesReady: boolean;
   readonly onArchiveConversations: (
     conversations: readonly DesktopAgentHomeConversationSummary[],
   ) => void;
@@ -4399,18 +4512,18 @@ function ApplicationPrimarySidebar({
           onClick={() => onNavigate('create')}
         />
         <DesktopApplicationNavigationButton
-          active={activeSection === 'characters'}
+          active={activeSection === 'projects'}
           disabled={disabled}
-          label={t('home.characters')}
-          icon={<UserIcon size={17} />}
-          onClick={() => onNavigate('characters')}
+          label={t('home.allProjects')}
+          icon={<FolderIcon size={17} />}
+          onClick={() => onNavigate('projects')}
         />
         <DesktopApplicationNavigationButton
-          active={activeSection === 'worlds'}
+          active={activeSection === 'works'}
           disabled={disabled}
-          label={t('home.worlds')}
-          icon={<GridIcon size={17} />}
-          onClick={() => onNavigate('worlds')}
+          label={t('home.works')}
+          icon={<FileIcon size={17} />}
+          onClick={() => onNavigate('works')}
         />
         <DesktopApplicationNavigationButton
           active={activeSection === 'assets'}
@@ -4426,17 +4539,36 @@ function ApplicationPrimarySidebar({
           icon={<PackageIcon size={17} />}
           onClick={() => onNavigate('extensions')}
         />
-        <DesktopApplicationNavigationButton
-          active={activeSection === 'projects'}
-          disabled={disabled}
-          label={t('home.allProjects')}
-          icon={<FolderIcon size={17} />}
-          onClick={() => onNavigate('projects')}
-        />
+        {experimentalCreativeCapabilitiesReady ? (
+          <section
+            aria-label={t('home.experimental')}
+            className="home-primary-navigation__group"
+            data-navigation-group="experimental"
+          >
+            <div className="home-sidebar-heading home-primary-navigation__group-heading">
+              <span>{t('home.experimental')}</span>
+            </div>
+            <DesktopApplicationNavigationButton
+              active={activeSection === 'characters'}
+              disabled={disabled}
+              label={t('home.characters')}
+              icon={<UserIcon size={17} />}
+              onClick={() => onNavigate('characters')}
+            />
+            <DesktopApplicationNavigationButton
+              active={activeSection === 'worlds'}
+              disabled={disabled}
+              label={t('home.worlds')}
+              icon={<GridIcon size={17} />}
+              onClick={() => onNavigate('worlds')}
+            />
+          </section>
+        ) : null}
       </nav>
       <PrimaryRecentNavigation
         activeProjectId={activeProjectId}
         disabled={disabled}
+        experimentalCreativeCapabilitiesReady={experimentalCreativeCapabilitiesReady}
         onArchiveConversations={onArchiveConversations}
         onArchiveProjectConversations={onArchiveProjectConversations}
         onManageProjects={onManageProjects}
@@ -4468,47 +4600,36 @@ function ApplicationPrimarySidebar({
   );
 }
 
-type PrimaryNavigationSectionId = 'projects' | 'conversations' | 'characters' | 'worlds';
-
-type PrimaryNavigationClassification = DesktopConversationNavigationGroup['kind'] | 'world';
-
-const PRIMARY_NAVIGATION_SECTION_BY_CLASSIFICATION = {
-  project: 'projects',
-  workspace: 'projects',
-  assistant: 'conversations',
-  character: 'characters',
-  room: 'characters',
-  world: 'worlds',
-} satisfies Readonly<Record<PrimaryNavigationClassification, PrimaryNavigationSectionId>>;
-
 function partitionPrimaryNavigationGroups(groups: readonly DesktopConversationNavigationGroup[]): {
   readonly projects: readonly DesktopConversationNavigationGroup[];
   readonly conversations: readonly DesktopConversationNavigationGroup[];
   readonly characters: readonly DesktopConversationNavigationGroup[];
-  readonly worlds: readonly DesktopConversationNavigationGroup[];
 } {
   const projects: DesktopConversationNavigationGroup[] = [];
   const conversations: DesktopConversationNavigationGroup[] = [];
   const characters: DesktopConversationNavigationGroup[] = [];
   for (const group of groups) {
-    switch (PRIMARY_NAVIGATION_SECTION_BY_CLASSIFICATION[group.kind]) {
-      case 'projects':
+    switch (group.kind) {
+      case 'project':
+      case 'workspace':
         projects.push(group);
         break;
-      case 'conversations':
+      case 'assistant':
         conversations.push(group);
         break;
-      case 'characters':
+      case 'character':
+      case 'room':
         characters.push(group);
         break;
     }
   }
-  return { projects, conversations, characters, worlds: [] };
+  return { projects, conversations, characters };
 }
 
 function PrimaryRecentNavigation({
   activeProjectId,
   disabled = false,
+  experimentalCreativeCapabilitiesReady,
   onArchiveConversations,
   onArchiveProjectConversations,
   onManageProjects,
@@ -4520,6 +4641,7 @@ function PrimaryRecentNavigation({
 }: {
   readonly activeProjectId?: string;
   readonly disabled?: boolean;
+  readonly experimentalCreativeCapabilitiesReady: boolean;
   readonly onArchiveConversations: (
     conversations: readonly DesktopAgentHomeConversationSummary[],
   ) => void;
@@ -4542,11 +4664,12 @@ function PrimaryRecentNavigation({
   const navigationGroups = partitionPrimaryNavigationGroups(
     projection.conversationNavigation.groups,
   );
-  const assistantConversationCount = navigationGroups.conversations.reduce(
-    (count, group) => count + group.conversations.length,
-    0,
-  );
-  const characterConversationCount = navigationGroups.characters.reduce(
+  const visibleNavigationGroups = [
+    ...navigationGroups.projects,
+    ...navigationGroups.conversations,
+    ...(experimentalCreativeCapabilitiesReady ? navigationGroups.characters : []),
+  ];
+  const visibleConversationCount = visibleNavigationGroups.reduce(
     (count, group) => count + group.conversations.length,
     0,
   );
@@ -4732,32 +4855,12 @@ function PrimaryRecentNavigation({
   };
   return (
     <div className="home-recent-navigation">
-      <section className="primary-navigation-section" data-navigation-section="projects">
-        <div className="home-sidebar-heading">
-          <span>{t('home.projects')}</span>
-          <span>{navigationGroups.projects.length}</span>
-        </div>
-        {navigationGroups.projects.map(renderNavigationGroup)}
-      </section>
       <section className="primary-navigation-section" data-navigation-section="conversations">
         <div className="home-sidebar-heading">
           <span>{t('home.conversations')}</span>
-          <span>{assistantConversationCount}</span>
+          <span>{visibleConversationCount}</span>
         </div>
-        {navigationGroups.conversations.map(renderNavigationGroup)}
-      </section>
-      <section className="primary-navigation-section" data-navigation-section="characters">
-        <div className="home-sidebar-heading">
-          <span>{t('home.characters')}</span>
-          <span>{characterConversationCount}</span>
-        </div>
-        {navigationGroups.characters.map(renderNavigationGroup)}
-      </section>
-      <section className="primary-navigation-section" data-navigation-section="worlds">
-        <div className="home-sidebar-heading">
-          <span>{t('home.worlds')}</span>
-          <span>{navigationGroups.worlds.length}</span>
-        </div>
+        {visibleNavigationGroups.map(renderNavigationGroup)}
       </section>
     </div>
   );
@@ -5199,10 +5302,24 @@ function formatStandaloneConversationGroup(
     case 'assistant':
       return t('home.personalAssistant');
     case 'character':
-      return `${t('home.character')} · ${group.characterId}`;
+      return `${t('home.character')} · ${requireNewestConversationTitle(group)}`;
     case 'room':
       return `${t('character.workbench.roomScene')} · ${group.roomId}`;
   }
+}
+
+function requireNewestConversationTitle(
+  group: Extract<DesktopConversationNavigationGroup, { readonly kind: 'character' }>,
+): string {
+  const newest = group.conversations.reduce<DesktopAgentHomeConversationSummary | undefined>(
+    (current, conversation) =>
+      current === undefined || conversation.updatedAt > current.updatedAt ? conversation : current,
+    undefined,
+  );
+  if (newest === undefined) {
+    throw new Error(`Character Conversation group '${group.characterId}' is empty.`);
+  }
+  return newest.title;
 }
 
 function PrimarySidebarBrand({

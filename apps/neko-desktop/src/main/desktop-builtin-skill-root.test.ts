@@ -34,7 +34,7 @@ describe('Desktop builtin Skill root', () => {
     );
   });
 
-  it('registers the real builtin Skill source as an Electron package resource', async () => {
+  it('registers the filtered Release Skill stage as an Electron package resource', async () => {
     const sourceRoot = resolveDesktopBuiltinSkillRoot({
       appPath: resolve(import.meta.dirname, '../..'),
       isPackaged: false,
@@ -44,10 +44,11 @@ describe('Desktop builtin Skill root', () => {
       import.meta.dirname,
       '../../.dsh-runtime-stage/dsh-runtime',
     );
+    const releaseSkillStageRoot = resolve(import.meta.dirname, '../../.dsh-runtime-stage/skills');
 
     await expect(access(join(sourceRoot, 'storyboard', 'SKILL.md'))).resolves.toBeUndefined();
     expect(forgeConfig.packagerConfig?.extraResource).toEqual([
-      sourceRoot,
+      releaseSkillStageRoot,
       dshRuntimeStageRoot,
     ]);
   });

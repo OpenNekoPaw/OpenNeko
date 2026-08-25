@@ -7,6 +7,7 @@ import {
   type DesktopShellProjection,
 } from '@neko/host/desktop-shell-contract';
 import {
+  ASSET_CENTER_MAIN_SPLIT_DEFAULT_RATIO,
   applyWorkbenchDisplayMode,
   createManagementMainSplitResizeBinding,
   createDesktopAgentSurfaceProps,
@@ -178,6 +179,7 @@ describe('Desktop scene Workbench', () => {
     });
 
     expect(MANAGEMENT_MAIN_SPLIT_DEFAULT_RATIO).toBe(0.5);
+    expect(ASSET_CENTER_MAIN_SPLIT_DEFAULT_RATIO).toBe(0.6);
     expect(MANAGEMENT_MAIN_SPLIT_MIN_RATIO).toBe(0.5);
     expect(binding.minSize).toBe(0.5);
     expect(binding.maxSize).toBe(DESKTOP_WORKBENCH_LIMITS.mainSplitRatio.max);
@@ -339,7 +341,6 @@ describe('Desktop scene Workbench', () => {
     ['asset-center', projectionWithScene(assetCenterScene())],
     ['extensions', projectionWithScene(extensionsScene())],
     ['project-management', projectionWithScene(projectManagementScene())],
-    ['settings', projectionWithScene(settingsScene())],
   ])(
     'mounts exactly one PrimarySidebar and ControlledWorkbenchShell for %s',
     (_name, projection) => {
@@ -373,22 +374,62 @@ describe('Desktop scene Workbench', () => {
     expect(markup).toContain('aria-label="Expand sidebar"');
   });
 
-  it('preserves the existing primary Sidebar navigation', () => {
+  it('renders the canonical stable and Development primary Sidebar navigation', () => {
     const markup = renderShell(<DesktopShellView projection={agentProjection()} />);
     const primaryNavigation = markup.match(
       /<nav class="home-primary-navigation"[\s\S]*?<\/nav>/u,
     )?.[0];
     if (!primaryNavigation) throw new Error('Primary product navigation is missing.');
 
-    expect(primaryNavigation.match(/class="home-nav-button/gu) ?? []).toHaveLength(6);
+    expect(primaryNavigation.match(/class="home-nav-button/gu) ?? []).toHaveLength(7);
     expect(primaryNavigation).toContain('aria-label="Start creating"');
+    expect(primaryNavigation).toContain('aria-label="Projects"');
+    expect(primaryNavigation).toContain('aria-label="Works"');
+    expect(primaryNavigation).toContain('aria-label="Asset Library"');
+    expect(primaryNavigation).toContain('aria-label="Extensions"');
     expect(primaryNavigation).toContain('aria-label="Characters"');
     expect(primaryNavigation).toContain('aria-label="Worlds"');
-    expect(primaryNavigation).toContain('aria-label="Asset Center"');
-    expect(primaryNavigation).toContain('aria-label="Extensions"');
-    expect(primaryNavigation).toContain('aria-label="All projects"');
+    expect(primaryNavigation).toContain('data-navigation-group="experimental"');
+    expect(primaryNavigation.indexOf('aria-label="Projects"')).toBeLessThan(
+      primaryNavigation.indexOf('aria-label="Works"'),
+    );
+    expect(primaryNavigation.indexOf('aria-label="Works"')).toBeLessThan(
+      primaryNavigation.indexOf('aria-label="Asset Library"'),
+    );
+    expect(primaryNavigation.indexOf('aria-label="Asset Library"')).toBeLessThan(
+      primaryNavigation.indexOf('aria-label="Extensions"'),
+    );
+    expect(primaryNavigation.indexOf('aria-label="Extensions"')).toBeLessThan(
+      primaryNavigation.indexOf('aria-label="Characters"'),
+    );
     expect(primaryNavigation).not.toContain('aria-label="Conversation"');
     expect(primaryNavigation).not.toContain('aria-label="Creation"');
+  });
+
+  it('hides Character and World navigation only in the Release capability projection', () => {
+    const markup = renderShell(
+      <DesktopShellView
+        projection={projectionWithScene(
+          createDefaultDesktopAgentScene('window-1', 'release-draft'),
+        )}
+      />,
+    );
+    const primaryNavigation = markup.match(
+      /<nav class="home-primary-navigation"[\s\S]*?<\/nav>/u,
+    )?.[0];
+    if (!primaryNavigation) throw new Error('Primary product navigation is missing.');
+
+    expect(primaryNavigation.match(/class="home-nav-button/gu) ?? []).toHaveLength(5);
+    expect(primaryNavigation).not.toContain('aria-label="Characters"');
+    expect(primaryNavigation).not.toContain('aria-label="Worlds"');
+    expect(primaryNavigation).not.toContain('data-navigation-group="experimental"');
+    expect(markup).not.toContain('data-navigation-section="characters"');
+    expect(markup).not.toContain('data-navigation-section="worlds"');
+    expect(primaryNavigation).toContain('aria-label="Start creating"');
+    expect(primaryNavigation).toContain('aria-label="Projects"');
+    expect(primaryNavigation).toContain('aria-label="Works"');
+    expect(primaryNavigation).toContain('aria-label="Asset Library"');
+    expect(primaryNavigation).toContain('aria-label="Extensions"');
   });
 
   it('places structural Workspace controls in shared Workbench title chrome only', () => {
@@ -595,16 +636,6 @@ describe('Desktop scene Workbench', () => {
     expect(desktopShellSource).toContain("const active = scene.context.kind === 'extensions'");
   });
 
-  it('reserves Settings navigation and Main portal targets in the same Workbench', () => {
-    const markup = renderShell(
-      <DesktopShellView projection={projectionWithScene(settingsScene('appearance'))} />,
-    );
-    expect(markup).toContain('data-workbench-slot="leftDock"');
-    expect(markup).toContain('data-workbench-slot="main"');
-    expect(markup).not.toContain('data-lifecycle=');
-    expect(markup).not.toContain('data-primary-sidebar-frame="application"');
-  });
-
   it('keeps Skill/MCP management full-width without exposing a Plugin detail panel', () => {
     const markup = renderShell(
       <DesktopShellView projection={projectionWithScene(extensionsScene())} />,
@@ -629,7 +660,7 @@ describe('Desktop scene Workbench', () => {
     expect(markup).not.toContain('project-main-group__tabs');
   });
 
-  it('composes management Main and detail surfaces edge-to-edge at an equal split', () => {
+  it('composes Asset management as the primary-width surface beside Preview', () => {
     const scene = assetCenterScene();
     const markup = renderShell(
       <DesktopShellView
@@ -651,7 +682,7 @@ describe('Desktop scene Workbench', () => {
 
     expect(markup).toContain('data-main-split="columns"');
     expect(markup).toContain('data-main-composition="continuous"');
-    expect(markup).toContain('--neko-controlled-main-split-ratio:50%');
+    expect(markup).toContain('--neko-controlled-main-split-ratio:60%');
     expect(markup).toContain('aria-label="Resize Main split"');
     expect(markup).not.toContain('data-workbench-main-gutter="true"');
   });
@@ -986,7 +1017,17 @@ function renderShell(node: JSX.Element): string {
 }
 
 function agentProjection(): DesktopShellProjection {
-  return projectionWithScene(createDefaultDesktopAgentScene('window-1', 'assistant-space:test'));
+  const projection = projectionWithScene(
+    createDefaultDesktopAgentScene('window-1', 'assistant-space:test'),
+  );
+  return {
+    ...projection,
+    domains: [
+      ...projection.domains,
+      { surface: 'character', status: 'ready', ownerSlice: 'P1.6' },
+      { surface: 'world', status: 'ready', ownerSlice: 'P1.6' },
+    ],
+  };
 }
 
 function workspaceProjection(): DesktopShellProjection {
@@ -1236,13 +1277,8 @@ function projectManagementScene(): DesktopWorkbenchSceneProjection {
   return managementScene('creative-management');
 }
 
-function settingsScene(section = 'general'): DesktopWorkbenchSceneProjection {
-  return managementScene('settings', section);
-}
-
 function managementScene(
-  kind: 'asset-center' | 'creative-management' | 'extensions' | 'settings',
-  section = 'general',
+  kind: 'asset-center' | 'creative-management' | 'extensions',
 ): DesktopWorkbenchSceneProjection {
   const sceneId = `scene:window-1:${kind}`;
   if (kind === 'asset-center') {
@@ -1278,16 +1314,7 @@ function managementScene(
       },
     });
   }
-  return parseDesktopWorkbenchSceneProjection({
-    sceneId,
-    windowId: 'window-1',
-    context: { kind, settingsSectionId: section },
-    slots: {
-      leftManager: { kind: 'settings-navigation', settingsSectionId: section },
-      main: { kind: 'settings-main', settingsSectionId: section },
-      status: { kind: 'scene-status', sceneId },
-    },
-  });
+  throw new Error(`Unsupported management fixture: ${kind}`);
 }
 
 function projectFixture(workspaceId: string, updatedAt: string) {

@@ -16,6 +16,7 @@ export const workspaceMainQuickCreationScenario = Object.freeze({
     return { workspacePath };
   },
   async run({
+    cdp,
     checkpoint,
     click,
     evaluate,
@@ -23,6 +24,7 @@ export const workspaceMainQuickCreationScenario = Object.freeze({
     pressKey,
     screenshot,
     type,
+    waitForDesktopBridge,
     waitForSelector,
   }) {
     await openFixtureWorkspace(evaluate);
@@ -116,6 +118,30 @@ export const workspaceMainQuickCreationScenario = Object.freeze({
       );
     }
     checkpoint('agent-canvas-index-refreshed', agentCanvasIndex);
+    await click('[data-workspace-canvas-context="true"] select');
+    await pressKey('ArrowDown');
+    await pressKey('Enter');
+    await waitForCondition(
+      evaluate,
+      `document.querySelector('[data-workspace-canvas-context="true"] select')?.value === 'Quick Board.nkc'`,
+      'Agent Canvas index did not accept the exact Canvas selection.',
+    );
+    const selectedCanvasScreenshot = await screenshot('workspace-canvas-exact-selected');
+    await cdp.send('Page.reload', { ignoreCache: true });
+    await waitForDesktopBridge();
+    await waitForSelector('.desktop-scene-workbench--workspace');
+    await waitForCondition(
+      evaluate,
+      `document.querySelector('[data-workspace-canvas-context="true"] select')?.value === 'Quick Board.nkc'`,
+      'Agent Canvas index reset after the Desktop page root reloaded.',
+    );
+    const reopenedCanvasIndex = await evaluate(`(() => {
+      const select = document.querySelector('[data-workspace-canvas-context="true"] select');
+      if (!(select instanceof HTMLSelectElement)) return null;
+      return { selectedId: select.value, selectedLabel: select.selectedOptions[0]?.textContent?.trim() ?? '' };
+    })()`);
+    checkpoint('agent-canvas-selection-restored-after-page-reload', reopenedCanvasIndex);
+    const reopenedCanvasScreenshot = await screenshot('workspace-canvas-selection-reopened');
     const populatedState = await inspectQuickCreationState(evaluate, MAIN_SLOT);
     assertQuickCreationState(populatedState, { empty: false });
     const populatedScreenshot = await screenshot('workspace-main-quick-create-populated');
@@ -239,9 +265,12 @@ export const workspaceMainQuickCreationScenario = Object.freeze({
       splitState,
       narrowState,
       agentCanvasIndex,
+      reopenedCanvasIndex,
       screenshots: [
         emptyScreenshot,
         emptyMenuScreenshot,
+        selectedCanvasScreenshot,
+        reopenedCanvasScreenshot,
         populatedScreenshot,
         conflictScreenshot,
         splitScreenshot,

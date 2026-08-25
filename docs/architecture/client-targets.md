@@ -28,8 +28,8 @@ Desktop 不拥有：
 
 Desktop 原生构建目标精确为：
 
-| Target         | 原生构建 Host            | 当前证据                                                     |
-| -------------- | ------------------------ | ------------------------------------------------------------ |
+| Target         | 原生构建 Host            | 当前证据                                                   |
+| -------------- | ------------------------ | ---------------------------------------------------------- |
 | `darwin-arm64` | 本地 Apple Silicon macOS | Forge DMG 已验证；GitHub Release 明确披露 ad-hoc、未公证状态 |
 
 Windows x64 与 Linux 只运行 typecheck、orchestration、SQLite、lint、测试、OpenSpec、依赖
@@ -55,13 +55,13 @@ ID、公证或正常 Gatekeeper 接受资格，这些能力仍需独立验收。
 
 ## 验证重点
 
-| 层级             | 最低验证                                                                               |
-| ---------------- | -------------------------------------------------------------------------------------- |
-| Contract/domain  | owning package tests、typecheck/build、生产者/消费者路径断言                           |
-| Main/preload/IPC | Desktop contract/security tests、unknown message 与 stale identity rejection           |
-| Renderer/UI      | package build/test，加真实 Electron visual/interaction/CSP/message 场景                |
-| Media            | Node/FFmpeg focused tests、Range/PCM/取消/释放和 production bundle inspection          |
-| Product          | macOS 原生 `pnpm package:desktop`、隔离 fixture project-open 与受影响 creative surface |
+| 层级             | 最低验证                                                                                       |
+| ---------------- | ---------------------------------------------------------------------------------------------- |
+| Contract/domain  | owning package tests、typecheck/build、生产者/消费者路径断言                                   |
+| Main/preload/IPC | Desktop contract/security tests、unknown message 与 stale identity rejection                   |
+| Renderer/UI      | package build/test，加真实 Electron visual/interaction/CSP/message 场景                        |
+| Media            | Node/FFmpeg focused tests、Range/PCM/取消/释放和 production bundle inspection                  |
+| Product          | macOS 原生 `pnpm package:desktop`、隔离 fixture project-open 与受影响 creative surface         |
 
 相关边界见 [`application-composition.md`](application-composition.md)、
 [`package-boundaries.md`](package-boundaries.md) 和 [`media-runtime.md`](media-runtime.md)。

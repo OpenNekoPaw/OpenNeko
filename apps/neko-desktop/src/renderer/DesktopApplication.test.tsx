@@ -17,6 +17,7 @@ import {
   createDefaultDesktopApplicationSidebar,
   parseDesktopWorkbenchSceneProjection,
   type DesktopCharacterDetailSelection,
+  type DesktopCreativeManagementCatalog,
   type DesktopWorldDetailSelection,
 } from '@neko/host/desktop-scene-contract';
 import {
@@ -28,6 +29,7 @@ import {
 import { createDesktopWindowComposition } from '@neko/host/desktop-window-composition-contract';
 import { DEFAULT_DESKTOP_APPLICATION_PREFERENCES } from '@neko/host/application-settings';
 import { DesktopApplication } from './DesktopShell';
+import { DshComposerPresentationSnapshotProvider } from '@neko/agent-webview/dsh-session/presentation-snapshot';
 import { DesktopApplicationSettingsProvider } from './application-settings-context';
 import { createDesktopI18n } from './i18n';
 import { DesktopExtensionManagementRuntime } from './desktop-extension-management-runtime';
@@ -451,44 +453,11 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
-  it('uses one committed projection event to switch Settings without a success refresh', async () => {
+  it('opens Settings as an overlay without replacing the current Scene', async () => {
     const assistant = createProjection();
-    const settings = withActiveScene(
-      {
-        ...assistant,
-        window: {
-          ...assistant.window,
-        },
-      },
-      settingsScene(),
-    );
-    let listener: ((event: DesktopShellProjectionEvent) => void) | undefined;
     const getSnapshot = vi.fn(async () => assistant);
-    const transition = vi.fn(async () => {
-      queueMicrotask(() =>
-        listener?.({
-          applicationInstanceId: settings.applicationInstanceId,
-          windowId: settings.window.windowId,
-          rendererSessionId: settings.rendererSessionId,
-          sequence: 1,
-          projection: settings,
-        }),
-      );
-      return {
-        status: 'transitioned' as const,
-        requestId: 'transition-1',
-        scene: activeScene(settings),
-      };
-    });
-    installBridge({
-      projection: assistant,
-      getSnapshot,
-      subscribe: vi.fn((next) => {
-        listener = next;
-        return () => undefined;
-      }),
-      transition,
-    });
+    const transition = vi.fn();
+    installBridge({ projection: assistant, getSnapshot, transition });
     const { container, root } = await renderApplication();
     const workbench = container.querySelector('[data-neko-controlled-workbench="true"]');
     const sidebar = container.querySelector('[data-primary-sidebar="application"]');
@@ -500,24 +469,27 @@ describe('DesktopApplication scene lifecycle', () => {
     }
 
     await act(async () => settingsButton.click());
-    await waitFor(() => container.querySelector('[data-settings-surface="main"]') !== null);
-    expect(transition).toHaveBeenCalledWith(
-      'window-1',
-      { kind: 'open-settings' },
-      activeScene(assistant).sceneId,
-    );
+    await waitFor(() => document.querySelector('[role="dialog"]') !== null);
+    expect(transition).not.toHaveBeenCalled();
     expect(container.querySelector('[data-neko-controlled-workbench="true"]')).toBe(workbench);
     expect(container.querySelector('[data-primary-sidebar="application"]')).toBe(sidebar);
-    expect(container.querySelector('[data-settings-surface="navigation"]')).not.toBeNull();
-    expect(container.querySelector('[data-settings-surface="main"]')).not.toBeNull();
+    expect(document.querySelector('[data-settings-surface="navigation"]')).not.toBeNull();
+    expect(document.querySelector('[data-settings-surface="main"]')).not.toBeNull();
     expect(getSnapshot).toHaveBeenCalledTimes(1);
+
+    const close = document.querySelector<HTMLButtonElement>('button[aria-label="Close settings"]');
+    if (!close) throw new Error('Settings overlay requires a close action.');
+    await act(async () => close.click());
+    await waitFor(() => document.querySelector('[role="dialog"]') === null);
+    expect(container.querySelector('[data-neko-controlled-workbench="true"]')).toBe(workbench);
+    expect(container.querySelector('.agent-workspace')).not.toBeNull();
     await act(async () => root.unmount());
   });
 
   it('recovers from a renderer-session replacement through one authoritative snapshot', async () => {
     const initial = createProjection();
     const replacement: DesktopShellProjection = {
-      ...withActiveScene(initial, settingsScene()),
+      ...withActiveScene(initial, projectManagementScene()),
       rendererSessionId: 'app-1:window-1:2',
     };
     const replacementEvent: DesktopShellProjection = {
@@ -548,7 +520,7 @@ describe('DesktopApplication scene lifecycle', () => {
         projection: replacementEvent,
       });
     });
-    await waitFor(() => container.querySelector('[data-settings-surface="main"]') !== null);
+    await waitFor(() => container.querySelector('[data-project-catalog-root]') !== null);
 
     expect(getSnapshot).toHaveBeenCalledTimes(2);
     expect(container.querySelector('[data-extension-management-root="agent"]')).toBeNull();
@@ -556,7 +528,7 @@ describe('DesktopApplication scene lifecycle', () => {
   });
 
   it('unmounts the outgoing Scene while renderer identity is replaced and restores on ready', async () => {
-    const initial = withActiveScene(createProjection(), settingsScene());
+    const initial = withActiveScene(createProjection(), projectManagementScene());
     const replacement: DesktopShellProjection = {
       ...initial,
       rendererSessionId: 'app-1:window-1:2',
@@ -598,7 +570,7 @@ describe('DesktopApplication scene lifecycle', () => {
         type: 'renderer-ready',
       });
     });
-    await waitFor(() => container.querySelector('[data-settings-surface="main"]') !== null);
+    await waitFor(() => container.querySelector('[data-project-catalog-root]') !== null);
 
     expect(getSnapshot).toHaveBeenCalledTimes(2);
     await act(async () => root.unmount());
@@ -608,7 +580,7 @@ describe('DesktopApplication scene lifecycle', () => {
     const initial = createProjection();
     const extensions = withActiveScene(initial, extensionsScene());
     const skipped = withActiveScene(initial, projectManagementScene());
-    const recovered = withActiveScene(initial, settingsScene());
+    const recovered = withActiveScene(initial, extensionsScene());
     let listener: ((event: DesktopShellProjectionEvent) => void) | undefined;
     const getSnapshot = vi
       .fn<() => Promise<DesktopShellProjection>>()
@@ -644,10 +616,12 @@ describe('DesktopApplication scene lifecycle', () => {
         projection: skipped,
       });
     });
-    await waitFor(() => container.querySelector('[data-settings-surface="main"]') !== null);
+    await waitFor(
+      () => container.querySelector('[data-extension-management-root="agent"]') !== null,
+    );
 
     expect(getSnapshot).toHaveBeenCalledTimes(2);
-    expect(container.querySelector('[data-project-management-surface="main"]')).toBeNull();
+    expect(container.querySelector('[data-project-catalog-root]')).toBeNull();
     await act(async () => root.unmount());
   });
 
@@ -655,7 +629,7 @@ describe('DesktopApplication scene lifecycle', () => {
     vi.useFakeTimers();
     try {
       const initial = createProjection();
-      const recovered = withActiveScene(initial, settingsScene());
+      const recovered = withActiveScene(initial, projectManagementScene());
       const getSnapshot = vi
         .fn<() => Promise<DesktopShellProjection>>()
         .mockResolvedValueOnce(initial)
@@ -666,12 +640,12 @@ describe('DesktopApplication scene lifecycle', () => {
       installBridge({ projection: initial, getSnapshot, transition });
       const { container, root } = await renderApplication();
       const assetCenter = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-        (button) => button.textContent?.trim() === 'Asset Center',
+        (button) => button.textContent?.trim() === 'Asset Library',
       );
-      if (!assetCenter) throw new Error('Desktop fixture requires Asset Center navigation.');
+      if (!assetCenter) throw new Error('Desktop fixture requires Asset Library navigation.');
 
       await act(async () => assetCenter.click());
-      await waitFor(() => container.querySelector('[data-settings-surface="main"]') !== null);
+      await waitFor(() => container.querySelector('[data-project-catalog-root]') !== null);
 
       expect(getSnapshot).toHaveBeenCalledTimes(2);
       expect(container.querySelector('[role="alert"]')?.textContent).toContain(
@@ -733,6 +707,166 @@ describe('DesktopApplication scene lifecycle', () => {
       { kind: 'open-creative-management', catalog: 'characters' },
       activeScene(projection).sceneId,
     );
+    await act(async () => root.unmount());
+  });
+
+  it('opens the Works catalog through Creative Management navigation', async () => {
+    const label = 'Works';
+    const catalog = 'works' as const;
+    const projection = createProjection();
+    const scene = creativeManagementScene(catalog);
+    const transition = vi.fn(async () => ({
+      status: 'transitioned' as const,
+      requestId: `${catalog}-management-1`,
+      scene,
+    }));
+    installBridge({ projection, transition });
+    const { container, root } = await renderApplication();
+    const navigation = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === label,
+    );
+    if (!navigation) throw new Error(`Desktop fixture requires ${label} navigation.`);
+
+    await act(async () => navigation.click());
+    await waitFor(() => transition.mock.calls.length === 1);
+    expect(transition).toHaveBeenCalledWith(
+      'window-1',
+      { kind: 'open-creative-management', catalog },
+      activeScene(projection).sceneId,
+    );
+    await act(async () => root.unmount());
+  });
+
+  it('starts from a Project template through the canonical Start Creating transition', async () => {
+    const initial = withActiveScene(
+      createProjection(),
+      creativeManagementScene('content-projects'),
+    );
+    const entryScene = createDefaultDesktopAgentScene('window-1', 'draft:template-start');
+    const transition = vi.fn(async () => ({
+      status: 'transitioned' as const,
+      requestId: 'template-start-1',
+      scene: entryScene,
+    }));
+    installBridge({ projection: initial, transition });
+    const { container, root } = await renderApplication();
+    const storyboard = container.querySelector<HTMLButtonElement>(
+      '[data-project-template-id="storyboard"]',
+    );
+    if (!storyboard) throw new Error('Desktop fixture requires the Storyboard template.');
+    const projects = container.querySelector('[data-project-catalog-root]');
+    expect(projects?.querySelectorAll('.project-template-card')).toHaveLength(2);
+    expect(projects?.querySelectorAll('.project-template-card__preview')).toHaveLength(2);
+    expect(projects?.querySelector('[data-project-template-id="character-kit"]')).toBeNull();
+    expect(projects?.querySelector('.management-segmented-control')).toBeNull();
+    expect(projects?.querySelector('[data-view-mode]')).toBeNull();
+
+    await act(async () => storyboard.click());
+    await waitFor(() => transition.mock.calls.length === 1);
+    expect(transition).toHaveBeenCalledWith(
+      'window-1',
+      { kind: 'open-agent-entry' },
+      creativeManagementScene('content-projects').sceneId,
+    );
+    await act(async () => root.unmount());
+  });
+
+  it.each([
+    ['characters', '[data-character-template="character-kit"]'],
+    ['worlds', '[data-world-template="world-bible"]'],
+  ] as const)(
+    'starts from the %s domain template through the canonical Start Creating transition',
+    async (catalog, selector) => {
+      const initialScene = creativeManagementScene(catalog);
+      const initial = withActiveScene(createProjection(), initialScene);
+      const entryScene = createDefaultDesktopAgentScene('window-1', `draft:${catalog}-template`);
+      const transition = vi.fn(async () => ({
+        status: 'transitioned' as const,
+        requestId: `${catalog}-template-start`,
+        scene: entryScene,
+      }));
+      installBridge({ projection: initial, transition });
+      const { container, root } = await renderApplication();
+      await waitFor(() => container.querySelector(selector) !== null);
+      const template = container.querySelector<HTMLButtonElement>(selector);
+      if (!template) throw new Error(`Desktop fixture requires ${selector}.`);
+
+      await act(async () => template.click());
+      await waitFor(() => transition.mock.calls.length === 1);
+      expect(transition).toHaveBeenCalledWith(
+        'window-1',
+        { kind: 'open-agent-entry' },
+        initialScene.sceneId,
+      );
+      await act(async () => root.unmount());
+    },
+  );
+
+  it.each([
+    ['characters', '[data-character-management-action="create"]'],
+    ['worlds', '[data-world-management-action="create"]'],
+  ] as const)(
+    'starts a new %s creation through the canonical Start Creating transition',
+    async (catalog, selector) => {
+      const initialScene = creativeManagementScene(catalog);
+      const initial = withActiveScene(createProjection(), initialScene);
+      const entryScene = createDefaultDesktopAgentScene('window-1', `draft:${catalog}-create`);
+      const transition = vi.fn(async () => ({
+        status: 'transitioned' as const,
+        requestId: `${catalog}-create-start`,
+        scene: entryScene,
+      }));
+      installBridge({ projection: initial, transition });
+      const { container, root } = await renderApplication();
+      await waitFor(() => container.querySelector(selector) !== null);
+      const create = container.querySelector<HTMLButtonElement>(selector);
+      if (!create) throw new Error(`Desktop fixture requires ${selector}.`);
+
+      await act(async () => create.click());
+      await waitFor(() => transition.mock.calls.length === 1);
+      expect(transition).toHaveBeenCalledWith(
+        'window-1',
+        { kind: 'open-agent-entry' },
+        initialScene.sceneId,
+      );
+      await act(async () => root.unmount());
+    },
+  );
+
+  it('renders the Works management page from its exact Host scene', async () => {
+    const catalog = 'works' as const;
+    const copy = 'No works yet';
+    const projection = withActiveScene(createProjection(), creativeManagementScene(catalog));
+    installBridge({ projection });
+    const { container, root } = await renderApplication();
+
+    expect(
+      container.querySelector(`[data-creative-management-catalog="${catalog}"]`),
+    ).not.toBeNull();
+    expect(container.textContent).toContain(copy);
+    const works = container.querySelector('[data-creative-management-catalog="works"]');
+    expect(works?.querySelector('.creative-library-catalog__hero h1')?.textContent).toBe('Works');
+    expect(works?.querySelector('.creative-library-catalog__hero p')?.textContent).toBe(
+      'Review completed creations that have entered the Works catalog.',
+    );
+    expect(works?.querySelector('#my-works-heading')?.textContent).toBe('My works');
+    expect(
+      works?.querySelector('.creative-library-catalog__collection-title > span')?.textContent,
+    ).toBe('0');
+    expect(works?.querySelector('.creative-library-catalog__empty')).not.toBeNull();
+    const search = works?.querySelector<HTMLInputElement>('input[aria-label="Search works"]');
+    expect(search).not.toBeNull();
+    expect(works?.textContent).not.toContain('Creative library');
+    expect(works?.querySelector('.management-surface-header')).toBeNull();
+    expect(works?.querySelector('.project-template-card')).toBeNull();
+    expect(works?.querySelector('.management-segmented-control')).toBeNull();
+    expect(works?.querySelector('[data-view-mode]')).toBeNull();
+    expect(works?.querySelector('button')).toBeNull();
+    if (!search) throw new Error('Works catalog requires its search field.');
+    await act(async () => fireEvent.change(search, { target: { value: 'missing' } }));
+    expect(works?.textContent).toContain('No matching works');
+    await act(async () => fireEvent.change(search, { target: { value: '' } }));
+    expect(works?.textContent).toContain(copy);
     await act(async () => root.unmount());
   });
 
@@ -800,7 +934,7 @@ describe('DesktopApplication scene lifecycle', () => {
 
   it('mounts only the current World catalog and unloads it on scene replacement', async () => {
     const initial = withActiveScene(createProjection(), worldManagementScene());
-    const settings = withActiveScene(initial, settingsScene());
+    const replacement = withActiveScene(initial, projectManagementScene());
     let listener: ((event: DesktopShellProjectionEvent) => void) | undefined;
     installBridge({
       projection: initial,
@@ -816,21 +950,21 @@ describe('DesktopApplication scene lifecycle', () => {
     );
     await act(async () => {
       listener?.({
-        applicationInstanceId: settings.applicationInstanceId,
-        windowId: settings.window.windowId,
-        rendererSessionId: settings.rendererSessionId,
+        applicationInstanceId: replacement.applicationInstanceId,
+        windowId: replacement.window.windowId,
+        rendererSessionId: replacement.rendererSessionId,
         sequence: 1,
-        projection: settings,
+        projection: replacement,
       });
     });
-    await waitFor(() => container.querySelector('[data-settings-surface="main"]') !== null);
+    await waitFor(() => container.querySelector('[data-project-catalog-root]') !== null);
     expect(container.querySelector('[data-world-management-catalog-root="true"]')).toBeNull();
     await act(async () => root.unmount());
   });
 
   it('mounts only the current Character Management catalog and unmounts it on replacement', async () => {
     const initial = withActiveScene(createProjection(), characterManagementScene());
-    const settings = withActiveScene(initial, settingsScene());
+    const replacement = withActiveScene(initial, projectManagementScene());
     let listener: ((event: DesktopShellProjectionEvent) => void) | undefined;
     installBridge({
       projection: initial,
@@ -846,14 +980,14 @@ describe('DesktopApplication scene lifecycle', () => {
     );
     await act(async () => {
       listener?.({
-        applicationInstanceId: settings.applicationInstanceId,
-        windowId: settings.window.windowId,
-        rendererSessionId: settings.rendererSessionId,
+        applicationInstanceId: replacement.applicationInstanceId,
+        windowId: replacement.window.windowId,
+        rendererSessionId: replacement.rendererSessionId,
         sequence: 1,
-        projection: settings,
+        projection: replacement,
       });
     });
-    await waitFor(() => container.querySelector('[data-settings-surface="main"]') !== null);
+    await waitFor(() => container.querySelector('[data-project-catalog-root]') !== null);
     expect(container.querySelector('[data-character-management-catalog="true"]')).toBeNull();
     await act(async () => root.unmount());
   });
@@ -934,7 +1068,7 @@ describe('DesktopApplication scene lifecycle', () => {
   it('composes exact Character and Room workbenches and unmounts their Roots on scene exit', async () => {
     const character = withActiveScene(createProjection(), characterInteractionScene());
     const room = withActiveScene(character, characterRoomInteractionScene());
-    const settings = withActiveScene(room, settingsScene());
+    const replacement = withActiveScene(room, projectManagementScene());
     let listener: ((event: DesktopShellProjectionEvent) => void) | undefined;
     installBridge({
       projection: character,
@@ -942,6 +1076,7 @@ describe('DesktopApplication scene lifecycle', () => {
         listener = next;
         return () => undefined;
       }),
+      characterFoundationGetSnapshot: vi.fn(async () => participantManagerFoundationSnapshot()),
     });
     const { container, root } = await renderApplication();
 
@@ -950,6 +1085,16 @@ describe('DesktopApplication scene lifecycle', () => {
     );
     expect(container.querySelector('[data-character-avatar-surface="true"]')).toBeNull();
     expect(container.querySelector('[data-character-context-manager="true"]')).not.toBeNull();
+    expect(container.querySelector('[data-character-participant-manager="true"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-character-participant-details="participant-1"]')?.textContent,
+    ).toContain('Mira');
+    expect(
+      container.querySelector('[data-character-participant-manager="true"]')?.textContent,
+    ).not.toContain('character-run-1');
+    expect(
+      container.querySelector('[data-character-participant-manager="true"]')?.textContent,
+    ).not.toContain('agent-session-1');
     expect(
       container.querySelector('[data-character-context-manager="true"]')?.textContent,
     ).not.toContain('Open conversation');
@@ -1031,14 +1176,14 @@ describe('DesktopApplication scene lifecycle', () => {
 
     await act(async () => {
       listener?.({
-        applicationInstanceId: settings.applicationInstanceId,
-        windowId: settings.window.windowId,
-        rendererSessionId: settings.rendererSessionId,
+        applicationInstanceId: replacement.applicationInstanceId,
+        windowId: replacement.window.windowId,
+        rendererSessionId: replacement.rendererSessionId,
         sequence: 2,
-        projection: settings,
+        projection: replacement,
       });
     });
-    await waitFor(() => container.querySelector('[data-settings-surface="main"]') !== null);
+    await waitFor(() => container.querySelector('[data-project-catalog-root]') !== null);
     expect(container.querySelector('[data-character-avatar-surface="true"]')).toBeNull();
     expect(container.querySelector('[data-character-context-manager="true"]')).toBeNull();
     expect(container.querySelector('[data-character-room-timeline="true"]')).toBeNull();
@@ -1047,7 +1192,7 @@ describe('DesktopApplication scene lifecycle', () => {
 
   it('mounts one exact selected VRM and releases its Host lease on scene exit', async () => {
     const character = withActiveScene(createProjection(), characterInteractionScene());
-    const settings = withActiveScene(character, settingsScene());
+    const replacement = withActiveScene(character, projectManagementScene());
     const openSurface = vi.fn(async () => ({
       requestId: 'avatar-open-a',
       status: 'ready' as const,
@@ -1084,16 +1229,17 @@ describe('DesktopApplication scene lifecycle', () => {
       workbenchInstanceId: character.window.workbench.workbenchInstanceId,
       characterRunId: 'character-run-1',
       representationId: 'avatar-main',
+      surface: 'avatar',
     });
     expect(rendererInstrumentation.avatarRootRender).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       listener?.({
-        applicationInstanceId: settings.applicationInstanceId,
-        windowId: settings.window.windowId,
-        rendererSessionId: settings.rendererSessionId,
+        applicationInstanceId: replacement.applicationInstanceId,
+        windowId: replacement.window.windowId,
+        rendererSessionId: replacement.rendererSessionId,
         sequence: 1,
-        projection: settings,
+        projection: replacement,
       });
     });
     await waitFor(() => releaseSurface.mock.calls.length === 1);
@@ -1115,7 +1261,11 @@ describe('DesktopApplication scene lifecycle', () => {
       },
     });
     const openSurface = vi.fn();
-    installBridge({ projection, characterAvatarOpenSurface: openSurface });
+    installBridge({
+      projection,
+      characterAvatarOpenSurface: openSurface,
+      characterFoundationGetSnapshot: vi.fn(async () => participantManagerFoundationSnapshot()),
+    });
     const { container, root } = await renderApplication();
 
     await waitFor(() => container.textContent?.includes('unknown.presentation'));
@@ -1197,9 +1347,9 @@ describe('DesktopApplication scene lifecycle', () => {
     installBridge({ projection, getSnapshot, transition });
     const { container, root } = await renderApplication();
     const assetCenter = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.textContent?.trim() === 'Asset Center',
+      (button) => button.textContent?.trim() === 'Asset Library',
     );
-    if (!assetCenter) throw new Error('Desktop fixture requires Asset Center navigation.');
+    if (!assetCenter) throw new Error('Desktop fixture requires Asset Library navigation.');
     await act(async () => assetCenter.click());
     await waitFor(() => container.textContent?.includes('Asset Center owner is unavailable.'));
 
@@ -1255,11 +1405,11 @@ describe('DesktopApplication scene lifecycle', () => {
           windowId: projection.window.windowId,
           rendererSessionId: projection.rendererSessionId,
           sequence: 1,
-          projection: withActiveScene(projection, settingsScene()),
+          projection: withActiveScene(projection, projectManagementScene()),
         });
       });
       expect(container.querySelector('[role="alert"]')).toBeNull();
-      expect(container.querySelector('[data-settings-surface="main"]')).not.toBeNull();
+      expect(container.querySelector('[data-project-catalog-root]')).not.toBeNull();
       await act(async () => root.unmount());
     } finally {
       vi.useRealTimers();
@@ -1391,11 +1541,11 @@ describe('DesktopApplication scene lifecycle', () => {
           windowId: projection.window.windowId,
           rendererSessionId: projection.rendererSessionId,
           sequence: 1,
-          projection: withActiveScene(projection, settingsScene()),
+          projection: withActiveScene(projection, projectManagementScene()),
         });
       });
       expect(container.querySelector('[role="alert"]')).toBeNull();
-      expect(container.querySelector('[data-settings-surface="main"]')).not.toBeNull();
+      expect(container.querySelector('[data-project-catalog-root]')).not.toBeNull();
       await act(async () => root.unmount());
     } finally {
       vi.useRealTimers();
@@ -1496,14 +1646,14 @@ describe('DesktopApplication scene lifecycle', () => {
     });
     const { container, root } = await renderApplication();
     const workbench = container.querySelector('[data-neko-controlled-workbench="true"]');
-    const settings = withActiveScene(
+    const projects = withActiveScene(
       {
         ...projection,
         window: {
           ...projection.window,
         },
       },
-      settingsScene(),
+      projectManagementScene(),
     );
     await act(async () => {
       listener?.({
@@ -1511,15 +1661,15 @@ describe('DesktopApplication scene lifecycle', () => {
         windowId: projection.window.windowId,
         rendererSessionId: 'renderer-session-1',
         sequence: 1,
-        projection: settings,
+        projection: projects,
       });
     });
     expect(container.querySelector('[data-neko-controlled-workbench="true"]')).toBe(workbench);
-    expect(container.querySelector('[data-settings-surface="main"]')).not.toBeNull();
+    expect(container.querySelector('[data-project-catalog-root]')).not.toBeNull();
     await act(async () => root.unmount());
   });
 
-  it('disposes the exact Skill/MCP catalog runtime when Settings replaces its Scene', async () => {
+  it('disposes the exact Skill/MCP catalog runtime when Projects replaces its Scene', async () => {
     const projection = withActiveScene(createProjection(), extensionsScene());
     let listener: ((event: DesktopShellProjectionEvent) => void) | undefined;
     const dispose = vi.spyOn(DesktopExtensionManagementRuntime.prototype, 'dispose');
@@ -1533,19 +1683,19 @@ describe('DesktopApplication scene lifecycle', () => {
     const { container, root } = await renderApplication();
     expect(container.querySelector('[data-extension-management-window="window-1"]')).not.toBeNull();
 
-    const settings = withActiveScene(projection, settingsScene());
+    const projects = withActiveScene(projection, projectManagementScene());
     await act(async () => {
       listener?.({
         applicationInstanceId: projection.applicationInstanceId,
         windowId: projection.window.windowId,
         rendererSessionId: 'renderer-session-1',
         sequence: 1,
-        projection: settings,
+        projection: projects,
       });
     });
     expect(dispose).toHaveBeenCalledTimes(1);
     expect(container.querySelector('[data-extension-management-root="agent"]')).toBeNull();
-    expect(container.querySelector('[data-settings-surface="main"]')).not.toBeNull();
+    expect(container.querySelector('[data-project-catalog-root]')).not.toBeNull();
     const extensionRenderCount = rendererInstrumentation.extensionRootRender.mock.calls.length;
 
     await act(async () => {
@@ -1554,7 +1704,7 @@ describe('DesktopApplication scene lifecycle', () => {
         windowId: projection.window.windowId,
         rendererSessionId: projection.rendererSessionId,
         sequence: 2,
-        projection: withActiveScene(settings, settingsScene()),
+        projection: withActiveScene(projects, projectManagementScene()),
       });
     });
     expect(rendererInstrumentation.extensionRootRender).toHaveBeenCalledTimes(extensionRenderCount);
@@ -1600,11 +1750,19 @@ describe('DesktopApplication scene lifecycle', () => {
       },
     };
     const assetCenterExecute = vi.fn(
-      async (request: { readonly requestId: string; readonly route: string }) => ({
-        requestId: request.requestId,
-        route: request.route,
-        projection: sessionProjection,
-      }),
+      async (request: { readonly requestId: string; readonly route: string }) =>
+        request.route === 'session.detach'
+          ? {
+              requestId: request.requestId,
+              route: request.route,
+              status: 'detached',
+              projection: sessionProjection,
+            }
+          : {
+              requestId: request.requestId,
+              route: request.route,
+              projection: sessionProjection,
+            },
     );
     installBridge({ projection, assetCenterExecute });
 
@@ -1613,7 +1771,7 @@ describe('DesktopApplication scene lifecycle', () => {
       () => container.querySelector('[data-preview-session="preview:asset-center:1"]') !== null,
     );
 
-    expectManagementSplit(container, 'asset-management', 'asset-preview');
+    expectManagementSplit(container, 'asset-management', 'asset-preview', '60%');
     expect(
       container
         .querySelector('[data-neko-controlled-workbench="true"]')
@@ -1679,7 +1837,8 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(container.querySelector('[aria-label="Open project: Project one"]')).toBeNull();
     expect(container.querySelector('.project-management-batch-toolbar')).toBeNull();
     expect(projectButton.hasAttribute('aria-pressed')).toBe(false);
-    expect(container.querySelectorAll('.management-surface-row-actions button')).toHaveLength(2);
+    expect(container.querySelectorAll('.project-catalog-card__more')).toHaveLength(1);
+    expect(container.querySelector('.management-surface-row-actions')).toBeNull();
     expect(projectButton.closest('[data-project-id="content:workspace-1"]')).not.toBeNull();
     expect(container.textContent).toContain('Project one');
     await act(async () => root.unmount());
@@ -1722,9 +1881,6 @@ describe('DesktopApplication scene lifecycle', () => {
     installBridge({ projection, transition });
 
     const { container, root } = await renderApplication();
-    const projectSection = container.querySelector<HTMLElement>(
-      '[data-navigation-section="projects"]',
-    );
     const conversationSection = container.querySelector<HTMLElement>(
       '[data-navigation-section="conversations"]',
     );
@@ -1741,19 +1897,12 @@ describe('DesktopApplication scene lifecycle', () => {
     if (!group || !projectButton || !newConversationButton || !cleanupButton) {
       throw new Error('Desktop fixture requires empty Project navigation actions.');
     }
-    if (!projectSection || !conversationSection) {
-      throw new Error('Desktop fixture requires current navigation sections.');
-    }
+    if (!conversationSection) throw new Error('Desktop fixture requires the Conversation section.');
 
-    expect(projectSection.querySelector('.home-sidebar-heading')?.textContent).toBe('Projects1');
     expect(conversationSection.querySelector('.home-sidebar-heading')?.textContent).toBe(
       'Conversations0',
     );
-    expect(projectSection.contains(group)).toBe(true);
-    expect(
-      projectSection.compareDocumentPosition(conversationSection) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).not.toBe(0);
+    expect(conversationSection.contains(group)).toBe(true);
     expect(projectButton.textContent).toContain(project.displayName);
     expect(container.textContent).not.toContain(catalogOnlyProject.displayName);
     expect(group.querySelector('.primary-conversation-group__count')?.textContent).toBe('0');
@@ -2393,13 +2542,11 @@ describe('DesktopApplication scene lifecycle', () => {
       '.primary-conversation-group[data-group-kind="workspace"]',
     );
     if (!group) throw new Error('Desktop fixture requires an unavailable Workspace group.');
-    const projectSection = group.closest<HTMLElement>('[data-navigation-section="projects"]');
-    const conversationSection = container.querySelector<HTMLElement>(
+    const conversationSection = group.closest<HTMLElement>(
       '[data-navigation-section="conversations"]',
     );
-    expect(projectSection?.querySelector('.home-sidebar-heading')?.textContent).toBe('Projects1');
     expect(conversationSection?.querySelector('.home-sidebar-heading')?.textContent).toBe(
-      'Conversations0',
+      'Conversations2',
     );
     const heading = group.querySelector<HTMLElement>(
       '.primary-conversation-group__standalone-heading',
@@ -2487,17 +2634,40 @@ describe('DesktopApplication scene lifecycle', () => {
     installBridge({ projection, removeProjects });
     vi.spyOn(globalThis, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
     const { container, root } = await renderApplication();
-    await waitFor(() => container.querySelector('[aria-label="Remove First Project"]') !== null);
-    const removeProject = container.querySelector<HTMLButtonElement>(
-      '[aria-label="Remove First Project"]',
+    await waitFor(
+      () => container.querySelector('[aria-label="More actions for First Project"]') !== null,
     );
-    if (!removeProject) throw new Error('Project Management item removal is unavailable.');
+    const moreActions = container.querySelector<HTMLButtonElement>(
+      '[aria-label="More actions for First Project"]',
+    );
+    if (!moreActions) throw new Error('Project Management item actions are unavailable.');
     expect(container.querySelector('.project-management-batch-toolbar')).toBeNull();
     expect(container.querySelector('[data-selected]')).toBeNull();
 
-    await act(async () => removeProject.click());
+    await act(async () => moreActions.click());
+    await waitFor(() =>
+      [...document.body.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].some(
+        (button) => button.textContent === 'Remove from project list',
+      ),
+    );
+    const firstRemove = [
+      ...document.body.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
+    ].find((button) => button.textContent === 'Remove from project list');
+    if (!firstRemove) throw new Error('Project Management item removal is unavailable.');
+    await act(async () => firstRemove.click());
     expect(removeProjects).not.toHaveBeenCalled();
-    await act(async () => removeProject.click());
+
+    await act(async () => moreActions.click());
+    await waitFor(() =>
+      [...document.body.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].some(
+        (button) => button.textContent === 'Remove from project list',
+      ),
+    );
+    const confirmedRemove = [
+      ...document.body.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
+    ].find((button) => button.textContent === 'Remove from project list');
+    if (!confirmedRemove) throw new Error('Project Management item removal is unavailable.');
+    await act(async () => confirmedRemove.click());
     await waitFor(() => removeProjects.mock.calls.length === 1);
     expect(removeProjects).toHaveBeenCalledWith(['content:workspace-1']);
     await act(async () => root.unmount());
@@ -2544,13 +2714,9 @@ describe('DesktopApplication scene lifecycle', () => {
       '.primary-conversation-group[data-group-kind="assistant"]',
     );
     if (!group) throw new Error('Desktop fixture requires a standalone Assistant group.');
-    const projectSection = container.querySelector<HTMLElement>(
-      '[data-navigation-section="projects"]',
-    );
     const conversationSection = group.closest<HTMLElement>(
       '[data-navigation-section="conversations"]',
     );
-    expect(projectSection?.querySelector('.home-sidebar-heading')?.textContent).toBe('Projects0');
     expect(conversationSection?.querySelector('.home-sidebar-heading')?.textContent).toBe(
       'Conversations6',
     );
@@ -2590,7 +2756,7 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
-  it('projects Project, Conversation, Character, and empty World navigation sections', async () => {
+  it('projects Project, Assistant, Character, and Room records in one Conversation section', async () => {
     const base = createProjection();
     const currentProject = {
       projectId: 'content:project-1',
@@ -2611,7 +2777,7 @@ describe('DesktopApplication scene lifecycle', () => {
             dialogueRunId: 'dialogue-run-1',
           },
         },
-        title: 'Character conversation',
+        title: 'Neko',
         updatedAt: '2026-08-07T01:00:00.000Z',
         attention: 'none' as const,
         lastActivity: {
@@ -2674,46 +2840,65 @@ describe('DesktopApplication scene lifecycle', () => {
     const headings = [
       ...navigation.querySelectorAll('.home-sidebar-heading > span:first-child'),
     ].map((heading) => heading.textContent);
-    expect(headings).toEqual(['Projects', 'Conversations', 'Characters', 'Worlds']);
-    expect(
-      navigation.querySelector('[data-navigation-section="projects"] .home-sidebar-heading')
-        ?.textContent,
-    ).toBe('Projects1');
+    expect(headings).toEqual(['Conversations']);
     expect(
       navigation.querySelector('[data-navigation-section="conversations"] .home-sidebar-heading')
         ?.textContent,
-    ).toBe('Conversations1');
+    ).toBe('Conversations3');
     expect(
-      navigation.querySelector('[data-navigation-section="characters"] .home-sidebar-heading')
-        ?.textContent,
-    ).toBe('Characters2');
-    expect(
-      navigation.querySelector('[data-navigation-section="worlds"] .home-sidebar-heading')
-        ?.textContent,
-    ).toBe('Worlds0');
-    expect(
-      navigation.querySelector('[data-navigation-section="projects"] [data-group-kind="project"]')
-        ?.textContent,
+      navigation.querySelector(
+        '[data-navigation-section="conversations"] [data-group-kind="project"]',
+      )?.textContent,
     ).toContain(currentProject.displayName);
     expect(
       navigation.querySelector(
         '[data-navigation-section="conversations"] [data-group-kind="assistant"]',
       )?.textContent,
     ).toContain('Current assistant conversation');
+    const characterGroup = navigation.querySelector(
+      '[data-navigation-section="conversations"] [data-group-kind="character"]',
+    );
+    expect(characterGroup?.textContent).toContain('Character · Neko');
+    expect(characterGroup?.textContent).not.toContain('character-1');
     expect(
-      navigation.querySelector(
-        '[data-navigation-section="characters"] [data-group-kind="character"]',
-      )?.textContent,
-    ).toContain('Character conversation');
-    expect(
-      navigation.querySelector('[data-navigation-section="characters"] [data-group-kind="room"]')
+      navigation.querySelector('[data-navigation-section="conversations"] [data-group-kind="room"]')
         ?.textContent,
     ).toContain('Room conversation');
-    expect(
-      navigation.querySelector('[data-navigation-section="worlds"] [data-group-kind]'),
-    ).toBeNull();
+    expect(navigation.querySelectorAll('[data-navigation-section]')).toHaveLength(1);
 
     await act(async () => root.unmount());
+
+    const releaseProjection: DesktopShellProjection = {
+      ...projection,
+      domains: [
+        {
+          surface: 'character',
+          status: 'unavailable',
+          ownerSlice: 'P1.6',
+          diagnosticCode: 'desktop-domain-surface-unavailable',
+        },
+        {
+          surface: 'world',
+          status: 'unavailable',
+          ownerSlice: 'P1.6',
+          diagnosticCode: 'desktop-domain-surface-unavailable',
+        },
+      ],
+    };
+    installBridge({ projection: releaseProjection });
+    const release = await renderApplication();
+    const releaseNavigation = release.container.querySelector<HTMLElement>(
+      '[data-navigation-section="conversations"]',
+    );
+    expect(release.container.querySelector('[data-navigation-group="experimental"]')).toBeNull();
+    expect(releaseNavigation?.querySelector('.home-sidebar-heading')?.textContent).toBe(
+      'Conversations1',
+    );
+    expect(releaseNavigation?.querySelector('[data-group-kind="project"]')).not.toBeNull();
+    expect(releaseNavigation?.querySelector('[data-group-kind="assistant"]')).not.toBeNull();
+    expect(releaseNavigation?.querySelector('[data-group-kind="character"]')).toBeNull();
+    expect(releaseNavigation?.querySelector('[data-group-kind="room"]')).toBeNull();
+    await act(async () => release.root.unmount());
   });
 
   it('keeps the Workspace Agent layout mounted when Main or Project catalog is unavailable', async () => {
@@ -3057,7 +3242,9 @@ async function renderApplication(strict = false) {
           openAgentAdvanced: async () => undefined,
         }}
       >
-        <DesktopApplication />
+        <DshComposerPresentationSnapshotProvider>
+          <DesktopApplication />
+        </DshComposerPresentationSnapshotProvider>
       </DesktopApplicationSettingsProvider>
     </I18nProvider>
   );
@@ -3102,7 +3289,10 @@ function createProjection(): DesktopShellProjection {
     },
     agentHome,
     conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome, []),
-    domains: [],
+    domains: [
+      { surface: 'character', status: 'ready', ownerSlice: 'P1.6' },
+      { surface: 'world', status: 'ready', ownerSlice: 'P1.6' },
+    ],
   };
 }
 
@@ -3255,20 +3445,6 @@ function withActiveScene(
       workbench: instance,
     },
   };
-}
-
-function settingsScene() {
-  const sceneId = 'scene:window-1:settings';
-  return parseDesktopWorkbenchSceneProjection({
-    sceneId,
-    windowId: 'window-1',
-    context: { kind: 'settings', settingsSectionId: 'general' },
-    slots: {
-      leftManager: { kind: 'settings-navigation', settingsSectionId: 'general' },
-      main: { kind: 'settings-main', settingsSectionId: 'general' },
-      status: { kind: 'scene-status', sceneId },
-    },
-  });
 }
 
 function characterManagementScene(detail?: DesktopCharacterDetailSelection) {
@@ -3483,6 +3659,23 @@ function characterManagementDetailSnapshot() {
           updatedAt: '2026-08-10T00:00:00.000Z',
         },
       ],
+    },
+  };
+}
+
+function participantManagerFoundationSnapshot() {
+  const snapshot = characterManagementDetailSnapshot();
+  return {
+    ...snapshot,
+    character: {
+      ...snapshot.character,
+      versions: snapshot.character.versions.map((publication) => ({
+        ...publication,
+        definition: {
+          ...publication.definition,
+          representationDefaults: {},
+        },
+      })),
     },
   };
 }
@@ -3727,13 +3920,17 @@ function assetCenterPreviewScene() {
 }
 
 function projectManagementScene() {
+  return creativeManagementScene('content-projects');
+}
+
+function creativeManagementScene(catalog: DesktopCreativeManagementCatalog) {
   const sceneId = 'scene:window-1:creative-management';
   return parseDesktopWorkbenchSceneProjection({
     sceneId,
     windowId: 'window-1',
-    context: { kind: 'creative-management', catalog: 'content-projects' },
+    context: { kind: 'creative-management', catalog },
     slots: {
-      main: { kind: 'creative-management', catalog: 'content-projects' },
+      main: { kind: 'creative-management', catalog },
       status: { kind: 'scene-status', sceneId },
     },
   });
@@ -3743,11 +3940,12 @@ function expectManagementSplit(
   container: HTMLElement,
   managementPanelId: string,
   detailPanelId: string,
+  expectedRatio = '50%',
 ): void {
   const shell = container.querySelector<HTMLElement>('[data-neko-controlled-workbench="true"]');
   expect(shell?.dataset.mainSplit).toBe('columns');
   expect(shell?.dataset.mainComposition).toBe('continuous');
-  expect(shell?.style.getPropertyValue('--neko-controlled-main-split-ratio')).toBe('50%');
+  expect(shell?.style.getPropertyValue('--neko-controlled-main-split-ratio')).toBe(expectedRatio);
   expect(
     container.querySelector(
       `[data-workbench-main-panel="${managementPanelId}"][data-panel-size="compact"]`,

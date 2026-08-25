@@ -1001,35 +1001,37 @@ describe('DshAgentView content-creation composer', () => {
           workspace: {
             projects: [{ projectId: 'project-1', label: 'Project One' }],
           },
-          loadCharacterTargets: vi.fn(async () => ({
-            targets: [
-              {
-                globalCharacterId: 'global-character-1',
-                characterVersionId: 'character-version-1',
-                displayName: 'Neko',
-                versionLabel: 'Published v1',
-                lineage: {
-                  coverage: 'complete' as const,
-                  state: 'declared-root' as const,
-                  isHead: true,
-                  path: [{ characterVersionId: 'character-version-1', label: 'Published v1' }],
+          experimentalCreative: {
+            loadCharacterTargets: vi.fn(async () => ({
+              targets: [
+                {
+                  globalCharacterId: 'global-character-1',
+                  characterVersionId: 'character-version-1',
+                  displayName: 'Neko',
+                  versionLabel: 'Published v1',
+                  lineage: {
+                    coverage: 'complete' as const,
+                    state: 'declared-root' as const,
+                    isHead: true,
+                    path: [{ characterVersionId: 'character-version-1', label: 'Published v1' }],
+                  },
+                  storylines: [],
                 },
-                storylines: [],
-              },
-            ],
-            diagnostics: [],
-          })),
-          loadWorldTargets: vi.fn(async () => ({
-            targets: [
-              {
-                globalWorldId: 'global-world-1',
-                worldVersionId: 'world-version-1',
-                displayName: 'Archive City',
-                versionLabel: 'Release v1',
-              },
-            ],
-            diagnostics: [],
-          })),
+              ],
+              diagnostics: [],
+            })),
+            loadWorldTargets: vi.fn(async () => ({
+              targets: [
+                {
+                  globalWorldId: 'global-world-1',
+                  worldVersionId: 'world-version-1',
+                  displayName: 'Archive City',
+                  versionLabel: 'Release v1',
+                },
+              ],
+              diagnostics: [],
+            })),
+          },
         }}
         configuring={false}
         draft="Create a scene"
@@ -1133,8 +1135,7 @@ describe('DshAgentView content-creation composer', () => {
         surfaceKind="entry"
         entryContext={{
           workspace: { projects: [] },
-          loadCharacterTargets,
-          loadWorldTargets,
+          experimentalCreative: { loadCharacterTargets, loadWorldTargets },
         }}
         configuring={false}
         draft=""
@@ -1215,8 +1216,10 @@ describe('DshAgentView content-creation composer', () => {
         }}
         entryContext={{
           workspace: { projects: [] },
-          loadCharacterTargets: vi.fn(async () => ({ targets: [], diagnostics: [] })),
-          loadWorldTargets: vi.fn(async () => ({ targets: [], diagnostics: [] })),
+          experimentalCreative: {
+            loadCharacterTargets: vi.fn(async () => ({ targets: [], diagnostics: [] })),
+            loadWorldTargets: vi.fn(async () => ({ targets: [], diagnostics: [] })),
+          },
         }}
         initialCharacterDialogueHandoff={{
           kind: 'character-dialogue',
@@ -1275,6 +1278,39 @@ describe('DshAgentView content-creation composer', () => {
         },
       ),
     );
+  });
+
+  it('keeps Project Creation while omitting experimental creative context in Release', () => {
+    const view = renderAgent(
+      <DshAgentView
+        agentSurfaceId="surface-release-entry"
+        surfaceKind="entry"
+        entryContext={{
+          workspace: { projects: [{ projectId: 'project-1', label: 'Project One' }] },
+        }}
+        configuring={false}
+        draft=""
+        loading={false}
+        permissions={[]}
+        runtime={{ status: 'running' }}
+        submitting={false}
+        onCancelPermission={vi.fn()}
+        onCancelTurn={vi.fn()}
+        onDecidePermission={vi.fn()}
+        onDraftChange={vi.fn()}
+        onModelChange={vi.fn()}
+        onPermissionPresetChange={vi.fn()}
+        onRestartRuntime={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(view.container.querySelector('[data-entry-context-action="character"]')).toBeNull();
+    expect(view.container.querySelector('[data-entry-context-action="world"]')).toBeNull();
+    expect(view.container.querySelector('.agent-entry-quick-toggle')).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: '创作' }));
+    expect(view.container.querySelector('[data-entry-context-action="project"]')).toBeTruthy();
+    expect(screen.getByText('Project One')).toBeTruthy();
   });
 
   it('shows live elapsed time for the active DSH turn and removes it on canonical completion', () => {

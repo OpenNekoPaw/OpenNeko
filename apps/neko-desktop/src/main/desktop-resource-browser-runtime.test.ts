@@ -198,6 +198,7 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
     });
     const shell = new DesktopShellService({
       applicationInstanceId: 'app-1',
+      experimentalCreativeCapabilitiesReady: true,
       stateRepository: createInMemoryDesktopShellStateRepository(),
       workspaceRegistry: registry,
       workspaceGrantAuthority,
@@ -768,6 +769,7 @@ function createGlobalLibraryShell(): DesktopShellService {
   };
   return new DesktopShellService({
     applicationInstanceId: 'app-1',
+    experimentalCreativeCapabilitiesReady: true,
     stateRepository: createInMemoryDesktopShellStateRepository(),
     workspaceRegistry: registry,
     createIdentity: () => 'window-1',

@@ -15,8 +15,11 @@ architectures are unsupported. Desktop already has an OpenNeko-owned Skill and e
 Skill/MCP contribution wiring; a general extension ecosystem and professional-tool integrations are
 not implemented.
 
-Each phase must be split into bounded OpenSpec changes. Shell, cross-platform work, the plugin
-runtime, and every professional-tool adapter must not be developed as one permanent umbrella change.
+Product-functional work in each phase must be split into bounded OpenSpec changes. Shell,
+cross-platform work, the plugin runtime, and every professional-tool adapter must not be developed
+as one permanent umbrella change. Documentation, architecture cleanup, behavior-preserving
+refactors, tests, and developer tooling are implemented directly and must not receive standalone
+OpenSpec changes.
 
 ## Product focus and experimental promotion
 
@@ -36,23 +39,27 @@ direction can become a core navigation, release capability, or current product c
 - a smallest creation-to-experience loop works through real owners, models, and durable facts.
 
 Before promotion, Character projects/rooms/Play and World projects/Experiences/Runs/Saves/branches
-remain fail-visibly unavailable. Multi-character Play, VLA/game control, complete 3D or realtime-video
-presentation, and social distribution must not expand the validation baseline. OpenSpec designs and
-task inventories do not by themselves commit roadmap delivery.
+may remain available for Development validation, while Release builds hide their product entries and
+reject direct Scene access as explicitly unavailable. Domain code and user data remain preserved.
+Multi-character Play, VLA/game control, complete 3D or realtime-video presentation, and social
+distribution must not expand the validation baseline. OpenSpec designs and task inventories do not
+by themselves commit roadmap delivery.
 
 ## Phase 1: Desktop UI and retained-package integration
 
-Current focused changes under `openspec/changes/` own the development and implementation slices;
-Phase 1 no longer maintains a program proposal that duplicates child tasks or retired runtime goals.
+Current focused product-functional changes under `openspec/changes/` own the applicable development
+and implementation slices; Phase 1 no longer maintains a program proposal that duplicates child
+tasks or retired runtime goals, and non-functional cleanup does not enter that directory.
 
 Complete `apps/neko-desktop` with Electron main/preload/renderer, AppHost, typed IPC, Home, Project
 Tabs, Content Project, Context Dock, and Activity/Attention. Integrate real public paths from Agent,
 Assets/Content/Media Library, Canvas, Cut, Preview/Media, Generation/Quality, Chara/Entity, and
 Tools/Diagnostics.
 
-Implementation progress, blockers, and verification evidence belong to the corresponding OpenSpec
-changes and dated status snapshots. This roadmap does not duplicate task-level state. Phase 1
-remains incomplete until every phase gate passes.
+Product-functional implementation progress, blockers, and verification evidence belong to the
+applicable OpenSpec changes. Non-functional work records evidence in its commit, PR, or delivery
+note; dated status documents remain snapshots rather than task trackers. This roadmap does not
+duplicate task-level state. Phase 1 remains incomplete until every phase gate passes.
 
 The phase is complete only when:
 
@@ -64,7 +71,8 @@ The phase is complete only when:
 - missing Character/World capabilities remain explicitly unavailable;
 - no retired Desktop, Workbench, Engine, or client path is restored.
 
-Phase 1 uses an OpenSpec-selected reference platform and does not claim full cross-platform support.
+Phase 1 uses the reference platform selected by an applicable feature OpenSpec or release
+qualification note and does not claim full cross-platform support.
 
 ## Phase 2: macOS release qualification
 

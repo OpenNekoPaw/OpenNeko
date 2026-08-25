@@ -48,7 +48,7 @@ export function createDesktopDshProductHandlers(options: {
   };
   readonly skillAuthoring: Pick<DshSkillAuthoringService, 'create'>;
   readonly comfyUi?: {
-    readonly bindings: Pick<ProfessionalApplicationBindingRepository, 'get'>;
+    readonly bindings: Pick<ProfessionalApplicationBindingRepository, 'get' | 'getEnabled'>;
   };
   readonly cutRuntime: {
     resolveExportService(input: {

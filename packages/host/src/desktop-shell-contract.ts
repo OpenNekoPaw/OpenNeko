@@ -222,6 +222,11 @@ export type DesktopReadyDomainCapabilityProjection =
       readonly surface: 'cut';
       readonly status: 'ready';
       readonly ownerSlice: 'P1.5';
+    }
+  | {
+      readonly surface: 'character' | 'world';
+      readonly status: 'ready';
+      readonly ownerSlice: 'P1.6';
     };
 
 export interface DesktopUnavailableDomainCapabilityProjection {
@@ -1483,7 +1488,8 @@ function parseDesktopDomainCapabilityProjection(value: unknown): DesktopDomainCa
       (surface === 'media-library' && ownerSlice === 'P1.4') ||
       (surface === 'canvas' && ownerSlice === 'P1.4') ||
       (surface === 'cut' && ownerSlice === 'P1.5') ||
-      (surface === 'preview' && ownerSlice === 'P1.5');
+      (surface === 'preview' && ownerSlice === 'P1.5') ||
+      ((surface === 'character' || surface === 'world') && ownerSlice === 'P1.6');
     if (!isReadyCapability) {
       throw invalidPayload(
         `Desktop domain capability '${surface}' cannot be ready in owner slice '${ownerSlice}'.`,
@@ -1498,6 +1504,9 @@ function parseDesktopDomainCapabilityProjection(value: unknown): DesktopDomainCa
     }
     if (surface === 'cut') {
       return { surface, status: 'ready', ownerSlice: 'P1.5' };
+    }
+    if (surface === 'character' || surface === 'world') {
+      return { surface, status: 'ready', ownerSlice: 'P1.6' };
     }
     return { surface, status: 'ready', ownerSlice: 'P1.5' };
   }

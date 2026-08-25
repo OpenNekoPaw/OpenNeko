@@ -29,7 +29,7 @@ export const domainManagementWorkbenchScenario = Object.freeze({
     await waitForDesktopBridge();
     await resizeWindow(evaluate, 1440, 960);
 
-    await clickNavigation(evaluate, click, 'All projects', '所有项目');
+    await clickNavigation(evaluate, click, 'Projects', '项目');
     await waitForSelector(`${MAIN_SLOT} .project-management-catalog`);
     await assertNoManagementModeSwitch(evaluate, 'Project');
     const projectScreenshot = await screenshot('project-management-direct');

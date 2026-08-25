@@ -174,7 +174,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       await resizeWindow(evaluate, 1440, 960);
 
       const assetsProjectionStart = await readShellProjectionProbe(evaluate);
-      await clickApplicationNavigation(evaluate, click, 3);
+      await clickApplicationNavigation(evaluate, click, 'assets');
       await waitForSelector('[data-owner-root="asset-management"]');
       await waitForSelector('[data-owner-root="asset-management"][data-catalog-status="ready"]');
       const assetsProjection = await assertSingleShellProjection(
@@ -246,7 +246,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       const assetPreviewScreenshot = await screenshot('asset-management-with-preview-large');
       checkpoint('asset-management-with-preview-large', { ...assetPreview, assetPreviewResize });
 
-      await clickApplicationNavigation(evaluate, click, 4);
+      await clickApplicationNavigation(evaluate, click, 'extensions');
       await waitForSelector('.agent-extension-management-root');
       const extensionsGrid = await inspectExtensionsManagement(evaluate);
       assertExtensionsCatalogOnly(extensionsGrid, 'grid', 'skills');
@@ -273,7 +273,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       };
       checkpoint('extension-management-mcp-list-large', extensions);
 
-      await clickApplicationNavigation(evaluate, click, 5);
+      await clickApplicationNavigation(evaluate, click, 'projects');
       await waitForSelector('.project-management-catalog');
       const projects = await inspectWorkbench(evaluate, 'management', 'project-management');
       assertManagementMain(projects, 'project-management');
@@ -296,7 +296,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       );
       checkpoint('settings-workbench-large', settings);
 
-      await clickApplicationNavigation(evaluate, click, 0);
+      await clickApplicationNavigation(evaluate, click, 'start');
       await waitForSelector('.desktop-scene-workbench--agent-only');
       const workspaceCancellation = await assertFixtureWorkspaceCancellation(evaluate);
       checkpoint('workspace-picker-cancellation', workspaceCancellation);
@@ -350,7 +350,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
         evaluate,
         measureRendererResources,
       );
-      await clickApplicationNavigation(evaluate, click, 0);
+      await clickApplicationNavigation(evaluate, click, 'start');
       await waitForSelector('.desktop-scene-workbench--agent-only');
       const secondaryWorkspaceActivation = await chooseFixtureWorkspace(evaluate);
       if (
@@ -407,7 +407,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       });
 
       await waitForNavigationButton(evaluate, 3);
-      await clickApplicationNavigation(evaluate, click, 5);
+      await clickApplicationNavigation(evaluate, click, 'projects');
       await waitForSelector(
         `${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} .project-management-catalog .management-surface-row`,
       );
@@ -416,9 +416,9 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       if (
         projectCatalog.projectDetailInSecondary ||
         projectCatalog.mainPanelIds.includes('project-detail') ||
-        projectCatalog.projectRowActionCount !== 2 ||
+        projectCatalog.projectRowActionCount !== 1 ||
         !projectCatalog.projectOpenTargetVisible ||
-        projectCatalog.projectCatalogViewMode !== 'grid'
+        !projectCatalog.projectCatalogUsesGrid
       ) {
         throw new Error('Project catalog lost its direct-open grid presentation.');
       }
@@ -434,7 +434,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       checkpoint('project-management-direct-open-exact-restore', catalogDirectRestore);
 
       await waitForNavigationButton(evaluate, 1);
-      await clickApplicationNavigation(evaluate, click, 3);
+      await clickApplicationNavigation(evaluate, click, 'assets');
       await waitForSelector('[data-owner-root="asset-management"]');
       await openProjectWorkspace(evaluate, workspaceActivation.projectId);
       await waitForSelector('.desktop-scene-workbench--workspace');
@@ -484,7 +484,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       });
 
       await waitForNavigationButton(evaluate, 1);
-      await clickApplicationNavigation(evaluate, click, 3);
+      await clickApplicationNavigation(evaluate, click, 'assets');
       await waitForSelector('[data-owner-root="asset-management"]');
       const retainedMediaLibrary = await openPersistedFixtureAssetPreview(evaluate);
       checkpoint('asset-management-media-library-restart-restore', retainedMediaLibrary);
@@ -502,7 +502,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       checkpoint('asset-management-with-preview-small', smallAssets);
 
       await resizeWindow(evaluate, 1440, 960);
-      await clickApplicationNavigation(evaluate, click, 0);
+      await clickApplicationNavigation(evaluate, click, 'start');
       await waitForSelector(
         `.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`,
       );
@@ -572,7 +572,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
           `Assistant endpoint replacement emitted identity errors: ${JSON.stringify(projectionEndpointErrors)}`,
         );
       }
-      await clickApplicationNavigation(evaluate, click, 3);
+      await clickApplicationNavigation(evaluate, click, 'assets');
       await waitForSelector('[data-owner-root="asset-management"]');
       await waitForSelector('.home-conversation-link');
       await openAssistantConversation(evaluate, assistantActivation.conversationId);
@@ -675,7 +675,7 @@ export const desktopAgentEntryWorkspaceSkillScenario = Object.freeze({
       const workspaceActivation = await chooseFixtureWorkspace(evaluate);
       await waitForSelector('.desktop-scene-workbench--workspace');
 
-      await clickApplicationNavigation(evaluate, click, 0);
+      await clickApplicationNavigation(evaluate, click, 'start');
       await waitForSelector(
         `.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`,
       );
@@ -1014,94 +1014,60 @@ export const desktopAgentMessageQueueScenario = Object.freeze({
       );
       checkpoint('agent-message-queue-running-pending', await inspectMessageQueueUi(evaluate));
 
-      await click(`${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-stop`);
+      await waitForCondition(
+        evaluate,
+        `(() => {
+          const surface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+          const firstRow = surface?.querySelector('.agent-composer-queue-row');
+          return surface?.querySelector('.agent-composer-stop') instanceof HTMLButtonElement &&
+            surface?.querySelector('.agent-composer-queue-title')
+                ?.textContent?.includes('3') === true &&
+            firstRow?.querySelector('[data-queued-message-status]')
+                ?.textContent?.includes('等待中') === true &&
+            firstRow?.querySelectorAll('.agent-composer-queue-action:not(:disabled)').length === 2;
+        })()`,
+        'Running turn did not expose send-now and cancel for all pending queue items.',
+        10_000,
+      );
+
+      await clickQueuedMessageAction(evaluate, priorityPrompt, 0);
       try {
         await waitForCondition(
           evaluate,
           `(() => {
             const surface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
-            const firstRow = surface?.querySelector('.agent-composer-queue-row');
-            return surface?.querySelector('.agent-composer-queue-title')
-                ?.textContent?.includes('3') === true &&
-              firstRow?.querySelector('[data-queued-message-status]')
-                ?.textContent?.includes('等待中') === true &&
-              firstRow?.querySelectorAll('.agent-composer-queue-action:not(:disabled)').length === 3;
+            const rows = [...(surface?.querySelectorAll('.agent-composer-queue-row') ?? [])];
+            return surface?.querySelector('.agent-composer-stop') instanceof HTMLButtonElement &&
+              [...(surface?.querySelectorAll('.agent-user-prompt') ?? [])].some(
+                (item) => item.textContent?.trim() === ${JSON.stringify(priorityPrompt)},
+              ) && rows.length === 2 &&
+              !rows.some((row) => row.textContent?.includes(${JSON.stringify(priorityPrompt)}));
           })()`,
-          'Explicit stop did not leave all pending queue items available.',
-          10_000,
-        );
-      } catch (error) {
-        throw new Error(
-          `${error instanceof Error ? error.message : String(error)} State: ${JSON.stringify(await inspectMessageQueueUi(evaluate))}`,
-        );
-      }
-      const pausedToggleVisible = await evaluate(
-        `document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-queue-toggle') instanceof HTMLButtonElement`,
-      );
-      if (pausedToggleVisible) {
-        await click(`${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-queue-toggle`);
-      }
-      await waitForCondition(
-        evaluate,
-        `document.querySelectorAll('${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-queue-row').length === 3`,
-        'Paused queue could not expand all three retained items.',
-      );
-      const pausedScreenshot = await captureSettledScreenshot(
-        screenshot,
-        'agent-message-queue-paused-after-stop',
-      );
-      checkpoint('agent-message-queue-paused-after-stop', await inspectMessageQueueUi(evaluate));
-
-      await clickQueuedMessageAction(evaluate, editPrompt, 1);
-      await waitForCondition(
-        evaluate,
-        `document.querySelector('${ACTIVE_AGENT_TEXTAREA_SELECTOR}')?.value === ${JSON.stringify(editPrompt)} &&
-          document.querySelectorAll('${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-queue-row').length === 2`,
-        'Queued edit did not restore the selected message into the owning Composer.',
-      );
-      const edited = await inspectMessageQueueUi(evaluate);
-      checkpoint('agent-message-queue-edit-restored', edited);
-      await replaceActiveAgentComposerText({ evaluate, pressKey, type }, '');
-      await evaluate(
-        `new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))`,
-      );
-
-      await clickQueuedMessageAction(evaluate, ordinaryPrompt, 2);
-      try {
-        await waitForCondition(
-          evaluate,
-          `(() => {
-            const rows = [...document.querySelectorAll(
-              '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-queue-row',
-            )];
-            return rows.length === 1 && rows[0]?.textContent?.includes(${JSON.stringify(priorityPrompt)});
-          })()`,
-          'Queue delete did not remove only the selected pending message.',
+          'Send-now did not interrupt the active turn and claim the selected exact message.',
+          20_000,
         );
       } catch (error) {
         throw new Error(
           `${error instanceof Error ? error.message : String(error)} State: ${JSON.stringify({ state: await inspectMessageQueueUi(evaluate), provider: providerServer.snapshot() })}`,
         );
       }
-      checkpoint('agent-message-queue-item-deleted', await inspectMessageQueueUi(evaluate));
-
-      await clickQueuedMessageAction(evaluate, priorityPrompt, 0);
-      await waitForCondition(
-        evaluate,
-        `(() => {
-          const surface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
-          return surface?.querySelector('.agent-composer-stop') instanceof HTMLButtonElement &&
-            [...surface.querySelectorAll('.agent-user-prompt')].some(
-              (item) => item.textContent?.trim() === ${JSON.stringify(priorityPrompt)},
-            ) && !surface.querySelector('.agent-composer-queue-panel');
-        })()`,
-        'Send-now did not resume the queue with the selected exact message.',
-      );
       const sendNowScreenshot = await captureSettledScreenshot(
         screenshot,
         'agent-message-queue-send-now-running',
       );
       checkpoint('agent-message-queue-send-now-running', await inspectMessageQueueUi(evaluate));
+
+      await clickQueuedMessageAction(evaluate, editPrompt, 1);
+      await clickQueuedMessageAction(evaluate, ordinaryPrompt, 1);
+      await waitForCondition(
+        evaluate,
+        `!document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-queue-panel')`,
+        'Queue cancel did not remove the two unselected pending messages.',
+      );
+      checkpoint(
+        'agent-message-queue-unselected-items-cancelled',
+        await inspectMessageQueueUi(evaluate),
+      );
 
       await waitForCondition(
         evaluate,
@@ -1147,13 +1113,11 @@ export const desktopAgentMessageQueueScenario = Object.freeze({
         ordinaryPrompt,
         editPrompt,
         priorityPrompt,
-        edited,
         completed,
         provider: providerEvidence,
         screenshots: [
           activeScreenshot,
           denseScreenshot,
-          pausedScreenshot,
           sendNowScreenshot,
           completedScreenshot,
           narrowScreenshot,
@@ -1279,7 +1243,7 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
         libraryName: 'workspace',
       });
 
-      await clickApplicationNavigation(evaluate, click, 0);
+      await clickApplicationNavigation(evaluate, click, 'start');
       await waitForSelector(
         `.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`,
       );
@@ -1990,7 +1954,7 @@ export const desktopConversationNavigationScenario = Object.freeze({
       );
       checkpoint('assistant-conversation-group-lifecycle', groupLifecycle);
 
-      await clickApplicationNavigation(evaluate, click, 3);
+      await clickApplicationNavigation(evaluate, click, 'assets');
       await waitForSelector('[data-owner-root="asset-management"]');
       await waitForSelector('.home-conversation-link');
       await openAssistantConversation(evaluate, initialSession.conversationId);
@@ -2025,21 +1989,39 @@ async function resizeWindow(evaluate, width, height) {
   await delay(250);
 }
 
-async function waitForNavigationButton(evaluate, index) {
+const APPLICATION_NAVIGATION_LABELS = Object.freeze({
+  start: ['Start creating', '开始创作'],
+  projects: ['Projects', '项目'],
+  assets: ['Asset Library', '资产库'],
+  extensions: ['Extensions', '扩展'],
+});
+
+async function waitForNavigationButton(evaluate, target) {
+  const labels = APPLICATION_NAVIGATION_LABELS[target];
+  if (!labels) throw new Error(`Unknown PrimarySidebar navigation target '${target}'.`);
   await waitForCondition(
     evaluate,
     `(() => {
-      const button = document.querySelectorAll(
+      const button = [...document.querySelectorAll(
         '${APPLICATION_NAVIGATION_BUTTON_SELECTOR}',
-      )[${String(index)}];
+      )].find((candidate) => ${JSON.stringify(labels)}.includes(candidate.textContent?.trim() ?? ''));
       return button instanceof HTMLButtonElement && !button.disabled;
     })()`,
     'PrimarySidebar navigation did not become interactive after reload.',
   );
 }
 
-async function clickApplicationNavigation(evaluate, click, index) {
-  await waitForNavigationButton(evaluate, index);
+async function clickApplicationNavigation(evaluate, click, target) {
+  const labels = APPLICATION_NAVIGATION_LABELS[target];
+  if (!labels) throw new Error(`Unknown PrimarySidebar navigation target '${target}'.`);
+  await waitForNavigationButton(evaluate, target);
+  const index = await evaluate(
+    `(() => [...document.querySelectorAll('${APPLICATION_NAVIGATION_BUTTON_SELECTOR}')]
+      .findIndex((candidate) => ${JSON.stringify(labels)}.includes(candidate.textContent?.trim() ?? '')))()`,
+  );
+  if (!Number.isInteger(index) || index < 0) {
+    throw new Error(`PrimarySidebar navigation target '${target}' is unavailable.`);
+  }
   await click(APPLICATION_NAVIGATION_BUTTON_SELECTOR, index);
 }
 
@@ -2785,7 +2767,7 @@ async function exerciseProjectConversationGroups({
         document.querySelector(${JSON.stringify(cleanupGroupSelector)}) !== null,
     };
   })()`);
-  await clickApplicationNavigation(evaluate, click, 5);
+  await clickApplicationNavigation(evaluate, click, 'projects');
   await waitForCondition(
     evaluate,
     `(() => {
@@ -2794,17 +2776,28 @@ async function exerciseProjectConversationGroups({
       const retainedProject = rows.find((row) =>
         row.getAttribute('data-project-id') === ${JSON.stringify(cleanup.projectId)},
       ) ?? rows[0];
-      const actions = retainedProject?.querySelectorAll(
-        '.management-surface-row-actions button',
-      );
-      const cleanupButton = actions?.[0];
-      const removalButton = actions?.[1];
+      const more = retainedProject?.querySelector('.project-catalog-card__more');
       return rows.length === 1 &&
-        cleanupButton instanceof HTMLButtonElement && cleanupButton.disabled &&
-        removalButton instanceof HTMLButtonElement && !removalButton.disabled;
+        more instanceof HTMLButtonElement && !more.disabled;
     })()`,
-    'Project catalog did not retain the cleaned Project with cleanup disabled.',
+    'Project catalog did not retain the cleaned Project with its actions available.',
   );
+  const cleanedProjectActions = await evaluate(`(async () => {
+    const more = document.querySelector('.project-management-catalog .project-catalog-card__more');
+    if (!(more instanceof HTMLButtonElement)) return null;
+    more.click();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    const actions = document.querySelectorAll('.project-catalog-card-menu [role="menuitem"]');
+    const cleanupButton = actions[0];
+    const removalButton = actions[1];
+    return {
+      cleanupDisabled: cleanupButton instanceof HTMLButtonElement && cleanupButton.disabled,
+      removalEnabled: removalButton instanceof HTMLButtonElement && !removalButton.disabled,
+    };
+  })()`);
+  if (!cleanedProjectActions?.cleanupDisabled || !cleanedProjectActions.removalEnabled) {
+    throw new Error('Cleaned Project more-actions menu has incorrect action availability.');
+  }
   const cleanedScreenshot = await captureSettledScreenshot(
     screenshot,
     'project-catalog-conversations-cleaned-project-retained',
@@ -4344,7 +4337,7 @@ async function waitForAssistantSession(evaluate, expectedConversationId) {
 
 async function exerciseAssistantConversationGroup(evaluate, click, type, originalConversationId) {
   for (let conversationNumber = 2; conversationNumber <= 6; conversationNumber += 1) {
-    await clickApplicationNavigation(evaluate, click, 0);
+    await clickApplicationNavigation(evaluate, click, 'start');
     await waitForCondition(
       evaluate,
       `(async () => {
@@ -5390,7 +5383,7 @@ async function registerFixtureGlobalMediaLibrary({
   waitForSelector,
   libraryName,
 }) {
-  await clickApplicationNavigation(evaluate, click, 3);
+  await clickApplicationNavigation(evaluate, click, 'assets');
   await waitForSelector('[data-owner-root="asset-management"][data-catalog-status="ready"]');
   await selectGlobalLibraryCatalog(evaluate, /^(Media Library|媒体库)$/u);
   await waitForCondition(
@@ -5946,18 +5939,19 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
         activeSecondaryMainTarget?.querySelector('.project-management-detail'),
       ),
       projectRowActionCount:
-        activeMainTarget?.querySelector(
-          '.project-management-catalog .management-surface-row-actions',
-        )?.querySelectorAll('button').length ?? -1,
+        activeMainTarget?.querySelectorAll(
+          '.project-management-catalog .project-catalog-card__more',
+        ).length ?? -1,
       projectOpenTargetVisible: Boolean(
         activeMainTarget?.querySelector(
           '.project-management-catalog .management-surface-row__open',
         ),
       ),
-      projectCatalogViewMode:
-        activeMainTarget
-          ?.querySelector('.project-management-catalog .management-surface-list')
-          ?.getAttribute('data-view-mode') ?? null,
+      projectCatalogUsesGrid: Boolean(
+        activeMainTarget?.querySelector(
+          '.project-management-catalog .management-surface-list.is-grid',
+        ),
+      ),
       mainPanelIds: [
         ...(activeMainTarget?.querySelectorAll('[data-workbench-main-panel]') ?? []),
         ...(activeSecondaryMainTarget?.querySelectorAll('[data-workbench-main-panel]') ?? []),
@@ -6299,7 +6293,7 @@ function assertSingleWorkbench(detail) {
   if (
     !detail.recentNavigationVisible ||
     detail.recentSectionCount !== 2 ||
-    JSON.stringify(detail.navigationSectionIds) !== JSON.stringify(['projects', 'conversations'])
+    JSON.stringify(detail.navigationSectionIds) !== JSON.stringify(['conversations'])
   ) {
     throw new Error(
       'PrimarySidebar did not preserve one authoritative grouped navigation surface.',
