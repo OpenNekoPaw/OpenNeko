@@ -1,12 +1,12 @@
-import type { MediaExecutionProviderResolver, MediaProvider } from '@neko/generation-domain/media';
+import type { PromptExecutionProviderResolver } from '@neko/generation-domain/prompt';
 import type { ConfigManager, ProviderCredentialReader } from '@neko/host/settings';
 
-export function createDesktopMediaExecutionProviderResolver(input: {
+export function createDesktopGenerationExecutionProviderResolver(input: {
   readonly config: Pick<ConfigManager, 'getProvider'>;
   readonly credentials: ProviderCredentialReader;
-}): MediaExecutionProviderResolver {
+}): PromptExecutionProviderResolver {
   return Object.freeze({
-    resolveProvider: async (providerId: string): Promise<MediaProvider | undefined> => {
+    resolveProvider: async (providerId: string) => {
       const provider = input.config.getProvider(providerId);
       if (provider === undefined || provider.id !== providerId || provider.enabled === false) {
         return undefined;

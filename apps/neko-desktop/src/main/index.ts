@@ -84,7 +84,7 @@ import {
   resolveDesktopFunctionalUserDataRoot,
   resolveDesktopRuntimeHome,
 } from './desktop-functional-fixture';
-import { createDesktopMediaExecutionProviderResolver } from './desktop-media-execution-provider';
+import { createDesktopGenerationExecutionProviderResolver } from './desktop-generation-execution-provider';
 import { createEncryptedDesktopSecretPort } from './encrypted-desktop-secret-port';
 import {
   createDshWorkspaceBoardContentRead,
@@ -583,12 +583,13 @@ async function startDesktop(): Promise<void> {
               workspacePath: root,
             })
           : workspaceConfigAuthority.getApplicationConfig();
+      const providerResolver = createDesktopGenerationExecutionProviderResolver({
+        config: configManager,
+        credentials: providerCredentials,
+      });
       const media = createMediaPlatform({
         configManager,
-        providerResolver: createDesktopMediaExecutionProviderResolver({
-          config: configManager,
-          credentials: providerCredentials,
-        }),
+        providerResolver,
         requestAssetMaterializer: createContentReadMediaRequestAssetMaterializer({
           contentRead: createNodeHostContentReadService({ workspaceRoot: root }),
           encodeBase64: (bytes) => Buffer.from(bytes).toString('base64'),
@@ -602,6 +603,7 @@ async function startDesktop(): Promise<void> {
         mediaExecution: media.service,
         promptExecution: new PromptGenerationService(
           configManager,
+          providerResolver,
           createAiSdkPromptCompletionPort(),
         ),
         comfyUiExecution: new ComfyUiWorkflowRunner({

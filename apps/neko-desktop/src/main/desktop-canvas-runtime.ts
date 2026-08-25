@@ -714,6 +714,7 @@ export class DesktopCanvasRuntime {
     const session = new CanvasHostRuntimeSession({
       identity,
       initialCanvas,
+      createGenerationNodeIdentity: () => `generation-${randomUUID()}`,
       presentationSnapshots: this.presentationSnapshots,
       resolveGenerationModels: () =>
         this.options.resolveGenerationModels?.({ workspace: grant.workspace }) ?? [],

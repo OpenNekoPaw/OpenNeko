@@ -1,26 +1,25 @@
-import type { MediaProvider } from '@neko/generation-domain/media';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createDesktopMediaExecutionProviderResolver } from './desktop-media-execution-provider';
+import { createDesktopGenerationExecutionProviderResolver } from './desktop-generation-execution-provider';
 
-const configuredProvider: MediaProvider = {
+const configuredProvider = {
   id: 'image-provider',
   name: 'image-provider',
   displayName: 'Image Provider',
-  type: 'newapi',
+  type: 'newapi' as const,
   apiUrl: 'https://image.example.test/api',
   enabled: true,
   requiresApiKey: true,
 };
 
-describe('Desktop media execution provider resolver', () => {
+describe('Desktop generation execution provider resolver', () => {
   it('hydrates an ephemeral exact provider and does not retain a removed credential', async () => {
     let credential: { readonly type: 'api_key'; readonly key: string } | undefined = {
       type: 'api_key',
       key: 'current-secret',
     };
     const read = vi.fn(async () => credential);
-    const resolver = createDesktopMediaExecutionProviderResolver({
+    const resolver = createDesktopGenerationExecutionProviderResolver({
       config: {
         getProvider: (providerId) =>
           providerId === configuredProvider.id ? configuredProvider : undefined,
@@ -43,7 +42,7 @@ describe('Desktop media execution provider resolver', () => {
 
   it('does not read a credential for a disabled provider', async () => {
     const read = vi.fn(async () => ({ type: 'api_key' as const, key: 'must-not-be-read' }));
-    const resolver = createDesktopMediaExecutionProviderResolver({
+    const resolver = createDesktopGenerationExecutionProviderResolver({
       config: { getProvider: () => ({ ...configuredProvider, enabled: false }) },
       credentials: { read },
     });

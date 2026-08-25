@@ -1586,6 +1586,9 @@ describe('DesktopCanvasRuntime', () => {
 
     expect(result.status).toBe('accepted');
     if (result.status !== 'accepted') throw new Error(result.diagnostic.message);
+    expect(result.snapshot.canvas.nodes[0]?.id).toMatch(
+      /^generation-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
+    );
     expect(result.snapshot.canvas.nodes).toEqual([
       expect.objectContaining({
         type: 'generation',

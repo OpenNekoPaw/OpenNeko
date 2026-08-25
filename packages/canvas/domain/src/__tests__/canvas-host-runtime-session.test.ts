@@ -784,6 +784,185 @@ describe('CanvasHostRuntimeSession', () => {
     },
   );
 
+  it('does not reuse a deleted Generation node identity within one document session', async () => {
+    const runtime = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas: createEmptyCanvasData('Initial'),
+      effects: { generation: unusedGenerationEffects() },
+    });
+
+    const first = await runtime.executeIntent(
+      request('generation-create-first', {
+        type: 'create-generation-node',
+        kind: 'video',
+      }),
+    );
+    expect(first.status).toBe('accepted');
+    if (first.status !== 'accepted') throw new Error(first.diagnostic.message);
+    const firstNode = first.snapshot.canvas.nodes[0];
+    if (!firstNode) throw new Error('First Generation node was not created.');
+
+    const removed = await runtime.executeIntent(
+      request('generation-remove-first', {
+        type: 'replace-document',
+        canvas: createEmptyCanvasData('Initial'),
+        removedNodeIds: [firstNode.id],
+      }),
+    );
+    expect(removed.status).toBe('accepted');
+
+    const second = await runtime.executeIntent(
+      request('generation-create-second', {
+        type: 'create-generation-node',
+        kind: 'video',
+      }),
+    );
+    expect(second.status).toBe('accepted');
+    if (second.status !== 'accepted') throw new Error(second.diagnostic.message);
+    expect(second.snapshot.canvas.nodes[0]?.id).toBe('generation-2');
+  });
+
+  it('drops a deleted run projection and rejects its late observation after an identity collision', async () => {
+    const run = {
+      submissionId: 'submission-old',
+      recipeInputFingerprint: 'sha256:old',
+      jobRef: { kind: 'generation' as const, jobId: 'job-old' },
+    };
+    const initialCanvas = generationCanvasWithRun('generation-1', run);
+    let releaseObservation: (() => void) | undefined;
+    let finishObservation: (() => void) | undefined;
+    const observationReleased = new Promise<void>((resolve) => {
+      releaseObservation = resolve;
+    });
+    const observationFinished = new Promise<void>((resolve) => {
+      finishObservation = resolve;
+    });
+    const effects: NonNullable<CanvasHostRuntimeSessionEffects['generation']> = {
+      ...unusedGenerationEffects(),
+      resumeNode: async ({ canvas }) => ({
+        canvas,
+        projection: {
+          nodeId: 'generation-1',
+          submissionId: run.submissionId,
+          recipeInputFingerprint: run.recipeInputFingerprint,
+          jobRef: run.jobRef,
+          phase: 'running',
+        },
+      }),
+      observeNode: async function* () {
+        try {
+          await observationReleased;
+          yield {
+            nodeId: 'generation-1',
+            submissionId: run.submissionId,
+            recipeInputFingerprint: run.recipeInputFingerprint,
+            jobRef: run.jobRef,
+            phase: 'failed',
+            recipeStale: true,
+            diagnostic: { code: 'old-provider-failure', message: 'Old provider failure.' },
+          };
+        } finally {
+          finishObservation?.();
+        }
+      },
+    };
+    const runtime = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas,
+      createGenerationNodeIdentity: () => 'generation-1',
+      effects: { generation: effects },
+    });
+    await runtime.reattachGenerationNodes();
+    expect((await runtime.getSnapshot()).generationNodes).toHaveLength(1);
+
+    const removed = await runtime.executeIntent(
+      request('generation-remove-running', {
+        type: 'replace-document',
+        canvas: createEmptyCanvasData('Initial'),
+        removedNodeIds: ['generation-1'],
+      }),
+    );
+    expect(removed.status).toBe('accepted');
+    if (removed.status !== 'accepted') throw new Error(removed.diagnostic.message);
+    expect(removed.snapshot.generationNodes).toEqual([]);
+
+    const recreated = await runtime.executeIntent(
+      request('generation-recreate-collision', {
+        type: 'create-generation-node',
+        kind: 'video',
+      }),
+    );
+    expect(recreated.status).toBe('accepted');
+    if (recreated.status !== 'accepted') throw new Error(recreated.diagnostic.message);
+    expect(recreated.snapshot.canvas.nodes[0]).toMatchObject({
+      id: 'generation-1',
+      type: 'generation',
+      data: { recipe: { kind: 'video', prompt: '' }, outputs: [] },
+    });
+
+    releaseObservation?.();
+    await observationFinished;
+    expect((await runtime.getSnapshot()).generationNodes).toEqual([]);
+  });
+
+  it('reprojects only the exact Generation run restored by undo', async () => {
+    const run = {
+      submissionId: 'submission-undo',
+      recipeInputFingerprint: 'sha256:undo',
+      jobRef: { kind: 'generation' as const, jobId: 'job-undo' },
+    };
+    const resumeNode = vi.fn(async ({ canvas }) => ({
+      canvas,
+      projection: {
+        nodeId: 'generation-undo',
+        submissionId: run.submissionId,
+        recipeInputFingerprint: run.recipeInputFingerprint,
+        jobRef: run.jobRef,
+        phase: 'failed' as const,
+        diagnostic: { code: 'provider-failure', message: 'Provider failure.' },
+      },
+    }));
+    const runtime = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas: generationCanvasWithRun('generation-undo', run),
+      effects: {
+        generation: {
+          ...unusedGenerationEffects(),
+          resumeNode,
+          observeNode: async function* () {},
+        },
+      },
+    });
+    await runtime.reattachGenerationNodes();
+
+    const removed = await runtime.executeIntent(
+      request('generation-remove-before-undo', {
+        type: 'replace-document',
+        canvas: createEmptyCanvasData('Initial'),
+        removedNodeIds: ['generation-undo'],
+      }),
+    );
+    expect(removed.status).toBe('accepted');
+    if (removed.status !== 'accepted') throw new Error(removed.diagnostic.message);
+    expect(removed.snapshot.generationNodes).toEqual([]);
+
+    const restored = await runtime.executeIntent(
+      request('generation-undo-removal', { type: 'undo' }),
+    );
+    expect(restored.status).toBe('accepted');
+    if (restored.status !== 'accepted') throw new Error(restored.diagnostic.message);
+    expect(restored.snapshot.canvas.nodes[0]?.id).toBe('generation-undo');
+    expect(restored.snapshot.generationNodes).toEqual([
+      expect.objectContaining({
+        nodeId: 'generation-undo',
+        jobRef: run.jobRef,
+        recipeInputFingerprint: run.recipeInputFingerprint,
+        phase: 'failed',
+      }),
+    ]);
+    expect(resumeNode).toHaveBeenCalledTimes(2);
+  });
+
   it('marks the current Generation projection stale when its submitted Recipe is edited', async () => {
     const configured = updateCanvasGenerationNodeRecipe({
       canvas: createCanvasGenerationNode({
@@ -1294,6 +1473,37 @@ function unusedGenerationEffects(): NonNullable<CanvasHostRuntimeSessionEffects[
       throw new Error('Generation cancellation is not used by this test.');
     },
   };
+}
+
+function generationCanvasWithRun(
+  nodeId: string,
+  run: {
+    readonly submissionId: string;
+    readonly recipeInputFingerprint: string;
+    readonly jobRef: { readonly kind: 'generation'; readonly jobId: string };
+  },
+) {
+  const configured = updateCanvasGenerationNodeRecipe({
+    canvas: createCanvasGenerationNode({
+      canvas: createEmptyCanvasData('Initial'),
+      nodeId,
+      kind: 'video',
+      position: { x: 0, y: 0 },
+    }),
+    nodeId,
+    recipe: {
+      kind: 'video',
+      prompt: 'Old prompt',
+      model: {
+        purpose: 'video.generate',
+        providerId: 'provider-old',
+        modelId: 'model-old',
+      },
+    },
+  });
+  const node = configured.nodes[0];
+  if (!node || node.type !== 'generation') throw new Error('Generation fixture is invalid.');
+  return { ...configured, nodes: [{ ...node, data: { ...node.data, latestRun: run } }] };
 }
 
 function directReference(
