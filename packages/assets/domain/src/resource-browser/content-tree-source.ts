@@ -1,5 +1,9 @@
 import type { MediaLibraryProjectionEntry } from '@neko/assets-domain/contracts';
-import type { WorkspaceFileContentLocator } from '@neko/content-domain';
+import {
+  isWorkspaceFileContentLocator,
+  validateContentLocator,
+  type WorkspaceFileContentLocator,
+} from '@neko/content-domain';
 import type { ResourceBrowserContentEntry } from './ports';
 
 export type ResourceBrowserContentTreeEntryType = 'file' | 'directory' | 'symlink' | 'unknown';
@@ -98,12 +102,14 @@ async function readDirectoryChildren(
     const relativePath = portableRelativePath(input.relativePath(input.absoluteRoot, absolutePath));
     const locatorPath = createLocatorPath(input.locatorPrefix, relativePath);
     if (input.excludedLocatorPaths?.has(locatorPath.toLocaleLowerCase('en-US'))) continue;
+    const locator = parseWorkspaceContentLocator(locatorPath);
+    if (!locator) continue;
     if (child.type === 'directory') {
       if (input.excludedDirectoryNames.has(child.name)) continue;
       directories.push(absolutePath);
       if (matchesQuery(locatorPath, input.query)) {
         entries.push({
-          locator: { file: { authority: 'workspace', path: locatorPath } },
+          locator,
           label: child.name,
           description: portableParentPath(locatorPath),
           availability: 'available',
@@ -123,7 +129,7 @@ async function readDirectoryChildren(
     if (!classification.include) continue;
     const stat = await input.files.stat(absolutePath);
     entries.push({
-      locator: { file: { authority: 'workspace', path: locatorPath } },
+      locator,
       label: child.name,
       description: portableParentPath(locatorPath),
       availability: 'available',
@@ -187,7 +193,15 @@ function parentLocator(
   const segments = relativePath.split('/');
   segments.pop();
   const parentPath = [locatorPrefix, segments.join('/')].filter(Boolean).join('/');
-  return parentPath
-    ? { parentLocator: { file: { authority: 'workspace', path: parentPath } } }
-    : {};
+  if (!parentPath) return {};
+  const locator = parseWorkspaceContentLocator(parentPath);
+  if (!locator) {
+    throw new Error('Resource Browser produced content with a non-portable parent locator.');
+  }
+  return { parentLocator: locator };
+}
+
+function parseWorkspaceContentLocator(path: string): WorkspaceFileContentLocator | undefined {
+  const result = validateContentLocator({ file: { authority: 'workspace', path } });
+  return result.ok && isWorkspaceFileContentLocator(result.locator) ? result.locator : undefined;
 }
