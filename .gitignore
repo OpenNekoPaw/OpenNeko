@@ -9,7 +9,7 @@
 !.vscode/settings.json
 .idea/
 .codex/
-# 仓库级 Evaluation/质量 Skill 需要进入版本控制；其余本地 Codex 状态继续忽略
+# 仓库级 Evaluation、质量与 OpenSpec 工作流 Skill 需要进入版本控制；其余本地 Codex 状态继续忽略
 !.codex/
 .codex/*
 !.codex/skills/
@@ -20,6 +20,14 @@
 !.codex/skills/neko-quality-review/**
 !.codex/skills/neko-ui-validation/
 !.codex/skills/neko-ui-validation/**
+!.codex/skills/openspec-propose/
+!.codex/skills/openspec-propose/**
+!.codex/skills/openspec-apply-change/
+!.codex/skills/openspec-apply-change/**
+!.codex/skills/openspec-archive-change/
+!.codex/skills/openspec-archive-change/**
+!.codex/skills/openspec-explore/
+!.codex/skills/openspec-explore/**
 
 # 依赖库与非 pnpm 锁文件
 node_modules/
