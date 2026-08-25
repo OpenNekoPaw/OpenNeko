@@ -27,6 +27,11 @@ export const en = {
   'shell.archiveWorkspaceConversations': 'Archive unavailable Workspace conversations',
   'shell.archiveConversationsConfirm':
     'Archive these {count} conversations? Their records will be retained.',
+  'shell.archiveUnavailableConversationsConfirm':
+    'Archive these {count} conversations including unavailable records? Local residual records without a DSH Session binding will be removed.',
+  'shell.deleteUnavailableConversation': 'Delete unavailable conversation {conversation}',
+  'shell.deleteUnavailableConversationConfirm':
+    'Permanently delete unavailable conversation “{conversation}”? This only removes the non-executable OpenNeko record.',
   'shell.openProject': 'Open content project',
   'shell.settingsUnavailable': 'Settings are not available in this build',
   'shell.settingsLabel': 'Desktop settings',
@@ -281,6 +286,7 @@ export const en = {
   'home.projects.removeFromList': 'Remove from project list',
   'home.openConversation': 'Open conversation',
   'home.archiveConversation': 'Archive conversation',
+  'home.deleteUnavailableConversation': 'Delete unavailable conversation',
   'home.noConversations': 'No Agent conversations',
   'home.projectProfiles': 'Project profiles',
   'home.available': 'Available',

@@ -37,7 +37,7 @@ describe('DesktopProjectRegistrationService', () => {
     const archiveConversations = vi.fn(async () => undefined);
     const service = new DesktopProjectRegistrationService({
       shell,
-      conversations: { archiveConversations },
+      conversations: conversationManagement(archiveConversations),
     });
 
     await expect(
@@ -62,7 +62,7 @@ describe('DesktopProjectRegistrationService', () => {
     const archiveConversations = vi.fn(async () => undefined);
     const service = new DesktopProjectRegistrationService({
       shell,
-      conversations: { archiveConversations },
+      conversations: conversationManagement(archiveConversations),
     });
 
     await expect(
@@ -86,7 +86,7 @@ describe('DesktopProjectRegistrationService', () => {
     const archiveConversations = vi.fn(async () => undefined);
     const service = new DesktopProjectRegistrationService({
       shell,
-      conversations: { archiveConversations },
+      conversations: conversationManagement(archiveConversations),
     });
 
     await expect(
@@ -104,7 +104,7 @@ describe('DesktopProjectRegistrationService', () => {
     const archiveConversations = vi.fn(async () => undefined);
     const service = new DesktopProjectRegistrationService({
       shell,
-      conversations: { archiveConversations },
+      conversations: conversationManagement(archiveConversations),
     });
 
     await expect(
@@ -122,7 +122,7 @@ describe('DesktopProjectRegistrationService', () => {
     const archiveConversations = vi.fn(async () => undefined);
     const service = new DesktopProjectRegistrationService({
       shell,
-      conversations: { archiveConversations },
+      conversations: conversationManagement(archiveConversations),
     });
 
     await expect(
@@ -145,7 +145,7 @@ describe('DesktopProjectRegistrationService', () => {
     const archiveConversations = vi.fn(async () => undefined);
     const service = new DesktopProjectRegistrationService({
       shell,
-      conversations: { archiveConversations },
+      conversations: conversationManagement(archiveConversations),
     });
 
     await expect(
@@ -160,7 +160,7 @@ describe('DesktopProjectRegistrationService', () => {
     const archiveConversations = vi.fn(async () => undefined);
     const service = new DesktopProjectRegistrationService({
       shell,
-      conversations: { archiveConversations },
+      conversations: conversationManagement(archiveConversations),
     });
 
     await expect(
@@ -169,7 +169,39 @@ describe('DesktopProjectRegistrationService', () => {
     expect(shell.resolveAgentHomeConversations).not.toHaveBeenCalled();
     expect(archiveConversations).not.toHaveBeenCalled();
   });
+
+  it('deletes only the exact unavailable Conversation revalidated by Shell authority', async () => {
+    const requested = workspaceConversation('conversation:unavailable');
+    const authoritative = workspaceConversation('conversation:unavailable');
+    const finalProjection = projection([]);
+    const shell = createShell({ conversations: [authoritative], projection: finalProjection });
+    const archiveConversations = vi.fn(async () => undefined);
+    const conversations = conversationManagement(archiveConversations);
+    const service = new DesktopProjectRegistrationService({ shell, conversations });
+
+    await expect(
+      service.deleteUnavailableConversation('window-1', 'renderer-session-1', requested),
+    ).resolves.toBe(finalProjection);
+    expect(shell.resolveAgentHomeConversations).toHaveBeenCalledWith(
+      'window-1',
+      [requested],
+      'renderer-session-1',
+    );
+    expect(conversations.deleteUnavailableConversation).toHaveBeenCalledWith(authoritative);
+    expect(archiveConversations).not.toHaveBeenCalled();
+  });
 });
+
+function conversationManagement(
+  archiveConversations: (
+    conversations: readonly DesktopAgentHomeNavigationIdentity[],
+  ) => Promise<void>,
+) {
+  return {
+    archiveConversations,
+    deleteUnavailableConversation: vi.fn(async () => undefined),
+  };
+}
 
 function createShell({
   conversations,

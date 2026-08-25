@@ -42,6 +42,7 @@ export interface DshSessionArchiveAcpClient {
 
 export interface ConversationDshSessionArchive {
   archiveConversation(conversationId: string): Promise<void>;
+  deleteUnavailableConversation(conversationId: string): Promise<void>;
 }
 
 export interface ConversationDshSessionApplication {
@@ -111,12 +112,38 @@ export function createConversationDshSessionApplication(
             await home.refresh();
             return;
           }
+          if (resolution.code === 'CONVERSATION_BINDING_MISSING') {
+            await options.staleConversations.discardMissingBinding(conversationId);
+            await home.refresh();
+            return;
+          }
           throw new Error(
             `DSH Conversation archive failed: ${resolution.code}: ${resolution.message}`,
           );
         }
         await options.client.archiveSession(resolution.binding.dshSessionId);
         await home.refresh();
+      },
+      async deleteUnavailableConversation(conversationId: string) {
+        const resolution = await binding.resolve(conversationId);
+        if (resolution.ok) {
+          throw new Error(
+            `DSH Conversation delete rejected: Conversation is still resolvable: ${conversationId}`,
+          );
+        }
+        if (resolution.code === 'DSH_SESSION_STALE') {
+          await options.staleConversations.discard(resolution.binding);
+          await home.refresh();
+          return;
+        }
+        if (resolution.code === 'CONVERSATION_BINDING_MISSING') {
+          await options.staleConversations.discardMissingBinding(conversationId);
+          await home.refresh();
+          return;
+        }
+        throw new Error(
+          `DSH Conversation delete failed: ${resolution.code}: ${resolution.message}`,
+        );
       },
     }),
     publication: createConversationDshSessionPublication({

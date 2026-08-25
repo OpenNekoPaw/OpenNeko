@@ -69,7 +69,45 @@ describe('Desktop Conversation archive IPC', () => {
 
     expect(channels).toContain('openneko:desktop:home:conversation:archive');
     expect(channels).toContain('openneko:desktop:project:conversation:archive');
+    expect(channels).toContain('openneko:desktop:home:conversation:delete-unavailable');
     expect(channels).not.toContain('openneko:desktop:home:conversation:delete');
     expect(channels).not.toContain('openneko:desktop:project:conversation:delete');
+  });
+
+  it('binds unavailable Conversation delete to the exact sender and request', async () => {
+    const deleteUnavailableConversation = vi.fn(async () => ({
+      requestId: 'request-delete',
+      projection: { applicationInstanceId: 'application-1' },
+    }));
+    registerDesktopIpc({ deleteUnavailableConversation } as never, {
+      selectContentWorkspace: vi.fn(),
+      selectWorkspaceGrant: vi.fn(),
+      saveCharacterPackage: vi.fn(),
+      readCharacterPackage: vi.fn(),
+      saveWorldPackage: vi.fn(),
+      readWorldPackage: vi.fn(),
+    });
+    const handler = electron.handlers.get(DESKTOP_SHELL_CHANNELS.conversationDeleteUnavailable);
+    if (!handler) throw new Error('Unavailable Conversation delete IPC was not registered.');
+    const event = {
+      sender: { id: 43 },
+      senderFrame: { url: 'file:///desktop/index.html' },
+    };
+    const request = {
+      requestId: 'request-delete',
+      rendererSessionId: 'renderer-session-1',
+      navigation: {
+        conversationId: 'conversation:unavailable',
+        owner: { kind: 'assistant', assistantSpaceId: 'assistant:local' },
+      },
+    };
+
+    await expect(handler(event, request)).resolves.toMatchObject({
+      requestId: 'request-delete',
+    });
+    expect(deleteUnavailableConversation).toHaveBeenCalledWith(
+      { webContentsId: 43, frameUrl: 'file:///desktop/index.html' },
+      request,
+    );
   });
 });

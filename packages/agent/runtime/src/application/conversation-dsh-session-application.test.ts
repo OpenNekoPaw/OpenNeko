@@ -158,7 +158,10 @@ function applicationFixture(conversationId: string) {
       get: vi.fn(async (requested: string) => (requested === conversationId ? record : undefined)),
       read: vi.fn(async () => ({ records: [record], diagnostics: [] })),
     },
-    staleConversations: { discard: vi.fn(async () => undefined) },
+    staleConversations: {
+      discard: vi.fn(async () => undefined),
+      discardMissingBinding: vi.fn(async () => undefined),
+    },
     conversationIdentitySeed: '/workspace/test',
     activity: {
       snapshot: (sessionId: string) => ({

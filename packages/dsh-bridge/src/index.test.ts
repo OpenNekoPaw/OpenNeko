@@ -303,6 +303,39 @@ describe('OpenNeko DSH ACP bridge projections', () => {
     });
   });
 
+  it('deduplicates one exact Session projected by both active and durable owners', () => {
+    const durable = header({
+      id: SessionId('shared'),
+      cwd: '/workspace',
+      agentPreset: 'openneko',
+    });
+
+    expect(listOpenNekoSessions([durable, { ...durable }], 'openneko')).toEqual({
+      sessions: [{ sessionId: 'shared', cwd: '/workspace' }],
+    });
+    expect(
+      listOpenNekoSessions(
+        [
+          durable,
+          { ...durable, cwd: '/other-workspace' },
+          header({ id: SessionId('sibling'), cwd: '/sibling', agentPreset: 'openneko' }),
+        ],
+        'openneko',
+      ),
+    ).toEqual({
+      sessions: [{ sessionId: 'sibling', cwd: '/sibling' }],
+      _meta: {
+        opennekoDiagnostics: [
+          {
+            code: 'SESSION_HEADER_CONFLICT',
+            message: 'OpenNeko DSH session shared has conflicting catalog headers.',
+            sessionId: 'shared',
+          },
+        ],
+      },
+    });
+  });
+
   it('rejects a profile session whose persisted cwd is not absolute', () => {
     const result = listOpenNekoSessions(
       [

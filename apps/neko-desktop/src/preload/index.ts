@@ -38,6 +38,7 @@ import {
 } from '../shared/bridge-contract';
 import {
   createDesktopConversationArchiveRequest,
+  createDesktopConversationDeleteUnavailableRequest,
   createDesktopProfileRequest,
   createDesktopProjectSelectionRequest,
   createDesktopProjectOpenRequest,
@@ -1989,6 +1990,21 @@ const bridge: OpenNekoDesktopBridge &
       );
       const response: unknown = await ipcRenderer.invoke(
         DESKTOP_SHELL_CHANNELS.conversationArchive,
+        request,
+      );
+      return rememberShellProjection(
+        parseDesktopShellResponse(response, request.requestId).projection,
+      );
+    },
+    async deleteUnavailable(navigation) {
+      const context = requireShellMutationContext();
+      const request = createDesktopConversationDeleteUnavailableRequest(
+        nextRequestId('desktop-conversation-delete-unavailable'),
+        navigation,
+        context.rendererSessionId,
+      );
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_SHELL_CHANNELS.conversationDeleteUnavailable,
         request,
       );
       return rememberShellProjection(

@@ -167,7 +167,7 @@ Desktop 原生 Agent surface 只选择并渲染 DSH-derived projection；卸载 
 排队或等待审批的 exact Session task。`@neko/agent-webview` 只拥有 DSH Session 与 Skill/MCP management browser presentation，
 不拥有 Agent controller、transcript、queue、Skill/MCP/Plugin runtime 或 Host IO。
 
-产品 lifecycle 只组合 create、bounded list/revalidation、load/resume、prompt、cancel、close/release 和 restart 后按 exact binding reload。缺少公开 Session delete 时保留局部 diagnostic，不把 close 当 delete；缺少 inbox-preserving release 时不提供离线 inbox 编辑，不建立 shadow queue 或泄漏 DSH owner。
+产品 lifecycle 只组合 create、bounded list/revalidation、load/resume、prompt、cancel、close/release 和 restart 后按 exact binding reload。缺少公开 Session delete 时不得把 close 当 delete；只有 binding 缺失或 exact Session 经权威目录证明不存在的不可执行 Conversation，才允许用户通过受限管理入口原子清理本地 catalog、context 与 stale binding。缺少 inbox-preserving release 时不提供离线 inbox 编辑，不建立 shadow queue 或泄漏 DSH owner。
 
 ## 验证边界
 

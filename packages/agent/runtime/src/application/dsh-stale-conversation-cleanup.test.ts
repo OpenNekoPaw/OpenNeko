@@ -115,6 +115,47 @@ describe('persistent stale DSH Conversation cleanup', () => {
       stale.context,
     );
   });
+
+  it('atomically removes an unavailable catalog record whose binding is missing', async () => {
+    const fixture = await createFixture();
+    const unavailable = record('/workspace/unbound');
+    const sibling = record('/workspace/unbound-sibling');
+    await fixture.catalog.reserve(unavailable);
+    await fixture.catalog.reserve(sibling);
+    await fixture.bindings.bind({
+      conversationId: sibling.conversationId,
+      dshSessionId: 'dsh-session-sibling',
+    });
+
+    await fixture.cleanup.discardMissingBinding(unavailable.conversationId);
+
+    await expect(fixture.catalog.get(unavailable.conversationId)).resolves.toBeUndefined();
+    await expect(fixture.contexts.readContext(unavailable.conversationId)).resolves.toBeUndefined();
+    await expect(fixture.catalog.get(sibling.conversationId)).resolves.toEqual(sibling);
+    await expect(fixture.bindings.get(sibling.conversationId)).resolves.toEqual({
+      conversationId: sibling.conversationId,
+      dshSessionId: 'dsh-session-sibling',
+    });
+  });
+
+  it('rolls back unbound cleanup when a binding appeared before the transaction', async () => {
+    const fixture = await createFixture();
+    const conversation = record('/workspace/bound-before-delete');
+    await fixture.catalog.reserve(conversation);
+    await fixture.bindings.bind({
+      conversationId: conversation.conversationId,
+      dshSessionId: 'dsh-session-current',
+    });
+
+    await expect(
+      fixture.cleanup.discardMissingBinding(conversation.conversationId),
+    ).rejects.toThrow(/gained a DSH Session binding/u);
+
+    await expect(fixture.catalog.get(conversation.conversationId)).resolves.toEqual(conversation);
+    await expect(fixture.contexts.readContext(conversation.conversationId)).resolves.toEqual(
+      conversation.context,
+    );
+  });
 });
 
 function record(seed: string) {

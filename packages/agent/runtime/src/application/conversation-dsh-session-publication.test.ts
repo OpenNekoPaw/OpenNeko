@@ -91,6 +91,37 @@ describe('Conversation DSH Session publication', () => {
     ).resolves.toEqual({ conversationId, dshSessionId: 'dsh-session-new' });
   });
 
+  it('does not expose a transient missing-binding record while publication is still running', async () => {
+    const catalog = memoryCatalog([]);
+    const store = memoryBindingStore([]);
+    let releaseCreate: (() => void) | undefined;
+    const createGate = new Promise<void>((resolve) => {
+      releaseCreate = resolve;
+    });
+    const application = createConversationDshSessionApplication({
+      client: clientWith({ onCreate: () => createGate }),
+      store,
+      catalog,
+      staleConversations: memoryStaleCleanup(catalog, store),
+      conversationIdentitySeed: '/workspace/publication-visibility',
+      activity: idleActivity(),
+      lookupCwd: testLookupCwd(),
+    });
+
+    const publication = application.publication.publish({
+      title: 'Publication in progress',
+      context: { kind: 'assistant', assistantSpaceId: 'assistant:one', baseGrantIds: [] },
+    });
+    await vi.waitFor(() => expect(catalog.records).toHaveLength(1));
+    expect(application.home.readHomeProjection().conversations).toEqual([]);
+
+    releaseCreate?.();
+    await publication;
+
+    expect(application.home.readHomeProjection().conversations).toHaveLength(1);
+    expect(application.home.readHomeProjection().conversations[0]?.unavailable).toBeUndefined();
+  });
+
   it('keeps the Host catalog record unavailable when session/new fails', async () => {
     const catalog = memoryCatalog([]);
     const store = memoryBindingStore([]);
@@ -252,6 +283,75 @@ describe('Conversation DSH Session publication', () => {
     expect(application.home.readHomeProjection().conversations).toEqual([]);
   });
 
+  it('archives an unbound unavailable record through exact local cleanup', async () => {
+    const catalog = memoryCatalog([]);
+    const store = memoryBindingStore([]);
+    const client = clientWith({});
+    const staleConversations = memoryStaleCleanup(catalog, store);
+    const application = createConversationDshSessionApplication({
+      client,
+      store,
+      catalog,
+      staleConversations,
+      conversationIdentitySeed: '/workspace/unbound-archive',
+      activity: idleActivity(),
+      lookupCwd: testLookupCwd(),
+    });
+    const conversationId = createConversationId('/workspace/unbound-archive');
+    await catalog.reserve({
+      conversationId,
+      title: 'Unavailable conversation',
+      createdAt: '2026-08-25T00:00:00.000Z',
+      updatedAt: '2026-08-25T00:00:00.000Z',
+      context: { kind: 'assistant', assistantSpaceId: 'assistant:one', baseGrantIds: [] },
+    });
+    await application.home.refresh();
+
+    await application.archive.archiveConversation(conversationId);
+
+    expect(staleConversations.discardMissingBinding).toHaveBeenCalledWith(conversationId);
+    expect(client.archiveSession).not.toHaveBeenCalled();
+    await expect(application.catalog.get(conversationId)).resolves.toBeUndefined();
+    expect(application.home.readHomeProjection().conversations).toEqual([]);
+  });
+
+  it('deletes only an unavailable record and rejects a resolvable Conversation', async () => {
+    const catalog = memoryCatalog([]);
+    const store = memoryBindingStore([]);
+    const client = clientWith({});
+    const staleConversations = memoryStaleCleanup(catalog, store);
+    const application = createConversationDshSessionApplication({
+      client,
+      store,
+      catalog,
+      staleConversations,
+      conversationIdentitySeed: '/workspace/unavailable-delete',
+      activity: idleActivity(),
+      lookupCwd: testLookupCwd(),
+    });
+    const unavailableId = createConversationId('/workspace/unavailable-delete');
+    await catalog.reserve({
+      conversationId: unavailableId,
+      title: 'Unavailable conversation',
+      createdAt: '2026-08-25T00:00:00.000Z',
+      updatedAt: '2026-08-25T00:00:00.000Z',
+      context: { kind: 'assistant', assistantSpaceId: 'assistant:one', baseGrantIds: [] },
+    });
+
+    await application.archive.deleteUnavailableConversation(unavailableId);
+
+    expect(staleConversations.discardMissingBinding).toHaveBeenCalledWith(unavailableId);
+    const published = await application.publication.publish({
+      title: 'Healthy conversation',
+      context: { kind: 'assistant', assistantSpaceId: 'assistant:one', baseGrantIds: [] },
+    });
+    await expect(
+      application.archive.deleteUnavailableConversation(published.conversationId),
+    ).rejects.toThrow(/still resolvable/u);
+    await expect(application.catalog.get(published.conversationId)).resolves.toBeDefined();
+    expect(client.archiveSession).not.toHaveBeenCalled();
+  });
+
   it('derives a bounded title from the canonical first Composer input', () => {
     expect(
       projectDshConversationTitle({
@@ -365,6 +465,14 @@ function memoryStaleCleanup(
         catalog.records.splice(index, 1);
       },
     ),
+    discardMissingBinding: vi.fn(async (conversationId: string) => {
+      if (store.records.has(conversationId)) {
+        throw new Error('Conversation gained a binding before cleanup.');
+      }
+      const index = catalog.records.findIndex((record) => record.conversationId === conversationId);
+      if (index < 0) throw new Error('Unbound catalog record is missing.');
+      catalog.records.splice(index, 1);
+    }),
   };
 }
 
@@ -383,6 +491,7 @@ function testLookupCwd() {
 function clientWith(options: {
   readonly order?: string[];
   readonly createError?: Error;
+  readonly onCreate?: () => Promise<void>;
   readonly onResume?: (dshSessionId: string) => Promise<void>;
 }) {
   const order = options.order ?? [];
@@ -392,6 +501,7 @@ function clientWith(options: {
     sessionIds,
     async createSession() {
       order.push('session-new');
+      await options.onCreate?.();
       if (options.createError) throw options.createError;
       return { sessionId: 'dsh-session-new' };
     },

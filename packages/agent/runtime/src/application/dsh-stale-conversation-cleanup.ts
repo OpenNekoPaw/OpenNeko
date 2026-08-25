@@ -5,6 +5,7 @@ import { CONVERSATION_DSH_SESSION_BINDING_TABLE } from './conversation-dsh-sessi
 
 export interface DshStaleConversationCleanup {
   discard(binding: ConversationDshSessionBindingRecord): Promise<void>;
+  discardMissingBinding(conversationId: string): Promise<void>;
 }
 
 export function createPersistentDshStaleConversationCleanup(options: {
@@ -27,26 +28,67 @@ export function createPersistentDshStaleConversationCleanup(options: {
               `Agent Conversation '${conversationId}' stale binding changed before cleanup.`,
             );
           }
-          const catalog = await sql.run(
-            `DELETE FROM agent_dsh_conversation_catalog WHERE conversation_id = ?`,
+          await discardOwnedConversationRows(sql, conversationId, 'discard-stale-dsh-conversation');
+        },
+      );
+    },
+
+    discardMissingBinding(conversationIdValue: string) {
+      const conversationId = requireIdentity(conversationIdValue, 'Conversation');
+      return options.metadataStore.transaction(
+        {
+          mode: 'state-write',
+          ownership: 'state',
+          operation: 'discard-unbound-dsh-conversation',
+        },
+        async ({ sql }) => {
+          const bindings = await sql.all(
+            `SELECT dsh_session_id
+               FROM ${CONVERSATION_DSH_SESSION_BINDING_TABLE}
+              WHERE conversation_id = ?`,
             [conversationId],
           );
-          if (catalog.changes !== 1) {
+          if (bindings.length !== 0) {
             throw cleanupError(
-              `Agent Conversation '${conversationId}' catalog record is not present.`,
+              `Agent Conversation '${conversationId}' gained a DSH Session binding before cleanup.`,
+              'discard-unbound-dsh-conversation',
             );
           }
-          const context = await sql.run(
-            `DELETE FROM agent_conversation_authority WHERE conversation_id = ?`,
-            [conversationId],
+          await discardOwnedConversationRows(
+            sql,
+            conversationId,
+            'discard-unbound-dsh-conversation',
           );
-          if (context.changes !== 1) {
-            throw cleanupError(`Agent Conversation '${conversationId}' context is not present.`);
-          }
         },
       );
     },
   });
+}
+
+async function discardOwnedConversationRows(
+  sql: {
+    run(statement: string, parameters?: readonly unknown[]): Promise<{ readonly changes: number }>;
+  },
+  conversationId: string,
+  operation: string,
+): Promise<void> {
+  const catalog = await sql.run(
+    `DELETE FROM agent_dsh_conversation_catalog WHERE conversation_id = ?`,
+    [conversationId],
+  );
+  if (catalog.changes !== 1) {
+    throw cleanupError(
+      `Agent Conversation '${conversationId}' catalog record is not present.`,
+      operation,
+    );
+  }
+  const context = await sql.run(
+    `DELETE FROM agent_conversation_authority WHERE conversation_id = ?`,
+    [conversationId],
+  );
+  if (context.changes !== 1) {
+    throw cleanupError(`Agent Conversation '${conversationId}' context is not present.`, operation);
+  }
 }
 
 function requireIdentity(value: string, label: string): string {
@@ -54,10 +96,13 @@ function requireIdentity(value: string, label: string): string {
   return value;
 }
 
-function cleanupError(message: string): LocalMetadataError {
+function cleanupError(
+  message: string,
+  operation = 'discard-stale-dsh-conversation',
+): LocalMetadataError {
   return new LocalMetadataError({
     code: 'metadata-transaction-failed',
-    operation: 'discard-stale-dsh-conversation',
+    operation,
     message,
   });
 }

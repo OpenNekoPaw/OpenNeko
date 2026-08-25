@@ -24,6 +24,11 @@ export const zhCN = {
   'shell.archiveConversationConfirm': '要归档会话“{conversation}”吗？会话记录会被保留。',
   'shell.archiveWorkspaceConversations': '归档不可用工作区的会话',
   'shell.archiveConversationsConfirm': '要归档这 {count} 个会话吗？会话记录会被保留。',
+  'shell.archiveUnavailableConversationsConfirm':
+    '要归档这 {count} 个包含异常状态的会话吗？无法关联 DSH Session 的本地残留记录会被清理。',
+  'shell.deleteUnavailableConversation': '删除异常会话 {conversation}',
+  'shell.deleteUnavailableConversationConfirm':
+    '要永久删除异常会话“{conversation}”吗？此操作只清理 OpenNeko 中无法执行的记录。',
   'shell.openProject': '打开内容项目',
   'shell.settingsUnavailable': '当前版本尚未接入设置',
   'shell.settingsLabel': 'Desktop 设置',
@@ -252,6 +257,7 @@ export const zhCN = {
   'home.projects.removeFromList': '从项目列表移除',
   'home.openConversation': '打开会话',
   'home.archiveConversation': '归档会话',
+  'home.deleteUnavailableConversation': '删除异常会话',
   'home.noConversations': '暂无 Agent 会话',
   'home.projectProfiles': '项目类型',
   'home.available': '可用',

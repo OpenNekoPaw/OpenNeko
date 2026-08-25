@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   createDesktopConversationArchiveRequest,
+  createDesktopConversationDeleteUnavailableRequest,
   createDesktopProfileRequest,
   createDesktopProjectSelectionRequest,
   createDesktopProjectOpenRequest,
   createDesktopTabMutationRequest,
   DesktopShellContractError,
   parseDesktopConversationArchiveRequest,
+  parseDesktopConversationDeleteUnavailableRequest,
   parseDesktopProjectSelectionRequest,
   parseDesktopShellProjection,
   parseDesktopShellProjectionEvent,
@@ -230,6 +232,23 @@ describe('Desktop Shell contract', () => {
         },
       ],
     });
+    expect(
+      createDesktopConversationDeleteUnavailableRequest(
+        'request-6',
+        {
+          conversationId: 'conversation-1',
+          owner: { kind: 'workspace', workspaceId: 'workspace-1' },
+        },
+        'renderer-session-1',
+      ),
+    ).toEqual({
+      requestId: 'request-6',
+      rendererSessionId: 'renderer-session-1',
+      navigation: {
+        conversationId: 'conversation-1',
+        owner: { kind: 'workspace', workspaceId: 'workspace-1' },
+      },
+    });
   });
 
   it('strictly requires a non-empty unique Conversation identity array', () => {
@@ -262,6 +281,37 @@ describe('Desktop Shell contract', () => {
         'renderer-session-1',
       ),
     ).toThrowError('Desktop Agent Home conversation identities must be unique.');
+  });
+
+  it('strictly parses one exact unavailable Conversation delete identity', () => {
+    expect(
+      parseDesktopConversationDeleteUnavailableRequest({
+        requestId: 'request-1',
+        rendererSessionId: 'renderer-session-1',
+        navigation: {
+          conversationId: 'conversation-1',
+          owner: { kind: 'assistant', assistantSpaceId: 'assistant-space:local-user' },
+        },
+      }),
+    ).toEqual({
+      requestId: 'request-1',
+      rendererSessionId: 'renderer-session-1',
+      navigation: {
+        conversationId: 'conversation-1',
+        owner: { kind: 'assistant', assistantSpaceId: 'assistant-space:local-user' },
+      },
+    });
+    expect(() =>
+      parseDesktopConversationDeleteUnavailableRequest({
+        requestId: 'request-1',
+        rendererSessionId: 'renderer-session-1',
+        navigation: {
+          conversationId: 'conversation-1',
+          owner: { kind: 'assistant', assistantSpaceId: 'assistant-space:local-user' },
+        },
+        force: true,
+      }),
+    ).toThrowError(DesktopShellContractError);
   });
 
   it('strictly rejects invalid Project selection payloads', () => {

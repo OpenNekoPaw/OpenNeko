@@ -479,7 +479,10 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
             'cwd does not match the configured virtual workspace.',
           );
         }
-        const headers = await ctx.sessionPersistence.list();
+        const headers = [
+          ...(await ctx.sessionPersistence.list()),
+          ...[...owned.values()].map((record) => record.handle.agent.session.header),
+        ];
         return listOpenNekoSessions(headers, preset);
       },
       async loadSession(params) {
@@ -1671,7 +1674,28 @@ export function listOpenNekoSessions(
 ): ListSessionsResponse {
   const sessions: ListSessionsResponse['sessions'] = [];
   const diagnostics: { code: string; message: string; sessionId: string }[] = [];
+  const seen = new Map<string, SessionHeader>();
+  const conflicts = new Set<string>();
   for (const header of headers) {
+    if (conflicts.has(header.id)) continue;
+    const existing = seen.get(header.id);
+    if (existing !== undefined) {
+      if (existing.cwd !== header.cwd || existing.agentPreset !== header.agentPreset) {
+        seen.delete(header.id);
+        conflicts.add(header.id);
+      }
+      continue;
+    }
+    seen.set(header.id, header);
+  }
+  for (const sessionId of conflicts) {
+    diagnostics.push({
+      code: 'SESSION_HEADER_CONFLICT',
+      message: `OpenNeko DSH session ${sessionId} has conflicting catalog headers.`,
+      sessionId,
+    });
+  }
+  for (const header of seen.values()) {
     if (header.agentPreset !== preset) continue;
     if (header.cwd === undefined) {
       diagnostics.push({

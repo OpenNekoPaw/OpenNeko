@@ -35,6 +35,7 @@ export const DESKTOP_SHELL_CHANNELS = {
   projectConversationArchive: 'openneko:desktop:project:conversation:archive',
   projectRequestProfile: 'openneko:desktop:project:profile:request',
   conversationArchive: 'openneko:desktop:home:conversation:archive',
+  conversationDeleteUnavailable: 'openneko:desktop:home:conversation:delete-unavailable',
   homeActivate: 'openneko:desktop:home:activate',
   tabActivate: 'openneko:desktop:tab:activate',
   tabClose: 'openneko:desktop:tab:close',
@@ -153,6 +154,10 @@ export type DesktopAgentHomeNavigationIdentity = AgentHomeNavigationIdentity;
 
 export interface DesktopConversationArchiveRequest extends DesktopWindowMutationRequest {
   readonly navigations: readonly DesktopAgentHomeNavigationIdentity[];
+}
+
+export interface DesktopConversationDeleteUnavailableRequest extends DesktopWindowMutationRequest {
+  readonly navigation: DesktopAgentHomeNavigationIdentity;
 }
 
 export type DesktopAgentHomeActivitySummary = AgentHomeActivitySummary;
@@ -363,6 +368,9 @@ export interface OpenNekoDesktopShellBridge {
   readonly conversations: {
     archive(
       navigations: readonly DesktopAgentHomeNavigationIdentity[],
+    ): Promise<DesktopShellProjection>;
+    deleteUnavailable(
+      navigation: DesktopAgentHomeNavigationIdentity,
     ): Promise<DesktopShellProjection>;
   };
   readonly tabs: {
@@ -661,6 +669,17 @@ export function createDesktopConversationArchiveRequest(
   };
 }
 
+export function createDesktopConversationDeleteUnavailableRequest(
+  requestId: string,
+  navigation: DesktopAgentHomeNavigationIdentity,
+  rendererSessionId: string,
+): DesktopConversationDeleteUnavailableRequest {
+  return {
+    ...createDesktopWindowMutationRequest(requestId, rendererSessionId),
+    navigation: parseDesktopAgentHomeNavigationIdentity(navigation),
+  };
+}
+
 export function parseDesktopShellRequest(value: unknown): DesktopShellRequest {
   const record = requireRecord(value, 'Desktop Shell request must be an object.');
   requireExactKeys(record, ['requestId'], 'Desktop Shell request');
@@ -768,6 +787,28 @@ export function parseDesktopConversationArchiveRequest(
       'Desktop renderer session identity is required.',
     ),
   };
+}
+
+export function parseDesktopConversationDeleteUnavailableRequest(
+  value: unknown,
+): DesktopConversationDeleteUnavailableRequest {
+  const record = requireRecord(
+    value,
+    'Desktop unavailable Agent Home conversation delete request must be an object.',
+  );
+  requireExactKeys(
+    record,
+    ['requestId', 'navigation', 'rendererSessionId'],
+    'Desktop unavailable Agent Home conversation delete request',
+  );
+  return createDesktopConversationDeleteUnavailableRequest(
+    parseDesktopShellRequestId(record),
+    parseDesktopAgentHomeNavigationIdentity(record['navigation']),
+    requireNonEmptyString(
+      record['rendererSessionId'],
+      'Desktop renderer session identity is required.',
+    ),
+  );
 }
 
 export function parseDesktopWorkbenchMutationRequest(

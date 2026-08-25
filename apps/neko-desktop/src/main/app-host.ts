@@ -9,6 +9,7 @@ import {
 import {
   parseDesktopProfileRequest,
   parseDesktopConversationArchiveRequest,
+  parseDesktopConversationDeleteUnavailableRequest,
   parseDesktopProjectOpenRequest,
   parseDesktopProjectSelectionRequest,
   parseDesktopShellRequest,
@@ -1268,6 +1269,23 @@ export class DesktopAppHost {
         window.windowId,
         request.rendererSessionId,
         request.navigations,
+      ),
+    };
+  }
+
+  async deleteUnavailableConversation(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopShellResponse> {
+    this.requireActive();
+    const request = parseDesktopConversationDeleteUnavailableRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    return {
+      requestId: request.requestId,
+      projection: await this.projectManagement.deleteUnavailableConversation(
+        window.windowId,
+        request.rendererSessionId,
+        request.navigation,
       ),
     };
   }
