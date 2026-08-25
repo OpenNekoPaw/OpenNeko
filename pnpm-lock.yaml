@@ -51,9 +51,6 @@ importers:
       '@neko/chara-domain':
         specifier: workspace:*
         version: link:packages/chara/domain
-      '@neko/chara-node':
-        specifier: workspace:*
-        version: link:packages/chara/node
       '@neko/content-domain':
         specifier: workspace:*
         version: link:packages/content/domain
@@ -66,9 +63,6 @@ importers:
       '@neko/generation-domain':
         specifier: workspace:*
         version: link:packages/generation/domain
-      '@neko/local-metadata':
-        specifier: workspace:*
-        version: link:packages/local-metadata
       '@neko/media':
         specifier: workspace:*
         version: link:packages/media
