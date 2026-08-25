@@ -749,9 +749,9 @@ describe('DshAgentView content-creation composer', () => {
         _input: Parameters<React.ComponentProps<typeof DshAgentView>['onSubmit']>[1],
       ) => true,
     );
-    const page = (epoch: number) => (
+    const page = (pageKey: number) => (
       <DshComposerPresentationSnapshotProvider
-        key={epoch}
+        key={pageKey}
         store={createDshComposerSessionPresentationSnapshotStore(storage)}
       >
         <I18nProvider service={new I18nService('zh-cn')}>

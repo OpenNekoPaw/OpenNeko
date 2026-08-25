@@ -485,94 +485,6 @@
       "userWorkflow": "Review a Character memory fact and trace it to the exact managed Asset release used as evidence."
     },
     {
-      "businessRequirement": "An Agent profile package is an immutable published release selected by the user.",
-      "category": "internal-version-field",
-      "domainOwner": "@neko/agent-contracts",
-      "fieldScope": "AgentProfileCatalogPackage package release field only",
-      "id": "5acaf1029af1359a7e6d",
-      "isolationRule": "The value is package metadata only and never selects an Agent profile schema, migration, component state, or compatibility path; invalid packages remain package-local.",
-      "path": "packages/agent/contracts/src/agent-profile.ts",
-      "token": "version",
-      "userWorkflow": "Inspect and select the exact published Agent profile package release."
-    },
-    {
-      "businessRequirement": "The package catalog source exposes the immutable profile package release selected by the user.",
-      "category": "internal-version-field",
-      "domainOwner": "@neko/agent-contracts",
-      "fieldScope": "AgentProfilePackageCatalogProjectable source package release field only",
-      "id": "41ceee6c5acead84f9e5",
-      "isolationRule": "The value is projected only as package release metadata and never dispatches an internal contract or migration; a malformed package does not invalidate sibling packages.",
-      "path": "packages/agent/contracts/src/agent-profile.ts",
-      "token": "version",
-      "userWorkflow": "Project an installed Agent profile package release into the profile catalog."
-    },
-    {
-      "businessRequirement": "The Agent profile catalog must preserve the exact immutable package release chosen by the user.",
-      "category": "internal-version-field",
-      "domainOwner": "@neko/agent-contracts",
-      "fieldScope": "Package manifest release copy into AgentProfileCatalogPackage only",
-      "id": "a4c3911e869acdfde440",
-      "isolationRule": "The copy is catalog metadata and is not compared for schema validity, migration, routing, or component state; failure is isolated to the source package.",
-      "path": "packages/agent/contracts/src/agent-profile.ts",
-      "token": "version",
-      "userWorkflow": "Inspect the exact release that supplied a cataloged Agent profile."
-    },
-    {
-      "businessRequirement": "Composite artifact provenance may identify the exact immutable Skill release selected by the user.",
-      "category": "internal-version-field",
-      "domainOwner": "@neko/agent-contracts",
-      "fieldScope": "ArtifactProvenance Skill package release reference only",
-      "id": "4f47a34187801d56ec83",
-      "isolationRule": "The value records creator-visible provenance only and never selects the CompositeArtifact contract, migration, renderer, or fallback path.",
-      "path": "packages/agent/contracts/src/composite-artifact.ts",
-      "token": "skillVersion",
-      "userWorkflow": "Inspect which user-managed Skill release produced an artifact."
-    },
-    {
-      "businessRequirement": "A generated Asset reference may pin the exact immutable Asset release selected by the user.",
-      "category": "internal-version-field",
-      "domainOwner": "@neko/agent-contracts",
-      "fieldScope": "CompositeArtifact generated-asset business release reference only",
-      "id": "bf52cc62b298220bc06d",
-      "isolationRule": "The value identifies one managed Asset release and never selects an artifact schema, migration, renderer, or alternate content path; invalid references remain reference-local.",
-      "path": "packages/agent/contracts/src/composite-artifact.ts",
-      "token": "assetVersion",
-      "userWorkflow": "Pin, inspect, or restore the exact Asset release referenced by an artifact."
-    },
-    {
-      "businessRequirement": "Profile packages expose the immutable release selected or installed by the user.",
-      "category": "internal-version-field",
-      "domainOwner": "@neko/agent-contracts",
-      "fieldScope": "Profile package fixture release passed to the catalog projection",
-      "id": "d0b760d00fbdd5d00acb",
-      "isolationRule": "The release is package metadata only and cannot select an Agent contract, message shape, migration, component state, or fallback path.",
-      "path": "packages/agent/contracts/src/__tests__/agent-profile.test.ts",
-      "token": "version",
-      "userWorkflow": "Install and inspect an exact profile package release."
-    },
-    {
-      "businessRequirement": "Profile catalog entries preserve the immutable package release shown to the user.",
-      "category": "internal-version-field",
-      "domainOwner": "@neko/agent-contracts",
-      "fieldScope": "Expected profile catalog package release",
-      "id": "c5624c8225e731c0ec03",
-      "isolationRule": "The release is package metadata only and cannot select an Agent contract, message shape, migration, component state, or fallback path.",
-      "path": "packages/agent/contracts/src/__tests__/agent-profile.test.ts",
-      "token": "version",
-      "userWorkflow": "Inspect the exact installed profile package release."
-    },
-    {
-      "businessRequirement": "Non-profile extension fixtures still carry their user-managed immutable package release.",
-      "category": "internal-version-field",
-      "domainOwner": "@neko/agent-contracts",
-      "fieldScope": "Skill package release used to verify profile catalog exclusion",
-      "id": "f866f965b5cc7f2103cc",
-      "isolationRule": "The release is package metadata only and cannot select an Agent contract, message shape, migration, component state, or fallback path.",
-      "path": "packages/agent/contracts/src/__tests__/agent-profile.test.ts",
-      "token": "version",
-      "userWorkflow": "Install an exact Skill package release while keeping profile projection scoped by package type."
-    },
-    {
       "businessRequirement": "A generated Asset revision is immutable content identity derived from the Asset identity and content digest so creator-visible references bind to exact generated bytes.",
       "category": "data-generation-alias",
       "domainOwner": "@neko/generation-domain",
@@ -1797,28 +1709,6 @@
       "businessRequirement": "The product must preserve the exact immutable user-managed CharacterVersion or CharacterStorylineVersion selected, published, compared, imported, synchronized, or launched by the user.",
       "category": "internal-version-field",
       "domainOwner": "@neko/chara-domain",
-      "fieldScope": "characterVersion: { (apps/neko-desktop/src/main/character-agent-domain-context-adapter.test.ts:16)",
-      "id": "eb1d6f74377af49ee86c",
-      "isolationRule": "The occurrence identifies one user-managed Character domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path; invalidity remains record- or request-local.",
-      "path": "apps/neko-desktop/src/main/character-agent-domain-context-adapter.test.ts",
-      "token": "characterVersion",
-      "userWorkflow": "Create, publish, import, synchronize, select, compare, retain, restore, or launch one exact Character domain version."
-    },
-    {
-      "businessRequirement": "The product must preserve the exact immutable user-managed CharacterVersion or CharacterStorylineVersion selected, published, compared, imported, synchronized, or launched by the user.",
-      "category": "data-generation-alias",
-      "domainOwner": "@neko/chara-domain",
-      "fieldScope": "revision: 'publication:one', (apps/neko-desktop/src/main/desktop-character-creation-source-authority.test.ts:111)",
-      "id": "5cb6f6bb9be0ec62a558",
-      "isolationRule": "The occurrence identifies one user-managed Character domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path; invalidity remains record- or request-local.",
-      "path": "apps/neko-desktop/src/main/desktop-character-creation-source-authority.test.ts",
-      "token": "revision",
-      "userWorkflow": "Create, publish, import, synchronize, select, compare, retain, restore, or launch one exact Character domain version."
-    },
-    {
-      "businessRequirement": "The product must preserve the exact immutable user-managed CharacterVersion or CharacterStorylineVersion selected, published, compared, imported, synchronized, or launched by the user.",
-      "category": "internal-version-field",
-      "domainOwner": "@neko/chara-domain",
       "fieldScope": "const version = snapshot.character.versions[0]!; (apps/neko-desktop/src/renderer/DesktopApplication.test.tsx:3439)",
       "id": "007c336ff88cb61cb549",
       "isolationRule": "The occurrence identifies one user-managed Character domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path; invalidity remains record- or request-local.",
@@ -1843,28 +1733,6 @@
       "domainOwner": "@neko/chara-domain",
       "fieldScope": "const version = snapshot.character.versions.find( (apps/neko-desktop/src/renderer/DesktopShell.tsx:852)",
       "id": "52f6b8918f56b43cb60c",
-      "isolationRule": "The occurrence identifies one user-managed Character domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path; invalidity remains record- or request-local.",
-      "path": "apps/neko-desktop/src/renderer/DesktopShell.tsx",
-      "token": "version",
-      "userWorkflow": "Create, publish, import, synchronize, select, compare, retain, restore, or launch one exact Character domain version."
-    },
-    {
-      "businessRequirement": "The product must preserve the exact immutable user-managed CharacterVersion or CharacterStorylineVersion selected, published, compared, imported, synchronized, or launched by the user.",
-      "category": "internal-version-field",
-      "domainOwner": "@neko/chara-domain",
-      "fieldScope": "(version) => version.characterVersionId === run.characterVersionId, (apps/neko-desktop/src/renderer/DesktopShell.tsx:2645)",
-      "id": "c8c3fc07aecc4fa3394e",
-      "isolationRule": "The occurrence identifies one user-managed Character domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path; invalidity remains record- or request-local.",
-      "path": "apps/neko-desktop/src/renderer/DesktopShell.tsx",
-      "token": "version",
-      "userWorkflow": "Create, publish, import, synchronize, select, compare, retain, restore, or launch one exact Character domain version."
-    },
-    {
-      "businessRequirement": "The product must preserve the exact immutable user-managed CharacterVersion or CharacterStorylineVersion selected, published, compared, imported, synchronized, or launched by the user.",
-      "category": "internal-version-field",
-      "domainOwner": "@neko/chara-domain",
-      "fieldScope": "(version) => version.characterVersionId === run.characterVersionId, (apps/neko-desktop/src/renderer/DesktopShell.tsx:2677)",
-      "id": "9a361ab2dfac051947eb",
       "isolationRule": "The occurrence identifies one user-managed Character domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path; invalidity remains record- or request-local.",
       "path": "apps/neko-desktop/src/renderer/DesktopShell.tsx",
       "token": "version",
@@ -2281,17 +2149,6 @@
       "businessRequirement": "The product must preserve the exact immutable user-managed CharacterVersion or CharacterStorylineVersion selected, published, compared, imported, synchronized, or launched by the user.",
       "category": "internal-version-field",
       "domainOwner": "@neko/chara-domain",
-      "fieldScope": "(version) => version.characterVersionId === character.currentCharacterVersionId, (packages/chara/webview/src/character-management-detail.tsx:31)",
-      "id": "e7494d1927d6598f2810",
-      "isolationRule": "The occurrence identifies one user-managed Character domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path; invalidity remains record- or request-local.",
-      "path": "packages/chara/webview/src/character-management-detail.tsx",
-      "token": "version",
-      "userWorkflow": "Create, publish, import, synchronize, select, compare, retain, restore, or launch one exact Character domain version."
-    },
-    {
-      "businessRequirement": "The product must preserve the exact immutable user-managed CharacterVersion or CharacterStorylineVersion selected, published, compared, imported, synchronized, or launched by the user.",
-      "category": "internal-version-field",
-      "domainOwner": "@neko/chara-domain",
       "fieldScope": "const selected = versions.find((version) => version.characterVersionId === selectedVersionId); (packages/chara/webview/src/character-management-detail.tsx:34)",
       "id": "33c4d63875b925237cda",
       "isolationRule": "The occurrence identifies one user-managed Character domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path; invalidity remains record- or request-local.",
@@ -2589,17 +2446,6 @@
       "businessRequirement": "The product must preserve the exact immutable user-managed CharacterVersion or CharacterStorylineVersion selected, published, compared, imported, synchronized, or launched by the user.",
       "category": "internal-version-field",
       "domainOwner": "@neko/chara-domain",
-      "fieldScope": "const version = base.character.versions[0]!; (packages/chara/webview/src/root.test.tsx:304)",
-      "id": "d724a676261e6bca22ac",
-      "isolationRule": "The occurrence identifies one user-managed Character domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path; invalidity remains record- or request-local.",
-      "path": "packages/chara/webview/src/root.test.tsx",
-      "token": "version",
-      "userWorkflow": "Create, publish, import, synchronize, select, compare, retain, restore, or launch one exact Character domain version."
-    },
-    {
-      "businessRequirement": "The product must preserve the exact immutable user-managed CharacterVersion or CharacterStorylineVersion selected, published, compared, imported, synchronized, or launched by the user.",
-      "category": "internal-version-field",
-      "domainOwner": "@neko/chara-domain",
       "fieldScope": "characterVersionIds: versions.map((version) => version.characterVersionId), (packages/chara/webview/src/root.test.tsx:350)",
       "id": "0f23d4941d14d94f1336",
       "isolationRule": "The occurrence identifies one user-managed Character domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path; invalidity remains record- or request-local.",
@@ -2704,17 +2550,6 @@
       "isolationRule": "The occurrence identifies one user-managed Character domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path; invalidity remains record- or request-local.",
       "path": "packages/chara/webview/src/storyline-timeline.tsx",
       "token": "version",
-      "userWorkflow": "Create, publish, import, synchronize, select, compare, retain, restore, or launch one exact Character domain version."
-    },
-    {
-      "businessRequirement": "The product must preserve the exact immutable user-managed CharacterVersion or CharacterStorylineVersion selected, published, compared, imported, synchronized, or launched by the user.",
-      "category": "internal-version-field",
-      "domainOwner": "@neko/chara-domain",
-      "fieldScope": "characterVersion: { (packages/chara/domain/src/__tests__/character-authoring-capability-provider.test.ts:22)",
-      "id": "3ba8b1548eb57519d7dc",
-      "isolationRule": "The occurrence identifies one user-managed Character domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path; invalidity remains record- or request-local.",
-      "path": "packages/chara/domain/src/__tests__/character-authoring-capability-provider.test.ts",
-      "token": "characterVersion",
       "userWorkflow": "Create, publish, import, synchronize, select, compare, retain, restore, or launch one exact Character domain version."
     },
     {
@@ -2858,17 +2693,6 @@
       "isolationRule": "The occurrence identifies one user-managed Character domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path; invalidity remains record- or request-local.",
       "path": "packages/chara/domain/src/__tests__/user-character-relationship-service.test.ts",
       "token": "CharacterVersion",
-      "userWorkflow": "Create, publish, import, synchronize, select, compare, retain, restore, or launch one exact Character domain version."
-    },
-    {
-      "businessRequirement": "The product must preserve the exact immutable user-managed CharacterVersion or CharacterStorylineVersion selected, published, compared, imported, synchronized, or launched by the user.",
-      "category": "internal-version-field",
-      "domainOwner": "@neko/chara-domain",
-      "fieldScope": "readonly characterVersion: { (packages/chara/domain/src/application/character-authoring-capability-provider.ts:62)",
-      "id": "9b3394e7e567fd2139ac",
-      "isolationRule": "The occurrence identifies one user-managed Character domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path; invalidity remains record- or request-local.",
-      "path": "packages/chara/domain/src/application/character-authoring-capability-provider.ts",
-      "token": "characterVersion",
       "userWorkflow": "Create, publish, import, synchronize, select, compare, retain, restore, or launch one exact Character domain version."
     },
     {
@@ -4028,28 +3852,6 @@
     },
     {
       "businessRequirement": "Project and Asset workflows must preserve the exact user-managed Asset or package release selected, published, copied, or referenced by the user.",
-      "category": "data-generation-alias",
-      "domainOwner": "@neko/project-domain",
-      "fieldScope": "revision: locator.revision, (packages/project/domain/src/application/project-dependency-projection.ts:120)",
-      "id": "f8fead44492fd5fe2546",
-      "isolationRule": "The occurrence identifies one user-managed Asset/package release only and cannot dispatch an internal schema, migration, cache generation, handler, or alternate implementation; invalidity remains record-local.",
-      "path": "packages/project/domain/src/application/project-dependency-projection.ts",
-      "token": "revision",
-      "userWorkflow": "Publish, import, inspect, compare, copy, synchronize, or reference one exact Asset/package release without changing sibling objects."
-    },
-    {
-      "businessRequirement": "Project and Asset workflows must preserve the exact user-managed Asset or package release selected, published, copied, or referenced by the user.",
-      "category": "data-generation-alias",
-      "domainOwner": "@neko/project-domain",
-      "fieldScope": "revision: locator.revision, (packages/project/domain/src/application/project-dependency-projection.ts:125)",
-      "id": "2db0ed01f6b6a65bb16c",
-      "isolationRule": "The occurrence identifies one user-managed Asset/package release only and cannot dispatch an internal schema, migration, cache generation, handler, or alternate implementation; invalidity remains record-local.",
-      "path": "packages/project/domain/src/application/project-dependency-projection.ts",
-      "token": "revision",
-      "userWorkflow": "Publish, import, inspect, compare, copy, synchronize, or reference one exact Asset/package release without changing sibling objects."
-    },
-    {
-      "businessRequirement": "Project and Asset workflows must preserve the exact user-managed Asset or package release selected, published, copied, or referenced by the user.",
       "category": "internal-version-field",
       "domainOwner": "@neko/project-domain",
       "fieldScope": "const version = characters.versions.find( (packages/project/domain/src/application/project-global-reference-mutation-service.ts:104)",
@@ -4124,17 +3926,6 @@
       "path": "packages/project/domain/src/contracts/project-target.ts",
       "token": "CharacterVersion",
       "userWorkflow": "Publish, import, inspect, compare, copy, synchronize, or reference one exact Asset/package release without changing sibling objects."
-    },
-    {
-      "businessRequirement": "The product must preserve the exact immutable user-managed WorldVersion selected, published, compared, imported, synchronized, or launched by the user.",
-      "category": "internal-version-field",
-      "domainOwner": "@neko/world-domain",
-      "fieldScope": "import type { WorldExperienceVersionId, WorldProject, WorldVersion } from '@neko/world-domain/contracts'; (packages/project/domain/src/contracts/project-target.ts:2)",
-      "id": "e2f2c01040ef76c62ef5",
-      "isolationRule": "The occurrence identifies one user-managed World domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path; invalidity remains record- or request-local.",
-      "path": "packages/project/domain/src/contracts/project-target.ts",
-      "token": "WorldVersion",
-      "userWorkflow": "Create, publish, import, synchronize, select, compare, retain, restore, or launch one exact World domain version."
     },
     {
       "businessRequirement": "Project and Asset workflows must preserve the exact user-managed Asset or package release selected, published, copied, or referenced by the user.",
@@ -4382,17 +4173,6 @@
       "businessRequirement": "The product must preserve the exact immutable user-managed WorldVersion selected, published, compared, imported, synchronized, or launched by the user.",
       "category": "internal-version-field",
       "domainOwner": "@neko/world-domain",
-      "fieldScope": "worldVersion: { (packages/world/domain/src/__tests__/world-authoring-capability-provider.test.ts:22)",
-      "id": "ad302c2e998aeccd7b23",
-      "isolationRule": "The occurrence identifies one user-managed World domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path; invalidity remains record- or request-local.",
-      "path": "packages/world/domain/src/__tests__/world-authoring-capability-provider.test.ts",
-      "token": "worldVersion",
-      "userWorkflow": "Create, publish, import, synchronize, select, compare, retain, restore, or launch one exact World domain version."
-    },
-    {
-      "businessRequirement": "The product must preserve the exact immutable user-managed WorldVersion selected, published, compared, imported, synchronized, or launched by the user.",
-      "category": "internal-version-field",
-      "domainOwner": "@neko/world-domain",
       "fieldScope": "GlobalWorldVersion, (packages/world/domain/src/__tests__/world-management-service.test.ts:4)",
       "id": "7b6a1a26bad0d856d4bd",
       "isolationRule": "The occurrence identifies one user-managed World domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path; invalidity remains record- or request-local.",
@@ -4508,17 +4288,6 @@
       "isolationRule": "The occurrence identifies one user-managed World domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path; invalidity remains record- or request-local.",
       "path": "packages/world/domain/src/__tests__/world-runtime-workbench-service.test.ts",
       "token": "WorldVersion",
-      "userWorkflow": "Create, publish, import, synchronize, select, compare, retain, restore, or launch one exact World domain version."
-    },
-    {
-      "businessRequirement": "The product must preserve the exact immutable user-managed WorldVersion selected, published, compared, imported, synchronized, or launched by the user.",
-      "category": "internal-version-field",
-      "domainOwner": "@neko/world-domain",
-      "fieldScope": "readonly worldVersion: { (packages/world/domain/src/application/world-authoring-capability-provider.ts:93)",
-      "id": "514803ca1cd7773b189e",
-      "isolationRule": "The occurrence identifies one user-managed World domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path; invalidity remains record- or request-local.",
-      "path": "packages/world/domain/src/application/world-authoring-capability-provider.ts",
-      "token": "worldVersion",
       "userWorkflow": "Create, publish, import, synchronize, select, compare, retain, restore, or launch one exact World domain version."
     },
     {
@@ -5169,6 +4938,138 @@
       "path": "packages/project/domain/src/contracts/project-target.ts",
       "token": "revision",
       "userWorkflow": "Resolve and display one exact Asset or package resource dependency in a Project without following a different release."
+    },
+    {
+      "category": "data-generation-alias",
+      "domainOwner": "@neko/chara-domain",
+      "businessRequirement": "The product must preserve the exact immutable user-managed CharacterVersion, CharacterStorylineVersion, or Character package resource release selected by the user.",
+      "fieldScope": "resource: { file: { authority: 'package', packageId: 'asset:live2d', revision: 'publication:one', path: 'avatar/model.model3.json' } }, (apps/neko-desktop/src/main/desktop-character-creation-source-authority.test.ts:108)",
+      "isolationRule": "The occurrence identifies one user-managed Character domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path.",
+      "userWorkflow": "Create, publish, import, synchronize, select, compare, retain, restore, or launch one exact Character domain version.",
+      "id": "c28c6e712afb1ad7a606",
+      "path": "apps/neko-desktop/src/main/desktop-character-creation-source-authority.test.ts",
+      "token": "revision"
+    },
+    {
+      "category": "internal-version-field",
+      "domainOwner": "@neko/world-domain",
+      "businessRequirement": "The product must preserve the exact immutable user-managed WorldVersion selected, published, compared, imported, synchronized, or launched by the user.",
+      "fieldScope": "? result.value.versions.map((version) => ({ (apps/neko-desktop/src/renderer/DesktopShell.tsx:979)",
+      "isolationRule": "The occurrence identifies one user-managed World domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path.",
+      "userWorkflow": "Create, publish, import, synchronize, select, compare, retain, restore, or launch one exact World domain version.",
+      "id": "fd97d31d333dee6706eb",
+      "path": "apps/neko-desktop/src/renderer/DesktopShell.tsx",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "domainOwner": "@neko/chara-domain",
+      "businessRequirement": "The product must preserve the exact immutable user-managed CharacterVersion, CharacterStorylineVersion, or Character package resource release selected by the user.",
+      "fieldScope": "const exactVersion = selectedTarget (packages/agent/webview/src/components/ChatView/CharacterDialogueTargetSelector.tsx:45)",
+      "isolationRule": "The occurrence identifies one user-managed Character domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path.",
+      "userWorkflow": "Create, publish, import, synchronize, select, compare, retain, restore, or launch one exact Character domain version.",
+      "id": "6ffd4e63288c1b9a4aea",
+      "path": "packages/agent/webview/src/components/ChatView/CharacterDialogueTargetSelector.tsx",
+      "token": "exactVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "domainOwner": "@neko/world-domain",
+      "businessRequirement": "The product must preserve the exact immutable user-managed WorldVersion selected, published, compared, imported, synchronized, or launched by the user.",
+      "fieldScope": "const exactVersion = selectedInProject (packages/agent/webview/src/components/ChatView/WorldExperienceTargetSelector.tsx:42)",
+      "isolationRule": "The occurrence identifies one user-managed World domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path.",
+      "userWorkflow": "Create, publish, import, synchronize, select, compare, retain, restore, or launch one exact World domain version.",
+      "id": "9d8c5eb4c898dd3e436f",
+      "path": "packages/agent/webview/src/components/ChatView/WorldExperienceTargetSelector.tsx",
+      "token": "exactVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "domainOwner": "@neko/chara-domain",
+      "businessRequirement": "The product must preserve the exact immutable user-managed CharacterVersion, CharacterStorylineVersion, or Character package resource release selected by the user.",
+      "fieldScope": "const version = catalog.versions.find( (packages/chara/domain/src/application/character-global-catalog-service.ts:273)",
+      "isolationRule": "The occurrence identifies one user-managed Character domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path.",
+      "userWorkflow": "Create, publish, import, synchronize, select, compare, retain, restore, or launch one exact Character domain version.",
+      "id": "a0b5a7d92afdb3e8bf42",
+      "path": "packages/chara/domain/src/application/character-global-catalog-service.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "domainOwner": "@neko/chara-domain",
+      "businessRequirement": "The product must preserve the exact immutable user-managed CharacterVersion, CharacterStorylineVersion, or Character package resource release selected by the user.",
+      "fieldScope": "const secondVersion = { (packages/chara/webview/src/root.test.tsx:485)",
+      "isolationRule": "The occurrence identifies one user-managed Character domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path.",
+      "userWorkflow": "Create, publish, import, synchronize, select, compare, retain, restore, or launch one exact Character domain version.",
+      "id": "6b8f77372ae4818cc957",
+      "path": "packages/chara/webview/src/root.test.tsx",
+      "token": "secondVersion"
+    },
+    {
+      "category": "data-generation-alias",
+      "domainOwner": "@neko/content-domain",
+      "businessRequirement": "PackageResourceContentLocator carries the exact immutable package release selected or pinned by the user.",
+      "fieldScope": "revision: input.revision, (packages/content/domain/src/contracts/content-locator.ts:153)",
+      "isolationRule": "The field is package business identity only and cannot select a Content contract, migration, component shape, cache generation, or alternate runtime path.",
+      "userWorkflow": "Pin and resolve a resource from an exact installed or published package release.",
+      "id": "e590f0e1000d7d583e00",
+      "path": "packages/content/domain/src/contracts/content-locator.ts",
+      "token": "revision"
+    },
+    {
+      "category": "data-generation-alias",
+      "domainOwner": "@neko/generation-domain",
+      "businessRequirement": "A generated Asset reference must preserve the exact immutable package resource release selected by the user.",
+      "fieldScope": "revision: 'rev-1', (packages/generation/domain/src/domain-contracts/__tests__/generated-asset-lifecycle.test.ts:47)",
+      "isolationRule": "The value identifies one managed Asset release and cannot select a Generation contract, migration, renderer, provider, or alternate content path.",
+      "userWorkflow": "Validate and retain the exact package release referenced by a generated Asset.",
+      "id": "710f664bc82eb21a6443",
+      "path": "packages/generation/domain/src/domain-contracts/__tests__/generated-asset-lifecycle.test.ts",
+      "token": "revision"
+    },
+    {
+      "category": "data-generation-alias",
+      "domainOwner": "@neko/project-domain",
+      "businessRequirement": "Project publication dependencies must preserve the exact user-managed Asset or package release referenced by the Project.",
+      "fieldScope": "revision: locator.file.revision, (packages/project/domain/src/application/project-dependency-projection.ts:121)",
+      "isolationRule": "The value identifies one managed Asset or package release and cannot dispatch an internal schema, migration, cache generation, handler, or alternate implementation.",
+      "userWorkflow": "Publish or inspect a Project dependency that references one exact Asset or package release.",
+      "id": "05b1f0fc32399cd47157",
+      "path": "packages/project/domain/src/application/project-dependency-projection.ts",
+      "token": "revision"
+    },
+    {
+      "category": "data-generation-alias",
+      "domainOwner": "@neko/project-domain",
+      "businessRequirement": "Project publication dependencies must preserve the exact user-managed Asset or package release referenced by the Project.",
+      "fieldScope": "revision: locator.file.revision, (packages/project/domain/src/application/project-dependency-projection.ts:126)",
+      "isolationRule": "The value identifies one managed Asset or package release and cannot dispatch an internal schema, migration, cache generation, handler, or alternate implementation.",
+      "userWorkflow": "Publish or inspect a Project dependency that references one exact Asset or package release.",
+      "id": "93548d2244d12a219e1b",
+      "path": "packages/project/domain/src/application/project-dependency-projection.ts",
+      "token": "revision"
+    },
+    {
+      "category": "internal-version-field",
+      "domainOwner": "@neko/world-domain",
+      "businessRequirement": "The product must preserve the exact immutable user-managed WorldVersion selected, published, compared, imported, synchronized, or launched by the user.",
+      "fieldScope": "WorldVersion, (packages/project/domain/src/contracts/project-target.ts:5)",
+      "isolationRule": "The occurrence identifies one user-managed World domain version only and cannot dispatch an internal schema, migration, cache generation, handler, renderer, provider, or alternate success path.",
+      "userWorkflow": "Create, publish, import, synchronize, select, compare, retain, restore, or launch one exact World domain version.",
+      "id": "dd41d174cb01300e20e6",
+      "path": "packages/project/domain/src/contracts/project-target.ts",
+      "token": "WorldVersion"
+    },
+    {
+      "category": "data-generation-alias",
+      "domainOwner": "@neko/content-domain",
+      "businessRequirement": "PackageResourceContentLocator carries the exact immutable package release selected or pinned by the user.",
+      "fieldScope": "readonly revision: string; (packages/content/domain/src/contracts/content-locator.ts:146)",
+      "isolationRule": "The field is package business identity only and cannot select a Content contract, migration, component shape, cache generation, or alternate runtime path.",
+      "userWorkflow": "Pin and resolve a resource from an exact installed or published package release.",
+      "id": "1846bf06ece58a58279f",
+      "path": "packages/content/domain/src/contracts/content-locator.ts",
+      "token": "revision"
     }
   ]
 }

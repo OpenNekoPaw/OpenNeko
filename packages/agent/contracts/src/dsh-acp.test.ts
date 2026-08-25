@@ -182,7 +182,7 @@ describe('DSH ACP extension contract', () => {
       decodeDshAcpContextPressureNotification({
         sessionId: 'session-1',
         sourceSequence: 1,
-        pressure: { projectedTokens: 1, revision: 1 },
+        pressure: { projectedTokens: 1, unexpectedField: 1 },
       }),
     ).toThrow(/unsupported fields/u);
   });

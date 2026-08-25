@@ -3647,7 +3647,7 @@ describe('DesktopShellService', () => {
     const canvasView = current.main.views[0]!;
     const tab = opened.projection.window.tabs[0]!;
     const project = opened.projection.catalog.projects[0]!;
-    const previewViewId = 'preview:view-legacy:pinned';
+    const previewViewId = 'preview:view-missing-locator:pinned';
     await first.service.updateWorkbench(
       windowId,
       opened.projection.rendererSessionId,
@@ -3663,9 +3663,9 @@ describe('DesktopShellService', () => {
               projectId: project.projectId,
               workspaceId: opened.workspace.workspaceId,
               kind: 'preview',
-              ownerId: 'preview-session:legacy',
-              displayLabel: 'legacy.png',
-              documentId: 'legacy.png',
+              ownerId: 'preview-session:missing-locator',
+              displayLabel: 'missing-locator.png',
+              documentId: 'missing-locator.png',
               previewPresentation: 'pinned',
               previewContentKind: 'image',
             },
