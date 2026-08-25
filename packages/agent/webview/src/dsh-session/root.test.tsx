@@ -8,7 +8,10 @@ import { I18nProvider } from '@neko/ui/i18n/react';
 import type { DshComposerMaterializedAssetProjection } from '@neko/agent-contracts/dsh-session-host';
 
 import { DshAgentView } from './root';
-import { DshComposerPresentationSnapshotProvider } from './presentation-snapshot';
+import {
+  createDshComposerSessionPresentationSnapshotStore,
+  DshComposerPresentationSnapshotProvider,
+} from './presentation-snapshot';
 
 const workspaceBoardTarget = {
   kind: 'workspace-board' as const,
@@ -717,6 +720,51 @@ describe('DshAgentView content-creation composer', () => {
 
     view.rerender(scene(false));
     view.rerender(scene(true));
+
+    expect((screen.getByRole('combobox', { name: '画布索引' }) as HTMLSelectElement).value).toBe(
+      'neko/boards/story.nkc',
+    );
+    fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]?.[1]).toMatchObject({
+      canvasTurnTarget: {
+        kind: 'exact-canvas',
+        workspaceId: 'workspace-1',
+        canvasId: 'neko/boards/story.nkc',
+      },
+    });
+  });
+
+  it('restores the exact Conversation Canvas after the Renderer page owner is recreated', async () => {
+    let serialized: string | null = null;
+    const storage = {
+      getItem: () => serialized,
+      setItem: (_key: string, value: string) => {
+        serialized = value;
+      },
+    };
+    const onSubmit = vi.fn(
+      async (
+        _target: Parameters<React.ComponentProps<typeof DshAgentView>['onSubmit']>[0],
+        _input: Parameters<React.ComponentProps<typeof DshAgentView>['onSubmit']>[1],
+      ) => true,
+    );
+    const page = (epoch: number) => (
+      <DshComposerPresentationSnapshotProvider
+        key={epoch}
+        store={createDshComposerSessionPresentationSnapshotStore(storage)}
+      >
+        <I18nProvider service={new I18nService('zh-cn')}>
+          <WorkspaceCanvasSelectionHarness conversationId="conversation-1" onSubmit={onSubmit} />
+        </I18nProvider>
+      </DshComposerPresentationSnapshotProvider>
+    );
+    const view = render(page(1));
+    fireEvent.change(screen.getByRole('combobox', { name: '画布索引' }), {
+      target: { value: 'neko/boards/story.nkc' },
+    });
+
+    view.rerender(page(2));
 
     expect((screen.getByRole('combobox', { name: '画布索引' }) as HTMLSelectElement).value).toBe(
       'neko/boards/story.nkc',

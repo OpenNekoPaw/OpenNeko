@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { createDshComposerPresentationSnapshotStore } from './presentation-snapshot';
+import {
+  createDshComposerPresentationSnapshotStore,
+  createDshComposerSessionPresentationSnapshotStore,
+} from './presentation-snapshot';
 
 describe('DSH composer presentation snapshot store', () => {
   it('isolates Canvas selection by exact Conversation and Workspace', () => {
@@ -31,5 +34,58 @@ describe('DSH composer presentation snapshot store', () => {
     store.select(draft, 'neko/boards/later-draft.nkc');
     store.transferIfAbsent(draft, conversation);
     expect(store.read(conversation)).toBe('neko/boards/conversation.nkc');
+  });
+
+  it('restores an exact Conversation selection when the page snapshot store is recreated', () => {
+    let serialized: string | null = null;
+    const storage = {
+      getItem: () => serialized,
+      setItem: (_key: string, value: string) => {
+        serialized = value;
+      },
+    };
+    const scope = {
+      agentSurfaceId: 'surface-before-page-reopen',
+      conversationId: 'conversation-1',
+      workspaceId: 'workspace-1',
+    };
+    createDshComposerSessionPresentationSnapshotStore(storage).select(
+      scope,
+      'neko/boards/story.nkc',
+    );
+
+    const reopened = createDshComposerSessionPresentationSnapshotStore(storage);
+
+    expect(
+      reopened.read({
+        ...scope,
+        agentSurfaceId: 'surface-after-page-reopen',
+      }),
+    ).toBe('neko/boards/story.nkc');
+    expect(reopened.read({ ...scope, conversationId: 'conversation-sibling' })).toBeUndefined();
+  });
+
+  it('discards one invalid persisted entry with a diagnostic while retaining its sibling', () => {
+    const diagnostics: string[] = [];
+    const validScopeKey = JSON.stringify(['conversation', 'conversation-valid', 'workspace-1']);
+    const store = createDshComposerPresentationSnapshotStore({
+      persistence: {
+        read: () => ({
+          [validScopeKey]: 'neko/boards/valid.nkc',
+          'not-a-scope': 'neko/boards/invalid.nkc',
+        }),
+        write: () => undefined,
+      },
+      onDiagnostic: (diagnostic) => diagnostics.push(diagnostic.code),
+    });
+
+    expect(
+      store.read({
+        agentSurfaceId: 'surface-valid',
+        conversationId: 'conversation-valid',
+        workspaceId: 'workspace-1',
+      }),
+    ).toBe('neko/boards/valid.nkc');
+    expect(diagnostics).toEqual(['invalid-entry']);
   });
 });

@@ -18,6 +18,10 @@ import { initializeDesktopRendererBridge } from './desktop-renderer-startup';
 import { DesktopRootErrorBoundary } from './DesktopSurfaceErrorBoundary';
 import { PreviewViewerSnapshotProvider } from '@neko/preview-webview/presentation-snapshot';
 import { ResourceBrowserPresentationSnapshotProvider } from '@neko/assets-webview/resource-browser/presentation-snapshot';
+import {
+  createDshComposerSessionPresentationSnapshotStore,
+  DshComposerPresentationSnapshotProvider,
+} from '@neko/agent-webview/dsh-session/presentation-snapshot';
 
 export async function mountDesktopRenderer(container: HTMLElement): Promise<void> {
   const initialSettings = await initializeDesktopRendererBridge(window.openNekoDesktop);
@@ -63,6 +67,10 @@ function DesktopRendererRoot({
   readonly themeController: DesktopThemeController;
 }): JSX.Element {
   const [settings, setSettings] = useState(initialSettings);
+  const dshComposerPresentationSnapshots = useMemo(
+    () => createDshComposerSessionPresentationSnapshotStore(window.sessionStorage),
+    [],
+  );
   const applyProjection = useCallback(
     (projection: DesktopApplicationSettingsProjection): void => {
       const locale = resolveDesktopLocalePreference(projection.preferences.locale);
@@ -98,7 +106,9 @@ function DesktopRendererRoot({
       <DesktopApplicationSettingsProvider value={runtime}>
         <ResourceBrowserPresentationSnapshotProvider>
           <PreviewViewerSnapshotProvider>
-            <DesktopApplication />
+            <DshComposerPresentationSnapshotProvider store={dshComposerPresentationSnapshots}>
+              <DesktopApplication />
+            </DshComposerPresentationSnapshotProvider>
           </PreviewViewerSnapshotProvider>
         </ResourceBrowserPresentationSnapshotProvider>
       </DesktopApplicationSettingsProvider>

@@ -1,6 +1,9 @@
 import { createContext, useContext, useMemo, useSyncExternalStore, type ReactNode } from 'react';
+import { getLogger } from '../utils/logger';
 
 const WORKSPACE_BOARD_SELECTION = 'workspace-board';
+const SESSION_STORAGE_KEY = 'neko.agent.dshComposerCanvasSelections';
+const logger = getLogger('DshComposerPresentationSnapshot');
 
 export interface DshComposerCanvasSelectionScope {
   readonly agentSurfaceId: string;
@@ -18,9 +21,39 @@ export interface DshComposerPresentationSnapshotStore {
   subscribe(scope: DshComposerCanvasSelectionScope, listener: () => void): () => void;
 }
 
-export function createDshComposerPresentationSnapshotStore(): DshComposerPresentationSnapshotStore {
+export interface DshComposerPresentationSnapshotPersistence {
+  read(): unknown;
+  write(state: Readonly<Record<string, string>>): void;
+}
+
+export interface DshComposerPresentationSnapshotDiagnostic {
+  readonly code: 'invalid-state' | 'invalid-entry' | 'read-failed' | 'write-failed';
+  readonly message: string;
+}
+
+export interface DshComposerPresentationSnapshotStoreOptions {
+  readonly persistence?: DshComposerPresentationSnapshotPersistence;
+  readonly onDiagnostic?: (diagnostic: DshComposerPresentationSnapshotDiagnostic) => void;
+}
+
+export function createDshComposerPresentationSnapshotStore(
+  options: DshComposerPresentationSnapshotStoreOptions = {},
+): DshComposerPresentationSnapshotStore {
   const selections = new Map<string, string>();
   const listeners = new Map<string, Set<() => void>>();
+  restorePersistedSelections(selections, options);
+
+  const persist = (): void => {
+    if (options.persistence === undefined) return;
+    try {
+      options.persistence.write(Object.fromEntries(selections));
+    } catch (error) {
+      options.onDiagnostic?.({
+        code: 'write-failed',
+        message: `DSH composer presentation snapshot write failed: ${describeError(error)}`,
+      });
+    }
+  };
 
   const store: DshComposerPresentationSnapshotStore = {
     read(scope) {
@@ -31,6 +64,7 @@ export function createDshComposerPresentationSnapshotStore(): DshComposerPresent
       const key = selectionScopeKey(scope);
       if (selections.get(key) === identity) return;
       selections.set(key, identity);
+      persist();
       notify(listeners.get(key));
     },
     transferIfAbsent(source, target) {
@@ -40,6 +74,7 @@ export function createDshComposerPresentationSnapshotStore(): DshComposerPresent
       const selection = selections.get(sourceKey);
       if (selection === undefined) return;
       selections.set(targetKey, selection);
+      persist();
       notify(listeners.get(targetKey));
     },
     subscribe(scope, listener) {
@@ -56,16 +91,38 @@ export function createDshComposerPresentationSnapshotStore(): DshComposerPresent
   return Object.freeze(store);
 }
 
+export function createDshComposerSessionPresentationSnapshotStore(
+  storage: Pick<Storage, 'getItem' | 'setItem'>,
+): DshComposerPresentationSnapshotStore {
+  return createDshComposerPresentationSnapshotStore({
+    persistence: {
+      read() {
+        const serialized = storage.getItem(SESSION_STORAGE_KEY);
+        return serialized === null ? undefined : JSON.parse(serialized);
+      },
+      write(state) {
+        storage.setItem(SESSION_STORAGE_KEY, JSON.stringify(state));
+      },
+    },
+    onDiagnostic(diagnostic) {
+      logger.warn(diagnostic.message, { code: diagnostic.code });
+    },
+  });
+}
+
 const DshComposerPresentationSnapshotContext = createContext<
   DshComposerPresentationSnapshotStore | undefined
 >(undefined);
 
 export function DshComposerPresentationSnapshotProvider({
   children,
+  store: providedStore,
 }: {
   readonly children: ReactNode;
+  readonly store?: DshComposerPresentationSnapshotStore;
 }): JSX.Element {
-  const store = useMemo(() => createDshComposerPresentationSnapshotStore(), []);
+  const ownedStore = useMemo(() => createDshComposerPresentationSnapshotStore(), []);
+  const store = providedStore ?? ownedStore;
   return (
     <DshComposerPresentationSnapshotContext.Provider value={store}>
       {children}
@@ -123,4 +180,69 @@ function requireIdentity(value: string, label: string): string {
 function notify(listeners: Set<() => void> | undefined): void {
   if (listeners === undefined) return;
   for (const listener of listeners) listener();
+}
+
+function restorePersistedSelections(
+  selections: Map<string, string>,
+  options: DshComposerPresentationSnapshotStoreOptions,
+): void {
+  if (options.persistence === undefined) return;
+  let state: unknown;
+  try {
+    state = options.persistence.read();
+  } catch (error) {
+    options.onDiagnostic?.({
+      code: 'read-failed',
+      message: `DSH composer presentation snapshot read failed: ${describeError(error)}`,
+    });
+    return;
+  }
+  if (state === undefined) return;
+  if (!isRecord(state)) {
+    options.onDiagnostic?.({
+      code: 'invalid-state',
+      message: 'DSH composer presentation snapshot state must be an object.',
+    });
+    return;
+  }
+  for (const [key, selection] of Object.entries(state)) {
+    if (
+      !isSelectionScopeKey(key) ||
+      typeof selection !== 'string' ||
+      selection.trim().length === 0
+    ) {
+      options.onDiagnostic?.({
+        code: 'invalid-entry',
+        message: 'A DSH composer presentation snapshot entry is invalid and was discarded.',
+      });
+      continue;
+    }
+    selections.set(key, selection);
+  }
+}
+
+function isSelectionScopeKey(value: string): boolean {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return false;
+  }
+  return (
+    Array.isArray(parsed) &&
+    parsed.length === 3 &&
+    (parsed[0] === 'draft' || parsed[0] === 'conversation') &&
+    typeof parsed[1] === 'string' &&
+    parsed[1].trim().length > 0 &&
+    typeof parsed[2] === 'string' &&
+    parsed[2].trim().length > 0
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
