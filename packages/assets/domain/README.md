@@ -14,4 +14,4 @@ Desktop Main 只负责 Electron 授权和 public port wiring；Renderer 只消�
 与 typed projection。项目事实、外部目录授权和 Workspace 访问投影保持独立 owner。
 
 系统级资源边界见 [`docs/architecture/asset-library.md`](../../../docs/architecture/asset-library.md) 和
-[`docs/architecture/cache-file-access-and-paths.md`](../../../docs/architecture/cache-file-access-and-paths.md)。
+[`docs/architecture/content-access-and-paths.md`](../../../docs/architecture/content-access-and-paths.md)。

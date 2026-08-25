@@ -1,10 +1,5 @@
 # 应用组合根
 
-状态：Accepted
-
-更新日期：2026-08-10
-当前相关变更：`compose-desktop-workbench-scenes`、`bound-desktop-ui-residency`
-
 OpenNeko 只有一个可执行产品组合根：`apps/neko-desktop`。`packages/*` 与 `packages/*/*` canonical workspace
 提供 host-neutral contract、领域 runtime、Node adapter 和 browser-safe UI；应用根负责把它们
 组合为 Electron Main、preload 和 renderer 运行时。Application root 是部署、信任和 concrete
@@ -75,9 +70,9 @@ public port、投影结果和释放资源。
 `@neko/desktop-core` 或其他 catch-all package。
 
 Canvas material authoring/generation、Media Library sync、project portability、Resource Browser、
-application settings、Agent content/facts/resource projection 与 personal Skill lifecycle 已迁入各自
-package。Desktop 对这些能力只保留 sender/path/trust 授权、Electron 资源绑定、native interaction、
-public port wiring 与 disposal；旧 app-owned 路径由边界测试和 legacy gate 持续 poison。
+Application settings、Agent content/facts/resource projection 与 personal Skill lifecycle 由各自 package
+拥有。Desktop 对这些能力只保留 sender/path/trust 授权、Electron 资源绑定、native interaction、
+public port wiring 与 disposal。
 
 Resource Browser 的 `entity.manage` 继续复用同一个 sender-bound Desktop bridge。Desktop 根据已授权
 workspace 构造 `@neko/entity-node` runtime，并注入 canonical Entity repository 与 local-metadata public
@@ -194,7 +189,7 @@ provider execution 前通过 package-owned materialization port 幂等确保 exa
 Agent runtime 已拥有同一 conversation identity；只有该 conversation 可以 bootstrap 后，Host 才把
 Scene 暴露为 session。Desktop Main 只实现 context 到 concrete runtime 的组合 adapter，不拥有提交或
 恢复规则。renderer 的 session adapter 与 preload 传输按显式 connection identity 绑定 send 和
-subscription；endpoint replacement 必须用创建旧 attachment 的 binding 发送 `endpoint-replaced`
+subscription；endpoint replacement 必须用创建待替换 attachment 的 binding 发送 `endpoint-replaced`
 detach，再由新 connection attach。全局 active connection 不得代替 instance owner，endpoint identity
 mismatch 继续 fail-visible。
 
@@ -237,8 +232,8 @@ audio/video、Preview 与 Agent 展示使用原生 `<audio>` / `<video>`；文�
   Main-to-React 依赖违规。
 - 新增或实质修改 `apps/neko-desktop` 生产模块时，适用的功能 OpenSpec、PR 或交付说明必须说明它为何需要 Application
   层、组合哪些 package public contract，以及为何不是可下沉的业务实现。
-- 业务逻辑迁移必须同时用 package producer test、Desktop consumer/path test 和旧 app path
-  poison/delete 证明唯一 canonical path；涉及 IPC、窗口、安全或用户资源时增加真实 Electron 验收。
+- 业务逻辑变更必须同时用 package producer test 和 Desktop consumer/path test 证明唯一 canonical path；
+  涉及 IPC、窗口、安全或用户资源时增加真实 Electron 验收。
 - `pnpm test`、`pnpm build`、`pnpm check` 验证生产者/消费者、workspace resolution 和依赖图。
 - `pnpm package:desktop` 检查 Electron 生产包；涉及用户路径时还需真实 Desktop
   project-open/creative-surface 场景。

@@ -1,24 +1,15 @@
 # 资源库架构：媒体库与素材库
 
-更新日期：2026-08-14
-
-> 当前稳定约束仍是：普通文件通过 **Media Library / 媒体库** 和 `ContentLocator`
-> 直接访问，不需要 catalog membership。独立 **Asset Library / 素材库** 仅管理显式导入
-> 或安装的本地版本化素材包，其完整实现由活跃 OpenSpec
-> [`establish-manifest-backed-asset-library`](../../openspec/changes/establish-manifest-backed-asset-library/)
-> 跟踪；项目本机绑定、同步与便携性的稳定边界见
-> [`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)；资源展示与 Entity/Character/World 的稳定边界见
-> [`unified-entity-representation-bindings`](../../openspec/specs/unified-entity-representation-bindings/spec.md)
-> 与 [`workspace-project-browser`](../../openspec/specs/workspace-project-browser/spec.md)。
-> 远程分发、发布、账户与云同步不属于当前 Asset change；未来需要独立 OpenSpec。
-> 项目媒体继续使用 Workspace authority 的 canonical `ContentLocator`、target-free `.neko/media-libraries` binding 与
+> 普通文件通过 **Media Library / 媒体库** 和 `ContentLocator` 直接访问，不需要 catalog membership。
+> **Asset Library / 素材库** 只管理用户显式导入或安装的本地版本化素材包。项目媒体使用 Workspace
+> authority 的 canonical `ContentLocator`、target-free `.neko/media-libraries` binding 与
 > 用户全局 Media Library connection。`neko/assets/<libraryName>` 下的受管软链接（Windows 使用
 > directory junction）是由该授权链派生的 Workspace 访问投影，供 Agent 等仅能访问工作区的消费者
 > 使用；它不是媒体身份、项目 binding 或全局登记的替代品。
 
 本文定义媒体库文件入口、素材包生命周期、项目受管链接、搜索投影、显式操作及其与
 Project Entity、Content I/O、DocumentAccess、生成结果和 package owner 的边界。路径安全见
-[`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)，跨领域 owner 模型见
+[`content-access-and-paths.md`](content-access-and-paths.md)，跨领域 owner 模型见
 [`creative-resource-semantic-boundaries.md`](creative-resource-semantic-boundaries.md)。
 
 Media Library 是可选的专业能力，不是创建或打开项目的前置条件。项目文件始终是文档和普通导入的默认
@@ -142,7 +133,7 @@ tab strip。
 application service 通过 Host port 授权 exact `ContentLocator` 并创建短生命周期 PreviewSession，
 Preview Root 只进入可选 Secondary Main。Desktop 不拥有 selection，不从扩展名推断 preview kind，
 renderer 不接收 raw path。scene switch、renderer reload、Window teardown 或 selection replacement
-必须释放旧 Preview handle，同时保留 Assets session facts。项目 Workspace 的右侧 Project Browser
+必须释放被替换的 Preview handle，同时保留 Assets session facts。项目 Workspace 的右侧 Project Browser
 继续使用自己的 workspace-scoped presentation state，不得复用全局资源中心 session。
 
 Asset Management 与 authorized Preview 使用两个独立、无单项 tab strip 的共享 Workbench panel shell，
@@ -152,17 +143,16 @@ panel shell 内重复 descriptor header。Preview 内容背景保持透明并继
 Assets management 均不得实现第二套 viewer 或复制 Preview 主题。
 
 普通删除按钮只执行“从素材库移除记录”：它更新用户级 SQLite 中的 mutable membership state，
-不得移动源文件到系统废纸篓，也不得卸载 immutable revision、删除 blob 或修改项目引用。首次升级时可将
-现有 flat managed files 原子登记为 membership；初始化完成后，文件扫描不得把已移除记录自动恢复。
+不得移动源文件到系统废纸篓，也不得卸载 immutable revision、删除 blob 或修改项目引用。文件扫描不得
+把用户已移除的记录自动恢复。
 真正的 uninstall 和无引用字节回收必须是独立、显式且可报告 blocker 的操作。
 
 ### 远程分发边界
 
-当前 Asset Library 只处理本地素材包。canonical contract、runtime、Resources intent 和 Desktop IPC
+Asset Library 只处理本地素材包。Canonical contract、runtime、Resources intent 和 Desktop IPC
 不得为远程 repository、publish、sync、account、credential、remote head、CAS、tombstone、cursor 或
-transfer checkpoint 预留平行路径。现有实验性 `remote` / `registry` shape 不构成可调用 resolver，必须
-在本地 manifest 收敛时退出 canonical contract。未来若出现真实分发需求，必须由独立 OpenSpec 定义
-provider、authority、用户数据保护、失败语义和真实 Electron 验收。
+transfer checkpoint 预留平行路径。远程分发能力只有在产品功能明确建立 provider、authority、用户数据
+保护、失败语义和真实 Electron 验收后才能加入。
 
 ## Projection
 
@@ -222,9 +212,8 @@ Generation output identity/provenance 与 package owner identity 由各自领域
 文件移动或 fingerprint 不匹配时，binding 变为 orphaned。Search 可以给出候选，但只有显式 rebind 可以修改 confirmed binding；不得通过旁路 catalog、fingerprint registry 或文件名猜测自动迁移。
 
 Asset package 只打包普通可复用资源。Project Entity 保持项目本地语义事实；Character portability 使用
-Chara-owned `.neko-character`；World portability/publication 由 World 在依赖闭包完整时定义。Entity Asset
-publish、instantiate、provenance 和 three-way update 已退出当前 canonical 产品路径。已存在的相关 bytes
-必须保留并显示 unsupported diagnostic，不得经普通 Asset import 推断或迁移为其他领域记录。
+Chara-owned `.neko-character`；World portability/publication 由 World owner 定义。Asset import 不得推断
+或改写其他领域记录。
 
 ## 存储归属
 

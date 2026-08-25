@@ -1,6 +1,6 @@
 ---
 name: neko-quality-review
-description: Use after non-trivial code changes in Neko Suite, when reviewing PRs, or when asked to run a repository quality review. Applies the Neko code review and quality gates ADR to classify risk, inspect architecture boundaries, choose validation commands, and produce review findings with verification and residual risk.
+description: Use after non-trivial code changes in Neko Suite, when reviewing PRs, or when asked to run a repository quality review. Applies the current Neko development and quality rules to classify risk, inspect architecture boundaries, choose validation commands, and produce review findings with verification and residual risk.
 ---
 
 # Neko Quality Review
@@ -9,7 +9,7 @@ Use this skill after implementing or modifying code in this repository, and when
 
 Source of truth:
 
-- `docs/architecture/adr-code-review-quality-gates.md`
+- `docs/architecture/development-quality.md`
 - `docs/architecture/application-composition.md`
 - `docs/architecture/package-boundaries.md`
 - `AGENTS.md`
@@ -27,7 +27,7 @@ Source of truth:
    - `L0`: docs, copy, low-risk single-file fix.
    - `L1`: local component, hook, service, or state logic.
    - `L2`: renderer/preload/Main messaging, shared packages, media ports, imports/exports, public types.
-   - `L3`: Rust engine, Proto, media streams, rendering, project formats, AI workflow, packaging.
+   - `L3`: Node/FFmpeg, media streams, rendering, project formats, AI workflow, packaging.
    - `L4`: release, install/packaging, major UX, core creative workflow.
 
 3. Review architecture before implementation details:
@@ -41,7 +41,7 @@ Source of truth:
 4. For multi-module changes or new functionality, apply the five-layer analysis:
    - Responsibility: who owns data, behavior, and lifecycle?
    - Dependency: are L0/L1/L2 and renderer/preload/Main/Node boundaries respected?
-   - Interface: are types, messages, schemas, and Proto contracts minimal and stable?
+   - Interface: are types, messages, schemas, and package-owned contracts minimal and stable?
    - Extension: will the next similar feature avoid broad edits or duplication?
    - Testing: what is covered by unit, integration, build smoke, an isolated Electron Desktop scenario, or explicit residual risk?
 
@@ -49,18 +49,6 @@ Source of truth:
 
    ```bash
    pnpm ci:local
-   ```
-
-   For Rust changes:
-
-   ```bash
-   pnpm ci:local:rust
-   ```
-
-   For Proto changes:
-
-   ```bash
-   pnpm ci:local:proto
    ```
 
    If a narrower package command is enough, prefer the smallest reliable command and state why.
@@ -89,44 +77,39 @@ Always check:
 
 - No new production `any`, unsafe `as Type`, or formal logging via `console.log`.
 - No circular dependency or broken layer direction.
-- No overdesign for the local-client/local-engine product boundary: avoid speculative interfaces, factories, registries, strategies, plugin hooks, feature flags, config layers, protocol layers, or generic platform scaffolding without a current caller, real external provider, release, or trust boundary.
+- No overdesign for the local Electron Desktop plus Node/FFmpeg product boundary: avoid speculative interfaces, factories, registries, strategies, plugin hooks, feature flags, config layers, protocol layers, or generic platform scaffolding without a current caller, real external provider, release, or trust boundary.
 - No overdefense that hides defects: broad `try/catch`, silent defaults, fallback success, repeated validation, no-op guards, retries, caches, or circuit-breaker-style logic must protect a real Desktop renderer/preload/Main, local file, Node/FFmpeg process, media, external provider, user-data, release, or security boundary and fail visibly for development errors.
-- Fail-visible defect handling is enforced: missing new implementations, contract mismatches, unreachable states, illegal messages, unknown schema/version values, bad configuration, missing dependencies, or unregistered handlers/renderers/adapters throw, return typed diagnostics, or fail tests visibly instead of returning empty data, success defaults, no-ops, silent degradation, or old compatibility behavior.
+- Fail-visible defect handling is enforced: missing implementations, contract mismatches, unreachable states, illegal messages, unknown schema values, bad configuration, missing dependencies, or unregistered handlers/renderers/adapters throw, return typed diagnostics, or fail tests visibly instead of returning empty data, success defaults, no-ops, or silent degradation.
 - Renderer/Webview code does not import Electron, Node APIs, or Desktop Main/preload implementations.
 - Desktop Main code does not import React/ReactDOM or Webview implementations.
-- TypeScript does not duplicate Rust engine authoritative computation.
+- Renderer and feature packages do not duplicate Node/FFmpeg or owning-domain authoritative computation.
 - Paths are relative or `${VAR}/path`, not hard-coded absolute paths.
-- File/document/media/model/thumbnail/preview/proxy/import/export/transfer changes use the owning shared boundary: content access, resource cache, local resource access, EngineClient/file access, path resolver, ingest, or project-file service. Feature packages provide provider/adapter/domain semantics; they do not create package-local cache managers, path resolvers, Webview URI projectors, Engine file-token policies, or cache manifest readers.
-- Cache is transparent and rebuildable: business logic, Agent tools, Webviews, Canvas nodes, Storyboard rows, composite artifacts, clipboard payloads, and cross-plugin transfer payloads must not use `.neko/.cache` layout, cache manifests, materialized cache paths, `cachePath`, `runtimePath`, `cacheResourceRef`, Webview URI, blob/object URL, Engine token, preview token, or scratch/temp paths as durable identity.
-- Webview-safe URIs are produced only by `LocalResourceAccessService` or `ResourceCacheService.project()` after authorization. Projection failure returns typed diagnostics, omits renderable projection, or fails closed; it does not fall back to raw local/cache/source paths.
-- Content-path acceptance is path-level acceptance: tests should assert the canonical service/provider/message/adapter was hit and prove direct fs reads, cache-path lookup, legacy field fallback, package-local path conversion, or Webview URI fallback did not produce a successful result.
+- File/document/media/model/thumbnail/preview/proxy/import/export/transfer changes use `ContentReadService`, `ContentRepresentationService`, `PathResolver`, `ProjectFileStore`, an owning authorized writer, or the narrow `@neko/media` port as appropriate. Feature packages do not create package-local cache managers, path resolvers, Webview URI projectors, file-token policies, or cache manifest readers.
+- Derived storage is transparent and rebuildable: business logic, Agent tools, Webviews, Canvas nodes, composite artifacts, clipboard payloads, and cross-package transfer payloads must not use physical cache layout, manifests, materialized paths, Renderer URLs, opaque runtime tokens, or scratch paths as durable identity.
+- Renderer-safe projections are produced only by an authorized Host content projection and exact-resource registration. Projection failure returns a typed diagnostic or fails closed; it does not expose a raw local, cache, or source path.
+- Content-path acceptance is path-level acceptance: tests should assert the canonical service/provider/message/adapter was hit and prove direct fs reads, cache-path lookup, package-local path conversion, or Webview URI bypass did not produce a successful result.
 - Async flows handle errors, cancellation, resource disposal, and races.
 - Public contracts include tests or clear validation evidence.
-- Residual/debt terms are scanned and classified: `legacy`, `fallback`, `deprecated`, `compat`, `shim`, `dirty`, `hack`, `temporary`, `workaround`, `dead code`, `unused`, and `duplicate`. New matches are removed, renamed, or recorded in the appropriate debt ledger with owner, replacement, validation, and removal criteria.
+- Residual/debt terms are scanned and classified. New matches are removed, renamed, or recorded in the appropriate machine-readable debt ledger with owner, replacement, validation, and removal criteria.
 - Redundant code is checked within the package and across adjacent packages: unused exports/files, duplicated helpers, repeated adapters, repeated protocol/message handlers, duplicated components, copied tests, and package-local implementations that should be shared.
-- Cross-cutting behavior includes shared foundation audit evidence: style/theme/i18n/logger/error/config/path/file IO/resource/cache/DTO changes reused or updated `@neko/shared`, `@neko/ui`, `@neko/neko-client`, `@neko/proto`, entity/search services, project-file-io, resource cache, or a domain service before adding package-local logic.
-- No package-local parallel design system, theme token set, i18n runtime, logger/error taxonomy, project file IO, cache manager, path resolver, Engine HTTP/WS client, or shared DTO copy unless the owning boundary, extraction criteria, and validation command are documented.
+- Cross-cutting behavior includes shared foundation audit evidence: style/theme/i18n/logger/error/config/path/file IO/resource/contract changes reused or updated `@neko/shared`, `@neko/ui`, `@neko/host`, `@neko/content-domain`, `@neko/media`, or the owning domain before adding package-local logic.
+- No package-local parallel design system, theme token set, i18n runtime, logger/error taxonomy, project file IO, cache manager, path resolver, media client, or shared contract copy unless the owning boundary, extraction criteria, and validation command are documented.
 - Reusable package capability patterns include cross-package reuse audit evidence: checked adjacent packages and shared layers for providers, registries, bridges, protocols, message routers, status bars, tree views, file decorations, history, selection, recent items, projectors, facades, command routers, capability providers, store slices, workflow adapters, or reusable tests before adding package-local capability code.
 - No copied implementation from another feature package and no direct import of another feature package's internals; reuse goes through shared packages, public subpaths, command/API facades, ports, provider registries, or domain services.
 - New Webview/React components include component reuse audit evidence: checked `@neko/ui`, owning-package components/hooks/shared modules, adjacent domains, and tests; explained why enhancing an existing component would be unsafe or too coupled.
-- Prelaunch breaking changes identify what breaks, the old-data strategy, and why compatibility shims are removed. New canonical paths delete or isolate legacy adapters, fallback branches, dual-read/dual-write paths, old field mappings, and legacy command aliases unless they protect valuable data or published/trust boundaries.
-- Prelaunch refactors enforce cleanup order inside the scoped replacement boundary: old successful call chains are disconnected, deleted, isolated, or fail-closed before the new design/contract is wired and accepted.
-- Review does not reward continued old-path bug fixing when the selected replacement boundary should already be moving to the new canonical path.
-- Development and validation defaults disable compatibility fallback for new paths. A legacy-path hit during new-path development or validation must throw, return a fail-closed diagnostic, or emit assertable telemetry/log failure instead of returning a legacy success result.
-- Only migration, rejection, or diagnostic tests may intentionally observe retained legacy paths; new-path acceptance tests must assert that retained legacy paths cannot return success or mask new-path failure.
-- New-path acceptance is path-level acceptance, not result-only acceptance. Tests must assert the canonical path, new handler, new renderer, new adapter, or new contract was hit, and prove retained legacy paths did not participate with a spy, counter, log assertion, or poisoned legacy path that throws.
-- Retained compatibility paths have owner, replacement, validation command, removal condition, expiry task, and tests proving they cannot mask new-path failure.
-- Docs are updated when behavior, architecture, config, package entry points, or public contracts change.
+- Breaking internal changes update the complete producer/consumer boundary atomically and state how valuable user data and published/trust boundaries remain protected.
+- Path acceptance is not result-only acceptance. Tests assert the canonical owner, handler, renderer, adapter, and contract, while generic invalid inputs fail at the smallest owning boundary without encoding removed implementation history.
+- Long-lived docs are updated only when system architecture, development policy, or core product design changes; public usage belongs in a short package README, while behavior and implementation status remain in code and tests.
 
 Add domain checks as needed:
 
 - Webview/UX: component reuse audit, layout, theme, focus, keyboard, i18n, and runtime evidence from an isolated Electron Desktop fixture; browser-only screenshots do not count as Desktop IPC/lifecycle acceptance evidence.
 - UI reference review: when run, inspect the `neko-ui-validation` applicability decision, acceptance inventory, authoritative runtime, functional and visual results, adjacent regression evidence, and residual risk. Report findings accurately without making this advisory review a code gate.
-- Engine/media: `cargo test`, CLI smoke, `serve` integration, performance before/after when relevant.
-- Proto/shared: generated types are synchronized and callers are migrated.
+- Node/media: focused package tests, FFmpeg/ffprobe fixture or smoke, resource disposal, and performance evidence when relevant.
+- Wire/shared: package-owned producer and consumer use the same canonical contract and preserve runtime isolation.
 - Agent/AI: tool contracts, permissions, Journal/traceability, failure recovery, and whether the change triggers `neko-agent-evaluation`. When triggered, check focused canonical-path evidence, forbidden-fallback evidence, assertion support in the current runner, and either a real Desktop complete-session result or an explicit blocking condition with residual risk. Protocol-only, mock-only, or final-text-only results do not count as Agent behavior acceptance.
-- Content access/cache/path: intent-aware access, transparent resource cache, path variable resolution, Engine-backed binary/media reads, Host text/project-file reads, authorized Webview projection, and stable `ContentLocator` transfer.
-- Assets/market: manifest/schema compatibility, path safety, cache invalidation, trust boundaries.
+- Content access/path: canonical locator transfer, bounded Host reads, authorized writes, transparent derived storage, authorized Renderer projection, and path containment.
+- Assets: manifest and locator contracts, path safety, derived projection invalidation, and trust boundaries.
 
 ## Output Format
 

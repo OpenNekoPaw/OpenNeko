@@ -1,12 +1,7 @@
-# 内容读写、工作区路径与派生存储
+# 内容访问、工作区路径与派生存储
 
-状态：Accepted
-
-更新日期：2026-08-13
-
-项目媒体身份、本机授权、受管链接投影、派生内容私有存储与 Content I/O 的当前收敛结果由本文记录。
-旧媒体库 `${VAR}`、旧 ContentAccess cache contract 和旧 locator 分支不进入新产品读取、启动或自动 cleanup 路径。
-canonical 内容地址只由文件 authority、规范化路径和可选文件内 selector 组成。
+本文定义项目媒体身份、本机授权、受管链接投影、派生内容私有存储与 Content I/O。
+Canonical 内容地址只由文件 authority、规范化路径和可选文件内 selector 组成。
 
 本文定义 Desktop 产品中的工作区路径、内容读写、文档访问、runtime 投影和可重建派生物边界。Creative Entity 与 Media Library 的业务语义分别见 [`unified-entity.md`](unified-entity.md) 和 [`asset-library.md`](asset-library.md)。`neko/assets/<libraryName>` 受管软链接是 binding 派生的 Workspace 访问路径，不是媒体身份或授权 authority。
 
@@ -52,7 +47,7 @@ canonical 内容地址只由文件 authority、规范化路径和可选文件内
 | `ContentReadService`                                 | locator stat、bounded bytes/Range、Renderer/media/processor opaque projection | cache policy、项目写入 ownership、公开 localPath    |
 | `ContentRepresentationService`                       | thumbnail/proxy/waveform/raster 等语义表现请求                                | 向调用方公开存储方式、cache status 或 root          |
 | Host derived store (`ResourceCacheService` internal) | fingerprint、生成复用、in-flight 去重、freshness、retention、quota、GC        | 产品子包协议、source identity、正式 Asset/输出      |
-| `@neko/content-domain/document`                             | 文档 format、manifest/range/locator/cursor、native entry 读取语义             | cache root、Webview URI、Agent 解包协议             |
+| `@neko/content-domain/document`                      | 文档 format、manifest/range/locator/cursor、native entry 读取语义             | cache root、Webview URI、Agent 解包协议             |
 | authorized workspace writer                          | 有界、原子、安全的 workspace bytes 写入 primitive                             | 决定 project/Asset/generated/export/cache ownership |
 | `ProjectFileStore` + domain codec                    | NK/JSON 项目事实 canonical shape、诊断与原子保存                              | 二进制表现、runtime token、cache lifecycle          |
 | Domain import/save service                           | Asset、generated output、package、export 的用户意图与 durable ownership       | 透明 cache destination、任意 absolute write         |
@@ -75,7 +70,7 @@ Host 为不同 consumer 注入 capability-scoped port。调用方不能通过 `c
 
 ## 内容接口
 
-公共接口不再使用独立 `intent × target × materialization × qualityMode` 组合，也不返回并列 optional `bytes/localPath/uri/engineSource/runtimeStream`。目标接口分为：
+公共接口按职责分为：
 
 - `stat(locator, constraints)`；
 - `read(locator, range/maxBytes/signal)`；
@@ -133,8 +128,7 @@ read-images 将同一 source locator 交回 ContentReadService。Agent 不感知
 - package/export 通过 ContentReadService 读取 exact locator 字节，不复制 binding/link 或序列化 target。
 - 产品普通 sync 不包含 `.neko`、binding、managed link 或 external bytes；独立便携快照只复制权威引用的 bytes，并在
   sibling staging 中重写项目文档后 atomic publish，不修改 source workspace 或 external target。
-- legacy variable/original path/local override 不由产品 runtime 读取、分类或转换；正常读取和 authoring
-  只有 canonical locator path。
+- 正常读取和 authoring 只接受 canonical locator，不读取或转换其他路径表达。
 
 ## 派生物不变量
 

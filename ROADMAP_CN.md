@@ -107,7 +107,7 @@ client 或 DTO。
 - Project Tab、Conversation、Run、Tool Call、Job、Window 和 View identity 不混用；快速
   切换/关闭、跨窗口订阅、自动保存、renderer reload 和 StrictMode 不产生重复执行或错写。
 - 缺失 Character/World 能力返回 unavailable diagnostic，不创建空项目或 no-op success。
-- Desktop 不导入 VS Code Extension 私有实现，不恢复旧 Desktop、Workbench、Engine 或 client。
+- Desktop 只消费 package public entry，不导入其他宿主或 package 的私有实现，也不建立平行组合层。
 - 第一阶段只在适用功能 OpenSpec 或发布资格说明指定的参考平台做产品验收，不因此声明完整跨平台支持。
 
 ## 阶段 2：macOS 能力与发布资格

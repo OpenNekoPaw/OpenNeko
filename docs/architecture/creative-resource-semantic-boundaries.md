@@ -1,13 +1,6 @@
 # 资源、实体、角色与世界边界
 
-更新日期：2026-08-13
-
-本文定义文件、媒体库、素材、Project Entity、Character 与 World 的跨领域边界。已接受的 Entity
-边界见 [`unified-entity-representation-bindings`](../../openspec/specs/unified-entity-representation-bindings/spec.md)；
-Project facts、项目 `.neko` 与 Media Library binding 的后续原子切换由
-[`separate-project-facts-local-state-and-media-bindings`](../../openspec/changes/separate-project-facts-local-state-and-media-bindings/)
-负责；
-在该 change 完成前，本文是目标约束，不表示所有路径已在产品中可用。
+本文定义文件、媒体库、素材、Project Entity、Character 与 World 的跨领域边界。
 
 ## 用户概念与内部 owner
 
@@ -149,10 +142,6 @@ Project Content 是 Project owner 计算的只读聚合，固定包含四个互�
 Project Content 不复制 Character、World 或 Entity payload，不提供通用 Entity mutation。单条 Character、
 World 或 Entity 记录失效只在对应条目或分组展示 diagnostic，不影响其他分组。
 
-`@neko/entity-webview` 当前登记为 `retained-kernel`：Entity domain 仍拥有语义 contract 与 Node
-application service，但普通 Desktop 产品不装配独立 Entity Inspector Root。只有后续独立 OpenSpec 定义
-Project Content 内明确、owner-qualified 的语义修复/管理操作及真实用户路径后，才能重新标记为产品可达。
-
 管理操作仍按 owner 分离：
 
 | 操作                                           | Owner          |
@@ -202,10 +191,10 @@ World Story、Gameplay、Experience 与 Presentation 只有在真实 producer、
   global connection identity、absolute/cache/runtime path。删除 `.neko` 不能改变 Entity/Character
   association、Character/World version、Asset pin、文档或其他项目事实。
 - 文件、Asset 包、Character、World 和 Conversation/Save bytes 不迁入通用 metadata 数据库。
-- `neko/project-composition.json` 不再作为组合 authority：Project identity 与 association 是独立事实，
-  Character/World membership、dependency summary、usage 和 Project Content 从 owning records 重建。
-- 被收窄 contract 无法读取的旧 Entity/Entity Asset 数据必须原样保留，并在对应记录展示 diagnostic；
-  不在普通启动中迁移、丢弃或伪造默认值。
+- Project identity 与 association 是独立事实；Character/World membership、dependency summary、usage 和
+  Project Content 从 owning records 重建。
+- 无法按 canonical contract 读取的 Entity 数据必须原样保留，并在对应记录展示 diagnostic；普通启动
+  不转换、丢弃或伪造默认值。
 - 单条 Entity、binding、association 或 projection 失效只影响该项；其他项目、角色和世界保持可用。
 - Desktop 只做路径/发送者授权、typed IPC 和可见 Root 组合，领域策略留在 owning package。
 

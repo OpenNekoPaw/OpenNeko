@@ -15,5 +15,5 @@ Canvas、Cut、Asset 与媒体字节仍由各自领域拥有；Project 不复制
 详细 owner、失败边界与数据流见 [`architecture.md`](architecture.md)。跨领域资源语义见
 [`../../architecture/creative-resource-semantic-boundaries.md`](../../architecture/creative-resource-semantic-boundaries.md)，
 本地状态与同步/打包边界见
-[`../../architecture/adr-local-metadata-store-sqlite.md`](../../architecture/adr-local-metadata-store-sqlite.md) 和
+[`../../architecture/local-metadata-and-project-facts.md`](../../architecture/local-metadata-and-project-facts.md) 和
 [`../../architecture/asset-library.md`](../../architecture/asset-library.md)。

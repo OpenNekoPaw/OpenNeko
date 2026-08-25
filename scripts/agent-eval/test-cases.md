@@ -186,10 +186,8 @@ requested/effective configuration update、typed input invocation、Tool call、
 process order、cancellation、recovery、retry、terminal concerns、Timeline、structured output、
 artifact、Desktop lifecycle 和 current path refs。`desktop-lifecycle` assertion 必须与
 `execution.lifecycleChecks` 精确一致，并验证 reload 后 exact Conversation、Composer focus 与 graceful
-close disposal。旧 `resource-display-projection` assertion 与
-`resourceDisplayProjections` fixture 已删除：DSH Tool 结果只从 exact Tool event 的 lossless
-`rawOutput`、content-locator 和 artifact facts 验证，实际 Webview 展示由可见 UI 验收负责，
-Evaluation 不再伪造第二套脱敏 display fact。
+close disposal。DSH Tool 结果只从 exact Tool event 的 lossless `rawOutput`、content-locator 和 artifact
+facts 验证，实际 Webview 展示由可见 UI 验收负责；Evaluation 不建立第二套 display fact。
 新增 assertion kind 前必须先
 实现 evaluator 与 key-free 失败测试；metadata-only 字段会被 strict validation 拒绝。
 

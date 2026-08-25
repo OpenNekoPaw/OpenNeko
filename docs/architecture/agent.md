@@ -1,9 +1,6 @@
 # Agent 横切架构
 
-更新日期：2026-08-25
-
-本文件定义 OpenNeko Agent 的稳定系统边界。尚未完成的 DSH runtime 切换由
-`openspec/changes/replace-pi-with-dsh-runtime-atomically/` 管理。
+本文件定义 OpenNeko Agent 的稳定系统边界。
 
 ## 系统定位
 
@@ -65,8 +62,8 @@ OpenNeko catalog 只保存用户可管理的 Conversation metadata、Workspace/d
 reference、权限/信任和领域 artifact/Job reference；不得复制完整 transcript 或把 projection 变成第二事实源。
 
 Session 不可解析、binding 丢失或 DSH 不可用时，只将对应 Conversation 标记为不可执行并显示明确
-diagnostic。不得创建空 Session、回退旧 reader、覆盖用户数据、停止 sibling Conversation，或让局部错误
-导致应用启动失败。旧 Pi 数据保持原始字节，只有用户显式删除或独立设计的恢复流程可以改变它。
+diagnostic。不得创建空 Session、选择其他 reader、覆盖用户数据、停止 sibling Conversation，或让局部错误
+导致应用启动失败。
 
 ## Tool 与领域 Job
 
@@ -109,7 +106,7 @@ Canvas 投影或 UI selection 都不是项目事实，也不能自动覆盖当�
 - Plugin discovery/load/enablement 由精确锁定的官方 DSH profile 拥有；它是内部装配机制，不是用户可安装或配置的第三类扩展。首版不加载第三方 runtime/Webview JS。
 - OpenNeko extension management 只展示 Skill/MCP，消费 DSH inventory/readiness/config/diagnostics projection 并提交精确命令，不建立第二 catalog/config authority。
 - Browser Use 与 Computer Use 是官方 DSH MCP integrations。DSH 拥有 MCP connection、Tool discovery/call/cancel；OpenNeko Host 只拥有 OS 权限、exact target、sender-bound grant、approval 与 evidence。
-- DSH 公开 inventory/settings API 不能形成 secret-safe 完整 contract 时，对应配置保持 visible unavailable；禁止读取私有模块或恢复旧 MCP/Plugin catalog。
+- DSH 公开 inventory/settings API 不能形成 secret-safe 完整 contract 时，对应配置保持 visible unavailable；禁止读取私有模块或建立平行 MCP/Plugin catalog。
 
 Skill 的 portable authority 是 DSH 支持的 `SKILL.md` 及相对 `references/`、`scripts/`、`assets/`；
 个人和 Workspace Skill 不需要 OpenNeko 私有 overlay、Plugin manifest 或 Marketplace 记录。通用
@@ -152,7 +149,9 @@ provider、permission 或 artifact owner 的缺陷。
 视为已验证。Quality runtime 可以聚合 provider-neutral evidence 和 Gate，但领域 rubric、repair 与 apply
 仍由 owning package 负责。
 
-DSH 组装默认 system prompt 与 Skill；OpenNeko 只通过 exact Session context extension 注入经过校验的 Workspace、Canvas、Character、World 和引用 evidence。旧 Agent Prompt Builder、Input Processor、Capability registry 或多模态 packet 只有在对应功能已经接管后才删除；它们不能作为第二成功路径保留。
+DSH 组装默认 system prompt 与 Skill；OpenNeko 只通过 exact Session context extension 注入经过校验的
+Workspace、Canvas、Character、World 和引用 evidence，不建立平行 Prompt、Input、Capability 或多模态
+packet 处理路径。
 
 ## Renderer 与生命周期
 
@@ -171,5 +170,5 @@ provider 验证，并记录 effective model、terminal state、artifact/path evi
 
 Evaluation canonical facts 使用 Conversation、DSH Session、turn/step/toolCall、permission preset、model receipt、Command/Skill、MCP/Tool provenance、attachment/media Tool evidence 和 domain Job/artifact identity。Pi run/branch/queue assertions 与 direct runtime driver 不得保留；visible UI 与 hidden full Desktop 都必须通过公开 Composer input path，缺少 driver/API 时报告 `infrastructure-blocked`。
 
-发布前必须证明旧 Pi runtime、Webview message protocol、queue/confirmation、Skill Host、MCP Manager、Plugin
-runtime 与平行 client 路径均不可达；真实 provider/API 或可见 UI 验收未执行时，发布门禁保持关闭。
+发布前必须证明 Agent runtime、Webview message、queue/confirmation、Skill、MCP、Plugin 与 client 均只走
+canonical path；真实 provider/API 或可见 UI 验收未执行时，发布门禁保持关闭。

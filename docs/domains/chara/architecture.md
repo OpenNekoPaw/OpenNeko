@@ -101,7 +101,8 @@ type CharacterConversationSelection =
 
 Companion participant 只携带精确 CharacterVersion 和 Chara 解析的 continuity identity。Narrative participant 携带精确 CharacterVersion 和可选的精确 Storyline/Version/Node ref。任一模式出现另一模式字段必须 decode/validation 失败；不得通过空字段、default 或 provider failure 改变模式。
 
-模式与所有 participant 选择在首次 submit 前冻结。改变模式或节点只能建立新的 launch draft 和 Conversation，不能重解释旧 transcript。
+模式与所有 participant 选择在首次 submit 前冻结。改变模式或节点只能建立新的 launch draft 和
+Conversation，不能重解释已有 transcript。
 
 一个 participant 创建 Dialogue，多个 participant 创建 Room。每个 agent-controlled participant 都有独立 primary DSH Session、provider/model/TTS receipt、上下文和 RoomView；human-controlled participant 不创建隐藏 DSH Session。
 
@@ -236,11 +237,13 @@ Character Interaction Scene 只有以下有界 slots：
 
 离开场景时 React Roots 卸载，无保护 Presentation/Web/Game resource 释放。运行、排队、审批或未完成外部操作由 exact runtime owner 保护，不得因此保留 hidden Root。重开从 exact identities 和最小 presentation snapshot 重建。
 
-## 持久化、旧记录和错误隔离
+## 持久化与错误隔离
 
 Chara Node 分别持久化 Character/Storyline authoring、Companion continuity、Dialogue/Room 和 mode receipts。repository 逐条 strict decode；一条非法 record 不阻止 sibling 或 workspace startup。
 
-旧 `CharacterStorylineRun`、observation/transition 和 run-scoped memory bytes 必须保留为 owner-qualified invalid/obsolete records，但不得进入新 reader 的成功集合。用户通过显式 offline inspect/export/cleanup 操作处理；不得自动转成 Storyline publication、continuity memory 或空默认值。
+Repository 只将 canonical records 纳入成功集合。无法解析的 owner-qualified bytes 必须原样保留并返回
+局部 diagnostic；用户通过显式 offline inspect/export/cleanup 操作处理，不得自动转成 Storyline
+publication、continuity memory 或空默认值。
 
 以下情况必须 fail-visible、fail-local：
 
@@ -251,19 +254,18 @@ Chara Node 分别持久化 Character/Storyline authoring、Companion continuity�
 - unknown/mismatched Presentation surface；
 - malformed continuity/memory/receipt record。
 
-Pre-commit launch failure 不得留下 partial CharacterRun、Room、DSH Session 或 first message。Post-commit provider failure 保留已创建的 Conversation owner 并记录 failed turn。所有失败都不得选择 active/recent/latest identity、另一 provider/source/renderer、旧 contract 或空成功值。
+Pre-commit launch failure 不得留下 partial CharacterRun、Room、DSH Session 或 first message。Post-commit
+provider failure 保留已创建的 Conversation owner 并记录 failed turn。所有失败都不得选择
+active/recent/latest identity、另一 provider/source/renderer、非 canonical contract 或空成功值。
 
-## Product promotion 与验证
-
-Character production entry 仍受独立 promotion gate 保护。package implementation、deterministic fixture、test route 或保存的 experimental Scene 不得使生产入口成功。
+## 验证
 
 验证必须覆盖：
 
-- strict producer/consumer codecs 与旧 shape poison；
+- strict producer/consumer codecs 拒绝 non-canonical shape；
 - Storyline publication immutability 和 node context filtering；
 - Companion cross-Conversation continuity 与 Narrative isolation；
 - independent DSH Session/model/TTS/RoomView；
 - Host/Webview owner matching、slot-local failure 和 UI lifetime；
 - Desktop delegation/trust boundary；
-- key-free Evaluation authoring、provider-backed complete Desktop session 和 visible Electron flow；
-- promotion gate 继续 fail-visible。
+- key-free Evaluation authoring、provider-backed complete Desktop session 和 visible Electron flow。

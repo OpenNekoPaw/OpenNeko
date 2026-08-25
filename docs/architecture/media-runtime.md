@@ -1,9 +1,5 @@
 # Node/FFmpeg 媒体运行时
 
-状态：Accepted
-
-更新日期：2026-08-01
-
 OpenNeko 的本地媒体 canonical path 是 `@neko/media` 与各领域的窄媒体 port。
 
 ## 职责
@@ -63,14 +59,14 @@ byte source、one-shot stream 或 frozen resource set，不解析 `ContentLocato
   48 kHz stereo float32 PCM。源 codec 和通道数仍由 probe 报告；普通单资源播放不因此
   自动转为 PCM。
 
-| Consumer / operation | Canonical audio path |
-| --- | --- |
-| Cut 有声 timeline preview | Host 混合 framed PCM；muted `<video>` 跟随 Cut master clock |
-| Cut video-only interval | 原生 `<video>` clock，不创建 PCM |
-| Canvas 普通 audio/video node | 原生 `<audio>` 或带内嵌音频的单个 `<video>` |
-| Canvas 显式同步/混音/分析 | 独立版本化 processed/PCM contract |
-| Preview、Agent 展示 | 原生 `<audio>` / `<video>` |
-| camera/microphone/call/live capture | `MediaStream` / WebRTC 或专用 live runtime |
+| Consumer / operation                | Canonical audio path                                        |
+| ----------------------------------- | ----------------------------------------------------------- |
+| Cut 有声 timeline preview           | Host 混合 framed PCM；muted `<video>` 跟随 Cut master clock |
+| Cut video-only interval             | 原生 `<video>` clock，不创建 PCM                            |
+| Canvas 普通 audio/video node        | 原生 `<audio>` 或带内嵌音频的单个 `<video>`                 |
+| Canvas 显式同步/混音/分析           | 独立版本化 processed/PCM contract                           |
+| Preview、Agent 展示                 | 原生 `<audio>` / `<video>`                                  |
+| camera/microphone/call/live capture | `MediaStream` / WebRTC 或专用 live runtime                  |
 
 PCM 浏览器调度采用显式 `prepare -> startAt` 两阶段：先取得首包，再由拥有
 timeline 的调用方在 Host 确认 generation activation 后选择未来
@@ -97,7 +93,7 @@ descriptor 携带 Clip source-time origin；Chromium 根据容器索引和 byte 
 Cut Webview 将授权 URL 直接赋给 active/standby `<video>`。Chromium 负责 Range
 调度、缓存、demux、decoder backpressure 和 seek；Cut 不调用视频 `fetch()`，
 不创建 `MediaSource`/`SourceBuffer`，也不维护缓冲窗口。同一 Clip 的 PCM
-generation 滚动时，Host 转移 video session ownership，只退休旧 PCM session。
+generation 滚动时，Host 转移 video session ownership，并释放被替换的 PCM session。
 
 H.264 容器不兼容时完成 `-c:v copy` 的有界 MP4 后再发布普通 Range URL。
 不兼容 codec 使用已验证的目标平台硬件 backend，完成 seekable session file
@@ -147,7 +143,7 @@ DTS，以及 macOS 硬件视频闭包；缺少任一必要能力会阻断媒体 
 - `openneko://resource/<opaque-id>` 不暴露路径或稳定内容身份；registration 绑定允许的
   `webContentsId`、Window/View/session/renderer-epoch/generation。
 - 文件响应支持标准 byte Range，并允许 Chromium 重复或并发请求同一 registration；
-  PCM 每个 registration 只允许一个消费者。Chromium 在 seek/替换资源时关闭旧 Range
+  PCM 每个 registration 只允许一个消费者。Chromium 在 seek/替换资源时关闭前一条 Range
   response 属于正常取消；只有连接仍有效时的流关闭、FFmpeg 失败或真实文件 IO
   失败才记录为资源错误。
 - Renderer CSP 只在 `media-src`、`img-src`、`connect-src` 和经审计需要的 `frame-src`

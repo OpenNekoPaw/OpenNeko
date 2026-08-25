@@ -1,8 +1,5 @@
 # Workspace Package 角色与命名
 
-状态：Accepted
-
-更新日期：2026-08-25
 稳定依据：[`application-composition.md`](application-composition.md)、[`package-boundaries.md`](package-boundaries.md)
 
 本文定义 `packages/*` 与 `packages/*/*` workspace 的稳定角色、拆包条件、命名、公开入口和产品状态语义。
@@ -60,10 +57,10 @@ workspace package 表达真实 ownership 和依赖闭包，不以发布、消费
   `packages/<domain>/<role>`。禁止 `packages/<domain>-<role>` 平铺 package、family 根 package 与 nested
   role package 并存、同一 family 横跨多个物理根，以及用 aggregate/barrel package 保留旧根 identity。
 - singleton-to-family 转换必须在同一原子变更中同步目录、package identity、consumer、
-  manifest/lockfile、构建与测试发现、质量台账、fixture 和当前文档，并删除旧路径。现存不符合该拓扑的
-  package 是待迁移 architecture drift，不得作为新增 package、平铺 sibling 或放松规则的先例。
-- package 移动或删除还必须清除精确旧 root 下可重建的 build、cache、package-local dependency 和空 source
-  artifacts，并验证旧 root 不再存在；不得用模糊 glob 清理用户数据、Workspace 内容或无关 package。
+  manifest/lockfile、构建与测试发现、质量台账、fixture 和当前文档，并删除原路径。不符合该拓扑的
+  package 属于 architecture drift，不能作为新增 package、平铺 sibling 或放松规则的先例。
+- package 移动或删除还必须清除精确原 root 下可重建的 build、cache、package-local dependency 和空 source
+  artifacts，并验证原 root 不再存在；不得用模糊 glob 清理用户数据、Workspace 内容或无关 package。
   同一 workspace package 内显式导出的 `./node`、`./browser` 等 source subpath 不是独立 package；只有形成
   独立构建、依赖闭包或生命周期时才触发上述 family 转换。
 - 测试 package 归入对应领域家族，例如 `@neko/agent-test-utils`；零生产消费者且不能证明独立价值时，
@@ -102,14 +99,13 @@ type-only、测试和登记的 migration-only 模块，并在状态冲突时输�
 活跃变更的包可标记 retained/inactive；否则删除优于保留空壳。禁止为了让 catalog 看起来完整而增加
 空 runtime/Webview package。
 
-## Desktop 与迁移
+## Desktop 与机器台账
 
 Electron Desktop 是唯一应用组合根，但不是默认业务 owner。领域 package 即使只有一个 Desktop caller，
 仍拥有其规则、状态机和 use case；Desktop 只保留边界授权、concrete adapter、产品 shell、依赖注入与
 生命周期释放。完整边界见 [`application-composition.md`](application-composition.md) 和
 [`package-boundaries.md`](package-boundaries.md)。
 
-当前 workspace 已按本分类登记源码 package；Tools 原型已退役。Chara 与 Search 的部分 validator/
-guard 已进入生产依赖图，因此 package 状态为 `active-product`，但这不表示独立 Chara/Search UI 已
-开放；Quality 等生产不可达核心保持 `retained-kernel`。角色目录、依赖方向、显式 exports、运行环境
-与产品状态由 `quality/package-roles.json`、`quality/package-product-status.json` 和仓库质量门禁持续校验。
+具体 package 的角色、依赖方向、显式 exports、运行环境与产品状态由
+`quality/package-roles.json`、`quality/package-product-status.json` 和仓库质量门禁校验；长期架构文档
+不复制当前 package 清单或产品可达状态。

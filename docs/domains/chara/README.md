@@ -10,7 +10,9 @@ OpenNeko Agent application 拥有 Conversation catalog/binding，DSH Session 继
 
 完整编辑属于 Project Creative Workspace 中的 Chara capability。新可编辑角色从首次 durable commit 起就属于一个精确 Project；不存在 standalone 草稿、隐藏默认 Project 或 active/recent Project fallback。工作区角色可以同步为新的全局角色，或为已关联全局角色追加不可变版本。Character Interaction 是独立 Conversation/Room runtime，只消费用户选择的精确全局版本。
 
-“创建可用版本”是本地不可变领域版本操作，不是远程发布，也不自动开始对话。版本图只投影 authoritative lineage；旧的未关联版本保持 `unlinked` 可见，任何启动操作都必须引用精确 CharacterVersion，不解析 latest/current/head。
+“创建可用版本”是本地不可变领域版本操作，不是远程发布，也不自动开始对话。版本图只投影 authoritative
+lineage；未关联版本保持 `unlinked` 可见，任何启动操作都必须引用精确 CharacterVersion，不解析
+latest/current/head。
 
 ## 核心模型
 
@@ -37,7 +39,8 @@ CharacterConversationSelection
   -> independent primary DSH Session per agent-controlled Character
 ```
 
-`CharacterStorylineVersion` 是用户管理的领域版本，不是内部 schema/contract 版本。Storyline、StorylineVersion 和 StorylineNode 都有精确身份；旧 Conversation 始终引用原 publication，不解析 latest。
+`CharacterStorylineVersion` 是用户管理的领域版本，不是内部 schema/contract 版本。Storyline、
+StorylineVersion 和 StorylineNode 都有精确身份；已有 Conversation 始终引用原 publication，不解析 latest。
 
 ## 背景故事与外部世界
 

@@ -34,6 +34,12 @@ OpenSpec tasks contain only a few product-level milestones and final acceptance 
 not track files, classes/functions, per-commit steps, command output, dated evidence, or code progress.
 Code and tests are the source of truth for business logic, implementation, and implementation status.
 
+Long-lived documentation describes only the current canonical architecture, development policy, and
+core product design. Do not retain narratives about removed packages, paths, protocols, or proposals,
+migration phases, completion status, Accepted/Deprecated labels, or update dates. File names must match
+their current responsibility. Code, tests, and machine-readable ledgers own the current package catalog,
+product reachability, and implementation status.
+
 Changes to production modules under `apps/*`, `packages/*`, or `packages/*/*` must record the
 owning responsibility, package role, canonical public path, producer/consumer, runtime boundary,
 legacy-path removal conditions, user-data semantics, and validation commands in delivery review.

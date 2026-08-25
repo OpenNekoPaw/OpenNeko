@@ -1,8 +1,5 @@
 # 凭据与认证边界
 
-状态：Accepted
-
-更新日期：2026-07-31
 当前宿主：Electron Desktop
 
 当前 workspace 不包含独立 Auth 产品或 `neko-auth` 包。认证仍是外部 AI/provider、MCP 和未来联网能力的真实安全边界，但由具体宿主的 credential/config adapter 负责，不通过一个不存在的共享产品兜底。
@@ -39,7 +36,7 @@
 - Workspace 可以限制 provider/tool，但不能携带个人 token。
 - 错误、trace 和 telemetry 只记录 provider、scope、错误类别和 correlation id 等脱敏信息。
 - External provider 是可恢复边界，可以报告未认证、过期、拒绝或网络失败；不得把失败伪装为原操作成功。
-- 已移除的 Auth/Market package、session DTO 或命令入口不得以 alias、fallback 或成功 no-op 恢复。
+- Credential 和认证能力不得通过 alias、fallback 或成功 no-op 绕过 canonical owner。
 
 ## 测试要求
 

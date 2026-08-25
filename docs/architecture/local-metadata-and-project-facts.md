@@ -1,15 +1,9 @@
-# ADR: Desktop 本地元数据 Store 与项目事实边界
-
-状态：Accepted
-
-更新日期：2026-08-13
+# 本地元数据与项目事实边界
 
 范围：Electron Desktop、本地 SQLite、项目文件、Agent、Assets、Entity、Search、任务投影和缓存索引。
 
-实现入口：
-[`separate-project-facts-local-state-and-media-bindings`](../../openspec/changes/separate-project-facts-local-state-and-media-bindings/)。
-当前实现允许 package-owned 项目 `.neko` 本机状态，同时由产品 sync/package/enumerator 在遍历前
-强制排除该根目录；用户级 SQLite 仍保持单一 `~/.neko/neko.db` authority。
+Package-owned 项目 `.neko` 保存本机状态，产品 sync、package 和 enumerator 在遍历前必须排除该根目录；
+用户级 SQLite 使用单一 `~/.neko/neko.db` authority。
 
 ## 决策
 
@@ -33,8 +27,8 @@ SQLite 只保存本机结构化状态、可查询 catalog、账本和可重建 p
 机器契约记录 authority kind、user management、portability、sensitivity、SQLite role、deletion、
 retention、backup 与离线恢复语义。未知分类、非 canonical SQLite path、raw-log table、普通 Store
 中的 secret-like schema，以及 user-content SQLite authority 都是质量门禁失败。产品 runtime 不注册
-migration reader、legacy reader 或自动修复路径；需要保护有价值数据时只能使用显式授权、精确目标且
-产品不可达的离线工具。
+产品 runtime 只注册 canonical repository，不注册自动转换或修复路径；需要保护有价值数据时只能使用
+显式授权、精确目标且产品不可达的离线工具。
 
 | 数据                              | Canonical owner                  | SQLite 角色                                           |
 | --------------------------------- | -------------------------------- | ----------------------------------------------------- |
@@ -49,11 +43,8 @@ migration reader、legacy reader 或自动修复路径；需要保护有价值�
 
 DSH Session transcript 保存在 Electron `userData/dsh/sessions`，由 DSH profile 直接拥有；OpenNeko
 Conversation metadata、DSH Session binding 与 checkpoint 等 operational state 使用
-`~/.neko/neko.db`，不得复制 transcript。旧 `agent/pi/metadata.sqlite`、旧 Desktop JSON state
-和旧 application settings 文件不属于产品输入：启动、普通 reader、build 和 package public entry
-均不得读取、导入、分类、改名或导出它们。现有字节保持不变；需要处理时由用户显式授权产品不可达的
-离线工具精确备份和修复。Credential 不得进入 SQLite；Desktop 通过 safeStorage-backed secret port
-持有，已删除的 TUI/VS Code SQLite credential path 不保留。
+`~/.neko/neko.db`，不得复制 transcript。Credential 不得进入 SQLite；Desktop 通过
+safeStorage-backed secret port 持有。
 
 ## 工作区与用户区
 
@@ -87,7 +78,7 @@ package 精确登记的 `.neko/config.toml`、`.neko/settings.local.json`、`.ne
 - 用户级 workspace row 必须携带稳定 `workspace_id`，不得用绝对路径、active project、
   resource URL 或 runtime token 充当身份。
 - 项目事实先由 owning package 原子提交；projection 更新失败时标记 stale 并暴露 diagnostic，
-  不回滚已成功项目写入，也不把旧 projection 当作成功结果。
+  不回滚已成功项目写入，也不把 stale projection 当作成功结果。
 - 数据库事务只保护同一 Store 内的原子更新。跨领域写入通过 application port、精确 operation/request
   identity 和各 owner 的串行化协调，不用一个大事务制造跨领域所有权，也不用 revision/CAS
   维持共享可变 authority。
@@ -112,11 +103,11 @@ projection refresh 不阻塞 Electron event loop；使用 worker 或有界批处
 ## 验证
 
 - repository contract、稳定表初始化、事务、损坏记录局部失败和 stale projection 使用聚焦测试；
-- reachability 测试证明产品启动、public entry、build 和普通 tests 不包含 migration/legacy/repair path；
+- reachability 测试证明产品启动、public entry、build 和普通 tests 只使用 canonical repositories；
 - 项目写入与 projection 更新分别断言 owner 和失败路径；
 - 多窗口订阅、应用退出和数据库占用使用真实 Electron 场景；
 - fixture 必须使用隔离临时目录，不读取或改写真实用户数据库。
 
-相关边界见 [`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)、
+相关边界见 [`content-access-and-paths.md`](content-access-and-paths.md)、
 [`asset-library.md`](asset-library.md)、[`unified-entity.md`](unified-entity.md) 和
 [`application-composition.md`](application-composition.md)。

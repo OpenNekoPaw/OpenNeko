@@ -20,6 +20,10 @@ OpenSpec 只用于能够独立命名并改变系统能力边界、核心产品�
 
 OpenSpec task 只保留少量产品级里程碑和最终验收，不记录文件、类/函数、逐提交步骤、命令结果、日期化证据或实现进度。实际业务逻辑、功能实现和实现状态以代码与测试为准。
 
+长期文档只描述当前 canonical 架构、开发规范和核心产品设计。不得保留已删除包、路径、协议或提案的
+历史说明，不保存迁移阶段、完成状态、Accepted/Deprecated 标签和更新时间；文件名必须匹配当前职责。
+当前 package 清单、产品可达状态和实现进度以代码、测试及机器台账为准。
+
 触及 `apps/*`、`packages/*` 或 `packages/*/*` 生产模块时，交付 review 必须记录 owning responsibility、
 package role、canonical public path、producer/consumer、runtime boundary、旧路径删除/poison 条件、用户数据
 语义与验证命令。OpenSpec 只保留稳定产品边界和产品级里程碑，不复制交付 review 的实现证据。仅说明

@@ -1,8 +1,5 @@
 # 无 UI 项目创作边界
 
-状态：Accepted
-更新日期：2026-07-31
-
 Neko 项目文件是持久创作事实。来自 Agent、Assets、Desktop action 或后台任务的写入必须在没有打开 renderer surface 或 UI snapshot 时仍可执行。Renderer 是交互投影，不是后台 authoring executor。
 
 本文件只定义结构化、空间化和时间线项目的 interface authoring。Markdown、Fountain、TXT、HTML、
@@ -10,7 +7,8 @@ Neko 项目文件是持久创作事实。来自 Agent、Assets、Desktop action 
 domain authoring service。Canvas `.nkc`、Cut `.otio` 即使序列化为 JSON，也因跨字段不变量、对象
 identity 与 project revision 必须留在 owning-domain interface path。
 
-当前保留且适用此边界的编辑领域是 Canvas 与 Cut。未来其他项目格式进入 workspace 时，必须通过新的 contract 和测试加入，不能复用已移除 Sketch、Audio、Model、Puppet 或 Story 的旧命令。
+Canvas 与 Cut 通过各自的 owning contract 实现无 UI authoring。其他项目格式进入 Workspace 时同样必须
+建立 package-owned contract 和测试。
 
 ## Operation 分类
 
@@ -36,7 +34,7 @@ JSON、shell redirection、其他 adapter/provider 或 active/recent target。�
 
 共享层只拥有 client-neutral target、result、diagnostic、operation classification 和测试 poison helper。领域 edit planning、codec、source policy 与项目 mutation 留在 owning package。
 
-旧 UI-shaped command 只能被删除、作为调用 canonical authoring 的薄 UI wrapper，或作为 fail-closed migration diagnostic；不得向 renderer 发送 mutation 后报告持久成功。
+UI command 只能作为调用 canonical authoring 的薄 adapter；不得把 mutation 发给 renderer 后报告持久成功。
 
 ## Target 与 reveal
 
@@ -67,11 +65,11 @@ Canvas Board 的二进制生成媒体必须先提交到项目拥有的稳定生�
 
 - `document-authoring` 在没有 active renderer surface 时成功；
 - save/reopen 能恢复持久事实；
-- 旧 UI-bound route 被删除、poison 或断言未使用；
+- 测试断言不存在绕过 canonical authoring service 的 UI-bound route；
 - core service 没有 UI/host import；
 - 已打开 editor 能在 host write 后同步；
 - runtime-only command 在缺失 editor/runtime 时明确失败；
-- 路径断言证明 canonical service 被命中，legacy handler 未参与。
+- 路径断言证明 canonical service 被命中且没有平行 handler。
 - protected-project 断言证明 generic Agent file read/write 与 shell bypass 不可达；
 - 内容文件断言证明 Markdown/Fountain 不被误路由到 Canvas/Cut authoring service。
 

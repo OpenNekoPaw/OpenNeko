@@ -17,4 +17,4 @@
 - 不支持或失效的语义返回局部 diagnostic，不切换 parser、renderer 或事实来源。
 
 跨运行边界的内容授权与资源投影规则见
-[`docs/architecture/cache-file-access-and-paths.md`](../../docs/architecture/cache-file-access-and-paths.md)。
+[`docs/architecture/content-access-and-paths.md`](../../docs/architecture/content-access-and-paths.md)。
