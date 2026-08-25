@@ -78,7 +78,7 @@ export function EntityInspector({
       entityId,
       binding: {
         role: 'reference',
-        target: { kind: 'workspace-file', path: bindingPath.trim() },
+        target: { file: { authority: 'workspace', path: bindingPath.trim() } },
       },
     });
   };
