@@ -127,7 +127,7 @@ describe('Desktop DSH Workspace Board projection request', () => {
     });
   });
 
-  it('publishes Markdown once and accepts only byte-identical replay', async () => {
+  it('publishes Markdown once and preserves user edits when the record is delivered again', async () => {
     const workspacePath = await mkdtemp(join(tmpdir(), 'openneko-dsh-markdown-'));
     const read = createDshWorkspaceBoardContentRead({
       workspacePath,
@@ -150,20 +150,25 @@ describe('Desktop DSH Workspace Board projection request', () => {
       contentFingerprint: 'markdown:durable',
     };
 
-    await expect(publishDshDurableMarkdownArtifact(input, { writer, read })).resolves.toEqual({
-      contentLocator: input.contentLocator,
-      contentFingerprint: input.contentFingerprint,
-    });
-    await expect(publishDshDurableMarkdownArtifact(input, { writer, read })).resolves.toEqual({
-      contentLocator: input.contentLocator,
-      contentFingerprint: input.contentFingerprint,
-    });
     await expect(
-      publishDshDurableMarkdownArtifact({ ...input, markdown: '# Changed' }, { writer, read }),
-    ).rejects.toThrow('conflicts with existing Workspace content');
+      publishDshDurableMarkdownArtifact(input, { writer, content: read }),
+    ).resolves.toEqual({
+      contentLocator: input.contentLocator,
+      contentFingerprint: input.contentFingerprint,
+    });
+    await writeFile(
+      join(workspacePath, input.contentLocator.file.path),
+      '# User-edited analysis\n\nKeep this content.\n',
+    );
+    await expect(
+      publishDshDurableMarkdownArtifact(input, { writer, content: read }),
+    ).resolves.toEqual({
+      contentLocator: input.contentLocator,
+      contentFingerprint: input.contentFingerprint,
+    });
     await expect(
       readFile(join(workspacePath, input.contentLocator.file.path), 'utf8'),
-    ).resolves.toBe(input.markdown);
+    ).resolves.toBe('# User-edited analysis\n\nKeep this content.\n');
   });
 
   it('keeps a durable Markdown reference available after the user edits the file', async () => {
@@ -194,7 +199,7 @@ describe('Desktop DSH Workspace Board projection request', () => {
     };
 
     await expect(resolveDshDurableMarkdownArtifact(reference, read)).resolves.toBeUndefined();
-    await publishDshDurableMarkdownArtifact(input, { writer, read });
+    await publishDshDurableMarkdownArtifact(input, { writer, content: read });
     await expect(resolveDshDurableMarkdownArtifact(reference, read)).resolves.toEqual({
       contentLocator: input.contentLocator,
     });

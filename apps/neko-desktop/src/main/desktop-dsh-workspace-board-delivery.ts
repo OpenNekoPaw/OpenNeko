@@ -147,7 +147,7 @@ export class DesktopDshWorkspaceBoardDelivery
     const workspace = await this.restoreExactWorkspace(input.workspaceId);
     return publishDshDurableMarkdownArtifact(input, {
       writer: this.options.createContentWriter(workspace.workspacePath),
-      read: this.options.createContentRead(workspace.workspacePath),
+      content: this.options.createContentRead(workspace.workspacePath),
     });
   }
 
@@ -251,7 +251,7 @@ export async function publishDshDurableMarkdownArtifact(
   input: Parameters<DshDurableMarkdownArtifactPublicationPort['publish']>[0],
   ports: {
     readonly writer: AuthorizedWorkspaceWriter;
-    readonly read: Pick<ContentReadService, 'read'>;
+    readonly content: Pick<ContentReadService, 'stat'>;
   },
 ): ReturnType<DshDurableMarkdownArtifactPublicationPort['publish']> {
   if (
@@ -274,13 +274,9 @@ export async function publishDshDurableMarkdownArtifact(
   if (result.diagnostic.code !== 'content-conflict') {
     throw new Error(`Durable Markdown publication failed: ${result.diagnostic.code}.`);
   }
-  const existing = await ports.read.read(input.contentLocator, { maxBytes: bytes.byteLength });
-  if (
-    existing.status !== 'ready' ||
-    existing.bytes.byteLength !== bytes.byteLength ||
-    !Buffer.from(existing.bytes).equals(Buffer.from(bytes))
-  ) {
-    throw new Error('Durable Markdown publication conflicts with existing Workspace content.');
+  const existing = await ports.content.stat(input.contentLocator);
+  if (existing.status !== 'ready') {
+    throw new Error(`Durable Markdown publication failed: ${existing.diagnostic.code}.`);
   }
   return {
     contentLocator: input.contentLocator,
