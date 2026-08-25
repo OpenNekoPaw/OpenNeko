@@ -1,5 +1,5 @@
 ## Product milestones
 
-- [ ] Deliver the canonical professional-application trust, discovery, launch, and document identity boundary.
-- [ ] Deliver explicit ComfyUI resource handoff, supported automation, progress/cancellation, and verified output ingest.
-- [ ] Qualify API/MCP and explicitly selected Computer Use paths without fallback or parallel product authority.
+- [ ] Deliver semantic resource actions and exact authorized handoff through an enabled, ready ComfyUI binding.
+- [ ] Deliver one recoverable ComfyUI Generation Job path with progress, cancellation, exact output retrieval and explicit verified ingest.
+- [ ] Qualify structured API execution and explicitly selected Computer Use without fallback, hidden Conversation or parallel product authority.
