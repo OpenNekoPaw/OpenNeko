@@ -10,5 +10,3 @@ export * from './canvas-authoring-contracts';
 export * from './canvas-material-contracts';
 export * from './canvas-generation-node';
 export * from './canvas-headless-authoring';
-export * from './storyboard-table';
-export * from './creative-table-profile';

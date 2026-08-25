@@ -1,4 +1,3 @@
-export * from './canvas-cut-draft';
 export * from './canvas-generation-application-port';
 export * from './canvas-generation-authoring';
 export * from './canvas-generation-inputs';
@@ -8,7 +7,6 @@ export * from './canvas-drop';
 export * from './canvas-markdown-capabilities';
 export * from './canvas-text-file-preview';
 export * from './canvas-projection';
-export * from './canvas-semantic-storyboard';
 export * from './types/index';
 export * from './utils/index';
 export * from './nkc/index';

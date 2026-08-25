@@ -600,7 +600,6 @@ function isBoundaryCanonicalizerSurface(lowerFile, lowerLine) {
       'types/skill.ts',
       'tool-planning.ts',
       'fieldbinding.ts',
-      'canvas-semantic-storyboard.ts',
       'node-workspace-storage-inspection.ts',
       'node-workspace-resource-cache-binding.ts',
       'project-authoring/index.ts',

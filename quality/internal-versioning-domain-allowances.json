@@ -705,7 +705,7 @@
       "userWorkflow": "Import, publish, inspect, compare, update, or resolve an exact Asset release for one Project Entity without affecting sibling Entities or Assets."
     },
     {
-      "businessRequirement": "Canvas and Storyboard media references must retain the exact user-selected immutable Asset or package release.",
+      "businessRequirement": "Canvas media references must retain the exact user-selected immutable Asset or package release.",
       "category": "data-generation-alias",
       "domainOwner": "@neko/canvas-domain",
       "fieldScope": "Exact managed Asset release occurrence in packages/canvas/domain/src/__tests__/canvas-content-authoring.test.ts: revision: '1.0.0',",
@@ -713,51 +713,7 @@
       "isolationRule": "The value identifies one Asset or package release only and cannot select a Canvas schema, migration, component generation, provider, or alternate implementation; invalid data remains reference-local.",
       "path": "packages/canvas/domain/src/__tests__/canvas-content-authoring.test.ts",
       "token": "revision",
-      "userWorkflow": "Place, inspect, transfer, or resolve media from an exact Asset or package release in Canvas or Storyboard."
-    },
-    {
-      "businessRequirement": "Canvas and Storyboard media references must retain the exact user-selected immutable Asset or package release.",
-      "category": "internal-version-field",
-      "domainOwner": "@neko/canvas-domain",
-      "fieldScope": "Exact managed Asset release occurrence in packages/canvas/domain/src/types/storyboard-table.ts: readonly assetVersion?: string;",
-      "id": "d0cdccd0327fb5351c5c",
-      "isolationRule": "The value identifies one Asset or package release only and cannot select a Canvas schema, migration, component generation, provider, or alternate implementation; invalid data remains reference-local.",
-      "path": "packages/canvas/domain/src/types/storyboard-table.ts",
-      "token": "assetVersion",
-      "userWorkflow": "Place, inspect, transfer, or resolve media from an exact Asset or package release in Canvas or Storyboard."
-    },
-    {
-      "businessRequirement": "Canvas and Storyboard media references must retain the exact user-selected immutable Asset or package release.",
-      "category": "internal-version-field",
-      "domainOwner": "@neko/canvas-domain",
-      "fieldScope": "Exact managed Asset release occurrence in packages/canvas/domain/src/types/storyboard-table.ts: ...(readTrimmedString(record['assetVersion'])",
-      "id": "1e4ad530ca9296839c30",
-      "isolationRule": "The value identifies one Asset or package release only and cannot select a Canvas schema, migration, component generation, provider, or alternate implementation; invalid data remains reference-local.",
-      "path": "packages/canvas/domain/src/types/storyboard-table.ts",
-      "token": "assetVersion",
-      "userWorkflow": "Place, inspect, transfer, or resolve media from an exact Asset or package release in Canvas or Storyboard."
-    },
-    {
-      "businessRequirement": "Canvas and Storyboard media references must retain the exact user-selected immutable Asset or package release.",
-      "category": "internal-version-field",
-      "domainOwner": "@neko/canvas-domain",
-      "fieldScope": "Exact managed Asset release occurrence in packages/canvas/domain/src/types/storyboard-table.ts: ? { assetVersion: readTrimmedString(record['assetVersion']) }",
-      "id": "f9aa676a64b584934c0a",
-      "isolationRule": "The value identifies one Asset or package release only and cannot select a Canvas schema, migration, component generation, provider, or alternate implementation; invalid data remains reference-local.",
-      "path": "packages/canvas/domain/src/types/storyboard-table.ts",
-      "token": "assetVersion",
-      "userWorkflow": "Place, inspect, transfer, or resolve media from an exact Asset or package release in Canvas or Storyboard."
-    },
-    {
-      "businessRequirement": "Canvas and Storyboard media references must retain the exact user-selected immutable Asset or package release.",
-      "category": "internal-version-field",
-      "domainOwner": "@neko/canvas-domain",
-      "fieldScope": "Exact managed Asset release occurrence in packages/canvas/domain/src/types/storyboard-table.ts: ? { assetVersion: readTrimmedString(record['assetVersion']) }",
-      "id": "f77c126af0bab147fe75",
-      "isolationRule": "The value identifies one Asset or package release only and cannot select a Canvas schema, migration, component generation, provider, or alternate implementation; invalid data remains reference-local.",
-      "path": "packages/canvas/domain/src/types/storyboard-table.ts",
-      "token": "assetVersion",
-      "userWorkflow": "Place, inspect, transfer, or resolve media from an exact Asset or package release in Canvas or Storyboard."
+      "userWorkflow": "Place, inspect, transfer, or resolve media from an exact Asset or package release in Canvas."
     },
     {
       "businessRequirement": "A generated-output artifact retains the exact immutable output revision selected by the user or produced by an accepted Generation operation.",
