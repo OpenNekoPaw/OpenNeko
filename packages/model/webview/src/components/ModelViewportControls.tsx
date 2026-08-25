@@ -16,8 +16,8 @@ import {
   ScaleIcon,
 } from '@neko/ui/icons';
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
-import type { ThreeReferencePresetOption } from '@neko/preview-domain';
-import { useTranslation } from '../../i18n/I18nContext';
+import type { ThreeReferencePresetOption } from '@neko/model-domain';
+import { useTranslation } from '@neko/ui/i18n/react';
 import {
   MODEL_CAMERA_PLACEMENTS,
   MODEL_LIGHT_PLACEMENTS,

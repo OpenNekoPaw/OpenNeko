@@ -204,6 +204,20 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
+      "path": "packages/model/domain",
+      "owner": "packages/model/domain",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/model/webview",
+      "owner": "packages/model/webview",
+      "mode": "self",
+      "sourceScope": "src/**/*.{ts,tsx}",
+      "testScope": "src/**/*.test.{ts,tsx}"
+    },
+    {
       "path": "packages/preview/domain",
       "owner": "packages/preview/domain",
       "mode": "self",

@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { performance } from 'node:perf_hooks';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { disposeObjectTree } from '../src/model/threeRuntime';
+import { disposeObjectTree } from '../src/threeRuntime';
 
 const AUDITED_RIGGED_SIMPLE = {
   source: 'https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/RiggedSimple',

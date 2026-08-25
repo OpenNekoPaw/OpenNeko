@@ -135,6 +135,7 @@ export default defineConfig({
       '@neko/canvas-webview',
       '@neko/chara-webview',
       '@neko/cut-webview',
+      '@neko/model-webview',
       '@neko/preview-webview',
       '@neko/text-editor-webview',
       '@neko/ui',

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ModelViewerHostPort } from './modelViewerHost';
 import type { ThreeModelRuntimeFactory, ThreeModelRuntimePort } from './threeRuntime';
 
-vi.mock('../i18n/I18nContext', () => ({
+vi.mock('@neko/ui/i18n/react', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 

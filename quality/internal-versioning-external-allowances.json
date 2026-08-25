@@ -2844,10 +2844,10 @@
       "category": "internal-version-field",
       "externalOwner": "Three.js Material API",
       "normativeSource": "https://threejs.org/docs/#api/en/materials/Material.version",
-      "fieldScope": "expect(opaqueBlend).toMatchObject({ transparent: false, depthWrite: true, version: 1 }); (packages/preview/model-webview/src/threeRuntime.test.ts:262)",
+      "fieldScope": "expect(opaqueBlend).toMatchObject({ transparent: false, depthWrite: true, version: 1 }); (packages/model/webview/src/threeRuntime.test.ts:262)",
       "isolationRule": "The assertion observes Three.js material invalidation only; the value is neither persisted nor exposed through an OpenNeko contract and cannot select a component shape, migration, or alternate renderer.",
-      "id": "027f6659f76ba51f8ed0",
-      "path": "packages/preview/model-webview/src/threeRuntime.test.ts",
+      "id": "469df5fe3ff8f1e8c5b4",
+      "path": "packages/model/webview/src/threeRuntime.test.ts",
       "token": "version"
     },
     {

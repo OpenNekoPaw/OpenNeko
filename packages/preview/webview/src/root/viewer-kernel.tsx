@@ -1,15 +1,12 @@
-import type {
-  ModelPreviewFormat,
-  ModelPreviewSourceDescriptor,
-  PreviewContentKind,
-  PreviewMediaDescriptor,
-} from '@neko/preview-domain';
+import type { ModelPreviewFormat, ModelPreviewSourceDescriptor } from '@neko/model-domain';
+import type { PreviewContentKind, PreviewMediaDescriptor } from '@neko/preview-domain';
 import type { II18nService, SupportedLocale } from '@neko/ui/i18n';
 import { MarkdownDocumentView } from '@neko/ui/markdown';
 import {
   cloneElement,
   lazy,
   Suspense,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -20,7 +17,6 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from 'react';
 import { I18nProvider } from '../i18n/I18nContext';
-import { createSourceModelViewerHost } from '../model/sourceModelViewerHost';
 import { PersistedStateProvider } from '../shared/usePersistedState';
 import type { PreviewViewerSnapshot } from './viewer-snapshot';
 
@@ -48,9 +44,9 @@ const CbzViewer = lazy(async () => {
   const module = await import('../cbz/CbzViewer');
   return { default: module.CbzViewer };
 });
-const ModelViewer = lazy(async () => {
-  const module = await import('../model/ModelViewer');
-  return { default: module.ModelViewer };
+const ModelPreviewPresentation = lazy(async () => {
+  const module = await import('@neko/model-webview/root');
+  return { default: module.ModelPreviewPresentation };
 });
 
 export type PreviewViewerControlDensity = 'compact' | 'full';
@@ -356,25 +352,51 @@ function CompleteModelPreview({
   i18nService,
 }: PreviewViewerKernelProps): ReactElement {
   const source = useMemo(() => createModelSourceDescriptor(descriptor), [descriptor]);
-  const host = useMemo(() => {
-    const next = createSourceModelViewerHost({
-      sessionId: descriptor.descriptorId,
-      source,
-    });
-    if (snapshot?.modelState !== undefined) next.setState(snapshot.modelState);
-    return next;
-  }, [descriptor.descriptorId, snapshot?.modelState, source]);
-  useEffect(
-    () => () => onSnapshotChange({ modelState: host.getState() }),
-    [host, onSnapshotChange],
+  const onModelStateChange = useCallback(
+    (modelState: unknown) => onSnapshotChange({ modelState }),
+    [onSnapshotChange],
   );
   return (
     <ViewerModuleBoundary locale={locale}>
-      <I18nProvider service={i18nService}>
-        <ModelViewer host={host} sessionId={descriptor.descriptorId} />
-      </I18nProvider>
+      <ModelPreviewPresentation
+        sessionId={descriptor.descriptorId}
+        source={source}
+        i18nService={i18nService}
+        initialState={snapshot?.modelState}
+        onStateChange={onModelStateChange}
+      />
     </ViewerModuleBoundary>
   );
+}
+
+function createModelSourceDescriptor(
+  descriptor: PreviewMediaDescriptor,
+): ModelPreviewSourceDescriptor {
+  if (!descriptor.contentLocator) {
+    throw new Error('Model Preview requires a durable content locator.');
+  }
+  return {
+    source: descriptor.contentLocator,
+    sourceFingerprint: descriptor.sourceFingerprint,
+    format: modelFormat(descriptor.displayName),
+    entryUri: descriptor.url,
+    uriMap: descriptor.resourceUris ?? { [descriptor.displayName]: descriptor.url },
+    sizeBytes: descriptor.byteLength,
+  };
+}
+
+function modelFormat(fileName: string): ModelPreviewFormat {
+  const extension = fileName.slice(fileName.lastIndexOf('.') + 1).toLocaleLowerCase();
+  if (
+    extension === 'glb' ||
+    extension === 'gltf' ||
+    extension === 'obj' ||
+    extension === 'stl' ||
+    extension === 'ply'
+  ) {
+    return extension;
+  }
+  throw new Error(`Unsupported model format '${extension}'.`);
 }
 
 function ViewerModuleBoundary({
@@ -423,36 +445,6 @@ function ViewerDiagnostic({
       {text}
     </div>
   );
-}
-
-function createModelSourceDescriptor(
-  descriptor: PreviewMediaDescriptor,
-): ModelPreviewSourceDescriptor {
-  if (!descriptor.contentLocator) {
-    throw new Error('Model Preview requires a durable content locator.');
-  }
-  return {
-    source: descriptor.contentLocator,
-    sourceFingerprint: descriptor.sourceFingerprint,
-    format: modelFormat(descriptor.displayName),
-    entryUri: descriptor.url,
-    uriMap: descriptor.resourceUris ?? { [descriptor.displayName]: descriptor.url },
-    sizeBytes: descriptor.byteLength,
-  };
-}
-
-function modelFormat(fileName: string): ModelPreviewFormat {
-  const extension = fileName.slice(fileName.lastIndexOf('.') + 1).toLocaleLowerCase();
-  if (
-    extension === 'glb' ||
-    extension === 'gltf' ||
-    extension === 'obj' ||
-    extension === 'stl' ||
-    extension === 'ply'
-  ) {
-    return extension;
-  }
-  throw new Error(`Unsupported model format '${extension}'.`);
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {

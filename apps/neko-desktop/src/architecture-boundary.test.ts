@@ -409,6 +409,7 @@ describe('Desktop architecture boundaries', () => {
       '../../packages/assets/domain/src/resource-browser/**/*.{ts,tsx}',
       '../../packages/canvas/webview/src/**/*.{ts,tsx}',
       '../../packages/cut/webview/src/**/*.{ts,tsx}',
+      '../../packages/model/webview/src/**/*.{ts,tsx}',
       '../../packages/preview/webview/src/**/*.{ts,tsx}',
     ]) {
       expect(tailwindConfig).toContain(sourcePattern);
@@ -432,6 +433,7 @@ describe('Desktop architecture boundaries', () => {
     const publicRoots = [
       ['packages/canvas/webview/package.json', './root'],
       ['packages/cut/webview/package.json', './root'],
+      ['packages/model/webview/package.json', './root'],
       ['packages/preview/webview/package.json', './root'],
       ['packages/assets/webview/package.json', './resource-browser/root'],
       ['packages/assets/webview/package.json', './asset-management/root'],

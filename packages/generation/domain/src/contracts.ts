@@ -2,7 +2,7 @@ import type {
   ThreeReferenceCameraMediaReference,
   ThreeReferenceMediaOutputIdentity,
   ThreeReferencePanoramaOrientation,
-} from '@neko/preview-domain';
+} from '@neko/model-domain';
 import type { ModelConfig, ProviderConfig } from '@neko/ai-contracts';
 import type { ContentLocator } from '@neko/content-domain';
 import type {

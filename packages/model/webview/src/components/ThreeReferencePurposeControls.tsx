@@ -15,8 +15,8 @@ import type {
   ThreeReferenceRuntimeJointConstraint,
   ThreeReferenceRuntimePosePreset,
   ThreeReferenceStagingSnapshot,
-} from '@neko/preview-domain';
-import { useTranslation } from '../../i18n/I18nContext';
+} from '@neko/model-domain';
+import { useTranslation } from '@neko/ui/i18n/react';
 
 export interface ThreeReferencePurposeControlsProps {
   readonly disabled: boolean;

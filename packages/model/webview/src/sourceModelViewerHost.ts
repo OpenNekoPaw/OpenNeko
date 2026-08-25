@@ -5,9 +5,9 @@ import {
   type ThreeReferenceHostMessage,
   type ThreeReferencePanelSubject,
   type ThreeReferenceStagingSnapshot,
-} from '@neko/preview-domain';
+} from '@neko/model-domain';
 import { contentLocatorsEqual } from '@neko/content-domain';
-import { createSourceModelStaging } from '@neko/preview-domain';
+import { createSourceModelStaging } from '@neko/model-domain';
 import type { ModelViewerHostPort } from './modelViewerHost';
 
 export function createSourceModelViewerHost(input: {

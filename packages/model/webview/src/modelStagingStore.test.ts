@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ModelPreviewStagingState } from '@neko/preview-domain';
+import type { ModelPreviewStagingState } from '@neko/model-domain';
 import {
   addModelCamera,
   addModelLight,

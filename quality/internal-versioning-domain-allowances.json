@@ -466,10 +466,10 @@
       "businessRequirement": "A 3D Reference fixture must identify the exact immutable package resource release selected for the reference image.",
       "category": "data-generation-alias",
       "domainOwner": "@neko/content-domain",
-      "fieldScope": "PackageResourceContentLocator business release fixture in Preview 3D Reference tests only",
-      "id": "1a358ad254470691f731",
+      "fieldScope": "PackageResourceContentLocator business release fixture in Model Domain 3D Reference tests only",
+      "id": "78caa088ff402e85a2bc",
       "isolationRule": "The release identifies one package resource and never selects a Preview schema, migration, component state, or runtime protocol; an invalid locator is rejected independently.",
-      "path": "packages/preview/domain/src/three-reference.test.ts",
+      "path": "packages/model/domain/src/three-reference.test.ts",
       "token": "revision",
       "userWorkflow": "Use an exact installed package resource release as an appearance, pose, camera, or panorama reference."
     },

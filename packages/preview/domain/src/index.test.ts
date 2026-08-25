@@ -3,7 +3,6 @@ import {
   PreviewContractError,
   assertNoForbiddenTransportValue,
   assertPreviewRuntimeIdentity,
-  createSourceModelStaging,
   detectPreviewContentKind,
   getPreviewMediaType,
   getEpubResourceMediaType,
@@ -55,25 +54,6 @@ describe('Preview Host runtime contract', () => {
     expect(getEpubResourceMediaType('OPS/font.woff2')).toBe('font/woff2');
     expect(getEpubResourceMediaType('OPS/audio.mp3')).toBe('audio/mpeg');
     expect(getEpubResourceMediaType('OPS/data.bin')).toBe('application/octet-stream');
-  });
-
-  it('creates the shared source-model staging used by VS Code and Desktop hosts', () => {
-    const source = {
-      file: { authority: 'workspace' as const, path: 'models/asset-1.glb' },
-    };
-
-    expect(
-      createSourceModelStaging('session-1', {
-        kind: 'source-model',
-        source,
-        fingerprint: 'revision-1',
-        format: 'glb',
-      }),
-    ).toMatchObject({
-      sessionId: 'session-1',
-      subject: { kind: 'source-model', source },
-      selectedPurposes: ['appearance', 'camera'],
-    });
   });
 
   it('parses a path-free ready projection and runtime request', () => {

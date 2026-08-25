@@ -1,5 +1,5 @@
 import type { ModelViewAxis, ModelViewOrientation } from '../threeRuntime';
-import { useTranslation } from '../../i18n/I18nContext';
+import { useTranslation } from '@neko/ui/i18n/react';
 
 export interface ModelOrientationGizmoProps {
   readonly disabled: boolean;

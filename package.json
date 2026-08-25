@@ -13,7 +13,7 @@
   ],
   "scripts": {
     "build": "pnpm --recursive --if-present --sort run build",
-    "build:ui": "pnpm --filter @neko/cut-webview --filter @neko/preview-webview --filter @neko/canvas-webview run build",
+    "build:ui": "pnpm --filter @neko/cut-webview --filter @neko/model-webview --filter @neko/preview-webview --filter @neko/canvas-webview run build",
     "typecheck": "pnpm --recursive --if-present --sort run typecheck",
     "typecheck:desktop": "pnpm --dir apps/neko-desktop run typecheck",
     "validate:media-matrix": "tsx scripts/validate-node-media-matrix.mts",

@@ -18,9 +18,9 @@ import {
   type ThreeReferencePoseState,
   type ThreeReferencePurpose,
   type ThreeReferenceStagingSnapshot,
-} from '@neko/preview-domain';
+} from '@neko/model-domain';
 import { contentLocatorsEqual } from '@neko/content-domain';
-import { useTranslation } from '../i18n/I18nContext';
+import { useTranslation } from '@neko/ui/i18n/react';
 import {
   browserThreeRuntimeFactory,
   DEFAULT_MODEL_VIEW_STATE,

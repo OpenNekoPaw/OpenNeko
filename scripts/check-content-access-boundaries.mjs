@@ -11,6 +11,7 @@ const browserRoots = [
   'packages/assets/webview/src',
   'packages/canvas/webview/src',
   'packages/cut/webview/src',
+  'packages/model/webview/src',
   'packages/preview/webview/src',
 ];
 const prohibitedImports = new Set([

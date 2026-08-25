@@ -352,6 +352,24 @@
       "architectureState": "converged"
     },
     {
+      "path": "packages/model/domain",
+      "name": "@neko/model-domain",
+      "family": "model",
+      "roles": ["contracts", "domain"],
+      "runtimes": ["host-neutral"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/model/webview",
+      "name": "@neko/model-webview",
+      "family": "model",
+      "roles": ["webview"],
+      "runtimes": ["browser"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
       "path": "packages/preview/domain",
       "name": "@neko/preview-domain",
       "family": "preview",

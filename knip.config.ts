@@ -275,10 +275,15 @@ const config: KnipConfig = {
         // Used via barrel exports in panels/
       ],
     },
+    'packages/model/domain': {
+      entry: ['src/index.ts'],
+    },
+    'packages/model/webview': {
+      entry: ['scripts/three-reference-preset-feasibility.mts', 'src/root.tsx'],
+    },
     'packages/preview/webview': {
       entry: [
         'functional/desktop-openneko-consumer.mjs',
-        'scripts/three-reference-preset-feasibility.mts',
         'src/cbz/main.tsx',
         'src/docx/main.tsx',
         'src/epub/main.tsx',

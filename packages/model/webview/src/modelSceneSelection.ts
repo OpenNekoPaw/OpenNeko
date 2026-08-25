@@ -1,4 +1,4 @@
-import type { ModelPreviewLightEntry } from '@neko/preview-domain';
+import type { ModelPreviewLightEntry } from '@neko/model-domain';
 
 export type ModelSceneSelection =
   | { readonly kind: 'scene' }

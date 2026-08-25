@@ -8,5 +8,7 @@ describe('3D Reference theme projection', () => {
     expect(css).toContain('var(--neko-sideBar-background');
     expect(css).toContain('var(--neko-foreground)');
     expect(css).not.toMatch(/--neko-(?:editor-background|sideBar-background|foreground)\s*:/);
+    expect(css).not.toMatch(/(^|\n)\s*#root\s*[,{]/u);
+    expect(css).not.toMatch(/(^|\n)\s*html\s*,/u);
   });
 });

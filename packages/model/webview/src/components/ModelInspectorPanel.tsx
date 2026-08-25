@@ -17,8 +17,8 @@ import type {
   ModelPreviewTransform,
   ModelPreviewVector3,
   NormalizedModelFacts,
-} from '@neko/preview-domain';
-import { useTranslation } from '../../i18n/I18nContext';
+} from '@neko/model-domain';
+import { useTranslation } from '@neko/ui/i18n/react';
 import type { ModelSceneSelection } from '../modelSceneSelection';
 import {
   patchModelTransform,

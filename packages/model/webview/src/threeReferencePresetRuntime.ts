@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type {
   ThreeReferencePoseState,
   ThreeReferenceRuntimePoseCapabilities,
-} from '@neko/preview-domain';
+} from '@neko/model-domain';
 
 export interface NeutralMannequinRuntime {
   readonly root: THREE.Group;

@@ -1,4 +1,4 @@
-import { isThreeReferenceContextData, type ThreeReferenceContextData } from '@neko/preview-domain';
+import { isThreeReferenceContextData, type ThreeReferenceContextData } from '@neko/model-domain';
 import type { AgentContextPayload, MessageAttachment } from '@neko/agent-contracts';
 import { isDocumentFile } from '@neko/media';
 

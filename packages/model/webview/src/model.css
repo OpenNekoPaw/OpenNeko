@@ -5,11 +5,7 @@
 @tailwind utilities;
 
 .model-preview {
-  --neko-surface: color-mix(
-    in srgb,
-    var(--neko-editor-background) 96%,
-    var(--neko-foreground) 4%
-  );
+  --neko-surface: color-mix(in srgb, var(--neko-editor-background) 96%, var(--neko-foreground) 4%);
   --neko-hover: color-mix(in srgb, var(--neko-list-hoverBackground) 80%, transparent);
   --neko-border: var(--neko-panel-border, var(--neko-widget-border));
   --neko-accent: var(--neko-button-background);

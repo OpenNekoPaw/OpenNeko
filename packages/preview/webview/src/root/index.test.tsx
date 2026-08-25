@@ -17,7 +17,6 @@ import { PreviewViewerSnapshotProvider } from './viewer-snapshot-context';
 import { createPreviewViewerSnapshotStore } from './viewer-snapshot';
 import { createPreviewRuntimeBootstrap } from './runtime-bootstrap';
 const playerStyles = readFileSync(resolve(__dirname, '../styles/player.css'), 'utf8');
-const modelStyles = readFileSync(resolve(__dirname, '../model/model.css'), 'utf8');
 const rootStyles = readFileSync(resolve(__dirname, './style.css'), 'utf8');
 
 const identity: PreviewRuntimeIdentity = {
@@ -45,8 +44,6 @@ describe('PreviewRoot', () => {
   it('keeps embeddable viewer layout styles scoped away from the Host document root', () => {
     expect(playerStyles).not.toMatch(/(^|\n)\s*#root\s*\{/u);
     expect(playerStyles).not.toMatch(/(^|\n)\s*html\s*,/u);
-    expect(modelStyles).not.toMatch(/(^|\n)\s*#root\s*[,{]/u);
-    expect(modelStyles).not.toMatch(/(^|\n)\s*html\s*,/u);
     expect(rootStyles).toMatch(/\.neko-preview-root__viewer\s*\{[^}]*position:\s*relative;/u);
   });
 
