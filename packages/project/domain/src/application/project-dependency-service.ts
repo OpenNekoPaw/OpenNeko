@@ -2,10 +2,7 @@ import type {
   CharacterAuthoringCatalog,
   CharacterAuthoringCatalogPort,
 } from '@neko/chara-domain/application';
-import type {
-  WorldAuthoringCatalog,
-  WorldAuthoringCatalogPort,
-} from '@neko/world-domain/application';
+import type { WorldAuthoringCatalog, WorldAuthoringCatalogPort } from '@neko/world-domain/application';
 import type { ProjectDependencySnapshot } from '../contracts/project-dependency';
 import {
   deriveProjectDependencySnapshot,

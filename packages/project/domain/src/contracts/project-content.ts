@@ -29,6 +29,7 @@ export interface ProjectContentElementItem {
   readonly entityId: string;
   readonly entityKind: CreativeEntityKind;
   readonly label: string;
+  readonly updatedAt: string;
   readonly availability: ProjectContentAvailability | 'deprecated';
   readonly diagnostic?: string;
 }
@@ -39,6 +40,9 @@ export interface ProjectContentCandidateItem {
   readonly entityKind: CreativeEntityKind;
   readonly label: string;
   readonly freshness: ProjectEntityCandidateFreshness;
+  readonly confidence?: number;
+  readonly evidenceCount: number;
+  readonly updatedAt?: string;
 }
 
 export type ProjectContentGroup = 'characters' | 'worlds' | 'elements' | 'candidates';
@@ -162,7 +166,7 @@ function parseWorldItem(value: unknown): ProjectContentWorldItem {
 function parseElementItem(value: unknown): ProjectContentElementItem {
   const record = requireExactRecord(
     value,
-    ['owner', 'entityId', 'entityKind', 'label', 'availability', 'diagnostic'],
+    ['owner', 'entityId', 'entityKind', 'label', 'updatedAt', 'availability', 'diagnostic'],
     'Project Content Element item',
     ['diagnostic'],
   );
@@ -185,6 +189,7 @@ function parseElementItem(value: unknown): ProjectContentElementItem {
     entityId: requireIdentity(record['entityId'], 'Project Entity identity'),
     entityKind: record['entityKind'],
     label: requireIdentity(record['label'], 'Project Content Element label'),
+    updatedAt: requireIsoDate(record['updatedAt'], 'Project Content Element updatedAt'),
     availability,
     ...optionalIdentity(record, 'diagnostic', 'Project Content Element diagnostic'),
   };
@@ -200,8 +205,18 @@ function parseElementItem(value: unknown): ProjectContentElementItem {
 function parseCandidateItem(value: unknown): ProjectContentCandidateItem {
   const record = requireExactRecord(
     value,
-    ['owner', 'candidateId', 'entityKind', 'label', 'freshness'],
+    [
+      'owner',
+      'candidateId',
+      'entityKind',
+      'label',
+      'freshness',
+      'confidence',
+      'evidenceCount',
+      'updatedAt',
+    ],
     'Project Content Candidate item',
+    ['confidence', 'updatedAt'],
   );
   if (record['owner'] !== 'entity-candidate') {
     throw new Error('Project Content Candidate owner is invalid.');
@@ -209,19 +224,18 @@ function parseCandidateItem(value: unknown): ProjectContentCandidateItem {
   if (!isCreativeEntityKind(record['entityKind'])) {
     throw new Error('Project Content Candidate kind is invalid.');
   }
-  if (
-    !PROJECT_ENTITY_CANDIDATE_FRESHNESS_STATES.some(
-      (freshness) => freshness === record['freshness'],
-    )
-  ) {
-    throw new Error('Project Content Candidate freshness is invalid.');
-  }
+  const freshness = parseCandidateFreshness(record['freshness']);
   return {
     owner: 'entity-candidate',
     candidateId: requireIdentity(record['candidateId'], 'Entity candidate identity'),
     entityKind: record['entityKind'],
     label: requireIdentity(record['label'], 'Project Content Candidate label'),
-    freshness: record['freshness'] as ProjectEntityCandidateFreshness,
+    freshness,
+    ...(record['confidence'] === undefined
+      ? {}
+      : { confidence: requireConfidence(record['confidence']) }),
+    evidenceCount: requireNonNegativeInteger(record['evidenceCount'], 'Candidate evidence count'),
+    ...optionalIsoDate(record, 'updatedAt', 'Project Content Candidate updatedAt'),
   };
 }
 
@@ -263,6 +277,44 @@ function parseAvailability(value: unknown): ProjectContentAvailability {
     throw new Error('Project Content item availability is invalid.');
   }
   return value;
+}
+
+function requireIsoDate(value: unknown, label: string): string {
+  const parsed = requireIdentity(value, label);
+  if (Number.isNaN(Date.parse(parsed))) throw new Error(`${label} must be an ISO timestamp.`);
+  return parsed;
+}
+
+function optionalIsoDate(
+  record: Readonly<Record<string, unknown>>,
+  key: string,
+  label: string,
+): Readonly<Record<string, string>> {
+  return record[key] === undefined ? {} : { [key]: requireIsoDate(record[key], label) };
+}
+
+function requireConfidence(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1) {
+    throw new Error('Project Content Candidate confidence must be between zero and one.');
+  }
+  return value;
+}
+
+function requireNonNegativeInteger(value: unknown, label: string): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+    throw new Error(`${label} must be a non-negative integer.`);
+  }
+  return value;
+}
+
+function parseCandidateFreshness(value: unknown): ProjectEntityCandidateFreshness {
+  const freshness = PROJECT_ENTITY_CANDIDATE_FRESHNESS_STATES.find(
+    (candidate) => candidate === value,
+  );
+  if (freshness === undefined) {
+    throw new Error('Project Content Candidate freshness is invalid.');
+  }
+  return freshness;
 }
 
 function requireAvailabilityConsistency(

@@ -1,8 +1,5 @@
 import type { CharacterAuthoringCatalog } from '@neko/chara-domain/application';
-import type {
-  WorldAuthoringCatalog,
-  WorldDurableRecordDiagnostic,
-} from '@neko/world-domain/application';
+import type { WorldAuthoringCatalog, WorldDurableRecordDiagnostic } from '@neko/world-domain/application';
 import type {
   ProjectEntityDiagnostic,
   ProjectEntityManagementProjection,
@@ -134,6 +131,7 @@ export function projectContentProjection(input: {
           entityId: projection.entity.entityId,
           entityKind: projection.entity.kind,
           label,
+          updatedAt: projection.entity.updatedAt,
           availability: 'needs-attention' as const,
           diagnostic,
         },
@@ -145,6 +143,7 @@ export function projectContentProjection(input: {
         entityId: projection.entity.entityId,
         entityKind: projection.entity.kind,
         label,
+        updatedAt: projection.entity.updatedAt,
         availability:
           projection.status === 'deprecated' ? ('deprecated' as const) : ('available' as const),
       },
@@ -162,6 +161,11 @@ export function projectContentProjection(input: {
               projection.candidate.proposedNames.display ??
               projection.candidate.proposedNames.canonical,
             freshness: projection.candidate.freshness,
+            ...(projection.candidate.confidence === undefined
+              ? {}
+              : { confidence: projection.candidate.confidence }),
+            evidenceCount: projection.candidate.evidence.length,
+            ...latestObservedAt(projection.candidate.evidence),
           },
         ]
       : [],
@@ -186,6 +190,15 @@ export function projectContentProjection(input: {
     candidates,
     diagnostics,
   });
+}
+
+function latestObservedAt(
+  evidence: readonly { readonly observedAt?: string }[],
+): Readonly<{ updatedAt?: string }> {
+  const observedAt = evidence
+    .flatMap((item) => (item.observedAt === undefined ? [] : [item.observedAt]))
+    .sort((left, right) => right.localeCompare(left))[0];
+  return observedAt === undefined ? {} : { updatedAt: observedAt };
 }
 
 function requireExactCharacterAssociations(

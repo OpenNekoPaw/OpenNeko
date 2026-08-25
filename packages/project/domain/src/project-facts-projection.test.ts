@@ -56,6 +56,26 @@ describe('Project fact projections', () => {
         projections: [
           entity('entity-rin', 'character', 'Rin'),
           entity('entity-station', 'scene', 'Station'),
+          {
+            projectionId: 'candidate:dockmaster',
+            status: 'candidate',
+            candidate: {
+              candidateId: 'candidate-dockmaster',
+              kind: 'character',
+              proposedNames: { canonical: 'Dockmaster', aliases: [] },
+              confidence: 0.82,
+              freshness: 'fresh',
+              evidence: [
+                {
+                  evidenceId: 'evidence-dockmaster-1',
+                  owner: 'document',
+                  sourceId: 'notes/story.md',
+                  observedAt: '2026-08-22T12:00:00.000Z',
+                },
+              ],
+            },
+            sourceOwners: ['document'],
+          },
         ],
         diagnostics: [],
       },
@@ -77,6 +97,14 @@ describe('Project fact projections', () => {
     ]);
     expect(projection.elements).toEqual([
       expect.objectContaining({ entityId: 'entity-station', availability: 'available' }),
+    ]);
+    expect(projection.candidates).toEqual([
+      expect.objectContaining({
+        candidateId: 'candidate-dockmaster',
+        confidence: 0.82,
+        evidenceCount: 1,
+        updatedAt: '2026-08-22T12:00:00.000Z',
+      }),
     ]);
     expect(
       projectEntityCharacterHandoffs({

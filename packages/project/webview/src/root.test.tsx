@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useEffect } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ProjectAuthoringTargetSwitchRoot,
   ProjectCatalogRoot,
@@ -13,6 +13,16 @@ import {
 vi.mock('@neko/ui/i18n/react', () => ({
   useTranslation: () => ({ locale: 'en', t: (key: string) => key }),
 }));
+
+class TestResizeObserver {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+}
+
+beforeEach(() => {
+  globalThis.ResizeObserver = TestResizeObserver;
+});
 
 afterEach(cleanup);
 
@@ -49,6 +59,7 @@ describe('ProjectContentRoot', () => {
             entityId: 'entity-station',
             entityKind: 'scene' as const,
             label: 'Station',
+            updatedAt: '2026-08-23T00:00:00.000Z',
             availability: 'available' as const,
           },
         ],
@@ -59,6 +70,7 @@ describe('ProjectContentRoot', () => {
             entityKind: 'character' as const,
             label: 'Shopkeeper',
             freshness: 'fresh' as const,
+            evidenceCount: 1,
           },
         ],
         diagnostics: [],
@@ -271,15 +283,17 @@ describe('ProjectContentRoot', () => {
 });
 
 describe('ProjectCatalogRoot', () => {
-  it('renders invalid records visibly and disables only their open action', () => {
+  it('renders invalid records visibly and disables only their open action', async () => {
+    const onOpenDirectory = vi.fn();
     render(
       <ProjectCatalogRoot
         associatedConversationCounts={{}}
         interactive
         onArchiveAssociatedConversations={vi.fn()}
         onOpen={vi.fn()}
-        onOpenDirectory={vi.fn()}
+        onOpenDirectory={onOpenDirectory}
         onRemove={vi.fn()}
+        onStartFromTemplate={vi.fn()}
         projects={[
           {
             projectId: 'project-1',
@@ -295,8 +309,71 @@ describe('ProjectCatalogRoot', () => {
     );
     expect(screen.getByText('Workspace unavailable')).toBeTruthy();
     expect(
-      (screen.getByRole('button', { name: /Broken Project/u }) as HTMLButtonElement).disabled,
+      (document.querySelector('.management-surface-row__open') as HTMLButtonElement).disabled,
     ).toBe(true);
+    expect(
+      document.querySelector('.management-surface-toolbar > .management-segmented-control'),
+    ).toBeNull();
+    expect(document.querySelector('[data-view-mode]')).toBeNull();
+    expect(document.querySelectorAll('.project-template-card')).toHaveLength(2);
+    expect(document.querySelector('[data-project-template-id="character-kit"]')).toBeNull();
+    expect(document.querySelector('.project-catalog-hero')).not.toBeNull();
+    expect(screen.getByText('home.projects.mine')).toBeTruthy();
+    expect(
+      document.querySelector('.project-catalog-controls .management-search-field'),
+    ).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'home.projects.openExisting' }));
+    expect(onOpenDirectory).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'home.projects.moreActions' }));
+    expect(
+      (
+        await screen.findByRole('menuitem', {
+          name: 'home.projects.archiveConversations',
+        })
+      ).hasAttribute('disabled'),
+    ).toBe(true);
+  });
+
+  it('opens exact Projects and keeps item actions behind one more-actions trigger', async () => {
+    const onArchiveAssociatedConversations = vi.fn();
+    const onOpen = vi.fn();
+    const onRemove = vi.fn();
+    const project = {
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      profile: 'content',
+      displayName: 'Project One',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+    } as const;
+    render(
+      <ProjectCatalogRoot
+        associatedConversationCounts={{ 'project-1': 2 }}
+        interactive
+        onArchiveAssociatedConversations={onArchiveAssociatedConversations}
+        onOpen={onOpen}
+        onOpenDirectory={vi.fn()}
+        onRemove={onRemove}
+        onStartFromTemplate={vi.fn()}
+        projects={[project]}
+      />,
+    );
+
+    fireEvent.click(document.querySelector('.management-surface-row__open')!);
+    expect(onOpen).toHaveBeenCalledWith('project-1');
+    expect(document.querySelectorAll('.project-catalog-card__more')).toHaveLength(1);
+    expect(document.querySelector('.management-surface-row-actions')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'home.projects.moreActions' }));
+    fireEvent.click(
+      await screen.findByRole('menuitem', { name: 'home.projects.archiveConversations' }),
+    );
+    expect(onArchiveAssociatedConversations).toHaveBeenCalledWith([project]);
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+
+    fireEvent.click(screen.getByRole('button', { name: 'home.projects.moreActions' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'home.projects.removeFromList' }));
+    expect(onRemove).toHaveBeenCalledWith([project]);
   });
 
   it('sorts exact Project records without changing the input', () => {
@@ -321,6 +398,9 @@ describe('ProjectCatalogRoot', () => {
     expect(
       filterAndSortProjectCatalog(projects, '', 'name-ascending').map((x) => x.projectId),
     ).toEqual(['project-a', 'project-b']);
+    expect(
+      filterAndSortProjectCatalog(projects, 'ALPHA', 'updated-descending').map((x) => x.projectId),
+    ).toEqual(['project-a']);
     expect(projects[0].projectId).toBe('project-b');
   });
 

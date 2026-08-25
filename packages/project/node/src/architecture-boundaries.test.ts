@@ -20,9 +20,9 @@ describe('Project Node canonical authority', () => {
     const sources = await Promise.all(
       [
         new URL('./index.ts', import.meta.url),
-        new URL('../../project/src/contracts/index.ts', import.meta.url),
-        new URL('../../project/src/application/index.ts', import.meta.url),
-        new URL('../../../apps/neko-desktop/src/main/index.ts', import.meta.url),
+        new URL('../../domain/src/contracts/index.ts', import.meta.url),
+        new URL('../../domain/src/application/index.ts', import.meta.url),
+        new URL('../../../../apps/neko-desktop/src/main/index.ts', import.meta.url),
       ].map((url) => readFile(url, 'utf8')),
     );
     expect(sources.join('\n')).not.toMatch(

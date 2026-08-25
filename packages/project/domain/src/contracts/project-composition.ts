@@ -19,6 +19,8 @@ export interface ProjectMixedDomainTargetItem {
   readonly target: ProjectWorkspaceTargetRef;
   readonly identity: string;
   readonly label: string;
+  readonly summary?: string;
+  readonly updatedAt?: string;
   readonly diagnostic?: string;
   readonly synchronization?: ProjectWorkspaceSynchronization;
 }
@@ -41,6 +43,9 @@ export interface ProjectGlobalReferenceItem {
   readonly reference: ProjectGlobalReference;
   readonly identity: string;
   readonly label: string;
+  readonly versionLabel: string;
+  readonly summary?: string;
+  readonly updatedAt?: string;
   readonly diagnostic?: string;
 }
 
@@ -312,8 +317,8 @@ function parseTargetItem<K extends ProjectWorkspaceTargetRef['kind']>(
   const record = exactRecord(value, 'Project mixed-domain target item');
   exactKeys(
     record,
-    ['target', 'identity', 'label', 'diagnostic', 'synchronization'],
-    ['diagnostic', 'synchronization'],
+    ['target', 'identity', 'label', 'summary', 'updatedAt', 'diagnostic', 'synchronization'],
+    ['summary', 'updatedAt', 'diagnostic', 'synchronization'],
   );
   const target = parseProjectWorkspaceTargetRef(record['target']);
   if (target.kind !== expectedKind) {
@@ -327,6 +332,8 @@ function parseTargetItem<K extends ProjectWorkspaceTargetRef['kind']>(
     target: target as Extract<ProjectWorkspaceTargetRef, { readonly kind: K }>,
     identity: targetIdentity,
     label: identity(record['label'], 'Project target label'),
+    ...optionalIdentity(record, 'summary', 'Project target summary'),
+    ...optionalIsoDate(record, 'updatedAt', 'Project target updatedAt'),
     ...optionalIdentity(record, 'diagnostic', 'Project target diagnostic'),
     ...(record['synchronization'] === undefined
       ? {}
@@ -383,7 +390,11 @@ function parseGlobalReferenceItem<K extends ProjectGlobalReference['kind']>(
   readonly reference: Extract<ProjectGlobalReference, { readonly kind: K }>;
 } {
   const record = exactRecord(value, 'Project global reference item');
-  exactKeys(record, ['reference', 'identity', 'label', 'diagnostic'], ['diagnostic']);
+  exactKeys(
+    record,
+    ['reference', 'identity', 'label', 'versionLabel', 'summary', 'updatedAt', 'diagnostic'],
+    ['summary', 'updatedAt', 'diagnostic'],
+  );
   const reference = parseProjectGlobalReference(record['reference']);
   if (reference.kind !== expectedKind) {
     throw new Error(`Project global reference requires '${expectedKind}'.`);
@@ -396,6 +407,9 @@ function parseGlobalReferenceItem<K extends ProjectGlobalReference['kind']>(
     reference: reference as Extract<ProjectGlobalReference, { readonly kind: K }>,
     identity: referenceIdentity,
     label: identity(record['label'], 'Project global reference label'),
+    versionLabel: identity(record['versionLabel'], 'Project global reference version label'),
+    ...optionalIdentity(record, 'summary', 'Project global reference summary'),
+    ...optionalIsoDate(record, 'updatedAt', 'Project global reference updatedAt'),
     ...optionalIdentity(record, 'diagnostic', 'Project global reference diagnostic'),
   };
 }
@@ -485,6 +499,17 @@ function optionalIdentity(
   label: string,
 ): Readonly<Record<string, string>> {
   return record[key] === undefined ? {} : { [key]: identity(record[key], label) };
+}
+
+function optionalIsoDate(
+  record: Readonly<Record<string, unknown>>,
+  key: string,
+  label: string,
+): Readonly<Record<string, string>> {
+  if (record[key] === undefined) return {};
+  const value = identity(record[key], label);
+  if (Number.isNaN(Date.parse(value))) throw new Error(`${label} must be an ISO timestamp.`);
+  return { [key]: value };
 }
 
 function array<T>(value: unknown, parser: (item: unknown) => T): readonly T[] {

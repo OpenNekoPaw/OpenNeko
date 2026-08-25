@@ -2,8 +2,9 @@ import {
   CubeIcon,
   FolderIcon,
   GridIcon,
-  LayersIcon,
   LoadingIcon,
+  MoreHorizontalIcon,
+  OpenIcon,
   PackageIcon,
   RemoveIcon,
   SearchIcon,
@@ -12,7 +13,7 @@ import {
   WarningIcon,
 } from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
-import { EmptyState } from '@neko/ui/primitives';
+import { EmptyState, Popover } from '@neko/ui/primitives';
 import type {
   OpenNekoDesktopProjectAuthoringBridge,
   ProjectAuthoringNavigationBinding,
@@ -315,6 +316,7 @@ export interface ProjectCatalogRootProps {
   readonly projects: readonly ProjectCatalogItem[];
   readonly onOpenDirectory: () => void;
   readonly onOpen: (projectId: string) => void;
+  readonly onStartFromTemplate: () => void;
   readonly onArchiveAssociatedConversations: (projects: readonly ProjectCatalogItem[]) => void;
   readonly onRemove: (projects: readonly ProjectCatalogItem[]) => void;
 }
@@ -326,134 +328,253 @@ export function ProjectCatalogRoot({
   onOpenDirectory,
   onOpen,
   onRemove,
+  onStartFromTemplate,
   projects,
 }: ProjectCatalogRootProps): JSX.Element {
   const { locale, t } = useTranslation();
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<ProjectCatalogSort>('updated-descending');
-  const [view, setView] = useState<'grid' | 'list'>('grid');
   const visible = useMemo(
     () => filterAndSortProjectCatalog(projects, query, sort),
     [projects, query, sort],
   );
   return (
-    <section className="project-management-catalog" data-project-catalog-root>
-      <header className="management-surface-header">
-        <div>
-          <p className="section-label">{t('home.projects.eyebrow')}</p>
-          <h2>{t('home.allProjects')}</h2>
-        </div>
-        <div className="management-surface-actions">
-          <button type="button" disabled={!interactive} onClick={onOpenDirectory}>
-            <FolderIcon size={15} />
-            <span>{t('home.projects.openDirectory')}</span>
-          </button>
-        </div>
-      </header>
-      <div className="management-surface-toolbar">
-        <label className="management-search-field">
-          <SearchIcon size={16} />
-          <input
-            aria-label={t('home.projects.search')}
-            value={query}
-            onChange={(event) => setQuery(event.currentTarget.value)}
-          />
-        </label>
-        <select
-          aria-label={t('home.projects.sort')}
-          value={sort}
-          onChange={(event) => setSort(parseProjectCatalogSort(event.currentTarget.value))}
-        >
-          <option value="updated-descending">{t('home.sort.newest')}</option>
-          <option value="updated-ascending">{t('home.sort.oldest')}</option>
-          <option value="name-ascending">{t('home.sort.nameAscending')}</option>
-          <option value="name-descending">{t('home.sort.nameDescending')}</option>
-        </select>
-        <button
-          type="button"
-          aria-label={t('home.projects.gridView')}
-          aria-pressed={view === 'grid'}
-          title={t('home.projects.gridView')}
-          onClick={() => setView('grid')}
-        >
-          <GridIcon size={15} />
-        </button>
-        <button
-          type="button"
-          aria-label={t('home.projects.listView')}
-          aria-pressed={view === 'list'}
-          title={t('home.projects.listView')}
-          onClick={() => setView('list')}
-        >
-          <LayersIcon size={15} />
-        </button>
-      </div>
-      <div
-        aria-label={t('home.allProjects')}
-        className={`management-surface-list is-${view}`}
-        data-empty={visible.length === 0}
-        data-view-mode={view}
-        role="region"
-        tabIndex={0}
-      >
-        {visible.length === 0 ? (
-          <EmptyState fill icon={<FolderIcon size={24} />} title={t('home.projects.noResults')} />
-        ) : null}
-        {visible.map((project) => (
-          <div
-            className="management-surface-row"
-            data-project-id={project.projectId}
-            data-workspace-open-disabled={project.unavailable !== undefined}
-            key={project.projectId}
-          >
-            <button
-              type="button"
-              className="management-surface-row__open"
-              disabled={!interactive || project.unavailable !== undefined}
-              onClick={() => onOpen(project.projectId)}
-            >
-              <span className="management-surface-project-icon">
-                <FolderIcon size={18} />
-              </span>
-              <span className="management-surface-copy">
-                <strong>{project.displayName}</strong>
-                <small>{formatProjectDate(project.updatedAt, locale)}</small>
-                {project.unavailable ? (
-                  <small className="management-surface-row__diagnostic" role="status">
-                    <WarningIcon size={13} />
-                    <span>{project.unavailable.message}</span>
-                  </small>
-                ) : null}
-              </span>
+    <section
+      aria-label={t('home.allProjects')}
+      className="project-management-catalog"
+      data-project-catalog-root
+    >
+      <div className="project-management-catalog__content">
+        <header className="project-catalog-hero">
+          <div className="project-catalog-hero__copy">
+            <h1>{t('home.allProjects')}</h1>
+            <p>{t('home.projects.description')}</p>
+            <button type="button" disabled={!interactive} onClick={onOpenDirectory}>
+              <FolderIcon size={15} />
+              <span>{t('home.projects.openExisting')}</span>
             </button>
-            <span className="management-surface-row-actions">
-              <button
-                type="button"
-                aria-label={t('shell.archiveProjectConversations', {
-                  project: project.displayName,
-                })}
-                disabled={
-                  !interactive || (associatedConversationCounts[project.projectId] ?? 0) === 0
-                }
-                title={t('shell.archiveProjectConversations', { project: project.displayName })}
-                onClick={() => onArchiveAssociatedConversations([project])}
-              >
-                <PackageIcon size={15} />
-              </button>
-              <button
-                type="button"
-                aria-label={t('shell.removeProject', { project: project.displayName })}
-                disabled={!interactive}
-                title={t('shell.removeProject', { project: project.displayName })}
-                onClick={() => onRemove([project])}
-              >
-                <RemoveIcon size={15} />
-              </button>
+          </div>
+          <div className="project-catalog-hero__visual" aria-hidden="true">
+            <span className="project-catalog-hero__connector" />
+            <span className="project-catalog-hero__tile is-folder">
+              <FolderIcon size={25} />
+            </span>
+            <span className="project-catalog-hero__tile is-team">
+              <UsersIcon size={23} />
+            </span>
+            <span className="project-catalog-hero__tile is-content">
+              <GridIcon size={21} />
             </span>
           </div>
-        ))}
+        </header>
+        <section className="project-catalog-collection" aria-labelledby="my-projects-heading">
+          <header className="project-catalog-collection__header">
+            <div className="project-catalog-collection__title">
+              <h2 id="my-projects-heading">{t('home.projects.mine')}</h2>
+              <span aria-label={t('home.projects.count', { count: visible.length })}>
+                {visible.length}
+              </span>
+            </div>
+            <div className="project-catalog-controls">
+              <label className="management-search-field">
+                <SearchIcon size={16} />
+                <input
+                  aria-label={t('home.projects.search')}
+                  placeholder={t('home.projects.search')}
+                  value={query}
+                  onChange={(event) => setQuery(event.currentTarget.value)}
+                />
+              </label>
+              <select
+                aria-label={t('home.projects.sort')}
+                value={sort}
+                onChange={(event) => setSort(parseProjectCatalogSort(event.currentTarget.value))}
+              >
+                <option value="updated-descending">{t('home.sort.newest')}</option>
+                <option value="updated-ascending">{t('home.sort.oldest')}</option>
+                <option value="name-ascending">{t('home.sort.nameAscending')}</option>
+                <option value="name-descending">{t('home.sort.nameDescending')}</option>
+              </select>
+            </div>
+          </header>
+          <div
+            aria-label={t('home.allProjects')}
+            className="management-surface-list is-grid"
+            data-empty={visible.length === 0}
+            role="region"
+            tabIndex={0}
+          >
+            {visible.length === 0 ? (
+              <EmptyState
+                fill
+                icon={<FolderIcon size={24} />}
+                title={t('home.projects.noResults')}
+              />
+            ) : null}
+            {visible.map((project) => (
+              <ProjectCatalogCard
+                associatedConversationCount={associatedConversationCounts[project.projectId] ?? 0}
+                interactive={interactive}
+                key={project.projectId}
+                locale={locale}
+                onArchiveAssociatedConversations={onArchiveAssociatedConversations}
+                onOpen={onOpen}
+                onRemove={onRemove}
+                project={project}
+              />
+            ))}
+          </div>
+        </section>
+        <section
+          className="project-template-quick-starts"
+          aria-labelledby="project-templates-heading"
+        >
+          <h2 id="project-templates-heading">{t('home.projects.fromTemplates')}</h2>
+          <div className="project-template-grid">
+            {[
+              {
+                id: 'storyboard',
+                icon: <GridIcon size={26} />,
+                title: t('home.start.template.storyboard.title'),
+                description: t('home.start.template.storyboard.description'),
+              },
+              {
+                id: 'video-plan',
+                icon: <OpenIcon size={26} />,
+                title: t('home.start.template.video.title'),
+                description: t('home.start.template.video.description'),
+              },
+            ].map((template) => (
+              <button
+                type="button"
+                className="project-template-card"
+                data-project-template-id={template.id}
+                disabled={!interactive}
+                key={template.id}
+                onClick={onStartFromTemplate}
+              >
+                <span className="project-template-card__preview" aria-hidden="true">
+                  <span className="project-template-card__preview-pattern">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                  <span className="project-template-card__preview-icon">{template.icon}</span>
+                </span>
+                <span className="project-template-card__body">
+                  <span className="project-template-card__copy">
+                    <strong>{template.title}</strong>
+                    <small>{template.description}</small>
+                  </span>
+                  <span className="project-template-card__action">
+                    {t('home.projects.startFromTemplate')}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
     </section>
+  );
+}
+
+function ProjectCatalogCard({
+  associatedConversationCount,
+  interactive,
+  locale,
+  onArchiveAssociatedConversations,
+  onOpen,
+  onRemove,
+  project,
+}: {
+  readonly associatedConversationCount: number;
+  readonly interactive: boolean;
+  readonly locale: string;
+  readonly onArchiveAssociatedConversations: (projects: readonly ProjectCatalogItem[]) => void;
+  readonly onOpen: (projectId: string) => void;
+  readonly onRemove: (projects: readonly ProjectCatalogItem[]) => void;
+  readonly project: ProjectCatalogItem;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const [actionsOpen, setActionsOpen] = useState(false);
+  return (
+    <div
+      className="management-surface-row"
+      data-project-id={project.projectId}
+      data-workspace-open-disabled={project.unavailable !== undefined}
+    >
+      <button
+        type="button"
+        className="management-surface-row__open"
+        disabled={!interactive || project.unavailable !== undefined}
+        onClick={() => onOpen(project.projectId)}
+      >
+        <span className="management-surface-project-icon">
+          <FolderIcon size={18} />
+        </span>
+        <span className="management-surface-copy">
+          <strong>{project.displayName}</strong>
+          <small>{formatProjectDate(project.updatedAt, locale)}</small>
+          {project.unavailable ? (
+            <small className="management-surface-row__diagnostic" role="status">
+              <WarningIcon size={13} />
+              <span>{project.unavailable.message}</span>
+            </small>
+          ) : null}
+        </span>
+      </button>
+      <Popover
+        align="end"
+        contentClassName="project-catalog-card-menu"
+        onOpenChange={setActionsOpen}
+        open={actionsOpen}
+        trigger={
+          <button
+            type="button"
+            className="project-catalog-card__more"
+            aria-label={t('home.projects.moreActions', {
+              project: project.displayName,
+            })}
+            disabled={!interactive}
+          >
+            <MoreHorizontalIcon size={17} />
+          </button>
+        }
+      >
+        <div
+          aria-label={t('home.projects.moreActions', { project: project.displayName })}
+          className="project-catalog-card-menu__items"
+          role="menu"
+        >
+          <button
+            type="button"
+            disabled={!interactive || associatedConversationCount === 0}
+            onClick={() => {
+              setActionsOpen(false);
+              onArchiveAssociatedConversations([project]);
+            }}
+            role="menuitem"
+          >
+            <PackageIcon size={15} />
+            <span>{t('home.projects.archiveConversations')}</span>
+          </button>
+          <button
+            type="button"
+            className="is-danger"
+            disabled={!interactive}
+            onClick={() => {
+              setActionsOpen(false);
+              onRemove([project]);
+            }}
+            role="menuitem"
+          >
+            <RemoveIcon size={15} />
+            <span>{t('home.projects.removeFromList')}</span>
+          </button>
+        </div>
+      </Popover>
+    </div>
   );
 }
 

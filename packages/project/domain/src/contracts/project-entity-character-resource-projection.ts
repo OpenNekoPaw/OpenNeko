@@ -1,7 +1,4 @@
-import {
-  parseCharacterProductHandoff,
-  type CharacterProductHandoff,
-} from '@neko/chara-domain/contracts';
+import { parseCharacterProductHandoff, type CharacterProductHandoff } from '@neko/chara-domain/contracts';
 
 export interface ProjectEntityCharacterResourceProjection {
   readonly entityId: string;

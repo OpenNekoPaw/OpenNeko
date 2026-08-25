@@ -1874,14 +1874,37 @@ async function startDesktop(): Promise<void> {
     };
     const composition = new ProjectCompositionService({
       content: {
-        readContentDocuments: async (projectId) => {
+        readContentDocuments: async (projectId, signal) => {
           const projection = await membership.read();
+          const contentRead = createNodeHostContentReadService({
+            workspaceRoot: input.workspace.workspacePath,
+          });
           return {
             projectId,
-            documents: projection.targets.flatMap((fact) =>
-              fact.target.kind === 'content-document'
-                ? [{ documentId: fact.target.documentId, label: fact.target.documentId }]
-                : [],
+            documents: await Promise.all(
+              projection.targets.flatMap((fact) => {
+                if (fact.target.kind !== 'content-document') return [];
+                const documentId = fact.target.documentId;
+                return [
+                  contentRead
+                    .stat(
+                      { file: { authority: 'workspace', path: documentId } },
+                      signal ? { signal } : undefined,
+                    )
+                    .then((source) => ({
+                      documentId,
+                      label: documentId,
+                      ...(source.status === 'ready' && source.modifiedAt
+                        ? { updatedAt: source.modifiedAt }
+                        : {}),
+                      ...(source.status === 'unavailable'
+                        ? {
+                            diagnostic: `Content document '${documentId}' is unavailable (${source.diagnostic.code}).`,
+                          }
+                        : {}),
+                    })),
+                ];
+              }),
             ),
           };
         },

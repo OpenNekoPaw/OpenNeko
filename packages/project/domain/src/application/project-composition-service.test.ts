@@ -17,7 +17,13 @@ describe('Project composition service', () => {
   it('projects mixed local objects and exact global references', () => {
     const projection = createProjectCompositionProjection({
       projectId,
-      content: [{ documentId: 'documents/novel.md', label: 'Novel' }],
+      content: [
+        {
+          documentId: 'documents/novel.md',
+          label: 'Novel',
+          updatedAt: '2026-08-12T00:00:00.000Z',
+        },
+      ],
       characters: characterCatalog(),
       worlds: worldCatalog(),
       targets: [
@@ -44,9 +50,15 @@ describe('Project composition service', () => {
     expect(projection.characters).toHaveLength(1);
     expect(projection.worlds).toHaveLength(1);
     expect(projection.globalCharacters).toEqual([
-      expect.objectContaining({ label: 'Global Aster' }),
+      expect.objectContaining({ label: 'Global Aster', versionLabel: 'Global Aster' }),
     ]);
-    expect(projection.globalWorlds).toEqual([expect.objectContaining({ label: 'Global Sea' })]);
+    expect(projection.globalWorlds).toEqual([
+      expect.objectContaining({ label: 'Global Sea', versionLabel: 'Global Sea' }),
+    ]);
+    expect(projection.characters[0]).toMatchObject({
+      updatedAt: '2026-08-14T00:00:00.000Z',
+    });
+    expect(projection.content[0]).toMatchObject({ updatedAt: '2026-08-12T00:00:00.000Z' });
     expect(projection.diagnostics).toEqual([]);
   });
 

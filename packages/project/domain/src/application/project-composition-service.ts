@@ -3,10 +3,7 @@ import type {
   CharacterAuthoringCatalogPort,
 } from '@neko/chara-domain/application';
 import type { GlobalCharacterCatalog } from '@neko/chara-domain/contracts';
-import type {
-  WorldAuthoringCatalog,
-  WorldAuthoringCatalogPort,
-} from '@neko/world-domain/application';
+import type { WorldAuthoringCatalog, WorldAuthoringCatalogPort } from '@neko/world-domain/application';
 import type { GlobalWorldCatalog } from '@neko/world-domain/contracts';
 import {
   parseProjectMixedDomainTargetProjection,
@@ -45,6 +42,7 @@ export interface ProjectGlobalWorldCatalogPort {
 export interface ProjectContentDocumentCatalogItem {
   readonly documentId: string;
   readonly label: string;
+  readonly updatedAt?: string;
   readonly diagnostic?: string;
 }
 
@@ -146,7 +144,10 @@ export function createProjectCompositionProjection(input: {
       const item = {
         reference,
         identity: `character-version:${reference.globalCharacterId}:${reference.characterVersionId}`,
-        label: version?.label ?? reference.characterVersionId,
+        label: character?.displayName ?? reference.globalCharacterId,
+        versionLabel: version?.label ?? reference.characterVersionId,
+        ...(version?.definition.summary ? { summary: version.definition.summary } : {}),
+        ...(character ? { updatedAt: character.updatedAt } : {}),
         ...(available
           ? {}
           : {
@@ -165,7 +166,10 @@ export function createProjectCompositionProjection(input: {
     const item = {
       reference,
       identity: `world-version:${reference.globalWorldId}:${reference.worldVersionId}`,
-      label: version?.label ?? reference.worldVersionId,
+      label: world?.title ?? reference.globalWorldId,
+      versionLabel: version?.label ?? reference.worldVersionId,
+      ...(version?.definition.background ? { summary: version.definition.background } : {}),
+      ...(world ? { updatedAt: world.updatedAt } : {}),
       ...(available
         ? {}
         : {
@@ -187,7 +191,10 @@ export function createProjectCompositionProjection(input: {
     return {
       reference,
       identity: projectGlobalReferenceKey(reference),
-      label: `${character?.displayName ?? version.globalCharacterId} · ${version.label}`,
+      label: character?.displayName ?? version.globalCharacterId,
+      versionLabel: version.label,
+      ...(version.definition.summary ? { summary: version.definition.summary } : {}),
+      ...(character ? { updatedAt: character.updatedAt } : {}),
     };
   });
   const availableGlobalWorlds = input.globalWorlds.versions.map((version) => {
@@ -202,7 +209,10 @@ export function createProjectCompositionProjection(input: {
     return {
       reference,
       identity: projectGlobalReferenceKey(reference),
-      label: `${world?.title ?? version.globalWorldId} · ${version.label}`,
+      label: world?.title ?? version.globalWorldId,
+      versionLabel: version.label,
+      ...(version.definition.background ? { summary: version.definition.background } : {}),
+      ...(world ? { updatedAt: world.updatedAt } : {}),
     };
   });
   return parseProjectMixedDomainTargetProjection({
@@ -244,6 +254,7 @@ function projectContentItems(
     target: { kind: 'content-document', documentId: document.documentId },
     identity: `content-document:${document.documentId}`,
     label: document.label,
+    ...(document.updatedAt === undefined ? {} : { updatedAt: document.updatedAt }),
     ...(document.diagnostic === undefined ? {} : { diagnostic: document.diagnostic }),
   }));
 }
@@ -292,6 +303,8 @@ function projectCharacterItems(
       target: { kind: 'character-project', characterProjectId },
       identity: `character-project:${characterProjectId}`,
       label: project?.displayName ?? characterProjectId,
+      ...(project?.draft.summary ? { summary: project.draft.summary } : {}),
+      ...(project ? { updatedAt: project.updatedAt } : {}),
       ...(message ? { diagnostic: message } : {}),
       ...(link && linkedCharacter
         ? {
@@ -345,6 +358,8 @@ function projectWorldItems(
       target: { kind: 'world-project', worldProjectId },
       identity: `world-project:${worldProjectId}`,
       label: project?.title ?? worldProjectId,
+      ...(project?.draft.background ? { summary: project.draft.background } : {}),
+      ...(project ? { updatedAt: project.updatedAt } : {}),
       ...(message ? { diagnostic: message } : {}),
       ...(link && linkedWorld
         ? {
