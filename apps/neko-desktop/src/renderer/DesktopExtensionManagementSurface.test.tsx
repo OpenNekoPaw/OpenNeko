@@ -65,7 +65,10 @@ describe('DesktopExtensionManagementSurface', () => {
     const professionalApplicationRuntime: ProfessionalApplicationManagementRuntime = {
       identity: { windowId: 'window-1' },
       getSnapshot: vi.fn(async () => ({ identity: { windowId: 'window-1' }, items: [] })),
+      addBinding: vi.fn(),
       updateBinding: vi.fn(),
+      setEnabled: vi.fn(),
+      removeBinding: vi.fn(),
       selectApplication: vi.fn(),
       launch: vi.fn(),
       dispose: vi.fn(),

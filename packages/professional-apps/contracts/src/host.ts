@@ -25,6 +25,19 @@ export type ProfessionalApplicationHostRequest =
   | {
       readonly requestId: string;
       readonly identity: { readonly windowId: string };
+      readonly route: 'binding.add' | 'binding.remove';
+      readonly integrationId: string;
+    }
+  | {
+      readonly requestId: string;
+      readonly identity: { readonly windowId: string };
+      readonly route: 'enablement.update';
+      readonly integrationId: string;
+      readonly enabled: boolean;
+    }
+  | {
+      readonly requestId: string;
+      readonly identity: { readonly windowId: string };
       readonly route: 'application.select';
       readonly integrationId: string;
     }
@@ -61,7 +74,15 @@ export function parseProfessionalApplicationHostRequest(
   const record = recordValue(value, 'Professional application Host request');
   const route = oneOf(
     record['route'],
-    ['snapshot.get', 'binding.update', 'application.select', 'application.launch'] as const,
+    [
+      'snapshot.get',
+      'binding.add',
+      'binding.update',
+      'binding.remove',
+      'enablement.update',
+      'application.select',
+      'application.launch',
+    ] as const,
     'Professional application Host route',
   );
   const allowed =
@@ -69,7 +90,9 @@ export function parseProfessionalApplicationHostRequest(
       ? ['requestId', 'identity', 'route']
       : route === 'binding.update'
         ? ['requestId', 'identity', 'route', 'binding']
-        : ['requestId', 'identity', 'route', 'integrationId'];
+        : route === 'enablement.update'
+          ? ['requestId', 'identity', 'route', 'integrationId', 'enabled']
+          : ['requestId', 'identity', 'route', 'integrationId'];
   exactKeys(record, allowed, 'Professional application Host request');
   const identityRecord = recordValue(record['identity'], 'Professional application Host identity');
   exactKeys(identityRecord, ['windowId'], 'Professional application Host identity');
@@ -82,6 +105,14 @@ export function parseProfessionalApplicationHostRequest(
   if (route === 'snapshot.get') return { ...base, route };
   if (route === 'binding.update') {
     return { ...base, route, binding: parseProfessionalApplicationBinding(record['binding']) };
+  }
+  if (route === 'enablement.update') {
+    return {
+      ...base,
+      route,
+      integrationId: identity(record['integrationId'], 'Professional application Host integration'),
+      enabled: booleanValue(record['enabled'], 'Professional application Host enablement'),
+    };
   }
   return {
     ...base,
@@ -214,6 +245,11 @@ function oneOf<const T extends readonly string[]>(
 ): T[number] {
   if (typeof value !== 'string' || !allowed.includes(value)) invalid(`${label} is invalid.`);
   return value as T[number];
+}
+
+function booleanValue(value: unknown, label: string): boolean {
+  if (typeof value !== 'boolean') invalid(`${label} is invalid.`);
+  return value;
 }
 
 function invalid(message: string): never {

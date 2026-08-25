@@ -22,7 +22,10 @@ describe('ProfessionalApplicationManagementRoot', () => {
     const runtime: ProfessionalApplicationManagementRuntime = {
       identity: { windowId: 'window-1' },
       getSnapshot: vi.fn(async () => projection),
+      addBinding: vi.fn(async () => projection),
       updateBinding,
+      setEnabled: vi.fn(async () => projection),
+      removeBinding: vi.fn(async () => projection),
       selectApplication: vi.fn(async () => projection),
       launch: vi.fn(async () => ({
         integrationId: 'comfyui',
@@ -54,6 +57,7 @@ describe('ProfessionalApplicationManagementRoot', () => {
     expect(screen.queryByLabelText('ComfyUI 本地接口地址')).toBeNull();
 
     const card = screen.getByRole('listitem', { name: 'ComfyUI' });
+    expect(card.getAttribute('data-lifecycle-state')).toBe('enabled');
     expect(card.querySelector('.professional-application-row__affordance')).toBeTruthy();
     const cardOpenButton = within(card).getByRole('button', { name: /ComfyUI/u });
     expect(cardOpenButton.getAttribute('aria-pressed')).toBe('false');
@@ -114,7 +118,10 @@ describe('ProfessionalApplicationManagementRoot', () => {
     const runtime: ProfessionalApplicationManagementRuntime = {
       identity: { windowId: 'window-1' },
       getSnapshot: vi.fn(async () => projection),
+      addBinding: vi.fn(),
       updateBinding: vi.fn(),
+      setEnabled: vi.fn(),
+      removeBinding: vi.fn(),
       selectApplication,
       launch: vi.fn(),
       dispose: vi.fn(),
@@ -155,7 +162,10 @@ describe('ProfessionalApplicationManagementRoot', () => {
           ],
         };
       }),
+      addBinding: vi.fn(),
       updateBinding: vi.fn(),
+      setEnabled: vi.fn(),
+      removeBinding: vi.fn(),
       selectApplication: vi.fn(),
       launch: vi.fn(),
       dispose: vi.fn(),
@@ -182,7 +192,10 @@ describe('ProfessionalApplicationManagementRoot', () => {
     const runtime: ProfessionalApplicationManagementRuntime = {
       identity: { windowId: 'window-1' },
       getSnapshot: vi.fn(async () => projection),
+      addBinding: vi.fn(),
       updateBinding: vi.fn(),
+      setEnabled: vi.fn(),
+      removeBinding: vi.fn(),
       selectApplication: vi.fn(),
       launch: vi.fn(),
       dispose: vi.fn(),
@@ -197,11 +210,70 @@ describe('ProfessionalApplicationManagementRoot', () => {
     await screen.findByText('ComfyUI');
     expect(screen.queryByRole('heading')).toBeNull();
     expect(screen.queryByRole('button', { name: '刷新应用' })).toBeNull();
-    expect(screen.queryByText('已添加')).toBeNull();
+    expect(screen.getByText(/已添加/u)).toBeTruthy();
+  });
+
+  it('adds, disables and removes a professional application binding through explicit actions', async () => {
+    const unbound = createProjection(false);
+    const enabled = createProjection(true);
+    const disabled: ProfessionalApplicationManagementProjection = {
+      ...enabled,
+      items: enabled.items.map((item) => ({ ...item, enabled: false })),
+    };
+    const addBinding = vi.fn(async () => enabled);
+    const setEnabled = vi.fn(async () => disabled);
+    const removeBinding = vi.fn(async () => unbound);
+    const runtime: ProfessionalApplicationManagementRuntime = {
+      identity: { windowId: 'window-1' },
+      getSnapshot: vi.fn(async () => unbound),
+      addBinding,
+      updateBinding: vi.fn(),
+      setEnabled,
+      removeBinding,
+      selectApplication: vi.fn(),
+      launch: vi.fn(),
+      dispose: vi.fn(),
+    };
+
+    render(
+      <I18nProvider service={createI18n()}>
+        <ProfessionalApplicationManagementRoot compactHeading interactive runtime={runtime} />
+      </I18nProvider>,
+    );
+
+    const addAction = await screen.findByRole('button', { name: '添加应用' });
+    fireEvent.click(addAction);
+    const addDialog = await screen.findByRole('dialog');
+    fireEvent.click(within(addDialog).getByRole('button', { name: 'ComfyUI' }));
+    await waitFor(() => expect(addBinding).toHaveBeenCalledWith('comfyui'));
+
+    const detail = await screen.findByRole('dialog');
+    fireEvent.click(within(detail).getByRole('button', { name: '停用' }));
+    await waitFor(() => expect(setEnabled).toHaveBeenCalledWith('comfyui', false));
+    await waitFor(() =>
+      expect(
+        document
+          .querySelector('.professional-application-row')
+          ?.getAttribute('data-lifecycle-state'),
+      ).toBe('disabled'),
+    );
+    expect(within(detail).getByRole('button', { name: '启用' })).toBeTruthy();
+
+    fireEvent.click(within(detail).getByRole('button', { name: '删除绑定' }));
+    const confirmation = await screen.findByRole('dialog', { name: '删除应用绑定？' });
+    expect(confirmation.textContent).toContain('不会卸载或修改外部应用');
+    fireEvent.click(within(confirmation).getByRole('button', { name: '删除绑定' }));
+    await waitFor(() => expect(removeBinding).toHaveBeenCalledWith('comfyui'));
+    await waitFor(() =>
+      expect(screen.getByRole('listitem', { name: 'ComfyUI' }).textContent).toContain('未添加'),
+    );
+    expect(
+      document.querySelector('.professional-application-row')?.getAttribute('data-lifecycle-state'),
+    ).toBe('not-added');
   });
 });
 
-function createProjection(): ProfessionalApplicationManagementProjection {
+function createProjection(bound = true): ProfessionalApplicationManagementProjection {
   return {
     identity: { windowId: 'window-1' },
     items: [
@@ -234,6 +306,15 @@ function createProjection(): ProfessionalApplicationManagementProjection {
             },
           ],
         },
+        ...(bound
+          ? {
+              binding: {
+                integrationId: 'comfyui',
+                launchPreference: 'reuse-qualified' as const,
+              },
+            }
+          : {}),
+        enabled: bound,
         readiness: {
           integrationId: 'comfyui',
           state: 'ready' as const,

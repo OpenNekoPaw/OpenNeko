@@ -1,11 +1,27 @@
-import { describe, expect, it, vi } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { initializeCoreLocalMetadataTables } from '@neko/local-metadata/sqlite';
+import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node';
+import { resolveGlobalStorageLayout } from '@neko/local-metadata';
 
 import {
   createInMemoryProfessionalApplicationBindingRepository,
+  createPersistentProfessionalApplicationBindingRepository,
   createProfessionalApplicationService,
+  initializeProfessionalApplicationBindingTables,
   type ProfessionalApplicationDiscoveryPort,
 } from './index';
 import { COMFYUI_PROFESSIONAL_APPLICATION_PROFILE } from './profiles/comfyui';
+
+const temporaryDirectories: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(
+    temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true })),
+  );
+});
 
 function readyInspection() {
   return {
@@ -61,7 +77,9 @@ describe('ProfessionalApplicationService', () => {
     const transfer = vi.fn(async () => ({ targetIdentity: 'comfyui-window-1', accepted: true }));
     const service = createProfessionalApplicationService({
       profiles: [COMFYUI_PROFESSIONAL_APPLICATION_PROFILE],
-      bindings: createInMemoryProfessionalApplicationBindingRepository(),
+      bindings: createInMemoryProfessionalApplicationBindingRepository([
+        { integrationId: 'comfyui', launchPreference: 'reuse-qualified' },
+      ]),
       discovery,
       launcher: {
         launch: vi.fn(async () => ({ targetIdentity: 'comfyui-window-1' })),
@@ -213,6 +231,79 @@ describe('ProfessionalApplicationService', () => {
         launchPreference: 'reuse-qualified',
       }),
     ).rejects.toMatchObject({ code: 'professional-application-binding-rejected' });
+  });
+
+  it('adds, disables and removes one binding without changing sibling profiles', async () => {
+    const bindings = createInMemoryProfessionalApplicationBindingRepository();
+    const service = createProfessionalApplicationService({
+      profiles: [COMFYUI_PROFESSIONAL_APPLICATION_PROFILE],
+      bindings,
+      discovery: { inspect: vi.fn(async () => readyInspection()) },
+      launcher: {
+        launch: vi.fn(async () => ({ targetIdentity: 'comfyui-window-1' })),
+        transfer: vi.fn(),
+      },
+      contentAuthorization: { authorize: vi.fn() },
+    });
+
+    expect((await service.addBinding('window-1', 'comfyui')).items[0]).toMatchObject({
+      enabled: true,
+      binding: { integrationId: 'comfyui' },
+    });
+    expect((await service.setEnabled('window-1', 'comfyui', false)).items[0]).toMatchObject({
+      enabled: false,
+    });
+    await expect(service.launch('comfyui')).rejects.toMatchObject({
+      code: 'professional-application-operation-unavailable',
+    });
+    expect((await service.removeBinding('window-1', 'comfyui')).items[0]).toMatchObject({
+      enabled: false,
+    });
+    expect(await bindings.get('comfyui')).toBeUndefined();
+  });
+
+  it('persists enablement and exact removal across repository reopen', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'neko-professional-apps-'));
+    temporaryDirectories.push(home);
+    const databasePath = resolveGlobalStorageLayout(home).database;
+    const first = createNodeSqliteLocalMetadataStore({ homedir: home });
+    await first.open({ databasePath, busyTimeoutMs: 1_000 });
+    await initializeCoreLocalMetadataTables(first);
+    await initializeProfessionalApplicationBindingTables(first);
+    const firstRepository = createPersistentProfessionalApplicationBindingRepository({
+      store: first,
+    });
+    await firstRepository.set({
+      integrationId: 'comfyui',
+      launchPreference: 'reuse-qualified',
+    });
+    await firstRepository.setEnabled('comfyui', false);
+    await first.dispose();
+
+    const reopened = createNodeSqliteLocalMetadataStore({ homedir: home });
+    await reopened.open({ databasePath, busyTimeoutMs: 1_000 });
+    await initializeCoreLocalMetadataTables(reopened);
+    await initializeProfessionalApplicationBindingTables(reopened);
+    const reopenedRepository = createPersistentProfessionalApplicationBindingRepository({
+      store: reopened,
+    });
+    await expect(reopenedRepository.get('comfyui')).resolves.toMatchObject({
+      integrationId: 'comfyui',
+    });
+    await expect(reopenedRepository.getEnabled('comfyui')).resolves.toBe(false);
+    await reopenedRepository.remove('comfyui');
+    await reopened.dispose();
+
+    const removed = createNodeSqliteLocalMetadataStore({ homedir: home });
+    await removed.open({ databasePath, busyTimeoutMs: 1_000 });
+    await initializeCoreLocalMetadataTables(removed);
+    await initializeProfessionalApplicationBindingTables(removed);
+    const removedRepository = createPersistentProfessionalApplicationBindingRepository({
+      store: removed,
+    });
+    await expect(removedRepository.get('comfyui')).resolves.toBeUndefined();
+    await expect(removedRepository.getEnabled('comfyui')).resolves.toBe(true);
+    await removed.dispose();
   });
 });
 

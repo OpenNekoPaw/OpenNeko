@@ -102,6 +102,7 @@ describe('professional application contracts', () => {
         items: [
           {
             profile,
+            enabled: false,
             readiness: {
               integrationId: 'comfyui',
               state: 'ready',

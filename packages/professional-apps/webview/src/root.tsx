@@ -1,4 +1,11 @@
-import { ChevronRightIcon, PackageIcon, SearchIcon, WarningIcon } from '@neko/ui';
+import {
+  ChevronRightIcon,
+  PackageIcon,
+  PlusIcon,
+  SearchIcon,
+  TrashIcon,
+  WarningIcon,
+} from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
 import { Button, Dialog, EmptyState } from '@neko/ui/primitives';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -23,10 +30,13 @@ export function ProfessionalApplicationManagementRoot({
   const { t } = useTranslation();
   const [projection, setProjection] = useState<ProfessionalApplicationManagementProjection>();
   const [query, setQuery] = useState('');
+  const [catalogFilter, setCatalogFilter] = useState<'all' | 'added'>('all');
   const [loading, setLoading] = useState(false);
   const [pendingId, setPendingId] = useState<string>();
   const [error, setError] = useState<string>();
   const [selectedIntegrationId, setSelectedIntegrationId] = useState<string>();
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [removeConfirmationId, setRemoveConfirmationId] = useState<string>();
   const [endpointDrafts, setEndpointDrafts] = useState<Readonly<Record<string, string>>>({});
   const [workflowDrafts, setWorkflowDrafts] = useState<Readonly<Record<string, string>>>({});
   const [launchPreferenceDrafts, setLaunchPreferenceDrafts] = useState<
@@ -72,13 +82,59 @@ export function ProfessionalApplicationManagementRoot({
 
   const items = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
-    return (projection?.items ?? []).filter((item) =>
-      `${item.profile.name} ${item.profile.description} ${item.profile.category}`
-        .toLocaleLowerCase()
-        .includes(normalized),
+    return (projection?.items ?? []).filter(
+      (item) =>
+        (catalogFilter === 'all' || item.binding !== undefined) &&
+        `${item.profile.name} ${item.profile.description} ${item.profile.category}`
+          .toLocaleLowerCase()
+          .includes(normalized),
     );
-  }, [projection, query]);
+  }, [catalogFilter, projection, query]);
   const selectedItem = projection?.items.find((item) => item.profile.id === selectedIntegrationId);
+  const removableItem = projection?.items.find((item) => item.profile.id === removeConfirmationId);
+  const availableToAdd = projection?.items.filter((item) => !item.binding) ?? [];
+
+  const runMutation = (
+    integrationId: string,
+    mutation: () => Promise<ProfessionalApplicationManagementProjection>,
+    after?: () => void,
+  ): void => {
+    setPendingId(integrationId);
+    setError(undefined);
+    void mutation()
+      .then((next) => {
+        setProjection(next);
+        after?.();
+      })
+      .catch((reason: unknown) => setError(toMessage(reason)))
+      .finally(() => setPendingId(undefined));
+  };
+
+  const add = (integrationId: string): void => {
+    runMutation(
+      integrationId,
+      () => runtime.addBinding(integrationId),
+      () => {
+        setAddDialogOpen(false);
+        setSelectedIntegrationId(integrationId);
+      },
+    );
+  };
+
+  const setEnabled = (item: ProfessionalApplicationItemProjection, enabled: boolean): void => {
+    runMutation(item.profile.id, () => runtime.setEnabled(item.profile.id, enabled));
+  };
+
+  const remove = (integrationId: string): void => {
+    runMutation(
+      integrationId,
+      () => runtime.removeBinding(integrationId),
+      () => {
+        setRemoveConfirmationId(undefined);
+        setSelectedIntegrationId(undefined);
+      },
+    );
+  };
 
   const save = (item: ProfessionalApplicationItemProjection): void => {
     const endpoint = endpointDrafts[item.profile.id]?.trim();
@@ -141,6 +197,32 @@ export function ProfessionalApplicationManagementRoot({
             onChange={(event) => setQuery(event.currentTarget.value)}
           />
         </label>
+        <div className="management-segmented-control" role="group">
+          <button
+            aria-pressed={catalogFilter === 'all'}
+            onClick={() => setCatalogFilter('all')}
+            type="button"
+          >
+            {t('professionalApps.all')} {projection?.items.length ?? 0}
+          </button>
+          <button
+            aria-pressed={catalogFilter === 'added'}
+            onClick={() => setCatalogFilter('added')}
+            type="button"
+          >
+            {t('professionalApps.added')}{' '}
+            {projection?.items.filter((item) => item.binding).length ?? 0}
+          </button>
+        </div>
+        <Button
+          data-professional-application-action="add"
+          disabled={!interactive || loading || availableToAdd.length === 0}
+          onClick={() => setAddDialogOpen(true)}
+          size="sm"
+        >
+          <PlusIcon size={14} />
+          {t('professionalApps.add')}
+        </Button>
         {toolbarControls}
       </div>
 
@@ -163,6 +245,9 @@ export function ProfessionalApplicationManagementRoot({
           <article
             aria-label={item.profile.name}
             className="management-surface-row professional-application-row"
+            data-lifecycle-state={
+              item.binding ? (item.enabled ? 'enabled' : 'disabled') : 'not-added'
+            }
             data-selected={selectedIntegrationId === item.profile.id}
             key={item.profile.id}
             role="listitem"
@@ -192,7 +277,12 @@ export function ProfessionalApplicationManagementRoot({
                 className="professional-application-row__readiness"
                 data-professional-application-readiness={item.readiness.state}
               >
-                {item.readiness.state} ·{' '}
+                {item.binding
+                  ? item.enabled
+                    ? t('professionalApps.enabled')
+                    : t('professionalApps.disabled')
+                  : t('professionalApps.notAdded')}{' '}
+                · {item.readiness.state} ·{' '}
                 {t('professionalApps.availableOperations', {
                   count: item.readiness.availableOperationIds.length,
                 })}
@@ -232,6 +322,8 @@ export function ProfessionalApplicationManagementRoot({
             }))
           }
           onSave={() => save(selectedItem)}
+          onSetEnabled={(enabled) => setEnabled(selectedItem, enabled)}
+          onRemove={() => setRemoveConfirmationId(selectedItem.profile.id)}
           onSelectApplication={() => selectApplication(selectedItem.profile.id)}
           onWorkflowChange={(defaultWorkflowId) =>
             setWorkflowDrafts((current) => ({
@@ -243,6 +335,49 @@ export function ProfessionalApplicationManagementRoot({
           workflow={workflowDrafts[selectedItem.profile.id] ?? ''}
         />
       ) : null}
+      <Dialog
+        closeLabel={t('professionalApps.closeAdd')}
+        description={t('professionalApps.addDescription')}
+        onOpenChange={setAddDialogOpen}
+        open={addDialogOpen}
+        title={t('professionalApps.add')}
+      >
+        <div className="professional-application-add-list">
+          {availableToAdd.map((item) => (
+            <Button
+              disabled={!interactive || pendingId === item.profile.id}
+              key={item.profile.id}
+              onClick={() => add(item.profile.id)}
+              variant="secondary"
+            >
+              <PackageIcon size={16} />
+              <span>{item.profile.name}</span>
+            </Button>
+          ))}
+        </div>
+      </Dialog>
+      <Dialog
+        closeLabel={t('professionalApps.cancelRemove')}
+        description={t('professionalApps.removeDescription')}
+        onOpenChange={(open) => {
+          if (!open) setRemoveConfirmationId(undefined);
+        }}
+        open={removableItem !== undefined}
+        title={t('professionalApps.removeTitle')}
+      >
+        <div className="professional-application-remove-actions">
+          <Button onClick={() => setRemoveConfirmationId(undefined)} variant="secondary">
+            {t('professionalApps.cancel')}
+          </Button>
+          <Button
+            disabled={!removableItem || pendingId === removableItem.profile.id}
+            onClick={() => removableItem && remove(removableItem.profile.id)}
+          >
+            <TrashIcon size={14} />
+            {t('professionalApps.remove')}
+          </Button>
+        </div>
+      </Dialog>
     </section>
   );
 }
@@ -258,6 +393,8 @@ function ProfessionalApplicationDetailOverlay({
   onLaunch,
   onLaunchPreferenceChange,
   onSave,
+  onSetEnabled,
+  onRemove,
   onSelectApplication,
   onWorkflowChange,
   pending,
@@ -275,17 +412,20 @@ function ProfessionalApplicationDetailOverlay({
     value: ProfessionalApplicationBinding['launchPreference'],
   ) => void;
   readonly onSave: () => void;
+  readonly onSetEnabled: (enabled: boolean) => void;
+  readonly onRemove: () => void;
   readonly onSelectApplication: () => void;
   readonly onWorkflowChange: (value: string) => void;
   readonly pending: boolean;
   readonly workflow: string;
 }): JSX.Element {
   const { t } = useTranslation();
-  const canLaunch = item.readiness.availableOperationIds.some((operationId) =>
-    item.profile.operations.some(
-      (operation) => operation.id === operationId && operation.kind === 'launch',
-    ),
-  );
+  const canLaunch =
+    item.readiness.availableOperationIds.some((operationId) =>
+      item.profile.operations.some(
+        (operation) => operation.id === operationId && operation.kind === 'launch',
+      ),
+    ) && item.enabled;
   return (
     <Dialog
       className="extension-detail-overlay professional-application-detail-overlay"
@@ -340,7 +480,7 @@ function ProfessionalApplicationDetailOverlay({
                 <span>{t('professionalApps.endpoint')}</span>
                 <input
                   aria-label={`${item.profile.name} ${t('professionalApps.endpoint')}`}
-                  disabled={!interactive || pending}
+                  disabled={!interactive || pending || !item.binding}
                   value={endpoint}
                   onChange={(event) => onEndpointChange(event.currentTarget.value)}
                 />
@@ -351,7 +491,7 @@ function ProfessionalApplicationDetailOverlay({
                 <span>{t('professionalApps.defaultWorkflow')}</span>
                 <input
                   aria-label={`${item.profile.name} ${t('professionalApps.defaultWorkflow')}`}
-                  disabled={!interactive || pending}
+                  disabled={!interactive || pending || !item.binding}
                   value={workflow}
                   onChange={(event) => onWorkflowChange(event.currentTarget.value)}
                 />
@@ -361,7 +501,7 @@ function ProfessionalApplicationDetailOverlay({
               <span>{t('professionalApps.launchPreference')}</span>
               <select
                 aria-label={`${item.profile.name} ${t('professionalApps.launchPreference')}`}
-                disabled={!interactive || pending}
+                disabled={!interactive || pending || !item.binding}
                 value={launchPreference}
                 onChange={(event) =>
                   onLaunchPreferenceChange(
@@ -379,6 +519,17 @@ function ProfessionalApplicationDetailOverlay({
         <section className="professional-application-detail__section">
           <h3>{t('professionalApps.actions')}</h3>
           <div className="professional-application-detail__actions">
+            {item.binding ? (
+              <Button
+                aria-pressed={item.enabled}
+                disabled={!interactive || pending || !item.binding}
+                onClick={() => onSetEnabled(!item.enabled)}
+                size="sm"
+                variant="secondary"
+              >
+                {item.enabled ? t('professionalApps.disable') : t('professionalApps.enable')}
+              </Button>
+            ) : null}
             {item.profile.officialDownloadUrl && item.readiness.state === 'not-installed' ? (
               <a href={item.profile.officialDownloadUrl} rel="noreferrer" target="_blank">
                 {t('professionalApps.officialDownload')}
@@ -386,7 +537,7 @@ function ProfessionalApplicationDetailOverlay({
             ) : null}
             {item.profile.configurable.applicationLocator ? (
               <Button
-                disabled={!interactive || pending}
+                disabled={!interactive || pending || !item.binding}
                 onClick={onSelectApplication}
                 size="sm"
                 variant="secondary"
@@ -409,6 +560,17 @@ function ProfessionalApplicationDetailOverlay({
             <Button disabled={!interactive || pending || !canLaunch} onClick={onLaunch} size="sm">
               {t('professionalApps.open')}
             </Button>
+            {item.binding ? (
+              <Button
+                disabled={!interactive || pending}
+                onClick={onRemove}
+                size="sm"
+                variant="secondary"
+              >
+                <TrashIcon size={14} />
+                {t('professionalApps.remove')}
+              </Button>
+            ) : null}
           </div>
         </section>
       </div>

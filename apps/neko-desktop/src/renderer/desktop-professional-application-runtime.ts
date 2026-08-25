@@ -32,6 +32,23 @@ export class DesktopProfessionalApplicationRuntime implements ProfessionalApplic
     return (await this.execute({ route: 'binding.update', binding })).projection;
   }
 
+  async addBinding(integrationId: string): Promise<ProfessionalApplicationManagementProjection> {
+    return (await this.execute({ route: 'binding.add', integrationId })).projection;
+  }
+
+  async setEnabled(
+    integrationId: string,
+    enabled: boolean,
+  ): Promise<ProfessionalApplicationManagementProjection> {
+    return (await this.execute({ route: 'enablement.update', integrationId, enabled })).projection;
+  }
+
+  async removeBinding(
+    integrationId: string,
+  ): Promise<ProfessionalApplicationManagementProjection> {
+    return (await this.execute({ route: 'binding.remove', integrationId })).projection;
+  }
+
   async selectApplication(
     integrationId: string,
   ): Promise<ProfessionalApplicationManagementProjection> {
@@ -67,7 +84,15 @@ export class DesktopProfessionalApplicationRuntime implements ProfessionalApplic
               route: input.route,
               binding: input.binding,
             })
-          : createProfessionalApplicationHostRequest({
+          : input.route === 'enablement.update'
+            ? createProfessionalApplicationHostRequest({
+                requestId,
+                identity: this.identity,
+                route: input.route,
+                integrationId: input.integrationId,
+                enabled: input.enabled,
+              })
+            : createProfessionalApplicationHostRequest({
               requestId,
               identity: this.identity,
               route: input.route,

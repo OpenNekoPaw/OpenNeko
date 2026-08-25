@@ -44,6 +44,12 @@ describe('DesktopProfessionalApplicationRuntime', () => {
       identity: { windowId: 'window-1' },
       items: [],
     });
+    await runtime.addBinding('comfyui');
+    await runtime.setEnabled('comfyui', false);
+    await runtime.removeBinding('comfyui');
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({ route: 'enablement.update', integrationId: 'comfyui', enabled: false }),
+    );
     expect(execute).toHaveBeenCalledWith(
       expect.objectContaining({ route: 'application.select', integrationId: 'comfyui' }),
     );

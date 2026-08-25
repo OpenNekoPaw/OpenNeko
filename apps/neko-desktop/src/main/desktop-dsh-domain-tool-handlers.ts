@@ -61,7 +61,7 @@ export function createDesktopDshDomainToolHandlers(options: {
   };
   readonly skillAuthoring?: Pick<DshSkillAuthoringService, 'create'>;
   readonly comfyUi?: {
-    readonly bindings: Pick<ProfessionalApplicationBindingRepository, 'get'>;
+    readonly bindings: Pick<ProfessionalApplicationBindingRepository, 'get' | 'getEnabled'>;
   };
   readonly cutRuntime?: {
     resolveExportService(input: {
@@ -150,9 +150,14 @@ export function createDesktopDshDomainToolHandlers(options: {
         ? {
             submitComfyUi: async ({ context, request, submission }) => {
               const binding = await options.comfyUi!.bindings.get('comfyui');
-              if (!binding?.endpoint) {
+              const enabled = binding
+                ? await options.comfyUi!.bindings.getEnabled('comfyui')
+                : false;
+              if (!binding?.endpoint || !enabled) {
                 throw Object.assign(
-                  new Error('ComfyUI requires an explicit configured loopback endpoint.'),
+                  new Error(
+                    'ComfyUI must be added, enabled and configured with an explicit loopback endpoint.',
+                  ),
                   { code: 'GENERATION_DSH_COMFYUI_UNCONFIGURED' },
                 );
               }

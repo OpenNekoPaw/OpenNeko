@@ -107,6 +107,7 @@ export interface ProfessionalApplicationInspection {
 export interface ProfessionalApplicationItemProjection {
   readonly profile: ProfessionalApplicationProfile;
   readonly binding?: ProfessionalApplicationBinding;
+  readonly enabled: boolean;
   readonly readiness: ProfessionalApplicationInspection;
 }
 
@@ -172,6 +173,12 @@ export interface ProfessionalApplicationManagementRuntime {
   updateBinding(
     binding: ProfessionalApplicationBinding,
   ): Promise<ProfessionalApplicationManagementProjection>;
+  addBinding(integrationId: string): Promise<ProfessionalApplicationManagementProjection>;
+  setEnabled(
+    integrationId: string,
+    enabled: boolean,
+  ): Promise<ProfessionalApplicationManagementProjection>;
+  removeBinding(integrationId: string): Promise<ProfessionalApplicationManagementProjection>;
   selectApplication(integrationId: string): Promise<ProfessionalApplicationManagementProjection>;
   launch(integrationId: string): Promise<ProfessionalApplicationLaunchReceipt>;
   dispose(): void;
@@ -382,7 +389,7 @@ export function parseProfessionalApplicationManagementProjection(
   const items = arrayValue(record['items'], 'Professional application items').map((item) => {
     const itemRecord = exactRecord(
       item,
-      ['profile', 'binding', 'readiness'],
+      ['profile', 'binding', 'enabled', 'readiness'],
       'Professional application item',
     );
     const profile = parseProfessionalApplicationProfile(itemRecord['profile']);
@@ -409,7 +416,11 @@ export function parseProfessionalApplicationManagementProjection(
         );
       }
     }
-    return { profile, ...(binding ? { binding } : {}), readiness };
+    const enabled = booleanValue(itemRecord['enabled'], 'Professional application enablement');
+    if (enabled && !binding) {
+      invalid(`Professional application '${profile.id}' cannot be enabled without a binding.`);
+    }
+    return { profile, ...(binding ? { binding } : {}), enabled, readiness };
   });
   unique(
     items.map((item) => item.profile.id),

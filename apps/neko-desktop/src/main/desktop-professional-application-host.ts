@@ -40,6 +40,28 @@ export class DesktopProfessionalApplicationHost {
       );
       return { requestId: request.requestId, route: request.route, projection };
     }
+    if (request.route === 'binding.add') {
+      const projection = await this.options.service.addBinding(
+        request.identity.windowId,
+        request.integrationId,
+      );
+      return { requestId: request.requestId, route: request.route, projection };
+    }
+    if (request.route === 'enablement.update') {
+      const projection = await this.options.service.setEnabled(
+        request.identity.windowId,
+        request.integrationId,
+        request.enabled,
+      );
+      return { requestId: request.requestId, route: request.route, projection };
+    }
+    if (request.route === 'binding.remove') {
+      const projection = await this.options.service.removeBinding(
+        request.identity.windowId,
+        request.integrationId,
+      );
+      return { requestId: request.requestId, route: request.route, projection };
+    }
     if (request.route === 'application.select') {
       const applicationIdentity = await this.options.selection.selectApplicationIdentity(
         sender,

@@ -24,7 +24,10 @@ export { COMFYUI_PROFESSIONAL_APPLICATION_PROFILE } from './profiles/comfyui';
 
 export interface ProfessionalApplicationBindingRepository {
   get(integrationId: string): Promise<ProfessionalApplicationBinding | undefined>;
+  getEnabled(integrationId: string): Promise<boolean>;
   set(binding: ProfessionalApplicationBinding): Promise<void>;
+  setEnabled(integrationId: string, enabled: boolean): Promise<void>;
+  remove(integrationId: string): Promise<void>;
 }
 
 export interface ProfessionalApplicationDiscoveryPort {
@@ -66,6 +69,22 @@ export interface ProfessionalApplicationService {
   updateBinding(
     windowId: string,
     binding: unknown,
+    signal?: AbortSignal,
+  ): Promise<ProfessionalApplicationManagementProjection>;
+  addBinding(
+    windowId: string,
+    integrationId: string,
+    signal?: AbortSignal,
+  ): Promise<ProfessionalApplicationManagementProjection>;
+  setEnabled(
+    windowId: string,
+    integrationId: string,
+    enabled: boolean,
+    signal?: AbortSignal,
+  ): Promise<ProfessionalApplicationManagementProjection>;
+  removeBinding(
+    windowId: string,
+    integrationId: string,
     signal?: AbortSignal,
   ): Promise<ProfessionalApplicationManagementProjection>;
   bindApplicationIdentity(
@@ -139,12 +158,15 @@ class DefaultProfessionalApplicationService implements ProfessionalApplicationSe
     requireIdentity(windowId, 'Professional application Window');
     const items = await Promise.all(
       [...this.profiles.values()].map(async (profile) => {
-        let binding: ProfessionalApplicationBinding | undefined;
         try {
-          binding = await this.bindings.get(profile.id);
+          const binding = await this.bindings.get(profile.id);
+          const enabled = binding ? await this.bindings.getEnabled(profile.id) : false;
+          const readiness = await this.inspectFailLocal(profile, binding, signal);
+          return { profile, ...(binding ? { binding } : {}), enabled, readiness };
         } catch (error) {
           return {
             profile,
+            enabled: false,
             readiness: {
               integrationId: profile.id,
               state: 'unavailable' as const,
@@ -158,8 +180,6 @@ class DefaultProfessionalApplicationService implements ProfessionalApplicationSe
             },
           };
         }
-        const readiness = await this.inspectFailLocal(profile, binding, signal);
-        return { profile, ...(binding ? { binding } : {}), readiness };
       }),
     );
     return {
@@ -178,6 +198,12 @@ class DefaultProfessionalApplicationService implements ProfessionalApplicationSe
     const profile = this.requireProfile(binding.integrationId);
     assertBindingAllowed(profile, binding);
     const existing = await this.bindings.get(binding.integrationId);
+    if (!existing) {
+      throw new ProfessionalApplicationServiceError(
+        'professional-application-binding-rejected',
+        `Professional application '${profile.id}' must be added before it can be configured.`,
+      );
+    }
     if (!sameApplicationLocator(existing?.applicationLocator, binding.applicationLocator)) {
       throw new ProfessionalApplicationServiceError(
         'professional-application-binding-rejected',
@@ -185,6 +211,59 @@ class DefaultProfessionalApplicationService implements ProfessionalApplicationSe
       );
     }
     await this.bindings.set(binding);
+    return this.getProjection(windowId, signal);
+  }
+
+  async addBinding(
+    windowId: string,
+    integrationId: string,
+    signal?: AbortSignal,
+  ): Promise<ProfessionalApplicationManagementProjection> {
+    requireIdentity(windowId, 'Professional application Window');
+    const profile = this.requireProfile(integrationId);
+    if (await this.bindings.get(profile.id)) {
+      throw new ProfessionalApplicationServiceError(
+        'professional-application-binding-rejected',
+        `Professional application '${profile.id}' is already added.`,
+      );
+    }
+    await this.bindings.set({ integrationId: profile.id, launchPreference: 'reuse-qualified' });
+    await this.bindings.setEnabled(profile.id, true);
+    return this.getProjection(windowId, signal);
+  }
+
+  async setEnabled(
+    windowId: string,
+    integrationId: string,
+    enabled: boolean,
+    signal?: AbortSignal,
+  ): Promise<ProfessionalApplicationManagementProjection> {
+    requireIdentity(windowId, 'Professional application Window');
+    const profile = this.requireProfile(integrationId);
+    if (!(await this.bindings.get(profile.id))) {
+      throw new ProfessionalApplicationServiceError(
+        'professional-application-binding-rejected',
+        `Professional application '${profile.id}' is not added.`,
+      );
+    }
+    await this.bindings.setEnabled(profile.id, enabled);
+    return this.getProjection(windowId, signal);
+  }
+
+  async removeBinding(
+    windowId: string,
+    integrationId: string,
+    signal?: AbortSignal,
+  ): Promise<ProfessionalApplicationManagementProjection> {
+    requireIdentity(windowId, 'Professional application Window');
+    const profile = this.requireProfile(integrationId);
+    if (!(await this.bindings.get(profile.id))) {
+      throw new ProfessionalApplicationServiceError(
+        'professional-application-binding-rejected',
+        `Professional application '${profile.id}' is not added.`,
+      );
+    }
+    await this.bindings.remove(profile.id);
     return this.getProjection(windowId, signal);
   }
 
@@ -213,6 +292,12 @@ class DefaultProfessionalApplicationService implements ProfessionalApplicationSe
       );
     }
     const existing = await this.bindings.get(profile.id);
+    if (!existing) {
+      throw new ProfessionalApplicationServiceError(
+        'professional-application-binding-rejected',
+        `Professional application '${profile.id}' must be added before it can be selected.`,
+      );
+    }
     const binding = parseProfessionalApplicationBinding({
       integrationId: profile.id,
       ...(existing?.endpoint ? { endpoint: existing.endpoint } : {}),
@@ -231,6 +316,7 @@ class DefaultProfessionalApplicationService implements ProfessionalApplicationSe
   ): Promise<ProfessionalApplicationLaunchReceipt> {
     const profile = this.requireProfile(integrationId);
     const binding = await this.bindings.get(profile.id);
+    await this.requireEnabledBinding(profile, binding);
     const readiness = await this.inspect(profile, binding, signal);
     const operation = requireAvailableOperation(profile, readiness, 'launch');
     const launched = await this.launcher.launch({ profile, binding, operation, signal });
@@ -255,6 +341,7 @@ class DefaultProfessionalApplicationService implements ProfessionalApplicationSe
       let binding: ProfessionalApplicationBinding | undefined;
       try {
         binding = await this.bindings.get(profile.id);
+        if (!binding || !(await this.bindings.getEnabled(profile.id))) continue;
       } catch {
         continue;
       }
@@ -286,6 +373,7 @@ class DefaultProfessionalApplicationService implements ProfessionalApplicationSe
     const handoff = parseProfessionalApplicationHandoffIntent(input);
     const profile = this.requireProfile(handoff.integrationId);
     const binding = await this.bindings.get(profile.id);
+    await this.requireEnabledBinding(profile, binding);
     const readiness = await this.inspect(profile, binding, signal);
     const operation = profile.operations.find(
       (candidate) => candidate.id === handoff.operationId && candidate.kind === 'resource-handoff',
@@ -346,6 +434,18 @@ class DefaultProfessionalApplicationService implements ProfessionalApplicationSe
     return profile;
   }
 
+  private async requireEnabledBinding(
+    profile: ProfessionalApplicationProfile,
+    binding: ProfessionalApplicationBinding | undefined,
+  ): Promise<void> {
+    if (!binding || !(await this.bindings.getEnabled(profile.id))) {
+      throw new ProfessionalApplicationServiceError(
+        'professional-application-operation-unavailable',
+        `Professional application '${profile.id}' is not added or is disabled.`,
+      );
+    }
+  }
+
   private async inspect(
     profile: ProfessionalApplicationProfile,
     binding: ProfessionalApplicationBinding | undefined,
@@ -398,6 +498,7 @@ class DefaultProfessionalApplicationService implements ProfessionalApplicationSe
 export function createInMemoryProfessionalApplicationBindingRepository(
   initial: readonly ProfessionalApplicationBinding[] = [],
 ): ProfessionalApplicationBindingRepository {
+  const enabled = new Map<string, boolean>();
   const values = new Map(
     initial.map((binding) => {
       const parsed = parseProfessionalApplicationBinding(binding);
@@ -412,6 +513,18 @@ export function createInMemoryProfessionalApplicationBindingRepository(
       const parsed = parseProfessionalApplicationBinding(binding);
       values.set(parsed.integrationId, parsed);
     },
+    async getEnabled(integrationId) {
+      return enabled.get(integrationId) ?? true;
+    },
+    async setEnabled(integrationId, next) {
+      requireIdentity(integrationId, 'Professional application integration');
+      enabled.set(integrationId, next);
+    },
+    async remove(integrationId) {
+      requireIdentity(integrationId, 'Professional application integration');
+      values.delete(integrationId);
+      enabled.delete(integrationId);
+    },
   };
 }
 
@@ -425,6 +538,11 @@ export async function initializeProfessionalApplicationBindingTables(
       `CREATE TABLE IF NOT EXISTS professional_application_binding (
         integration_id TEXT PRIMARY KEY,
         binding_json TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      ) STRICT`,
+      `CREATE TABLE IF NOT EXISTS professional_application_binding_enablement (
+        integration_id TEXT PRIMARY KEY,
+        enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
         updated_at TEXT NOT NULL
       ) STRICT`,
     ],
@@ -493,6 +611,70 @@ export function createPersistentProfessionalApplicationBindingRepository(options
                updated_at = excluded.updated_at`,
             [binding.integrationId, serialized, now()],
           );
+        },
+      );
+    },
+    getEnabled(integrationId) {
+      requireIdentity(integrationId, 'Professional application integration');
+      return options.store.transaction(
+        {
+          mode: 'read',
+          ownership: 'state',
+          operation: 'read-professional-application-binding-enablement',
+        },
+        async ({ sql }) => {
+          const rows = await sql.all(
+            `SELECT enabled
+               FROM professional_application_binding_enablement
+              WHERE integration_id = ?`,
+            [integrationId],
+          );
+          const value = rows[0]?.['enabled'];
+          if (value === undefined) return true;
+          if (value !== 0 && value !== 1) {
+            throw persistenceError('Professional application enablement is invalid.');
+          }
+          return value === 1;
+        },
+      );
+    },
+    async setEnabled(integrationId, enabled) {
+      requireIdentity(integrationId, 'Professional application integration');
+      await options.store.transaction(
+        {
+          mode: 'state-write',
+          ownership: 'state',
+          operation: 'write-professional-application-binding-enablement',
+        },
+        async ({ sql }) => {
+          await sql.run(
+            `INSERT INTO professional_application_binding_enablement(
+               integration_id, enabled, updated_at
+             ) VALUES (?, ?, ?)
+             ON CONFLICT(integration_id) DO UPDATE SET
+               enabled = excluded.enabled,
+               updated_at = excluded.updated_at`,
+            [integrationId, enabled ? 1 : 0, now()],
+          );
+        },
+      );
+    },
+    async remove(integrationId) {
+      requireIdentity(integrationId, 'Professional application integration');
+      await options.store.transaction(
+        {
+          mode: 'state-write',
+          ownership: 'state',
+          operation: 'remove-professional-application-binding',
+        },
+        async ({ sql }) => {
+          await sql.run(
+            `DELETE FROM professional_application_binding_enablement WHERE integration_id = ?`,
+            [integrationId],
+          );
+          await sql.run(`DELETE FROM professional_application_binding WHERE integration_id = ?`, [
+            integrationId,
+          ]);
         },
       );
     },

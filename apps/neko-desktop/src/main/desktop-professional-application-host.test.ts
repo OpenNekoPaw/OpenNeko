@@ -98,7 +98,10 @@ function createService(): ProfessionalApplicationService {
   const projection = { identity: { windowId: 'window-1' }, items: [] } as const;
   return {
     getProjection: vi.fn(async () => projection),
+    addBinding: vi.fn(async () => projection),
     updateBinding: vi.fn(async () => projection),
+    setEnabled: vi.fn(async () => projection),
+    removeBinding: vi.fn(async () => projection),
     bindApplicationIdentity: vi.fn(async () => projection),
     launch: vi.fn(async () => ({
       integrationId: 'comfyui',
