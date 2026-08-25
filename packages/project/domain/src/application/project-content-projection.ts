@@ -1,5 +1,8 @@
 import type { CharacterAuthoringCatalog } from '@neko/chara-domain/application';
-import type { WorldAuthoringCatalog, WorldDurableRecordDiagnostic } from '@neko/world-domain/application';
+import type {
+  WorldAuthoringCatalog,
+  WorldDurableRecordDiagnostic,
+} from '@neko/world-domain/application';
 import type {
   ProjectEntityDiagnostic,
   ProjectEntityManagementProjection,

@@ -2,7 +2,10 @@ import type {
   CharacterGlobalCatalogService,
   SynchronizeCharacterInput,
 } from '@neko/chara-domain/application';
-import type { WorldGlobalCatalogService, SynchronizeWorldInput } from '@neko/world-domain/application';
+import type {
+  WorldGlobalCatalogService,
+  SynchronizeWorldInput,
+} from '@neko/world-domain/application';
 import {
   parseProjectWorkspaceObjectMutation,
   type ProjectWorkspaceObjectMutation,

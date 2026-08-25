@@ -1,5 +1,9 @@
 import type { CharacterProject, CharacterVersion } from '@neko/chara-domain/contracts';
-import type { WorldExperienceVersionId, WorldProject, WorldVersion } from '@neko/world-domain/contracts';
+import type {
+  WorldExperienceVersionId,
+  WorldProject,
+  WorldVersion,
+} from '@neko/world-domain/contracts';
 
 export type ProjectId = string;
 export type ContentDocumentId = string;

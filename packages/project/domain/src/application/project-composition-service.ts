@@ -3,7 +3,10 @@ import type {
   CharacterAuthoringCatalogPort,
 } from '@neko/chara-domain/application';
 import type { GlobalCharacterCatalog } from '@neko/chara-domain/contracts';
-import type { WorldAuthoringCatalog, WorldAuthoringCatalogPort } from '@neko/world-domain/application';
+import type {
+  WorldAuthoringCatalog,
+  WorldAuthoringCatalogPort,
+} from '@neko/world-domain/application';
 import type { GlobalWorldCatalog } from '@neko/world-domain/contracts';
 import {
   parseProjectMixedDomainTargetProjection,
