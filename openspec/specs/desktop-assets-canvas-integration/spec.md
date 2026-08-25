@@ -19,13 +19,13 @@ item surfaces, colors or focus treatment.
 - **THEN** Desktop renders the package-owned ordered catalog and localized labels
 - **AND** the popover uses neutral Portal-safe Neko foreground, hover, badge and elevated surface
   treatment at compact Canvas density without oversized card icons or a duplicate focus outline
-- **AND** Table creates editable GFM table content without a legacy table node type
+- **AND** Table creates editable GFM table content without a second table node representation
 - **AND** every menu item reaches an implemented canonical node path rather than adding a label-only
   placeholder: Text/Table become Markdown, Image/Video/Audio become typed Media and 3D Director
   becomes a model-backed File reference
 - **AND** 3D Director requests a model source and uses the package-owned model Preview path
-- **AND** the Desktop shell does not render a local duplicate menu, viewer, no-op item or
-  compatibility fallback
+- **AND** the Desktop shell does not render a local duplicate menu, viewer, no-op item or alternate
+  fallback
 
 ### Requirement: Assets owns the Desktop Resource Browser
 
@@ -72,34 +72,18 @@ implementation.
 - **AND** a failed workspace link rolls back the newly created global connection instead of leaving a
   partial successful configuration
 
-#### Scenario: Legacy generic source intent is submitted
+#### Scenario: Unsupported generic source intent is submitted
 
 - **WHEN** a renderer submits `source.add`, an `all` facet or an `entities` facet
 - **THEN** the canonical Resource Browser contract rejects it visibly
 - **AND** it does not dispatch a directory picker, mutate either registry or fall back to an active
   global Asset center
 
-### Requirement: Desktop development keeps Home contract consumers coherent
-
-Desktop development SHALL restart the Electron Main lifecycle after a successful Main watch build so
-Main, preload and renderer consume one canonical Desktop Home management contract. A reloaded preload
-MUST NOT send a request carrying a mismatched renderer session identity to stale Main ownership.
-Desktop MUST NOT accept multiple internal shapes, retry another parser or hide the diagnostic as
-compatibility behavior.
-
-#### Scenario: Shared Home contract changes during development
-
-- **WHEN** the Desktop Main watch build completes after a shared Home contract change
-- **THEN** the development lifecycle requests one Electron Main restart
-- **AND** the next Media Library search is parsed by the matching Main contract
-- **AND** production builds do not emit a development restart request
-
 ### Requirement: Global Library package styles reach the renderer
 
 The Assets-owned Global Library Root SHALL import its package-owned stylesheet into the lazy renderer
 chunk. Desktop SHALL provide the complete Main viewport but MUST NOT duplicate Global Library
-selectors. Runtime acceptance MUST verify computed styles and stable layout dimensions in real
-Electron rather than only inspecting stylesheet source text.
+selectors. The mounted Root MUST expose the package-owned computed styles and stable layout dimensions.
 
 #### Scenario: User opens Asset center
 
@@ -267,18 +251,3 @@ import, delivery, candidate acceptance or Canvas mutation.
 - **WHEN** Desktop restarts after a resource was placed and the Canvas was saved
 - **THEN** the Project reattaches the exact workspace, Assets projection and Canvas document/session
 - **AND** the resource placement appears once with no duplicate import or mutation
-
-### Requirement: P1.4 qualification proves the canonical path
-
-The change SHALL provide producer/consumer, authorization, identity, request ownership, persistence,
-lifecycle, architecture and UI tests plus an isolated Electron fixture scenario. Desktop Canvas
-behavior SHALL be revalidated through the production package or controlled Electron runtime when
-Webview behavior changes.
-
-#### Scenario: Desktop Assets and Canvas qualification runs
-
-- **WHEN** the fixture opens a Project, searches/imports media, opens Canvas, places a resource,
-  saves/reopens and explicitly opens a second Canvas to the side
-- **THEN** visible state and durable facts succeed
-- **AND** evidence proves Assets services/Root, Content/Entity owners, Canvas runtime/domain and fixed
-  Desktop bridge were used while VS Code, active-object, demo/mock and path fallbacks were absent

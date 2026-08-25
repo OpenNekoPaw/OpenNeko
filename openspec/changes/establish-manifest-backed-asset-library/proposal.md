@@ -18,7 +18,6 @@ Reusable local Assets require stable package identity, immutable revisions, inte
 ### Modified Capabilities
 
 - `media-library-resource-entry`
-- `legacy-asset-catalog-retirement`
 
 ## Impact
 

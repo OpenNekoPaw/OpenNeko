@@ -37,7 +37,7 @@ The archive reader SHALL remain available only while the authorized resource-tre
 
 ### Requirement: Non-EPUB files preserve their canonical publication path
 
-The EPUB cutover SHALL NOT reroute ordinary previewable files through archive publication.
+EPUB virtual-tree publication SHALL NOT reroute ordinary previewable files through archive publication.
 
 #### Scenario: User selects a PNG after an EPUB
 

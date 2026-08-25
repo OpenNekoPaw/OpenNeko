@@ -39,14 +39,13 @@ authority, private DSH module access, or direct DSH storage writes.
 
 - **WHEN** the surface requests a snapshot while DSH is unavailable
 - **THEN** only that surface receives an explicit runtime-unavailable diagnostic
-- **AND** no legacy catalog or runtime provides fallback success
+- **AND** no alternate catalog or runtime provides fallback success
 
 ### Requirement: Plugin is internal composition only
 
 DSH Plugin packages SHALL remain only as precisely locked, first-party internal composition units for
 the official profile. They MUST NOT become a user-installable extension type or a general third-party
-execution platform. A future user-facing Plugin product requires a separate accepted OpenSpec defining
-sandbox, distribution, trust, lifecycle and user-data ownership.
+execution platform. User-facing extension management SHALL expose only Skill and MCP facts.
 
 #### Scenario: Internal first-party DSH Plugin is loaded
 

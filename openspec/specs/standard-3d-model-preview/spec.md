@@ -50,23 +50,22 @@ before Three.js loads them.
 - **THEN** Desktop Main returns a source-projection diagnostic and the Preview surface does not
   attempt a network request or substitute an unrelated resource
 
-### Requirement: Three.js rendering is browser-only and isolated from the Media Engine
+### Requirement: Three.js rendering is browser-only
 
 The model preview renderer SHALL run only inside the dedicated Preview Webview entry. Three.js, its
 loaders, renderer state, scene graph, cameras, lights, controls, and GPU resources MUST NOT be
-imported by Desktop Main/preload, shared Layer 0 packages, Agent runtime, or the retired Rust Engine.
-Opening a model preview MUST NOT activate or dispatch the removed Engine `models`,
-`model-preview`, `scenes`, `viewport`, or `cameras` groups.
+imported by Desktop Main/preload, shared Layer 0 packages or Agent runtime. Opening a model preview
+MUST NOT dispatch rendering through another Host runtime.
 
 #### Scenario: Render a standard model
 
 - **WHEN** the Webview receives a valid authorized source descriptor
 - **THEN** its format adapter loads the source into one panel-owned Three.js scene, frames the model bounds, and renders through the panel-owned browser renderer
 
-#### Scenario: Audit Engine isolation
+#### Scenario: Host remains isolated from model rendering
 
-- **WHEN** Preview and Engine dependency and action guards run
-- **THEN** no model preview code imports `EngineClient` model/scene APIs, registers removed Engine groups, or reports Engine-backed model rendering as available
+- **WHEN** a model Preview session renders an authorized source
+- **THEN** no Host-side model renderer or alternate model action group participates
 
 ### Requirement: Preview staging does not mutate the source model
 

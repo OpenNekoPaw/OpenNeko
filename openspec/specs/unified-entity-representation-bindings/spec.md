@@ -33,7 +33,7 @@ A representation that requires multiple files SHALL use a narrow package-owned m
 - **THEN** the entity binding references the package representation and the package owner resolves its members
 
 ### Requirement: Missing or changed path-addressed content becomes orphaned
-An ordinary workspace-file binding SHALL be validated against its locator and any stored fingerprint precondition. Missing or mismatched content MUST make the binding visibly orphaned and MUST NOT trigger automatic path replacement, fingerprint relocation, or legacy catalog fallback.
+An ordinary workspace-file binding SHALL be validated against its locator and any stored fingerprint precondition. Missing or mismatched content MUST make the binding visibly orphaned and MUST NOT trigger automatic path replacement, fingerprint relocation, or alternate catalog fallback.
 
 #### Scenario: Bound file moves
 - **WHEN** a bound workspace or linked file no longer exists at its persisted locator

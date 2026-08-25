@@ -40,7 +40,7 @@ The system MUST NOT expose a Conversation delete channel, contract, UI action, c
 
 - **WHEN** Desktop production registrations and bridge capabilities are inspected
 - **THEN** exactly one Conversation archive path is present
-- **AND** the retired Conversation delete channels and methods are absent
+- **AND** no Conversation delete channel or method is registered
 
 ### Requirement: Archive projection is rebuilt from DSH authority
 

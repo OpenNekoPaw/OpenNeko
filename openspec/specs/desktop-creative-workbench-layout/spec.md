@@ -128,7 +128,7 @@ Resource Browser as a Main View.
 - **WHEN** Desktop reads Workbench state containing a `resource-browser` Main View
 - **THEN** only that Workbench instance reports an explicit invalid-layout diagnostic
 - **AND** stored bytes remain unchanged while sibling Workbench instances and the right Resource Dock remain usable
-- **AND** no retired Main View handler participates
+- **AND** no alternate Main View handler participates
 
 ### Requirement: Narrow layouts preserve a usable main surface
 
@@ -160,18 +160,6 @@ Canvas SHALL render; an explicit side-open action MAY render at most two differe
 - **THEN** Desktop renders the two independent document Views in the bounded split
 - **AND** each retains its own document session, revision and View presentation state
 
-### Requirement: Future surfaces remain explicit until their owner is ready
-
-The workbench SHALL preserve slots and typed diagnostics for Cut, Preview, Generation/Quality,
-Character Studio and World without rendering simulated inputs, timelines, canvases, search results or
-successful controls.
-
-#### Scenario: User requests Cut during P1.4
-
-- **WHEN** Cut is still classified as unavailable
-- **THEN** Desktop displays the owning P1.5 diagnostic
-- **AND** it does not mount a fixed timeline, infer a Cut target or report success
-
 ### Requirement: Workspace layout controls reflect central panel containment
 
 Desktop Workspace SHALL present exactly three top-level layout controls matching the visible left, central and right structure. The left control SHALL manage Agent with a left-sidebar icon, the central control SHALL use a combined Main-plus-Cut layout icon and expose Main and Cut as explicit child presentation choices, and the right control SHALL manage Workspace Resource management with a right-sidebar icon. Main and Cut SHALL continue to use the canonical Host-owned layout projection and update path rather than a second Renderer state source. The version-free Host layout contract SHALL expose one canonical `empty-main` display mode only for a docked Cut Panel so Agent, Main and Cut can be controlled without hidden Renderer state.
@@ -198,7 +186,7 @@ Desktop Workspace SHALL present exactly three top-level layout controls matching
 - **WHEN** the user changes Main or Cut in the combined Popover
 - **THEN** Main uses the existing Workbench display update and Cut uses the existing Cut Panel presentation update or exact draft-creation path
 - **AND** the sibling presentation, exact Main/Cut View refs, Agent session, Resources and user documents remain unchanged
-- **AND** no retired top-level Main or Cut handler participates
+- **AND** no alternate top-level Main or Cut handler participates
 
 #### Scenario: Cut expands when Main is not visible
 

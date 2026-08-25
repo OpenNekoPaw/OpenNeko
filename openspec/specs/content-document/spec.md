@@ -14,11 +14,11 @@ The official `openneko.document` Tool metadata MUST describe `source.file.author
 - **THEN** the request is accepted by the canonical decoder and routed through workspace content authorization
 - **AND** the Host reads the linked file as an ordinary workspace file
 
-#### Scenario: Retired locator shapes remain visible failures
+#### Scenario: Unsupported locator shapes fail visibly
 
 - **WHEN** the Tool receives `{"source":{"kind":"workspace-file","path":"neko/assets/Books/book.epub"}}`, a top-level `locator`, or a `pageRange` field
 - **THEN** the canonical decoder rejects the request with an invalid-input diagnostic
-- **AND** no compatibility reader or alternate path is attempted
+- **AND** no alternate reader or path is attempted
 
 ### Requirement: DSH document selection uses ContentLocator only
 
@@ -78,12 +78,6 @@ artifact.
 - **WHEN** Content returns a document manifest
 - **THEN** every addressable unit carries one complete `ContentLocator`
 - **AND** no bare document coordinate or fingerprint is exposed
-
-#### Scenario: Retired DocumentLocator API is absent
-
-- **WHEN** production contracts and consumers are built
-- **THEN** no `DocumentLocator` type, parser, alias, or cross-package field remains
-- **AND** every transferable document address is a complete `ContentLocator`
 
 #### Scenario: Reader coordinate remains transient
 
@@ -147,7 +141,7 @@ The official `openneko.document` Tool MUST expose `operation`, `source`, and ope
 
 - **WHEN** the Tool receives a top-level `source` plus `input: {"mode":"manifest"}`
 - **THEN** the canonical document argument decoder rejects the unsupported `input` field before any Host call
-- **AND** no compatibility decoder or Host call is attempted
+- **AND** no alternate decoder or Host call is attempted
 
 ### Requirement: Authorized document images use native model image context
 
@@ -167,8 +161,8 @@ It MUST NOT expose raw paths, switch provider/model, create another queue or mod
 - **THEN** only the current image request fails visibly
 - **AND** no alternate model, provider, source or media-analysis implementation is selected
 
-#### Scenario: Retired nested wrapper is rejected
+#### Scenario: Nested wrapper is rejected
 
 - **WHEN** the Tool receives `{"operation":"read","input":{"source":...}}`
-- **THEN** the canonical document argument decoder rejects the retired nested wrapper before any Host call
+- **THEN** the canonical document argument decoder rejects the nested wrapper before any Host call
 - **AND** the nested wrapper cannot produce a successful Tool call

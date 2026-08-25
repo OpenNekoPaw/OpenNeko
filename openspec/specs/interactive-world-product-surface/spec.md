@@ -17,9 +17,9 @@ The production Desktop MAY expose basic World Management, directory World Author
 - **THEN** Host mounts only the narrow World Management catalog/detail composition
 - **AND** no complete WorldExperience, Story, Gameplay, Agent or realtime success path is inferred
 
-#### Scenario: Desktop restores an old mixed Foundation scene
+#### Scenario: Desktop restores an invalid mixed Foundation scene
 
-- **WHEN** a Window contains a persisted legacy mixed Foundation presentation
+- **WHEN** a Window contains a persisted mixed Foundation presentation that violates the current scene contract
 - **THEN** Host resets only that invalid presentation to the canonical fresh scene and reports a presentation diagnostic
 - **AND** World projects, versions, runs, saves, branches and protected background runtime remain unchanged
 

@@ -89,17 +89,16 @@ retention/redaction and MUST NOT be stored as ordinary SQLite rows or replayed a
 - **THEN** SecretStorage/keychain is its sole persisted authority
 - **AND** the product does not write the secret into user TOML
 
-### Requirement: Retired data is outside product runtime
+### Requirement: Unowned data remains outside product runtime
 
-Product startup, public entries, build output and ordinary tests MUST NOT inspect, import, classify,
-archive, delete, repair or rewrite retired databases, mixed config sources or workspace `.neko/` data.
-Existing bytes MUST remain untouched.
+Product startup and public entries MUST read only data owned by a current canonical repository or domain
+codec. Unknown or unowned local bytes MUST remain untouched and MUST NOT become a fallback authority.
 
-#### Scenario: Unknown retired workspace file exists
+#### Scenario: Unknown workspace file exists
 
-- **WHEN** a retired `.neko/` path contains an unknown file
-- **THEN** normal product runtime ignores the retired path and leaves the file unchanged
-- **AND** no cleanup or migration is marked successful
+- **WHEN** a Workspace contains a file that no current owner recognizes
+- **THEN** normal product runtime leaves the file unchanged
+- **AND** it does not infer facts, cleanup work or a successful repair from that file
 
 ### Requirement: Invalid data fails locally
 
@@ -125,8 +124,8 @@ the exact invalid fields and explicit identity-scoped manual actions.
 ### Requirement: Offline repair is explicit and product-unreachable
 
 Any repair utility SHALL require an exact target and confirmation, create an immutable backup, write
-atomically, validate the bounded result and remain unreachable from product imports, build, startup,
-ordinary tests and CI.
+atomically, validate the bounded result and remain unreachable from product entry points and the
+production dependency graph.
 
 #### Scenario: User authorizes one repair
 
@@ -158,7 +157,7 @@ The Local Metadata boundary SHALL accept only scalar SQL bindings and bounded st
 
 ### Requirement: Rebuildable semantic projection stores current consumer records
 
-The Search semantic cache SHALL persist source identity, source fingerprint, freshness, compact index metadata and separately-owned Entity projections required by current production consumers. It MUST NOT persist one full evidence record for every transient text segment when no production consumer requires that record. Retired evidence tables and rows MUST NOT be read, written, migrated, repaired, or selected as a fallback by the canonical runtime.
+The Search semantic cache SHALL persist source identity, source fingerprint, freshness, compact index metadata and separately-owned Entity projections required by current production consumers. It MUST NOT persist one full evidence record for every transient text segment when no production consumer requires that record.
 
 #### Scenario: Semantic source is analyzed
 
@@ -166,53 +165,19 @@ The Search semantic cache SHALL persist source identity, source fingerprint, fre
 - **THEN** the cache stores one compact semantic source/index record and the required Entity projections
 - **AND** it does not create per-segment durable evidence rows
 
-#### Scenario: Existing database contains retired evidence rows
-
-- **WHEN** the canonical runtime opens a database that still contains the retired evidence table
-- **THEN** source reconciliation and Entity projection use only current source/index and Entity tables
-- **AND** the retired rows remain untouched and cannot produce a successful fallback result
-
 #### Scenario: Fresh database initializes Search metadata
 
 - **WHEN** Search initializes its Local Metadata tables in a fresh database
-- **THEN** no semantic evidence table is created
-- **AND** semantic source records can round-trip without segment evidence
+- **THEN** semantic source records can round-trip without segment evidence
 
-### Requirement: Desktop tests use isolated storage authority
+### Requirement: Record handling depends on authority, not path appearance
 
-Every canonical Desktop functional or Agent Evaluation run SHALL bind its runtime HOME, Local Metadata
-SQLite database, Electron `userData`, and prepared Workspace to one explicit temporary fixture root
-before application storage opens. A functional launch with a missing, relative, unsafe, or escaping
-storage path MUST fail visibly and MUST NOT fall back to the system HOME or `~/.neko/neko.db`.
+Product runtime MUST NOT classify, hide, rewrite or delete identifiable user records merely because a
+stored locator resembles a temporary, report or test path. Availability SHALL be resolved by the owning
+catalog and failures SHALL remain identity-scoped.
 
-#### Scenario: Canonical functional run starts
+#### Scenario: A stored Workspace locator is unavailable
 
-- **WHEN** the shared Desktop functional runner prepares a UI or Agent Evaluation scenario
-- **THEN** it launches Desktop with an explicit fixture argument and absolute contained HOME, userData,
-  and Workspace paths
-- **AND** Desktop opens `${FIXTURE_HOME}/.neko/neko.db` rather than the user database
-
-#### Scenario: Functional userData escapes the fixture root
-
-- **WHEN** a functional launch supplies Electron `userData` outside its fixture HOME
-- **THEN** Desktop rejects startup before Local Metadata opens
-- **AND** no fallback database is selected
-
-#### Scenario: Ordinary product startup begins
-
-- **WHEN** Desktop starts without the explicit functional fixture argument or fixture environment
-- **THEN** it uses the system HOME and canonical user database
-- **AND** it does not inspect or import discarded functional fixture databases
-
-### Requirement: Historical fixture records are not inferred or rewritten
-
-Product runtime and test orchestration MUST NOT classify, hide, migrate, rewrite, or delete existing
-user catalog rows by matching path names associated with tests, reports, or temporary directories.
-Identifiable unavailable rows SHALL remain visible for explicit identity-scoped user handling.
-
-#### Scenario: User database contains an old fixture-looking Workspace
-
-- **WHEN** a retained Workspace locator includes a temporary, report, or Agent Evaluation path
-- **THEN** the project catalog displays the record and its local diagnostic according to normal catalog
-  rules
-- **AND** only an explicit user removal for that exact identity may delete the catalog record
+- **WHEN** an identifiable Workspace locator cannot be resolved
+- **THEN** the owning catalog keeps the record visible with its local diagnostic
+- **AND** only an explicit operation for that exact identity may remove it
