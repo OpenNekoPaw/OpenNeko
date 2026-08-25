@@ -11,6 +11,7 @@ publicHoistPattern:
   - '*prism*'
 
 overrides:
+  '@electron/node-gyp': https://codeload.github.com/electron/node-gyp/tar.gz/06b29aafb7708acef8b3669835c8a7857ebc92d2
   adm-zip: ^0.6.0
   '@vitejs/plugin-react': 4.3.4
   '@vitest/coverage-v8': 4.1.2
