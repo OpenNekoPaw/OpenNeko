@@ -19,7 +19,10 @@ describe('retired Pi data access poison', () => {
       'repairRetiredPi',
       'cleanupRetiredPi',
       'deleteRetiredPi',
-      'migratePiTranscript',
+      ['mig', 'ratePiTranscript'].join(''),
+      'removeRetiredPiStorage',
+      'RetiredPiStorageFilePort',
+      'remove-retired-pi-agent-storage',
     ];
     for (const source of sources) {
       const content = await readFile(source, 'utf8');

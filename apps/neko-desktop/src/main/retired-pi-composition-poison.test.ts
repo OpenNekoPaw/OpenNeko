@@ -21,6 +21,8 @@ describe('Desktop Main retired Pi composition poison', () => {
       expect(source).not.toContain('resolveAgentSkillsDir');
     }
     expect(index).not.toContain("'agent-credentials.json'");
+    expect(index).not.toContain('removeRetiredPiStorage');
+    expect(index).not.toContain('DesktopRetiredPiStorageFilePort');
     expect(index).toContain('DSH Conversation reference authority is not composed.');
     expect(existsSync(path.join(mainRoot, 'macos-protected-auth-prompt.ts'))).toBe(false);
   });

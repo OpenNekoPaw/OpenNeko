@@ -15,8 +15,6 @@ interface NonCanonicalDatabasePath {
   readonly literal: string;
 }
 
-const retiredPiCleanupSource =
-  'packages/agent/runtime/src/application/retired-pi-storage-cleanup.ts';
 const retiredPiTables = [
   'agent_conversation_records',
   'conversations',
@@ -29,14 +27,14 @@ export function validateRetiredAgentStorageSources(
 ): readonly string[] {
   const findings: string[] = [];
   for (const [sourcePath, source] of Object.entries(sources)) {
+    const dropsDynamicTable = /DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?\$\{/iu.test(source);
     for (const table of retiredPiTables) {
+      const namesRetiredTable = new RegExp(`['"]${table}['"]`, 'u').test(source);
       if (
-        sourcePath !== retiredPiCleanupSource &&
-        new RegExp(`DROP\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?${table}\\b`, 'iu').test(source)
+        new RegExp(`DROP\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?${table}\\b`, 'iu').test(source) ||
+        (dropsDynamicTable && namesRetiredTable)
       ) {
-        findings.push(
-          `${sourcePath}: retired Pi table ${table} may only be removed by ${retiredPiCleanupSource}`,
-        );
+        findings.push(`${sourcePath}: retired Pi table ${table} must remain byte-preserved`);
       }
     }
     if (/\b(?:ConversationCatalogRepository|ConversationCatalogSource)\b/u.test(source)) {
@@ -61,16 +59,12 @@ export function validateRetiredAgentStorageSources(
     ) {
       findings.push(`${sourcePath}: retired Pi conversation file layout`);
     }
-  }
-  const cleanupSource = sources[retiredPiCleanupSource];
-  if (cleanupSource !== undefined) {
-    for (const table of retiredPiTables) {
-      if (!cleanupSource.includes(`'${table}'`)) {
-        findings.push(`${retiredPiCleanupSource}: missing exact retired Pi table ${table}`);
-      }
-    }
-    if (!cleanupSource.includes('DROP TABLE IF EXISTS ${table}')) {
-      findings.push(`${retiredPiCleanupSource}: missing canonical retired Pi table cleanup`);
+    if (
+      /\b(?:removeRetiredPiStorage|RetiredPiStorageFilePort|DesktopRetiredPiStorageFilePort)\b/u.test(
+        source,
+      )
+    ) {
+      findings.push(`${sourcePath}: retired Pi storage cleanup path must remain deleted`);
     }
   }
   return findings;

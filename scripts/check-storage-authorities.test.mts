@@ -85,24 +85,32 @@ describe('storage authority quality gate', () => {
     );
   });
 
-  it('allows retired Pi table deletion only in the canonical cleanup owner', () => {
-    const cleanupPath = 'packages/agent/runtime/src/application/retired-pi-storage-cleanup.ts';
-    const canonicalCleanup = `
-      const tables = [
-        'agent_conversation_records',
-        'conversations',
-        'pi_conversations',
-        'pi_messages',
-      ];
-      await sql.run(\`DROP TABLE IF EXISTS \${table}\`);
-    `;
-
-    assert.deepEqual(validateRetiredAgentStorageSources({ [cleanupPath]: canonicalCleanup }), []);
+  it('rejects retired Pi storage deletion and cleanup services in every production owner', () => {
     assert.deepEqual(
       validateRetiredAgentStorageSources({
-        'other-cleanup.ts': 'DROP TABLE IF EXISTS pi_messages',
+        'cleanup.ts': `
+          export async function removeRetiredPiStorage() {
+            await sql.run('DROP TABLE IF EXISTS pi_messages');
+          }
+        `,
       }),
-      [`other-cleanup.ts: retired Pi table pi_messages may only be removed by ${cleanupPath}`],
+      [
+        'cleanup.ts: retired Pi table pi_messages must remain byte-preserved',
+        'cleanup.ts: retired Pi storage cleanup path must remain deleted',
+      ],
+    );
+
+    assert.deepEqual(
+      validateRetiredAgentStorageSources({
+        'renamed-owner.ts': `
+          const tables = ['pi_conversations', 'pi_messages'];
+          for (const table of tables) await sql.run(\`DROP TABLE IF EXISTS \${table}\`);
+        `,
+      }),
+      [
+        'renamed-owner.ts: retired Pi table pi_conversations must remain byte-preserved',
+        'renamed-owner.ts: retired Pi table pi_messages must remain byte-preserved',
+      ],
     );
   });
 });

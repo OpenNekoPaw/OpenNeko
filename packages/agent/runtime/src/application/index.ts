@@ -20,4 +20,3 @@ export * from './dsh-permission-owner';
 export * from './agent-authoring-mutation-authority';
 export * from './agent-conversation-context-authority';
 export * from './agent-runtime-settings-repository';
-export * from './retired-pi-storage-cleanup';

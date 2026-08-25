@@ -59,7 +59,6 @@ import {
   createDshTurnCanvasTargetOwner,
   createDshWorkspaceBoardArtifactDeliveryService,
   projectDshConversationTitle,
-  removeRetiredPiStorage,
   type DshDomainConversationService,
 } from '@neko/agent-runtime/application';
 import {
@@ -87,7 +86,6 @@ import {
 } from './desktop-functional-fixture';
 import { createDesktopMediaExecutionProviderResolver } from './desktop-media-execution-provider';
 import { createEncryptedDesktopSecretPort } from './encrypted-desktop-secret-port';
-import { DesktopRetiredPiStorageFilePort } from './desktop-retired-pi-storage-file-port';
 import {
   createDshWorkspaceBoardContentRead,
   DesktopDshWorkspaceBoardDelivery,
@@ -398,10 +396,6 @@ async function startDesktop(): Promise<void> {
   let agentRuntimeSettings;
   let stateRejections: readonly InvalidJsonStateRejection[] = [];
   try {
-    await removeRetiredPiStorage({
-      metadataStore: localMetadataStore,
-      files: new DesktopRetiredPiStorageFilePort(homedir),
-    });
     await shellStateRepository.prepare();
     const rejections = await Promise.all([
       shellStateRepository.inspectInvalidState(),
