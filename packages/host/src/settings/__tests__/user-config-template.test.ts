@@ -16,7 +16,6 @@ describe('user config template', () => {
     expect(template).toContain('DeepSeek direct');
     expect(template).toContain('Gemini direct');
     expect(template).toContain('Media understanding uses the selected Agent model');
-    expect(template).toContain('Do not configure image_understand');
     expect(template).toContain(
       'protocol_profile: optional request protocol override for gateway models',
     );

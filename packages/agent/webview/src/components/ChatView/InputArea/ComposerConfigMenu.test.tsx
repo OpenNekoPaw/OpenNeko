@@ -6,7 +6,7 @@ import { ComposerConfigMenu } from './ComposerConfigMenu';
 import { DEFAULT_GENERATION_PARAMS } from './types';
 
 describe('Composer model configuration', () => {
-  it('shows media generation choices without a perception-model selector', () => {
+  it('shows only media generation choices', () => {
     render(
       <AgentPresentationI18nProvider locale="en">
         <ComposerConfigMenu
@@ -51,6 +51,5 @@ describe('Composer model configuration', () => {
     const dialog = screen.getByRole('dialog', { name: 'Creation configuration' });
     expect(dialog.textContent).toContain('Image generation model');
     expect(dialog.textContent).toContain('Image Generator');
-    expect(dialog.textContent).not.toMatch(/perception|understanding/iu);
   });
 });

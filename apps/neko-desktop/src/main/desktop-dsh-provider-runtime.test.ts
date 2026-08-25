@@ -85,11 +85,6 @@ describe('Desktop DSH provider runtime projection', () => {
           providerId: 'vision-provider',
           capabilities: ['chat', 'vision'],
         }),
-        model({
-          id: 'retired-alias-model',
-          providerId: 'vision-provider',
-          capabilities: ['chat', 'image.understand'],
-        }),
         model({ id: 'text-model', providerId: 'vision-provider', capabilities: ['chat'] }),
       ],
       credentials: { read: vi.fn(async () => undefined) },
@@ -102,9 +97,6 @@ describe('Desktop DSH provider runtime projection', () => {
     expect(projection.executionCatalog.resolve('vision-provider', 'text-model')?.input).toEqual([
       'text',
     ]);
-    expect(
-      projection.executionCatalog.resolve('vision-provider', 'retired-alias-model')?.input,
-    ).toEqual(['text']);
     expect(JSON.stringify(projection.profilePatchEntries)).toContain('"input":["text","image"]');
   });
 

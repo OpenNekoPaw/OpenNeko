@@ -101,9 +101,6 @@ describe('default agent provider configuration', () => {
       enabled: false,
       capabilities: expect.arrayContaining(['vision', 'audio', 'vision_video', 'llm.chat']),
     });
-    expect(geminiVideoModel?.capabilities).not.toEqual(
-      expect.arrayContaining(['llm.vision', 'image.understand']),
-    );
     if (!geminiVideoModel) throw new Error('Expected default Gemini multimodal model');
   });
 });

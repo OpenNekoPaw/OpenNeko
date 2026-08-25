@@ -41,13 +41,13 @@ DSH、Electron `process.execPath` 或 Pi fallback。DSH runtime closure 必须�
 
 ## 五层边界
 
-| 维度 | 约束 |
-| --- | --- |
-| 职责 | DSH 拥有 Agent/Session/extension execution；OpenNeko Agent application 拥有 binding/projection；领域包拥有业务结果；Host 拥有信任和资源。 |
+| 维度 | 约束                                                                                                                                          |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| 职责 | DSH 拥有 Agent/Session/extension execution；OpenNeko Agent application 拥有 binding/projection；领域包拥有业务结果；Host 拥有信任和资源。     |
 | 依赖 | Renderer 只依赖 typed contracts；Desktop Main 只组合 package public ports 与 concrete adapters；host-neutral packages 不依赖 Electron/React。 |
-| 接口 | 使用 exact Conversation/DSH Session/turn/call/request/Job identity 与单一 canonical shape；禁止自由 JSON、内部版本和 active-state fallback。 |
-| 扩展 | 用户扩展面只有 Skill/MCP；Plugin 只用于官方 DSH profile composition；领域能力以 typed DSH Tool 经 reverse Host request 调用 owning service。 |
-| 测试 | deterministic tests 证明唯一 path/no-fallback；真实 Desktop + provider 验证行为；二者不能互相替代。 |
+| 接口 | 使用 exact Conversation/DSH Session/turn/call/request/Job identity 与单一 canonical shape；禁止自由 JSON、内部版本和 active-state fallback。  |
+| 扩展 | 用户扩展面只有 Skill/MCP；Plugin 只用于官方 DSH profile composition；领域能力以 typed DSH Tool 经 reverse Host request 调用 owning service。  |
+| 测试 | deterministic tests 证明唯一 path/no-fallback；真实 Desktop + provider 验证行为；二者不能互相替代。                                           |
 
 ## Session 与产品事实
 
@@ -91,7 +91,7 @@ cross-session identity、过大 payload 或权限拒绝必须 fail-local、fail-
 
 ACP content block 是 Desktop 到 DSH 的唯一消息输入协议。Composer 图片通过 Host 授权和 DSH attachment admission 后以 DSH 原生 image block 进入 exact Session；运行中发现的文档图片通过 `openneko.read_image` Tool 返回同一原生 image block。当前 DSH 只原生持久化 PNG、JPEG、WebP 与 GIF；音频、视频、文档和其他文件在公开 block/lifecycle 补齐前，只能由 owning media/content Tool 生成有界、带来源的文本、metadata、转写或采样表示，不把 raw path、bearer URL 或旧多模态 packet 写入 Session。
 
-当前 Agent 模型是媒体语义理解的唯一 LLM authority。附件或 Tool 结果所需模态受支持时由同一模型继续处理；不支持时只拒绝当前 submit 或 Tool call，并明确提示切换模型。产品不配置独立感知模型，不隐式切换 provider/model，也不允许 Tool 用隐藏模型伪造成功。Generation 媒体模型/参数继续由 `@neko/generation` owner 独立管理；未来专用 ASR/OCR/安全审核模型只能属于对应 Tool/service 的显式能力与审批边界。
+当前 Agent 模型是媒体语义理解的唯一 LLM authority。附件或 Tool 结果所需模态受支持时由同一模型继续处理；不支持时只拒绝当前 submit 或 Tool call，并明确提示切换模型。产品不配置第二媒体分析模型，不隐式切换 provider/model，也不允许 Tool 用隐藏模型伪造成功。Generation 媒体模型/参数继续由 `@neko/generation` owner 独立管理；未来专用 ASR/OCR/安全审核模型只能属于对应 Tool/service 的显式能力与审批边界。
 
 ## Credential 与安全
 

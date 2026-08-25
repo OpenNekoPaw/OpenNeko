@@ -21,7 +21,7 @@ access, persists it in the DSH attachment store, and emits a native image block.
 
 - **WHEN** the exact current provider/model route does not declare image input
 - **THEN** the image Tool call fails visibly before publishing an image result
-- **AND** it does not switch model, provider, source, or perception implementation
+- **AND** it does not switch model, provider, source, or media-analysis implementation
 
 #### Scenario: One step requests several document images
 
@@ -33,7 +33,7 @@ access, persists it in the DSH attachment store, and emits a native image block.
 #### Scenario: Valid document image exceeds the attachment side limit
 
 - **WHEN** an authorized image is within the active decoded-pixel and byte limits but one side exceeds the active DSH attachment dimension limit
-- **THEN** the image reader derives a bounded auto-oriented perception representation and persists that representation as the native DSH attachment
+- **THEN** the image reader derives a bounded auto-oriented visual representation and persists that representation as the native DSH attachment
 - **AND** the Tool result and downstream Workspace artifacts preserve the exact original `ContentLocator`
 - **AND** no source bytes, Workspace file, attachment limit, provider, or model selection is modified
 

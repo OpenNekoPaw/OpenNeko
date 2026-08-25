@@ -56,16 +56,16 @@ Renderer product UI
 
 ### 3. 单一 authority 分工
 
-| 事实或生命周期                                            | 唯一 owner                          | DSH/OpenNeko 边界                                                |
-| --------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------- |
-| Agent turn、流式事件、Tool call、取消                     | DSH Session/Agent runtime           | OpenNeko 只投影产品 contract，不复制执行状态机                   |
-| transcript 与 harness context                             | DSH Session                         | Conversation catalog 只保存产品记录与精确 Session 引用           |
-| Conversation catalog、Workspace/Project binding           | OpenNeko Agent application service  | 不由 Cordis plugin inventory 或 Renderer store 反向决定          |
-| provider/model 用户选择、凭据、成本授权                   | OpenNeko 产品配置与 CredentialStore | provider adapter 只接收当前请求已授权配置                        |
-| 领域事实与长任务                                          | owning domain service / Job         | Tool call 通过精确 domain identity 发起，不接管领域 Job 生命周期 |
-| Skill/MCP catalog、配置、readiness 与执行                 | DSH profile                         | OpenNeko 只显示可重建投影并提交精确命令                           |
-| Plugin mount/unmount/effect disposal                      | DSH Cordis Loader                   | 只用于官方内部 composition，不形成用户 Plugin catalog            |
-| Workspace 文件、媒体与本地资源授权                        | OpenNeko Desktop/owning package     | DSH Tool 只接收授权 handle、descriptor 或 `ContentLocator`       |
+| 事实或生命周期                                  | 唯一 owner                          | DSH/OpenNeko 边界                                                |
+| ----------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------- |
+| Agent turn、流式事件、Tool call、取消           | DSH Session/Agent runtime           | OpenNeko 只投影产品 contract，不复制执行状态机                   |
+| transcript 与 harness context                   | DSH Session                         | Conversation catalog 只保存产品记录与精确 Session 引用           |
+| Conversation catalog、Workspace/Project binding | OpenNeko Agent application service  | 不由 Cordis plugin inventory 或 Renderer store 反向决定          |
+| provider/model 用户选择、凭据、成本授权         | OpenNeko 产品配置与 CredentialStore | provider adapter 只接收当前请求已授权配置                        |
+| 领域事实与长任务                                | owning domain service / Job         | Tool call 通过精确 domain identity 发起，不接管领域 Job 生命周期 |
+| Skill/MCP catalog、配置、readiness 与执行       | DSH profile                         | OpenNeko 只显示可重建投影并提交精确命令                          |
+| Plugin mount/unmount/effect disposal            | DSH Cordis Loader                   | 只用于官方内部 composition，不形成用户 Plugin catalog            |
+| Workspace 文件、媒体与本地资源授权              | OpenNeko Desktop/owning package     | DSH Tool 只接收授权 handle、descriptor 或 `ContentLocator`       |
 
 Renderer 只选择 Conversation 并渲染只读投影。卸载 UI、切换 Workspace 或进入管理场景不得取消、转移或重绑定精确 Session 下仍受保护的任务。
 
@@ -142,7 +142,7 @@ DSH 当前 provider adapter 可能内部依赖 `@earendil-works/pi-ai`。在 DSH
 
 ACP content block 是 Desktop 到 DSH 的唯一输入协议。DSH rc.7 原生 attachment 当前只覆盖 PNG、JPEG、WebP 与 GIF；Composer 图片通过 Host 授权和 DSH admission 后进入 Session，运行中图片通过 package-owned Content Tool 返回同一原生 image block。音频、视频、文档与其他文件在 DSH 公开生命周期补齐前，只由 owning media/content Tool 生成有界、带来源的文本、metadata、转写或采样表示，不恢复旧 Agent 多模态 packet 或把 raw path 写入 Session。
 
-当前 Agent 模型是媒体语义理解的唯一 LLM authority；缺少 Tool 结果所需模态时当前输入或 Tool call fail-visible，不配置独立感知模型，也不切换 provider/model。Generation 媒体模型/参数仍由 Generation owner 管理。Generation、Canvas、Cut、Assets、Character 与 World 作为 first-party DSH Tools 通过 typed reverse Host adapter 调用 owning service，不包装成 MCP。Browser Use 与 Computer Use 则作为官方 DSH MCP contributions：DSH 拥有 MCP lifecycle，OpenNeko 只拥有 OS/target/grant/approval 边界。
+当前 Agent 模型是媒体语义理解的唯一 LLM authority；缺少 Tool 结果所需模态时当前输入或 Tool call fail-visible，不配置第二媒体分析模型，也不切换 provider/model。Generation 媒体模型/参数仍由 Generation owner 管理。Generation、Canvas、Cut、Assets、Character 与 World 作为 first-party DSH Tools 通过 typed reverse Host adapter 调用 owning service，不包装成 MCP。Browser Use 与 Computer Use 则作为官方 DSH MCP contributions：DSH 拥有 MCP lifecycle，OpenNeko 只拥有 OS/target/grant/approval 边界。
 
 ## 实施边界与顺序
 

@@ -8,7 +8,6 @@ describe('OpenNeko DSH product system prompt', () => {
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('immutable runtime tool list');
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('A plan is not execution evidence');
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toMatch(/\bPi\b|fallbackProvider|fallbackModel/u);
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toContain('perception capability');
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('package-owned media Tool');
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toMatch(/executionMode|PromptLocale/u);
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('<!-- neko:artifact -->');

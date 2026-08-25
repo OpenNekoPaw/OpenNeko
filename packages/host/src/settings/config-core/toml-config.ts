@@ -18,6 +18,7 @@ import {
   STREAM_FORMATS,
 } from '@neko/ai-contracts';
 import { parse, stringify } from 'smol-toml';
+import { isAgentModelPurpose } from '../model-purpose-registry';
 import type { ProviderDefinition, UnifiedConfig } from './types';
 
 export interface NekoTomlConfig {
@@ -121,8 +122,7 @@ export interface TomlConfigValidationIssue {
     | 'invalidProviderApiKey'
     | 'unsupportedModelType'
     | 'unsupportedDefaultModelType'
-    | 'unsupportedDefaultModelPurpose'
-    | 'retiredDefaultModelPurpose';
+    | 'unsupportedDefaultModelPurpose';
   readonly path: string;
   readonly message: string;
 }
@@ -486,11 +486,14 @@ function decodeModelRefs(
   const result: Record<string, TomlModelRefConfig> = {};
   for (const [key, entry] of Object.entries(record)) {
     const path = `${section}.${key}`;
-    if (section === 'default_model_purposes' && isRetiredMediaUnderstandingPurpose(key)) {
+    if (
+      section === 'default_model_purposes' &&
+      !isAgentModelPurpose(tomlModelPurposeKeyToRuntime(key))
+    ) {
       issues.push({
-        code: 'retiredDefaultModelPurpose',
+        code: 'unsupportedDefaultModelPurpose',
         path,
-        message: `${path} is retired; media understanding uses the selected Agent model and package-owned Tools.`,
+        message: `${path} is not a supported model purpose.`,
       });
       continue;
     }
@@ -529,19 +532,6 @@ function decodeModelRefs(
     result[key] = { provider_id: providerId, model_id: modelId };
   }
   return Object.keys(result).length > 0 ? result : undefined;
-}
-
-function isRetiredMediaUnderstandingPurpose(value: string): boolean {
-  return (
-    value === 'image_understand' ||
-    value === 'video_understand' ||
-    value === 'audio_understand' ||
-    value === 'image.understand' ||
-    value === 'video.understand' ||
-    value === 'audio.understand' ||
-    value === 'llm_vision' ||
-    value === 'llm.vision'
-  );
 }
 
 function decodeDefaults(

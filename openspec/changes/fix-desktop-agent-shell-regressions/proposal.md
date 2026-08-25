@@ -56,7 +56,7 @@ Electron Desktop 的 Agent 入口在冷启动、首次挂载和项目主面板�
   snapshot，使同一用户消息及其附件、Canvas/context payload 与应用内 file reference 从排队态连续转为
   transcript 消息；不得用空 snapshot、pending count、文本匹配或等待最终 transcript 回写填补可见性。
 - 让 Pi live Timeline 与持久 transcript 使用同一个 canonical ToolResult projection，完整保留 stable
-  `ContentLocator`、attachments、perception cards 和 artifact transfer；历史 Conversation 消息也必须经过
+  `ContentLocator`、attachments 和 artifact transfer；历史 Conversation 消息也必须经过
   Host resource authorization 后再进入 Webview，授权失败显示 item-local diagnostic，禁止退回 raw path、
   文件名猜测或无诊断占位。
 - 让 `ReadImage` 和 Workspace Board source artifact identity 从 canonical locator 派生，避免不同文档中的

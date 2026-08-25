@@ -10,21 +10,12 @@ describe('@neko/quality architecture boundaries', () => {
   it('exposes core and project behavior through distinct public entries', () => {
     expect(core.createQualityGateRuntime).toBeTypeOf('function');
     expect(project.collectProjectQualityEvidence).toBeTypeOf('function');
-    expect(Reflect.has(core, 'createMultimodalPerceptionEvaluator')).toBe(false);
-    expect(Reflect.has(core, 'assertExternalPerceptionTarget')).toBe(false);
   });
 
-  it('does not retain an independently configured model execution adapter', () => {
+  it('does not expose a model execution subpath', () => {
     const manifest = readFileSync(resolve(packageRoot, 'package.json'), 'utf8');
-    const runtime = readFileSync(
-      resolve(packageRoot, 'src/internal/quality-gate-runtime.ts'),
-      'utf8',
-    );
 
     expect(manifest).not.toContain('"./model"');
-    expect(runtime).not.toMatch(
-      /createMultimodalPerceptionEvaluator|MediaQualityChatModelRef|MediaQualityLLMService/u,
-    );
   });
 
   it('depends only on explicit domain contracts', () => {
@@ -34,6 +25,7 @@ describe('@neko/quality architecture boundaries', () => {
       '@neko/platform',
       '@neko/entity-domain',
       '@neko/cut',
+      '@neko/ai-sdk',
       'vscode',
       'react',
     ];

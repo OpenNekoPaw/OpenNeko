@@ -278,16 +278,23 @@ Generation and Canvas SHALL be the first vertical official domain Tool slice reg
 
 ACP Prompt content blocks SHALL be the sole Desktop-to-DSH message input path. The bridge SHALL advertise only content types it can preserve into the DSH Session and current provider request. Composer images SHALL use DSH durable image attachments and image blocks after Host authorization and DSH admission. Images discovered during execution SHALL use the package-owned Content image Tool to return a native image block to the same current Agent model. Audio, video, document and other file inputs without a qualified DSH native block SHALL be processed only by exact owning media/content Tools into bounded source-attributed text, metadata, transcription or sampled representations. OpenNeko MUST NOT serialize raw paths, bearer URLs or a second Agent multimodal packet into the Session.
 
-The selected current Agent model SHALL be the only LLM authority for media understanding. OpenNeko SHALL NOT expose or consume a separate perception-model selector, purpose binding, catalog or cross-model fallback. When the exact current model lacks the modality required by an attachment or Tool result, only the affected submit or Tool call SHALL fail visibly and direct the user to select a capable Agent model. It MUST NOT silently drop the media, infer or switch provider/model, invoke a hidden perception model or fabricate semantic evidence.
+The selected current Agent model SHALL be the only LLM authority for media understanding. OpenNeko SHALL NOT expose or consume a second media-analysis model selector, purpose binding, catalog or cross-model fallback. When the exact current model lacks the modality required by an attachment or Tool result, only the affected submit or Tool call SHALL fail visibly and direct the user to select a capable Agent model. It MUST NOT silently drop the media, infer or switch provider/model, invoke a hidden model or fabricate semantic evidence.
 
-Current-model input support SHALL be declared only through the canonical native modality capabilities owned by the model catalog. Retired `llm.vision` and `*.understand` aliases SHALL NOT remain in the public capability contract or participate in DSH input admission. A retained package without a production consumer SHALL NOT expose a direct media-analysis LLM adapter with an independently injected provider/model reference; future media-quality evidence that needs model execution MUST enter through an explicit owning Tool/service contract.
+Current-model input support SHALL be declared only through the canonical native modality capabilities owned by the model catalog. Retired input aliases SHALL NOT remain in the public capability contract or participate in DSH input admission. Unknown purpose bindings SHALL be rejected per entry through the canonical purpose registry while valid sibling bindings remain available; the decoder SHALL NOT retain a retired-field list, dedicated compatibility code or alternate read path. A retained package without a production consumer SHALL NOT expose a direct media-analysis LLM adapter with an independently injected provider/model reference; future media-quality evidence that needs model execution MUST enter through an explicit owning Tool/service contract.
 
-#### Scenario: Retired capability aliases cannot advertise image input
+#### Scenario: Unknown model purpose is isolated generically
 
-- **GIVEN** a model declaration uses a retired `llm.vision` or `image.understand` capability token
-- **WHEN** the configuration or DSH provider profile is validated
-- **THEN** the retired token does not advertise native image input
-- **AND** only the canonical current-model image modality declaration can enable the image path
+- **GIVEN** one configuration entry uses a purpose outside the canonical purpose registry and a sibling entry is valid
+- **WHEN** the configuration is decoded
+- **THEN** only the unknown entry is rejected with an unsupported-purpose diagnostic
+- **AND** the valid sibling remains available without consulting a retired-field list or compatibility path
+
+#### Scenario: Dead media-analysis card bridge remains absent
+
+- **GIVEN** no production owner emits or consumes the retired Search media-analysis card projection
+- **WHEN** Search public contracts and semantic indexing work kinds are inspected
+- **THEN** no card input, reference field or dedicated refresh work kind is exposed
+- **AND** media semantic indexing continues through source-attributed text segments, entity mentions and semantic tags
 
 #### Scenario: Inactive Quality package cannot bypass Tool ownership
 
@@ -295,6 +302,7 @@ Current-model input support SHALL be declared only through the canonical native 
 - **WHEN** its public exports and source are inspected
 - **THEN** no adapter accepts an independently selected media-analysis provider/model and calls an LLM directly
 - **AND** its provider-neutral evaluator and evidence contracts remain available for a future owning Tool/service integration
+- **AND** a domain evaluator class that merely classifies visual or semantic evidence does not become a model selector or provider route
 
 #### Scenario: User submits a supported image
 
@@ -336,14 +344,14 @@ Current-model input support SHALL be declared only through the canonical native 
 - **WHEN** an image-capable current model calls `openneko.read_image` with an exact authorized `ContentLocator`
 - **THEN** the Content owner returns a bounded native image block through the exact DSH Tool call
 - **AND** the same current Agent model receives that block in the next model step
-- **AND** no separate perception model, purpose binding or provider route participates
+- **AND** no second media-analysis model, purpose binding or provider route participates
 
 #### Scenario: No qualified input path exists
 
 - **WHEN** the current model lacks the modality required by a selected attachment or media Tool result
 - **THEN** the Composer submit or exact Tool call reports the unsupported input without changing the Agent model
 - **AND** the media is not discarded or replaced by fabricated text
-- **AND** no perception purpose binding, hidden provider or alternate model is consulted
+- **AND** no second media-analysis purpose binding, hidden provider or alternate model is consulted
 
 ### Requirement: Character and Room participants use the canonical DSH Conversation lifecycle
 

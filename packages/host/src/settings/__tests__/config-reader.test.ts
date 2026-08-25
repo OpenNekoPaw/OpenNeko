@@ -316,20 +316,12 @@ describe('config-reader typed results', () => {
     );
   });
 
-  it('resets retired media-understanding bindings while preserving valid sibling purposes', () => {
+  it('rejects an unknown purpose while preserving valid sibling purposes', () => {
     const filePath = path.join(createTempRoot(), 'config.toml');
     fs.writeFileSync(
       filePath,
       [
-        '[default_model_purposes.image_understand]',
-        'provider_id = "google"',
-        'model_id = "google-gemini-2.5-flash"',
-        '',
-        '[default_model_purposes.audio_understand]',
-        'provider_id = "google"',
-        'model_id = "google-gemini-2.5-flash"',
-        '',
-        '[default_model_purposes.video_understand]',
+        '[default_model_purposes.media_analysis]',
         'provider_id = "google"',
         'model_id = "google-gemini-2.5-flash"',
         '',
@@ -359,25 +351,15 @@ describe('config-reader typed results', () => {
     });
     expect(result.diagnostics).toEqual([
       expect.objectContaining({
-        code: 'retiredDefaultModelPurpose',
-        path: 'default_model_purposes.image_understand',
-      }),
-      expect.objectContaining({
-        code: 'retiredDefaultModelPurpose',
-        path: 'default_model_purposes.audio_understand',
-      }),
-      expect.objectContaining({
-        code: 'retiredDefaultModelPurpose',
-        path: 'default_model_purposes.video_understand',
+        code: 'unsupportedDefaultModelPurpose',
+        path: 'default_model_purposes.media_analysis',
       }),
     ]);
 
     writeConfigFile(filePath, result.config);
     const rewritten = fs.readFileSync(filePath, 'utf-8');
     expect(rewritten).toContain('[default_model_purposes.character_dialogue]');
-    expect(rewritten).not.toContain('image_understand');
-    expect(rewritten).not.toContain('audio_understand');
-    expect(rewritten).not.toContain('video_understand');
+    expect(rewritten).not.toContain('media_analysis');
   });
 
   it('preserves model protocol profile overrides from TOML', () => {

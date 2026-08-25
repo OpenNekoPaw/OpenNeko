@@ -635,13 +635,13 @@ through their stable locator metadata.
 ### Requirement: Tool result resources survive live projection, persistence and terminal delivery
 
 Agent SHALL project the same canonical ToolResult shape from Pi live events and persisted Pi transcript entries.
-The projection SHALL preserve durable data, attachments, perception cards, backfill diagnostics and artifact
-transfers while excluding transient preview URLs from durable facts. Every ToolResult shown in Webview SHALL pass
+The projection SHALL preserve durable data, attachments, backfill diagnostics and artifact transfers while
+excluding transient preview URLs from durable facts. Every ToolResult shown in Webview SHALL pass
 through the Host resource authorization boundary using its stable locator identity.
 
 #### Scenario: ReadImage completes during a live turn
 
-- **WHEN** `ReadImage` completes with locator-backed image data, attachments and perception cards
+- **WHEN** `ReadImage` completes with locator-backed image data and attachments
 - **THEN** Timeline retains those exact durable collections in the Tool Call result
 - **AND** Host adds only connection-scoped preview descriptors before Webview rendering
 - **AND** terminal artifact collection receives the same locator-backed resources

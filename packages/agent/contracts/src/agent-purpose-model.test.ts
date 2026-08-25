@@ -21,18 +21,15 @@ describe('Agent purpose model bindings', () => {
     });
   });
 
-  it.each(['image.understand', 'video.understand', 'audio.understand'])(
-    'rejects retired perception purpose %s',
-    (purpose) => {
-      expect(() =>
-        parseAgentFlatPurposeModelRefs({
-          [purpose]: {
-            providerId: 'chat-provider',
-            modelId: 'multimodal-model',
-            category: 'llm',
-          },
-        }),
-      ).toThrow(`Unknown Agent model purpose '${purpose}'.`);
-    },
-  );
+  it('rejects purposes outside the Agent purpose contract', () => {
+    expect(() =>
+      parseAgentFlatPurposeModelRefs({
+        'media.analysis': {
+          providerId: 'chat-provider',
+          modelId: 'multimodal-model',
+          category: 'llm',
+        },
+      }),
+    ).toThrow("Unknown Agent model purpose 'media.analysis'.");
+  });
 });

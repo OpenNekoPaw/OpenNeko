@@ -369,7 +369,6 @@ describe('project cache/search contracts', () => {
     expect(canRunSemanticIndexingWorkOnTrigger('ocr', 'project-open')).toBe(false);
     expect(canRunSemanticIndexingWorkOnTrigger('asr', 'project-open')).toBe(false);
     expect(canRunSemanticIndexingWorkOnTrigger('embedding', 'project-open')).toBe(false);
-    expect(canRunSemanticIndexingWorkOnTrigger('perception-refresh', 'project-open')).toBe(false);
     expect(canRunSemanticIndexingWorkOnTrigger('ocr', 'on-demand')).toBe(true);
     expect(canSemanticIndexingWorkBlockProjectOpen('sidecar-projection')).toBe(false);
     expect(canSemanticIndexingWorkBlockProjectOpen('embedding')).toBe(false);

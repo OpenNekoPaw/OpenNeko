@@ -68,7 +68,6 @@ describe('agent-runtime public surface convergence', () => {
     expect(runtime).not.toHaveProperty('createCoreTools');
     expect(runtime).toHaveProperty('composeProviderImageBatches');
     expect(runtime).not.toHaveProperty('projectMultimodalPacketToChatMessage');
-    expect(runtime).not.toHaveProperty('projectPerceptionCardToContentParts');
     expect(runtime).toHaveProperty('createConversationId');
     expect(runtime).toHaveProperty('createInputProcessor');
   });

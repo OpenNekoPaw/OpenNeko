@@ -23,16 +23,16 @@ user goal + authorized context
 
 ## 领域所有权
 
-| 领域 | 权威结果 |
-| --- | --- |
-| Content/Perception | 文档、图像、音视频证据与结构化分析 |
-| Assets/Entity/Character | 资源、创作身份、关系与 representation binding |
-| Canvas | 空间布局、节点、连接、播放路线与 `.nkc` authoring |
-| Cut | OTIO 时间线、轨道、剪辑、字幕、音频与导出计划 |
-| Preview | 授权只读媒体、模型与 3D reference session |
-| Generation | provider binding、生成 Job、结果、lineage 与 durable artifact |
-| `@neko/media` + Node/FFmpeg | probe、decode、PCM、派生、encode 与有界执行 |
-| Quality/Export | rubric、证据、Gate、preflight、发布与交付验证 |
+| 领域                        | 权威结果                                                      |
+| --------------------------- | ------------------------------------------------------------- |
+| Content/Media analysis      | 文档、图像、音视频证据与结构化分析                            |
+| Assets/Entity/Character     | 资源、创作身份、关系与 representation binding                 |
+| Canvas                      | 空间布局、节点、连接、播放路线与 `.nkc` authoring             |
+| Cut                         | OTIO 时间线、轨道、剪辑、字幕、音频与导出计划                 |
+| Preview                     | 授权只读媒体、模型与 3D reference session                     |
+| Generation                  | provider binding、生成 Job、结果、lineage 与 durable artifact |
+| `@neko/media` + Node/FFmpeg | probe、decode、PCM、派生、encode 与有界执行                   |
+| Quality/Export              | rubric、证据、Gate、preflight、发布与交付验证                 |
 
 Agent 不拼装领域私有文件，不保存 active Canvas/Cut，不维护全局 current revision，也不以聊天总结、
 TODO、trace 或 prompt 声明完成。完成必须由真实文件、ContentLocator、project revision、领域

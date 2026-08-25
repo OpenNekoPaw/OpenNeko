@@ -1,8 +1,11 @@
 # home-experience-entry-modes Specification
 
 ## Purpose
+
 TBD - created by archiving change add-home-experience-entry-modes. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Home modes configure the Agent Entry Draft
 
 Desktop SHALL expose Assistant, Workspace, Character, and World in a top-centered segmented selector only
@@ -67,12 +70,12 @@ to Assistant presentation and MUST NOT alter durable records.
 - **THEN** the Agent Entry model catalog still exposes them as available generation choices
 - **AND** the explicit image, video, and audio defaults are selected without an inferred fallback
 
-#### Scenario: Media configuration does not expose a perception-model selector
+#### Scenario: Media configuration does not expose a second-model selector
 
 - **GIVEN** the selected Agent model declares its native input capabilities
 - **WHEN** the Agent Entry configuration menu opens
 - **THEN** media categories expose only their Generation model choices and parameters
-- **AND** no image, video, audio or generic perception-model selector is rendered
+- **AND** no image, video, audio or generic media-analysis model selector is rendered
 - **AND** Renderer does not read the config file, infer another provider/model or create a fallback purpose binding
 
 ### Requirement: Workspace requires explicit Project authority

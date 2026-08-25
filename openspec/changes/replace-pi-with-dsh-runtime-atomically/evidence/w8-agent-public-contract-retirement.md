@@ -25,11 +25,11 @@ The following files formed closed graphs containing only their own implementatio
 - `resource-display-projection.ts`
 - `skill.ts`
 
-The obsolete `canvas_lifecycle` message block depended only on the retired capability lifecycle and had no producer or renderer, so it was removed from the canonical `Message` contract.
+The obsolete `canvas_lifecycle` message block depended only on the retired capability lifecycle and had no producer or renderer, so it was removed from the canonical `Message` contract. A later repository-wide consumer audit also removed the dead Search media-analysis card bridge and its reference field; source-attributed semantic text/tag contracts remain canonical.
 
 `CreativeDomainMetadata` remains a real consumer contract for `tool.ts` and `platform.ts`; it moved from the deleted router module to the focused `creative-domain.ts` contract. The following surfaces were explicitly retained because they have current runtime or UI consumers:
 
-- `PerceptionCard`, multimodal context/tooling, and provider projection;
+- multimodal context/tooling and provider projection;
 - `agent-input-trigger.ts` and `agent-input-intent.ts` for the DSH-derived Composer catalog;
 - `plugin-transfer-contract.ts` for existing Webview presentation;
 - `extension-management.ts` / `extension-management-host.ts` while the public DSH management seam remains incomplete;
@@ -49,7 +49,7 @@ No Webview, renderer component, style, layout, or interaction file was modified.
 ## Agent Evaluation disposition
 
 - Decision: `excluded` for real provider behavior.
-- Reason: this change removes public contracts with no production producer or consumer and preserves all current ACP/DSH Session, input-catalog, Tool, perception-card, and projection paths. It cannot change model output, Skill selection, Tool routing, provider/model selection, Session workflow, or Desktop event projection.
+- Reason: this change removes public contracts with no production producer or consumer and preserves all current ACP/DSH Session, input-catalog, Tool, and canonical projection paths. It cannot change model output, Skill selection, Tool routing, provider/model selection, Session workflow, or Desktop event projection.
 - Deterministic evidence: contracts/runtime/Desktop typechecks, contracts/runtime tests, change-selector and coverage-index tests, complete key-free Evaluation harness, source/export/path poison, and architecture gates.
 - Real Desktop/provider case: not run because no user-visible or executable Agent behavior changed. Existing release-wide provider, approval, Tool, reopen, and hidden/visible matrices remain required by the parent change.
 

@@ -58,7 +58,6 @@ function buildConfigTemplateHeader(): string {
     '#',
     '# Default model bindings use provider_id + model_id under [default_models.llm/image/video/audio].',
     '# Media understanding uses the selected Agent model and package-owned media Tools.',
-    '# Do not configure image_understand, video_understand, audio_understand, or llm_vision purpose bindings.',
     '# Character roleplay uses independent [default_model_purposes.character_dialogue] and',
     '# [default_model_purposes.character_profile] bindings; Desktop prompts before first use when missing.',
     '# Unsupported values fail visibly with a config diagnostic instead of falling back silently.',

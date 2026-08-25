@@ -641,7 +641,7 @@ describe('ConfigManager', () => {
       expect(() => manager.assertConfigAvailable()).not.toThrow();
     });
 
-    it('rejects retired media-understanding purpose bindings', () => {
+    it('rejects unknown purpose bindings', () => {
       const googleProvider: Provider = {
         id: 'google',
         name: 'google',
@@ -669,7 +669,7 @@ describe('ConfigManager', () => {
             providers: [googleProvider],
             models: [model],
             defaultModelPurposes: {
-              'video.understand': {
+              'media.analysis': {
                 providerId: 'google',
                 modelId: 'gemini-flash',
               },
@@ -680,10 +680,10 @@ describe('ConfigManager', () => {
 
       expect(manager.getConfigDiagnostic()).toMatchObject({
         code: 'invalidDefaultModelBinding',
-        path: 'default_model_purposes.video.understand',
+        path: 'default_model_purposes.media.analysis',
       });
-      expect(manager.getDefaultModelPurposeRef('video.understand')).toBeUndefined();
-      expect(manager.resolveModelRefForPurpose('video.understand')).toBeUndefined();
+      expect(manager.getDefaultModelPurposeRef('media.analysis')).toBeUndefined();
+      expect(manager.resolveModelRefForPurpose('media.analysis')).toBeUndefined();
     });
 
     it('atomically persists explicit Character purpose bindings', async () => {

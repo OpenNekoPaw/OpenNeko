@@ -45,11 +45,8 @@ describe('model-purpose-registry', () => {
     ).toBe(true);
   });
 
-  it('does not register native media capabilities as separate model purposes', () => {
-    expect(isAgentModelPurpose('image.understand')).toBe(false);
-    expect(isAgentModelPurpose('video.understand')).toBe(false);
-    expect(isAgentModelPurpose('audio.understand')).toBe(false);
-    expect(isAgentModelPurpose('llm.vision')).toBe(false);
+  it('rejects purposes outside the canonical registry', () => {
+    expect(isAgentModelPurpose('media.analysis')).toBe(false);
     expect(getModelPurposeCapabilityMatches('llm.chat')).toEqual(['llm.chat', 'chat']);
   });
 });

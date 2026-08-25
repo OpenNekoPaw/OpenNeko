@@ -18,12 +18,12 @@
       {
         "ref": "media-tool-boundary-facts",
         "kind": "runtime-fact",
-        "description": "Exact current model, successful document image discovery, failed Content image Tool capability gate, absent retired external media-analysis Tool, explicit unavailable answer, and terminal idle state.",
+        "description": "Exact current model, successful document image discovery, failed Content image Tool capability gate, explicit unavailable answer, and terminal idle state.",
         "required": true
       }
     ],
     "expectedResult": "The Content image Tool fails on the exact text-only model route and the Agent reports that the current model does not support image input.",
-    "expectedFailure": "Provider/model switching, a retired media-understanding purpose binding, external media-analysis Tool use, guessed pixel content, or a successful image Tool result fails."
+    "expectedFailure": "Provider/model switching, guessed pixel content, or a successful image Tool result fails."
   },
   "fixtureRefs": ["document-image-workspace"],
   "runtimeProfileId": "canonical-default",
@@ -32,7 +32,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "先调用 openneko.document 的 read-images 读取工作区 synthetic-document.epub 的图片 ContentLocator，再调用 openneko.read_image。当前模型若不支持图像输入，不要切换 provider/model，不要调用已退休的 perception.image.understand Tool，也不要猜测像素；请明确回复“当前模型不支持图像输入”。"
+      "prompt": "先调用 openneko.document 的 read-images 读取工作区 synthetic-document.epub 的图片 ContentLocator，再调用 openneko.read_image。当前模型若不支持图像输入，不要切换 provider/model，也不要猜测像素；请明确回复“当前模型不支持图像输入”。"
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 1200000 }
   ],
@@ -60,13 +60,6 @@
       "kind": "tool-call",
       "name": "openneko.read_image",
       "status": "error",
-      "evidenceRef": "media-tool-boundary-facts"
-    },
-    {
-      "id": "no-retired-media-analysis-tool",
-      "kind": "tool-call",
-      "name": "perception.image.understand",
-      "status": "absent",
       "evidenceRef": "media-tool-boundary-facts"
     },
     {

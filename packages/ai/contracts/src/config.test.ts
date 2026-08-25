@@ -43,15 +43,10 @@ describe('AI configuration contracts', () => {
     expect(MEDIA_MODEL_TYPES).toEqual(['image', 'video', 'audio']);
   });
 
-  it('does not expose retired perception-routing capability aliases', () => {
+  it('exposes one canonical image-input capability', () => {
     expect(KNOWN_MODEL_CAPABILITIES).toContain('vision');
-    expect(KNOWN_MODEL_CAPABILITIES).not.toEqual(
-      expect.arrayContaining([
-        'llm.vision',
-        'image.understand',
-        'video.understand',
-        'audio.understand',
-      ]),
+    expect(KNOWN_MODEL_CAPABILITIES.filter((capability) => capability === 'vision')).toHaveLength(
+      1,
     );
   });
 });

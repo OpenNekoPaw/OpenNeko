@@ -67,7 +67,7 @@ replace these boundaries.
   Agent Webview passes 90 files / 705 tests. Coverage reconstructs three persisted assistant
   iterations around two exact Tool results as one product message, preserves orphan-result failure,
   renders one process disclosure before the final answer and keeps typed ReadImage thumbnails in the
-  process lane without requiring perception cards.
+  process lane directly from typed Tool output without requiring a second card projection.
 - Active-output deterministic evidence: Agent Webview passes 90 files / 704 tests, focused Desktop tests
   pass 67 assertions, both affected package typechecks pass, and the scheduling/finalization tests prove
   byte-preserving coalescing with synchronous final convergence.

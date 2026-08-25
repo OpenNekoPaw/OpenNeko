@@ -129,7 +129,7 @@ export type ProjectIndexUpdateReason =
   | 'cache-rebuild';
 
 export type ProjectSemanticIndexingWorkKind =
-  'sidecar-projection' | 'ledger-projection' | 'ocr' | 'asr' | 'embedding' | 'perception-refresh';
+  'sidecar-projection' | 'ledger-projection' | 'ocr' | 'asr' | 'embedding';
 
 export type ProjectSemanticIndexingTrigger =
   'project-open' | 'idle' | 'import' | 'on-demand' | 'manual-refresh';
@@ -430,7 +430,6 @@ export const PROJECT_SEMANTIC_INDEXING_WORK_KINDS: readonly ProjectSemanticIndex
   'ocr',
   'asr',
   'embedding',
-  'perception-refresh',
 ] as const;
 
 export const PROJECT_SEMANTIC_INDEXING_TRIGGERS: readonly ProjectSemanticIndexingTrigger[] = [
@@ -464,11 +463,6 @@ export const PROJECT_SEMANTIC_INDEXING_POLICIES: readonly ProjectSemanticIndexin
   },
   {
     workKind: 'embedding',
-    allowedTriggers: ['idle', 'import', 'on-demand', 'manual-refresh'],
-    blocksProjectOpen: false,
-  },
-  {
-    workKind: 'perception-refresh',
     allowedTriggers: ['idle', 'import', 'on-demand', 'manual-refresh'],
     blocksProjectOpen: false,
   },

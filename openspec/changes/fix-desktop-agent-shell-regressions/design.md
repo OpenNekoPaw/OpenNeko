@@ -84,9 +84,9 @@ conversation 的 render coordinator。
 
 Pi Tool adapter 的 `details` 保存 OpenNeko `ToolResult` 的 durable structured clone；给模型看的 `content`
 只负责 provider-visible text/image，不是产品展示或 Canvas 交付的事实来源。live Timeline 与持久 transcript
-history 必须通过同一个 ToolResult projector 解包 `success/data/error/attachments/perceptionCards/
-backfillDiagnostics/artifacts`，不得把整个 envelope 塞入 `result.data` 后交给 Webview 猜测，也不得只保留
-attachments 而丢失 perception cards。
+history 必须通过同一个 ToolResult projector 解包 `success/data/error/attachments/backfillDiagnostics/artifacts`，
+不得把整个 envelope 塞入 `result.data` 后交给 Webview 猜测，也不得丢失 locator-backed attachments、
+diagnostics 或 artifact transfer。
 
 所有进入 Webview 的 ToolResult，无论来自 live projection attachment、`activeConversation` 还是
 `conversationSnapshot`，都通过同一个 Host resource display projector 使用 stable `ContentLocator` 或
