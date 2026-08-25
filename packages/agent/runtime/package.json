@@ -22,7 +22,6 @@
     "@neko/agent-contracts": "workspace:*",
     "@neko/assets-node": "workspace:*",
     "@neko/canvas-domain": "workspace:*",
-    "@neko/chara-domain": "workspace:*",
     "@neko/content-domain": "workspace:*",
     "@neko/cut-domain": "workspace:*",
     "@neko/generation-domain": "workspace:*",

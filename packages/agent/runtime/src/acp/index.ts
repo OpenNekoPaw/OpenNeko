@@ -15,9 +15,9 @@ export {
 } from './generation-host-adapter';
 export { DocumentDshHostAdapter } from './document-host-adapter';
 export { ContentImageDshHostAdapter } from './content-image-host-adapter';
-export { CharacterDshHostAdapter } from './character-host-adapter';
 export { WorldDshHostAdapter } from './world-host-adapter';
 export { SkillAuthoringDshHostAdapter } from './skill-authoring-host-adapter';
+export { enforceDshDomainToolEffect } from './dsh-domain-tool-access';
 export {
   createDshDomainToolHandlers,
   type DshDomainToolHandlers,

@@ -78,15 +78,17 @@ const RULES = Object.freeze([
   ]),
   rule('creative-media-workflow', 'agent-runtime.creative-media-workflow', [
     'packages/chara/domain/src/application/character-dsh-tool',
+    'packages/chara/node/src/character-dsh-host-adapter',
     'packages/chara/dsh-plugin/',
     'packages/world/domain/src/application/world-dsh-tool',
     'packages/world/dsh-plugin/',
     'packages/agent/runtime/src/acp/world-host-adapter',
+    'packages/agent/runtime/src/acp/dsh-domain-tool-handlers',
     'packages/cut/domain/src/dsh-tool',
     'packages/cut/dsh-plugin/',
-    'packages/agent/runtime/src/acp/character-host-adapter',
     'packages/agent/runtime/src/acp/cut-host-adapter',
     'apps/neko-desktop/src/main/desktop-dsh-domain-tool-handlers',
+    'apps/neko-desktop/src/main/desktop-dsh-product-handlers',
   ]),
   rule('launch-domain-binding', 'agent-runtime.launch-binding', [
     'packages/agent/contracts/src/agent-input-intent',
@@ -192,6 +194,7 @@ export function isAgentEvaluationRelevantPath(rawPath) {
     path.startsWith('packages/cut/domain/src/dsh-tool') ||
     path.startsWith('packages/cut/dsh-plugin/') ||
     path.startsWith('packages/chara/domain/src/application/character-dsh-tool') ||
+    path.startsWith('packages/chara/node/src/character-dsh-host-adapter') ||
     path.startsWith('packages/chara/dsh-plugin/') ||
     path.startsWith('packages/world/domain/src/application/world-dsh-tool') ||
     path.startsWith('packages/world/dsh-plugin/') ||

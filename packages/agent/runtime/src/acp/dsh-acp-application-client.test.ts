@@ -39,42 +39,10 @@ function deferred<T>(): Deferred<T> {
 function createHandlers(): DshAcpApplicationClientHandlers {
   return {
     requestPermission: vi.fn<() => Promise<RequestPermissionResponse>>(),
-    executeGenerationTool: vi.fn(
-      async (_request: DshAcpDomainToolRequest, _signal: AbortSignal) => ({
-        outcome: 'success' as const,
-        result: {},
-      }),
-    ),
-    executeCanvasTool: vi.fn(async (_request: DshAcpDomainToolRequest, _signal: AbortSignal) => ({
+    executeDomainTool: vi.fn(async (_request: DshAcpDomainToolRequest, _signal: AbortSignal) => ({
       outcome: 'success' as const,
       result: {},
     })),
-    executeCutTool: vi.fn(async (_request: DshAcpDomainToolRequest, _signal: AbortSignal) => ({
-      outcome: 'success' as const,
-      result: {},
-    })),
-    executeDocumentTool: vi.fn(async (_request: DshAcpDomainToolRequest, _signal: AbortSignal) => ({
-      outcome: 'success' as const,
-      result: {},
-    })),
-    executeContentImageTool: vi.fn(
-      async (_request: DshAcpDomainToolRequest, _signal: AbortSignal) => ({
-        outcome: 'success' as const,
-        result: {},
-      }),
-    ),
-    executeCharacterTool: vi.fn(
-      async (_request: DshAcpDomainToolRequest, _signal: AbortSignal) => ({
-        outcome: 'success' as const,
-        result: {},
-      }),
-    ),
-    executeSkillAuthoringTool: vi.fn(
-      async (_request: DshAcpDomainToolRequest, _signal: AbortSignal) => ({
-        outcome: 'success' as const,
-        result: {},
-      }),
-    ),
     onSessionUpdate: vi.fn(),
     onSessionEvent: vi.fn(),
     onContextPressure: vi.fn(),
@@ -470,7 +438,7 @@ describe('DshAcpApplicationClient', () => {
     });
   });
 
-  it('routes exact domain tools and one notification', async () => {
+  it('delegates domain tools without interpreting domain identities and routes one notification', async () => {
     const handlers = createHandlers();
     const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
     await DshAcpApplicationClient.connect({
@@ -541,23 +509,23 @@ describe('DshAcpApplicationClient', () => {
       replay: false,
     });
 
-    expect(handlers.executeGenerationTool).toHaveBeenCalledWith(
+    expect(handlers.executeDomainTool).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: 'session-1', toolCallId: 'call-generation' }),
       expect.any(AbortSignal),
     );
-    expect(handlers.executeCanvasTool).toHaveBeenCalledWith(
+    expect(handlers.executeDomainTool).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: 'session-1', toolCallId: 'call-canvas' }),
       expect.any(AbortSignal),
     );
-    expect(handlers.executeCutTool).toHaveBeenCalledWith(
+    expect(handlers.executeDomainTool).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: 'session-1', toolCallId: 'call-cut' }),
       expect.any(AbortSignal),
     );
-    expect(handlers.executeContentImageTool).toHaveBeenCalledWith(
+    expect(handlers.executeDomainTool).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: 'session-1', toolCallId: 'call-content-image' }),
       expect.any(AbortSignal),
     );
-    expect(handlers.executeSkillAuthoringTool).toHaveBeenCalledWith(
+    expect(handlers.executeDomainTool).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: 'session-1', toolCallId: 'call-skill-authoring' }),
       expect.any(AbortSignal),
     );
@@ -568,13 +536,17 @@ describe('DshAcpApplicationClient', () => {
       protocolClient.extMethod?.('openneko/domain-tool/execute', {
         sessionId: 'session-1',
         turn: 0,
-        toolCallId: 'call-unknown',
+        toolCallId: 'call-domain-extension',
         sandboxMode: 'read-only',
-        tool: 'openneko.unknown',
-        operation: 'run',
+        tool: 'openneko.domain-extension',
+        operation: 'query',
         input: {},
       }),
-    ).rejects.toThrow(/unsupported domain tool/);
+    ).resolves.toEqual({ outcome: 'success', result: {} });
+    expect(handlers.executeDomainTool).toHaveBeenCalledWith(
+      expect.objectContaining({ tool: 'openneko.domain-extension' }),
+      expect.any(AbortSignal),
+    );
     await expect(protocolClient.extMethod?.('unknown/execute', {})).rejects.toThrow(
       /unsupported Host extension method/,
     );
@@ -798,7 +770,7 @@ describe('DshAcpApplicationClient', () => {
     });
     const protocolClient = fixture.readProtocolClient();
     let handlerSignal: AbortSignal | undefined;
-    vi.mocked(handlers.executeGenerationTool).mockImplementation((_request, signal) => {
+    vi.mocked(handlers.executeDomainTool).mockImplementation((_request, signal) => {
       handlerSignal = signal;
       return generation.promise;
     });
@@ -835,7 +807,7 @@ describe('DshAcpApplicationClient', () => {
     });
     const protocolClient = fixture.readProtocolClient();
     let canvasSignal: AbortSignal | undefined;
-    vi.mocked(handlers.executeCanvasTool).mockImplementation((_request, signal) => {
+    vi.mocked(handlers.executeDomainTool).mockImplementation((_request, signal) => {
       canvasSignal = signal;
       return canvas.promise;
     });
@@ -873,7 +845,7 @@ describe('DshAcpApplicationClient', () => {
       createConnection: fixture.createConnection,
     });
     const protocolClient = fixture.readProtocolClient();
-    vi.mocked(handlers.executeGenerationTool).mockImplementation(() => generation.promise);
+    vi.mocked(handlers.executeDomainTool).mockImplementation(() => generation.promise);
 
     const first = protocolClient.extMethod?.('openneko/domain-tool/execute', {
       sessionId: 'session-1',
@@ -895,14 +867,14 @@ describe('DshAcpApplicationClient', () => {
         input: {},
       }),
     ).rejects.toThrow(/already in flight/);
-    expect(handlers.executeGenerationTool).toHaveBeenCalledTimes(1);
+    expect(handlers.executeDomainTool).toHaveBeenCalledTimes(1);
 
     generation.resolve({ outcome: 'success', result: {} });
     await expect(first).resolves.toEqual({ outcome: 'success', result: {} });
 
     const pending = new Map<string, Deferred<DshAcpDomainToolResponse>>();
     const started: string[] = [];
-    vi.mocked(handlers.executeGenerationTool).mockImplementation(async (request) => {
+    vi.mocked(handlers.executeDomainTool).mockImplementation(async (request) => {
       started.push(request.toolCallId);
       const completion = deferred<DshAcpDomainToolResponse>();
       pending.set(request.toolCallId, completion);
@@ -938,7 +910,7 @@ describe('DshAcpApplicationClient', () => {
     await Promise.all([firstC, secondA]);
 
     const active = deferred<DshAcpDomainToolResponse>();
-    vi.mocked(handlers.executeGenerationTool).mockImplementation(() => active.promise);
+    vi.mocked(handlers.executeDomainTool).mockImplementation(() => active.promise);
 
     const activeA = execute('session-a', 'call-a0');
     const activeB = execute('session-b', 'call-b0');
@@ -969,7 +941,7 @@ describe('DshAcpApplicationClient', () => {
     });
     const protocolClient = fixture.readProtocolClient();
     let handlerSignal: AbortSignal | undefined;
-    vi.mocked(handlers.executeGenerationTool).mockImplementation((_request, signal) => {
+    vi.mocked(handlers.executeDomainTool).mockImplementation((_request, signal) => {
       handlerSignal = signal;
       return generation.promise;
     });

@@ -69,14 +69,6 @@ import {
   type DshAcpStagedSkillValidationProjection,
 } from '@neko/agent-contracts/dsh-acp';
 import type { DshSkillAuthoringLayout } from '@neko/agent-contracts/dsh-skill-authoring';
-import { CANVAS_DSH_TOOL_NAME } from '@neko/canvas-domain';
-import { CUT_DSH_TOOL_NAME } from '@neko/cut-domain';
-import { GENERATION_DSH_TOOL_NAME } from '@neko/generation-domain';
-import { DOCUMENT_DSH_TOOL_NAME } from '@neko/content-domain/document';
-import { CONTENT_IMAGE_DSH_TOOL_NAME } from '@neko/content-domain';
-import { CHARACTER_DSH_TOOL_NAME } from '@neko/chara-domain/application';
-import { WORLD_DSH_TOOL_NAME } from '@neko/world-domain/application';
-import { CREATE_SKILL_DSH_TOOL_NAME } from '@neko/agent-contracts/dsh-skill-authoring';
 import { DshAcpProjection } from './dsh-acp-projection';
 
 export interface DshAcpApplicationClientHandlers {
@@ -88,35 +80,7 @@ export interface DshAcpApplicationClientHandlers {
       readonly toolCallId: string;
     },
   ) => Promise<RequestPermissionResponse>;
-  readonly executeGenerationTool: (
-    request: DshAcpDomainToolRequest,
-    signal: AbortSignal,
-  ) => Promise<DshAcpDomainToolResponse>;
-  readonly executeCanvasTool: (
-    request: DshAcpDomainToolRequest,
-    signal: AbortSignal,
-  ) => Promise<DshAcpDomainToolResponse>;
-  readonly executeCutTool: (
-    request: DshAcpDomainToolRequest,
-    signal: AbortSignal,
-  ) => Promise<DshAcpDomainToolResponse>;
-  readonly executeDocumentTool: (
-    request: DshAcpDomainToolRequest,
-    signal: AbortSignal,
-  ) => Promise<DshAcpDomainToolResponse>;
-  readonly executeContentImageTool?: (
-    request: DshAcpDomainToolRequest,
-    signal: AbortSignal,
-  ) => Promise<DshAcpDomainToolResponse>;
-  readonly executeCharacterTool: (
-    request: DshAcpDomainToolRequest,
-    signal: AbortSignal,
-  ) => Promise<DshAcpDomainToolResponse>;
-  readonly executeWorldTool?: (
-    request: DshAcpDomainToolRequest,
-    signal: AbortSignal,
-  ) => Promise<DshAcpDomainToolResponse>;
-  readonly executeSkillAuthoringTool?: (
+  readonly executeDomainTool: (
     request: DshAcpDomainToolRequest,
     signal: AbortSignal,
   ) => Promise<DshAcpDomainToolResponse>;
@@ -176,7 +140,7 @@ interface HostToolCallRecord {
   readonly request: DshAcpDomainToolRequest;
   readonly controller: AbortController;
   readonly identity: string;
-  readonly handler: DshAcpApplicationClientHandlers['executeGenerationTool'];
+  readonly handler: DshAcpApplicationClientHandlers['executeDomainTool'];
   readonly completion: HostToolCompletion;
   cancelled: boolean;
 }
@@ -624,7 +588,7 @@ class HostToolAdmission {
       request,
       identity,
       controller: new AbortController(),
-      handler: this.resolveHandler(request.tool),
+      handler: this.handlers.executeDomainTool,
       completion: createHostToolCompletion(),
       cancelled: false,
     };
@@ -770,32 +734,6 @@ class HostToolAdmission {
       if (record.request.sessionId === sessionId) return true;
     }
     return false;
-  }
-
-  private resolveHandler(tool: string): DshAcpApplicationClientHandlers['executeGenerationTool'] {
-    if (tool === GENERATION_DSH_TOOL_NAME) return this.handlers.executeGenerationTool;
-    if (tool === CANVAS_DSH_TOOL_NAME) return this.handlers.executeCanvasTool;
-    if (tool === CUT_DSH_TOOL_NAME) return this.handlers.executeCutTool;
-    if (tool === DOCUMENT_DSH_TOOL_NAME) return this.handlers.executeDocumentTool;
-    if (tool === CONTENT_IMAGE_DSH_TOOL_NAME) {
-      if (this.handlers.executeContentImageTool === undefined) {
-        throw new Error('DSH ACP Content image Tool handler is unavailable.');
-      }
-      return this.handlers.executeContentImageTool;
-    }
-    if (tool === CHARACTER_DSH_TOOL_NAME) return this.handlers.executeCharacterTool;
-    if (tool === WORLD_DSH_TOOL_NAME) {
-      if (this.handlers.executeWorldTool === undefined)
-        throw new Error('DSH ACP World Tool handler is unavailable.');
-      return this.handlers.executeWorldTool;
-    }
-    if (tool === CREATE_SKILL_DSH_TOOL_NAME) {
-      if (this.handlers.executeSkillAuthoringTool === undefined) {
-        throw new Error('DSH ACP Skill authoring Tool handler is unavailable.');
-      }
-      return this.handlers.executeSkillAuthoringTool;
-    }
-    throw new Error(`DSH ACP requested unsupported domain tool ${tool}.`);
   }
 }
 

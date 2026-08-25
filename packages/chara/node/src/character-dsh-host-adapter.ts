@@ -5,44 +5,45 @@ import type {
 } from '@neko/agent-contracts/dsh-acp';
 import {
   CHARACTER_DSH_TOOL_NAME,
-  CharacterDshAuthoringService,
   decodeCharacterDshToolInput,
+  type CharacterDshAuthoringService,
+  type CharacterDshProjectFacts,
+  type CharacterDshToolInput,
 } from '@neko/chara-domain/application';
-import { enforceDshDomainToolEffect } from './dsh-domain-tool-access';
+
+export type CharacterDshToolEffect = 'read' | 'write';
+
+export type CharacterDshToolAccess = (
+  request: DshAcpDomainToolRequest,
+  effect: CharacterDshToolEffect,
+) => DshAcpDomainToolResponse | undefined;
 
 export class CharacterDshHostAdapter {
-  private readonly toolName: string;
-
   constructor(
     private readonly service:
       | Pick<CharacterDshAuthoringService, 'query' | 'fillDraft'>
       | (() => Promise<Pick<CharacterDshAuthoringService, 'query' | 'fillDraft'>>),
-    toolName: string = CHARACTER_DSH_TOOL_NAME,
-  ) {
-    if (toolName !== CHARACTER_DSH_TOOL_NAME) {
-      throw new Error(`Character Host adapter must use exactly ${CHARACTER_DSH_TOOL_NAME}.`);
-    }
-    this.toolName = toolName;
-  }
+    private readonly checkAccess: CharacterDshToolAccess,
+  ) {}
 
   async execute(
     request: DshAcpDomainToolRequest,
     signal?: AbortSignal,
   ): Promise<DshAcpDomainToolResponse> {
     signal?.throwIfAborted();
-    if (request.tool !== this.toolName) {
+    if (request.tool !== CHARACTER_DSH_TOOL_NAME) {
       return failure(
         'CHARACTER_DSH_TOOL_MISMATCH',
-        `Expected ${this.toolName}, received ${request.tool}.`,
+        `Expected ${CHARACTER_DSH_TOOL_NAME}, received ${request.tool}.`,
       );
     }
-    let decoded;
+    let decoded: CharacterDshToolInput;
     try {
       decoded = decodeCharacterDshToolInput(request.operation, request.input);
     } catch (error) {
       return failure('CHARACTER_DSH_TOOL_INVALID_INPUT', errorMessage(error));
     }
-    const permissionFailure = enforceDshDomainToolEffect(
+    const permissionFailure = this.checkAccess(
       request,
       decoded.operation === 'query' ? 'read' : 'write',
     );
@@ -53,40 +54,24 @@ export class CharacterDshHostAdapter {
         decoded.operation === 'query'
           ? await service.query(decoded.input, signal)
           : await service.fillDraft(decoded.input, signal);
-      return { outcome: 'success', result: projectFacts(facts) };
+      return { outcome: 'success', result: projectResult(facts) };
     } catch (error) {
       return failure(toDiagnostic(error), errorMessage(error));
     }
   }
 }
 
-function projectFacts(
-  facts: Awaited<ReturnType<CharacterDshAuthoringService['query']>>,
-): DshAcpJsonValue {
+function projectResult(facts: CharacterDshProjectFacts): DshAcpJsonValue {
   return {
     characterProjectId: facts.characterProjectId,
     displayName: facts.displayName,
     reviewStatus: facts.reviewStatus,
     isFreshTarget: facts.isFreshTarget,
-    draft: {
-      hasSummary: facts.draft.hasSummary,
-      hasBackground: facts.draft.hasBackground,
-      hasOrigin: facts.draft.hasOrigin,
-      canonCount: facts.draft.canonCount,
-      knowledgeBoundaryCount: facts.draft.knowledgeBoundaryCount,
-      behaviorPolicyCount: facts.draft.behaviorPolicyCount,
-      expressionPolicyCount: facts.draft.expressionPolicyCount,
-      representationCount: facts.draft.representationCount,
-    },
+    draft: { ...facts.draft },
     evidenceCount: facts.evidenceCount,
     candidateCount: facts.candidateCount,
     versionCount: facts.versionCount,
-    versions: facts.versions.map((publication) => ({
-      characterVersionId: publication.characterVersionId,
-      label: publication.label,
-      lifecycle: publication.lifecycle,
-      publishedAt: publication.publishedAt,
-    })),
+    versions: facts.versions.map((publication) => ({ ...publication })),
     versionsTruncated: facts.versionsTruncated,
     createdAt: facts.createdAt,
     updatedAt: facts.updatedAt,

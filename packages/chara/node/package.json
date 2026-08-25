@@ -1,6 +1,6 @@
 {
   "name": "@neko/chara-node",
-  "description": "Node persistence adapters for the OpenNeko Character domain",
+  "description": "Node persistence and Host adapters for the OpenNeko Character domain",
   "private": true,
   "type": "module",
   "exports": {
@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@zip.js/zip.js": "^2.8.26",
+    "@neko/agent-contracts": "workspace:*",
     "@neko/chara-domain": "workspace:*",
     "@neko/local-metadata": "workspace:*"
   },

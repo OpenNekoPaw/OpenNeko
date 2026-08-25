@@ -1,7 +1,10 @@
 import type {
   DshAcpContextPressureNotification,
+  DshAcpDomainToolRequest,
+  DshAcpDomainToolResponse,
   DshAcpSessionEventNotification,
 } from '@neko/agent-contracts/dsh-acp';
+import { CREATE_SKILL_DSH_TOOL_NAME } from '@neko/agent-contracts/dsh-skill-authoring';
 import {
   DshPermissionOwner,
   type AgentConversationContextAuthorityPort,
@@ -14,10 +17,17 @@ import type {
   DshAcpSessionUpdateDelivery,
 } from '@neko/agent-runtime/acp';
 import type { GenerationApplicationRuntime } from '@neko/generation-domain/job';
-import type { CutProjectAuthoringService } from '@neko/cut-domain';
+import { GENERATION_DSH_TOOL_NAME } from '@neko/generation-domain';
+import { CUT_DSH_TOOL_NAME, type CutProjectAuthoringService } from '@neko/cut-domain';
 import type { CutExportApplicationService } from '@neko/cut-node';
-import type { CharacterDshAuthoringService } from '@neko/chara-domain/application';
-import type { WorldDshAuthoringService } from '@neko/world-domain/application';
+import {
+  CHARACTER_DSH_TOOL_NAME,
+  type CharacterDshAuthoringService,
+} from '@neko/chara-domain/application';
+import { WORLD_DSH_TOOL_NAME, type WorldDshAuthoringService } from '@neko/world-domain/application';
+import { CANVAS_DSH_TOOL_NAME } from '@neko/canvas-domain';
+import { CONTENT_IMAGE_DSH_TOOL_NAME } from '@neko/content-domain';
+import { DOCUMENT_DSH_TOOL_NAME } from '@neko/content-domain/document';
 import type { DesktopWorkspaceGrantAuthorityPort } from '@neko/host/desktop-workspace-grant-authority';
 import type { WorkspaceConfigManagerAuthority } from '@neko/host/settings';
 import type { ProfessionalApplicationBindingRepository } from '@neko/professional-apps-node';
@@ -98,16 +108,7 @@ export function createDesktopDshProductHandlers(options: {
       }
       return permissions.request({ request, turn: identity.turn });
     },
-    executeGenerationTool: (request, signal) => domainTools.executeGenerationTool(request, signal),
-    executeCanvasTool: (request, signal) => domainTools.executeCanvasTool(request, signal),
-    executeCutTool: (request, signal) => domainTools.executeCutTool(request, signal),
-    executeDocumentTool: (request, signal) => domainTools.executeDocumentTool(request, signal),
-    executeContentImageTool: (request, signal) =>
-      domainTools.executeContentImageTool(request, signal),
-    executeCharacterTool: (request, signal) => domainTools.executeCharacterTool(request, signal),
-    executeWorldTool: (request, signal) => domainTools.executeWorldTool(request, signal),
-    executeSkillAuthoringTool: (request, signal) =>
-      domainTools.executeSkillAuthoringTool(request, signal),
+    executeDomainTool: (request, signal) => executeDomainTool(domainTools, request, signal),
     onSessionUpdate: options.onSessionUpdate,
     onSessionEvent: options.onSessionEvent,
     onContextPressure: options.onContextPressure,
@@ -118,4 +119,31 @@ export function createDesktopDshProductHandlers(options: {
     reset: () => permissions.reset(),
     dispose: () => permissions.dispose(),
   });
+}
+
+async function executeDomainTool(
+  handlers: ReturnType<typeof createDesktopDshDomainToolHandlers>,
+  request: DshAcpDomainToolRequest,
+  signal: AbortSignal,
+): Promise<DshAcpDomainToolResponse> {
+  switch (request.tool) {
+    case GENERATION_DSH_TOOL_NAME:
+      return handlers.executeGenerationTool(request, signal);
+    case CANVAS_DSH_TOOL_NAME:
+      return handlers.executeCanvasTool(request, signal);
+    case CUT_DSH_TOOL_NAME:
+      return handlers.executeCutTool(request, signal);
+    case DOCUMENT_DSH_TOOL_NAME:
+      return handlers.executeDocumentTool(request, signal);
+    case CONTENT_IMAGE_DSH_TOOL_NAME:
+      return handlers.executeContentImageTool(request, signal);
+    case CHARACTER_DSH_TOOL_NAME:
+      return handlers.executeCharacterTool(request, signal);
+    case WORLD_DSH_TOOL_NAME:
+      return handlers.executeWorldTool(request, signal);
+    case CREATE_SKILL_DSH_TOOL_NAME:
+      return handlers.executeSkillAuthoringTool(request, signal);
+    default:
+      throw new Error(`DSH ACP requested unsupported domain tool ${request.tool}.`);
+  }
 }

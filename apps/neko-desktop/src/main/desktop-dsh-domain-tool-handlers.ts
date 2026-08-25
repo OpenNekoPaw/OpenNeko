@@ -3,7 +3,10 @@ import type {
   ConversationDshSessionBindingStore,
 } from '@neko/agent-runtime/application';
 import type { AgentConversationContext } from '@neko/agent-contracts';
-import type { DshAcpDomainToolRequest } from '@neko/agent-contracts/dsh-acp';
+import type {
+  DshAcpDomainToolRequest,
+  DshAcpDomainToolResponse,
+} from '@neko/agent-contracts/dsh-acp';
 import { createHostAgentContentAccessRuntime } from '@neko/agent-runtime/runtime';
 import {
   createDshDomainToolContextResolver,
@@ -11,6 +14,7 @@ import {
 } from '@neko/agent-runtime/application';
 import {
   createDshDomainToolHandlers,
+  enforceDshDomainToolEffect,
   type DshDomainToolHandlers,
   type GenerationDshLifecycleProjectionOutcome,
 } from '@neko/agent-runtime/acp';
@@ -34,6 +38,7 @@ import type { ProfessionalApplicationBindingRepository } from '@neko/professiona
 import type { DesktopWorkspaceGrantAuthorityPort } from '@neko/host/desktop-workspace-grant-authority';
 import type { ConfigManager, WorkspaceConfigManagerAuthority } from '@neko/host/settings';
 import type { CharacterDshAuthoringService } from '@neko/chara-domain/application';
+import { CharacterDshHostAdapter } from '@neko/chara-node';
 import type { WorldDshAuthoringService } from '@neko/world-domain/application';
 import type { DshSkillAuthoringService } from '@neko/agent-runtime/application';
 
@@ -43,6 +48,13 @@ export interface DesktopDshGenerationProjectionPort {
     readonly request: DshAcpDomainToolRequest;
     readonly snapshot: GenerationJobSnapshot;
   }): Promise<GenerationDshLifecycleProjectionOutcome>;
+}
+
+export interface DesktopDshDomainToolHandlers extends DshDomainToolHandlers {
+  executeCharacterTool(
+    request: DshAcpDomainToolRequest,
+    signal: AbortSignal,
+  ): Promise<DshAcpDomainToolResponse>;
 }
 
 export function createDesktopDshDomainToolHandlers(options: {
@@ -86,7 +98,7 @@ export function createDesktopDshDomainToolHandlers(options: {
       readonly worldProjectId: string;
     }): Promise<Pick<WorldDshAuthoringService, 'query' | 'fillDraft'>>;
   };
-}): DshDomainToolHandlers {
+}): DesktopDshDomainToolHandlers {
   const contexts = createDshDomainToolContextResolver({
     bindings: options.bindings,
     contexts: options.contexts,
@@ -135,7 +147,7 @@ export function createDesktopDshDomainToolHandlers(options: {
     };
   };
   const comfyUi = options.comfyUi;
-  return createDshDomainToolHandlers({
+  const domainTools = createDshDomainToolHandlers({
     contexts,
     skillAuthoring: options.skillAuthoring,
     generation: {
@@ -263,41 +275,6 @@ export function createDesktopDshDomainToolHandlers(options: {
         });
       },
     },
-    character: {
-      resolveService: async (context) => {
-        if (
-          context.binding.kind !== 'authoring' ||
-          context.binding.target?.kind !== 'character-project'
-        ) {
-          throw diagnosticError(
-            'CHARACTER_DSH_CONTEXT_UNSUPPORTED',
-            'Character authoring requires an exact CharacterProject Conversation target.',
-          );
-        }
-        const resolution = await options.workspaceGrants.resolveAuthorizedWorkspace(
-          context.binding.workspaceGrantId,
-          context.binding.workspaceId,
-        );
-        if (resolution.workspace.workspaceId !== context.binding.workspaceId) {
-          throw diagnosticError(
-            'CHARACTER_DSH_WORKSPACE_MISMATCH',
-            'Character authoring Workspace authority does not match the Conversation binding.',
-          );
-        }
-        if (options.character === undefined) {
-          throw diagnosticError(
-            'CHARACTER_DSH_SERVICE_UNAVAILABLE',
-            'Character DSH authoring service is not composed by Desktop.',
-          );
-        }
-        return options.character.resolveService({
-          workspaceId: resolution.workspace.workspaceId,
-          workspacePath: resolution.workspace.workspacePath,
-          projectId: context.binding.authority.projectId,
-          characterProjectId: context.binding.target.characterProjectId,
-        });
-      },
-    },
     world: {
       resolveService: async (context) => {
         if (
@@ -332,6 +309,43 @@ export function createDesktopDshDomainToolHandlers(options: {
           worldProjectId: context.binding.target.worldProjectId,
         });
       },
+    },
+  });
+  return Object.freeze({
+    ...domainTools,
+    executeCharacterTool(request: DshAcpDomainToolRequest, signal: AbortSignal) {
+      return new CharacterDshHostAdapter(async () => {
+        const context = await contexts.resolve(request.sessionId);
+        const binding = context.binding;
+        if (binding.kind !== 'authoring' || binding.target?.kind !== 'character-project') {
+          throw diagnosticError(
+            'CHARACTER_DSH_CONTEXT_UNSUPPORTED',
+            'Character authoring requires an exact CharacterProject Conversation target.',
+          );
+        }
+        const resolution = await options.workspaceGrants.resolveAuthorizedWorkspace(
+          binding.workspaceGrantId,
+          binding.workspaceId,
+        );
+        if (resolution.workspace.workspaceId !== binding.workspaceId) {
+          throw diagnosticError(
+            'CHARACTER_DSH_WORKSPACE_MISMATCH',
+            'Character authoring Workspace authority does not match the Conversation binding.',
+          );
+        }
+        if (options.character === undefined) {
+          throw diagnosticError(
+            'CHARACTER_DSH_SERVICE_UNAVAILABLE',
+            'Character DSH authoring service is not composed by Desktop.',
+          );
+        }
+        return options.character.resolveService({
+          workspaceId: resolution.workspace.workspaceId,
+          workspacePath: resolution.workspace.workspacePath,
+          projectId: binding.authority.projectId,
+          characterProjectId: binding.target.characterProjectId,
+        });
+      }, enforceDshDomainToolEffect).execute(request, signal);
     },
   });
 }

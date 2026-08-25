@@ -378,9 +378,6 @@ importers:
       '@neko/canvas-domain':
         specifier: workspace:*
         version: link:../../canvas/domain
-      '@neko/chara-domain':
-        specifier: workspace:*
-        version: link:../../chara/domain
       '@neko/content-domain':
         specifier: workspace:*
         version: link:../../content/domain
@@ -871,6 +868,9 @@ importers:
 
   packages/chara/node:
     dependencies:
+      '@neko/agent-contracts':
+        specifier: workspace:*
+        version: link:../../agent/contracts
       '@neko/chara-domain':
         specifier: workspace:*
         version: link:../domain

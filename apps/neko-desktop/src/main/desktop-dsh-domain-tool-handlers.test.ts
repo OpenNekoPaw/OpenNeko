@@ -308,6 +308,49 @@ describe('Desktop DSH domain Tool handlers', () => {
     );
   });
 
+  it('denies a read-only Character mutation before resolving Conversation or Workspace authority', async () => {
+    const getByDshSessionId = vi.fn();
+    const readContext = vi.fn();
+    const resolveAuthorizedWorkspace = vi.fn();
+    const resolveService = vi.fn();
+    const handlers = createDesktopDshDomainToolHandlers({
+      bindings: { getByDshSessionId },
+      contexts: { readContext },
+      workspaceGrants: { resolveAuthorizedWorkspace },
+      generationRuntime: { getJobs: vi.fn() },
+      generationProjection,
+      configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
+      assistant: { assistantSpaceId: 'assistant:one', root: '/tmp/assistant' },
+      character: { resolveService },
+    });
+
+    await expect(
+      handlers.executeCharacterTool(
+        {
+          sessionId: 'dsh-session:one',
+          turn: 1,
+          toolCallId: 'call:character',
+          sandboxMode: 'read-only',
+          tool: 'openneko.character',
+          operation: 'fill-draft',
+          input: {
+            characterProjectId: 'character:one',
+            displayName: 'Mira',
+            definition: emptyCharacterDefinition(),
+          },
+        },
+        new AbortController().signal,
+      ),
+    ).resolves.toMatchObject({
+      outcome: 'failure',
+      diagnostic: { code: 'DSH_DOMAIN_TOOL_READ_ONLY' },
+    });
+    expect(getByDshSessionId).not.toHaveBeenCalled();
+    expect(readContext).not.toHaveBeenCalled();
+    expect(resolveAuthorizedWorkspace).not.toHaveBeenCalled();
+    expect(resolveService).not.toHaveBeenCalled();
+  });
+
   it('rejects absolute and escaping Cut paths before resolving a Workspace grant', async () => {
     const root = await createRoot();
     const resolveAuthorizedWorkspace = vi.fn(async () => workspaceResolution(root));
@@ -687,6 +730,33 @@ function characterFacts() {
     versionsTruncated: false,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+}
+
+function emptyCharacterDefinition() {
+  return {
+    summary: '',
+    backgroundStory: {
+      overview: '',
+      origins: [],
+      personalHistory: [],
+      formativeEvents: [],
+      establishedRelationships: [],
+    },
+    originSetting: {
+      overview: '',
+      eras: [],
+      cultures: [],
+      socialEnvironment: [],
+      importantPlaces: [],
+      organizations: [],
+      believedRules: [],
+    },
+    canon: [],
+    knowledgeBoundary: [],
+    behaviorPolicy: [],
+    expressionPolicy: [],
+    representationRefs: [],
   };
 }
 

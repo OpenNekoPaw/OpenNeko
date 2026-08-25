@@ -551,11 +551,7 @@ function createHandlers(): DshAcpApplicationClientHandlers {
   };
   return {
     requestPermission: async () => unsupported(),
-    executeGenerationTool: async () => unsupported(),
-    executeCanvasTool: async () => unsupported(),
-    executeCutTool: async () => unsupported(),
-    executeDocumentTool: async () => unsupported(),
-    executeCharacterTool: async () => unsupported(),
+    executeDomainTool: async () => unsupported(),
     onSessionUpdate: unsupported,
     onSessionEvent: unsupported,
     onContextPressure: unsupported,

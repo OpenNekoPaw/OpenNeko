@@ -125,10 +125,7 @@ describe('Agent Evaluation change-to-suite selector', () => {
         expect.objectContaining({
           behaviorId: 'workspace-board-delivery',
           suiteId: 'agent-runtime.workflow-controller',
-          suiteIds: [
-            'agent-runtime.creative-media-workflow',
-            'agent-runtime.workflow-controller',
-          ],
+          suiteIds: ['agent-runtime.creative-media-workflow', 'agent-runtime.workflow-controller'],
         }),
         expect.objectContaining({
           behaviorId: 'tool-result-delivery',
@@ -232,9 +229,11 @@ describe('Agent Evaluation change-to-suite selector', () => {
   it('maps the Character DSH Tool vertical slice to creative workflow coverage', () => {
     const paths = [
       'packages/chara/domain/src/application/character-dsh-tool.ts',
+      'packages/chara/node/src/character-dsh-host-adapter.ts',
       'packages/chara/dsh-plugin/src/index.ts',
-      'packages/agent/runtime/src/acp/character-host-adapter.ts',
+      'packages/agent/runtime/src/acp/dsh-domain-tool-handlers.ts',
       'apps/neko-desktop/src/main/desktop-dsh-domain-tool-handlers.ts',
+      'apps/neko-desktop/src/main/desktop-dsh-product-handlers.ts',
     ];
     expect(paths.every(isAgentEvaluationRelevantPath)).toBe(true);
     expect(selectEvaluationCoverage(paths)).toEqual([

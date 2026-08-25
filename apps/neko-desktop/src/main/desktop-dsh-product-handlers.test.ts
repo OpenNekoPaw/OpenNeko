@@ -120,6 +120,41 @@ describe('Desktop DSH product handlers', () => {
     await assembly.reset();
     await expect(second).resolves.toEqual({ outcome: { outcome: 'cancelled' } });
   });
+
+  it('rejects an unregistered domain Tool at the Desktop composition boundary', async () => {
+    const assembly = createDesktopDshProductHandlers({
+      bindings: bindings(),
+      contexts: { readContext: vi.fn() },
+      workspaceGrants: { resolveAuthorizedWorkspace: vi.fn() },
+      generationRuntime: { getJobs: vi.fn() },
+      generationProjection: {
+        projectSnapshot: vi.fn(async () => ({ status: 'accepted' as const })),
+      },
+      configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
+      assistant: { assistantSpaceId: 'assistant:one', root: '/tmp/assistant' },
+      skillAuthoring: { create: vi.fn() },
+      cutRuntime: cutRuntime(),
+      onPermissionChanged: vi.fn(),
+      onSessionUpdate: vi.fn(),
+      onSessionEvent: vi.fn(),
+      onContextPressure: vi.fn(),
+    });
+
+    await expect(
+      assembly.handlers.executeDomainTool(
+        {
+          sessionId: 'dsh-session:one',
+          turn: 1,
+          toolCallId: 'tool:unknown',
+          sandboxMode: 'read-only',
+          tool: 'openneko.unknown',
+          operation: 'query',
+          input: {},
+        },
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow('unsupported domain tool openneko.unknown');
+  });
 });
 
 function bindings() {

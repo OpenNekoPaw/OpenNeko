@@ -24,7 +24,6 @@ describe('DSH domain Tool handlers', () => {
       canvas: { resolveService: vi.fn() },
       cut: { resolveService: vi.fn() },
       document: { resolveRuntime: vi.fn() },
-      character: { resolveService: vi.fn() },
     });
 
     await expect(
@@ -63,7 +62,6 @@ describe('DSH domain Tool handlers', () => {
       canvas: { resolveService: vi.fn() },
       cut: { resolveService: vi.fn() },
       document: { resolveRuntime: vi.fn() },
-      character: { resolveService: vi.fn() },
     });
 
     await expect(
@@ -93,7 +91,6 @@ describe('DSH domain Tool handlers', () => {
       canvas: { resolveService },
       cut: { resolveService: vi.fn() },
       document: { resolveRuntime: vi.fn() },
-      character: { resolveService: vi.fn() },
     });
 
     await expect(
@@ -122,7 +119,6 @@ describe('DSH domain Tool handlers', () => {
       canvas: { resolveService: vi.fn() },
       cut: { resolveService: vi.fn() },
       document: { resolveRuntime: vi.fn() },
-      character: { resolveService: vi.fn() },
     });
 
     await expect(
@@ -146,7 +142,6 @@ describe('DSH domain Tool handlers', () => {
       canvas: { resolveService: vi.fn() },
       cut: { resolveService: vi.fn() },
       document: { resolveRuntime: vi.fn() },
-      character: { resolveService: vi.fn() },
     });
 
     await expect(
@@ -186,7 +181,6 @@ describe('DSH domain Tool handlers', () => {
       canvas: { resolveService: vi.fn() },
       cut: { resolveService },
       document: { resolveRuntime: vi.fn() },
-      character: { resolveService: vi.fn() },
     });
 
     await expect(
@@ -208,104 +202,6 @@ describe('DSH domain Tool handlers', () => {
         code: 'CUT_DSH_CONTEXT_UNSUPPORTED',
         message: 'Cut is unavailable for assistant Conversation context.',
       },
-    });
-    expect(resolveService).not.toHaveBeenCalled();
-  });
-
-  it('resolves Character only from an exact authoring target', async () => {
-    const facts = {
-      characterProjectId: 'character:one',
-      displayName: 'Mira',
-      reviewStatus: 'draft' as const,
-      isFreshTarget: true,
-      draft: {
-        hasSummary: false,
-        hasBackground: false,
-        hasOrigin: false,
-        canonCount: 0,
-        knowledgeBoundaryCount: 0,
-        behaviorPolicyCount: 0,
-        expressionPolicyCount: 0,
-        representationCount: 0,
-      },
-      evidenceCount: 0,
-      candidateCount: 0,
-      versionCount: 0,
-      versions: [],
-      versionsTruncated: false,
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:00.000Z',
-    };
-    const resolveService = vi.fn(async () => ({
-      query: vi.fn(async () => facts),
-      fillDraft: vi.fn(async () => facts),
-    }));
-    const authoring = {
-      conversationId: 'conversation:character',
-      dshSessionId: 'dsh-session:character',
-      binding: {
-        kind: 'authoring' as const,
-        workspaceId: 'workspace:one',
-        workspaceGrantId: 'workspace-grant:one',
-        authority: { kind: 'project' as const, projectId: 'project:one' },
-        target: { kind: 'character-project' as const, characterProjectId: 'character:one' },
-      },
-    };
-    const resolve = vi.fn(async () => authoring);
-    const handlers = createDshDomainToolHandlers({
-      contexts: { resolve },
-      generation: generationHandlers(),
-      canvas: { resolveService: vi.fn() },
-      cut: { resolveService: vi.fn() },
-      document: { resolveRuntime: vi.fn() },
-      character: { resolveService },
-    });
-
-    await expect(
-      handlers.executeCharacterTool(
-        {
-          sessionId: 'dsh-session:character',
-          turn: 1,
-          toolCallId: 'call:character',
-          sandboxMode: 'read-only',
-          tool: 'openneko.character',
-          operation: 'query',
-          input: { characterProjectId: 'character:one' },
-        },
-        new AbortController().signal,
-      ),
-    ).resolves.toMatchObject({ outcome: 'success' });
-    expect(resolve).toHaveBeenCalledWith('dsh-session:character');
-    expect(resolveService).toHaveBeenCalledWith(authoring);
-  });
-
-  it('rejects Character for a Workspace context without resolving a service', async () => {
-    const resolveService = vi.fn();
-    const handlers = createDshDomainToolHandlers({
-      contexts: { resolve: async () => workspaceContext() },
-      generation: generationHandlers(),
-      canvas: { resolveService: vi.fn() },
-      cut: { resolveService: vi.fn() },
-      document: { resolveRuntime: vi.fn() },
-      character: { resolveService },
-    });
-
-    await expect(
-      handlers.executeCharacterTool(
-        {
-          sessionId: 'dsh-session:one',
-          turn: 1,
-          toolCallId: 'call:character',
-          sandboxMode: 'read-only',
-          tool: 'openneko.character',
-          operation: 'query',
-          input: { characterProjectId: 'character:one' },
-        },
-        new AbortController().signal,
-      ),
-    ).resolves.toMatchObject({
-      outcome: 'failure',
-      diagnostic: { code: 'CHARACTER_DSH_CONTEXT_UNSUPPORTED' },
     });
     expect(resolveService).not.toHaveBeenCalled();
   });
