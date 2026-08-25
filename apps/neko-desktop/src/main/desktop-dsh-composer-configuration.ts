@@ -109,6 +109,7 @@ export function createDesktopDshComposerConfiguration(options: {
   };
 }) {
   let mentionRequestSequence = 0;
+  const executionByConversation = new Map<string, { readonly supportsImageInput: boolean }>();
   const resolveConfiguration = async (
     binding: AgentConversationContext,
     windowId: string,
@@ -143,13 +144,17 @@ export function createDesktopDshComposerConfiguration(options: {
     conversationId: string,
     config: ComposerConfigManager,
   ): Promise<{ readonly supportsImageInput: boolean }> => {
+    const existing = executionByConversation.get(conversationId);
+    if (existing !== undefined) return existing;
     const effective = requireEffectiveConfiguration(config, options.executionCatalog);
     await options.sessions.setSessionConfigOption(
       conversationId,
       DSH_ACP_MODEL_CONFIG_ID,
       encodeDshAcpModelConfiguration(effective.model),
     );
-    return { supportsImageInput: effective.supportsImageInput };
+    const execution = Object.freeze({ supportsImageInput: effective.supportsImageInput });
+    executionByConversation.set(conversationId, execution);
+    return execution;
   };
 
   const readInputCatalog = async (
@@ -297,6 +302,10 @@ export function createDesktopDshComposerConfiguration(options: {
             maxTokens: state.maxTokens,
           }),
         );
+        executionByConversation.set(
+          scope.conversationId,
+          Object.freeze({ supportsImageInput: execution.input.includes('image') }),
+        );
       }
       await config.setAssistantSettings({
         selectedProviderId: selected.providerId,
@@ -385,15 +394,19 @@ export function createDesktopDshComposerConfiguration(options: {
 
     async readConversationExecution(
       conversationId: string,
-      windowId: string,
+      _windowId: string,
     ): Promise<{ readonly supportsImageInput: boolean }> {
-      const binding = await options.contexts.readContext(conversationId);
-      if (binding === undefined) {
-        throw new Error(`Conversation '${conversationId}' has no authoritative domain context.`);
+      const execution = executionByConversation.get(conversationId);
+      if (execution === undefined) {
+        throw new Error(
+          `Conversation '${conversationId}' has no active DSH model execution binding.`,
+        );
       }
-      const resolved = await resolveConfiguration(binding, windowId);
-      const effective = requireEffectiveConfiguration(resolved.config, options.executionCatalog);
-      return { supportsImageInput: effective.supportsImageInput };
+      return execution;
+    },
+
+    resetSessionExecutions(): void {
+      executionByConversation.clear();
     },
   });
 }

@@ -1,5 +1,4 @@
 import type {
-  ModelCapability,
   ModelType,
   ProviderModelFamily,
   ProviderProtocolProfile,
@@ -51,6 +50,7 @@ export class DesktopAiModelSettingsService {
           apiName: model.name,
           displayName: model.displayName ?? model.name,
           type: model.type ?? 'llm',
+          capabilities: [...model.capabilities],
           enabled: model.enabled,
         })),
       defaults: Object.fromEntries(
@@ -142,10 +142,15 @@ export class DesktopAiModelSettingsService {
       if (!provider) {
         throw new Error(`Provider ${request.model.providerId} does not exist.`);
       }
-      const existingModel = this.config.getModel(request.model.id);
+      const existingModel = request.model.existingId
+        ? this.config.getModel(request.model.existingId)
+        : undefined;
+      if (request.model.existingId && !existingModel) {
+        throw new Error(`Model ${request.model.existingId} does not exist.`);
+      }
       if (existingModel && existingModel.providerId !== request.model.providerId) {
         throw new Error(
-          `Model ${request.model.id} already belongs to Provider ${existingModel.providerId}. Choose another model ID.`,
+          `Model ${existingModel.id} belongs to Provider ${existingModel.providerId}, not ${request.model.providerId}.`,
         );
       }
       if (
@@ -179,6 +184,11 @@ export class DesktopAiModelSettingsService {
             `Model template ${template.id} does not match ${provider.type}/${request.model.apiName}.`,
           );
         }
+        if (!sameCapabilities(request.model.capabilities, template.capabilities)) {
+          throw new Error(`Model template ${template.id} owns its capability declaration.`);
+        }
+      } else {
+        assertRequiredModelCapabilities(request.model.type, request.model.capabilities);
       }
       const matchingPresets = DESKTOP_AI_PROVIDER_PRESETS.filter(
         (preset) => preset.providerType === provider.type && preset.family === modelFamily,
@@ -195,13 +205,23 @@ export class DesktopAiModelSettingsService {
           `Provider ${provider.id} supports only builtin model templates: ${templateIds.join(', ')}.`,
         );
       }
+      const modelId =
+        existingModel?.id ??
+        (template
+          ? modelIdForTemplate(provider.id, template.id)
+          : modelIdForCustomModel(provider.id, request.model.apiName));
+      if (!existingModel && this.config.getModel(modelId)) {
+        throw new Error(
+          `Provider ${provider.id} already has a model derived from '${request.model.apiName}'. Edit that model or choose another model name.`,
+        );
+      }
       await this.config.setModel({
-        id: request.model.id,
+        id: modelId,
         providerId: request.model.providerId,
         name: request.model.apiName,
         displayName: request.model.displayName,
         type: request.model.type,
-        capabilities: template ? [...template.capabilities] : capabilitiesFor(request.model.type),
+        capabilities: template ? [...template.capabilities] : [...request.model.capabilities],
         enabled: request.model.enabled,
       });
       return { projection: await this.project(), executionConfigurationChanged: true };
@@ -217,7 +237,28 @@ export class DesktopAiModelSettingsService {
           );
         }
       }
+      const selected = this.config.getAssistantSettingsSnapshot();
+      const clearsRuntimeSelection =
+        selected.selectedProviderId === model.providerId && selected.selectedModelId === model.id;
       await this.config.removeModel(model.id);
+      if (clearsRuntimeSelection) {
+        try {
+          await this.config.clearAssistantModelSelection();
+        } catch (error) {
+          try {
+            await this.config.setModel(model);
+          } catch (rollbackError) {
+            throw new Error(
+              `Model ${model.providerId}/${model.id} was removed but the stale Composer selection could not be cleared and the model could not be restored. Selection error: ${describeError(error)}. Restore error: ${describeError(rollbackError)}.`,
+              { cause: error },
+            );
+          }
+          throw new Error(
+            `Model ${model.providerId}/${model.id} deletion was reverted because its stale Composer selection could not be cleared: ${describeError(error)}.`,
+            { cause: error },
+          );
+        }
+      }
       return { projection: await this.project(), executionConfigurationChanged: true };
     }
     if (request.operation === 'delete-provider') {
@@ -413,15 +454,42 @@ function dialogueProviderDiagnostic(
     : `Provider '${providerId}' is not an executable DSH catalog route and has no explicit protocol.`;
 }
 
-function capabilitiesFor(type: ModelType): ModelCapability[] {
-  if (type === 'llm') return ['chat', 'llm.chat', 'streaming'];
-  if (type === 'image') return ['text_to_image', 'image.generate'];
-  if (type === 'video') return ['text_to_video', 'video.generate'];
-  return ['text_to_audio', 'audio.generate'];
-}
-
 function modelFamilyFor(type: ModelType): ProviderModelFamily {
   return type === 'llm' ? 'dialogue' : 'generation';
+}
+
+function assertRequiredModelCapabilities(type: ModelType, capabilities: readonly string[]): void {
+  const required =
+    type === 'llm'
+      ? (['chat', 'llm.chat'] as const)
+      : type === 'image'
+        ? (['image.generate'] as const)
+        : type === 'video'
+          ? (['video.generate'] as const)
+          : (['audio.generate'] as const);
+  const missing = required.filter((capability) => !capabilities.includes(capability));
+  if (missing.length > 0) {
+    throw new Error(`Model type ${type} requires capabilities: ${missing.join(', ')}.`);
+  }
+}
+
+function sameCapabilities(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((capability) => right.includes(capability));
+}
+
+function modelIdForTemplate(providerId: string, templateId: string): string {
+  return `${providerId}-${templateId}`;
+}
+
+function modelIdForCustomModel(providerId: string, apiName: string): string {
+  const segment = encodeURIComponent(apiName.toLowerCase())
+    .replaceAll('%', '')
+    .replace(/[^a-z0-9._:-]+/giu, '-')
+    .replace(/^-+|-+$/gu, '');
+  if (segment.length === 0) {
+    throw new Error('Custom model name cannot produce a model identity.');
+  }
+  return `${providerId}:${segment}`;
 }
 
 function describeError(error: unknown): string {

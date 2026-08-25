@@ -537,6 +537,14 @@ export class ConfigManager {
     await authority.commit({ ...authority.snapshot(), ...updates });
   }
 
+  async clearAssistantModelSelection(): Promise<void> {
+    const authority = this.requireAssistantRuntimeSettings();
+    const next = { ...authority.snapshot() };
+    delete next.selectedProviderId;
+    delete next.selectedModelId;
+    await authority.commit(next);
+  }
+
   async applyRuntimeAssistantSettingsFromWebview(settings: Record<string, unknown>): Promise<void> {
     const updates = mapWebviewSettingsToAssistantSettings(settings);
     const authority = this.requireAssistantRuntimeSettings();

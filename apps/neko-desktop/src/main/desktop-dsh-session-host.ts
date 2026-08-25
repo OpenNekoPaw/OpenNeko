@@ -384,6 +384,9 @@ export class DesktopDshSessionHost {
     } else {
       conversationId = request.conversationId;
     }
+    if (request.operation === 'snapshot') {
+      await this.options.composer.applyConversation(conversationId, request.windowId);
+    }
     return {
       requestId: request.requestId,
       projection: await this.project(conversationId),

@@ -2,7 +2,7 @@ export const DSH_RUNTIME_HOST_CHANNEL = 'openneko:dsh:runtime';
 export const DSH_RUNTIME_CHANGED_CHANNEL = 'openneko:dsh:runtime:changed';
 
 export type DshRuntimeHostProjection =
-  | { readonly status: 'running' }
+  | { readonly status: 'running'; readonly sessionConfigurationPending?: true }
   | { readonly status: 'restarting' }
   | {
       readonly status: 'unavailable';
@@ -14,7 +14,7 @@ export type DshRuntimeHostProjection =
 
 export interface DshRuntimeHostRequest {
   readonly requestId: string;
-  readonly operation: 'status' | 'restart';
+  readonly operation: 'status' | 'prepare-session' | 'restart';
   readonly windowId: string;
   readonly rendererSessionId: string;
 }
@@ -27,6 +27,7 @@ export interface DshRuntimeHostResult {
 export interface OpenNekoDshRuntimeBridge {
   readonly dshRuntime: {
     getStatus(): Promise<DshRuntimeHostProjection>;
+    prepareSession(): Promise<DshRuntimeHostProjection>;
     restart(): Promise<DshRuntimeHostProjection>;
     subscribe(listener: (projection: DshRuntimeHostProjection) => void): () => void;
   };
@@ -35,7 +36,11 @@ export interface OpenNekoDshRuntimeBridge {
 export function parseDshRuntimeHostRequest(value: unknown): DshRuntimeHostRequest {
   const record = requireRecord(value, 'DSH runtime request');
   requireExactKeys(record, ['requestId', 'operation', 'windowId', 'rendererSessionId']);
-  if (record.operation !== 'status' && record.operation !== 'restart') {
+  if (
+    record.operation !== 'status' &&
+    record.operation !== 'prepare-session' &&
+    record.operation !== 'restart'
+  ) {
     throw new Error(`DSH runtime operation '${String(record.operation)}' is unsupported.`);
   }
   return {
@@ -61,9 +66,20 @@ export function parseDshRuntimeHostResult(
 
 export function parseDshRuntimeHostProjection(value: unknown): DshRuntimeHostProjection {
   const record = requireRecord(value, 'DSH runtime projection');
-  if (record.status === 'running' || record.status === 'restarting') {
+  if (record.status === 'running') {
+    if (Object.hasOwn(record, 'sessionConfigurationPending')) {
+      requireExactKeys(record, ['status', 'sessionConfigurationPending']);
+      if (record.sessionConfigurationPending !== true) {
+        throw new Error('DSH runtime sessionConfigurationPending must be true when present.');
+      }
+      return { status: 'running', sessionConfigurationPending: true };
+    }
     requireExactKeys(record, ['status']);
-    return { status: record.status };
+    return { status: 'running' };
+  }
+  if (record.status === 'restarting') {
+    requireExactKeys(record, ['status']);
+    return { status: 'restarting' };
   }
   if (record.status !== 'unavailable') {
     throw new Error(`DSH runtime status '${String(record.status)}' is unsupported.`);

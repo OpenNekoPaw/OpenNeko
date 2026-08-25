@@ -79,6 +79,11 @@ function createConfig() {
       removeProvider: vi.fn(async () => undefined),
       removeModel: vi.fn(async () => undefined),
       setDefaultModelRef: vi.fn(async () => undefined),
+      getAssistantSettingsSnapshot: vi.fn(() => ({
+        selectedProviderId: provider.id,
+        selectedModelId: model.id,
+      })),
+      clearAssistantModelSelection: vi.fn(async () => undefined),
     } as unknown as ConfigManager,
   };
 }
@@ -582,11 +587,11 @@ describe('DesktopAiModelSettingsService', () => {
       requestId: `request-model-${template.type}`,
       operation: 'save-model',
       model: {
-        id: template.templateId,
         providerId: provider.id,
         apiName: template.apiName,
         displayName: template.apiName,
         type: 'video',
+        capabilities: template.capabilities,
         enabled: true,
         templateId: template.templateId,
       },
@@ -594,12 +599,123 @@ describe('DesktopAiModelSettingsService', () => {
 
     expect(config.setModel).toHaveBeenCalledWith(
       expect.objectContaining({
+        id: `${provider.id}-${template.templateId}`,
         providerId: provider.id,
         name: template.apiName,
         type: 'video',
         capabilities: template.capabilities,
       }),
     );
+  });
+
+  it('rejects capability overrides for a builtin model template', async () => {
+    const { config, provider } = createConfig();
+    Object.assign(provider, {
+      type: 'minimax',
+      protocolProfile: undefined,
+      supportedModelFamilies: ['generation'],
+    });
+    const credentials = {
+      read: vi.fn(async () => undefined),
+    } as unknown as ProviderCredentialAuthority;
+
+    await expect(
+      createService(config, credentials).execute({
+        requestId: 'request-template-capability-override',
+        operation: 'save-model',
+        model: {
+          providerId: provider.id,
+          apiName: 'MiniMax-H3',
+          displayName: 'MiniMax H3',
+          type: 'video',
+          capabilities: ['video.generate'],
+          enabled: true,
+          templateId: 'minimax-h3',
+        },
+      }),
+    ).rejects.toThrow(/owns its capability declaration/u);
+
+    expect(config.setModel).not.toHaveBeenCalled();
+  });
+
+  it('persists explicitly selected capabilities for a custom dialogue model', async () => {
+    const { config, provider } = createConfig();
+    const credentials = {
+      read: vi.fn(async () => undefined),
+    } as unknown as ProviderCredentialAuthority;
+
+    await createService(config, credentials).execute({
+      requestId: 'request-custom-dialogue-capabilities',
+      operation: 'save-model',
+      model: {
+        providerId: provider.id,
+        apiName: 'custom-agent-model',
+        displayName: 'Custom Agent Model',
+        type: 'llm',
+        capabilities: ['chat', 'llm.chat', 'vision', 'function_calling', 'streaming'],
+        enabled: true,
+      },
+    });
+
+    expect(config.setModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: `${provider.id}:custom-agent-model`,
+        capabilities: ['chat', 'llm.chat', 'vision', 'function_calling', 'streaming'],
+      }),
+    );
+  });
+
+  it('preserves the Host-owned identity when editing an existing model', async () => {
+    const { config, provider, model } = createConfig();
+    const credentials = {
+      read: vi.fn(async () => undefined),
+    } as unknown as ProviderCredentialAuthority;
+
+    await createService(config, credentials).execute({
+      requestId: 'request-edit-dialogue-model',
+      operation: 'save-model',
+      model: {
+        existingId: model.id,
+        providerId: provider.id,
+        apiName: 'renamed-api-model',
+        displayName: 'Renamed Model',
+        type: 'llm',
+        capabilities: ['chat', 'llm.chat', 'streaming'],
+        enabled: true,
+      },
+    });
+
+    expect(config.setModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: model.id,
+        name: 'renamed-api-model',
+        displayName: 'Renamed Model',
+      }),
+    );
+  });
+
+  it('rejects a custom model missing the capabilities required by its type', async () => {
+    const { config, provider } = createConfig();
+    const credentials = {
+      read: vi.fn(async () => undefined),
+    } as unknown as ProviderCredentialAuthority;
+
+    await expect(
+      createService(config, credentials).execute({
+        requestId: 'request-incomplete-dialogue-capabilities',
+        operation: 'save-model',
+        model: {
+          providerId: provider.id,
+          apiName: 'incomplete-agent-model',
+          displayName: 'Incomplete Agent Model',
+          type: 'llm',
+          capabilities: ['vision'],
+          enabled: true,
+        },
+      }),
+    ).rejects.toThrow(/requires capabilities: chat, llm.chat/u);
+
+    expect(config.setModel).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -621,11 +737,11 @@ describe('DesktopAiModelSettingsService', () => {
         requestId: `request-unsupported-${type}`,
         operation: 'save-model',
         model: {
-          id: `unsupported-${type}`,
           providerId: provider.id,
           apiName,
           displayName: apiName,
           type: 'video',
+          capabilities: ['video.generate'],
           enabled: true,
         },
       }),
@@ -634,7 +750,7 @@ describe('DesktopAiModelSettingsService', () => {
     expect(config.setModel).not.toHaveBeenCalled();
   });
 
-  it('rejects a model ID that already belongs to another Provider', async () => {
+  it('rejects editing a model through another Provider', async () => {
     const { config, provider, model } = createConfig();
     Object.assign(provider, {
       id: 'provider-b',
@@ -651,16 +767,17 @@ describe('DesktopAiModelSettingsService', () => {
         requestId: 'request-model-collision',
         operation: 'save-model',
         model: {
-          id: model.id,
+          existingId: model.id,
           providerId: provider.id,
           apiName: 'MiniMax-H3',
           displayName: 'MiniMax H3',
           type: 'video',
+          capabilities: ['video.generate'],
           enabled: true,
           templateId: 'minimax-h3',
         },
       }),
-    ).rejects.toThrow(/already belongs to Provider provider-a/u);
+    ).rejects.toThrow(/belongs to Provider provider-a, not provider-b/u);
 
     expect(config.setModel).not.toHaveBeenCalled();
   });
@@ -698,11 +815,11 @@ describe('DesktopAiModelSettingsService', () => {
         requestId: 'request-family-mismatch',
         operation: 'save-model',
         model: {
-          id: 'chat-mismatch',
           providerId: provider.id,
           apiName: 'chat-mismatch',
           displayName: 'Chat mismatch',
           type: 'llm',
+          capabilities: ['chat', 'llm.chat'],
           enabled: true,
         },
       }),
@@ -723,11 +840,11 @@ describe('DesktopAiModelSettingsService', () => {
         requestId: 'request-dialogue-video-mismatch',
         operation: 'save-model',
         model: {
-          id: 'video-mismatch',
           providerId: provider.id,
           apiName: 'video-mismatch',
           displayName: 'Video mismatch',
           type: 'video',
+          capabilities: ['video.generate'],
           enabled: true,
         },
       }),
@@ -817,8 +934,52 @@ describe('DesktopAiModelSettingsService', () => {
     });
 
     expect(config.removeModel).toHaveBeenCalledWith(model.id);
+    expect(config.clearAssistantModelSelection).toHaveBeenCalledOnce();
     expect(config.removeProvider).toHaveBeenCalledWith(provider.id);
     expect(credentials.delete).toHaveBeenCalledWith(provider.id);
+  });
+
+  it('restores a deleted model when its stale Composer selection cannot be cleared', async () => {
+    const { config, model } = createConfig();
+    config.getDefaultModelRef = vi.fn(() => undefined);
+    config.clearAssistantModelSelection = vi.fn(async () => {
+      throw new Error('runtime settings unavailable');
+    });
+    const credentials = {
+      read: vi.fn(async () => undefined),
+    } as unknown as ProviderCredentialAuthority;
+
+    await expect(
+      createService(config, credentials).execute({
+        requestId: 'delete-selected-model',
+        operation: 'delete-model',
+        modelId: model.id,
+      }),
+    ).rejects.toThrow(/deletion was reverted/u);
+
+    expect(config.removeModel).toHaveBeenCalledWith(model.id);
+    expect(config.setModel).toHaveBeenCalledWith(model);
+  });
+
+  it('keeps an unrelated transient Composer selection when deleting another model', async () => {
+    const { config, model } = createConfig();
+    config.getDefaultModelRef = vi.fn(() => undefined);
+    config.getAssistantSettingsSnapshot = vi.fn(() => ({
+      selectedProviderId: 'another-provider',
+      selectedModelId: 'another-model',
+    }));
+    const credentials = {
+      read: vi.fn(async () => undefined),
+    } as unknown as ProviderCredentialAuthority;
+
+    await createService(config, credentials).execute({
+      requestId: 'delete-unselected-model',
+      operation: 'delete-model',
+      modelId: model.id,
+    });
+
+    expect(config.removeModel).toHaveBeenCalledWith(model.id);
+    expect(config.clearAssistantModelSelection).not.toHaveBeenCalled();
   });
 
   it('persists Provider edits and deletion through the canonical config.toml owner', async () => {

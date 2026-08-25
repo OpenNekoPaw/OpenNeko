@@ -3232,6 +3232,7 @@ function installBridge({
       },
       dshRuntime: {
         getStatus: vi.fn(async () => ({ status: 'running' as const })),
+        prepareSession: vi.fn(async () => ({ status: 'running' as const })),
         restart: vi.fn(async () => ({ status: 'running' as const })),
         subscribe: vi.fn(() => () => undefined),
       },

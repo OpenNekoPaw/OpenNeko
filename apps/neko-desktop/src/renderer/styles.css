@@ -378,7 +378,8 @@ code {
 
 .desktop-settings__subsection-heading strong,
 .desktop-settings__compact-field > span,
-.desktop-settings__form-grid label > span {
+.desktop-settings__form-grid label > span,
+.desktop-settings__model-capability-field > span {
   color: var(--neko-desktop-text-strong);
   font-size: 12px;
   font-weight: 680;
@@ -461,7 +462,8 @@ code {
 }
 
 .desktop-settings__compact-field,
-.desktop-settings__form-grid label {
+.desktop-settings__form-grid label,
+.desktop-settings__model-capability-field {
   display: grid;
   min-width: 0;
   gap: 5px;
@@ -740,7 +742,8 @@ code {
 }
 
 .desktop-settings__model-default-badge,
-.desktop-settings__model-default-action {
+.desktop-settings__model-default-action,
+.desktop-settings__model-edit-action {
   flex: 0 0 auto;
   padding: 3px 7px;
   border-radius: 999px;
@@ -752,19 +755,22 @@ code {
   background: color-mix(in srgb, var(--neko-desktop-accent) 10%, transparent);
 }
 
-.desktop-settings__model-default-action {
+.desktop-settings__model-default-action,
+.desktop-settings__model-edit-action {
   border: 0;
   color: var(--neko-desktop-text-muted);
   background: var(--neko-desktop-control);
   cursor: pointer;
 }
 
-.desktop-settings__model-default-action:hover {
+.desktop-settings__model-default-action:hover,
+.desktop-settings__model-edit-action:hover {
   color: var(--neko-desktop-text-strong);
   background: var(--neko-desktop-control-hover);
 }
 
-.desktop-settings__model-default-action:disabled {
+.desktop-settings__model-default-action:disabled,
+.desktop-settings__model-edit-action:disabled {
   opacity: 0.48;
   cursor: not-allowed;
 }
@@ -932,6 +938,130 @@ code {
 
 .desktop-settings__model-editor .desktop-settings__form-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.desktop-settings__model-capability-trigger {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--neko-desktop-border);
+  border-radius: 8px;
+  color: var(--neko-fg);
+  background: var(--neko-desktop-surface-raised);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.desktop-settings__model-capability-trigger > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-settings__model-capability-trigger > span:last-child {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--neko-desktop-text-muted);
+  transition: transform 140ms ease;
+}
+
+.desktop-settings__model-capability-trigger[aria-expanded='true'] > span:last-child {
+  transform: rotate(180deg);
+}
+
+.desktop-settings__model-capability-trigger:focus-visible {
+  outline: 0;
+  box-shadow: var(--neko-desktop-focus-ring);
+}
+
+.desktop-settings__model-capability-trigger:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.desktop-settings__model-capability-popover {
+  width: min(320px, calc(100vw - 32px));
+  padding: 8px;
+  border-color: var(--neko-desktop-border);
+  color: var(--neko-desktop-text-strong);
+  background: var(--neko-desktop-surface-raised);
+}
+
+.desktop-settings__model-capability-menu {
+  display: grid;
+  gap: 7px;
+}
+
+.desktop-settings__model-capability-menu > small {
+  padding: 2px 4px 5px;
+  color: var(--neko-desktop-text-muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.desktop-settings__model-capability-menu-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.desktop-settings__model-capability-option {
+  display: flex;
+  min-width: 0;
+  min-height: 30px;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--neko-desktop-text-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.desktop-settings__model-capability-option:hover:not(:disabled),
+.desktop-settings__model-capability-option[aria-checked='true'] {
+  color: var(--neko-desktop-text-strong);
+  background: var(--neko-desktop-control-hover);
+}
+
+.desktop-settings__model-capability-option:focus-visible {
+  outline: 0;
+  box-shadow: var(--neko-desktop-focus-ring);
+}
+
+.desktop-settings__model-capability-option:disabled {
+  cursor: default;
+}
+
+.desktop-settings__model-capability-check {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--neko-desktop-border-strong);
+  border-radius: 4px;
+  color: var(--neko-desktop-accent-foreground);
+  background: var(--neko-desktop-surface);
+}
+
+.desktop-settings__model-capability-option[aria-checked='true']
+  .desktop-settings__model-capability-check {
+  border-color: var(--neko-desktop-accent);
+  background: var(--neko-desktop-accent);
 }
 
 .desktop-settings__form-wide {

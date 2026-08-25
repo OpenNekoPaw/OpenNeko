@@ -671,6 +671,67 @@ describe('Desktop DSH composer configuration', () => {
     ).rejects.toThrow(/not executable by the current DSH runtime/u);
     expect(config.setAssistantSettings).not.toHaveBeenCalled();
   });
+
+  it('retains the exact open-Session model binding until the DSH runtime is reset', async () => {
+    const config = createConfig();
+    const setSessionConfigOption = vi.fn(async () => ({ configOptions: [] }));
+    const service = createDesktopDshComposerConfiguration({
+      resolveSurface: vi.fn(async () => ({
+        windowId: 'window-1',
+        binding: { kind: 'assistant' as const, assistantSpaceId: 'assistant-1', baseGrantIds: [] },
+        conversationId: 'conversation-1',
+      })),
+      contexts: {
+        readContext: vi.fn(async () => ({
+          kind: 'assistant' as const,
+          assistantSpaceId: 'assistant-1',
+          baseGrantIds: [],
+        })),
+      },
+      canvas: canvasIndex(),
+      workspaceGrants: {
+        restore: vi.fn(async () => {
+          throw new Error('Workspace resolution must not run.');
+        }),
+      },
+      configuration: { getApplicationConfig: () => config, getWorkspaceConfig: () => config },
+      sessions: {
+        setSessionConfigOption,
+        readInputCatalog: vi.fn(async () => ({ commands: [], skills: [], skillsComplete: true })),
+      },
+      preTurnInputCatalog: emptyInputCatalogReader(),
+      lookupCwd: fixedCwdLookup(),
+      executionCatalog: createExecutionCatalog(),
+      resourceBrowser: unavailableResourceBrowser(),
+      assets: unavailableAssets(),
+      entities: unavailableEntities(),
+      permissions: {
+        read: vi.fn(async () => permissionPresets('workspace-write')),
+        set: vi.fn(async () => permissionPresets('workspace-write')),
+      },
+    });
+
+    await expect(service.applyConversation('conversation-1', 'window-1')).resolves.toEqual({
+      supportsImageInput: false,
+    });
+    expect(setSessionConfigOption).toHaveBeenCalledOnce();
+
+    config.getEffectiveAgentWorkspaceConfigSnapshot.mockReturnValue({
+      blockingDiagnostic: { message: 'Selected model was removed.' },
+    });
+    await expect(service.applyConversation('conversation-1', 'window-1')).resolves.toEqual({
+      supportsImageInput: false,
+    });
+    await expect(service.readConversationExecution('conversation-1', 'window-1')).resolves.toEqual({
+      supportsImageInput: false,
+    });
+    expect(setSessionConfigOption).toHaveBeenCalledOnce();
+
+    service.resetSessionExecutions();
+    await expect(service.applyConversation('conversation-1', 'window-1')).rejects.toThrow(
+      'Selected model was removed.',
+    );
+  });
 });
 
 function createExecutionCatalog(options: { readonly includeDeepSeek?: boolean } = {}) {

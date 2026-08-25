@@ -284,6 +284,100 @@ describe('Desktop DSH Agent runtime composition', () => {
     await fixture.store.dispose();
   });
 
+  it('keeps the current Session runtime intact until a reopened or new Session boundary', async () => {
+    const fixture = await createFixture();
+    const firstSubprocess = createSubprocess(createTransport());
+    const secondSubprocess = createSubprocess(createTransport());
+    const start = vi
+      .fn()
+      .mockReturnValueOnce(firstSubprocess)
+      .mockReturnValueOnce(secondSubprocess);
+    const runtime = await startDesktopDshAgentRuntime({
+      supervisor: { start },
+      virtualCwd: '/virtual/workspace',
+      metadataStore: fixture.store,
+      resolveSessionCwd: async () => '/virtual/workspace',
+      createHandlers: () => createHandlerAssembly(),
+      connectClient: vi.fn(async () => createClient(['dsh-session-a'])),
+    });
+    runtime.client.projection.acceptSessionUpdate({
+      sessionId: 'dsh-session-a',
+      _meta: { opennekoSequence: 0 },
+      update: {
+        sessionUpdate: 'user_message_chunk',
+        content: { type: 'text', text: 'retained current Session' },
+      },
+    });
+
+    await expect(runtime.deferConfigurationRefresh()).resolves.toBe('pending');
+
+    expect(start).toHaveBeenCalledOnce();
+    expect(firstSubprocess.dispose).not.toHaveBeenCalled();
+    expect(runtime.getStatus()).toEqual({
+      status: 'running',
+      sessionConfigurationPending: true,
+    });
+    expect(runtime.client.projection.snapshot('dsh-session-a').events).toHaveLength(1);
+    await expect(runtime.client.listSessions()).resolves.toEqual({
+      sessions: [{ sessionId: 'dsh-session-a', cwd: '/workspace' }],
+    });
+
+    await runtime.prepareSession();
+
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(firstSubprocess.dispose).toHaveBeenCalledOnce();
+    expect(runtime.client.projection.snapshot('dsh-session-a').events).toEqual([]);
+
+    await runtime.dispose();
+    await fixture.store.dispose();
+  });
+
+  it('does not auto-refresh a deferred model configuration when the current turn ends', async () => {
+    const fixture = await createFixture();
+    const firstSubprocess = createSubprocess(createTransport());
+    const secondSubprocess = createSubprocess(createTransport());
+    const start = vi
+      .fn()
+      .mockReturnValueOnce(firstSubprocess)
+      .mockReturnValueOnce(secondSubprocess);
+    const runtime = await startDesktopDshAgentRuntime({
+      supervisor: { start },
+      virtualCwd: '/virtual/workspace',
+      metadataStore: fixture.store,
+      resolveSessionCwd: async () => '/virtual/workspace',
+      createHandlers: () => createHandlerAssembly(),
+      connectClient: vi.fn(async () => createClient(['dsh-session-a'])),
+    });
+    runtime.client.projection.acceptSessionEvent({
+      sessionId: 'dsh-session-a',
+      sequence: 0,
+      time: 1_000,
+      type: 'turn/start',
+      data: { turn: 0 },
+      replay: false,
+    });
+
+    await runtime.deferConfigurationRefresh();
+    await expect(runtime.prepareSession()).rejects.toThrow(/current Session work/u);
+
+    runtime.client.projection.acceptSessionEvent({
+      sessionId: 'dsh-session-a',
+      sequence: 1,
+      time: 1_001,
+      type: 'turn/end',
+      data: { turn: 0, reason: { kind: 'success' } },
+      replay: false,
+    });
+    await runtime.flushPendingConfigurationRefresh();
+    expect(start).toHaveBeenCalledOnce();
+
+    await runtime.prepareSession();
+    expect(start).toHaveBeenCalledTimes(2);
+
+    await runtime.dispose();
+    await fixture.store.dispose();
+  });
+
   it('defers configuration refresh until an active turn ends and blocks new work meanwhile', async () => {
     const fixture = await createFixture();
     const firstSubprocess = createSubprocess(createTransport());

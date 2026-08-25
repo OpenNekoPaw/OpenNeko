@@ -676,6 +676,17 @@ const bridge: OpenNekoDesktopBridge &
       const response: unknown = await ipcRenderer.invoke(DSH_RUNTIME_HOST_CHANNEL, request);
       return parseDshRuntimeHostResult(response, request.requestId).projection;
     },
+    async prepareSession() {
+      const context = requireDesktopWindowContext();
+      const request = {
+        requestId: nextRequestId('dsh-runtime-prepare-session'),
+        operation: 'prepare-session' as const,
+        windowId: context.windowId,
+        rendererSessionId: context.rendererSessionId,
+      };
+      const response: unknown = await ipcRenderer.invoke(DSH_RUNTIME_HOST_CHANNEL, request);
+      return parseDshRuntimeHostResult(response, request.requestId).projection;
+    },
     async restart() {
       const context = requireDesktopWindowContext();
       const request = {

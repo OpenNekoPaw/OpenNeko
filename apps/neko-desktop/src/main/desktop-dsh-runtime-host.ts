@@ -9,7 +9,7 @@ import type { DesktopSenderIdentity } from './window-registry';
 export class DesktopDshRuntimeHost {
   constructor(
     private readonly options: {
-      readonly runtime: Pick<DesktopDshAgentRuntime, 'getStatus' | 'restart'>;
+      readonly runtime: Pick<DesktopDshAgentRuntime, 'getStatus' | 'prepareSession' | 'restart'>;
       readonly windows: {
         resolveSender(sender: DesktopSenderIdentity): {
           readonly windowId: string;
@@ -28,7 +28,9 @@ export class DesktopDshRuntimeHost {
     ) {
       throw new Error('DSH runtime request does not match its sender-bound renderer session.');
     }
-    if (request.operation === 'restart') {
+    if (request.operation === 'prepare-session') {
+      await this.options.runtime.prepareSession();
+    } else if (request.operation === 'restart') {
       try {
         await this.options.runtime.restart();
       } catch (error) {

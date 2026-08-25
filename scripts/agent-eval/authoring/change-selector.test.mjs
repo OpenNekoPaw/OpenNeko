@@ -153,7 +153,10 @@ describe('Agent Evaluation change-to-suite selector', () => {
   it('maps Desktop DSH composition files to the owning runtime suite', () => {
     const paths = [
       'packages/agent/runtime/src/application/conversation-dsh-session-application.ts',
+      'packages/agent/contracts/src/dsh-runtime-host.ts',
       'apps/neko-desktop/src/main/desktop-dsh-agent-runtime.ts',
+      'apps/neko-desktop/src/main/desktop-dsh-composer-configuration.ts',
+      'apps/neko-desktop/src/main/desktop-dsh-runtime-host.ts',
       'apps/neko-desktop/src/main/desktop-dsh-permission-host.ts',
       'apps/neko-desktop/src/renderer/DesktopAgentSurface.tsx',
     ];
@@ -173,7 +176,10 @@ describe('Agent Evaluation change-to-suite selector', () => {
           suiteId: 'agent-runtime.workflow-controller',
           suiteIds: ['agent-runtime.workflow-controller'],
           changedPaths: [
+            'packages/agent/contracts/src/dsh-runtime-host.ts',
             'apps/neko-desktop/src/main/desktop-dsh-agent-runtime.ts',
+            'apps/neko-desktop/src/main/desktop-dsh-composer-configuration.ts',
+            'apps/neko-desktop/src/main/desktop-dsh-runtime-host.ts',
             'apps/neko-desktop/src/main/desktop-dsh-permission-host.ts',
             'apps/neko-desktop/src/renderer/DesktopAgentSurface.tsx',
           ],

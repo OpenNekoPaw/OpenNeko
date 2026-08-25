@@ -1129,6 +1129,7 @@ describe('Desktop DSH Session Host', () => {
 
   it('delegates canonical DSH turn timing without using Desktop receipt time', async () => {
     const projection = new DshAcpProjection();
+    const applyConversation = vi.fn(async () => ({ supportsImageInput: false }));
     projection.acceptSessionEvent({
       sessionId: identity.dshSessionId,
       sequence: 0,
@@ -1147,7 +1148,7 @@ describe('Desktop DSH Session Host', () => {
     });
 
     const result = requireSessionResult(
-      await createHost({ projection }).execute(
+      await createHost({ projection, applyConversation }).execute(
         { webContentsId: 1, frameUrl: 'openneko://app' },
         {
           requestId: 'request-snapshot',
@@ -1159,6 +1160,7 @@ describe('Desktop DSH Session Host', () => {
       ),
     );
 
+    expect(applyConversation).toHaveBeenCalledWith(identity.conversationId, 'window-1');
     expect(result.projection.events).toEqual([
       { kind: 'turn', turn: 2, phase: 'start', startedAt: 1_000 },
       {

@@ -76,6 +76,10 @@ export const desktopAiModelSettingsScenario = Object.freeze({
         'capabilities = ["image.generate"]',
         'enabled = true',
         '',
+        '[default_models.llm]',
+        'provider_id = "functional-ollama"',
+        'model_id = "functional-local-chat"',
+        '',
       ].join('\n'),
       { encoding: 'utf8', mode: 0o600 },
     );
@@ -83,6 +87,50 @@ export const desktopAiModelSettingsScenario = Object.freeze({
   },
   async run({ checkpoint, evaluate, prepared, screenshot, waitForSelector }) {
     await waitForSelector('[data-primary-sidebar="application"]');
+    await waitForSelector('.agent-model-config-trigger');
+    await waitForCondition(
+      evaluate,
+      `document.querySelector('.agent-model-config-trigger') instanceof HTMLButtonElement &&
+        !document.querySelector('.agent-model-config-trigger').disabled`,
+      'Entry Draft did not finish loading its configured chat models.',
+    );
+    await evaluate(`(() => {
+      const trigger = document.querySelector('.agent-model-config-trigger');
+      if (!(trigger instanceof HTMLButtonElement)) throw new Error('Chat model selector is unavailable.');
+      trigger.click();
+      return true;
+    })()`);
+    await waitForSelector('.agent-model-config-radio');
+    await evaluate(`(() => {
+      const option = [...document.querySelectorAll('.agent-model-config-radio')].find((item) =>
+        item.textContent?.includes('Functional Removable Chat'),
+      );
+      if (!(option instanceof HTMLButtonElement)) {
+        throw new Error('Functional removable chat model is unavailable in the Entry Draft.');
+      }
+      option.click();
+      return true;
+    })()`);
+    await waitForCondition(
+      evaluate,
+      `document.querySelector('.agent-model-config-trigger')?.textContent?.includes(
+        'Functional Removable Chat',
+      )`,
+      'Entry Draft did not select the removable chat model.',
+    );
+    const selectedBeforeDelete = await evaluate(`(() => {
+      const trigger = document.querySelector('.agent-model-config-trigger');
+      if (!(trigger instanceof HTMLButtonElement)) throw new Error('Chat model selector disappeared.');
+      const triggerLabel = trigger.textContent?.trim() ?? '';
+      trigger.click();
+      return { triggerLabel };
+    })()`);
+    if (!selectedBeforeDelete.triggerLabel.includes('Functional Removable Chat')) {
+      throw new Error(
+        `Entry Draft did not select the removable chat model: ${JSON.stringify(selectedBeforeDelete)}`,
+      );
+    }
+    checkpoint('entry-draft-removable-model-selected', selectedBeforeDelete);
     await evaluate(`(() => {
       window.resizeTo(1440, 960);
       const settings = [...document.querySelectorAll('button')].find((button) =>
@@ -272,6 +320,15 @@ export const desktopAiModelSettingsScenario = Object.freeze({
       return true;
     })()`);
     await waitForSelector('.desktop-settings__model-editor');
+    await evaluate(`(() => {
+      const trigger = document.querySelector('[data-model-capability-trigger="true"]');
+      if (!(trigger instanceof HTMLButtonElement)) {
+        throw new Error('MiniMax capability selector is unavailable.');
+      }
+      trigger.click();
+      return true;
+    })()`);
+    await waitForSelector('.desktop-settings__model-capability-menu');
     const h3TemplateState = await evaluate(`(() => {
       const editor = document.querySelector('.desktop-settings__model-editor');
       const selects = [...editor?.querySelectorAll('select') ?? []];
@@ -281,14 +338,22 @@ export const desktopAiModelSettingsScenario = Object.freeze({
         template: selects[0]?.value,
         modelType: selects[1]?.value,
         values: inputs.map((input) => input.value),
-        lockedFieldCount: inputs.filter((input) => input.disabled).length,
+        lockedControlCount: [...inputs, ...selects].filter((control) => control.disabled).length,
+        checkedCapabilities: [...document.querySelectorAll('[data-model-capability]')]
+          .filter((option) => option.getAttribute('aria-checked') === 'true')
+          .map((option) => option.getAttribute('data-model-capability')),
+        capabilitiesLocked: [...document.querySelectorAll('[data-model-capability]')]
+          .every((option) => option.disabled),
       };
     })()`);
     if (
       h3TemplateState.template !== 'minimax-h3' ||
       h3TemplateState.modelType !== 'video' ||
       !h3TemplateState.values.includes('MiniMax-H3') ||
-      h3TemplateState.lockedFieldCount < 2
+      h3TemplateState.lockedControlCount < 3 ||
+      JSON.stringify(h3TemplateState.checkedCapabilities) !==
+        JSON.stringify(['textToVideo', 'imageToVideo', 'videoToVideo']) ||
+      !h3TemplateState.capabilitiesLocked
     ) {
       throw new Error(`MiniMax H3 model template is incorrect: ${JSON.stringify(h3TemplateState)}`);
     }
@@ -454,6 +519,36 @@ export const desktopAiModelSettingsScenario = Object.freeze({
       configFileUpdated: true,
       retainedProviders: ['functional-ollama', 'functional-generation', 'minimax-media'],
     });
+    await waitForCondition(
+      evaluate,
+      `(() => {
+        const trigger = document.querySelector('.agent-model-config-trigger');
+        return trigger instanceof HTMLButtonElement &&
+          !trigger.disabled &&
+          trigger.textContent?.includes('Functional Local Chat');
+      })()`,
+      'Entry Draft did not refresh to the canonical default after deleting its transient model selection.',
+    );
+    const entryModelAfterDelete = await evaluate(`(() => ({
+      triggerLabel: document.querySelector('.agent-model-config-trigger')?.textContent?.trim() ?? '',
+      runtimeStatus:
+        document.querySelector('[data-agent-surface]')?.getAttribute('data-dsh-runtime-status') ?? '',
+      unavailableDiagnosticVisible:
+        document.body.textContent?.includes('unavailable default chat model') ?? false,
+    }))()`);
+    if (
+      !entryModelAfterDelete.triggerLabel.includes('Functional Local Chat') ||
+      entryModelAfterDelete.runtimeStatus !== 'running' ||
+      entryModelAfterDelete.unavailableDiagnosticVisible
+    ) {
+      throw new Error(
+        `Entry Draft model catalog did not converge after deletion: ${JSON.stringify(entryModelAfterDelete)}`,
+      );
+    }
+    checkpoint('entry-draft-model-catalog-refreshed-after-delete', entryModelAfterDelete);
+    const refreshedEntryScreenshot = await screenshot(
+      'desktop-ai-model-entry-refreshed-after-delete',
+    );
 
     return {
       catalog,
@@ -462,6 +557,8 @@ export const desktopAiModelSettingsScenario = Object.freeze({
       generationPresetState,
       dshCatalogState,
       h3TemplateState,
+      selectedBeforeDelete,
+      entryModelAfterDelete,
       screenshots: [
         catalogScreenshot,
         dshCatalogScreenshot,
@@ -469,6 +566,7 @@ export const desktopAiModelSettingsScenario = Object.freeze({
         h3TemplateScreenshot,
         localScreenshot,
         deleteConfirmationScreenshot,
+        refreshedEntryScreenshot,
       ],
     };
   },

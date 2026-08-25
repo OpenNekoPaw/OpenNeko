@@ -98,6 +98,7 @@ const RULES = Object.freeze([
     'packages/agent/runtime/src/application/conversation-dsh-session-application',
   ]),
   rule('session-workflows', 'agent-runtime.workflow-controller', [
+    'packages/agent/contracts/src/dsh-runtime-host',
     'packages/agent/runtime/src/session/',
     'packages/agent/runtime/src/subagent/',
     'packages/dsh-bridge/',
@@ -105,6 +106,8 @@ const RULES = Object.freeze([
     'packages/agent/runtime/src/application/conversation-dsh-session-client',
     'packages/agent/runtime/src/application/dsh-permission-owner',
     'apps/neko-desktop/src/main/desktop-dsh-agent-runtime',
+    'apps/neko-desktop/src/main/desktop-dsh-composer-configuration',
+    'apps/neko-desktop/src/main/desktop-dsh-runtime-host',
     'apps/neko-desktop/src/main/desktop-dsh-runtime-bootstrap',
     'apps/neko-desktop/src/main/desktop-dsh-permission-host',
     'apps/neko-desktop/src/renderer/DesktopAgentSurface',

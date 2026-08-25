@@ -2404,7 +2404,7 @@ async function startDesktop(): Promise<void> {
     },
   });
   dshDialogueCapabilities.current = () => dshProduct.runtime.client.readProviderCapabilities();
-  dshProviderRefresh.current = () => dshProduct.runtime.refreshConfiguration();
+  dshProviderRefresh.current = () => dshProduct.runtime.deferConfigurationRefresh();
   dshWorkspaceBoardDeliveryTrigger.current = async (dshSessionId, conversationId, trigger) => {
     try {
       const snapshot = dshProduct.runtime.client.projection.snapshot(dshSessionId);
@@ -2576,6 +2576,11 @@ async function startDesktop(): Promise<void> {
         return dshProduct.runtime.conversations.conversations.readPermissionPresets(conversationId);
       },
     },
+  });
+  dshProduct.runtime.subscribe((projection) => {
+    if (projection.status !== 'running') {
+      dshComposerConfiguration.resetSessionExecutions();
+    }
   });
   const dshPromptContext = createDshConversationTurnContextResolver({
     contexts: agentConversationContexts,

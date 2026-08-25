@@ -70,6 +70,8 @@ export interface DesktopDshAgentRuntime {
   resolveSessionCwd(context: AgentConversationContext): Promise<string>;
   getStatus(): DshRuntimeHostProjection;
   subscribe(listener: (projection: DshRuntimeHostProjection) => void): () => void;
+  deferConfigurationRefresh(): Promise<'pending'>;
+  prepareSession(): Promise<void>;
   refreshConfiguration(): Promise<'applied' | 'pending'>;
   flushPendingConfigurationRefresh(): Promise<void>;
   restart(): Promise<void>;
@@ -124,7 +126,9 @@ export async function startDesktopDshAgentRuntime(
   let activeWork = 0;
   let workBlocked = false;
   let configurationRefreshPending = false;
+  let sessionConfigurationRefreshPending = false;
   const refreshFlushTrigger: { current?: () => Promise<void> } = {};
+  const sessionPreparationTrigger: { current?: () => Promise<void> } = {};
   const requireInstanceClient = (): DesktopDshAgentClient => {
     const client = current?.client;
     if (client === undefined) throw new Error('Desktop DSH Agent runtime is unavailable.');
@@ -207,18 +211,23 @@ export async function startDesktopDshAgentRuntime(
     throw error;
   });
   watchInstance(current);
-  const client = createStableDesktopDshAgentClient(projection, () => current?.client, {
-    isWorkBlocked: () => workBlocked,
-    async trackWork<T>(operation: () => Promise<T>): Promise<T> {
-      activeWork += 1;
-      try {
-        return await operation();
-      } finally {
-        activeWork -= 1;
-        void refreshFlushTrigger.current?.().catch(() => undefined);
-      }
+  const client = createStableDesktopDshAgentClient(
+    projection,
+    () => current?.client,
+    {
+      isWorkBlocked: () => workBlocked,
+      async trackWork<T>(operation: () => Promise<T>): Promise<T> {
+        activeWork += 1;
+        try {
+          return await operation();
+        } finally {
+          activeWork -= 1;
+          void refreshFlushTrigger.current?.().catch(() => undefined);
+        }
+      },
     },
-  });
+    () => sessionPreparationTrigger.current?.() ?? Promise.resolve(),
+  );
 
   const conversations = createConversationDshSessionApplication({
     client,
@@ -233,6 +242,7 @@ export async function startDesktopDshAgentRuntime(
   const restart = (): Promise<void> => {
     if (disposed) return Promise.reject(new Error('Desktop DSH Agent runtime is disposed.'));
     if (restartPromise !== undefined) return restartPromise;
+    sessionConfigurationRefreshPending = false;
     workBlocked = true;
     publishStatus({ status: 'restarting' });
     const previous = current;
@@ -280,6 +290,21 @@ export async function startDesktopDshAgentRuntime(
     await restart();
   };
   refreshFlushTrigger.current = flushPendingConfigurationRefresh;
+  const prepareSession = async (): Promise<void> => {
+    while (sessionConfigurationRefreshPending) {
+      if (restartPromise !== undefined) {
+        await restartPromise;
+        continue;
+      }
+      if (activeWork > 0 || projection.hasActiveTurn()) {
+        throw new Error(
+          'Desktop DSH Agent configuration update is waiting for current Session work to finish. Reopen or create a Session afterward.',
+        );
+      }
+      await restart();
+    }
+  };
+  sessionPreparationTrigger.current = prepareSession;
   return Object.freeze({
     client,
     conversations,
@@ -290,6 +315,17 @@ export async function startDesktopDshAgentRuntime(
       statusListeners.add(listener);
       return () => statusListeners.delete(listener);
     },
+    async deferConfigurationRefresh(): Promise<'pending'> {
+      if (disposed) throw new Error('Desktop DSH Agent runtime is disposed.');
+      sessionConfigurationRefreshPending = true;
+      publishStatus(
+        status.status === 'running'
+          ? { status: 'running', sessionConfigurationPending: true }
+          : status,
+      );
+      return 'pending';
+    },
+    prepareSession,
     async refreshConfiguration() {
       if (restartPromise !== undefined) {
         configurationRefreshPending = true;
@@ -350,6 +386,7 @@ function createStableDesktopDshAgentClient(
     readonly isWorkBlocked: () => boolean;
     readonly trackWork: <T>(operation: () => Promise<T>) => Promise<T>;
   },
+  prepareSession?: () => Promise<void>,
 ): DesktopDshAgentClient {
   const requireClient = (): DesktopDshAgentClient => {
     const client = readClient();
@@ -377,12 +414,15 @@ function createStableDesktopDshAgentClient(
       return requireClient().listSessions(input);
     },
     async createSession(input) {
+      await prepareSession?.();
       return runWork((client) => client.createSession(input));
     },
     async loadSession(input) {
+      await prepareSession?.();
       return runWork((client) => client.loadSession(input));
     },
     async resumeSession(input) {
+      await prepareSession?.();
       return runWork((client) => client.resumeSession(input));
     },
     async closeSession(sessionId) {

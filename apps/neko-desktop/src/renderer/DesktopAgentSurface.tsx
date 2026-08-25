@@ -138,6 +138,8 @@ export function DesktopAgentSurface({
     let active = true;
     let refreshInFlight = false;
     let refreshPending = false;
+    let preparationInFlight = false;
+    let preparationPending = false;
     const requestRefresh = (): void => {
       refreshPending = true;
       if (refreshInFlight) {
@@ -156,22 +158,34 @@ export function DesktopAgentSurface({
         }
       })();
     };
+    const requestPreparation = (): void => {
+      preparationPending = true;
+      if (preparationInFlight) return;
+      preparationInFlight = true;
+      void (async () => {
+        try {
+          while (active && preparationPending) {
+            preparationPending = false;
+            const projection = await window.openNekoDesktop.dshRuntime.prepareSession();
+            if (!active) return;
+            setRuntime(projection);
+            if (projection.status !== 'running') return;
+            await refreshComposerConfiguration();
+            if (conversationId) requestRefresh();
+          }
+        } catch (error) {
+          if (active) setState({ kind: 'error', message: describeError(error) });
+        } finally {
+          preparationInFlight = false;
+        }
+      })();
+    };
     setComposerConfiguration(undefined);
     setComposerConfigurationError(undefined);
-    void refreshComposerConfiguration();
     if (conversationId) {
       setState({ kind: 'loading' });
-      requestRefresh();
-    } else {
-      void window.openNekoDesktop.dshRuntime.getStatus().then(
-        (projection) => {
-          if (active) setRuntime(projection);
-        },
-        (error: unknown) => {
-          if (active) setState({ kind: 'error', message: describeError(error) });
-        },
-      );
     }
+    requestPreparation();
     const unsubscribeSession = conversationId
       ? window.openNekoDesktop.dshSessions.subscribe((event) => {
           if (event.conversationId === conversationId) requestRefresh();
@@ -185,7 +199,9 @@ export function DesktopAgentSurface({
     const unsubscribeRuntime = window.openNekoDesktop.dshRuntime.subscribe((projection) => {
       if (!active) return;
       setRuntime(projection);
-      if (projection.status === 'running') requestRefresh();
+      if (projection.status !== 'running') return;
+      if (conversationId) requestRefresh();
+      else if (projection.sessionConfigurationPending === true) requestPreparation();
     });
     return () => {
       active = false;

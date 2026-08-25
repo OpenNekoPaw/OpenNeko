@@ -1000,6 +1000,23 @@ describe('ConfigManager', () => {
       );
     });
 
+    it('clears only the transient model selection while preserving other runtime settings', async () => {
+      const runtimeSettings = createMemoryAssistantRuntimeSettings();
+      const manager = new ConfigManager({
+        assistantRuntimeSettings: runtimeSettings,
+        userConfigManager: createMockUserConfigManager(),
+      });
+      await manager.setAssistantSettings({
+        selectedProviderId: 'provider-a',
+        selectedModelId: 'model-a',
+        executionMode: 'plan',
+      });
+
+      await manager.clearAssistantModelSelection();
+
+      expect(runtimeSettings.snapshot()).toEqual({ executionMode: 'plan' });
+    });
+
     it('allows explicit reset when the runtime settings authority rejected its stored record', async () => {
       let rejected = true;
       const reset = vi.fn(async () => {

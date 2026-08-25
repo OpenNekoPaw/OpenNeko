@@ -9,6 +9,7 @@ import type { DesktopAiModelProtocol } from './ai-model-provider-presets';
 
 export {
   DESKTOP_AI_PROVIDER_PRESETS,
+  defaultDesktopAiModelCapabilities,
   type DesktopAiModelProtocol,
   type DesktopAiModelTemplate,
   type DesktopAiProviderPreset,
@@ -17,6 +18,7 @@ export {
 export const DESKTOP_AI_MODEL_SETTINGS_CHANNEL = 'openneko:desktop:ai-model-settings:execute';
 
 export type DesktopAiModelType = ModelType;
+export type DesktopAiModelCapability = string;
 export type DesktopAiProviderModelFamily = ProviderModelFamily;
 export type DesktopAiProviderType = ProviderType;
 
@@ -44,6 +46,7 @@ export interface DesktopAiModelView {
   readonly apiName: string;
   readonly displayName: string;
   readonly type: ModelType;
+  readonly capabilities: readonly string[];
   readonly enabled: boolean;
 }
 
@@ -97,11 +100,12 @@ export type DesktopAiModelSettingsRequest =
       readonly requestId: string;
       readonly operation: 'save-model';
       readonly model: {
-        readonly id: string;
+        readonly existingId?: string;
         readonly providerId: string;
         readonly apiName: string;
         readonly displayName: string;
         readonly type: ModelType;
+        readonly capabilities: readonly string[];
         readonly enabled: boolean;
         readonly templateId?: string;
       };
@@ -220,18 +224,30 @@ export function parseDesktopAiModelSettingsRequest(value: unknown): DesktopAiMod
     const model = exactRecord(record['model'], 'Model input');
     exactKeys(
       model,
-      ['id', 'providerId', 'apiName', 'displayName', 'type', 'enabled', 'templateId'],
+      [
+        'existingId',
+        'providerId',
+        'apiName',
+        'displayName',
+        'type',
+        'capabilities',
+        'enabled',
+        'templateId',
+      ],
       'Model input',
     );
     return {
       requestId,
       operation,
       model: {
-        id: identity(model['id'], 'model.id'),
+        ...(model['existingId'] === undefined
+          ? {}
+          : { existingId: identity(model['existingId'], 'model.existingId') }),
         providerId: identity(model['providerId'], 'model.providerId'),
         apiName: nonEmpty(model['apiName'], 'model.apiName'),
         displayName: nonEmpty(model['displayName'], 'model.displayName'),
         type: modelType(model['type']),
+        capabilities: modelCapabilities(model['capabilities']),
         enabled: booleanValue(model['enabled'], 'model.enabled'),
         ...(model['templateId'] === undefined
           ? {}
@@ -430,7 +446,7 @@ function parseModelView(value: unknown): DesktopAiModelView {
   const record = exactRecord(value, 'Model view');
   exactKeys(
     record,
-    ['id', 'providerId', 'apiName', 'displayName', 'type', 'enabled'],
+    ['id', 'providerId', 'apiName', 'displayName', 'type', 'capabilities', 'enabled'],
     'Model view',
   );
   return {
@@ -439,6 +455,7 @@ function parseModelView(value: unknown): DesktopAiModelView {
     apiName: nonEmpty(record['apiName'], 'model.apiName'),
     displayName: nonEmpty(record['displayName'], 'model.displayName'),
     type: modelType(record['type']),
+    capabilities: modelCapabilities(record['capabilities']),
     enabled: booleanValue(record['enabled'], 'model.enabled'),
   };
 }
@@ -454,6 +471,19 @@ function parseModelRef(value: unknown): DesktopAiModelRef {
 
 function modelType(value: unknown): ModelType {
   return oneOf(value, ['llm', 'image', 'video', 'audio'] as const, 'modelType');
+}
+
+function modelCapabilities(value: unknown): readonly string[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw invalid('model.capabilities must be a non-empty array.');
+  }
+  const capabilities = value.map((capability, index) =>
+    nonEmpty(capability, `model.capabilities[${index}]`),
+  );
+  if (new Set(capabilities).size !== capabilities.length) {
+    throw invalid('model.capabilities must not contain duplicates.');
+  }
+  return capabilities;
 }
 
 function providerModelFamilies(value: unknown): readonly ProviderModelFamily[] {

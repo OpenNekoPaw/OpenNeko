@@ -1,10 +1,21 @@
-import { FolderIcon, GridIcon, PackageIcon, SearchIcon, SettingsIcon } from '@neko/ui';
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  FolderIcon,
+  GridIcon,
+  PackageIcon,
+  Popover,
+  SearchIcon,
+  SettingsIcon,
+} from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
 import { Dialog } from '@neko/ui/primitives';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { DesktopApplicationPreferences } from '@neko/host/application-settings';
 import {
   DESKTOP_AI_PROVIDER_PRESETS,
+  defaultDesktopAiModelCapabilities,
+  type DesktopAiModelCapability,
   type DesktopAiModelTemplate,
   type DesktopAiModelType,
   type DesktopAiModelView,
@@ -27,6 +38,40 @@ const categories: readonly DesktopSettingsSection[] = [
   'creative',
   'agent',
 ];
+
+const MODEL_CAPABILITY_OPTIONS = {
+  llm: [
+    { id: 'vision', capabilities: ['vision'] },
+    { id: 'tools', capabilities: ['function_calling'] },
+    { id: 'streaming', capabilities: ['streaming'] },
+    { id: 'structuredOutput', capabilities: ['json_mode'] },
+    { id: 'code', capabilities: ['code'] },
+    { id: 'reasoning', capabilities: ['reasoning'] },
+  ],
+  image: [
+    { id: 'textToImage', capabilities: ['text_to_image'] },
+    { id: 'imageToImage', capabilities: ['image_to_image'] },
+    { id: 'imageEdit', capabilities: ['image_edit', 'image.edit'] },
+  ],
+  video: [
+    { id: 'textToVideo', capabilities: ['text_to_video'] },
+    { id: 'imageToVideo', capabilities: ['image_to_video'] },
+    { id: 'videoToVideo', capabilities: ['video_to_video'] },
+    { id: 'videoEdit', capabilities: ['video_edit'] },
+  ],
+  audio: [
+    { id: 'textToAudio', capabilities: ['text_to_audio'] },
+    { id: 'tts', capabilities: ['audio.tts'] },
+    { id: 'asr', capabilities: ['audio.asr'] },
+    { id: 'music', capabilities: ['text_to_music', 'audio.music.generate'] },
+  ],
+} as const satisfies Record<
+  DesktopAiModelType,
+  readonly {
+    readonly id: string;
+    readonly capabilities: readonly DesktopAiModelCapability[];
+  }[]
+>;
 
 const categoryMessageKeys = {
   general: {
@@ -809,11 +854,12 @@ function ProviderForm({
     apiKey?: string,
   ) => Promise<void>;
   readonly onSaveModel: (model: {
-    readonly id: string;
+    readonly existingId?: string;
     readonly providerId: string;
     readonly apiName: string;
     readonly displayName: string;
     readonly type: DesktopAiModelType;
+    readonly capabilities: readonly DesktopAiModelCapability[];
     readonly enabled: boolean;
     readonly templateId?: string;
   }) => Promise<boolean>;
@@ -846,6 +892,7 @@ function ProviderForm({
   const [apiKey, setApiKey] = useState('');
   const [advancedOpen, setAdvancedOpen] = useState(!initial);
   const [showModelForm, setShowModelForm] = useState(false);
+  const [editingModel, setEditingModel] = useState<DesktopAiModelView>();
   const [confirmProviderDelete, setConfirmProviderDelete] = useState(false);
   const requiresApiKey =
     selectedOption?.requiresApiKey ?? initial?.credentialStatus !== 'not-required';
@@ -1073,7 +1120,10 @@ function ProviderForm({
               className="desktop-settings__action desktop-settings__action--quiet"
               disabled={disabled}
               type="button"
-              onClick={() => setShowModelForm((current) => !current)}
+              onClick={() => {
+                setEditingModel(undefined);
+                setShowModelForm((current) => !current);
+              }}
             >
               {showModelForm ? t('common.cancel') : t('settings.agent.addModel')}
             </button>
@@ -1085,6 +1135,10 @@ function ProviderForm({
             disabled={disabled}
             models={models}
             onDeleteModel={onDeleteModel}
+            onEditModel={(model) => {
+              setEditingModel(model);
+              setShowModelForm(true);
+            }}
             onSetDefault={onSetDefault}
           />
         ) : (
@@ -1094,15 +1148,23 @@ function ProviderForm({
         )}
         {initial && showModelForm ? (
           <ModelForm
+            key={editingModel ? `edit:${editingModel.id}` : 'new-model'}
             allowCustomModels={providerAllowsCustomModels(initial.type, modelFamily)}
             disabled={disabled}
+            initial={editingModel}
             modelTemplates={modelTemplatesForProvider(initial.type, modelFamily)}
             supportedTypes={modelTypesForFamilies(modelFamily, protocol)}
             providerId={initial.id}
-            onCancel={() => setShowModelForm(false)}
+            onCancel={() => {
+              setEditingModel(undefined);
+              setShowModelForm(false);
+            }}
             onSave={(model) =>
               onSaveModel(model).then((saved) => {
-                if (saved) setShowModelForm(false);
+                if (saved) {
+                  setEditingModel(undefined);
+                  setShowModelForm(false);
+                }
               })
             }
           />
@@ -1157,6 +1219,7 @@ function ProviderForm({
 function ModelForm({
   allowCustomModels = true,
   disabled,
+  initial,
   modelTemplates = [],
   onCancel,
   onSave,
@@ -1165,14 +1228,16 @@ function ModelForm({
 }: {
   readonly allowCustomModels?: boolean;
   readonly disabled: boolean;
+  readonly initial?: DesktopAiModelView;
   readonly modelTemplates?: readonly DesktopAiModelTemplate[];
   readonly onCancel: () => void;
   readonly onSave: (model: {
-    readonly id: string;
+    readonly existingId?: string;
     readonly providerId: string;
     readonly apiName: string;
     readonly displayName: string;
     readonly type: DesktopAiModelType;
+    readonly capabilities: readonly DesktopAiModelCapability[];
     readonly enabled: boolean;
     readonly templateId?: string;
   }) => Promise<void>;
@@ -1186,23 +1251,54 @@ function ModelForm({
   if (!allowCustomModels && !defaultTemplate) {
     throw new Error(`Provider ${providerId} requires a builtin model template.`);
   }
-  const [templateId, setTemplateId] = useState(defaultTemplate?.id ?? 'custom');
-  const [id, setId] = useState(
-    defaultTemplate ? modelIdForTemplate(providerId, defaultTemplate) : '',
+  const initialTemplate = initial
+    ? modelTemplates.find(
+        (template) => template.apiName === initial.apiName && template.type === initial.type,
+      )
+    : defaultTemplate;
+  const [templateId, setTemplateId] = useState(initialTemplate?.id ?? 'custom');
+  const [apiName, setApiName] = useState(initial?.apiName ?? defaultTemplate?.apiName ?? '');
+  const [displayName, setDisplayName] = useState(
+    initial
+      ? initial.displayName === initial.apiName
+        ? ''
+        : initial.displayName
+      : (defaultTemplate?.displayName ?? ''),
   );
-  const [apiName, setApiName] = useState(defaultTemplate?.apiName ?? '');
-  const [displayName, setDisplayName] = useState(defaultTemplate?.displayName ?? '');
-  const [type, setType] = useState<DesktopAiModelType>(defaultTemplate?.type ?? initialType);
+  const [type, setType] = useState<DesktopAiModelType>(
+    initial?.type ?? defaultTemplate?.type ?? initialType,
+  );
+  const [capabilities, setCapabilities] = useState<readonly DesktopAiModelCapability[]>(
+    initialTemplate?.capabilities ??
+      initial?.capabilities ??
+      defaultDesktopAiModelCapabilities(initialType),
+  );
+  const [capabilityMenuOpen, setCapabilityMenuOpen] = useState(false);
   const selectedTemplate = modelTemplates.find((template) => template.id === templateId);
-  const canSave = Boolean(id.trim() && apiName.trim() && displayName.trim());
+  const capabilityOptions = MODEL_CAPABILITY_OPTIONS[type];
+  const selectedCapabilityOptions = capabilityOptions.filter((option) =>
+    option.capabilities.every((capability) => capabilities.includes(capability)),
+  );
+  const selectedCapabilityLabels = selectedCapabilityOptions.map((option) =>
+    t(`settings.agent.modelCapability.${option.id}`),
+  );
+  const capabilitySummary =
+    selectedCapabilityLabels.length === 0
+      ? t('settings.agent.modelCapabilities.noneSelected')
+      : selectedCapabilityLabels.length <= 2
+        ? selectedCapabilityLabels.join(' · ')
+        : `${selectedCapabilityLabels.slice(0, 2).join(' · ')} +${selectedCapabilityLabels.length - 2}`;
+  const canSave = Boolean(apiName.trim());
   const save = (): void => {
     if (disabled || !canSave) return;
+    const normalizedApiName = apiName.trim();
     void onSave({
-      id,
+      ...(initial ? { existingId: initial.id } : {}),
       providerId,
-      apiName,
-      displayName,
+      apiName: normalizedApiName,
+      displayName: displayName.trim() || normalizedApiName,
       type,
+      capabilities,
       enabled: true,
       ...(selectedTemplate === undefined ? {} : { templateId: selectedTemplate.id }),
     });
@@ -1213,7 +1309,13 @@ function ModelForm({
       className="desktop-settings__model-editor"
       role="group"
       onKeyDown={(event) => {
-        if (event.key !== 'Enter') return;
+        if (
+          event.key !== 'Enter' ||
+          !(event.target instanceof HTMLInputElement) ||
+          event.target.type === 'checkbox'
+        ) {
+          return;
+        }
         event.preventDefault();
         save();
       }}
@@ -1223,7 +1325,7 @@ function ModelForm({
           <label className="desktop-settings__form-wide">
             <span>{t('settings.agent.modelTemplate')}</span>
             <select
-              disabled={disabled}
+              disabled={disabled || initial !== undefined}
               value={templateId}
               onChange={(event) => {
                 const nextId = event.currentTarget.value;
@@ -1233,16 +1335,16 @@ function ModelForm({
                   if (!allowCustomModels) {
                     throw new Error(`Provider ${providerId} does not allow custom models.`);
                   }
-                  setId('');
                   setApiName('');
                   setDisplayName('');
                   setType(initialType);
+                  setCapabilities(defaultDesktopAiModelCapabilities(initialType));
                   return;
                 }
-                setId(modelIdForTemplate(providerId, next));
                 setApiName(next.apiName);
                 setDisplayName(next.displayName);
                 setType(next.type);
+                setCapabilities(next.capabilities);
               }}
             >
               {modelTemplates.map((template) => (
@@ -1257,11 +1359,93 @@ function ModelForm({
           </label>
         ) : null}
         <label>
+          <span>{t('settings.agent.apiModelName')}</span>
+          <input
+            disabled={disabled || selectedTemplate !== undefined}
+            required
+            value={apiName}
+            onChange={(e) => setApiName(e.currentTarget.value)}
+          />
+        </label>
+        <div className="desktop-settings__model-capability-field">
+          <span>{t('settings.agent.modelCapabilities')}</span>
+          <Popover
+            align="end"
+            contentClassName="desktop-settings__model-capability-popover"
+            open={capabilityMenuOpen}
+            onOpenChange={setCapabilityMenuOpen}
+            trigger={
+              <button
+                aria-label={`${t('settings.agent.modelCapabilities')}: ${capabilitySummary}`}
+                aria-expanded={capabilityMenuOpen}
+                aria-haspopup="menu"
+                className="desktop-settings__model-capability-trigger"
+                data-model-capability-trigger="true"
+                disabled={disabled}
+                title={selectedCapabilityLabels.join(' · ') || capabilitySummary}
+                type="button"
+              >
+                <span>{capabilitySummary}</span>
+                <span aria-hidden="true">
+                  <ChevronDownIcon size={13} />
+                </span>
+              </button>
+            }
+          >
+            <div
+              aria-label={t('settings.agent.modelCapabilities')}
+              className="desktop-settings__model-capability-menu"
+              role="menu"
+            >
+              <small>
+                {selectedTemplate
+                  ? t('settings.agent.modelCapabilities.templateDescription')
+                  : t('settings.agent.modelCapabilities.customDescription')}
+              </small>
+              <div className="desktop-settings__model-capability-menu-options">
+                {capabilityOptions.map((option) => {
+                  const checked = option.capabilities.every((capability) =>
+                    capabilities.includes(capability),
+                  );
+                  return (
+                    <button
+                      aria-checked={checked}
+                      className="desktop-settings__model-capability-option"
+                      data-model-capability={option.id}
+                      disabled={disabled || selectedTemplate !== undefined}
+                      key={option.id}
+                      role="menuitemcheckbox"
+                      type="button"
+                      onClick={() => {
+                        const next = new Set(capabilities);
+                        for (const capability of option.capabilities) {
+                          if (checked) next.delete(capability);
+                          else next.add(capability);
+                        }
+                        setCapabilities([...next]);
+                      }}
+                    >
+                      <span className="desktop-settings__model-capability-check" aria-hidden="true">
+                        {checked ? <CheckIcon size={12} /> : null}
+                      </span>
+                      <span>{t(`settings.agent.modelCapability.${option.id}`)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </Popover>
+        </div>
+        <label>
           <span>{t('settings.agent.modelType')}</span>
           <select
-            disabled={disabled || selectedTemplate !== undefined}
+            disabled={disabled || initial !== undefined || selectedTemplate !== undefined}
             value={type}
-            onChange={(e) => setType(e.currentTarget.value as DesktopAiModelType)}
+            onChange={(e) => {
+              const nextType = e.currentTarget.value as DesktopAiModelType;
+              setType(nextType);
+              setCapabilities(defaultDesktopAiModelCapabilities(nextType));
+            }}
           >
             {supportedTypes.map((candidate) => (
               <option key={candidate} value={candidate}>
@@ -1271,28 +1455,10 @@ function ModelForm({
           </select>
         </label>
         <label>
-          <span>{t('settings.agent.modelId')}</span>
-          <input
-            disabled={disabled || selectedTemplate !== undefined}
-            required
-            value={id}
-            onChange={(e) => setId(e.currentTarget.value)}
-          />
-        </label>
-        <label>
-          <span>{t('settings.agent.apiModelName')}</span>
-          <input
-            disabled={disabled || selectedTemplate !== undefined}
-            required
-            value={apiName}
-            onChange={(e) => setApiName(e.currentTarget.value)}
-          />
-        </label>
-        <label className="desktop-settings__form-wide">
           <span>{t('settings.agent.modelName')}</span>
           <input
             disabled={disabled}
-            required
+            placeholder={t('settings.agent.modelNamePlaceholder')}
             value={displayName}
             onChange={(e) => setDisplayName(e.currentTarget.value)}
           />
@@ -1335,10 +1501,6 @@ function modelTemplatesForProvider(
   ).flatMap((preset) => preset.modelTemplates);
 }
 
-function modelIdForTemplate(providerId: string, template: DesktopAiModelTemplate): string {
-  return `${providerId}-${template.id}`;
-}
-
 function providerAllowsCustomModels(
   providerType: DesktopAiProviderType,
   families: readonly DesktopAiProviderModelFamily[],
@@ -1354,12 +1516,14 @@ function ProviderModelCatalog({
   disabled,
   models,
   onDeleteModel,
+  onEditModel,
   onSetDefault,
 }: {
   readonly defaults: DesktopAiModelSettingsProjection['defaults'];
   readonly disabled: boolean;
   readonly models: readonly DesktopAiModelView[];
   readonly onDeleteModel: (modelId: string) => Promise<boolean>;
+  readonly onEditModel: (model: DesktopAiModelView) => void;
   readonly onSetDefault: (model: DesktopAiModelView) => Promise<boolean>;
 }): JSX.Element {
   const { t } = useTranslation();
@@ -1400,6 +1564,14 @@ function ProviderModelCatalog({
                   </span>
                 </span>
                 <span className="desktop-settings__model-actions">
+                  <button
+                    className="desktop-settings__model-edit-action"
+                    disabled={disabled}
+                    type="button"
+                    onClick={() => onEditModel(model)}
+                  >
+                    {t('settings.agent.editModel')}
+                  </button>
                   {isDefault ? (
                     <span className="desktop-settings__model-default-badge">
                       {t('settings.agent.defaultModel')}

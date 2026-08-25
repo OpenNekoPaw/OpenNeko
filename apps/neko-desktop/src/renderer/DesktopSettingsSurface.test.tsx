@@ -17,6 +17,14 @@ import { createDesktopI18n } from './i18n';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
+class TestResizeObserver {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+}
+
+Object.assign(globalThis, { ResizeObserver: TestResizeObserver });
+
 const dialogueCapabilities = {
   status: 'available',
   providers: [
@@ -150,6 +158,7 @@ describe('Desktop Settings surfaces', () => {
           apiName: 'deepseek-chat',
           displayName: 'DeepSeek Dialogue',
           type: 'llm' as const,
+          capabilities: ['chat', 'llm.chat', 'streaming'],
           enabled: true,
         },
         {
@@ -158,6 +167,7 @@ describe('Desktop Settings surfaces', () => {
           apiName: 'image-model',
           displayName: 'Image Model',
           type: 'image' as const,
+          capabilities: ['text_to_image', 'image.generate'],
           enabled: true,
         },
         {
@@ -166,6 +176,7 @@ describe('Desktop Settings surfaces', () => {
           apiName: 'audio-model',
           displayName: 'Audio Model',
           type: 'audio' as const,
+          capabilities: ['text_to_audio', 'audio.generate'],
           enabled: true,
         },
       ],
@@ -260,10 +271,11 @@ describe('Desktop Settings surfaces', () => {
       defaults: {},
     };
     const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
+    const saveModel = vi.fn(async () => response);
     const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
       get: async () => projection,
       saveProvider: async () => response,
-      saveModel: async () => response,
+      saveModel,
       deleteProvider: async () => response,
       deleteModel: async () => response,
       setDefault: async () => response,
@@ -290,6 +302,31 @@ describe('Desktop Settings surfaces', () => {
     expect(container.querySelector('.desktop-settings__model-editor option')?.textContent).toBe(
       'Dialogue',
     );
+    const modelEditor = container.querySelector<HTMLElement>('.desktop-settings__model-editor');
+    if (!modelEditor) throw new Error('Ollama fixture requires a model editor.');
+    expect(modelEditor.textContent).not.toContain('Model ID');
+    const modelNameLabel = [...modelEditor.querySelectorAll('label')].find(
+      (label) => label.querySelector(':scope > span')?.textContent === 'Model name',
+    );
+    const modelNameInput = modelNameLabel?.querySelector<HTMLInputElement>('input');
+    if (!modelNameInput) throw new Error('Ollama fixture requires a model name field.');
+    await act(async () => {
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      if (!setValue) throw new Error('HTMLInputElement value setter is unavailable.');
+      setValue.call(modelNameInput, 'qwen2.5-7b');
+      modelNameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () =>
+      modelEditor.querySelector<HTMLButtonElement>('button.desktop-settings__action')?.click(),
+    );
+    expect(saveModel).toHaveBeenCalledWith({
+      providerId: 'ollama-local',
+      apiName: 'qwen2.5-7b',
+      displayName: 'qwen2.5-7b',
+      type: 'llm',
+      capabilities: ['chat', 'llm.chat', 'streaming'],
+      enabled: true,
+    });
     await act(async () => root.unmount());
   });
 
@@ -398,6 +435,95 @@ describe('Desktop Settings surfaces', () => {
     await act(async () => root.unmount());
   });
 
+  it('edits authoritative capability tags for an existing custom dialogue model', async () => {
+    const projection = {
+      dialogueCapabilities,
+      providers: [
+        {
+          id: 'nekoapi-chat',
+          displayName: 'Neko API Chat',
+          type: 'generic' as const,
+          apiUrl: 'https://api.example.test',
+          protocol: 'openai-responses' as const,
+          connectionKind: 'direct' as const,
+          enabled: true,
+          supportedModelFamilies: ['dialogue'] as const,
+          credentialStatus: 'configured' as const,
+        },
+      ],
+      models: [
+        {
+          id: 'gpt-5.6-sol',
+          providerId: 'nekoapi-chat',
+          apiName: 'gpt-5.6-sol',
+          displayName: 'GPT 5.6 SOL',
+          type: 'llm' as const,
+          capabilities: ['chat', 'llm.chat', 'streaming'],
+          enabled: true,
+        },
+      ],
+      defaults: {},
+    };
+    const response = { requestId: 'fixture', projection, runtimeEffect: 'pending' as const };
+    const saveModel = vi.fn(async () => response);
+    const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
+      get: async () => projection,
+      saveProvider: async () => response,
+      saveModel,
+      deleteProvider: async () => response,
+      deleteModel: async () => response,
+      setDefault: async () => response,
+    };
+    const { container, root } = await renderSettings({
+      aiModelSettings,
+      initialSection: 'agent',
+    });
+    await act(async () => Promise.resolve());
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('.desktop-settings__provider-card-main')?.click(),
+    );
+    await act(async () => findButton(container, 'Edit').click());
+
+    const editor = container.querySelector<HTMLElement>('.desktop-settings__model-editor');
+    if (!editor) throw new Error('Custom model capability fixture requires an editor.');
+    expect(editor.textContent).not.toContain('Model ID');
+    const capabilityTrigger = editor.querySelector<HTMLButtonElement>(
+      '[data-model-capability-trigger="true"]',
+    );
+    if (!capabilityTrigger) throw new Error('Custom model capability fixture requires a trigger.');
+    expect(capabilityTrigger.textContent).toContain('Streaming');
+    await act(async () => capabilityTrigger.click());
+    const capabilityOption = (label: string): HTMLButtonElement => {
+      const option = [
+        ...document.querySelectorAll<HTMLButtonElement>('[data-model-capability]'),
+      ].find((candidate) => candidate.textContent?.includes(label));
+      if (!option) throw new Error(`Missing model capability option '${label}'.`);
+      return option;
+    };
+    expect(capabilityOption('Streaming').getAttribute('aria-checked')).toBe('true');
+    expect(capabilityOption('Vision input').getAttribute('aria-checked')).toBe('false');
+    expect(capabilityOption('Tool calling').getAttribute('aria-checked')).toBe('false');
+    await act(async () => capabilityOption('Vision input').click());
+    await act(async () => capabilityOption('Tool calling').click());
+    expect(capabilityTrigger.textContent).toContain('Vision input · Tool calling +1');
+    await act(async () => capabilityTrigger.click());
+    expect(document.querySelector('.desktop-settings__model-capability-menu')).toBeNull();
+    await act(async () =>
+      editor.querySelector<HTMLButtonElement>('button.desktop-settings__action')?.click(),
+    );
+
+    expect(saveModel).toHaveBeenCalledWith({
+      existingId: 'gpt-5.6-sol',
+      providerId: 'nekoapi-chat',
+      apiName: 'gpt-5.6-sol',
+      displayName: 'GPT 5.6 SOL',
+      type: 'llm',
+      capabilities: ['chat', 'llm.chat', 'streaming', 'vision', 'function_calling'],
+      enabled: true,
+    });
+    await act(async () => root.unmount());
+  });
+
   it('creates dialogue Providers from the live DSH catalog without a local preset', async () => {
     const projection = { dialogueCapabilities, providers: [], models: [], defaults: {} };
     const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
@@ -500,7 +626,7 @@ describe('Desktop Settings surfaces', () => {
     await act(async () => findButton(container, 'Confirm delete').click());
     expect(deleteProvider).toHaveBeenCalledWith('custom-empty');
     expect(container.textContent).toContain(
-      'Configuration saved. DSH will refresh after the active task finishes, then new conversations will use the latest model catalog.',
+      'Configuration saved. Open conversations stay unchanged; reopened and new conversations use the latest model catalog.',
     );
     await act(async () => root.unmount());
   });
@@ -665,15 +791,26 @@ describe('Desktop Settings surfaces', () => {
     expect(modelEditor.textContent).toContain('MiniMax H3 · MiniMax-H3');
     expect(modelEditor.querySelectorAll('select')).toHaveLength(2);
     expect(modelEditor.querySelector<HTMLSelectElement>('select')?.value).toBe('minimax-h3');
+    const capabilityTrigger = modelEditor.querySelector<HTMLButtonElement>(
+      '[data-model-capability-trigger="true"]',
+    );
+    if (!capabilityTrigger) throw new Error('MiniMax fixture requires a capability selector.');
+    expect(capabilityTrigger.textContent).toContain('Text to video · Image to video +1');
+    await act(async () => capabilityTrigger.click());
+    const capabilityOptions = [
+      ...document.querySelectorAll<HTMLButtonElement>('[data-model-capability]'),
+    ];
+    expect(capabilityOptions).toHaveLength(4);
+    expect(capabilityOptions.every((option) => option.disabled)).toBe(true);
     const save = modelEditor.querySelector<HTMLButtonElement>('button.desktop-settings__action');
     if (!save) throw new Error('MiniMax model fixture requires a save action.');
     await act(async () => save.click());
     expect(saveModel).toHaveBeenCalledWith({
-      id: 'minimax-media-minimax-h3',
       providerId: 'minimax-media',
       apiName: 'MiniMax-H3',
       displayName: 'MiniMax H3',
       type: 'video',
+      capabilities: ['text_to_video', 'video.generate', 'image_to_video', 'video_to_video'],
       enabled: true,
       templateId: 'minimax-h3',
     });
@@ -768,6 +905,14 @@ function modelFixture(id: string, providerId: string, type: 'llm' | 'image' | 'v
     apiName: id,
     displayName: id,
     type,
+    capabilities:
+      type === 'llm'
+        ? (['chat', 'llm.chat', 'streaming'] as const)
+        : type === 'image'
+          ? (['text_to_image', 'image.generate'] as const)
+          : type === 'video'
+            ? (['text_to_video', 'video.generate'] as const)
+            : (['text_to_audio', 'audio.generate'] as const),
     enabled: true,
   } as const;
 }

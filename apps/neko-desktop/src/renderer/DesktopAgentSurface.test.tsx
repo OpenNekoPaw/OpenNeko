@@ -210,14 +210,12 @@ const dshPermissions = {
     return vi.fn();
   }),
 };
-let runtimeListener:
-  | ((projection: {
-      readonly status: 'running' | 'restarting' | 'unavailable';
-      readonly diagnostic?: { readonly code: string; readonly message: string };
-    }) => void)
-  | undefined;
+let runtimeListener: ((projection: DshRuntimeHostProjection) => void) | undefined;
 const dshRuntime = {
   getStatus: vi.fn<() => Promise<DshRuntimeHostProjection>>(async () => ({ status: 'running' })),
+  prepareSession: vi.fn<() => Promise<DshRuntimeHostProjection>>(async () => ({
+    status: 'running',
+  })),
   restart: vi.fn<() => Promise<DshRuntimeHostProjection>>(async () => ({ status: 'running' })),
   subscribe: vi.fn((listener: typeof runtimeListener) => {
     runtimeListener = listener;
@@ -269,6 +267,7 @@ beforeEach(() => {
     return vi.fn();
   });
   dshRuntime.getStatus.mockResolvedValue({ status: 'running' });
+  dshRuntime.prepareSession.mockResolvedValue({ status: 'running' });
   dshRuntime.restart.mockResolvedValue({ status: 'running' });
   dshRuntime.subscribe.mockImplementation((listener: typeof runtimeListener) => {
     runtimeListener = listener;
@@ -292,6 +291,50 @@ afterEach(() => {
 });
 
 describe('DesktopAgentSurface', () => {
+  it('prepares the runtime before opening an exact existing Conversation', async () => {
+    render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
+        agentSurfaceId="surface-1"
+        conversationId="conversation-1"
+        surfaceKind="workspace"
+      />,
+    );
+
+    expect(await screen.findByText('Create a node')).toBeTruthy();
+    expect(dshRuntime.prepareSession).toHaveBeenCalledOnce();
+    expect(dshRuntime.prepareSession.mock.invocationCallOrder[0]).toBeLessThan(
+      dshSessions.getSnapshot.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    );
+
+    await act(async () =>
+      runtimeListener?.({ status: 'running', sessionConfigurationPending: true }),
+    );
+    expect(dshRuntime.prepareSession).toHaveBeenCalledOnce();
+  });
+
+  it('re-prepares a Draft surface when future-Session model configuration changes', async () => {
+    render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-draft"
+        agentSurfaceId="surface-draft"
+        surfaceKind="entry"
+      />,
+    );
+
+    await waitFor(() => expect(dshSessions.getComposerConfiguration).toHaveBeenCalledOnce());
+    expect(dshRuntime.prepareSession).toHaveBeenCalledOnce();
+
+    await act(async () =>
+      runtimeListener?.({ status: 'running', sessionConfigurationPending: true }),
+    );
+
+    await waitFor(() => expect(dshRuntime.prepareSession).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(dshSessions.getComposerConfiguration).toHaveBeenCalledTimes(2));
+  });
+
   it('releases exact Conversation image preview resources when the Surface unmounts', async () => {
     const view = render(
       <DesktopAgentSurface
