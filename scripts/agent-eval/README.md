@@ -9,17 +9,14 @@ Evaluation infrastructure but is not itself AI behavior Evaluation.
 
 ## Current Runtime Status
 
-The Desktop application is the only product host. The previous TUI debug-automation and Pi-era
-Desktop drivers have been removed. Desktop Evaluation now uses the public DSH Session, Permission,
-Runtime and Shell bridges inside the complete application owner. The focused runner has no case-id
+The Desktop application is the only product host. Desktop Evaluation uses the public DSH Session,
+Permission, Runtime and Shell bridges inside the complete application owner. The focused runner has no case-id
 whitelist: it resolves an indexed Scenario into an immutable execution case and interprets canonical
 submit, idle-only model configuration, typed Command/Skill invocation, approval, cancellation,
 resume/restart, feedback, lifecycle and idle steps through one driver. The focused
 `submit-with-followup` step drives the visible Composer and exact DSH Inbox row's send-now action;
-the retired generic queue/send-now DSL cannot execute. Pi-era Draft binding replacement,
-pre-Session Draft input and their synthetic
-rejection facts are no longer part of the Scenario contract; ordinary first submit stays on the
-visible Composer path.
+ordinary first submit stays on the visible Composer path, and no generic queue/send-now DSL or
+pre-Session Draft mutation path exists in the Scenario contract.
 
 Therefore:
 

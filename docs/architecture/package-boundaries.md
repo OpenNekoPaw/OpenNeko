@@ -274,7 +274,7 @@ Browser Use 与 Computer Use 的控制实现由审核固定的开源 upstream MC
 第二套浏览器、截图、键鼠输入、VLA 或 GUI Agent loop。`@neko/automation-contracts` 是 L0 canonical
 shape owner，`@neko/automation-node` 是 L1 target、grant、action policy 与 evidence owner。两者作为官方维护的
 DSH MCP contributions 接入：DSH 子进程拥有 MCP connection、Tool discovery/registration、call 与 cancellation；
-OpenNeko 不保留 MCP Manager、generic Tool Registry 或 Pi Tool Call。`@neko/automation-node` 拥有目标发现、
+OpenNeko 不保留 MCP Manager、generic Tool Registry 或 product-owned Tool Call runtime。`@neko/automation-node` 拥有目标发现、
 脱敏候选、显式选择、选择后 exact revalidation 与一次性 grant 语义；Desktop Main 只提供 sender/Window-bound
 用户选择 interaction adapter、当前 OS permission 查询、精确 app/process/window facts 与短生命周期 observation projection。
 自动化 grant 必须绑定 exact provider/upstream release、browser profile 和 domains 或 computer target、

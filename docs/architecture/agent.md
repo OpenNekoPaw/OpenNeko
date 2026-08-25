@@ -5,8 +5,9 @@
 ## 系统定位
 
 DSH 独立子进程/profile 是 Agent、Session/transcript、Inbox/queue、Tool lifecycle、Skill、MCP 与内部
-Plugin composition 的唯一 runtime authority。OpenNeko 不实例化 Pi Agent/Session，不实现第二套 Agent loop、Skill
-Host、MCP manager、Plugin runtime、Tool registry、queue、transcript 或 compaction。
+Plugin composition 的唯一 runtime authority。OpenNeko 只实现 package-owned binding/projection、typed Host
+adapter 和产品 presentation，不实现第二套 Agent loop、Skill Host、MCP manager、Plugin runtime、Tool registry、
+queue、transcript 或 compaction。
 
 OpenNeko 保留：
 
@@ -31,7 +32,7 @@ Desktop native Agent surface
 ```
 
 生产路径不得使用内嵌 Cordis、DSH Web/Client Runtime、TypeScript SDK、Remote API、系统 Node、全局
-DSH、Electron `process.execPath` 或 Pi fallback。DSH runtime closure 必须随产品精确锁定；`scripts/dsh-q0`
+DSH、Electron `process.execPath` 或替代 Agent runtime fallback。DSH runtime closure 必须随产品精确锁定；`scripts/dsh-q0`
 只用于非发布资格验证，不进入发布包。
 
 ## 五层边界

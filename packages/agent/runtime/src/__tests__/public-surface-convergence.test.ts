@@ -10,13 +10,13 @@ const PACKAGE_ROOT = join(__dirname, '..', '..');
 /**
  * Public-surface convergence guard for the agent-runtime package.
  *
- * The pre-Pi provider routing, approval, permission, validation, perception, external
+ * The retired product-owned provider routing, approval, permission, validation, perception, external
  * processor/research, profile registry, and legacy conversation-control subsystems were
  * removed. This test pins the root entry, the `./runtime` subpath, and the package subpath
  * manifest so dead modules cannot be silently re-exported or re-added.
  */
 describe('agent-runtime public surface convergence', () => {
-  it('removes the deleted pre-Pi provider routing and profile subsystems from the root entry', () => {
+  it('removes the deleted product-owned provider routing and profile subsystems from the root entry', () => {
     expect(runtime).not.toHaveProperty('ProviderRouter');
     expect(runtime).not.toHaveProperty('createProviderRouter');
     expect(runtime).not.toHaveProperty('createProviderCardRegistry');

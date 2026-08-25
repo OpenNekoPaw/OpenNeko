@@ -1,6 +1,6 @@
 # DSH Q0
 
-This standalone, non-release fixture qualifies the exact DSH subprocess and ACP boundary required by `replace-pi-with-dsh-runtime-atomically`.
+This standalone, non-release fixture qualifies OpenNeko's exact DSH subprocess and ACP production boundary.
 
 It must not read the user's DSH credentials or profiles, contact a model provider, become a Desktop artifact, or import private DSH modules. A failed qualification blocks production consumer cutover and must not trigger a fallback runtime.
 

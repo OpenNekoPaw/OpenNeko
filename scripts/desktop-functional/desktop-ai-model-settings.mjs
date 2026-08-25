@@ -82,9 +82,12 @@ export const desktopAiModelSettingsScenario = Object.freeze({
     return { workspacePath, configPath };
   },
   async run({ checkpoint, evaluate, prepared, screenshot, waitForSelector }) {
+    await waitForSelector('[data-primary-sidebar="application"]');
     await evaluate(`(() => {
       window.resizeTo(1440, 960);
-      const settings = document.querySelector('.home-navigation-footer__actions button:last-child');
+      const settings = [...document.querySelectorAll('button')].find((button) =>
+        /设置|Settings/u.test(button.getAttribute('aria-label') ?? ''),
+      );
       if (!(settings instanceof HTMLButtonElement)) throw new Error('Desktop Settings is unavailable.');
       settings.click();
       return { width: window.innerWidth, height: window.innerHeight };
@@ -101,6 +104,12 @@ export const desktopAiModelSettingsScenario = Object.freeze({
     })()`);
     await waitForSelector('[data-provider-group="dialogue"]');
     await waitForSelector('[data-provider-group="generation"]');
+    await waitForCondition(
+      evaluate,
+      `[...document.querySelectorAll('.desktop-settings__provider-card')].some((card) =>
+        card.textContent?.includes('Functional Ollama'))`,
+      'Configured Provider catalog did not finish loading.',
+    );
 
     const catalog = await inspectProviderCatalog(evaluate);
     checkpoint('ai-model-provider-capability-groups', catalog);
@@ -218,7 +227,7 @@ export const desktopAiModelSettingsScenario = Object.freeze({
       };
     })()`);
     if (
-      generationPresetState.selectedPreset !== 'generation-minimax-h3' ||
+      generationPresetState.selectedPreset !== 'product-preset:generation-minimax-h3' ||
       generationPresetState.apiUrl !== 'https://api.minimaxi.com/v2' ||
       !generationPresetState.providerTypeVisible ||
       JSON.stringify(generationPresetState.presetLabels) !==
@@ -509,7 +518,10 @@ async function inspectProviderCatalog(evaluate) {
       card.textContent?.includes('Functional Ollama'),
     );
     if (!(localCard instanceof HTMLElement) || !/本地|Local/u.test(localCard.textContent ?? '')) {
-      throw new Error('Local Provider source is not visible.');
+      throw new Error(
+        'Local Provider source is not visible: ' +
+          JSON.stringify({ groups, localCard: localCard?.textContent ?? null }),
+      );
     }
     if (!groups.dialogue?.some((label) => label.includes('Functional Ollama'))) {
       throw new Error('Local dialogue Provider is not in the dialogue group.');

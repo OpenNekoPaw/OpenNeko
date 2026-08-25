@@ -732,7 +732,7 @@ describe('OpenNeko DSH ACP bridge boundaries', () => {
     expect(source).toContain('const promptAdmission = new PromptAdmission<PromptResponse>()');
     expect(source).toMatch(/const runPrompt[\s\S]*promptAdmission\.run\(sessionId/u);
     expect(source).toMatch(
-      /async prompt\(params\)[\s\S]*return runPrompt\(params\.sessionId, content, displayContent\)/u,
+      /async prompt\(params\)[\s\S]*return runPrompt\(params\.sessionId, async \(\) => \{[\s\S]*await admitAcpPrompt/u,
     );
     expect(source).toMatch(/cancel\(params\)[\s\S]*promptAdmission\.cancel\(params\.sessionId/u);
     expect(source).toMatch(

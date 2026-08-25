@@ -108,7 +108,7 @@ Host-resolved real filesystem paths; ordinary Agent sessions SHALL not gain Bash
 
 - **WHEN** a Tool result has a valid displayable locator
 - **THEN** Webview projection preserves it and adds a transient render URL for native `<video>`
-- **AND** Pi, provider and later Tools do not consume that URL
+- **AND** DSH Session, provider and later Tools do not consume that URL
 
 #### Scenario: Authorized processor invokes a command
 

@@ -75,7 +75,7 @@ fail-visible unavailable。领域代码与用户数据继续保留。多角色 P
 | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | Desktop Shell                    | Electron main/preload/renderer、AppHost、typed IPC、安全自定义协议、窗口/菜单/文件选择、Home、Project Tabs、Context Dock、Activity/Attention |
 | 前端状态                         | Host authoritative snapshot、按 owner 的 Renderer replica、Window/View store、snapshot-first attachment、sequence/revision/CAS、迟到响应拒绝 |
-| Agent                            | 复用 Pi、AgentSession、Conversation projection、Tool Call、Approval、Skill 与现有 `AgentHostRuntimeAdapter`；不建立第二套 Agent runtime      |
+| Agent                            | 复用 DSH Agent/Session/Tool/Skill/MCP authority，通过 ACP application/projection 与 typed Host adapter 接入；不建立第二套 Agent runtime      |
 | Assets / Content / Media Library | 复用 `ContentLocator`、workspace-linked library、缩略图/metadata 和受控文件授权；不复制 catalog                                              |
 | Canvas                           | 接入完整 Canvas Root、`.nkc` 事实、节点/素材/候选操作和 Agent capability；不使用简化占位 surface                                             |
 | Cut                              | 接入完整 Cut Root、OTIO、预览、音频、代理和 ExportJob；不恢复 Engine/client                                                                  |
