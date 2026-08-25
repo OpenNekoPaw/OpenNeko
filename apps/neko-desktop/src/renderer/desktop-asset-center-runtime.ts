@@ -24,6 +24,7 @@ export class DesktopAssetCenterRuntime implements AssetCenterManagementRuntime {
 
   constructor(
     identity: AssetCenterSessionIdentity,
+    private readonly rendererSessionId: string,
     private readonly initialViewMode: AssetCenterFilterProjection['viewMode'],
     private readonly bridge: OpenNekoAssetCenterBridge,
   ) {
@@ -67,6 +68,7 @@ export class DesktopAssetCenterRuntime implements AssetCenterManagementRuntime {
     }
     const request = createAssetCenterHostRequest({
       requestId: crypto.randomUUID(),
+      rendererSessionId: this.rendererSessionId,
       identity: this.identity,
       route: 'thumbnail.resolve',
       itemId: item.id,
@@ -118,6 +120,7 @@ export class DesktopAssetCenterRuntime implements AssetCenterManagementRuntime {
         this.bridge.assetCenter.execute(
           createAssetCenterHostRequest({
             requestId: crypto.randomUUID(),
+            rendererSessionId: this.rendererSessionId,
             identity: this.identity,
             route: 'session.detach',
           }),
@@ -156,11 +159,16 @@ export class DesktopAssetCenterRuntime implements AssetCenterManagementRuntime {
     this.requireActive();
     const request = createAssetCenterHostRequest({
       requestId: crypto.randomUUID(),
+      rendererSessionId: this.rendererSessionId,
       identity: this.identity,
       ...input,
     });
     const result = await this.bridge.assetCenter.execute(request);
-    if (result.route === 'preview.get' || result.route === 'thumbnail.resolve') {
+    if (
+      result.route === 'preview.get' ||
+      result.route === 'thumbnail.resolve' ||
+      result.route === 'session.detach'
+    ) {
       throw new Error('Asset Center management request returned a non-projection result.');
     }
     this.projection = result.projection;

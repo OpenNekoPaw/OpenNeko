@@ -194,10 +194,7 @@ import {
   type WorldRuntimeBinding,
   type WorldRuntimeHostResult,
 } from '@neko/world-domain/contracts';
-import type {
-  WorldManagementService,
-  WorldRuntimeWorkbenchService,
-} from '@neko/world-domain/application';
+import type { WorldManagementService, WorldRuntimeWorkbenchService } from '@neko/world-domain/application';
 import {
   parseProjectLocalAuthoringHostRequest,
   parseProjectAuthoringHostRequest,
@@ -1288,6 +1285,16 @@ export class DesktopAppHost {
       throw new Error('Asset Center request belongs to another Window.');
     }
     const shell = await this.shell.getProjection(window.windowId);
+    if (request.rendererSessionId !== shell.rendererSessionId) {
+      if (request.route === 'session.detach') {
+        return {
+          requestId: request.requestId,
+          route: request.route,
+          status: 'stale',
+        };
+      }
+      throw new Error('Asset Center Renderer session is stale.');
+    }
     const runtime = this.requireAssetCenter();
     if (request.route === 'preview.get') {
       return {
@@ -1368,6 +1375,14 @@ export class DesktopAppHost {
             : {}),
         });
       }
+    }
+    if (request.route === 'session.detach') {
+      return {
+        requestId: request.requestId,
+        route: request.route,
+        status: 'detached',
+        projection,
+      };
     }
     return {
       requestId: request.requestId,

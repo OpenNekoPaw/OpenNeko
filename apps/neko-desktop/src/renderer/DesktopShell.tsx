@@ -1947,6 +1947,7 @@ function DesktopWorkbenchRuntimePortals({
       : undefined;
   const assetCenter = useDesktopAssetCenterScene({
     active: true,
+    rendererSessionId: projection.rendererSessionId,
     scene,
     viewMode: resourceBrowserView,
   });
@@ -2006,7 +2007,10 @@ function DesktopWorkbenchRuntimePortals({
       : undefined;
   const assetPreview =
     typeof assetPreviewSession === 'string' && assetCenter.projection ? (
-      <DesktopAssetCenterMainSurface projection={assetCenter.projection} />
+      <DesktopAssetCenterMainSurface
+        projection={assetCenter.projection}
+        rendererSessionId={projection.rendererSessionId}
+      />
     ) : undefined;
   const mainContent =
     settingsSection !== undefined ? (
@@ -3021,6 +3025,7 @@ function SceneSurfaceUnavailable({ owner }: { readonly owner: string }): JSX.Ele
 
 function useDesktopAssetCenterScene(input: {
   readonly active: boolean;
+  readonly rendererSessionId: string;
   readonly scene: DesktopWorkbenchSceneProjection;
   readonly viewMode: 'list' | 'grid';
 }): {
@@ -3035,10 +3040,17 @@ function useDesktopAssetCenterScene(input: {
     if (!input.active || !assetCenterSessionId || typeof window === 'undefined') return undefined;
     return new DesktopAssetCenterRuntime(
       { assetCenterSessionId, windowId: input.scene.windowId },
+      input.rendererSessionId,
       input.viewMode,
       window.openNekoDesktop,
     );
-  }, [assetCenterSessionId, input.active, input.scene.windowId, input.viewMode]);
+  }, [
+    assetCenterSessionId,
+    input.active,
+    input.rendererSessionId,
+    input.scene.windowId,
+    input.viewMode,
+  ]);
   const [sessionState, setSessionState] = useState<{
     readonly runtime: DesktopAssetCenterRuntime;
     readonly projection: AssetCenterSessionProjection;
