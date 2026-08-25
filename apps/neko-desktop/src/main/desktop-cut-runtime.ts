@@ -262,25 +262,27 @@ export class DesktopCutRuntime {
       workbench.layout.cutPanel?.presentation === 'docked'
         ? getActiveCutView(workbench.layout)
         : undefined;
-    if (activeCut && !activeCut.projectId) {
-      throw new Error('Desktop Cut active View has no exact Project owner.');
-    }
+    const activeCutTarget = activeCut
+      ? (() => {
+          const projectId = activeCut.projectId;
+          if (!projectId) {
+            throw new Error('Desktop Cut active View has no exact Project owner.');
+          }
+          return {
+            kind: 'cut' as const,
+            projectId,
+            workspaceId: activeCut.workspaceId,
+            viewId: activeCut.viewId,
+            viewInstanceId: activeCut.viewInstanceId,
+            ...(activeCut.documentId ? { documentId: activeCut.documentId } : {}),
+            ownerId: activeCut.ownerId,
+          };
+        })()
+      : undefined;
     return resolveCutCanvasHandoffTarget({
       source: identity,
       workbenchInstanceId: workbench.workbenchInstanceId,
-      ...(activeCut
-        ? {
-            activeCut: {
-              kind: 'cut' as const,
-              projectId: activeCut.projectId!,
-              workspaceId: activeCut.workspaceId,
-              viewId: activeCut.viewId,
-              viewInstanceId: activeCut.viewInstanceId,
-              ...(activeCut.documentId ? { documentId: activeCut.documentId } : {}),
-              ownerId: activeCut.ownerId,
-            },
-          }
-        : {}),
+      ...(activeCutTarget ? { activeCut: activeCutTarget } : {}),
     });
   }
 
@@ -837,15 +839,15 @@ function createCutDocumentStorage(
         { file: { authority: 'workspace', path: documentId } },
         bytes,
         {
-        conflict: options.expectedFingerprint === undefined ? 'fail-if-exists' : 'replace',
-        ...(options.expectedFingerprint === undefined
-          ? {}
-          : {
-              expectedFingerprint: {
-                strategy: 'mtime-size' as const,
-                value: options.expectedFingerprint,
-              },
-            }),
+          conflict: options.expectedFingerprint === undefined ? 'fail-if-exists' : 'replace',
+          ...(options.expectedFingerprint === undefined
+            ? {}
+            : {
+                expectedFingerprint: {
+                  strategy: 'mtime-size' as const,
+                  value: options.expectedFingerprint,
+                },
+              }),
         },
       );
       if (result.status !== 'written') {

@@ -10,7 +10,7 @@ import type {
 } from '@neko/agent-contracts/dsh-acp';
 
 export const DSH_ACP_PROJECTION_DEFAULT_MAX_EVENTS_PER_SESSION = 256;
-export const DSH_ACP_PROJECTION_DEFAULT_MAX_ASSISTANT_STREAM_BYTES = 262_144;
+const DSH_ACP_PROJECTION_DEFAULT_MAX_ASSISTANT_STREAM_BYTES = 262_144;
 
 export type DshAcpProjectedToolStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
 

@@ -209,9 +209,7 @@ export function sortSkillInvocationsForDisplay(
   return [...skills];
 }
 
-export function projectSlashCommandGroup(
-  command: SlashCommandCatalogItem,
-): SlashCommandDisplayGroup {
+function projectSlashCommandGroup(command: SlashCommandCatalogItem): SlashCommandDisplayGroup {
   if (command.source === 'command') return 'command';
   if (command.source === 'plugin') return 'creation';
   if (creationBuiltinCommands.has(command.commandId ?? command.id)) return 'creation';

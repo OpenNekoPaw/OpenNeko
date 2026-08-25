@@ -219,37 +219,6 @@ export function filterSkillInvocations(
   });
 }
 
-export function extractSlashCommandArgs(
-  inputValue: string,
-  command: Pick<SlashCommandCatalogItem, 'name' | 'commandId' | 'id'>,
-): string | undefined {
-  const trimmed = inputValue.trim();
-  if (!trimmed.startsWith('/')) {
-    return undefined;
-  }
-
-  const withoutPrefix = trimmed.slice(1);
-  const separatorIndex = withoutPrefix.search(/\s/);
-  const typedCommand =
-    separatorIndex === -1 ? withoutPrefix : withoutPrefix.slice(0, Math.max(separatorIndex, 0));
-  const normalizedTypedCommand = normalizeSlashCommandName(typedCommand);
-  const acceptedCommands = new Set([
-    normalizeSlashCommandName(command.name),
-    normalizeSlashCommandName(command.commandId ?? command.id),
-  ]);
-
-  if (!acceptedCommands.has(normalizedTypedCommand)) {
-    return undefined;
-  }
-
-  if (separatorIndex === -1) {
-    return undefined;
-  }
-
-  const args = withoutPrefix.slice(separatorIndex + 1).trim();
-  return args.length > 0 ? args : undefined;
-}
-
 function projectCommandSource(
   entry: Extract<AgentInputCatalogEntry, { readonly trigger: 'command' }>,
 ): SlashCommandSource {

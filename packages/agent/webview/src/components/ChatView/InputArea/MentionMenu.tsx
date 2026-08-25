@@ -277,7 +277,7 @@ export function getFilteredMentionItems(items: MentionItem[], filter: string): M
     .slice(0, 20);
 }
 
-export function getMentionIcon(item: MentionItem): string {
+function getMentionIcon(item: MentionItem): string {
   const path = mentionItemPath(item);
   if (path && (!item.icon || isGenericMentionIcon(item.icon))) {
     return getFilePathIcon(path);

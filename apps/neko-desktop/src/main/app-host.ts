@@ -172,9 +172,6 @@ import type { DesktopCharacterAvatarRuntime } from './desktop-character-avatar-r
 import type {
   CharacterFoundationCommandPort,
   CharacterFoundationService,
-  CharacterInteractionService,
-  CharacterRoomMessageSubmissionResult,
-  SubmitCharacterRoomMessageInput,
 } from '@neko/chara-domain/application';
 import {
   parseWorldAuthoringHostRequest,
@@ -194,7 +191,10 @@ import {
   type WorldRuntimeBinding,
   type WorldRuntimeHostResult,
 } from '@neko/world-domain/contracts';
-import type { WorldManagementService, WorldRuntimeWorkbenchService } from '@neko/world-domain/application';
+import type {
+  WorldManagementService,
+  WorldRuntimeWorkbenchService,
+} from '@neko/world-domain/application';
 import {
   parseProjectLocalAuthoringHostRequest,
   parseProjectAuthoringHostRequest,
@@ -608,16 +608,14 @@ export class DesktopAppHost {
         projects: results.flatMap((result) =>
           result.status === 'fulfilled' ? [result.value] : [],
         ),
-        diagnostics: results.flatMap((result, index) =>
-          result.status === 'rejected'
-            ? [
-                {
-                  projectId: availableProjects[index]!.projectId,
-                  message: describeError(result.reason),
-                },
-              ]
-            : [],
-        ),
+        diagnostics: results.flatMap((result, index) => {
+          if (result.status !== 'rejected') return [];
+          const project = availableProjects[index];
+          if (project === undefined) {
+            throw new Error('Project authoring result lost its source Project identity.');
+          }
+          return [{ projectId: project.projectId, message: describeError(result.reason) }];
+        }),
       };
     }
     const { project, workspace } = await this.resolveProjectAuthoringAuthority(request);
@@ -1557,8 +1555,6 @@ export class DesktopAppHost {
       await this.worldRuntime.read(request.intent.binding);
     }
     const result = await this.shell.transitionScene(request);
-    if (result.status === 'transitioned') {
-    }
     return result;
   }
 

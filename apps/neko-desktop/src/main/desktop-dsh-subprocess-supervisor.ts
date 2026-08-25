@@ -66,13 +66,15 @@ export class DesktopDshSubprocessSupervisor {
     if (this.options.onStderr !== undefined) {
       child.stderr.on('data', this.options.onStderr);
     }
+    const clearCurrentChild = (): void => {
+      if (this.handle?.transport.readable === child.stdout) this.handle = undefined;
+    };
 
     let stopping = false;
     let stopPromise: Promise<void> | undefined;
-    let handle!: DesktopDshSubprocessHandle;
     const closed = waitForExit(child).then(
       (exit) => {
-        if (this.handle === handle) this.handle = undefined;
+        clearCurrentChild();
         if (!stopping && (exit.code !== 0 || exit.signal !== null)) {
           throw new Error(
             `Desktop DSH subprocess exited unexpectedly: code=${String(exit.code)} signal=${String(exit.signal)}.`,
@@ -81,7 +83,7 @@ export class DesktopDshSubprocessSupervisor {
         return exit;
       },
       (error: unknown) => {
-        if (this.handle === handle) this.handle = undefined;
+        clearCurrentChild();
         throw error;
       },
     );
@@ -93,7 +95,7 @@ export class DesktopDshSubprocessSupervisor {
       return stopPromise;
     };
 
-    handle = {
+    const handle: DesktopDshSubprocessHandle = {
       transport: {
         readable: child.stdout,
         write: (chunk) => writeBytes(child, chunk),

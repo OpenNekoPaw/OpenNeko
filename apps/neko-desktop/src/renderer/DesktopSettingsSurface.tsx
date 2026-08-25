@@ -1382,12 +1382,6 @@ export function DesktopSettingsOverlaySurface({
   );
 }
 
-export function parseDesktopSettingsSection(value: string): DesktopSettingsSection {
-  const section = categories.find((candidate) => candidate === value);
-  if (!section) throw new Error(`Unknown Desktop Settings section '${value}'.`);
-  return section;
-}
-
 function SettingsGroup({
   action,
   children,

@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
@@ -227,7 +226,6 @@ describe('CanvasMaterialAuthoringService', () => {
       request: externalRequest(fixture.identity, secondToken, 'clip.mp4', 'rename'),
     });
 
-    const expectedDigest = createHash('sha256').update('first').digest('hex');
     expect(canvas.nodes.map(contentLocatorOf)).toEqual([
       { file: { authority: 'workspace', path: 'neko/imports/video/clip.mp4' } },
       expect.objectContaining({

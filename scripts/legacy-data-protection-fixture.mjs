@@ -4,14 +4,14 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const scriptRoot = dirname(fileURLToPath(import.meta.url));
-export const LEGACY_DATA_FIXTURE_ROOT = resolve(scriptRoot, 'fixtures/legacy-data-protection');
+const LEGACY_DATA_FIXTURE_ROOT = resolve(scriptRoot, 'fixtures/legacy-data-protection');
 const manifestPath = join(LEGACY_DATA_FIXTURE_ROOT, 'manifest.json');
 
 export async function readLegacyDataProtectionManifest() {
   return JSON.parse(await readFile(manifestPath, 'utf8'));
 }
 
-export async function hashLegacyDataProtectionFixture(relativePath) {
+async function hashLegacyDataProtectionFixture(relativePath) {
   const bytes = await readFile(join(LEGACY_DATA_FIXTURE_ROOT, relativePath));
   return createHash('sha256').update(bytes).digest('hex');
 }

@@ -140,7 +140,7 @@ export function dropdownPositionClass(placement: DropdownDirection | DropdownPla
   return `${verticalClass} ${horizontalClass}`;
 }
 
-export function resolveDropdownPlacement(input: {
+function resolveDropdownPlacement(input: {
   readonly triggerRect: DropdownPlacementRect;
   readonly boundaryRect: DropdownPlacementRect;
   readonly viewportHeight: number;
@@ -168,7 +168,7 @@ export function resolveDropdownPlacement(input: {
   return { direction, alignment };
 }
 
-export function resolveBoundedDropdownLayout(input: {
+function resolveBoundedDropdownLayout(input: {
   readonly triggerRect: DropdownPlacementRect;
   readonly boundaryRect: DropdownPlacementRect;
   readonly viewportWidth: number;

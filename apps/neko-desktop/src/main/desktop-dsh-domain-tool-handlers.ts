@@ -134,6 +134,7 @@ export function createDesktopDshDomainToolHandlers(options: {
       }),
     };
   };
+  const comfyUi = options.comfyUi;
   return createDshDomainToolHandlers({
     contexts,
     skillAuthoring: options.skillAuthoring,
@@ -146,13 +147,11 @@ export function createDesktopDshDomainToolHandlers(options: {
           bindings: purposeBindings(resolved.config),
         });
       },
-      ...(options.comfyUi
+      ...(comfyUi
         ? {
             submitComfyUi: async ({ context, request, submission }) => {
-              const binding = await options.comfyUi!.bindings.get('comfyui');
-              const enabled = binding
-                ? await options.comfyUi!.bindings.getEnabled('comfyui')
-                : false;
+              const binding = await comfyUi.bindings.get('comfyui');
+              const enabled = binding ? await comfyUi.bindings.getEnabled('comfyui') : false;
               if (!binding?.endpoint || !enabled) {
                 throw Object.assign(
                   new Error(

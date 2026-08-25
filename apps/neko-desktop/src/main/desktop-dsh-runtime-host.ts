@@ -1,6 +1,5 @@
 import {
   parseDshRuntimeHostRequest,
-  type DshRuntimeHostProjection,
   type DshRuntimeHostResult,
 } from '@neko/agent-contracts/dsh-runtime-host';
 

@@ -132,6 +132,7 @@ export function createDshDomainToolHandlers(options: {
   };
   readonly skillAuthoring?: Pick<DshSkillAuthoringService, 'create'>;
 }): DshDomainToolHandlers {
+  const submitComfyUi = options.generation.submitComfyUi;
   return Object.freeze({
     async executeGenerationTool(request: DshAcpDomainToolRequest, signal: AbortSignal) {
       let context: Promise<DshDomainToolContext> | undefined;
@@ -163,10 +164,10 @@ export function createDshDomainToolHandlers(options: {
               snapshot,
             }),
         },
-        options.generation.submitComfyUi
+        submitComfyUi
           ? {
               submit: async (submission) =>
-                options.generation.submitComfyUi!({
+                submitComfyUi({
                   context: await resolveContext(),
                   request,
                   submission,

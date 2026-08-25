@@ -1,4 +1,3 @@
-import { createContext, useContext, type ReactNode } from 'react';
 import type {
   AgentAuthoringAuthority,
   AgentAuthoringTargetRef,
@@ -108,23 +107,3 @@ export type AgentComposerWorkspacePresentation =
       readonly loadCanvasCatalog: () => Promise<CanvasWorkspaceContextCatalog>;
       readonly openCanvasDocument?: (canvasId: string) => Promise<void>;
     };
-
-const ComposerWorkspaceContext = createContext<AgentComposerWorkspacePresentation | undefined>(
-  undefined,
-);
-
-export function ComposerWorkspaceProvider({
-  children,
-  value,
-}: {
-  readonly children: ReactNode;
-  readonly value?: AgentComposerWorkspacePresentation;
-}): JSX.Element {
-  return (
-    <ComposerWorkspaceContext.Provider value={value}>{children}</ComposerWorkspaceContext.Provider>
-  );
-}
-
-export function useComposerWorkspacePresentation(): AgentComposerWorkspacePresentation | undefined {
-  return useContext(ComposerWorkspaceContext);
-}
