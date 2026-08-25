@@ -25,16 +25,17 @@ Desktop 不拥有：
 
 Desktop 原生构建目标精确为：
 
-| Target         | 原生构建 Host            | 当前证据                                                     |
-| -------------- | ------------------------ | ------------------------------------------------------------ |
-| `darwin-arm64` | 本地 Apple Silicon macOS | Forge DMG 已验证；GitHub Release 明确披露 ad-hoc、未公证状态 |
+| Target         | 原生构建 Host       | 当前证据                                                     |
+| -------------- | ------------------- | ------------------------------------------------------------ |
+| `darwin-arm64` | Apple Silicon macOS | Forge DMG 已验证；GitHub Release 明确披露 ad-hoc、未公证状态 |
 
 Windows x64 与 Linux 只运行 typecheck、orchestration、SQLite、lint、测试、OpenSpec、依赖
 分析和 browser-safe build 等确定性检查，不调用 Forge，不生成 Desktop artifact。Intel
 macOS、Windows 和 Linux package 以及其他目标在 Forge 前 fail-visible。原生 package 成功
-只证明构建闭包，不能替代安装、启动、凭据、媒体/GPU、文件和完整创作路径资格。GitHub
-Actions 不运行 Forge，也不上传 Desktop 原生 artifact；当前本地构建的 DMG 不具备 Developer
-ID、公证或正常 Gatekeeper 接受资格，这些能力仍需独立验收。
+只证明构建闭包，不能替代安装、启动、凭据、媒体/GPU、文件和完整创作路径资格。稳定的
+`v<semver>` tag 只在其提交属于 `main` 且源码门禁通过后，才会在 GitHub 托管的 Apple Silicon
+macOS runner 上生成、校验并发布 DMG 与 SHA-256；产物不具备 Developer ID、公证或正常
+Gatekeeper 接受资格，这些能力仍需独立验收。
 
 ## Package 复用
 

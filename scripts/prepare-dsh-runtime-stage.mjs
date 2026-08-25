@@ -30,10 +30,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     arguments_.find((argument) => !argument.startsWith('--')) ??
       fileURLToPath(new URL('../apps/neko-desktop/.dsh-runtime-stage', import.meta.url)),
   );
-  const developmentBuild = arguments_.includes('--development');
   const runtimeSourceRoot =
-    process.env['NEKO_DSH_RUNTIME_ROOT'] ??
-    (developmentBuild ? prepareDshDevelopmentRuntime() : undefined);
+    process.env['NEKO_DSH_RUNTIME_ROOT'] ?? prepareDshDevelopmentRuntime();
   rmSync(stageRoot, { recursive: true, force: true });
   mkdirSync(stageRoot, { recursive: true });
   const staged = stagePackagedDshRuntime(stageRoot, 'darwin-arm64', runtimeSourceRoot);

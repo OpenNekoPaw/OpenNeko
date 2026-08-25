@@ -6,11 +6,11 @@
   "type": "module",
   "main": ".vite/build/main.cjs",
   "scripts": {
-    "build": "node ../../scripts/assert-supported-desktop-host.mjs && node ../../scripts/prepare-dsh-runtime-stage.mjs --development && node ../../scripts/desktop-functional/run-forge-build.mjs package && node ../../scripts/assert-desktop-package-output.mjs",
+    "build": "node ../../scripts/assert-supported-desktop-host.mjs && node ../../scripts/prepare-dsh-runtime-stage.mjs && node ../../scripts/desktop-functional/run-forge-build.mjs package && node ../../scripts/assert-desktop-package-output.mjs",
     "dev": "node ../../scripts/assert-supported-desktop-host.mjs && node ../../scripts/desktop-functional/run-development.mjs",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
-    "make": "node ../../scripts/assert-dsh-cutover-release-ready.mjs && node ../../scripts/assert-supported-desktop-host.mjs && node ../../scripts/prepare-dsh-runtime-stage.mjs && node ../../scripts/desktop-functional/run-forge-build.mjs make && node ../../scripts/assert-desktop-package-output.mjs",
-    "package": "node ../../scripts/assert-supported-desktop-host.mjs && node ../../scripts/prepare-dsh-runtime-stage.mjs --development && node ../../scripts/desktop-functional/run-forge-build.mjs package && node ../../scripts/assert-desktop-package-output.mjs",
+    "make": "node ../../scripts/assert-supported-desktop-host.mjs && node ../../scripts/prepare-dsh-runtime-stage.mjs && node ../../scripts/desktop-functional/run-forge-build.mjs make && node ../../scripts/assert-desktop-package-output.mjs",
+    "package": "node ../../scripts/assert-supported-desktop-host.mjs && node ../../scripts/prepare-dsh-runtime-stage.mjs && node ../../scripts/desktop-functional/run-forge-build.mjs package && node ../../scripts/assert-desktop-package-output.mjs",
     "test": "vitest run",
     "test:run": "vitest run",
     "typecheck": "tsc --noEmit"

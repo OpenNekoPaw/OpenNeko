@@ -40,7 +40,6 @@ const config: KnipConfig = {
         'scripts/agent-eval/canvas-json-check.mjs',
         'scripts/agent-eval/fixtures/generate-synthetic-document-image-epub.mjs',
         'scripts/agent-eval/validators/file-validator-cli.mjs',
-        'scripts/assert-dsh-cutover-release-ready.mjs',
         'scripts/automation-runtime-release-inputs.mjs',
         'scripts/check-agent-extension-surface.mjs',
         'scripts/check-application-boundaries.mjs',
