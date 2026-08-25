@@ -75,8 +75,10 @@ selector。
 - binding、connection 或 link 不可用时只显示 safe diagnostic 与显式 relink，不尝试同名目录、active
   Workspace、cache 或最近 target。
 
-`.neko` binding 丢失时默认初始化为空。只有现存受管链接精确匹配一个已登记 connection，且项目事实需要
-同名库时，才可重建 target-free binding；无法唯一匹配时必须由用户显式关联。
+`.neko` binding 是非 authoritative 的本机授权物化，丢失时默认初始化为空。只有当前项目事实需要同名库，
+且现存受管链接精确匹配唯一已登记 connection 时，才可从这些当前 authority 确定性重新物化 target-free
+binding；受管链接只作为 exact-match 准入证据，不成为 target 或项目事实 authority。无法唯一匹配时必须
+保持未关联并由用户显式处理。
 
 ## 同步、恢复与便携快照
 
@@ -111,32 +113,32 @@ chrome；Desktop 与 Assets management 不实现第二套 viewer 或复制 Previ
 fingerprint 为键。文件事件只是低延迟提示，有界 reconciliation 才保证完整性。发现文件不得创建 Entity、
 representation binding 或全局 Asset membership。
 
-| 资源 | 读取 owner |
-| --- | --- |
-| Workspace file | shared Host `ContentReadService` Workspace handler |
-| Media Library file | binding + global connection + managed-link handler |
-| document entry | DocumentAccess owner adapter |
-| generated output | generated-output owner identity + digest |
-| 全局 Asset 文件 | Assets membership + managed-root resolver；进入项目后使用 Workspace locator |
-| thumbnail/proxy/preview | `ContentRepresentationService`；cache 仅是 Host 内部实现 |
+| 资源                    | 读取 owner                                                                  |
+| ----------------------- | --------------------------------------------------------------------------- |
+| Workspace file          | shared Host `ContentReadService` Workspace handler                          |
+| Media Library file      | binding + global connection + managed-link handler                          |
+| document entry          | DocumentAccess owner adapter                                                |
+| generated output        | generated-output owner identity + digest                                    |
+| 全局 Asset 文件         | Assets membership + managed-root resolver；进入项目后使用 Workspace locator |
+| thumbnail/proxy/preview | `ContentRepresentationService`；cache 仅是 Host 内部实现                    |
 
 公共或持久契约不得包含绝对 source path、link target、cache path、materialization 状态、Renderer URL、
 runtime token 或 provider-private error。
 
 ## 显式操作
 
-| 用户意图 | Operation | 所有权结果 |
-| --- | --- | --- |
-| 导入普通项目文件 | import project files | 复制到项目目录，项目副本进入普通同步与打包 |
-| 关联全局媒体库 | link global library | 创建 target-free 项目 binding 与受管链接投影 |
-| 添加目录为媒体库 | add directory library | 先登记全局 connection，再创建项目 binding 与受管链接 |
-| 修复缺失连接 | plan / confirm / apply recovery | 验证后创建或替换 binding 与受管链接 |
-| 移除项目授权 | remove binding | 删除 binding 与链接，不删除 connection、target 或引用 |
-| 创建便携项目 | portable snapshot | 收集被引用字节并重写 staged 项目事实 |
-| 导入全局 Asset 文件 | import global asset | 复制到受管全局目录并创建 membership |
-| 移除全局 Asset 记录 | remove membership | 保留字节，仅更新 exact membership 状态 |
-| 将全局 Asset 用于项目 | materialize to Workspace | 校验 membership 后复制，项目使用 Workspace locator |
-| 关联创作身份 | bind/rebind | Project Entity owner 只更新 binding fact |
+| 用户意图              | Operation                       | 所有权结果                                            |
+| --------------------- | ------------------------------- | ----------------------------------------------------- |
+| 导入普通项目文件      | import project files            | 复制到项目目录，项目副本进入普通同步与打包            |
+| 关联全局媒体库        | link global library             | 创建 target-free 项目 binding 与受管链接投影          |
+| 添加目录为媒体库      | add directory library           | 先登记全局 connection，再创建项目 binding 与受管链接  |
+| 修复缺失连接          | plan / confirm / apply recovery | 验证后创建或替换 binding 与受管链接                   |
+| 移除项目授权          | remove binding                  | 删除 binding 与链接，不删除 connection、target 或引用 |
+| 创建便携项目          | portable snapshot               | 收集被引用字节并重写 staged 项目事实                  |
+| 导入全局 Asset 文件   | import global asset             | 复制到受管全局目录并创建 membership                   |
+| 移除全局 Asset 记录   | remove membership               | 保留字节，仅更新 exact membership 状态                |
+| 将全局 Asset 用于项目 | materialize to Workspace        | 校验 membership 后复制，项目使用 Workspace locator    |
+| 关联创作身份          | bind/rebind                     | Project Entity owner 只更新 binding fact              |
 
 link 存在不表示目标可写。外部复制与删除必须明确选择 library、目标路径、conflict policy 和用户意图。
 删除资源不会删除 Project Entity；删除 binding 不会删除文件。
@@ -151,17 +153,17 @@ Media Library 和全局 Asset 文件记录都不推断、创建或改写 Entity�
 
 ## 存储归属
 
-| 数据 | Canonical owner / persistence |
-| --- | --- |
-| 项目 Media Library binding | 项目 `.neko` 的 Assets owner |
-| 受管 Workspace link | `neko/assets/<libraryName>`，由 binding 派生 |
-| 全局 Media Library connection | `~/.neko/media-libraries` |
-| 项目 JSON/NKC/OTIO | owning project codec |
-| Media 与 retained artifact bytes | file/artifact owner |
-| Credential、mount secret | SecretStorage/system keychain |
-| requirement/probe/search projection | 用户级 `~/.neko/neko.db` |
-| 全局 Asset 文件 bytes | Assets-managed global root |
-| 全局 Asset membership | 用户级 `~/.neko/neko.db` |
+| 数据                                | Canonical owner / persistence                          |
+| ----------------------------------- | ------------------------------------------------------ |
+| 项目 Media Library binding          | 项目 `.neko` 的 Assets-owned 非 authoritative 本机物化 |
+| 受管 Workspace link                 | `neko/assets/<libraryName>`，由 binding 派生           |
+| 全局 Media Library connection       | `~/.neko/media-libraries`                              |
+| 项目 JSON/NKC/OTIO                  | owning project codec                                   |
+| Media 与 retained artifact bytes    | file/artifact owner                                    |
+| Credential、mount secret            | SecretStorage/system keychain                          |
+| requirement/probe/search projection | 用户级 `~/.neko/neko.db`                               |
+| 全局 Asset 文件 bytes               | Assets-managed global root                             |
+| 全局 Asset membership               | 用户级 `~/.neko/neko.db`                               |
 
 ## 失败与验证不变量
 

@@ -26,20 +26,20 @@ SQLite 只保存本机结构化状态、可查询 catalog、账本和可重建 p
 
 机器契约记录 authority kind、user management、portability、sensitivity、SQLite role、deletion、
 retention、backup 与离线恢复语义。未知分类、非 canonical SQLite path、raw-log table、普通 Store
-中的 secret-like schema，以及 user-content SQLite authority 都是质量门禁失败。产品 runtime 不注册
-产品 runtime 只注册 canonical repository，不注册自动转换或修复路径；需要保护有价值数据时只能使用
+中的 secret-like schema，以及 user-content SQLite authority 都是质量门禁失败。产品 runtime 只注册
+canonical repository，不注册自动转换或修复路径；需要保护有价值数据时只能使用
 显式授权、精确目标且产品不可达的离线工具。
 
-| 数据                              | Canonical owner                  | SQLite 角色                                           |
-| --------------------------------- | -------------------------------- | ----------------------------------------------------- |
-| `.nk*`、Markdown、OTIO 等项目内容 | owning package 的项目文件        | 可选索引，不得反向覆盖项目事实                        |
-| Agent transcript                  | DSH Session JSONL                | OpenNeko Conversation catalog、binding 与运行恢复状态 |
-| Media Library 本机 binding        | Assets-owned 项目 `.neko` record | 不进入 SQLite；缺失时初始化为空并从项目引用推导需求   |
-| Media/Entity/Asset projection     | owning domain                    | 可查询 projection 与 freshness metadata               |
-| 后台领域 Job                      | owning domain repository         | checkpoint、状态和恢复索引                            |
-| 派生缓存                          | cache owner                      | locator、fingerprint、quota、GC eligibility           |
-| 凭据与 secret                     | Desktop credential store         | 不保存 secret；仅允许无敏感信息的 provider metadata   |
-| 窗口、选择、滚动和布局            | Desktop view-state owner         | 仅保存明确允许恢复的稳定展示状态                      |
+| 数据                              | Canonical owner               | SQLite 角色                                                                |
+| --------------------------------- | ----------------------------- | -------------------------------------------------------------------------- |
+| `.nk*`、Markdown、OTIO 等项目内容 | owning package 的项目文件     | 可选索引，不得反向覆盖项目事实                                             |
+| Agent transcript                  | DSH Session JSONL             | OpenNeko Conversation catalog、binding 与运行恢复状态                      |
+| Media Library 本机 binding        | Assets-owned `.neko` 本机物化 | 不进入 SQLite；不是项目事实，缺失时从当前 authority 确定性物化或保持未关联 |
+| Media/Entity/Asset projection     | owning domain                 | 可查询 projection 与 freshness metadata                                    |
+| 后台领域 Job                      | owning domain repository      | checkpoint、状态和恢复索引                                                 |
+| 派生缓存                          | cache owner                   | locator、fingerprint、quota、GC eligibility                                |
+| 凭据与 secret                     | Desktop credential store      | 不保存 secret；仅允许无敏感信息的 provider metadata                        |
+| 窗口、选择、滚动和布局            | Desktop view-state owner      | 仅保存明确允许恢复的稳定展示状态                                           |
 
 DSH Session transcript 保存在 Electron `userData/dsh/sessions`，由 DSH profile 直接拥有；OpenNeko
 Conversation metadata、DSH Session binding 与 checkpoint 等 operational state 使用
@@ -57,6 +57,8 @@ safeStorage-backed secret port 持有。
   可丢弃 cache，但必须声明精确 owner、严格 codec、canonical 默认值、删除语义和局部 diagnostic；
 - 删除整个项目 `.neko/` 必须只产生当前 canonical 本地初始状态，不得丢失、伪造或覆盖项目 identity、
   Entity/Character binding、领域版本、文档、Conversation、Task、WorldSave、Asset pin 或其他用户事实；
+- 明确声明可重建的非 authoritative 本机 binding 只能从当前项目事实与当前本机 authority 确定性物化；
+  cache、旧 record、managed link 或同名目录不得成为替代 authority，来源不唯一时保持未关联并显示 diagnostic；
 - 项目 `.neko/` 不得成为通用 settings bag，不得与 `neko.db` 双写同一 authority，也不得保存 credential、
   物理媒体 target、绝对路径或不可重建的未提交创作事实；
 - 产品自有 sync、package/export、Project file enumeration 和通用 Resource Browser 必须在遍历前排除

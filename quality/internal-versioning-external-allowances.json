@@ -203,6 +203,16 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
+      "fieldScope": "const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} }); (packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts:967)",
+      "id": "794d5917ddbe8f18bf59",
+      "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
+      "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
+      "path": "packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts",
+      "token": "protocolVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Agent Client Protocol initialization contract",
       "fieldScope": "const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} }); (packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts:293)",
       "id": "5f2929fe9daa073991b7",
       "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",

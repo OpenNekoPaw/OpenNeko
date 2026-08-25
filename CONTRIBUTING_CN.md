@@ -64,7 +64,9 @@ pnpm gate:local
 pnpm package:desktop
 ```
 
-纯文档修改至少运行格式、链接和 `git diff --check`。涉及 Desktop 视觉、交互、CSP、IPC、焦点或媒体时，推荐在真实 Electron 应用中完成聚焦检查并作为参考证据记录。
+纯文档修改至少运行格式、链接和 `git diff --check`。涉及 Desktop 视觉、交互、CSP、IPC、焦点或媒体时，
+必须在真实 Electron 应用中运行受影响功能路径；浏览器或组件预览只能补充纯浏览器证据。是否使用 UI
+validation Skill 及其视觉评价仍为推荐、非阻塞参考。
 
 任何新增或实质修改用户可见 UI 行为的开发工作，推荐使用
 [`.codex/skills/neko-ui-validation/SKILL.md`](.codex/skills/neko-ui-validation/SKILL.md)

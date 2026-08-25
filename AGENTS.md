@@ -52,7 +52,7 @@
   - 前端：React 18、Zustand、Tailwind CSS、Vite
   - Desktop：Electron Main/preload/renderer、TypeScript、Vite
   - 媒体运行时：Node.js + FFmpeg/ffprobe、loopback Range/PCM
-  - AI：Vercel AI SDK + MCP Protocol
+  - AI：对话使用 DSH + ACP，MCP 由 DSH 管理，生成/provider adapter 使用 Vercel AI SDK
   - 类型契约：TypeScript package-owned contracts 与领域 codec
   - 构建：pnpm 10 workspace
   - 测试：Vitest、Node.js test runner、真实 Electron 场景
@@ -122,10 +122,10 @@
 - Contract 失效必须隔离在最小可判定范围，优先为单次 message/event/command 或单条记录，其次为单个实例、sender、session 或能力；只能拒绝受影响的输入或操作并返回明确 diagnostic，不得因一个 contract decode、validation、registration 或 handler 失败而使其他 contract、组件、项目、工作区或整个应用不可用。Contract registry、组合根和批量加载路径必须支持逐项隔离失败，不得用全局初始化失败、清空共享状态或统一 disable 传播局部 contract 错误。
 - Contract 测试必须覆盖生产者与消费者使用同一 canonical shape、代码中不存在内部 contract 版本字段和版本分发路径、合法的用户领域版本与第三方版本不会被删除或改写，以及单个非法 contract 输入被拒绝时无关 contract、实例、能力、工作区和应用仍可正常使用；涉及 Electron trust boundary 时必须额外断言仅当前请求、sender 或授权资源 fail-closed。
 - 禁止内部代码多路径。同一业务意图在一个 owning boundary 内必须只有一个 canonical contract、一个 authoritative data source、一个 owning service 和一条可成功的 handler/adapter/projection 链；普通领域条件分支不属于多路径，但不得让相同输入因版本、旧数据、缓存命中、加载顺序、异常、feature flag、注册优先级或异步时序进入不同实现、事实来源或成功语义。
-- 禁止显式平行路径，包括内部版本分发、migrator/legacy/compatibility path、dual-read/dual-write、新旧实现并存、用 feature flag 保留替代实现、多个 handler/adapter 按优先级试探、失败后切换 provider/source/reader/renderer、自动修复/重建/重新导入，以及按 raw/cache/projection 可用性选择不同业务事实。替换设计时必须原子切换本次边界内 producer、consumer、registration、fixture 和测试，并删除被替代入口、导出与实现。
+- 禁止显式平行路径，包括内部版本分发、migrator/legacy/compatibility path、dual-read/dual-write、新旧实现并存、用 feature flag 保留替代实现、多个 handler/adapter 按优先级试探、失败后切换 provider/source/reader/renderer、把旧数据或替代事实自动修复/重建/重新导入为成功结果，以及按 raw/cache/projection 可用性选择不同业务事实。替换设计时必须原子切换本次边界内 producer、consumer、registration、fixture 和测试，并删除被替代入口、导出与实现。
 - 禁止隐藏成功路径。缺失依赖、非法 contract、未注册 handler/renderer/adapter、缺失 authoritative source 或不可达状态不得通过宽泛 `try/catch`、空数组/空对象、默认成功、implicit session/project/workspace、no-op、wildcard/default handler、`try-next` 链或回退到 active/current instance 伪装成功。稳定可选字段的永久缺省语义和非 authoritative UI 状态的局部 canonical 默认值不属于 fallback，但必须与旧数据 shape、release generation 和替代业务实现无关。
 - Adapter 只允许位于真实运行或信任边界，负责格式转换、认证、授权和调用，不得拥有业务事实、业务路由、迁移/兼容策略或 projection authority，不得 adapter 套 adapter 以保留旧路径。多个第三方或 OS adapter 只能由 canonical owner 根据用户显式选择或当前真实能力精确选择；第三方版本和协议差异必须封闭在 provider-specific adapter 内，adapter 失败只能拒绝当前请求并返回 diagnostic，不得隐式切换 provider、source、contract 或内部实现。
-- Projection 必须是由 authoritative source 计算出的可重建、只读 read model，不得成为第二事实来源、写回业务事实或参与 contract/data generation 路由。Projection 只能使用稳定 domain/instance/request/owner identity；`sourceFingerprint` 只可表达内容新鲜度，不得成为持久 identity、schema version 或兼容分发键。单条 projection 失效必须逐项隔离并保留有效 sibling；从当前 authoritative source 重新投影属于 canonical 计算，不是数据迁移，但读取失败后回退旧 projection、raw path、cache path、legacy source 或空成功结果一律禁止。
+- Projection 必须是由 authoritative source 计算出的可重建、只读 read model，不得成为第二事实来源、写回业务事实或参与 contract/data generation 路由。Projection 只能使用稳定 domain/instance/request/owner identity；`sourceFingerprint` 只可表达内容新鲜度，不得成为持久 identity、schema version 或兼容分发键。单条 projection 失效必须逐项隔离并保留有效 sibling；从当前 authoritative source 重新投影，以及从当前项目事实与当前本机 authority 确定性物化已明确声明可重建的非 authoritative 本机 binding，属于 canonical 计算，不是数据迁移。此类重建不得读取旧 shape、把 cache/link/projection 提升为业务 authority、猜测 target，或在来源不唯一时继续；读取失败后回退旧 projection、raw path、cache path、legacy source 或空成功结果一律禁止。
 - Cache 必须对业务语义透明且可丢弃，cache hit/miss 不得改变 contract、authority、identity 或结果含义；miss 只能进入同一 canonical computation，stale/损坏 cache 不得作为替代成功来源。Registry 必须以精确 identity 映射唯一 handler/adapter/capability，禁止 first-compatible、wildcard/default、失败后尝试下一项或重复注册覆盖；批量注册和加载必须逐项 fail-local。
 - 多路径测试必须进行路径级而非仅结果级验收：断言唯一 canonical owner、contract、handler、adapter、authority 和 projection 被命中，断言不存在旧入口、平行 registration、fallback provider/source、raw/cache/legacy bypass、active-instance fallback 和 test-only direct runtime shortcut，并覆盖一个非法输入或 projection 失效时 sibling 记录、实例、能力和工作区仍可用。用户显式选择的领域模式、用户管理的 Character/素材版本、第三方版本、正常 `Suspense fallback` 加载 UI，以及同一外部请求不改变 provider/source/contract/成功语义的有界重试不属于违规路径。
 - 路径系统只保存相对路径或 `${VAR}/path` 形式，避免写入绝对路径；优先复用 `PathResolver` 与现有设置机制。
@@ -286,7 +286,7 @@
 - 项目尚未发布时，可以对未发布的内部 API、DTO、Webview message、Agent workflow payload、测试 fixture 和 nk\* 草稿格式做显式破坏性调整，用于清理 legacy debt 或收敛到更清晰的架构。
 - “未发布”不等于可以牺牲既有用户数据。破坏性变更必须说明影响范围和旧数据处理方式；所有持久化数据必须遵守禁止生产迁移代码和局部失效规则，内部组件格式还必须禁止无意义版本化。失效数据只能通过用户明确执行的手动操作或独立离线脚本修复，不得由产品自动迁移、重建或重新导入。
 - 禁止内部组件和存储格式版本化。组件内部持久化 namespace、目录、key、identity、索引和查询条件不得依赖应用、包、组件、Skill、Prompt、provider、model、build、release、schema version、format revision 或 migration marker，也不得按这些内部版本切换读写路径或判定数据有效性。用户显式管理的 Character、素材等领域版本必须保留为 owning domain 的业务数据；第三方服务、库、API、协议、模型和文件格式版本必须保留在对应外部集成边界，两者均不属于内部组件格式版本。
-- 禁止在应用、workspace package、runtime、启动流程、读写路径或产品构建产物中编写、注册或调用任何持久化数据迁移或兼容代码，包括 migrator、upgrade handler、旧格式转换、版本探测、legacy reader/writer、旧字段 alias/mapping、为旧数据补默认值、dual-read、dual-write、自动重建、兼容 codec/handler、迁移期 compatibility path 和按旧数据 shape 分支。组件数据契约必须长期稳定；演进只能增加具有明确缺省语义的可选字段，并保持所有既有数据原样可读，不得删除、重命名或改变已有字段语义。
+- 禁止在应用、workspace package、runtime、启动流程、读写路径或产品构建产物中编写、注册或调用任何持久化数据迁移或兼容代码，包括 migrator、upgrade handler、旧格式转换、版本探测、legacy reader/writer、旧字段 alias/mapping、为旧数据补默认值、dual-read、dual-write、authoritative data 自动重建、兼容 codec/handler、迁移期 compatibility path 和按旧数据 shape 分支。组件数据契约必须长期稳定；演进只能增加具有明确缺省语义的可选字段，并保持所有既有数据原样可读，不得删除、重命名或改变已有字段语义。由当前 authoritative source 重建可丢弃 projection，或按本文 Projection 规则确定性物化明确声明的非 authoritative 本机 binding，不属于持久化数据迁移。
 - 项目事实、用户内容或组件 authoritative data 失效后，只允许用户明确执行手动修复或独立离线数据修复脚本；非 authoritative 参数和可恢复状态按下一条规则局部重置，不属于数据迁移。脚本必须位于产品运行路径之外，不得被应用、package public entry、构建、安装、启动、读取、写入、通用测试或 CI 自动导入或调用，不得包含版本探测或形成长期兼容路径；脚本必须要求显式目标和确认，修改前备份原数据，只处理指定的失效记录或组件实例，并在写回前后验证结果。离线修复脚本属于显式运维工具，不得演变为产品迁移机制。
 - 组件数据失效必须隔离在最小可判定范围，优先为单条记录，其次为单个组件实例。可恢复的旧参数和非 authoritative 状态应只回到该范围的 canonical 默认状态；项目事实、用户内容或组件 authoritative data 应只显示对应项目、记录或组件失效。不得因一个组件、实例或记录的数据损坏、缺失或不可读而使其他组件、项目、工作区或整个应用不可用。系统必须保留其余数据的读取和操作能力，并对失效范围返回明确 diagnostic；不得通过全局加载失败、清空全局状态或统一判定全部数据失效来简化错误处理。
 - 数据测试必须覆盖：升级后既有数据仍原样可读；产品代码和运行路径中不存在数据迁移、兼容或自动修复路径，内部组件格式不存在版本判断；用户管理的领域版本以及第三方版本字段仍被原样保留；旧参数或可恢复状态失效时只有对应 scope 回到 canonical 默认状态；项目事实或组件 authoritative data 失效时只有对应项目、记录或组件显示失效，其他组件、项目、工作区和应用仍可正常使用。离线修复脚本必须使用隔离 fixture 验证目标限定、备份、写回校验和失败不覆盖原数据。
@@ -301,7 +301,7 @@
 - 集中式仓库门禁可以保留验证拦截器本身所必需的最小合成反例，但必须位于治理脚本的聚焦自测中，与产品 import、构建、普通领域 fixture 和运行时不可达，且不得复制真实历史 payload、维护已删除入口清单或为具体旧路径建立长期行为测试。门禁必须默认扫描生产代码和测试代码；允许项必须精确到 occurrence 和真实外部/用户领域语义，不得按目录、文件名、`provider`/`runtime`/`canonical` 等宽泛词汇放行。
 - 不能借 prelaunch cleanup 忽略 Electron、Node、pnpm、OS、renderer sandbox、CSP、codec、Range、FFmpeg、
   外部序列化协议、marketplace trust 或安全边界。
-- 不能静默删除或损坏有价值的本地项目数据、用户设置、trust state、entitlement、插件安装记录或生成产物。任何持久化数据都不得由产品迁移或重建，必须按上述规则保持稳定读取或局部 fail-visible；确需修复时只能使用显式手动操作或产品运行路径之外的独立离线脚本，并提供明确的数据保护方案或 fail-closed diagnostic。
+- 不能静默删除或损坏有价值的本地项目数据、用户设置、trust state、entitlement、插件安装记录或生成产物。任何 authoritative 持久化数据都不得由产品迁移或重建，必须按上述规则保持稳定读取或局部 fail-visible；可丢弃 projection 与明确声明可重建的非 authoritative 本机 binding 只允许按当前 canonical authority 确定性重新计算。authoritative data 确需修复时只能使用显式手动操作或产品运行路径之外的独立离线脚本，并提供明确的数据保护方案或 fail-closed diagnostic。
 
 ## 测试与质量门禁
 
