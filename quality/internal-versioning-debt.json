@@ -70121,7 +70121,7 @@
       "findings": [
         {
           "id": "40201c79cd3c708a28e8",
-          "path": "packages/chara/package.json",
+          "path": "packages/chara/domain/package.json",
           "category": "internal-version-field",
           "token": "version",
           "line": 5,
@@ -70526,7 +70526,7 @@
       "findings": [
         {
           "id": "ad46dd9a38c00b8a9c6a",
-          "path": "packages/content/package.json",
+          "path": "packages/content/domain/package.json",
           "category": "internal-version-field",
           "token": "version",
           "line": 4,
@@ -86217,7 +86217,7 @@
       "findings": [
         {
           "id": "612f350c236a7de34ae2",
-          "path": "packages/generation/package.json",
+          "path": "packages/generation/domain/package.json",
           "category": "internal-version-field",
           "token": "version",
           "line": 5,

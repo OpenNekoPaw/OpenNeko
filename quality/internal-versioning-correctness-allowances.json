@@ -2885,6 +2885,19 @@
       "removalCondition": "Remove when World action preparation and commit cannot cross an asynchronous boundary and one serialized owner can preserve stale-write rejection without caller-observed state.",
       "token": "worldStateRevision",
       "versionFreeAnalysis": "Without the observed-state CAS token, an Agent or user action can commit after another World event and mutate facts it did not observe; the value never dispatches schema, contract, cache, migration, or implementation generations."
+    },
+    {
+      "category": "data-generation-alias",
+      "consumer": "The Chara Room participant projection fixture and Room timeline authority",
+      "correctnessInvariant": "The Room fixture must represent the exact committed event position consumed by the canonical Room participant projection.",
+      "fieldScope": "roomRevision: 0, (packages/chara/webview/src/participant-manager.test.tsx:244)",
+      "id": "575eaf0fb9c795307e0c",
+      "isolationRule": "An invalid Room position rejects only the affected Room projection and cannot select a contract shape, migration, handler, provider, cache generation, or alternate participant authority.",
+      "owner": "@neko/chara-domain Room timeline authority",
+      "path": "packages/chara/webview/src/participant-manager.test.tsx",
+      "removalCondition": "Remove this fixture token when the participant manager no longer consumes RoomRun snapshots or Room commits cannot cross an asynchronous inference boundary.",
+      "token": "roomRevision",
+      "versionFreeAnalysis": "The Room timeline CAS position is required by the canonical RoomRun contract to preserve event ordering across asynchronous participant responses; this fixture does not dispatch an internal schema or alternate success path."
     }
   ]
 }
