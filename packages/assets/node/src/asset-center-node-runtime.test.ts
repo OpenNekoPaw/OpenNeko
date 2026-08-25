@@ -223,6 +223,9 @@ describe('AssetCenterNodeRuntime', () => {
     const identity = sessionIdentity();
     runtime.attach({ identity });
     await runtime.detachSession(identity);
+    await expect(runtime.detachSession(identity)).rejects.toThrow(
+      `Asset Center session '${identity.assetCenterSessionId}' is unavailable.`,
+    );
 
     expect(runtime.attach({ identity, initialViewMode: 'grid' }).filter.viewMode).toBe('grid');
     await runtime.detachSession(identity);
@@ -264,9 +267,9 @@ describe('AssetCenterNodeRuntime', () => {
     ).rejects.toThrow("Asset Center item 'missing-item' is unavailable");
 
     await expect(runtime.refresh({ identity })).resolves.toMatchObject({
-      catalog: { status: 'ready', owner: 'global-asset-library' },
+      catalog: { status: 'ready', owner: 'media-library' },
     });
-    expect(resources.searchHomeAssets).toHaveBeenCalledTimes(1);
+    expect(resources.searchHomeMediaLibraries).toHaveBeenCalledTimes(1);
   });
 
   it('keeps selection visible when Preview kind is unsupported', async () => {

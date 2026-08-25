@@ -7,9 +7,9 @@ import {
 } from './contract';
 
 describe('Asset Center session contract', () => {
-  it('opens the stable Asset membership catalog in list mode', () => {
+  it('opens the Media Library catalog in list mode by default', () => {
     expect(createDefaultAssetCenterFilter()).toEqual({
-      catalog: 'global-asset-library',
+      catalog: 'media-library',
       query: '',
       sortBy: 'name',
       sortDirection: 'ascending',

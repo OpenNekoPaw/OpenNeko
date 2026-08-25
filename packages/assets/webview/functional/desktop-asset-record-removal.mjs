@@ -44,13 +44,18 @@ export const assetLibraryRecordRemovalScenario = Object.freeze({
     await evaluate(`(() => {
       const root = document.querySelector(${JSON.stringify(ACTIVE_ASSET_CENTER)});
       if (!(root instanceof HTMLElement)) throw new Error('Active Asset Center is unavailable.');
-      const refresh = [...root.querySelectorAll('button')].find((button) =>
-        /^(Refresh|刷新)$/u.test(button.getAttribute('aria-label') ?? ''),
-      );
-      if (!(refresh instanceof HTMLButtonElement)) throw new Error('Asset refresh is unavailable.');
-      refresh.click();
+      const mediaMode = [...root.querySelectorAll('.global-library-browser__modes button')]
+        .find((button) => /^(Media Library|媒体库)$/u.test(button.textContent?.trim() ?? ''));
+      if (!(mediaMode instanceof HTMLButtonElement)) throw new Error('Media Library mode is unavailable.');
+      mediaMode.click();
       return true;
     })()`);
+    await waitForCondition(
+      evaluate,
+      `document.querySelector(${JSON.stringify(ACTIVE_ASSET_CENTER)})?.getAttribute('data-catalog') === 'media-library' && document.querySelector(${JSON.stringify(ACTIVE_ASSET_CENTER)})?.getAttribute('data-catalog-status') === 'ready'`,
+      'Media Library catalog did not become ready.',
+    );
+    await openAssetLibrary(evaluate, waitForSelector);
     await waitForCondition(
       evaluate,
       `(() => {
@@ -130,9 +135,9 @@ async function openAssetLibrary(evaluate, waitForSelector) {
   await evaluate(`(() => {
     const root = document.querySelector(${JSON.stringify(ACTIVE_ASSET_CENTER)});
     if (!(root instanceof HTMLElement)) throw new Error('Active Asset Center is unavailable.');
-    const button = [...root.querySelectorAll('.global-library-browser__facets button')]
+    const button = [...root.querySelectorAll('.global-library-browser__modes button')]
       .find((candidate) => /^(Asset Library|资产库)$/u.test(candidate.textContent?.trim() ?? ''));
-    if (!(button instanceof HTMLButtonElement)) throw new Error('Asset Library facet is unavailable.');
+    if (!(button instanceof HTMLButtonElement)) throw new Error('Asset Library mode is unavailable.');
     if (button.getAttribute('aria-pressed') !== 'true') button.click();
     return true;
   })()`);

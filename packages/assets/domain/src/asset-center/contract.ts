@@ -100,7 +100,7 @@ export function createAssetCenterSessionId(windowId: string): string {
 
 export function createDefaultAssetCenterFilter(): AssetCenterFilterProjection {
   return {
-    catalog: 'global-asset-library',
+    catalog: 'media-library',
     query: '',
     sortBy: 'name',
     sortDirection: 'ascending',

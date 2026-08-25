@@ -8,7 +8,6 @@ import {
   MoreHorizontalIcon,
   MoveIcon,
   PlusIcon,
-  RefreshIcon,
   SearchIcon,
   TrashIcon,
   UploadIcon,
@@ -141,12 +140,6 @@ export function AssetManagementRoot({
     }
   }, [items, selectedIds, selectionAnchorId]);
 
-  const refresh = (): void => {
-    if (!projection) return;
-    setPendingMutation(true);
-    void runtime.refresh().finally(() => setPendingMutation(false));
-  };
-
   const updateFilter = (filter: AssetCenterFilterProjection): void => {
     if (!projection) return;
     void Promise.resolve(runtime.updateFilter(filter))
@@ -203,6 +196,20 @@ export function AssetManagementRoot({
     } finally {
       setPendingMutation(false);
     }
+  };
+
+  const connectMediaDirectory = (): void => {
+    void runMutation(async () => {
+      await runtime.addMediaLibrary(locationKind);
+      return undefined;
+    });
+  };
+
+  const importAssets = (): void => {
+    void runMutation(async () => {
+      await runtime.importAssets();
+      return labels.imported;
+    });
   };
 
   const changeViewMode = (mode: GlobalLibraryViewMode): void => {
@@ -375,70 +382,33 @@ export function AssetManagementRoot({
   const { catalog, directory, query, viewMode } = projection.filter;
   const sort = toSort(projection.filter);
   const title = catalog === 'media-library' ? labels.titleMedia : labels.titleAssets;
-  const description =
-    catalog === 'media-library' ? labels.descriptionMedia : labels.descriptionAssets;
   return (
     <section
       className="global-library-browser"
       data-owner-root="asset-management"
       data-asset-center-session-id={projection.identity.assetCenterSessionId}
+      data-catalog={catalog}
       data-catalog-status={projection.catalog.status}
     >
-      <header className="global-library-browser__header">
-        <div className="global-library-browser__header-copy">
-          <p className="section-label">{labels.eyebrow}</p>
-          <h1>{title}</h1>
-          <p>{description}</p>
-        </div>
-        <div className="global-library-browser__commands">
-          {catalog === 'media-library' ? (
-            <>
-              <label>
-                <span className="global-library-browser__visually-hidden">{labels.location}</span>
-                <select
-                  aria-label={labels.location}
-                  value={locationKind}
-                  disabled={pendingMutation || projection.catalog.status !== 'ready'}
-                  onChange={(event) =>
-                    setLocationKind(requireLocationKind(event.currentTarget.value))
-                  }
-                >
-                  <option value="local">{labels.local}</option>
-                  <option value="nas">{labels.nas}</option>
-                  <option value="cloud">{labels.cloud}</option>
-                </select>
-              </label>
-              <button
-                type="button"
-                disabled={!interactive || pendingMutation || projection.catalog.status !== 'ready'}
-                onClick={() =>
-                  void runMutation(async () => {
-                    await runtime.addMediaLibrary(locationKind);
-                    return undefined;
-                  })
-                }
-              >
-                <PlusIcon size={14} />
-                <span>{labels.addLibrary}</span>
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              disabled={!interactive || pendingMutation || projection.catalog.status !== 'ready'}
-              onClick={() =>
-                void runMutation(async () => {
-                  await runtime.importAssets();
-                  return labels.imported;
-                })
-              }
-            >
-              <UploadIcon size={14} />
-              <span>{labels.importAssets}</span>
-            </button>
-          )}
-        </div>
-      </header>
+      <nav className="global-library-browser__modes" aria-label={labels.catalogMode}>
+        <button
+          type="button"
+          aria-pressed={catalog === 'media-library'}
+          onClick={() => selectCatalog('media-library')}
+        >
+          <LayersIcon size={15} />
+          <span>{labels.titleMedia}</span>
+        </button>
+        <button
+          type="button"
+          aria-pressed={catalog === 'global-asset-library'}
+          onClick={() => selectCatalog('global-asset-library')}
+        >
+          <GridIcon size={15} />
+          <span>{labels.titleAssets}</span>
+        </button>
+      </nav>
+      <h1 className="global-library-browser__visually-hidden">{title}</h1>
 
       <div className="global-library-browser__toolbar">
         <label className="global-library-browser__search">
@@ -455,61 +425,78 @@ export function AssetManagementRoot({
             }
           />
         </label>
-        <select
-          aria-label={labels.sort}
-          value={sort}
-          onChange={(event) =>
-            updateFilter(withSort(projection.filter, requireSort(event.currentTarget.value)))
-          }
-        >
-          <option value="name-ascending">{labels.nameAscending}</option>
-          <option value="name-descending">{labels.nameDescending}</option>
-          <option value="modified-descending">{labels.newest}</option>
-        </select>
-        <div className="global-library-browser__view-switcher">
-          <button
-            type="button"
-            title={labels.list}
-            aria-label={labels.list}
-            aria-pressed={viewMode === 'list'}
-            onClick={() => changeViewMode('list')}
+        <div className="global-library-browser__toolbar-actions">
+          <div className="global-library-browser__commands">
+            {catalog === 'media-library' ? (
+              <>
+                <label>
+                  <span className="global-library-browser__visually-hidden">{labels.location}</span>
+                  <select
+                    aria-label={labels.location}
+                    value={locationKind}
+                    disabled={pendingMutation || projection.catalog.status !== 'ready'}
+                    onChange={(event) =>
+                      setLocationKind(requireLocationKind(event.currentTarget.value))
+                    }
+                  >
+                    <option value="local">{labels.local}</option>
+                    <option value="nas">{labels.nas}</option>
+                    <option value="cloud">{labels.cloud}</option>
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  disabled={
+                    !interactive || pendingMutation || projection.catalog.status !== 'ready'
+                  }
+                  onClick={connectMediaDirectory}
+                >
+                  <PlusIcon size={14} />
+                  <span>{labels.addLibrary}</span>
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                disabled={!interactive || pendingMutation || projection.catalog.status !== 'ready'}
+                onClick={importAssets}
+              >
+                <UploadIcon size={14} />
+                <span>{labels.importAssets}</span>
+              </button>
+            )}
+          </div>
+          <select
+            aria-label={labels.sort}
+            value={sort}
+            onChange={(event) =>
+              updateFilter(withSort(projection.filter, requireSort(event.currentTarget.value)))
+            }
           >
-            <LayersIcon size={14} />
-          </button>
-          <button
-            type="button"
-            title={labels.grid}
-            aria-label={labels.grid}
-            aria-pressed={viewMode === 'grid'}
-            onClick={() => changeViewMode('grid')}
-          >
-            <GridIcon size={14} />
-          </button>
-        </div>
-        <button
-          type="button"
-          title={labels.refresh}
-          aria-label={labels.refresh}
-          disabled={!interactive || pendingMutation || projection.catalog.status !== 'ready'}
-          onClick={refresh}
-        >
-          <RefreshIcon size={14} />
-        </button>
-        <div className="global-library-browser__facets">
-          <button
-            type="button"
-            aria-pressed={catalog === 'media-library'}
-            onClick={() => selectCatalog('media-library')}
-          >
-            {labels.titleMedia}
-          </button>
-          <button
-            type="button"
-            aria-pressed={catalog === 'global-asset-library'}
-            onClick={() => selectCatalog('global-asset-library')}
-          >
-            {labels.titleAssets}
-          </button>
+            <option value="name-ascending">{labels.nameAscending}</option>
+            <option value="name-descending">{labels.nameDescending}</option>
+            <option value="modified-descending">{labels.newest}</option>
+          </select>
+          <div className="global-library-browser__view-switcher">
+            <button
+              type="button"
+              title={labels.list}
+              aria-label={labels.list}
+              aria-pressed={viewMode === 'list'}
+              onClick={() => changeViewMode('list')}
+            >
+              <LayersIcon size={14} />
+            </button>
+            <button
+              type="button"
+              title={labels.grid}
+              aria-label={labels.grid}
+              aria-pressed={viewMode === 'grid'}
+              onClick={() => changeViewMode('grid')}
+            >
+              <GridIcon size={14} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -582,7 +569,38 @@ export function AssetManagementRoot({
           {labels.loading}
         </div>
       ) : items.length === 0 ? (
-        <EmptyState fill icon={<LayersIcon size={24} />} title={labels.empty} />
+        <EmptyState
+          fill
+          className="global-library-browser__empty-state"
+          icon={catalog === 'media-library' ? <LayersIcon size={24} /> : <GridIcon size={24} />}
+          title={
+            query.length > 0
+              ? labels.noResults
+              : catalog === 'media-library'
+                ? labels.emptyMedia
+                : labels.emptyAssets
+          }
+          description={
+            query.length > 0
+              ? undefined
+              : catalog === 'media-library'
+                ? labels.emptyMediaDescription
+                : labels.emptyAssetsDescription
+          }
+          action={
+            query.length > 0 ? undefined : (
+              <button
+                type="button"
+                className="global-library-browser__empty-action"
+                disabled={!interactive || pendingMutation}
+                onClick={catalog === 'media-library' ? connectMediaDirectory : importAssets}
+              >
+                {catalog === 'media-library' ? <PlusIcon size={14} /> : <UploadIcon size={14} />}
+                <span>{catalog === 'media-library' ? labels.addLibrary : labels.importAssets}</span>
+              </button>
+            )
+          }
+        />
       ) : (
         <div
           ref={collectionRef}
