@@ -24,6 +24,7 @@ import type { Config as DshMcpClientConfig } from '@deepseek-ai/dsh-mcp-client';
 import { Context, type FiberState } from '@deepseek-ai/cordis';
 import type {} from '@deepseek-ai/cordis-plugin-loader';
 import { createUserMessage, errorChain, type ContentBlock } from '@deepseek-ai/dsh-llm';
+import { supportedProtocols } from '@deepseek-ai/dsh-llm-pi-ai';
 import { SessionId, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session';
 import type {} from '@deepseek-ai/dsh-session-persistence';
 import type {} from '@deepseek-ai/dsh-workspace';
@@ -60,6 +61,7 @@ import {
   decodeDshAcpDomainToolResponse,
   decodeDshAcpContextPressureProjection,
   encodeDshAcpModelConfiguration,
+  projectDshAcpProviderCapabilities,
   type DshAcpExtensionProjection,
   type DshAcpExtensionMcp,
   type DshAcpExtensionSkill,
@@ -87,6 +89,7 @@ export const inject = [
   'commands',
   'permissionPresets',
   'loader',
+  'llm',
   'sandboxPolicy',
   'sessions',
   'sessionPersistence',
@@ -588,6 +591,20 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
             }
             record.runtimeContext.text = request.text;
             return {};
+          }
+          case DSH_ACP_EXTENSION_METHODS.readProviderCapabilities: {
+            if (Object.keys(params).length !== 0) {
+              throw RequestError.invalidParams(
+                undefined,
+                'Provider capability read does not accept parameters.',
+              );
+            }
+            return {
+              ...projectDshAcpProviderCapabilities(
+                ctx.llm.listConfigurableProviders(),
+                supportedProtocols(),
+              ),
+            };
           }
           case DSH_ACP_EXTENSION_METHODS.readExtensions: {
             if (Object.keys(params).length !== 0) {

@@ -502,7 +502,12 @@ function AgentModelSettingsGroup({
                   <span className="desktop-settings__count">{group.providers.length}</span>
                   <button
                     className="desktop-settings__action desktop-settings__action--quiet"
-                    disabled={pending || !port}
+                    disabled={
+                      pending ||
+                      !port ||
+                      (group.kind === 'dialogue' &&
+                        !hasDialogueProviderCreationCapability(projection?.dialogueCapabilities))
+                    }
                     type="button"
                     onClick={() => {
                       setEditingProvider(undefined);
@@ -513,6 +518,11 @@ function AgentModelSettingsGroup({
                   </button>
                 </span>
               </div>
+              {group.kind === 'dialogue' && projection?.dialogueCapabilities.diagnostics.length ? (
+                <p className="desktop-settings__provider-empty" role="status">
+                  {projection.dialogueCapabilities.diagnostics.join(' ')}
+                </p>
+              ) : null}
               {group.providers.length > 0 ? (
                 <div className="desktop-settings__provider-list">
                   {group.providers.map((provider) => (
@@ -537,7 +547,7 @@ function AgentModelSettingsGroup({
                             {provider.connectionKind === 'local'
                               ? t('settings.agent.source.local')
                               : t('settings.agent.source.remote')}{' '}
-                            · {provider.apiUrl}
+                            · {provider.apiUrl || t('settings.agent.apiUrl.catalogDefault')}
                           </small>
                         </span>
                         <span
@@ -616,6 +626,7 @@ function AgentModelSettingsGroup({
                 : []
             }
             defaults={projection?.defaults ?? {}}
+            dialogueCapabilities={projection?.dialogueCapabilities}
             onCancel={() => {
               setEditingProvider(undefined);
               setCreatingProviderFamily(undefined);
@@ -677,9 +688,94 @@ function groupProvidersByCapability(
   }));
 }
 
+function hasDialogueProviderCreationCapability(
+  capabilities: DesktopAiModelSettingsProjection['dialogueCapabilities'] | undefined,
+): boolean {
+  return Boolean(
+    capabilities?.status === 'available' &&
+    (capabilities.protocols.length > 0 ||
+      capabilities.providers.some((provider) => provider.source === 'catalog')),
+  );
+}
+
+interface ProviderCreationOption {
+  readonly id: string;
+  readonly kind: 'dsh-catalog' | 'dsh-custom' | 'product-preset';
+  readonly suggestedProviderId: string;
+  readonly displayName: string;
+  readonly providerType: DesktopAiProviderType;
+  readonly defaultApiUrl: string;
+  readonly protocol?: DesktopAiModelProtocol;
+  readonly presetId?: string;
+  readonly requiresApiKey: boolean;
+}
+
+function createProviderCreationOptions(
+  family: DesktopAiProviderModelFamily | undefined,
+  capabilities: DesktopAiModelSettingsProjection['dialogueCapabilities'] | undefined,
+  customLabel: string,
+): readonly ProviderCreationOption[] {
+  if (family === 'dialogue') {
+    if (capabilities?.status !== 'available') return [];
+    return [
+      ...capabilities.providers
+        .filter((provider) => provider.source === 'catalog')
+        .map((provider) => ({
+          id: `dsh-catalog:${provider.providerId}`,
+          kind: 'dsh-catalog' as const,
+          suggestedProviderId: provider.providerId,
+          displayName: provider.displayName,
+          providerType: providerTypeForDshProvider(provider.providerId),
+          defaultApiUrl: '',
+          requiresApiKey: provider.providerId !== 'ollama',
+        })),
+      ...(capabilities.protocols.length === 0
+        ? []
+        : [
+            {
+              id: 'dsh-custom',
+              kind: 'dsh-custom' as const,
+              suggestedProviderId: '',
+              displayName: customLabel,
+              providerType: 'generic' as const,
+              defaultApiUrl: '',
+              protocol: capabilities.protocols[0],
+              requiresApiKey: true,
+            },
+          ]),
+    ];
+  }
+  return DESKTOP_AI_PROVIDER_PRESETS.filter((preset) => preset.family === family).map((preset) => ({
+    id: `product-preset:${preset.id}`,
+    kind: 'product-preset' as const,
+    suggestedProviderId: preset.suggestedProviderId,
+    displayName: preset.displayName,
+    providerType: preset.providerType,
+    defaultApiUrl: preset.defaultApiUrl,
+    ...(preset.protocol === undefined ? {} : { protocol: preset.protocol }),
+    presetId: preset.id,
+    requiresApiKey: preset.requiresApiKey,
+  }));
+}
+
+function providerTypeForDshProvider(providerId: string): DesktopAiProviderType {
+  switch (providerId) {
+    case 'openai':
+    case 'anthropic':
+    case 'google':
+    case 'azure':
+    case 'ollama':
+    case 'xai':
+      return providerId;
+    default:
+      return 'generic';
+  }
+}
+
 function ProviderForm({
   disabled,
   defaults,
+  dialogueCapabilities,
   initial,
   modelFamily,
   models,
@@ -692,6 +788,7 @@ function ProviderForm({
 }: {
   readonly disabled: boolean;
   readonly defaults: DesktopAiModelSettingsProjection['defaults'];
+  readonly dialogueCapabilities?: DesktopAiModelSettingsProjection['dialogueCapabilities'];
   readonly initial?: DesktopAiProviderView;
   readonly modelFamily: readonly DesktopAiProviderModelFamily[];
   readonly models: readonly DesktopAiModelView[];
@@ -724,35 +821,47 @@ function ProviderForm({
 }): JSX.Element {
   const { t } = useTranslation();
   const creationFamily = modelFamily.length === 1 ? modelFamily[0] : undefined;
-  const availablePresets = DESKTOP_AI_PROVIDER_PRESETS.filter(
-    (preset) => preset.family === creationFamily,
+  const creationOptions = createProviderCreationOptions(
+    creationFamily,
+    dialogueCapabilities,
+    t('settings.agent.customProvider'),
   );
-  const initialPreset = initial ? undefined : availablePresets[0];
-  if (!initial && !initialPreset) {
-    throw new Error(`No Provider preset is available for ${String(creationFamily)} settings.`);
+  const initialOption = initial ? undefined : creationOptions[0];
+  if (!initial && !initialOption) {
+    throw new Error(`No Provider capability is available for ${String(creationFamily)} settings.`);
   }
-  const [presetId, setPresetId] = useState(initialPreset?.id);
-  const selectedPreset = presetId
-    ? DESKTOP_AI_PROVIDER_PRESETS.find((preset) => preset.id === presetId)
-    : undefined;
-  const [id, setId] = useState(initial?.id ?? initialPreset?.suggestedProviderId ?? '');
+  const [creationOptionId, setCreationOptionId] = useState(initialOption?.id);
+  const selectedOption = creationOptions.find((option) => option.id === creationOptionId);
+  const [id, setId] = useState(initial?.id ?? initialOption?.suggestedProviderId ?? '');
   const [displayName, setDisplayName] = useState(
-    initial?.displayName ?? initialPreset?.displayName ?? '',
+    initial?.displayName ?? initialOption?.displayName ?? '',
   );
-  const [apiUrl, setApiUrl] = useState(initial?.apiUrl ?? initialPreset?.defaultApiUrl ?? '');
+  const [apiUrl, setApiUrl] = useState(initial?.apiUrl ?? initialOption?.defaultApiUrl ?? '');
   const [providerType, setProviderType] = useState<DesktopAiProviderType>(
-    initial?.type ?? initialPreset?.providerType ?? 'generic',
+    initial?.type ?? initialOption?.providerType ?? 'generic',
   );
   const [protocol, setProtocol] = useState<DesktopAiModelProtocol | undefined>(
-    initial?.protocol ?? initialPreset?.protocol,
+    initial?.protocol ?? initialOption?.protocol,
   );
   const [apiKey, setApiKey] = useState('');
   const [advancedOpen, setAdvancedOpen] = useState(!initial);
   const [showModelForm, setShowModelForm] = useState(false);
   const [confirmProviderDelete, setConfirmProviderDelete] = useState(false);
   const requiresApiKey =
-    selectedPreset?.requiresApiKey ?? initial?.credentialStatus !== 'not-required';
-  const canSave = Boolean(id.trim() && displayName.trim() && apiUrl.trim());
+    selectedOption?.requiresApiKey ?? initial?.credentialStatus !== 'not-required';
+  const isCatalogueProvider =
+    modelFamily.includes('dialogue') &&
+    (selectedOption?.kind === 'dsh-catalog' ||
+      (dialogueCapabilities?.status === 'available' &&
+        dialogueCapabilities.providers.some(
+          (provider) => provider.source === 'catalog' && provider.providerId === id,
+        )));
+  const isCatalogueRoute = isCatalogueProvider && protocol === undefined;
+  const canSave = Boolean(
+    id.trim() &&
+    displayName.trim() &&
+    (isCatalogueRoute || !modelFamily.includes('dialogue') || apiUrl.trim()),
+  );
   const submit = (event: FormEvent): void => {
     event.preventDefault();
     void onSave(
@@ -762,7 +871,9 @@ function ProviderForm({
         type: providerType,
         apiUrl,
         ...(protocol === undefined ? {} : { protocol }),
-        ...(initial || presetId === undefined ? {} : { presetId }),
+        ...(initial || selectedOption?.presetId === undefined
+          ? {}
+          : { presetId: selectedOption.presetId }),
         supportedModelFamilies: modelFamily,
         enabled: true,
       },
@@ -798,17 +909,17 @@ function ProviderForm({
               <span>{t('settings.agent.providerPreset')}</span>
               <select
                 disabled={disabled}
-                value={presetId}
+                value={creationOptionId}
                 onChange={(event) => {
-                  const next = DESKTOP_AI_PROVIDER_PRESETS.find(
-                    (preset) => preset.id === event.currentTarget.value,
+                  const next = creationOptions.find(
+                    (option) => option.id === event.currentTarget.value,
                   );
-                  if (!next || next.family !== creationFamily) {
+                  if (!next) {
                     throw new Error(
-                      `Provider preset '${event.currentTarget.value}' is unavailable.`,
+                      `Provider capability '${event.currentTarget.value}' is unavailable.`,
                     );
                   }
-                  setPresetId(next.id);
+                  setCreationOptionId(next.id);
                   setId(next.suggestedProviderId);
                   setDisplayName(next.displayName);
                   setApiUrl(next.defaultApiUrl);
@@ -816,9 +927,9 @@ function ProviderForm({
                   setProtocol(next.protocol);
                 }}
               >
-                {availablePresets.map((preset) => (
-                  <option key={preset.id} value={preset.id}>
-                    {preset.displayName}
+                {creationOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.displayName}
                   </option>
                 ))}
               </select>
@@ -827,7 +938,7 @@ function ProviderForm({
             <label>
               <span>{t('settings.agent.providerId')}</span>
               <input
-                disabled={disabled}
+                disabled={disabled || isCatalogueProvider}
                 placeholder={t('settings.agent.providerIdPlaceholder')}
                 required
                 value={id}
@@ -897,7 +1008,7 @@ function ProviderForm({
             <input
               disabled={disabled}
               placeholder={t('settings.agent.apiUrlPlaceholder')}
-              required
+              required={!isCatalogueRoute}
               type="url"
               value={apiUrl}
               onChange={(e) => setApiUrl(e.currentTarget.value)}
@@ -907,20 +1018,31 @@ function ProviderForm({
             <label className="desktop-settings__field-compact">
               <span>{t('settings.agent.protocol')}</span>
               <select
-                disabled={
-                  disabled ||
-                  !initial ||
-                  providerType === 'anthropic' ||
-                  providerType === 'ollama' ||
-                  providerType === 'newapi'
+                disabled={disabled}
+                value={protocol ?? ''}
+                onChange={(e) =>
+                  setProtocol(
+                    e.currentTarget.value.length === 0 ? undefined : e.currentTarget.value,
+                  )
                 }
-                value={protocol ?? 'openai-chat'}
-                onChange={(e) => setProtocol(e.currentTarget.value as DesktopAiModelProtocol)}
               >
-                <option value="openai-chat">OpenAI Chat compatible</option>
-                <option value="openai-responses">OpenAI Responses</option>
-                <option value="anthropic">Anthropic Messages</option>
-                {providerType === 'ollama' ? <option value="ollama">Ollama local</option> : null}
+                {isCatalogueProvider || protocol === undefined ? (
+                  <option value="">{t('settings.agent.protocol.catalogDefault')}</option>
+                ) : null}
+                {protocol !== undefined &&
+                !(
+                  dialogueCapabilities?.status === 'available' &&
+                  dialogueCapabilities.protocols.includes(protocol)
+                ) ? (
+                  <option value={protocol}>{protocol}</option>
+                ) : null}
+                {dialogueCapabilities?.status === 'available'
+                  ? dialogueCapabilities.protocols.map((candidate) => (
+                      <option key={candidate} value={candidate}>
+                        {candidate}
+                      </option>
+                    ))
+                  : null}
               </select>
             </label>
           ) : null}

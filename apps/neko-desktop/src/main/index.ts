@@ -244,6 +244,7 @@ import {
 import { ProjectPortabilityRuntime } from '@neko/assets-node';
 import { DesktopWorkspaceGrantAuthority } from '@neko/host/desktop-workspace-grant-authority';
 import { DSH_PERMISSION_CHANGED_CHANNEL } from '@neko/agent-contracts/dsh-permission-host';
+import type { DshAcpProviderCapabilityProjection } from '@neko/agent-contracts/dsh-acp';
 import {
   DSH_SESSION_CHANGED_CHANNEL,
   type DshComposerSubmitInput,
@@ -505,9 +506,27 @@ async function startDesktop(): Promise<void> {
     }),
   );
   const applicationAgentConfig = workspaceConfigAuthority.getApplicationConfig();
+  const dshDialogueCapabilities: {
+    current?: () => Promise<DshAcpProviderCapabilityProjection>;
+  } = {};
   const aiModelSettings = new DesktopAiModelSettingsService(
     applicationAgentConfig,
     providerCredentials,
+    {
+      read: async () => {
+        const read = dshDialogueCapabilities.current;
+        if (read === undefined) {
+          throw new Error('Desktop DSH Provider capability authority is not initialized.');
+        }
+        const projection = await read();
+        return {
+          status: 'available' as const,
+          providers: projection.providers,
+          protocols: projection.protocols,
+          diagnostics: projection.diagnostics.map((diagnostic) => diagnostic.message),
+        };
+      },
+    },
   );
   const storageSettings = new DesktopStorageSettingsRuntime({
     homedir,
@@ -1723,6 +1742,11 @@ async function startDesktop(): Promise<void> {
           );
         }
       },
+      deleteUnavailableConversation: async (navigation) => {
+        await requireDshDomainConversations().deleteUnavailableConversation(
+          navigation.conversationId,
+        );
+      },
     },
   });
   const resolveCharacterRepository = (input: {
@@ -2379,6 +2403,7 @@ async function startDesktop(): Promise<void> {
       return assembly;
     },
   });
+  dshDialogueCapabilities.current = () => dshProduct.runtime.client.readProviderCapabilities();
   dshProviderRefresh.current = () => dshProduct.runtime.refreshConfiguration();
   dshWorkspaceBoardDeliveryTrigger.current = async (dshSessionId, conversationId, trigger) => {
     try {

@@ -3,15 +3,11 @@ import type {
   ModelType,
   ProviderConnectionKind,
   ProviderModelFamily,
-  ProviderProtocolProfile,
   ProviderSupportLevel,
   ProviderType,
 } from '@neko/ai-contracts';
 
-export type DesktopAiModelProtocol = Extract<
-  ProviderProtocolProfile,
-  'openai-chat' | 'openai-responses' | 'anthropic' | 'ollama'
->;
+export type DesktopAiModelProtocol = string;
 
 export interface DesktopAiModelTemplate {
   readonly id: string;

@@ -6,7 +6,42 @@ import { ConfigManager } from './settings/config-manager';
 import { readConfigFileResult } from './settings/config-reader';
 import type { ProviderCredentialAuthority } from './settings/provider-credential-authority';
 import { FileUserConfigManager } from './settings/user-config';
-import { DesktopAiModelSettingsService } from './ai-model-settings-service';
+import {
+  DesktopAiModelSettingsService,
+  type DesktopAiDialogueCapabilityReader,
+} from './ai-model-settings-service';
+
+const dialogueCapabilities: DesktopAiDialogueCapabilityReader = {
+  read: vi.fn(async () => ({
+    status: 'available' as const,
+    providers: [
+      {
+        providerId: 'provider-a',
+        displayName: 'Provider A',
+        source: 'catalog' as const,
+        settingsNamespace: 'llm-pi-ai',
+        settingsPath: ['providers', 'provider-a'],
+      },
+    ],
+    protocols: [
+      'openai-completions',
+      'openai-responses',
+      'anthropic-messages',
+      'openai-chat',
+      'anthropic',
+      'ollama',
+    ],
+    diagnostics: [],
+  })),
+};
+
+function createService(
+  config: ConfigManager,
+  credentials: ProviderCredentialAuthority,
+  capabilities: DesktopAiDialogueCapabilityReader = dialogueCapabilities,
+) {
+  return new DesktopAiModelSettingsService(config, credentials, capabilities);
+}
 
 function createConfig() {
   const provider = {
@@ -54,7 +89,7 @@ describe('DesktopAiModelSettingsService', () => {
     const credentials = {
       read: vi.fn(async () => ({ type: 'api_key' as const, key: 'must-not-project' })),
     } as unknown as ProviderCredentialAuthority;
-    const projection = await new DesktopAiModelSettingsService(config, credentials).project();
+    const projection = await createService(config, credentials).project();
 
     expect(projection.providers).toEqual([
       expect.objectContaining({
@@ -72,7 +107,7 @@ describe('DesktopAiModelSettingsService', () => {
       read: vi.fn(async () => undefined),
       replaceApiKey: vi.fn(async () => undefined),
     } as unknown as ProviderCredentialAuthority;
-    const service = new DesktopAiModelSettingsService(config, credentials);
+    const service = createService(config, credentials);
 
     const result = await service.execute({
       requestId: 'request-1',
@@ -101,6 +136,106 @@ describe('DesktopAiModelSettingsService', () => {
     expect(JSON.stringify(result)).not.toContain('secret-value');
   });
 
+  it('creates an unknown DSH catalog Provider without a local preset or endpoint override', async () => {
+    const { config } = createConfig();
+    const credentials = {
+      read: vi.fn(async () => undefined),
+      replaceApiKey: vi.fn(async () => undefined),
+    } as unknown as ProviderCredentialAuthority;
+    const capabilities: DesktopAiDialogueCapabilityReader = {
+      read: vi.fn(async () => ({
+        status: 'available' as const,
+        providers: [
+          {
+            providerId: 'future-provider',
+            displayName: 'Future Provider',
+            source: 'catalog' as const,
+            settingsNamespace: 'llm-pi-ai',
+            settingsPath: ['providers', 'future-provider'],
+          },
+        ],
+        protocols: ['future-protocol'],
+        diagnostics: [],
+      })),
+    };
+
+    await createService(config, credentials, capabilities).execute({
+      requestId: 'request-future-provider',
+      operation: 'save-provider',
+      provider: {
+        id: 'future-provider',
+        displayName: 'Future Provider',
+        type: 'generic',
+        apiUrl: '',
+        supportedModelFamilies: ['dialogue'],
+        enabled: true,
+      },
+    });
+
+    expect(config.setProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'future-provider',
+        apiUrl: '',
+        supportedModelFamilies: ['dialogue'],
+      }),
+    );
+    expect(vi.mocked(config.setProvider).mock.calls[0]?.[0]).not.toHaveProperty('protocolProfile');
+  });
+
+  it('rejects a stale protocol before mutating OpenNeko configuration', async () => {
+    const { config, provider } = createConfig();
+    const credentials = {
+      read: vi.fn(async () => undefined),
+    } as unknown as ProviderCredentialAuthority;
+    const capabilities: DesktopAiDialogueCapabilityReader = {
+      read: vi.fn(async () => ({
+        status: 'available' as const,
+        providers: [],
+        protocols: ['openai-completions'],
+        diagnostics: [],
+      })),
+    };
+
+    await expect(
+      createService(config, credentials, capabilities).execute({
+        requestId: 'request-stale-protocol',
+        operation: 'save-provider',
+        provider: {
+          id: provider.id,
+          displayName: provider.displayName,
+          type: provider.type,
+          apiUrl: provider.apiUrl,
+          protocol: 'removed-by-dsh',
+          supportedModelFamilies: ['dialogue'],
+          enabled: true,
+        },
+      }),
+    ).rejects.toThrow(/not advertised by the current DSH runtime/u);
+    expect(config.setProvider).not.toHaveBeenCalled();
+  });
+
+  it('keeps configured Providers visible when DSH capability discovery is unavailable', async () => {
+    const { config } = createConfig();
+    const credentials = {
+      read: vi.fn(async () => undefined),
+    } as unknown as ProviderCredentialAuthority;
+    const projection = await createService(config, credentials, {
+      read: vi.fn(async () => {
+        throw new Error('DSH subprocess stopped');
+      }),
+    }).project();
+
+    expect(projection.dialogueCapabilities).toEqual({
+      status: 'unavailable',
+      providers: [],
+      protocols: [],
+      diagnostics: ['DSH Provider capabilities are unavailable: DSH subprocess stopped'],
+    });
+    expect(projection.providers).toEqual([
+      expect.objectContaining({ id: 'provider-a', diagnostic: expect.stringContaining('DSH') }),
+    ]);
+  });
+
   it('preserves protocol metadata without projecting config-only preset metadata', async () => {
     const { config, provider } = createConfig();
     Object.assign(provider, {
@@ -115,7 +250,7 @@ describe('DesktopAiModelSettingsService', () => {
       replaceApiKey: vi.fn(async () => undefined),
     } as unknown as ProviderCredentialAuthority;
 
-    await new DesktopAiModelSettingsService(config, credentials).execute({
+    await createService(config, credentials).execute({
       requestId: 'request-existing-provider',
       operation: 'save-provider',
       provider: {
@@ -134,7 +269,7 @@ describe('DesktopAiModelSettingsService', () => {
       expect.objectContaining({
         id: provider.id,
         type: 'newapi',
-        protocolProfile: 'newapi',
+        protocolProfile: 'openai-chat',
         supportLevel: 'verified',
       }),
     );
@@ -149,7 +284,7 @@ describe('DesktopAiModelSettingsService', () => {
       replaceApiKey: vi.fn(async () => undefined),
     } as unknown as ProviderCredentialAuthority;
 
-    await new DesktopAiModelSettingsService(config, credentials).execute({
+    await createService(config, credentials).execute({
       requestId: 'request-config-provider-protocol',
       operation: 'save-provider',
       provider: {
@@ -189,7 +324,7 @@ describe('DesktopAiModelSettingsService', () => {
     } as unknown as ProviderCredentialAuthority;
 
     await expect(
-      new DesktopAiModelSettingsService(config, credentials).execute({
+      createService(config, credentials).execute({
         requestId: 'request-custom-ollama',
         operation: 'save-provider',
         provider: {
@@ -215,7 +350,7 @@ describe('DesktopAiModelSettingsService', () => {
     } as unknown as ProviderCredentialAuthority;
 
     await expect(
-      new DesktopAiModelSettingsService(config, credentials).execute({
+      createService(config, credentials).execute({
         requestId: 'request-hybrid-provider',
         operation: 'save-provider',
         provider: {
@@ -241,7 +376,7 @@ describe('DesktopAiModelSettingsService', () => {
     } as unknown as ProviderCredentialAuthority;
 
     await expect(
-      new DesktopAiModelSettingsService(config, credentials).execute({
+      createService(config, credentials).execute({
         requestId: 'request-provider-collision',
         operation: 'save-provider',
         provider: {
@@ -260,30 +395,30 @@ describe('DesktopAiModelSettingsService', () => {
     expect(config.setProvider).not.toHaveBeenCalled();
   });
 
-  it('rejects a dialogue protocol that conflicts with the exact Provider type', async () => {
+  it('accepts any protocol advertised by DSH regardless of local Provider type', async () => {
     const { config, provider } = createConfig();
     Object.assign(provider, { type: 'newapi', protocolProfile: 'newapi' });
     const credentials = {
       read: vi.fn(async () => undefined),
     } as unknown as ProviderCredentialAuthority;
 
-    await expect(
-      new DesktopAiModelSettingsService(config, credentials).execute({
-        requestId: 'request-provider-protocol-mismatch',
-        operation: 'save-provider',
-        provider: {
-          id: provider.id,
-          displayName: provider.displayName,
-          type: 'newapi',
-          apiUrl: provider.apiUrl,
-          protocol: 'openai-responses',
-          supportedModelFamilies: ['dialogue'],
-          enabled: true,
-        },
-      }),
-    ).rejects.toThrow(/requires protocol openai-chat/u);
+    await createService(config, credentials).execute({
+      requestId: 'request-provider-protocol-mismatch',
+      operation: 'save-provider',
+      provider: {
+        id: provider.id,
+        displayName: provider.displayName,
+        type: 'newapi',
+        apiUrl: provider.apiUrl,
+        protocol: 'openai-responses',
+        supportedModelFamilies: ['dialogue'],
+        enabled: true,
+      },
+    });
 
-    expect(config.setProvider).not.toHaveBeenCalled();
+    expect(config.setProvider).toHaveBeenCalledWith(
+      expect.objectContaining({ protocolProfile: 'openai-responses' }),
+    );
   });
 
   it('rejects credentials for local Ollama providers', async () => {
@@ -294,7 +429,7 @@ describe('DesktopAiModelSettingsService', () => {
     } as unknown as ProviderCredentialAuthority;
 
     await expect(
-      new DesktopAiModelSettingsService(config, credentials).execute({
+      createService(config, credentials).execute({
         requestId: 'request-ollama-key',
         operation: 'save-provider',
         provider: {
@@ -336,7 +471,7 @@ describe('DesktopAiModelSettingsService', () => {
       read: vi.fn(async () => undefined),
     } as unknown as ProviderCredentialAuthority;
 
-    await new DesktopAiModelSettingsService(config, credentials).execute({
+    await createService(config, credentials).execute({
       requestId: `request-${preset.type}`,
       operation: 'save-provider',
       provider: {
@@ -368,7 +503,7 @@ describe('DesktopAiModelSettingsService', () => {
       read: vi.fn(async () => undefined),
     } as unknown as ProviderCredentialAuthority;
 
-    await new DesktopAiModelSettingsService(config, credentials).execute({
+    await createService(config, credentials).execute({
       requestId: 'request-minimax-custom-url',
       operation: 'save-provider',
       provider: {
@@ -404,7 +539,7 @@ describe('DesktopAiModelSettingsService', () => {
       read: vi.fn(async () => undefined),
     } as unknown as ProviderCredentialAuthority;
 
-    const projection = await new DesktopAiModelSettingsService(config, credentials).project();
+    const projection = await createService(config, credentials).project();
 
     expect(projection.providers).toEqual([
       expect.objectContaining({
@@ -443,7 +578,7 @@ describe('DesktopAiModelSettingsService', () => {
       read: vi.fn(async () => undefined),
     } as unknown as ProviderCredentialAuthority;
 
-    await new DesktopAiModelSettingsService(config, credentials).execute({
+    await createService(config, credentials).execute({
       requestId: `request-model-${template.type}`,
       operation: 'save-model',
       model: {
@@ -482,7 +617,7 @@ describe('DesktopAiModelSettingsService', () => {
     } as unknown as ProviderCredentialAuthority;
 
     await expect(
-      new DesktopAiModelSettingsService(config, credentials).execute({
+      createService(config, credentials).execute({
         requestId: `request-unsupported-${type}`,
         operation: 'save-model',
         model: {
@@ -512,7 +647,7 @@ describe('DesktopAiModelSettingsService', () => {
     } as unknown as ProviderCredentialAuthority;
 
     await expect(
-      new DesktopAiModelSettingsService(config, credentials).execute({
+      createService(config, credentials).execute({
         requestId: 'request-model-collision',
         operation: 'save-model',
         model: {
@@ -535,7 +670,7 @@ describe('DesktopAiModelSettingsService', () => {
     const credentials = {
       read: vi.fn(async () => undefined),
     } as unknown as ProviderCredentialAuthority;
-    const service = new DesktopAiModelSettingsService(config, credentials);
+    const service = createService(config, credentials);
 
     const result = await service.execute({
       requestId: 'request-2',
@@ -559,7 +694,7 @@ describe('DesktopAiModelSettingsService', () => {
     } as unknown as ProviderCredentialAuthority;
 
     await expect(
-      new DesktopAiModelSettingsService(config, credentials).execute({
+      createService(config, credentials).execute({
         requestId: 'request-family-mismatch',
         operation: 'save-model',
         model: {
@@ -584,7 +719,7 @@ describe('DesktopAiModelSettingsService', () => {
     } as unknown as ProviderCredentialAuthority;
 
     await expect(
-      new DesktopAiModelSettingsService(config, credentials).execute({
+      createService(config, credentials).execute({
         requestId: 'request-dialogue-video-mismatch',
         operation: 'save-model',
         model: {
@@ -616,7 +751,7 @@ describe('DesktopAiModelSettingsService', () => {
       read: vi.fn(async () => undefined),
     } as unknown as ProviderCredentialAuthority;
 
-    const projection = await new DesktopAiModelSettingsService(config, credentials).project();
+    const projection = await createService(config, credentials).project();
 
     expect(projection.providers).toEqual([
       expect.objectContaining({
@@ -639,7 +774,7 @@ describe('DesktopAiModelSettingsService', () => {
       read: vi.fn(async () => undefined),
       delete: vi.fn(async () => undefined),
     } as unknown as ProviderCredentialAuthority;
-    const service = new DesktopAiModelSettingsService(config, credentials);
+    const service = createService(config, credentials);
 
     await expect(
       service.execute({
@@ -668,7 +803,7 @@ describe('DesktopAiModelSettingsService', () => {
       read: vi.fn(async () => undefined),
       delete: vi.fn(async () => undefined),
     } as unknown as ProviderCredentialAuthority;
-    const service = new DesktopAiModelSettingsService(config, credentials);
+    const service = createService(config, credentials);
 
     await service.execute({
       requestId: 'delete-model',
@@ -712,7 +847,7 @@ describe('DesktopAiModelSettingsService', () => {
         read: vi.fn(async () => undefined),
         delete: vi.fn(async () => undefined),
       } as unknown as ProviderCredentialAuthority;
-      const service = new DesktopAiModelSettingsService(config, credentials);
+      const service = createService(config, credentials);
 
       await service.execute({
         requestId: 'persist-provider-edit',
@@ -772,7 +907,7 @@ describe('DesktopAiModelSettingsService', () => {
     } as unknown as ProviderCredentialAuthority;
 
     await expect(
-      new DesktopAiModelSettingsService(config, credentials).execute({
+      createService(config, credentials).execute({
         requestId: 'delete-provider-rollback',
         operation: 'delete-provider',
         providerId: provider.id,

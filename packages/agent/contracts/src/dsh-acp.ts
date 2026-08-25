@@ -16,6 +16,7 @@ export const DSH_ACP_EXTENSION_METHODS = {
   readInputCatalog: 'openneko/session/input-catalog/read',
   executeCommand: 'openneko/session/command/execute',
   invokeSkill: 'openneko/session/skill/invoke',
+  readProviderCapabilities: 'openneko/providers/capabilities/read',
   readExtensions: 'openneko/extensions/read',
   setSkillEnabled: 'openneko/extensions/skill/enabled/set',
   removeSkill: 'openneko/extensions/skill/remove',
@@ -27,6 +28,170 @@ export const DSH_ACP_EXTENSION_METHODS = {
   executeDomainTool: 'openneko/domain-tool/execute',
   cancelDomainTool: 'openneko/domain-tool/cancel',
 } as const;
+
+export interface DshAcpProviderCapability {
+  readonly providerId: string;
+  readonly displayName: string;
+  readonly settingsNamespace: string;
+  readonly settingsPath: readonly string[];
+  readonly source: 'catalog' | 'declared';
+}
+
+export interface DshAcpProviderCapabilityDiagnostic {
+  readonly code: 'invalid-provider' | 'invalid-protocol';
+  readonly index: number;
+  readonly message: string;
+}
+
+export interface DshAcpProviderCapabilityProjection {
+  readonly providers: readonly DshAcpProviderCapability[];
+  readonly protocols: readonly string[];
+  readonly diagnostics: readonly DshAcpProviderCapabilityDiagnostic[];
+}
+
+export function projectDshAcpProviderCapabilities(
+  providerEntries: readonly unknown[],
+  protocolEntries: readonly unknown[],
+): DshAcpProviderCapabilityProjection {
+  const providers: DshAcpProviderCapability[] = [];
+  const protocols: string[] = [];
+  const diagnostics: DshAcpProviderCapabilityDiagnostic[] = [];
+  const providerIds = new Set<string>();
+  for (const [index, value] of providerEntries.entries()) {
+    try {
+      const provider = projectProviderCapability(value, `providers[${index}]`);
+      if (providerIds.has(provider.providerId)) {
+        throw new Error(`Duplicate DSH Provider capability '${provider.providerId}'.`);
+      }
+      providerIds.add(provider.providerId);
+      providers.push(provider);
+    } catch (error) {
+      diagnostics.push({
+        code: 'invalid-provider',
+        index,
+        message: describeDshAcpCapabilityError(error),
+      });
+    }
+  }
+  const protocolIds = new Set<string>();
+  for (const [index, value] of protocolEntries.entries()) {
+    try {
+      const protocol = requireNonEmptyString(value, `protocols[${index}]`);
+      if (protocolIds.has(protocol)) {
+        throw new Error(`Duplicate DSH protocol capability '${protocol}'.`);
+      }
+      protocolIds.add(protocol);
+      protocols.push(protocol);
+    } catch (error) {
+      diagnostics.push({
+        code: 'invalid-protocol',
+        index,
+        message: describeDshAcpCapabilityError(error),
+      });
+    }
+  }
+  return { providers, protocols, diagnostics };
+}
+
+export function decodeDshAcpProviderCapabilityProjection(
+  input: Record<string, unknown>,
+): DshAcpProviderCapabilityProjection {
+  decodeDshAcpJsonPayload(input, 'Provider capability projection');
+  requireExactKeys(
+    input,
+    ['providers', 'protocols', 'diagnostics'],
+    'Provider capability projection',
+  );
+  if (
+    !Array.isArray(input.providers) ||
+    !Array.isArray(input.protocols) ||
+    !Array.isArray(input.diagnostics)
+  ) {
+    throw new Error('DSH ACP Provider capability projection arrays are invalid.');
+  }
+  return {
+    providers: input.providers.map((value, index) =>
+      decodeProviderCapability(value, `providers[${index}]`),
+    ),
+    protocols: input.protocols.map((value, index) =>
+      requireNonEmptyString(value, `protocols[${index}]`),
+    ),
+    diagnostics: input.diagnostics.map((value, index) => {
+      const diagnostic = requireRecord(value, `diagnostics[${index}]`);
+      requireExactKeys(diagnostic, ['code', 'index', 'message'], `diagnostics[${index}]`);
+      if (diagnostic.code !== 'invalid-provider' && diagnostic.code !== 'invalid-protocol') {
+        throw new Error(`DSH ACP Provider capability diagnostic ${index} has an invalid code.`);
+      }
+      if (!Number.isSafeInteger(diagnostic.index) || (diagnostic.index as number) < 0) {
+        throw new Error(`DSH ACP Provider capability diagnostic ${index} has an invalid index.`);
+      }
+      return {
+        code: diagnostic.code,
+        index: diagnostic.index as number,
+        message: requireNonEmptyString(diagnostic.message, `diagnostics[${index}].message`),
+      };
+    }),
+  };
+}
+
+function projectProviderCapability(value: unknown, label: string): DshAcpProviderCapability {
+  const provider = requireRecord(value, label);
+  requireExactKeys(
+    provider,
+    provider.declared === undefined
+      ? ['provider', 'displayName', 'settingsNs', 'settingsPath']
+      : ['provider', 'displayName', 'settingsNs', 'settingsPath', 'declared'],
+    label,
+  );
+  if (
+    !Array.isArray(provider.settingsPath) ||
+    provider.settingsPath.some((entry) => typeof entry !== 'string' || entry.length === 0)
+  ) {
+    throw new Error(`${label}.settingsPath must contain non-empty strings.`);
+  }
+  if (provider.declared !== undefined && typeof provider.declared !== 'boolean') {
+    throw new Error(`${label}.declared must be a boolean when present.`);
+  }
+  return {
+    providerId: requireNonEmptyString(provider.provider, `${label}.provider`),
+    displayName: requireNonEmptyString(provider.displayName, `${label}.displayName`),
+    settingsNamespace: requireNonEmptyString(provider.settingsNs, `${label}.settingsNs`),
+    settingsPath: [...provider.settingsPath],
+    source: provider.declared === true ? 'declared' : 'catalog',
+  };
+}
+
+function decodeProviderCapability(value: unknown, label: string): DshAcpProviderCapability {
+  const provider = requireRecord(value, label);
+  requireExactKeys(
+    provider,
+    ['providerId', 'displayName', 'settingsNamespace', 'settingsPath', 'source'],
+    label,
+  );
+  if (
+    !Array.isArray(provider.settingsPath) ||
+    provider.settingsPath.some((entry) => typeof entry !== 'string' || entry.length === 0)
+  ) {
+    throw new Error(`${label}.settingsPath must contain non-empty strings.`);
+  }
+  if (provider.source !== 'catalog' && provider.source !== 'declared') {
+    throw new Error(`${label}.source is invalid.`);
+  }
+  return {
+    providerId: requireNonEmptyString(provider.providerId, `${label}.providerId`),
+    displayName: requireNonEmptyString(provider.displayName, `${label}.displayName`),
+    settingsNamespace: requireNonEmptyString(
+      provider.settingsNamespace,
+      `${label}.settingsNamespace`,
+    ),
+    settingsPath: [...provider.settingsPath],
+    source: provider.source,
+  };
+}
+
+function describeDshAcpCapabilityError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 export interface DshAcpStagedSkillValidationRequest {
   readonly stagingRoot: string;

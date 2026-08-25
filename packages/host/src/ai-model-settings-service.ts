@@ -8,7 +8,7 @@ import type {
 import type { ConfigManager } from './settings/config-manager';
 import type { ProviderCredentialAuthority } from './settings/provider-credential-authority';
 import type {
-  DesktopAiModelProtocol,
+  DesktopAiDialogueCapabilityProjection,
   DesktopAiModelSettingsProjection,
   DesktopAiModelSettingsRequest,
   DesktopAiProviderView,
@@ -20,21 +20,27 @@ import {
   type DesktopAiProviderPreset,
 } from './ai-model-provider-presets';
 
+export interface DesktopAiDialogueCapabilityReader {
+  read(): Promise<Extract<DesktopAiDialogueCapabilityProjection, { readonly status: 'available' }>>;
+}
+
 export class DesktopAiModelSettingsService {
   constructor(
     private readonly config: ConfigManager,
     private readonly credentials: ProviderCredentialAuthority,
+    private readonly dialogueCapabilities: DesktopAiDialogueCapabilityReader,
   ) {}
 
   async project(): Promise<DesktopAiModelSettingsProjection> {
+    const dialogueCapabilities = await this.projectDialogueCapabilities();
     const providers = await Promise.all(
       this.config
         .getProviders()
-        .filter((provider) => this.isProjectableProvider(provider.id))
-        .map((provider) => this.projectProvider(provider.id)),
+        .map((provider) => this.projectProvider(provider.id, dialogueCapabilities)),
     );
     const projectedProviderIds = new Set(providers.map((provider) => provider.id));
     return {
+      dialogueCapabilities,
       providers,
       models: this.config
         .getModels()
@@ -69,7 +75,8 @@ export class DesktopAiModelSettingsService {
       const preset = request.provider.presetId
         ? getDesktopAiProviderPreset(request.provider.presetId)
         : undefined;
-      if (!existing && !preset) {
+      const isDialogue = request.provider.supportedModelFamilies.includes('dialogue');
+      if (!existing && !preset && !isDialogue) {
         throw new Error(
           `New Provider ${request.provider.id} requires an explicit Provider preset.`,
         );
@@ -89,16 +96,14 @@ export class DesktopAiModelSettingsService {
       }
       if (preset) assertPresetMatchesRequest(preset, request.provider);
       assertProviderFamiliesSupported(request.provider);
-      assertProviderProtocolMatchesType(request.provider);
+      if (isDialogue) {
+        assertDialogueProviderCapability(request.provider, await this.dialogueCapabilities.read());
+      }
       const isLocalOllama = request.provider.type === 'ollama';
       const requiresApiKey = preset?.requiresApiKey ?? existing?.requiresApiKey ?? !isLocalOllama;
       if (!requiresApiKey && request.apiKey !== undefined) {
         throw new Error(`Provider ${request.provider.id} does not accept an API key.`);
       }
-      const protocolProfile = toCanonicalProtocolProfile(
-        request.provider.type,
-        request.provider.protocol,
-      );
       await this.config.setProvider({
         id: request.provider.id,
         name: existing?.name ?? request.provider.id,
@@ -110,7 +115,9 @@ export class DesktopAiModelSettingsService {
           preset?.connectionKind ??
           existing?.connectionKind ??
           (isLocalOllama ? 'local' : 'direct'),
-        ...(protocolProfile === undefined ? {} : { protocolProfile }),
+        ...(request.provider.protocol === undefined
+          ? {}
+          : { protocolProfile: request.provider.protocol }),
         supportLevel:
           preset === undefined
             ? (existing?.supportLevel ?? 'custom')
@@ -245,14 +252,17 @@ export class DesktopAiModelSettingsService {
     return { projection: await this.project(), executionConfigurationChanged: true };
   }
 
-  private async projectProvider(providerId: string): Promise<DesktopAiProviderView> {
+  private async projectProvider(
+    providerId: string,
+    capabilities: DesktopAiDialogueCapabilityProjection,
+  ): Promise<DesktopAiProviderView> {
     const provider = this.config.getProvider(providerId);
     if (!provider) throw new Error(`Provider ${providerId} disappeared during projection.`);
-    const protocol = toDesktopProtocol(provider.protocolProfile);
+    const protocol = provider.protocolProfile;
     const families = this.projectModelFamilies(provider.id);
-    if (families.includes('dialogue') && !protocol) {
-      throw new Error(`Dialogue Provider ${providerId} is not supported by DSH settings.`);
-    }
+    const capabilityDiagnostic = families.includes('dialogue')
+      ? dialogueProviderDiagnostic(provider.id, protocol, capabilities)
+      : undefined;
     const base = {
       id: provider.id,
       displayName: provider.displayName,
@@ -267,6 +277,7 @@ export class DesktopAiModelSettingsService {
       return {
         ...base,
         credentialStatus: 'not-required',
+        ...(capabilityDiagnostic === undefined ? {} : { diagnostic: capabilityDiagnostic }),
       };
     }
     try {
@@ -274,12 +285,26 @@ export class DesktopAiModelSettingsService {
       return {
         ...base,
         credentialStatus: credential ? 'configured' : 'missing',
+        ...(capabilityDiagnostic === undefined ? {} : { diagnostic: capabilityDiagnostic }),
       };
     } catch (error: unknown) {
       return {
         ...base,
         credentialStatus: 'invalid',
         diagnostic: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  private async projectDialogueCapabilities(): Promise<DesktopAiDialogueCapabilityProjection> {
+    try {
+      return await this.dialogueCapabilities.read();
+    } catch (error) {
+      return {
+        status: 'unavailable',
+        providers: [],
+        protocols: [],
+        diagnostics: [`DSH Provider capabilities are unavailable: ${describeError(error)}`],
       };
     }
   }
@@ -300,17 +325,6 @@ export class DesktopAiModelSettingsService {
     }
     if (isNativeGenerationProviderType(provider.type)) return ['generation'];
     return ['dialogue'];
-  }
-
-  private isProjectableProvider(providerId: string): boolean {
-    const provider = this.config.getProvider(providerId);
-    if (!provider) return false;
-    const families = this.projectModelFamilies(providerId);
-    return (
-      (families.includes('dialogue') &&
-        toDesktopProtocol(provider.protocolProfile) !== undefined) ||
-      families.includes('generation')
-    );
   }
 }
 
@@ -346,59 +360,57 @@ function assertProviderFamiliesSupported(
   ) {
     throw new Error(`Provider ${provider.id} only supports generation models in Desktop Settings.`);
   }
-  if (families.includes('dialogue') && provider.protocol === undefined) {
-    throw new Error(`Dialogue Provider ${provider.id} requires an explicit DSH protocol.`);
-  }
   if (!families.includes('dialogue') && provider.protocol !== undefined) {
     throw new Error(`Generation Provider ${provider.id} must not declare a DSH dialogue protocol.`);
   }
 }
-
-function assertProviderProtocolMatchesType(
+function assertDialogueProviderCapability(
   provider: Extract<DesktopAiModelSettingsRequest, { operation: 'save-provider' }>['provider'],
+  capabilities: Extract<DesktopAiDialogueCapabilityProjection, { readonly status: 'available' }>,
 ): void {
-  const canonicalProtocol =
-    provider.type === 'anthropic'
-      ? 'anthropic'
-      : provider.type === 'ollama'
-        ? 'ollama'
-        : provider.type === 'newapi'
-          ? 'openai-chat'
-          : undefined;
-  if (canonicalProtocol !== undefined && provider.protocol !== canonicalProtocol) {
+  if (provider.protocol !== undefined) {
+    if (!capabilities.protocols.includes(provider.protocol)) {
+      throw new Error(
+        `Dialogue Provider ${provider.id} protocol '${provider.protocol}' is not advertised by the current DSH runtime.`,
+      );
+    }
+    if (provider.apiUrl.trim().length === 0) {
+      throw new Error(
+        `Dialogue Provider ${provider.id} requires an API endpoint when overriding the DSH protocol.`,
+      );
+    }
+    return;
+  }
+  const catalog = capabilities.providers.find(
+    (candidate) => candidate.providerId === provider.id && candidate.source === 'catalog',
+  );
+  if (catalog === undefined) {
     throw new Error(
-      `Provider ${provider.id} type ${provider.type} requires protocol ${canonicalProtocol}.`,
+      `Dialogue Provider ${provider.id} must select a protocol advertised by DSH because it is not a DSH catalog route.`,
     );
   }
-}
-
-function toCanonicalProtocolProfile(
-  providerType: ProviderType,
-  protocol: DesktopAiModelProtocol | undefined,
-): ProviderProtocolProfile | undefined {
-  if (providerType === 'newapi') return 'newapi';
-  if (providerType === 'ollama') return 'ollama';
-  if (providerType === 'anthropic') return 'anthropic';
-  return protocol;
 }
 
 function isNativeGenerationProviderType(type: ProviderType): boolean {
   return type === 'minimax' || type === 'bytedance';
 }
 
-function toDesktopProtocol(
+function dialogueProviderDiagnostic(
+  providerId: string,
   protocol: ProviderProtocolProfile | undefined,
-): DesktopAiModelProtocol | undefined {
-  if (protocol === 'newapi') return 'openai-chat';
-  if (
-    protocol === 'openai-chat' ||
-    protocol === 'openai-responses' ||
-    protocol === 'anthropic' ||
-    protocol === 'ollama'
-  ) {
-    return protocol;
+  capabilities: DesktopAiDialogueCapabilityProjection,
+): string | undefined {
+  if (capabilities.status === 'unavailable') return capabilities.diagnostics.join(' ');
+  if (protocol !== undefined) {
+    return capabilities.protocols.includes(protocol)
+      ? undefined
+      : `Protocol '${protocol}' is not advertised by the current DSH runtime.`;
   }
-  return undefined;
+  return capabilities.providers.some(
+    (candidate) => candidate.providerId === providerId && candidate.source === 'catalog',
+  )
+    ? undefined
+    : `Provider '${providerId}' is not an executable DSH catalog route and has no explicit protocol.`;
 }
 
 function capabilitiesFor(type: ModelType): ModelCapability[] {

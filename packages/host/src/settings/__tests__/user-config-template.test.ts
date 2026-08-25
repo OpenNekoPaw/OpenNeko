@@ -10,11 +10,14 @@ describe('user config template', () => {
     expect(parseTomlConfigText(template)).toEqual(DEFAULT_USER_CONFIG);
     expect(template).toContain('type: "openai", "anthropic", "google"');
     expect(template).toContain('connection_kind: "gateway", "local", "direct"');
-    expect(template).toContain('protocol_profile: "newapi", "openai-chat", "openai-responses"');
+    expect(template).toContain(
+      'protocol_profile: use a protocol advertised by the connected DSH runtime',
+    );
     expect(template).toContain('auth_type: "bearer", "api-key", "custom-header"');
     expect(template).toContain('stream_format: "sse", "ndjson"');
-    expect(template).toContain('DeepSeek direct');
-    expect(template).toContain('Gemini direct');
+    expect(template).toContain('DSH catalog route');
+    expect(template).toContain('openai-completions');
+    expect(template).toContain('anthropic-messages');
     expect(template).toContain('Media understanding uses the selected Agent model');
     expect(template).toContain(
       'protocol_profile: optional request protocol override for gateway models',

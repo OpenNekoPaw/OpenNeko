@@ -125,6 +125,13 @@ ACP content block 是 Desktop 到 DSH 的唯一消息输入协议。Composer 图
 
 ## Credential 与安全
 
+DSH 当前组合的公开 configurable-Provider directory 与 profile protocol catalog 是对话执行能力的
+唯一 authority。OpenNeko 通过有界、无 secret 的 ACP projection 驱动设置页和保存校验；本地
+Provider metadata 只能改善展示，不得隐藏 DSH 已广告的 Provider 或协议。用户选择的 Provider、模型和
+默认值仍只写入 `~/.neko/config.toml`，再由 Desktop 将该配置物化为新的 DSH runtime instance；不得把 DSH
+settings storage 建成平行产品配置。单项能力 decode 失败只隔离该项；能力读取整体不可用时禁止新建
+依赖该目录的对话 Provider，但现有记录和无关设置保持可用。
+
 Host 是 provider credential authority。Secret 只能通过 Desktop SecretStorage concrete adapter 和受限 Host
 port 解析，不能进入 ACP logs/stdout、DSH Session、Renderer、Evaluation facts 或 domain artifacts。Renderer
 不得访问 Node/Electron、本地绝对路径、raw cache path、credential 或进程 handle。

@@ -47,7 +47,30 @@ export interface DesktopAiModelView {
   readonly enabled: boolean;
 }
 
+export interface DesktopAiDialogueProviderCapability {
+  readonly providerId: string;
+  readonly displayName: string;
+  readonly source: 'catalog' | 'declared';
+  readonly settingsNamespace: string;
+  readonly settingsPath: readonly string[];
+}
+
+export type DesktopAiDialogueCapabilityProjection =
+  | {
+      readonly status: 'available';
+      readonly providers: readonly DesktopAiDialogueProviderCapability[];
+      readonly protocols: readonly string[];
+      readonly diagnostics: readonly string[];
+    }
+  | {
+      readonly status: 'unavailable';
+      readonly providers: readonly [];
+      readonly protocols: readonly [];
+      readonly diagnostics: readonly [string, ...string[]];
+    };
+
 export interface DesktopAiModelSettingsProjection {
+  readonly dialogueCapabilities: DesktopAiDialogueCapabilityProjection;
   readonly providers: readonly DesktopAiProviderView[];
   readonly models: readonly DesktopAiModelView[];
   readonly defaults: Readonly<Partial<Record<ModelType, DesktopAiModelRef>>>;
@@ -177,15 +200,11 @@ export function parseDesktopAiModelSettingsRequest(value: unknown): DesktopAiMod
         id: identity(provider['id'], 'provider.id'),
         displayName: nonEmpty(provider['displayName'], 'provider.displayName'),
         type: oneOf(provider['type'], PROVIDER_TYPES, 'provider.type'),
-        apiUrl: httpUrl(provider['apiUrl']),
+        apiUrl: httpUrlOrEmpty(provider['apiUrl']),
         ...(provider['protocol'] === undefined
           ? {}
           : {
-              protocol: oneOf(
-                provider['protocol'],
-                ['openai-chat', 'openai-responses', 'anthropic', 'ollama'] as const,
-                'provider.protocol',
-              ),
+              protocol: nonEmpty(provider['protocol'], 'provider.protocol'),
             }),
         ...(provider['presetId'] === undefined
           ? {}
@@ -269,7 +288,11 @@ export function parseDesktopAiModelSettingsProjection(
   value: unknown,
 ): DesktopAiModelSettingsProjection {
   const record = exactRecord(value, 'AI model settings projection');
-  exactKeys(record, ['providers', 'models', 'defaults'], 'AI model settings projection');
+  exactKeys(
+    record,
+    ['dialogueCapabilities', 'providers', 'models', 'defaults'],
+    'AI model settings projection',
+  );
   if (!Array.isArray(record['providers']) || !Array.isArray(record['models'])) {
     throw invalid('AI model settings providers and models must be arrays.');
   }
@@ -281,6 +304,7 @@ export function parseDesktopAiModelSettingsProjection(
     if (raw !== undefined) defaults[type] = parseModelRef(raw);
   }
   return {
+    dialogueCapabilities: parseDialogueCapabilities(record['dialogueCapabilities']),
     providers: record['providers'].map(parseProviderView),
     models: record['models'].map(parseModelView),
     defaults,
@@ -312,15 +336,11 @@ function parseProviderView(value: unknown): DesktopAiProviderView {
     id: identity(record['id'], 'provider.id'),
     displayName: nonEmpty(record['displayName'], 'provider.displayName'),
     type: oneOf(record['type'], PROVIDER_TYPES, 'provider.type'),
-    apiUrl: httpUrl(record['apiUrl']),
+    apiUrl: httpUrlOrEmpty(record['apiUrl']),
     ...(record['protocol'] === undefined
       ? {}
       : {
-          protocol: oneOf(
-            record['protocol'],
-            ['openai-chat', 'openai-responses', 'anthropic', 'ollama'] as const,
-            'provider.protocol',
-          ),
+          protocol: nonEmpty(record['protocol'], 'provider.protocol'),
         }),
     connectionKind: oneOf(
       record['connectionKind'],
@@ -336,6 +356,74 @@ function parseProviderView(value: unknown): DesktopAiProviderView {
     ),
     ...(diagnostic === undefined ? {} : { diagnostic }),
   };
+}
+
+function parseDialogueCapabilities(value: unknown): DesktopAiDialogueCapabilityProjection {
+  const record = exactRecord(value, 'Dialogue Provider capabilities');
+  exactKeys(
+    record,
+    ['status', 'providers', 'protocols', 'diagnostics'],
+    'Dialogue Provider capabilities',
+  );
+  const status = oneOf(record['status'], ['available', 'unavailable'] as const, 'status');
+  if (
+    !Array.isArray(record['providers']) ||
+    !Array.isArray(record['protocols']) ||
+    !Array.isArray(record['diagnostics'])
+  ) {
+    throw invalid('Dialogue Provider capability fields must be arrays.');
+  }
+  const providers = record['providers'].map((value, index) => {
+    const provider = exactRecord(value, `Dialogue Provider capability ${index}`);
+    exactKeys(
+      provider,
+      ['providerId', 'displayName', 'source', 'settingsNamespace', 'settingsPath'],
+      `Dialogue Provider capability ${index}`,
+    );
+    if (
+      !Array.isArray(provider['settingsPath']) ||
+      provider['settingsPath'].some(
+        (entry) => typeof entry !== 'string' || entry.trim().length === 0,
+      )
+    ) {
+      throw invalid(`Dialogue Provider capability ${index} settingsPath is invalid.`);
+    }
+    return {
+      providerId: identity(provider['providerId'], `capabilities.providers[${index}].providerId`),
+      displayName: nonEmpty(
+        provider['displayName'],
+        `capabilities.providers[${index}].displayName`,
+      ),
+      source: oneOf(
+        provider['source'],
+        ['catalog', 'declared'] as const,
+        `capabilities.providers[${index}].source`,
+      ),
+      settingsNamespace: nonEmpty(
+        provider['settingsNamespace'],
+        `capabilities.providers[${index}].settingsNamespace`,
+      ),
+      settingsPath: [...provider['settingsPath']],
+    };
+  });
+  const protocols = record['protocols'].map((entry, index) =>
+    nonEmpty(entry, `capabilities.protocols[${index}]`),
+  );
+  const diagnostics = record['diagnostics'].map((entry, index) =>
+    nonEmpty(entry, `capabilities.diagnostics[${index}]`),
+  );
+  if (status === 'unavailable') {
+    if (providers.length !== 0 || protocols.length !== 0 || diagnostics.length === 0) {
+      throw invalid('Unavailable dialogue capabilities must contain only diagnostics.');
+    }
+    return {
+      status,
+      providers: [],
+      protocols: [],
+      diagnostics: diagnostics as [string, ...string[]],
+    };
+  }
+  return { status, providers, protocols, diagnostics };
 }
 
 function parseModelView(value: unknown): DesktopAiModelView {
@@ -419,6 +507,11 @@ function httpUrl(value: unknown): string {
     throw invalid('apiUrl must be a credential-free HTTP(S) URL without query or fragment.');
   }
   return url.toString().replace(/\/$/u, '');
+}
+
+function httpUrlOrEmpty(value: unknown): string {
+  if (value === '') return '';
+  return httpUrl(value);
 }
 
 function booleanValue(value: unknown, label: string): boolean {

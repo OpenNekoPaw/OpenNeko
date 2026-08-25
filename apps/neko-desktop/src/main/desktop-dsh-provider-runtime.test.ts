@@ -132,6 +132,36 @@ describe('Desktop DSH provider runtime projection', () => {
     expect(readCredential).not.toHaveBeenCalled();
   });
 
+  it('lets a DSH catalog route inherit its protocol and endpoint', async () => {
+    const projection = await createDesktopDshProviderRuntimeProjection({
+      providers: [
+        provider({
+          id: 'openai',
+          type: 'openai',
+          apiUrl: '',
+          protocolProfile: undefined,
+        }),
+      ],
+      models: [model({ id: 'catalog-model', providerId: 'openai', name: 'gpt-catalog' })],
+      credentials: {
+        read: vi.fn(async () => ({ type: 'api_key' as const, key: 'catalog-secret' })),
+      },
+    });
+
+    expect(projection.executionCatalog.resolve('openai', 'catalog-model')).toMatchObject({
+      apiModelName: 'gpt-catalog',
+    });
+    const profile = JSON.parse(JSON.stringify(projection.profilePatchEntries))[0].config.providers
+      .openai as Record<string, unknown>;
+    expect(profile).not.toHaveProperty('api');
+    expect(profile).not.toHaveProperty('baseURL');
+    expect(profile).toMatchObject({
+      apiKeyEnv: 'OPENNEKO_DSH_PROVIDER_CREDENTIAL_0',
+      models: [expect.objectContaining({ id: 'gpt-catalog' })],
+    });
+    expect(projection.diagnostics).toEqual([]);
+  });
+
   it('projects the canonical Host reasoning effort catalog into the DSH model profile', async () => {
     const projection = await createDesktopDshProviderRuntimeProjection({
       providers: [

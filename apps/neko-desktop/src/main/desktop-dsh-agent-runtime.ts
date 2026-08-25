@@ -23,6 +23,7 @@ import type { AgentConversationContext } from '@neko/agent-contracts';
 import type { LocalMetadataStore } from '@neko/local-metadata';
 import type { DshRuntimeHostProjection } from '@neko/agent-contracts/dsh-runtime-host';
 import type { DshAcpExtensionProjection } from '@neko/agent-contracts/dsh-acp';
+import type { DshAcpProviderCapabilityProjection } from '@neko/agent-contracts/dsh-acp';
 import type { DshAcpMcpServerInput } from '@neko/agent-contracts/dsh-acp';
 import type {
   DshAcpSkillObservationProjection,
@@ -40,6 +41,7 @@ export interface DesktopDshAgentClient
     DshSessionCreationClient {
   readonly closed: Promise<void>;
   readonly projection: DshAcpProjection;
+  readProviderCapabilities(): Promise<DshAcpProviderCapabilityProjection>;
   readExtensions(): Promise<DshAcpExtensionProjection>;
   setSkillEnabled(input: {
     readonly name: string;
@@ -422,6 +424,9 @@ function createStableDesktopDshAgentClient(
     },
     async readExtensions() {
       return requireClient().readExtensions();
+    },
+    async readProviderCapabilities() {
+      return requireClient().readProviderCapabilities();
     },
     async setSkillEnabled(input) {
       return runWork((client) => client.setSkillEnabled(input));

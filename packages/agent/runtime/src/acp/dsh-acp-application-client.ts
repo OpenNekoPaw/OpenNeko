@@ -43,6 +43,7 @@ import {
   decodeDshAcpInboxSnapshot,
   decodeDshAcpInputCatalogProjection,
   decodeDshAcpPermissionPresetProjection,
+  decodeDshAcpProviderCapabilityProjection,
   decodeDshAcpSessionContextSetRequest,
   decodeDshAcpSessionArchiveRequest,
   decodeDshAcpSessionEventNotification,
@@ -60,6 +61,7 @@ import {
   type DshAcpImageAttachmentReadProjection,
   type DshAcpInputCatalogProjection,
   type DshAcpPermissionPresetProjection,
+  type DshAcpProviderCapabilityProjection,
   type DshAcpCommandExecuteProjection,
   type DshAcpSkillInvokeProjection,
   type DshAcpExtensionProjection,
@@ -326,6 +328,14 @@ export class DshAcpApplicationClient {
   async readExtensions(): Promise<DshAcpExtensionProjection> {
     const response = await this.connection.extMethod(DSH_ACP_EXTENSION_METHODS.readExtensions, {});
     return decodeDshAcpExtensionProjection(response);
+  }
+
+  async readProviderCapabilities(): Promise<DshAcpProviderCapabilityProjection> {
+    const response = await this.connection.extMethod(
+      DSH_ACP_EXTENSION_METHODS.readProviderCapabilities,
+      {},
+    );
+    return decodeDshAcpProviderCapabilityProjection(response);
   }
 
   async setSkillEnabled(input: {

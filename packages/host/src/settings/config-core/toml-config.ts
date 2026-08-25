@@ -12,7 +12,6 @@ import {
   MODEL_TYPES,
   PROVIDER_CONNECTION_KINDS,
   PROVIDER_MODEL_FAMILIES,
-  PROVIDER_PROTOCOL_PROFILES,
   PROVIDER_SUPPORT_LEVELS,
   PROVIDER_TYPES,
   STREAM_FORMATS,
@@ -109,12 +108,10 @@ export interface TomlConfigValidationIssue {
     | 'invalidConfigField'
     | 'unsupportedProviderType'
     | 'unsupportedProviderConnectionKind'
-    | 'unsupportedProviderProtocolProfile'
     | 'unsupportedProviderSupportLevel'
     | 'unsupportedProviderModelFamily'
     | 'unsupportedProtocolAuthType'
     | 'unsupportedProtocolStreamFormat'
-    | 'unsupportedModelProtocolProfile'
     | 'duplicateProviderId'
     | 'duplicateModelId'
     | 'invalidDefaultMaxTokens'
@@ -304,14 +301,7 @@ function decodeProviders(
       'unsupportedProviderConnectionKind',
       issues,
     );
-    const protocolProfile = readAllowedString(
-      record,
-      'protocol_profile',
-      path,
-      PROVIDER_PROTOCOL_PROFILES,
-      'unsupportedProviderProtocolProfile',
-      issues,
-    );
+    const protocolProfile = readOptionalNonEmptyString(record, 'protocol_profile', path, issues);
     const supportLevel = readAllowedString(
       record,
       'support_level',
@@ -403,14 +393,7 @@ function decodeModels(value: unknown, issues: TomlConfigValidationIssue[]): Toml
     const providerId = readRequiredString(record, 'provider_id', path, issues);
     const capabilities = readRequiredStringArray(record, 'capabilities', path, issues);
     const displayName = readOptionalString(record, 'display_name', path, issues);
-    const protocolProfile = readAllowedString(
-      record,
-      'protocol_profile',
-      path,
-      PROVIDER_PROTOCOL_PROFILES,
-      'unsupportedModelProtocolProfile',
-      issues,
-    );
+    const protocolProfile = readOptionalNonEmptyString(record, 'protocol_profile', path, issues);
     const type = readAllowedString(
       record,
       'type',
@@ -723,6 +706,20 @@ function readOptionalString(
   if (typeof value === 'string') return value;
   const path = fieldPath(owner, key);
   issues.push(invalidField(path, `${path} must be a string.`));
+  return undefined;
+}
+
+function readOptionalNonEmptyString(
+  record: Record<string, unknown>,
+  key: string,
+  owner: string,
+  issues: TomlConfigValidationIssue[],
+): string | undefined {
+  const value = readOptionalString(record, key, owner, issues);
+  if (value === undefined) return undefined;
+  if (value.trim().length > 0 && value === value.trim()) return value;
+  const path = fieldPath(owner, key);
+  issues.push(invalidField(path, `${path} must be a non-empty trimmed string.`));
   return undefined;
 }
 

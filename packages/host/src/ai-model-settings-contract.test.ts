@@ -5,6 +5,13 @@ import {
 } from './ai-model-settings-contract';
 
 describe('Desktop AI model settings contract', () => {
+  const dialogueCapabilities = {
+    status: 'available',
+    providers: [],
+    protocols: ['openai-completions'],
+    diagnostics: [],
+  } as const;
+
   it('accepts a strict supported Provider request', () => {
     expect(
       createDesktopAiModelSettingsRequest({
@@ -24,6 +31,23 @@ describe('Desktop AI model settings contract', () => {
     ).toMatchObject({ operation: 'save-provider', provider: { id: 'deepseek' } });
   });
 
+  it('accepts a DSH catalog Provider without local protocol or endpoint overrides', () => {
+    expect(
+      createDesktopAiModelSettingsRequest({
+        requestId: 'request-catalog',
+        operation: 'save-provider',
+        provider: {
+          id: 'future-provider',
+          displayName: 'Future Provider',
+          type: 'generic',
+          apiUrl: '',
+          supportedModelFamilies: ['dialogue'],
+          enabled: true,
+        },
+      }),
+    ).toMatchObject({ provider: { id: 'future-provider', apiUrl: '' } });
+  });
+
   it('rejects a secret-bearing projection', () => {
     expect(() =>
       parseDesktopAiModelSettingsResponse(
@@ -31,6 +55,7 @@ describe('Desktop AI model settings contract', () => {
           requestId: 'request-2',
           runtimeEffect: 'unchanged',
           projection: {
+            dialogueCapabilities,
             providers: [
               {
                 id: 'deepseek',
@@ -60,7 +85,7 @@ describe('Desktop AI model settings contract', () => {
         {
           requestId: 'request-restart',
           restartRequired: true,
-          projection: { providers: [], models: [], defaults: {} },
+          projection: { dialogueCapabilities, providers: [], models: [], defaults: {} },
         },
         'request-restart',
       ),
@@ -74,6 +99,7 @@ describe('Desktop AI model settings contract', () => {
           requestId: 'request-config-metadata',
           runtimeEffect: 'unchanged',
           projection: {
+            dialogueCapabilities,
             providers: [
               {
                 id: 'deepseek',
