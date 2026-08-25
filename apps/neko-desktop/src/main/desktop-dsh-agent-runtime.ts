@@ -23,6 +23,7 @@ import type { AgentConversationContext } from '@neko/agent-contracts';
 import type { LocalMetadataStore } from '@neko/local-metadata';
 import type { DshRuntimeHostProjection } from '@neko/agent-contracts/dsh-runtime-host';
 import type { DshAcpExtensionProjection } from '@neko/agent-contracts/dsh-acp';
+import type { DshAcpProviderCapabilityProjection } from '@neko/agent-contracts/dsh-acp';
 import type { DshAcpMcpServerInput } from '@neko/agent-contracts/dsh-acp';
 import type {
   DshAcpSkillObservationProjection,
@@ -40,6 +41,7 @@ export interface DesktopDshAgentClient
     DshSessionCreationClient {
   readonly closed: Promise<void>;
   readonly projection: DshAcpProjection;
+  readProviderCapabilities(): Promise<DshAcpProviderCapabilityProjection>;
   readExtensions(): Promise<DshAcpExtensionProjection>;
   setSkillEnabled(input: {
     readonly name: string;
@@ -78,8 +80,8 @@ export interface DesktopDshAgentRuntimeOptions {
   readonly supervisor: {
     start(): DesktopDshSubprocessHandle | Promise<DesktopDshSubprocessHandle>;
   };
-  readonly onGenerationConnected?: () => void;
-  readonly onGenerationUnavailable?: () => void;
+  readonly onInstanceConnected?: () => void;
+  readonly onInstanceUnavailable?: () => void;
   readonly virtualCwd: string;
   readonly metadataStore: LocalMetadataStore;
   readonly resolveSessionCwd: (context: AgentConversationContext) => Promise<string>;
@@ -118,12 +120,12 @@ export async function startDesktopDshAgentRuntime(
   });
   const connectClient = options.connectClient ?? DshAcpApplicationClient.connect;
   const projection = new DshAcpProjection();
-  let current: DesktopDshRuntimeGeneration | undefined;
+  let current: DesktopDshRuntimeInstance | undefined;
   let activeWork = 0;
   let workBlocked = false;
   let configurationRefreshPending = false;
   const refreshFlushTrigger: { current?: () => Promise<void> } = {};
-  const requireGenerationClient = (): DesktopDshAgentClient => {
+  const requireInstanceClient = (): DesktopDshAgentClient => {
     const client = current?.client;
     if (client === undefined) throw new Error('Desktop DSH Agent runtime is unavailable.');
     return client;
@@ -131,8 +133,8 @@ export async function startDesktopDshAgentRuntime(
   const handlerAssembly = options.createHandlers({
     bindings,
     skillAuthoringBridge: Object.freeze({
-      validateStagedSkill: (input) => requireGenerationClient().validateStagedSkill(input),
-      observeSkill: (input) => requireGenerationClient().observeSkill(input),
+      validateStagedSkill: (input) => requireInstanceClient().validateStagedSkill(input),
+      observeSkill: (input) => requireInstanceClient().observeSkill(input),
     }),
   });
   let retirement = Promise.resolve();
@@ -144,7 +146,7 @@ export async function startDesktopDshAgentRuntime(
     status = Object.freeze(projection);
     for (const listener of statusListeners) listener(status);
   };
-  const connectGeneration = async (): Promise<DesktopDshRuntimeGeneration> => {
+  const connectInstance = async (): Promise<DesktopDshRuntimeInstance> => {
     const subprocess = await options.supervisor.start();
     try {
       const client = await connectClient({
@@ -153,33 +155,33 @@ export async function startDesktopDshAgentRuntime(
         virtualCwd: options.virtualCwd,
         projection,
       });
-      options.onGenerationConnected?.();
+      options.onInstanceConnected?.();
       return { subprocess, client };
     } catch (error) {
       return disposeSubprocessAfterConnectionFailure(subprocess, error);
     }
   };
-  const watchGeneration = (generation: DesktopDshRuntimeGeneration): void => {
-    void Promise.race([generation.subprocess.closed, generation.client.closed])
+  const watchInstance = (instance: DesktopDshRuntimeInstance): void => {
+    void Promise.race([instance.subprocess.closed, instance.client.closed])
       .then(
         () =>
           retireAfterUnexpectedClose(
-            generation,
+            instance,
             new Error('Desktop DSH connection closed unexpectedly.'),
           ),
-        (error: unknown) => retireAfterUnexpectedClose(generation, error),
+        (error: unknown) => retireAfterUnexpectedClose(instance, error),
       )
       .catch(() => undefined);
   };
   const retireAfterUnexpectedClose = (
-    generation: DesktopDshRuntimeGeneration,
+    instance: DesktopDshRuntimeInstance,
     closeError: unknown,
   ): Promise<void> => {
-    if (current !== generation || disposed) return Promise.resolve();
+    if (current !== instance || disposed) return Promise.resolve();
     current = undefined;
     conversations.activation.reset();
     projection.reset();
-    options.onGenerationUnavailable?.();
+    options.onInstanceUnavailable?.();
     publishStatus({
       status: 'unavailable',
       diagnostic: {
@@ -187,25 +189,24 @@ export async function startDesktopDshAgentRuntime(
         message: describeRuntimeFailure(closeError),
       },
     });
-    retirement = Promise.allSettled([
-      handlerAssembly.reset(),
-      generation.subprocess.dispose(),
-    ]).then((results) => {
-      const failures = results
-        .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
-        .map((result) => result.reason);
-      if (failures.length > 0) {
-        throw new AggregateError(failures, 'Desktop DSH crashed runtime cleanup failed.');
-      }
-    });
+    retirement = Promise.allSettled([handlerAssembly.reset(), instance.subprocess.dispose()]).then(
+      (results) => {
+        const failures = results
+          .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+          .map((result) => result.reason);
+        if (failures.length > 0) {
+          throw new AggregateError(failures, 'Desktop DSH crashed runtime cleanup failed.');
+        }
+      },
+    );
     retirement.catch(() => undefined);
     return retirement;
   };
-  current = await connectGeneration().catch(async (error: unknown) => {
+  current = await connectInstance().catch(async (error: unknown) => {
     await handlerAssembly.dispose();
     throw error;
   });
-  watchGeneration(current);
+  watchInstance(current);
   const client = createStableDesktopDshAgentClient(projection, () => current?.client, {
     isWorkBlocked: () => workBlocked,
     async trackWork<T>(operation: () => Promise<T>): Promise<T> {
@@ -244,18 +245,18 @@ export async function startDesktopDshAgentRuntime(
         await handlerAssembly.reset();
         await previous.subprocess.dispose();
       }
-      const next = await connectGeneration();
+      const next = await connectInstance();
       if (disposed) {
         await next.subprocess.dispose();
         throw new Error('Desktop DSH Agent runtime was disposed during restart.');
       }
       current = next;
-      watchGeneration(next);
+      watchInstance(next);
       workBlocked = configurationRefreshPending;
       publishStatus({ status: 'running' });
     })()
       .catch((error: unknown) => {
-        options.onGenerationUnavailable?.();
+        options.onInstanceUnavailable?.();
         configurationRefreshPending = false;
         workBlocked = false;
         publishStatus({
@@ -337,7 +338,7 @@ function describeRuntimeFailure(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-interface DesktopDshRuntimeGeneration {
+interface DesktopDshRuntimeInstance {
   readonly subprocess: DesktopDshSubprocessHandle;
   readonly client: DesktopDshAgentClient;
 }
@@ -364,8 +365,8 @@ function createStableDesktopDshAgentClient(
     return requireClient();
   };
   const runWork = <T>(operation: (client: DesktopDshAgentClient) => Promise<T>): Promise<T> => {
-    const generationClient = requireWorkClient();
-    return activity.trackWork(() => operation(generationClient));
+    const instanceClient = requireWorkClient();
+    return activity.trackWork(() => operation(instanceClient));
   };
   const client: DesktopDshAgentClient = {
     projection,
@@ -422,6 +423,9 @@ function createStableDesktopDshAgentClient(
     },
     async readExtensions() {
       return requireClient().readExtensions();
+    },
+    async readProviderCapabilities() {
+      return requireClient().readProviderCapabilities();
     },
     async setSkillEnabled(input) {
       return runWork((client) => client.setSkillEnabled(input));

@@ -9,8 +9,9 @@ Canonical 内容地址只由文件 authority、规范化路径和可选文件内
 
 - 所有跨包内容事实使用 package-owned `ContentLocator`；workspace 媒体库链接仍由 Assets owner 维护 binding，
   但不会引入第二种 locator identity。
-- 项目 `.neko` 保存 target-free binding，全局 connection 保存物理授权，`neko/assets/<libraryName>`
-  直接软链接（Windows junction）是两者派生的 Workspace 访问投影。
+- 项目 `.neko` 保存 Assets-owned、非 authoritative 的 target-free 本机 binding 物化，全局 connection
+  保存物理授权，`neko/assets/<libraryName>` 直接软链接（Windows junction）是两者派生的 Workspace
+  访问投影。binding 缺失时只能从当前项目事实与唯一 exact global connection 确定性物化。
 - Host 校验 exact binding、connection 与 managed link 一致后，才允许链接跨越 Workspace 边界，并做
   relative/traversal 与最终 realpath containment 校验。
 - 公共内容接口只表达 source read、runtime projection、authorized write 和 semantic representation；不暴露 cache、materialization、manifest、root、GC 或 physical path。
@@ -83,7 +84,9 @@ Host 为不同 consumer 注入 capability-scoped port。调用方不能通过 `c
 ## 项目媒体受管链接安全边界
 
 - `libraryName` 必须是 portable single segment，`relativePath` 必须 normalized、relative 且无 dot segment。
-- 项目 `.neko` 保存 target-free binding；软链接入口是由 binding 与 exact global connection 派生的访问投影。
+- 项目 `.neko` 保存非 authoritative 的 target-free binding 本机物化；软链接入口是由 binding 与 exact
+  global connection 派生的访问投影。重新物化 binding 时，现存软链接只提供 exact-match 准入证据，
+  不得成为 target、项目事实或替代业务 authority。
 - link 只有在用户确认 binding，或本地初始化能证明 existing link 精确匹配唯一 global connection 时创建/替换。
 - Content guard 检查 exact binding、global connection 与 `neko/assets/<libraryName>` 直接链接，不尝试
   active/recent Workspace、同名 connection、cache 或 alternate provider。

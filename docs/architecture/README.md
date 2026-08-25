@@ -28,7 +28,7 @@ composition。
 | [`local-metadata-and-project-facts.md`](local-metadata-and-project-facts.md)           | 用户级 SQLite、同步项目事实、可删除项目 `.neko` 与缓存索引边界                                                              |
 | [`application-composition.md`](application-composition.md)                             | 唯一 Electron Desktop composition root、一级包、Main/preload/renderer 依赖方向及 app-lifetime exact-resource registry owner |
 | [`agent.md`](agent.md)                                                                 | Agent runtime、输入、创作、Tool/Job、Skill/MCP、Prompt、信任与生命周期的统一横切架构                                        |
-| [`asset-library.md`](asset-library.md)                                                 | 媒体库逻辑 locator、本机 binding、全局连接，以及本地版本化素材包与搜索投影                                                  |
+| [`asset-library.md`](asset-library.md)                                                 | 媒体库逻辑 locator、本机 binding、全局连接、全局 Asset 文件记录与资源投影                                                   |
 | [`credentials.md`](credentials.md)                                                     | 用户凭据、workspace policy、host adapter 和 session 边界                                                                    |
 | [`content-access-and-paths.md`](content-access-and-paths.md)                           | 项目/媒体 locator、`.neko` 本机 binding、派生存储、窄内容读写与 Webview 投影                                                |
 | [`client-targets.md`](client-targets.md)                                               | OpenNeko Desktop 的产品目标、职责边界和验证重点                                                                             |

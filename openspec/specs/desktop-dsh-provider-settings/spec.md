@@ -1,11 +1,50 @@
 # desktop-dsh-provider-settings Specification
 
 ## Purpose
+
 Define the canonical host-owned DSH Provider, model, credential, removal and runtime-refresh settings path.
+
 ## Requirements
+
+### Requirement: Dialogue Provider capabilities come from the running DSH composition
+
+The isolated DSH subprocess SHALL expose a bounded, secret-free projection of its public configurable-Provider directory and supported dialogue profile protocols. Desktop settings SHALL derive dialogue Provider and protocol choices from that projection and SHALL NOT use a product-owned Provider or protocol whitelist to remove a capability advertised by the current pinned DSH runtime.
+
+#### Scenario: DSH advertises an unknown catalog Provider or protocol
+
+- **WHEN** the connected DSH runtime advertises a configurable Provider or protocol identity unknown to OpenNeko presentation metadata
+- **THEN** Desktop settings expose the DSH identity without requiring a Renderer or Host whitelist update
+- **AND** optional OpenNeko metadata may refine presentation without hiding the capability
+
+#### Scenario: One DSH capability entry is malformed
+
+- **WHEN** one Provider or protocol capability entry cannot be decoded while sibling entries are valid
+- **THEN** only that entry is rejected with a visible diagnostic
+- **AND** valid sibling capabilities and existing OpenNeko settings remain usable
+
 ### Requirement: DSH settings use the canonical provider authority
 
-Provider, model and default changes SHALL update the existing TOML ConfigManager authority consumed by DSH and SHALL NOT create a parallel model configuration file. Provider and model directory changes SHALL locally refresh the DSH runtime from that authority without restarting the Desktop application.
+Provider, model and default changes SHALL update the existing OpenNeko TOML ConfigManager authority consumed by DSH and SHALL NOT create a parallel model configuration file. Provider secrets SHALL remain in the Host credential authority. Provider and model directory changes SHALL locally refresh the DSH runtime from that authority without restarting the Desktop application.
+
+#### Scenario: A DSH-advertised Provider is configured
+
+- **WHEN** the user saves a Provider selected from the current DSH capability projection
+- **THEN** its non-secret configuration is written to `~/.neko/config.toml`
+- **AND** its credential is stored only through the Host credential authority
+- **AND** a new DSH runtime instance is materialized from those OpenNeko authorities
+
+#### Scenario: A selected capability is no longer advertised
+
+- **WHEN** the user attempts to save a Provider or protocol absent from the current connected DSH projection
+- **THEN** the mutation is rejected before changing OpenNeko configuration
+- **AND** no stale catalog or alternate Provider or protocol is used as fallback success
+
+#### Scenario: DSH capability discovery is unavailable
+
+- **WHEN** the DSH runtime cannot provide its capability projection
+- **THEN** capability-dependent dialogue Provider creation is visibly unavailable
+- **AND** existing Provider records remain inspectable and removable
+- **AND** unrelated settings remain usable
 
 #### Scenario: Provider is added while DSH is idle
 
@@ -33,7 +72,7 @@ The Renderer SHALL never read stored provider secrets. A submitted API key SHALL
 
 ### Requirement: Existing sessions are not silently reconfigured
 
-Default dialogue changes SHALL refresh the execution configuration used by future conversations. Provider catalog and default changes SHALL replace only the ephemeral DSH runtime generation and SHALL preserve existing Conversation records, DSH session identities, bindings and transcripts.
+Default dialogue changes SHALL refresh the execution configuration used by future conversations. Provider catalog and default changes SHALL replace only the ephemeral DSH runtime instance and SHALL preserve existing Conversation records, DSH session identities, bindings and transcripts.
 
 #### Scenario: Runtime is refreshed after a Provider edit
 

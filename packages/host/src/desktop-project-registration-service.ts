@@ -4,8 +4,9 @@ import type {
 } from './desktop-shell-contract';
 import type { DesktopProjectCatalogRemovalResult } from './desktop-shell-service';
 
-export interface DesktopConversationArchivePort {
+export interface DesktopConversationManagementPort {
   archiveConversations(conversations: readonly DesktopAgentHomeNavigationIdentity[]): Promise<void>;
+  deleteUnavailableConversation(conversation: DesktopAgentHomeNavigationIdentity): Promise<void>;
 }
 
 export interface DesktopProjectRegistrationShellPort {
@@ -28,7 +29,7 @@ export interface DesktopProjectRegistrationShellPort {
 }
 
 export interface DesktopProjectRegistrationServiceOptions {
-  readonly conversations: DesktopConversationArchivePort;
+  readonly conversations: DesktopConversationManagementPort;
   readonly shell: DesktopProjectRegistrationShellPort;
 }
 
@@ -78,6 +79,23 @@ export class DesktopProjectRegistrationService {
       rendererSessionId,
     );
     await this.options.conversations.archiveConversations(conversations);
+    return this.options.shell.getProjection(windowId);
+  }
+
+  async deleteUnavailableConversation(
+    windowId: string,
+    rendererSessionId: string,
+    navigation: DesktopAgentHomeNavigationIdentity,
+  ): Promise<DesktopShellProjection> {
+    const [conversation] = await this.options.shell.resolveAgentHomeConversations(
+      windowId,
+      [navigation],
+      rendererSessionId,
+    );
+    if (conversation === undefined) {
+      throw new Error('Unavailable Agent Home Conversation was not resolved for deletion.');
+    }
+    await this.options.conversations.deleteUnavailableConversation(conversation);
     return this.options.shell.getProjection(windowId);
   }
 }

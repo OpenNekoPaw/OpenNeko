@@ -13,7 +13,7 @@ All durable content references SHALL use the package-owned canonical Content Loc
 #### Scenario: Invalid locator is rejected locally
 
 - **WHEN** a producer or consumer receives an unknown authority, absolute path, unsupported field, or unnormalized entry selector
-- **THEN** the owning content boundary SHALL return a diagnostic and SHALL NOT select another source, active workspace, or legacy locator shape.
+- **THEN** the owning content boundary SHALL return a diagnostic and SHALL NOT select another source, active workspace, or alternate locator shape.
 
 #### Scenario: DSH content operation receives a valid locator
 

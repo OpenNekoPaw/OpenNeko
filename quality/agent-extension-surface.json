@@ -39,7 +39,7 @@
     "appContributionStatus": "unsupported",
     "evidence": [
       "packages/dsh-bridge/cordis.patch.yml",
-      "openspec/changes/replace-pi-with-dsh-runtime-atomically/specs/dsh-extension-runtime-boundary/spec.md"
+      "openspec/specs/skill-mcp-extension-management/spec.md"
     ]
   },
   "extensionManagement": {
@@ -63,7 +63,7 @@
     "connectionFailureIsolation": "contribution",
     "evidence": [
       "packages/dsh-bridge/cordis.patch.yml",
-      "openspec/changes/replace-pi-with-dsh-runtime-atomically/specs/dsh-extension-runtime-boundary/spec.md"
+      "openspec/specs/skill-mcp-extension-management/spec.md"
     ]
   },
   "hostCapability": {

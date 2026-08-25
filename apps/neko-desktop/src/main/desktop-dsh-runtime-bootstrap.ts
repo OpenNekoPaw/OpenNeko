@@ -131,7 +131,7 @@ export async function startDesktopDshProductRuntime(options: {
         return candidate.prepared.supervisor.start();
       },
     },
-    onGenerationConnected() {
+    onInstanceConnected() {
       const candidate = connectingCandidate;
       if (candidate === undefined) {
         throw new Error('Desktop DSH runtime connected without a prepared Provider candidate.');
@@ -139,7 +139,7 @@ export async function startDesktopDshProductRuntime(options: {
       activeExecutionCatalog = candidate.providers.executionCatalog;
       connectingCandidate = undefined;
     },
-    onGenerationUnavailable() {
+    onInstanceUnavailable() {
       activeExecutionCatalog = undefined;
       connectingCandidate = undefined;
     },

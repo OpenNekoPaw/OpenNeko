@@ -203,7 +203,10 @@ const turnContext = Object.freeze(
   }),
 ) as CharacterAgentTurnContext;
 
-function createConversations(): DshDomainConversationService {
+function createConversations(): Pick<
+  DshDomainConversationService,
+  'publish' | 'archivePublishedConversation' | 'submitTurn'
+> {
   return {
     publish: vi.fn(async () => undefined),
     archivePublishedConversation: vi.fn(async () => undefined),

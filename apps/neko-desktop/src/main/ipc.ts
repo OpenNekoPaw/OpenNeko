@@ -440,6 +440,11 @@ export function registerDesktopIpc(
       appHost.archiveConversations(requireSender(event), payload),
   );
   ipcMain.handle(
+    DESKTOP_SHELL_CHANNELS.conversationDeleteUnavailable,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.deleteUnavailableConversation(requireSender(event), payload),
+  );
+  ipcMain.handle(
     DESKTOP_SHELL_CHANNELS.projectRequestProfile,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.requestProjectProfile(requireSender(event), payload),
@@ -528,6 +533,7 @@ export function registerDesktopIpc(
       DESKTOP_SHELL_CHANNELS.projectRemove,
       DESKTOP_SHELL_CHANNELS.projectConversationArchive,
       DESKTOP_SHELL_CHANNELS.conversationArchive,
+      DESKTOP_SHELL_CHANNELS.conversationDeleteUnavailable,
       DESKTOP_SHELL_CHANNELS.projectRequestProfile,
       DESKTOP_SHELL_CHANNELS.homeActivate,
       DESKTOP_SHELL_CHANNELS.tabActivate,

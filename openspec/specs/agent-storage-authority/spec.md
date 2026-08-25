@@ -10,8 +10,8 @@ provider/model/MCP definitions SHALL use the product configuration owner or expl
 An explicitly authored provider `api_key` SHALL remain owned by the product configuration document and
 MUST be consumed only through a Host-only credential port. Credentials entered through protected UI
 interaction SHALL remain in SecretStorage/keychain. Each provider SHALL select one explicit credential
-owner; an invalid declared source MUST fail closed without reading another source. No migration, dual
-write, environment fallback or product legacy import path may combine these authorities.
+owner; an invalid declared source MUST fail closed without reading another source. No dual write,
+environment fallback or alternate import path may combine these authorities.
 
 #### Scenario: Agent configuration is loaded
 
@@ -28,7 +28,7 @@ write, environment fallback or product legacy import path may combine these auth
 
 ### Requirement: Conversation facts and operational state remain distinct
 
-Pi Session files SHALL remain authoritative for transcript and branch facts. Conversation catalog,
+DSH Sessions SHALL remain authoritative for transcript and branch facts. Conversation catalog,
 leases, checkpoints and task state MAY use Agent-owned stable state/cache repositories, but MUST be
 scoped by exact conversation/session/request identity without writer epochs or schema versions.
 
@@ -42,8 +42,8 @@ scoped by exact conversation/session/request identity without writer epochs or s
 
 Listing, search and semantic acceleration SHALL be derived from Agent/project facts. Projection loss
 MAY trigger ordinary recomputation from current authority. A stale/invalid projection MUST NOT replace
-facts, return fabricated empty success or switch to a retired source.
-Conversation catalog enumeration SHALL read the one stable Pi Conversation authority independently
+facts, return fabricated empty success or switch to another source.
+Conversation catalog enumeration SHALL read the one stable Conversation authority independently
 from the currently open Workspace or Desktop Project catalog. A missing Project binding MUST NOT hide
 the Conversation; it SHALL produce an unavailable owner projection with exact fields.
 
@@ -55,7 +55,7 @@ the Conversation; it SHALL produce an unavailable owner projection with exact fi
 
 #### Scenario: Conversation Workspace is not in the Shell catalog
 
-- **WHEN** a valid Pi Conversation references a Workspace that is not currently open
+- **WHEN** a valid Conversation references a Workspace that is not currently open
 - **THEN** Agent Home still lists the Conversation under its stable Workspace identity
 - **AND** Desktop marks only the unavailable Project/locator fields for manual handling
 
@@ -72,14 +72,15 @@ shape.
 - **THEN** Chara writes the canonical memory fact
 - **AND** Agent SQLite/cache state remains only operational or derived
 
-### Requirement: Retired Agent databases and config are product-unreachable
+### Requirement: Agent reads only its canonical authorities
 
-Normal Agent startup MUST NOT open, import, archive, delete or repair retired Agent-specific databases
-or mixed config sources. Existing bytes remain untouched; exact offline repair requires separate user
+Normal Agent startup MUST open only the canonical Conversation, operational-state, configuration and
+credential authorities defined above. Unknown Agent-local bytes or mixed config sources MUST remain
+untouched and MUST NOT become a fallback authority; exact offline repair requires separate user
 authorization.
 
-#### Scenario: Retired Agent database remains on disk
+#### Scenario: Unknown Agent-local data remains on disk
 
 - **WHEN** Agent starts with a canonical authority available
-- **THEN** it never opens the retired database
+- **THEN** it does not inspect or import the unknown data
 - **AND** canonical conversations and settings continue independently

@@ -24,6 +24,7 @@ import type { Config as DshMcpClientConfig } from '@deepseek-ai/dsh-mcp-client';
 import { Context, type FiberState } from '@deepseek-ai/cordis';
 import type {} from '@deepseek-ai/cordis-plugin-loader';
 import { createUserMessage, errorChain, type ContentBlock } from '@deepseek-ai/dsh-llm';
+import { supportedProtocols } from '@deepseek-ai/dsh-llm-pi-ai';
 import { SessionId, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session';
 import type {} from '@deepseek-ai/dsh-session-persistence';
 import type {} from '@deepseek-ai/dsh-workspace';
@@ -60,6 +61,7 @@ import {
   decodeDshAcpDomainToolResponse,
   decodeDshAcpContextPressureProjection,
   encodeDshAcpModelConfiguration,
+  projectDshAcpProviderCapabilities,
   type DshAcpExtensionProjection,
   type DshAcpExtensionMcp,
   type DshAcpExtensionSkill,
@@ -87,6 +89,7 @@ export const inject = [
   'commands',
   'permissionPresets',
   'loader',
+  'llm',
   'sandboxPolicy',
   'sessions',
   'sessionPersistence',
@@ -147,6 +150,11 @@ type OpenNekoDisplayContentBlock =
       readonly width: number;
       readonly height: number;
     };
+
+interface PreparedPrompt {
+  readonly content: readonly ContentBlock[];
+  readonly displayContent?: readonly OpenNekoDisplayContentBlock[];
+}
 
 interface DshSessionRuntimeContext {
   text: string;
@@ -354,12 +362,13 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
 
   const runPrompt = (
     sessionId: string,
-    content: readonly ContentBlock[],
-    displayContent?: readonly OpenNekoDisplayContentBlock[],
+    prepare: () => Promise<PreparedPrompt>,
   ): Promise<PromptResponse> =>
     promptAdmission.run(sessionId, async () => {
       requireOpen();
-      const record = await requireReadyOwned(sessionId);
+      const current = requireOwned(sessionId);
+      const record =
+        current.replacement === undefined ? current : await requireReadyOwned(sessionId);
       if (record.commandAbort !== undefined) {
         throw RequestError.invalidParams(
           undefined,
@@ -381,14 +390,28 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
         endReason: undefined,
       };
       record.inflight = inflight;
+      let prepared: PreparedPrompt;
+      try {
+        prepared = await prepare();
+      } catch (error) {
+        if (record.inflight === inflight) record.inflight = undefined;
+        throw error;
+      }
+      if (record.inflight !== inflight || inflight.cancelRequested) {
+        settlePrompt(record);
+        return { stopReason: await inflight.completion.promise };
+      }
       try {
         record.handle.agent.followup(
           createUserMessage({
-            content: [...content],
+            content: [...prepared.content],
             source:
-              displayContent === undefined
+              prepared.displayContent === undefined
                 ? { kind: 'user' as const }
-                : { kind: 'user' as const, opennekoDisplayContent: displayContent },
+                : {
+                    kind: 'user' as const,
+                    opennekoDisplayContent: prepared.displayContent,
+                  },
           }),
         );
       } catch (error) {
@@ -456,7 +479,10 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
             'cwd does not match the configured virtual workspace.',
           );
         }
-        const headers = await ctx.sessionPersistence.list();
+        const headers = [
+          ...(await ctx.sessionPersistence.list()),
+          ...[...owned.values()].map((record) => record.handle.agent.session.header),
+        ];
         return listOpenNekoSessions(headers, preset);
       },
       async loadSession(params) {
@@ -545,10 +571,13 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
       },
       async prompt(params) {
         requireOpen();
-        await requireReadyOwned(params.sessionId);
-        const content = await admitAcpPrompt(params.prompt, ctx.attachments);
-        const displayContent = projectAcpDisplayContent(params.prompt, content);
-        return runPrompt(params.sessionId, content, displayContent);
+        return runPrompt(params.sessionId, async () => {
+          const content = await admitAcpPrompt(params.prompt, ctx.attachments);
+          return {
+            content,
+            displayContent: projectAcpDisplayContent(params.prompt, content),
+          };
+        });
       },
       cancel(params) {
         const admission = promptAdmission.cancel(params.sessionId);
@@ -588,6 +617,20 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
             }
             record.runtimeContext.text = request.text;
             return {};
+          }
+          case DSH_ACP_EXTENSION_METHODS.readProviderCapabilities: {
+            if (Object.keys(params).length !== 0) {
+              throw RequestError.invalidParams(
+                undefined,
+                'Provider capability read does not accept parameters.',
+              );
+            }
+            return {
+              ...projectDshAcpProviderCapabilities(
+                ctx.llm.listConfigurableProviders(),
+                supportedProtocols(),
+              ),
+            };
           }
           case DSH_ACP_EXTENSION_METHODS.readExtensions: {
             if (Object.keys(params).length !== 0) {
@@ -771,45 +814,48 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
                 );
               }
             }
-            const record = await requireReadyOwned(request.sessionId);
-            const agent = record.handle.agent;
-            const snapshot = await readSkillCatalog(ctx, { kind: 'session', agent });
-            if (!snapshot.complete) {
-              throw RequestError.invalidParams(
-                undefined,
-                `DSH Skill catalog is incomplete for Session: ${request.sessionId}`,
-              );
-            }
-            for (const invocation of request.invocations) {
-              const skill = snapshot.skills.find(
-                (candidate) => candidate.name === invocation.skillName,
-              );
-              if (skill === undefined || !isUserInvocable(skill)) {
+            const response = await runPrompt(request.sessionId, async () => {
+              const record = await requireReadyOwned(request.sessionId);
+              const snapshot = await readSkillCatalog(ctx, {
+                kind: 'session',
+                agent: record.handle.agent,
+              });
+              if (!snapshot.complete) {
                 throw RequestError.invalidParams(
                   undefined,
-                  `Unknown, stale, or non-user-invocable DSH Skill: ${invocation.skillName}`,
+                  `DSH Skill catalog is incomplete for Session: ${request.sessionId}`,
                 );
               }
-            }
-            const displayGestures = request.invocations
-              .map((invocation) => `$${invocation.skillName}`)
-              .join(' ');
-            const promptSuffix = request.promptText.length === 0 ? '' : ` ${request.promptText}`;
-            const canonicalDisplay = `${displayGestures}${promptSuffix}`;
-            if (request.displayText !== canonicalDisplay) {
-              throw RequestError.invalidParams(
-                undefined,
-                'DSH Skill display text does not match its canonical invocation.',
-              );
-            }
-            const gesture = `${request.invocations
-              .map((invocation) => `/${invocation.skillName}`)
-              .join(' ')}${promptSuffix}`;
-            const response = await runPrompt(
-              request.sessionId,
-              [{ type: 'text', text: gesture }],
-              [{ type: 'text', text: canonicalDisplay }],
-            );
+              for (const invocation of request.invocations) {
+                const skill = snapshot.skills.find(
+                  (candidate) => candidate.name === invocation.skillName,
+                );
+                if (skill === undefined || !isUserInvocable(skill)) {
+                  throw RequestError.invalidParams(
+                    undefined,
+                    `Unknown, stale, or non-user-invocable DSH Skill: ${invocation.skillName}`,
+                  );
+                }
+              }
+              const displayGestures = request.invocations
+                .map((invocation) => `$${invocation.skillName}`)
+                .join(' ');
+              const promptSuffix = request.promptText.length === 0 ? '' : ` ${request.promptText}`;
+              const canonicalDisplay = `${displayGestures}${promptSuffix}`;
+              if (request.displayText !== canonicalDisplay) {
+                throw RequestError.invalidParams(
+                  undefined,
+                  'DSH Skill display text does not match its canonical invocation.',
+                );
+              }
+              const gesture = `${request.invocations
+                .map((invocation) => `/${invocation.skillName}`)
+                .join(' ')}${promptSuffix}`;
+              return {
+                content: [{ type: 'text', text: gesture }],
+                displayContent: [{ type: 'text', text: canonicalDisplay }],
+              };
+            });
             return { stopReason: response.stopReason };
           }
           case DSH_ACP_EXTENSION_METHODS.enqueueInboxMessage: {
@@ -1628,7 +1674,28 @@ export function listOpenNekoSessions(
 ): ListSessionsResponse {
   const sessions: ListSessionsResponse['sessions'] = [];
   const diagnostics: { code: string; message: string; sessionId: string }[] = [];
+  const seen = new Map<string, SessionHeader>();
+  const conflicts = new Set<string>();
   for (const header of headers) {
+    if (conflicts.has(header.id)) continue;
+    const existing = seen.get(header.id);
+    if (existing !== undefined) {
+      if (existing.cwd !== header.cwd || existing.agentPreset !== header.agentPreset) {
+        seen.delete(header.id);
+        conflicts.add(header.id);
+      }
+      continue;
+    }
+    seen.set(header.id, header);
+  }
+  for (const sessionId of conflicts) {
+    diagnostics.push({
+      code: 'SESSION_HEADER_CONFLICT',
+      message: `OpenNeko DSH session ${sessionId} has conflicting catalog headers.`,
+      sessionId,
+    });
+  }
+  for (const header of seen.values()) {
     if (header.agentPreset !== preset) continue;
     if (header.cwd === undefined) {
       diagnostics.push({

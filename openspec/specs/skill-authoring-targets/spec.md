@@ -36,7 +36,7 @@ The system SHALL expose one confirmation-gated `CreateSkill` Host operation whos
 
 ### Requirement: Skill package creation is canonical and non-destructive
 
-The Agent-owned package service SHALL stage the supplied DSH Markdown and relative resources, validate them through the locked DSH filesystem provider, and ask the Host to publish one new package without replacement. It SHALL NOT restore Pi SkillHost or copy the DSH parser.
+The Agent-owned package service SHALL stage the supplied DSH Markdown and relative resources, validate them through the locked DSH filesystem provider, and ask the Host to publish one new package without replacement. It SHALL NOT introduce a product-owned SkillHost or copy the DSH parser.
 
 #### Scenario: Package is valid
 

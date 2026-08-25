@@ -5,8 +5,9 @@
 ## 系统定位
 
 DSH 独立子进程/profile 是 Agent、Session/transcript、Inbox/queue、Tool lifecycle、Skill、MCP 与内部
-Plugin composition 的唯一 runtime authority。OpenNeko 不实例化 Pi Agent/Session，不实现第二套 Agent loop、Skill
-Host、MCP manager、Plugin runtime、Tool registry、queue、transcript 或 compaction。
+Plugin composition 的唯一 runtime authority。OpenNeko 只实现 package-owned binding/projection、typed Host
+adapter 和产品 presentation，不实现第二套 Agent loop、Skill Host、MCP manager、Plugin runtime、Tool registry、
+queue、transcript 或 compaction。
 
 OpenNeko 保留：
 
@@ -31,7 +32,7 @@ Desktop native Agent surface
 ```
 
 生产路径不得使用内嵌 Cordis、DSH Web/Client Runtime、TypeScript SDK、Remote API、系统 Node、全局
-DSH、Electron `process.execPath` 或 Pi fallback。DSH runtime closure 必须随产品精确锁定；`scripts/dsh-q0`
+DSH、Electron `process.execPath` 或替代 Agent runtime fallback。DSH runtime closure 必须随产品精确锁定；`scripts/dsh-q0`
 只用于非发布资格验证，不进入发布包。
 
 ## 五层边界
@@ -125,6 +126,13 @@ ACP content block 是 Desktop 到 DSH 的唯一消息输入协议。Composer 图
 
 ## Credential 与安全
 
+DSH 当前组合的公开 configurable-Provider directory 与 profile protocol catalog 是对话执行能力的
+唯一 authority。OpenNeko 通过有界、无 secret 的 ACP projection 驱动设置页和保存校验；本地
+Provider metadata 只能改善展示，不得隐藏 DSH 已广告的 Provider 或协议。用户选择的 Provider、模型和
+默认值仍只写入 `~/.neko/config.toml`，再由 Desktop 将该配置物化为新的 DSH runtime instance；不得把 DSH
+settings storage 建成平行产品配置。单项能力 decode 失败只隔离该项；能力读取整体不可用时禁止新建
+依赖该目录的对话 Provider，但现有记录和无关设置保持可用。
+
 Host 是 provider credential authority。Secret 只能通过 Desktop SecretStorage concrete adapter 和受限 Host
 port 解析，不能进入 ACP logs/stdout、DSH Session、Renderer、Evaluation facts 或 domain artifacts。Renderer
 不得访问 Node/Electron、本地绝对路径、raw cache path、credential 或进程 handle。
@@ -159,16 +167,11 @@ Desktop 原生 Agent surface 只选择并渲染 DSH-derived projection；卸载 
 排队或等待审批的 exact Session task。`@neko/agent-webview` 只拥有 DSH Session 与 Skill/MCP management browser presentation，
 不拥有 Agent controller、transcript、queue、Skill/MCP/Plugin runtime 或 Host IO。
 
-产品 lifecycle 只组合 create、bounded list/revalidation、load/resume、prompt、cancel、close/release 和 restart 后按 exact binding reload。缺少公开 Session delete 时保留局部 diagnostic，不把 close 当 delete；缺少 inbox-preserving release 时不提供离线 inbox 编辑，不建立 shadow queue 或泄漏 DSH owner。
+产品 lifecycle 只组合 create、bounded list/revalidation、load/resume、prompt、cancel、close/release 和 restart 后按 exact binding reload。缺少公开 Session delete 时不得把 close 当 delete；只有 binding 缺失或 exact Session 经权威目录证明不存在的不可执行 Conversation，才允许用户通过受限管理入口原子清理本地 catalog、context 与 stale binding。缺少 inbox-preserving release 时不提供离线 inbox 编辑，不建立 shadow queue 或泄漏 DSH owner。
 
-## 验收
+## 验证边界
 
-确定性门禁至少覆盖 ACP purity、subprocess lifecycle、exact binding、Session replay、permission/cancel、reverse
-Tool request、Skill/MCP inventory、attachment/media Tool evidence、bounded payload、迟到 frame 隔离、唯一 registration 与 retired-path poison。`pnpm test:agent:eval`
-只证明 key-free harness/schema readiness；真实行为必须通过完整 Desktop session owner、用户可操作 UI 和真实
-provider 验证，并记录 effective model、terminal state、artifact/path evidence 与 no-fallback facts。
-
-Evaluation canonical facts 使用 Conversation、DSH Session、turn/step/toolCall、permission preset、model receipt、Command/Skill、MCP/Tool provenance、attachment/media Tool evidence 和 domain Job/artifact identity。Pi run/branch/queue assertions 与 direct runtime driver 不得保留；visible UI 与 hidden full Desktop 都必须通过公开 Composer input path，缺少 driver/API 时报告 `infrastructure-blocked`。
-
-发布前必须证明 Agent runtime、Webview message、queue/confirmation、Skill、MCP、Plugin 与 client 均只走
-canonical path；真实 provider/API 或可见 UI 验收未执行时，发布门禁保持关闭。
+确定性测试必须覆盖 ACP 协议纯净、subprocess lifecycle、exact binding、Session replay、permission/cancel、
+reverse Tool request、Skill/MCP inventory、附件与媒体 Tool、bounded payload、迟到 frame 隔离和唯一
+registration。真实 Agent 行为必须经完整 Desktop Session owner、公开 Composer 输入路径和真实 provider
+验证；测试不得通过 direct runtime driver、替代 Session assembly 或 mock provider 充当产品行为证据。

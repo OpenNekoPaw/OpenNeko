@@ -168,17 +168,13 @@ export const PROVIDER_CONNECTION_KINDS = [
 /**
  * Protocol profile used by the provider endpoint.
  */
-export type ProviderProtocolProfile =
-  'newapi' | 'openai-chat' | 'openai-responses' | 'anthropic' | 'google' | 'ollama';
+export type ProviderProtocolProfile = string;
 
-export const PROVIDER_PROTOCOL_PROFILES = [
-  'newapi',
-  'openai-chat',
+export const KNOWN_PROVIDER_PROTOCOL_PROFILES = [
+  'openai-completions',
   'openai-responses',
-  'anthropic',
-  'google',
-  'ollama',
-] as const satisfies readonly ProviderProtocolProfile[];
+  'anthropic-messages',
+] as const;
 
 /**
  * Support confidence for built-in and user-configured providers.

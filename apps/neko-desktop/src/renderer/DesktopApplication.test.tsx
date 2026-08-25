@@ -2401,8 +2401,15 @@ describe('DesktopApplication scene lifecycle', () => {
       scene: activeScene(projection),
     }));
     const archiveConversation = vi.fn(async () => projection);
+    const deleteUnavailableConversation = vi.fn(async () => projection);
     const removeProjects = vi.fn(async () => projection);
-    installBridge({ projection, transition, archiveConversation, removeProjects });
+    installBridge({
+      projection,
+      transition,
+      archiveConversation,
+      deleteUnavailableConversation,
+      removeProjects,
+    });
     vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
     const { container, root } = await renderApplication();
 
@@ -2480,17 +2487,29 @@ describe('DesktopApplication scene lifecycle', () => {
     const archiveButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Archive conversation Unavailable conversation"]',
     );
-    if (!removeButton || !archiveButton) {
+    const deleteButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Delete unavailable conversation Unavailable conversation"]',
+    );
+    if (!removeButton || !archiveButton || !deleteButton) {
       throw new Error('Desktop fixture requires unavailable cleanup actions.');
     }
     expect(removeButton.disabled).toBe(false);
     expect(archiveButton.disabled).toBe(false);
+    expect(deleteButton.disabled).toBe(false);
+    expect(
+      container.querySelector(
+        'button[aria-label="Delete unavailable conversation Valid conversation"]',
+      ),
+    ).toBeNull();
     await act(async () => removeButton.click());
     await waitFor(() => removeProjects.mock.calls.length === 1);
     await act(async () => archiveButton.click());
     await waitFor(() => archiveConversation.mock.calls.length === 1);
+    await act(async () => deleteButton.click());
+    await waitFor(() => deleteUnavailableConversation.mock.calls.length === 1);
     expect(removeProjects).toHaveBeenCalledWith([project.projectId]);
     expect(archiveConversation).toHaveBeenCalledWith([unavailableConversation.navigation]);
+    expect(deleteUnavailableConversation).toHaveBeenCalledWith(unavailableConversation.navigation);
     await act(async () => root.unmount());
   });
 
@@ -3033,6 +3052,7 @@ function installBridge({
   subscribe = vi.fn(() => () => undefined),
   transition = vi.fn(),
   archiveConversation = vi.fn(),
+  deleteUnavailableConversation = vi.fn(),
   archiveProjectConversations = vi.fn(),
   removeProjects = vi.fn(),
   updateApplicationSidebar = vi.fn(),
@@ -3092,6 +3112,7 @@ function installBridge({
   readonly subscribe?: (listener: (event: DesktopShellProjectionEvent) => void) => () => void;
   readonly transition?: ReturnType<typeof vi.fn>;
   readonly archiveConversation?: ReturnType<typeof vi.fn>;
+  readonly deleteUnavailableConversation?: ReturnType<typeof vi.fn>;
   readonly archiveProjectConversations?: ReturnType<typeof vi.fn>;
   readonly removeProjects?: ReturnType<typeof vi.fn>;
   readonly updateApplicationSidebar?: ReturnType<typeof vi.fn>;
@@ -3121,7 +3142,10 @@ function installBridge({
       shell: { getSnapshot, subscribe },
       lifecycle: { subscribe: lifecycleSubscribe },
       scenes: { transition },
-      conversations: { archive: archiveConversation },
+      conversations: {
+        archive: archiveConversation,
+        deleteUnavailable: deleteUnavailableConversation,
+      },
       projects: { remove: removeProjects, archiveConversations: archiveProjectConversations },
       applicationSidebar: { update: updateApplicationSidebar },
       workbench: { update: updateWorkbench },

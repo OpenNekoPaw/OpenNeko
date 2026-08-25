@@ -322,7 +322,7 @@ describe('ConfigManager', () => {
           },
           diagnostics: [
             {
-              code: 'unsupportedProviderProtocolProfile',
+              code: 'invalidConfigField',
               filePath: '/tmp/neko/config.toml',
               path: 'providers.invalid.protocol_profile',
               message: 'invalid provider protocol profile',
@@ -334,7 +334,7 @@ describe('ConfigManager', () => {
 
       expect(manager.getConfigDiagnostic()).toEqual(
         expect.objectContaining({
-          code: 'unsupportedProviderProtocolProfile',
+          code: 'invalidConfigField',
           path: 'providers.invalid.protocol_profile',
         }),
       );

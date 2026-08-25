@@ -257,6 +257,9 @@ interface ShellActions {
   readonly onArchiveConversations: (
     conversations: readonly DesktopAgentHomeConversationSummary[],
   ) => void;
+  readonly onDeleteUnavailableConversation: (
+    conversation: DesktopAgentHomeConversationSummary,
+  ) => void;
   readonly onRemoveProjects: (projects: readonly DesktopProjectCatalogItem[]) => void;
   readonly onArchiveProjectConversations: (projects: readonly DesktopProjectCatalogItem[]) => void;
   readonly onUpdateWorkbench: (
@@ -576,8 +579,11 @@ function DesktopApplicationContent(): JSX.Element {
       if (conversations.length === 0) {
         throw new Error('At least one Conversation is required for archive.');
       }
-      const confirmation =
-        conversations.length === 1 && conversations[0]
+      const confirmation = conversations.some(
+        (conversation) => conversation.unavailable !== undefined,
+      )
+        ? t('shell.archiveUnavailableConversationsConfirm', { count: conversations.length })
+        : conversations.length === 1 && conversations[0]
           ? t('shell.archiveConversationConfirm', { conversation: conversations[0].title })
           : t('shell.archiveConversationsConfirm', { count: conversations.length });
       if (!globalThis.confirm(confirmation)) {
@@ -587,6 +593,23 @@ function DesktopApplicationContent(): JSX.Element {
         window.openNekoDesktop.conversations.archive(
           conversations.map((conversation) => conversation.navigation),
         ),
+      );
+    },
+    onDeleteUnavailableConversation: (conversation) => {
+      if (conversation.unavailable === undefined) {
+        throw new Error('Only an unavailable Conversation can be deleted.');
+      }
+      if (
+        !globalThis.confirm(
+          t('shell.deleteUnavailableConversationConfirm', {
+            conversation: conversation.title,
+          }),
+        )
+      ) {
+        return;
+      }
+      void runMutation('navigation', () =>
+        window.openNekoDesktop.conversations.deleteUnavailable(conversation.navigation),
       );
     },
     onRemoveProjects: (projects) => {
@@ -1168,6 +1191,7 @@ export function DesktopShellView({
     onOpenWorkspaceDirectory: () => undefined,
     onOpenConversation: () => undefined,
     onArchiveConversations: () => undefined,
+    onDeleteUnavailableConversation: () => undefined,
     onRemoveProjects: () => undefined,
     onArchiveProjectConversations: () => undefined,
     onUpdateWorkbench: () => undefined,
@@ -1772,6 +1796,7 @@ function DesktopSceneWorkbench({
             disabled={interactionLocks.navigation || interactionLocks.sidebar}
             activeProjectId={workspaceProject?.projectId}
             onArchiveConversations={actions.onArchiveConversations}
+            onDeleteUnavailableConversation={actions.onDeleteUnavailableConversation}
             onArchiveProjectConversations={(project) =>
               actions.onArchiveProjectConversations([project])
             }
@@ -4461,6 +4486,7 @@ function ApplicationPrimarySidebar({
   experimentalCreativeCapabilitiesReady,
   onArchiveConversations,
   onArchiveProjectConversations,
+  onDeleteUnavailableConversation,
   onManageProjects,
   onNavigate,
   onOpenConversation,
@@ -4480,6 +4506,9 @@ function ApplicationPrimarySidebar({
     conversations: readonly DesktopAgentHomeConversationSummary[],
   ) => void;
   readonly onArchiveProjectConversations: (project: DesktopProjectCatalogItem) => void;
+  readonly onDeleteUnavailableConversation: (
+    conversation: DesktopAgentHomeConversationSummary,
+  ) => void;
   readonly onManageProjects: () => void;
   readonly onNavigate: (section: HomeSection) => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
@@ -4571,6 +4600,7 @@ function ApplicationPrimarySidebar({
         experimentalCreativeCapabilitiesReady={experimentalCreativeCapabilitiesReady}
         onArchiveConversations={onArchiveConversations}
         onArchiveProjectConversations={onArchiveProjectConversations}
+        onDeleteUnavailableConversation={onDeleteUnavailableConversation}
         onManageProjects={onManageProjects}
         onOpenConversation={onOpenConversation}
         onOpenPortability={
@@ -4632,6 +4662,7 @@ function PrimaryRecentNavigation({
   experimentalCreativeCapabilitiesReady,
   onArchiveConversations,
   onArchiveProjectConversations,
+  onDeleteUnavailableConversation,
   onManageProjects,
   onOpenConversation,
   onOpenPortability,
@@ -4646,6 +4677,9 @@ function PrimaryRecentNavigation({
     conversations: readonly DesktopAgentHomeConversationSummary[],
   ) => void;
   readonly onArchiveProjectConversations: (project: DesktopProjectCatalogItem) => void;
+  readonly onDeleteUnavailableConversation: (
+    conversation: DesktopAgentHomeConversationSummary,
+  ) => void;
   readonly onManageProjects: () => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onOpenPortability?: (project: DesktopProjectCatalogItem) => void;
@@ -4835,6 +4869,7 @@ function PrimaryRecentNavigation({
                   disabled || group.kind === 'workspace' || projectUnavailable !== undefined
                 }
                 onArchive={(conversation) => onArchiveConversations([conversation])}
+                onDeleteUnavailable={onDeleteUnavailableConversation}
                 onOpen={onOpenConversation}
               />
             ))}
@@ -4947,6 +4982,7 @@ function ConversationNavigationRow({
   disabled,
   navigationDisabled,
   onArchive,
+  onDeleteUnavailable,
   onOpen,
 }: {
   readonly active: boolean;
@@ -4954,6 +4990,7 @@ function ConversationNavigationRow({
   readonly disabled: boolean;
   readonly navigationDisabled: boolean;
   readonly onArchive: (conversation: DesktopAgentHomeConversationSummary) => void;
+  readonly onDeleteUnavailable: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onOpen: (conversation: DesktopAgentHomeConversationSummary) => void;
 }): JSX.Element {
   const { t } = useTranslation();
@@ -4964,6 +5001,7 @@ function ConversationNavigationRow({
         disabled,
         navigationDisabled,
         onArchive: () => onArchive(conversation),
+        onDeleteUnavailable: () => onDeleteUnavailable(conversation),
         onOpen: () => onOpen(conversation),
         t,
       })}
@@ -5002,6 +5040,17 @@ function ConversationNavigationRow({
               icon={<PackageIcon size={13} />}
               onClick={() => onArchive(conversation)}
             />
+            {conversation.unavailable ? (
+              <IconButton
+                disabled={disabled}
+                size="xs"
+                label={t('shell.deleteUnavailableConversation', {
+                  conversation: conversation.title,
+                })}
+                icon={<RemoveIcon size={13} />}
+                onClick={() => onDeleteUnavailable(conversation)}
+              />
+            ) : null}
           </span>
         </div>
       }
@@ -5170,6 +5219,7 @@ function createConversationNavigationMenuItems(input: {
   readonly disabled: boolean;
   readonly navigationDisabled: boolean;
   readonly onArchive: () => void;
+  readonly onDeleteUnavailable: () => void;
   readonly onOpen: () => void;
   readonly t: TranslationFunction;
 }): readonly ContextMenuItem[] {
@@ -5198,6 +5248,22 @@ function createConversationNavigationMenuItems(input: {
       disabled: input.disabled,
       onSelect: input.onArchive,
     },
+    ...(input.conversation.unavailable
+      ? [
+          {
+            id: 'delete-unavailable-conversation',
+            label: (
+              <NavigationMenuLabel
+                icon={<RemoveIcon size={14} />}
+                text={input.t('home.deleteUnavailableConversation')}
+              />
+            ),
+            disabled: input.disabled,
+            danger: true,
+            onSelect: input.onDeleteUnavailable,
+          } satisfies ContextMenuItem,
+        ]
+      : []),
   ];
 }
 

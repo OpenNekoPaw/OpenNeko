@@ -82,9 +82,12 @@ export const desktopAiModelSettingsScenario = Object.freeze({
     return { workspacePath, configPath };
   },
   async run({ checkpoint, evaluate, prepared, screenshot, waitForSelector }) {
+    await waitForSelector('[data-primary-sidebar="application"]');
     await evaluate(`(() => {
       window.resizeTo(1440, 960);
-      const settings = document.querySelector('.home-navigation-footer__actions button:last-child');
+      const settings = [...document.querySelectorAll('button')].find((button) =>
+        /设置|Settings/u.test(button.getAttribute('aria-label') ?? ''),
+      );
       if (!(settings instanceof HTMLButtonElement)) throw new Error('Desktop Settings is unavailable.');
       settings.click();
       return { width: window.innerWidth, height: window.innerHeight };
@@ -101,10 +104,99 @@ export const desktopAiModelSettingsScenario = Object.freeze({
     })()`);
     await waitForSelector('[data-provider-group="dialogue"]');
     await waitForSelector('[data-provider-group="generation"]');
+    await waitForCondition(
+      evaluate,
+      `[...document.querySelectorAll('.desktop-settings__provider-card')].some((card) =>
+        card.textContent?.includes('Functional Ollama'))`,
+      'Configured Provider catalog did not finish loading.',
+    );
 
     const catalog = await inspectProviderCatalog(evaluate);
     checkpoint('ai-model-provider-capability-groups', catalog);
     const catalogScreenshot = await screenshot('desktop-ai-model-provider-groups');
+
+    await evaluate(`(() => {
+      const group = document.querySelector('[data-provider-group="dialogue"]');
+      const add = group?.querySelector(
+        '.desktop-settings__provider-group-actions .desktop-settings__action',
+      );
+      if (!(add instanceof HTMLButtonElement)) {
+        throw new Error('Dialogue Provider add action is unavailable.');
+      }
+      add.click();
+      return true;
+    })()`);
+    await waitForSelector('.desktop-settings__editor');
+    const dshCatalogState = await evaluate(`(() => {
+      const editor = document.querySelector('.desktop-settings__editor');
+      const selects = [...editor?.querySelectorAll('select') ?? []];
+      const provider = selects[0];
+      if (!(provider instanceof HTMLSelectElement)) {
+        throw new Error('DSH Provider capability selector is unavailable.');
+      }
+      provider.value = 'dsh-catalog:openai';
+      provider.dispatchEvent(new Event('change', { bubbles: true }));
+      const protocol = selects[1];
+      const inputs = [...editor?.querySelectorAll('input') ?? []];
+      return {
+        providerValues: [...provider.options].map((option) => option.value),
+        providerLabels: [...provider.options].map((option) => option.textContent?.trim() ?? ''),
+        selectedProvider: provider.value,
+        protocolValues:
+          protocol instanceof HTMLSelectElement
+            ? [...protocol.options].map((option) => option.value)
+            : [],
+        providerId: inputs.find((input) => input.value === 'openai')?.value,
+        apiUrl: inputs.find((input) => input.type === 'url')?.value,
+      };
+    })()`);
+    if (
+      !dshCatalogState.providerValues.includes('dsh-catalog:openai') ||
+      dshCatalogState.selectedProvider !== 'dsh-catalog:openai' ||
+      dshCatalogState.providerId !== 'openai' ||
+      dshCatalogState.apiUrl !== '' ||
+      !dshCatalogState.protocolValues.includes('') ||
+      !dshCatalogState.protocolValues.includes('openai-completions') ||
+      !dshCatalogState.protocolValues.includes('openai-responses') ||
+      !dshCatalogState.protocolValues.includes('anthropic-messages')
+    ) {
+      throw new Error(
+        `DSH Provider catalog state is incorrect: ${JSON.stringify(dshCatalogState)}`,
+      );
+    }
+    checkpoint('dsh-provider-capabilities-visible', dshCatalogState);
+    const dshCatalogScreenshot = await screenshot('desktop-ai-model-dsh-provider-catalog');
+    await evaluate(`(() => {
+      const editor = document.querySelector('.desktop-settings__editor');
+      const save = [...editor?.querySelectorAll('button') ?? []].find((button) =>
+        /保存|Save/u.test(button.textContent ?? ''),
+      );
+      if (!(save instanceof HTMLButtonElement) || save.disabled) {
+        throw new Error('DSH catalog Provider save is unavailable.');
+      }
+      save.click();
+      return true;
+    })()`);
+    await waitForCondition(
+      evaluate,
+      `!document.querySelector('.desktop-settings__editor')`,
+      'DSH catalog Provider form did not close after save.',
+    );
+    const dshConfig = await readFile(prepared.configPath, 'utf8');
+    const dshProviderBlock = dshConfig
+      .split('[[providers]]')
+      .find((block) => block.includes('id = "openai"'));
+    if (
+      dshProviderBlock === undefined ||
+      !dshProviderBlock.includes('api_url = ""') ||
+      dshProviderBlock.includes('protocol_profile')
+    ) {
+      throw new Error('DSH catalog Provider was not persisted through canonical config.toml.');
+    }
+    checkpoint('dsh-provider-persisted-to-openneko-config', {
+      providerId: 'openai',
+      inheritedProtocolAndEndpoint: true,
+    });
 
     const generationPreset = await evaluate(`(() => {
       const group = document.querySelector('[data-provider-group="generation"]');
@@ -135,7 +227,7 @@ export const desktopAiModelSettingsScenario = Object.freeze({
       };
     })()`);
     if (
-      generationPresetState.selectedPreset !== 'generation-minimax-h3' ||
+      generationPresetState.selectedPreset !== 'product-preset:generation-minimax-h3' ||
       generationPresetState.apiUrl !== 'https://api.minimaxi.com/v2' ||
       !generationPresetState.providerTypeVisible ||
       JSON.stringify(generationPresetState.presetLabels) !==
@@ -368,9 +460,11 @@ export const desktopAiModelSettingsScenario = Object.freeze({
       localProvider: { ...localProvider, localModelTypes },
       deleted,
       generationPresetState,
+      dshCatalogState,
       h3TemplateState,
       screenshots: [
         catalogScreenshot,
+        dshCatalogScreenshot,
         generationPresetScreenshot,
         h3TemplateScreenshot,
         localScreenshot,
@@ -424,7 +518,10 @@ async function inspectProviderCatalog(evaluate) {
       card.textContent?.includes('Functional Ollama'),
     );
     if (!(localCard instanceof HTMLElement) || !/本地|Local/u.test(localCard.textContent ?? '')) {
-      throw new Error('Local Provider source is not visible.');
+      throw new Error(
+        'Local Provider source is not visible: ' +
+          JSON.stringify({ groups, localCard: localCard?.textContent ?? null }),
+      );
     }
     if (!groups.dialogue?.some((label) => label.includes('Functional Ollama'))) {
       throw new Error('Local dialogue Provider is not in the dialogue group.');

@@ -190,7 +190,7 @@ describe('config-reader typed results', () => {
     expect(JSON.stringify(result.diagnostics)).not.toContain('api_key =');
   });
 
-  it('isolates an invalid provider protocol profile', () => {
+  it('preserves an opaque provider protocol profile for DSH validation', () => {
     const filePath = path.join(createTempRoot(), 'config.toml');
     fs.writeFileSync(
       filePath,
@@ -218,13 +218,12 @@ describe('config-reader typed results', () => {
 
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') throw new Error('Expected ok result');
-    expect(result.config.providers?.map((provider) => provider.id)).toEqual(['valid-local']);
-    expect(result.diagnostics).toEqual([
-      expect.objectContaining({
-        code: 'unsupportedProviderProtocolProfile',
-        path: 'providers.custom-newapi.protocol_profile',
-      }),
+    expect(result.config.providers?.map((provider) => provider.id)).toEqual([
+      'custom-newapi',
+      'valid-local',
     ]);
+    expect(result.config.providers?.[0]?.protocolProfile).toBe('newapi-compatible');
+    expect(result.diagnostics).toEqual([]);
   });
 
   it('isolates an invalid provider model-family declaration', () => {
@@ -644,7 +643,7 @@ describe('config-reader typed results', () => {
     ]);
   });
 
-  it('rejects unsupported provider protocol profile values', () => {
+  it('preserves provider protocol identities that are not known locally', () => {
     const filePath = path.join(createTempRoot(), 'config.toml');
     fs.writeFileSync(
       filePath,
@@ -669,13 +668,10 @@ describe('config-reader typed results', () => {
 
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') throw new Error('Expected ok result');
-    expect(result.config.providers).toEqual([]);
-    expect(result.diagnostics).toEqual([
-      expect.objectContaining({
-        code: 'unsupportedProviderProtocolProfile',
-        path: 'providers.deepseek.protocol_profile',
-      }),
+    expect(result.config.providers).toEqual([
+      expect.objectContaining({ id: 'deepseek', protocolProfile: 'deepseek' }),
     ]);
+    expect(result.diagnostics).toEqual([]);
   });
 
   it('rejects unsupported provider and protocol variant enum values', () => {
@@ -737,7 +733,7 @@ describe('config-reader typed results', () => {
     ]);
   });
 
-  it('rejects unsupported model protocol profile overrides', () => {
+  it('preserves opaque model protocol profile overrides', () => {
     const filePath = path.join(createTempRoot(), 'config.toml');
     fs.writeFileSync(
       filePath,
@@ -757,13 +753,10 @@ describe('config-reader typed results', () => {
 
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') throw new Error('Expected ok result');
-    expect(result.config.models).toEqual([]);
-    expect(result.diagnostics).toEqual([
-      expect.objectContaining({
-        code: 'unsupportedModelProtocolProfile',
-        path: 'models.custom-model.protocol_profile',
-      }),
+    expect(result.config.models).toEqual([
+      expect.objectContaining({ id: 'custom-model', protocolProfile: 'deepseek' }),
     ]);
+    expect(result.diagnostics).toEqual([]);
   });
 
   it('rejects unsupported type defaults', () => {

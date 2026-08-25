@@ -11,7 +11,7 @@
 - Entity ID 是持久锚点；名称、alias、路径和表现可以变化。
 - 用户确认事实高于 AI、Importer、Matcher 与 Search 推断。
 - candidate、suggestion、draft、mention 与 semantic evidence 不能静默覆盖 confirmed Entity。
-- Entity 不拥有文件、Asset package、Character、World、thumbnail、cache、usage 或 interaction lifecycle。
+- Entity 不拥有文件、全局 Asset 记录、Character、World、thumbnail、cache、usage 或 interaction lifecycle。
 - 删除资源不删除 Entity；deprecate Entity 不删除资源、角色、世界或历史引用。
 
 Entity 是跨文档语义锚点，不是 Character/World 的基类。全局 Character/World 可以没有 Entity；
@@ -48,8 +48,8 @@ Entity contract 不提供任意 facts bag。Character/World 定义、provider/mo
 | occurrence / relationship / availability / usage | 可重建 read model                         | Search / local metadata        |
 | Entity/Character association                     | 项目语义身份与角色的精确组合              | Project per-record fact owner  |
 
-SQLite 不保存 Entity authoritative payload。现有记录中超出最小 contract 的字段在切换严格 reader 前必须
-先资格化；无法支持的记录原样保留并在对应项目显示 diagnostic，不通过普通启动迁移或丢弃。
+SQLite 不保存 Entity authoritative payload。无法通过当前 contract 校验的记录原样保留，并在对应项目
+显示 record-local diagnostic；普通启动不得改写、丢弃或伪造默认值。
 
 ## Identity 生命周期
 
@@ -77,7 +77,6 @@ binding 保存 owner-qualified durable resource ref，而不是任意路径：
 | workspace file   | normalized workspace-relative locator + optional fingerprint                  |
 | document entry   | stable document source + normalized entry identity + optional fingerprint     |
 | generated output | output owner identity + revision/digest + durable locator                     |
-| package resource | Asset identity + exact user-managed revision/digest + package-relative member |
 
 availability 与 attention 是可重建投影。公共或持久 Entity contract 不包含 absolute/link-target path、
 cache path、provider URL、Renderer URI 或 runtime token。
@@ -85,7 +84,7 @@ cache path、provider URL、Renderer URI 或 runtime token。
 workspace path 缺失或 fingerprint 不匹配时，binding 变为 orphaned。Search 可以提供候选 evidence，只有
 显式 rebind 才能修改 confirmed binding；禁止按同名文件、旁路 catalog 或 active workspace 自动修复。
 
-unbind 不删除 bytes；资源删除只让 binding orphaned；deprecate Entity 不修改 Media link、Asset package、
+unbind 不删除 bytes；资源删除只让 binding orphaned；deprecate Entity 不修改 Media link、全局 Asset 记录、
 Character 或 World。
 
 ## 候选、发现与展示
@@ -120,12 +119,12 @@ run/save/branch 仍归 World；Character actor 必须引用精确 CharacterVersi
 
 ## 与资源和 Asset 的关系
 
-Media Library discovery 可以提供 evidence 或 rebind candidate，但不能确认文件“就是某个角色”。Asset
-只拥有显式导入、安装或发布的普通可复用包；Project Entity 可以绑定 package member，但不拥有 Asset
-manifest、revision 或安装状态。
+Media Library discovery 可以提供 evidence 或 rebind candidate，但不能确认文件“就是某个角色”。全局
+Asset membership 只管理用户显式导入的文件记录；Project Entity 绑定其进入 Workspace 后的 durable
+locator，不拥有 membership 或文件生命周期。
 
-普通可复用资源使用 Asset package；Character 可移植包由 Chara 拥有；World 可移植与发布由 World
-拥有；ProjectEntity 只保持项目本地可变事实。Entity 不拥有素材包发布、实例化或更新协议。
+Character 可移植包由 Chara 拥有；World 可移植与发布由 World 拥有；ProjectEntity 只保持项目本地可变
+事实，不拥有其他领域的发布、实例化或更新协议。
 
 ## Entity Inspector
 
@@ -150,6 +149,6 @@ CharacterVersion、完整 reference reader 或资源 adapter 时，操作必须�
 | 把 Character/World 字段放进 Entity facts | 对应 owning aggregate + exact association    |
 | 把使用次数放进 Entity                    | Search/local-metadata projection             |
 | Entity 启动 Dialogue/Room                | Chara-owned exact handoff                    |
-| Entity Asset 复制角色或世界 publication  | Chara/World-owned portability                |
+| 全局 Asset 记录复制角色或世界事实         | Chara/World-owned portability                |
 | 自动 relocation confirmed binding        | orphan + candidate + explicit rebind         |
 | 删除文件时删除 Entity                    | orphan binding，Entity 保留                  |

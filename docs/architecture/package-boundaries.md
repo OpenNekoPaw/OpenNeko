@@ -274,7 +274,7 @@ Browser Use 与 Computer Use 的控制实现由审核固定的开源 upstream MC
 第二套浏览器、截图、键鼠输入、VLA 或 GUI Agent loop。`@neko/automation-contracts` 是 L0 canonical
 shape owner，`@neko/automation-node` 是 L1 target、grant、action policy 与 evidence owner。两者作为官方维护的
 DSH MCP contributions 接入：DSH 子进程拥有 MCP connection、Tool discovery/registration、call 与 cancellation；
-OpenNeko 不保留 MCP Manager、generic Tool Registry 或 Pi Tool Call。`@neko/automation-node` 拥有目标发现、
+OpenNeko 不保留 MCP Manager、generic Tool Registry 或 product-owned Tool Call runtime。`@neko/automation-node` 拥有目标发现、
 脱敏候选、显式选择、选择后 exact revalidation 与一次性 grant 语义；Desktop Main 只提供 sender/Window-bound
 用户选择 interaction adapter、当前 OS permission 查询、精确 app/process/window facts 与短生命周期 observation projection。
 自动化 grant 必须绑定 exact provider/upstream release、browser profile 和 domains 或 computer target、
@@ -289,8 +289,9 @@ projection attachment 只能通过其创建时 binding 释放，不能使用全�
 模拟多个 session instance。
 
 `@neko/shared/job-lifecycle` 只提供 typed Job identity、phase、revision/CAS、终态不可变和
-versioned observation。Generation、Cut 等 owning domain 各自拥有 submit、具体 snapshot
-schema、provider/executor identity、持久 migration、reconciliation、retry policy 和原子结果提交；
+CAS-guarded observation。Generation、Cut 等 owning domain 各自拥有 submit、具体 snapshot
+schema、provider/executor identity、当前 canonical shape 的持久化、重启 reconciliation、保持同一
+provider/source/contract 语义的有界 retry policy 和原子结果提交；不得实现 schema/data migration；
 不得建立中央 `GenericJobManager`、共享 payload/result 表或跨领域 execution registry。Agent
 只能通过 Tool Call 调用具体领域 port，Webview 只消费 Host-owned Activity projection，不拥有
 Job 生命周期或 provider/executor observer。
@@ -312,7 +313,7 @@ Capability Host、generic Tool registry、MCP wrapper 或 External Processor。
 
 | 包                          | 主要职责                                                                                              | 关键边界                                                                                                                                                                                                                                           |
 | --------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@neko/agent-*`             | Agent session、provider、Skill、capability 与 Chat UI                                                 | runtime host-neutral；宿主与 UI adapter 分离；行为变更需真实 evaluation                                                                                                                                                                            |
+| `@neko/agent-*`             | Conversation binding、DSH application/projection、typed Tool bridge、配置契约与管理 UI                | DSH 独占 Agent/Session/Skill/MCP/Plugin runtime authority；OpenNeko runtime host-neutral，宿主与 UI adapter 分离；行为变更需真实 evaluation                                                                                                        |
 | `@neko/generation-domain`   | canonical Recipe、生成请求/结果契约、execution port 与 recoverable Job                                | 统一拥有 Recipe/default/validation/request projection；只依赖共享契约；不读取配置或 credential；provider runtime 由现有 Host 注入；不创建独立 Host 或 UI                                                                                           |
 | `@neko/chara-domain`        | 工作区 Character、全局 Character/不可变版本、同步、Dialogue/Room、表现、故事线与记忆                  | Project 只保存 membership 或精确全局版本引用；Assistant Creator 直接创建全局首版；运行只消费精确全局版本；单版本 ZIP 直接导入全局目录，不存在 installed/adaptation/recovery 生命周期                                                               |
 | `@neko/world-domain`        | 工作区 World、全局 World/不可变版本、同步、World Run/Save/branch 与 World Experience                  | Project 只保存 membership 或精确全局版本引用；Assistant Creator 直接创建全局首版；Run/Save 固定精确版本；单版本 ZIP 直接导入全局目录，不存在 installed/adaptation/recovery 生命周期                                                                |

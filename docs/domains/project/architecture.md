@@ -41,8 +41,10 @@ plan。归档路径、链接逃逸、重复条目、容量、清单和摘要校�
 
 ## 本机重新初始化
 
-项目中的 `media-library` locator 是权威、可同步的外部媒体身份；`.neko/media-libraries` binding 与
-`neko/assets/<libraryName>` managed link 都是本机可重建状态。删除 `.neko` 后项目仍可打开，受影响引用
-显示未关联；只有项目事实需要同名库、现存直接链接精确匹配唯一可用全局 connection 且没有冲突时，才可
-确定性重建 binding。零个或多个匹配、普通目录占位、链接目标不一致都必须局部显示冲突并要求显式关联，
-不得把 Workspace 投影写回项目事实、按名称猜测 target 或读取全局目录作为替代事实。
+项目中的 `media-library` locator 是权威、可同步的外部媒体身份；`.neko/media-libraries` binding 是
+Assets-owned、非 authoritative 的本机授权物化，`neko/assets/<libraryName>` managed link 是由该 binding
+与 exact global connection 派生的访问投影。删除 `.neko` 后项目仍可打开，受影响引用显示未关联；只有项目
+事实需要同名库、现存直接链接精确匹配唯一可用全局 connection 且没有冲突时，才可从这些当前 authority
+确定性重新物化 binding。直接链接只作为 exact-match 准入证据，不成为 target 或项目事实 authority。
+零个或多个匹配、普通目录占位、链接目标不一致都必须局部显示冲突并要求显式关联，不得把 Workspace 投影
+写回项目事实、按名称猜测 target、读取旧 binding shape，或读取全局目录作为替代业务事实。

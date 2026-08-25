@@ -1,0 +1,119 @@
+name: Release macOS Preview
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  source-gate:
+    name: Preview Release Source Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Validate release metadata
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node scripts/assert-macos-release-metadata.mjs --tag "$RELEASE_TAG"
+
+      - name: Validate release source is on main
+        run: |
+          git fetch origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - name: Install media runtime dependency
+        run: |
+          sudo apt-get update
+          xargs sudo apt-get install -y < scripts/act/media-runtime-packages.txt
+
+      - name: Run release source gates
+        run: pnpm check:static-build && pnpm check:test && pnpm check:repository-quality
+
+  macos-release:
+    name: Release macOS Preview (darwin-arm64)
+    needs: [source-gate]
+    runs-on: macos-15
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Fetch locked DSH runtime inputs
+        run: pnpm --dir scripts/dsh-development-runtime fetch --frozen-lockfile
+
+      - name: Validate release metadata and main ancestry
+        run: |
+          node scripts/assert-macos-release-metadata.mjs --tag "$RELEASE_TAG"
+          git fetch origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - name: Project tag version into release checkout
+        run: node scripts/project-macos-release-version.mjs --tag "$RELEASE_TAG"
+
+      - name: Typecheck Desktop
+        run: pnpm typecheck:desktop
+
+      - name: Validate native Sharp bundle runtime
+        run: node --test scripts/test-orchestration/sharp-cjs-bundle-runtime.test.mjs
+
+      - name: Make ad-hoc macOS preview DMG
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: pnpm make:desktop
+
+      - name: Verify ad-hoc app and DMG closure
+        run: |
+          APP_PATH="apps/neko-desktop/out/OpenNeko-darwin-arm64/OpenNeko.app"
+          VERSION="${RELEASE_TAG#v}"
+          DMG_PATH="apps/neko-desktop/out/make/OpenNeko-${VERSION}-arm64.dmg"
+          codesign --verify --deep --strict --verbose=4 "$APP_PATH"
+          SIGNATURE_DETAILS="$(codesign -dv --verbose=4 "$APP_PATH" 2>&1)"
+          grep -Fq "Signature=adhoc" <<< "$SIGNATURE_DETAILS"
+          hdiutil verify "$DMG_PATH"
+          node scripts/prepare-macos-release-artifacts.mjs --tag "$RELEASE_TAG"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          DMG_PATH="apps/neko-desktop/out/make/OpenNeko-${VERSION}-arm64.dmg"
+          CHECKSUM_PATH="apps/neko-desktop/out/release/SHASUMS256.txt"
+          PREVIEW_WARNING=$'> [!WARNING]\n> This preview DMG is ad-hoc signed. It is not Developer ID signed or notarized by Apple.\n> If macOS blocks the first launch, open System Settings > Privacy & Security and choose Open Anyway.'
+          gh release create "$RELEASE_TAG" "$DMG_PATH" "$CHECKSUM_PATH" --verify-tag --generate-notes --notes "$PREVIEW_WARNING" --prerelease --latest=false --title "$RELEASE_TAG"

@@ -19,10 +19,9 @@ DTO types.
 
 #### Scenario: Adapter contract violation
 
-- **WHEN** an adapter returns an unknown descriptor version or stale session
-  identity
+- **WHEN** an adapter returns an invalid descriptor or stale session identity
 - **THEN** the consumer fails with an explicit diagnostic
-- **AND** it does not substitute a legacy adapter or empty result
+- **AND** it does not substitute another adapter or empty result
 
 ### Requirement: Node/FFmpeg owns trusted media preparation
 
@@ -74,7 +73,7 @@ PCM decoding, and export.
 
 ### Requirement: Preview uses declared native Range preparation
 
-Video preview SHALL use an explicit versioned native video descriptor and one
+Video preview SHALL use an explicit native video descriptor and one
 opaque transient OpenNeko resource URL. The Webview SHALL assign it directly to a muted
 `<video>` element without application-level video byte fetching or buffering.
 
@@ -102,8 +101,7 @@ opaque transient OpenNeko resource URL. The Webview SHALL assign it directly to 
 
 #### Scenario: VP8 qualification
 
-- **WHEN** the target Electron renderer passes the real VP8 WebM native
-  `<video src>` fixture
+- **WHEN** the target Electron renderer supports VP8 WebM native `<video src>` playback
 - **THEN** VP8 may use the direct WebM preparation profile
 - **ELSE** VP8 uses the explicit H.264 transcode profile
 
@@ -116,14 +114,14 @@ opaque transient OpenNeko resource URL. The Webview SHALL assign it directly to 
 ### Requirement: All audible inputs use PCM
 
 The system SHALL decode and mix every audible timeline input, including video-embedded audio, into
-one versioned framed float32 PCM registration per owning Cut generation. PCM bytes SHALL be
+one framed float32 PCM registration per owning Cut operation. PCM bytes SHALL be
 delivered through the unified OpenNeko resource handler.
 
 #### Scenario: Start synchronized audio
 
 - **WHEN** a preview interval contains audible inputs
 - **THEN** Desktop Main creates one owning mixed PCM registration for the Cut generation
-- **AND** its descriptor reports protocol version, sample rate, channels, and an opaque transient
+- **AND** its descriptor reports sample rate, channels, and an opaque transient
   resource URL
 - **AND** the video element remains muted
 
@@ -198,49 +196,18 @@ owned cancellable FFmpeg job with staged output and post-write validation.
 - **THEN** incomplete output is not published as a successful export
 - **AND** the caller receives an actionable diagnostic
 
-### Requirement: Cut switches through one canonical composition path
+### Requirement: Cut uses one canonical composition path
 
-The Cut composition root SHALL select only the Node/FFmpeg adapter after the switch.
+The Cut composition root SHALL select only the Node/FFmpeg adapter.
 
 #### Scenario: Canonical adapter selected
 
-- **WHEN** a Cut document is opened after migration
-- **THEN** tests observe construction of the Node/FFmpeg adapter
-- **AND** a poisoned legacy Engine Cut entry is not invoked
+- **WHEN** a Cut document is opened
+- **THEN** the composition root constructs the Node/FFmpeg adapter
+- **AND** no alternate media runtime is invoked
 
 #### Scenario: Node adapter cannot initialize
 
 - **WHEN** FFmpeg binaries, the injected media publisher, or the Desktop resource registry is unavailable
 - **THEN** Cut reports initialization failure
-- **AND** it does not retry with the Engine adapter
-
-### Requirement: Legacy Cut Engine surface is removed
-
-After the canonical path is verified, the repository SHALL remove Cut-owned
-Engine adapters, connections, routes, client calls, DTO references, package
-dependencies, and tests.
-
-#### Scenario: Legacy debt check
-
-- **WHEN** repository searches and dependency checks run
-- **THEN** no Cut production path imports or invokes the removed Engine Cut
-  surface
-
-### Requirement: Whole-Engine deletion is conditional
-
-The repository SHALL delete `packages/neko-engine` only after an audited
-dependency closure proves that it has no remaining owned responsibility.
-
-#### Scenario: A non-Cut consumer remains
-
-- **WHEN** Preview, Canvas, Assets, Tools, Agent, Desktop composition, packaging,
-  protocol, tests, or documentation still owns an Engine dependency
-- **THEN** `packages/neko-engine` remains
-- **AND** the audit records the exact consumer and responsibility
-
-#### Scenario: No consumer remains
-
-- **WHEN** runtime, protocol, build, packaging, test, and documentation audits
-  all report zero remaining responsibilities
-- **THEN** the Engine package and its now-unused shared surface may be deleted
-- **AND** the full local quality gates must pass
+- **AND** it does not retry with another adapter

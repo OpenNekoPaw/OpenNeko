@@ -60,7 +60,7 @@ committing rather than leave a dangling or silently redirected reference.
 ### Requirement: Availability is derived from owning resources
 
 Entity and binding attention state SHALL be derived by resolving each representation through its owning
-resource contract. Missing files, removed Media Library links, uninstalled Assets, changed fingerprints,
+resource contract. Missing files, removed Media Library links, removed global Asset memberships, changed fingerprints,
 or unavailable accounts MUST NOT delete or mutate Project Entity facts.
 
 #### Scenario: Bound content becomes unavailable
@@ -73,35 +73,11 @@ or unavailable accounts MUST NOT delete or mutate Project Entity facts.
 - **WHEN** the exact target and fingerprint become available again
 - **THEN** availability is rebuilt without editing the canonical Entity document
 
-### Requirement: Fragmented retired authorities are product-unreachable
-
-Product startup, public entries, build output and ordinary tests MUST NOT inspect, classify, migrate,
-archive or repair current character, per-kind, candidate, binding, visual draft and requirement files as
-retired semantic authorities. Existing bytes remain untouched. Normal readers and writers for fragmented
-semantic authority MUST be absent.
-
-#### Scenario: Retired file remains beside canonical facts
-
-- **WHEN** a retired file exists beside `neko/entities.json`
-- **THEN** product runtime reads only the canonical document
-- **AND** it leaves the retired file unchanged
-
-#### Scenario: Encounter ambiguous or unknown data
-
-- **WHEN** a retired file contains an ambiguous or unknown value
-- **THEN** product runtime does not inspect or discard it
-- **AND** any repair requires a separately authorized exact offline tool
-
-#### Scenario: Retired reader is referenced
-
-- **WHEN** a normal runtime path attempts to load semantic facts from a replaced fragmented file
-- **THEN** repository reachability checks fail and the path cannot return success
-
 ### Requirement: Project open uses only the canonical Entity owner
 
 The Entity Node application service SHALL read the canonical Entity document and publish valid records
-with record-local diagnostics. Desktop SHALL only compose the service and SHALL NOT implement a retired
-renderer, migration reader or app-local fallback.
+with record-local diagnostics. Desktop SHALL only compose the service and SHALL NOT implement another
+Entity fact reader or app-local authority.
 
 #### Scenario: Canonical project contains valid character and candidate facts
 
@@ -113,14 +89,14 @@ renderer, migration reader or app-local fallback.
 
 - **WHEN** one record reports an identity, binding or unknown-field blocker
 - **THEN** project Entity projection exposes an exact record diagnostic
-- **AND** valid sibling Entities remain available without reading retired files
+- **AND** valid sibling Entities remain available
 
 #### Scenario: Canonical document metadata is unsupported
 
 - **WHEN** the canonical document has valid structural fields plus unsupported document metadata
 - **THEN** the Entity owner projects independently valid records with an exact document diagnostic
 - **AND** strict mutation remains blocked while the original bytes remain untouched
-- **AND** no version dispatch, compatibility reader or migration runs
+- **AND** no alternate reader or fact source is selected
 
 #### Scenario: Canonical document belongs to another Project identity
 

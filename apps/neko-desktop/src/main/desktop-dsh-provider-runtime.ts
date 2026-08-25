@@ -36,8 +36,8 @@ export interface DesktopDshProviderRuntimeProjection {
 
 interface DshProviderProfile {
   readonly displayName: string;
-  readonly api: 'openai-completions' | 'openai-responses' | 'anthropic-messages';
-  readonly baseURL: string;
+  readonly api?: string;
+  readonly baseURL?: string;
   readonly models: readonly Readonly<Record<string, unknown>>[];
   readonly apiKeyEnv?: string;
   readonly maxRequestImageBytes: number;
@@ -66,7 +66,10 @@ export async function createDesktopDshProviderRuntimeProjection(input: {
 
     const protocol = resolveDshProtocol(provider);
     const baseURL = resolveDshBaseUrl(provider);
-    if (protocol === undefined || baseURL === undefined || provider.id === 'deepseek-official') {
+    if (
+      (provider.apiUrl.trim().length > 0 && baseURL === undefined) ||
+      provider.id === 'deepseek-official'
+    ) {
       diagnostics.push({
         providerId: provider.id,
         message: `Provider '${provider.id}' cannot be expressed by the OpenNeko DSH execution profile.`,
@@ -150,8 +153,8 @@ export async function createDesktopDshProviderRuntimeProjection(input: {
 
     profiles[provider.id] = Object.freeze({
       displayName: provider.displayName || provider.name || provider.id,
-      api: protocol,
-      baseURL,
+      ...(protocol === undefined ? {} : { api: protocol }),
+      ...(baseURL === undefined ? {} : { baseURL }),
       models: Object.freeze(dshModels),
       maxRequestImageBytes: OPENNEKO_DSH_MAX_REQUEST_IMAGE_BYTES,
       ...(credentialEnvironmentName === undefined ? {} : { apiKeyEnv: credentialEnvironmentName }),
@@ -223,21 +226,14 @@ function modelSupportsImageInput(capabilities: readonly string[]): boolean {
 }
 
 function resolveDshProtocol(provider: Provider): DshProviderProfile['api'] | undefined {
-  if (provider.protocolProfile === 'ollama' || provider.type === 'ollama') {
+  if (provider.protocolProfile === 'ollama') {
     return 'openai-completions';
   }
   if (provider.protocolProfile === 'openai-responses') return 'openai-responses';
-  if (provider.protocolProfile === 'anthropic' || provider.type === 'anthropic') {
+  if (provider.protocolProfile === 'anthropic') {
     return 'anthropic-messages';
   }
-  if (
-    provider.protocolProfile === 'newapi' ||
-    provider.protocolProfile === 'openai-chat' ||
-    provider.type === 'newapi' ||
-    provider.type === 'oneapi' ||
-    provider.type === 'openai' ||
-    provider.type === 'generic'
-  ) {
+  if (provider.protocolProfile === 'newapi' || provider.protocolProfile === 'openai-chat') {
     if (
       provider.protocolVariant?.authType !== undefined &&
       provider.protocolVariant.authType !== 'bearer'
@@ -246,7 +242,7 @@ function resolveDshProtocol(provider: Provider): DshProviderProfile['api'] | und
     }
     return 'openai-completions';
   }
-  return undefined;
+  return provider.protocolProfile;
 }
 
 function resolveDshBaseUrl(provider: Provider): string | undefined {

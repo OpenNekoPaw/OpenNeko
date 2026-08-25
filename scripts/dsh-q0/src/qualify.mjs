@@ -455,6 +455,18 @@ async function qualify() {
       const bridge = await startBridge(dshHome, dshBin, client, modelTransitionProfileName);
       processes.push(bridge);
       const session = await bridge.connection.newSession({ cwd: fixtureRoot, mcpServers: [] });
+      const activeSessions = await bridge.connection.listSessions({ cwd: fixtureRoot });
+      if (!activeSessions.sessions.some((candidate) => candidate.sessionId === session.sessionId)) {
+        throw new Error(
+          'OpenNeko DSH bridge omitted the active zero-turn Session from session/list',
+        );
+      }
+      await bridge.connection.closeSession({ sessionId: session.sessionId });
+      await bridge.connection.resumeSession({
+        sessionId: session.sessionId,
+        cwd: fixtureRoot,
+        mcpServers: [],
+      });
       const [modelConfiguration, permissionProjection, inputCatalog] = await Promise.all([
         bridge.connection.setSessionConfigOption({
           sessionId: session.sessionId,
@@ -475,6 +487,8 @@ async function qualify() {
         `${JSON.stringify({
           qualified: true,
           sessionModelTransitionIsolation: true,
+          activeSessionListed: true,
+          zeroTurnSessionResumed: true,
           sessionId: 'redacted',
           providerContacted: false,
           jsonRpcMessages: bridge.finishPurity(),

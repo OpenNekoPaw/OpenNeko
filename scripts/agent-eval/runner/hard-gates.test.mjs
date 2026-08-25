@@ -339,7 +339,7 @@ describe('M2 typed path hard gates', () => {
     });
   });
 
-  it('uses the same Pi receipt for the triggered assertion status', () => {
+  it('uses the same Tool receipt for the triggered assertion status', () => {
     const [result] = evaluateHardGates(
       [{ ...M2_ASSERTIONS[0], status: 'triggered' }],
       m2Facts(),

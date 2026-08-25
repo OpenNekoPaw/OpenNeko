@@ -88,9 +88,10 @@ pnpm gate:local
 pnpm package:desktop
 ```
 
-Documentation-only changes require formatting, local-link checks, and `git diff --check`. For
-Desktop visual, interaction, CSP, IPC, focus, or media changes, focused checks in the real Electron
-application are recommended as advisory evidence.
+Documentation-only changes require formatting, local-link checks, and `git diff --check`. Desktop
+visual, interaction, CSP, IPC, focus, or media changes must exercise the affected functional path in
+the real Electron application; browser and component previews supplement browser-only evidence.
+Using the UI validation Skill and its visual judgment remains recommended advisory evidence.
 
 Development work that adds or materially changes user-visible UI behavior should use
 [`.codex/skills/neko-ui-validation/SKILL.md`](.codex/skills/neko-ui-validation/SKILL.md) to build the

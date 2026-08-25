@@ -1,11 +1,11 @@
 # desktop-conversation-context-navigation Specification
 
 ## Purpose
-Define owner-qualified Conversation navigation across Assistant, Project, Character and Room contexts.
+Define exact owner-qualified Conversation navigation for the currently supported Assistant and Workspace contexts.
 ## Requirements
 ### Requirement: Every conversation navigation item has one exact context owner
 
-The Agent conversation catalog SHALL project each conversation with one closed owner identity and MUST NOT encode Assistant, Character or Room conversations as synthetic Workspace Projects. The supported navigation owner kinds SHALL be `assistant`, `workspace`, `character` and `room`; Character and Room identities MUST include their exact run identity.
+The Agent conversation catalog SHALL project each conversation with one exact owner identity and MUST NOT encode Assistant conversations as synthetic Workspace Projects. The supported visible navigation owner kinds SHALL be `assistant` and `workspace`.
 
 #### Scenario: Assistant conversation is projected
 
@@ -19,12 +19,6 @@ The Agent conversation catalog SHALL project each conversation with one closed o
 - **THEN** its navigation owner is `workspace` with that `workspaceId`
 - **AND** Project grouping is resolved separately from the Host Project catalog
 
-#### Scenario: Character or Room owner is incomplete
-
-- **WHEN** a Character conversation lacks `characterRunId` or a Room conversation lacks `roomRunId`
-- **THEN** the strict catalog/context codec rejects it visibly
-- **AND** it is not downgraded to Assistant or Workspace
-
 ### Requirement: Project grouping is optional and does not change context authority
 
 A conversation MAY carry an explicit Project grouping association. Grouping SHALL control only navigation placement and MUST NOT change the conversation owner, capability scope, resource grants, memory scope, transcript ownership or Workbench Scene qualification.
@@ -35,9 +29,9 @@ A conversation MAY carry an explicit Project grouping association. Grouping SHAL
 - **THEN** it appears under its standalone Assistant group
 - **AND** it remains fully restorable without a Project catalog record
 
-#### Scenario: Non-Workspace conversation is associated with a Project
+#### Scenario: Assistant conversation is associated with a Project
 
-- **WHEN** an exact Assistant, Character or Room conversation carries a valid Project association
+- **WHEN** an exact Assistant conversation carries a valid Project association
 - **THEN** it appears below that Project in PrimarySidebar
 - **AND** its original context owner remains unchanged
 - **AND** it gains no Workspace file or domain mutation capability from the association
@@ -84,7 +78,7 @@ The Host Shell service SHALL combine the complete Project catalog, the existing 
 
 ### Requirement: Container activation and conversation restoration are distinct
 
-Project/Character/Room container activation SHALL create or expose an owner-bound Draft without selecting an arbitrary historical conversation. Conversation selection SHALL restore the exact persisted conversation and its complete qualified Workbench Scene.
+Project container activation SHALL create or expose an owner-bound Draft without selecting an arbitrary historical conversation. Conversation selection SHALL restore the exact persisted conversation and its complete qualified Workbench Scene.
 
 #### Scenario: User opens a Project header
 
@@ -104,20 +98,14 @@ Project/Character/Room container activation SHALL create or expose an owner-boun
 - **THEN** Host restores the Assistant session without requiring a Project
 - **AND** any Project grouping grants no Workspace capability
 
-#### Scenario: Character or Room owner is not qualified
-
-- **WHEN** the user requests restore for a Character/Room conversation before its owner runtime and public Scene surfaces are available
-- **THEN** Desktop returns `desktop-scene-owner-unavailable` with the exact owner kind
-- **AND** no placeholder, Assistant fallback or previous Scene transcript is shown
-
 ### Requirement: Lifecycle operations validate exact conversation and owner identity
 
-Delete, restore and future association operations SHALL carry exact conversation identity, owner identity and applicable revision fences. Host SHALL compare them with the authoritative projection before delegating and MUST NOT require a Project identity for standalone owners. Project removal SHALL NOT act as a conversation lifecycle operation.
+Delete, restore and association operations SHALL carry exact conversation identity, owner identity and applicable revision fences. Host SHALL compare them with the authoritative projection before delegating and MUST NOT require a Project identity for standalone owners. Project removal SHALL NOT act as a conversation lifecycle operation.
 
 #### Scenario: Assistant conversation is deleted
 
 - **WHEN** the user confirms deletion of an exact Assistant conversation with current revisions
-- **THEN** Host validates its Assistant owner and delegates canonical Agent lifecycle/Pi deletion
+- **THEN** Host validates its Assistant owner and delegates to the canonical Agent lifecycle owner
 - **AND** no Project record is required
 
 #### Scenario: Owner identity is stale or mismatched
@@ -128,47 +116,10 @@ Delete, restore and future association operations SHALL carry exact conversation
 
 #### Scenario: Project is removed while conversations remain
 
-- **WHEN** a Project is removed while Workspace, Assistant, Character or Room conversations remain
+- **WHEN** a Project is removed while Workspace or Assistant conversations remain
 - **THEN** the Project catalog operation does not delete those conversations
 - **AND** Workspace conversations remain under an unavailable Workspace group
 - **AND** standalone-owner conversations remain accessible under their exact owner grouping
-
-### Requirement: Existing valuable conversations migrate without synthetic fallback
-
-The breaking navigation projection migration SHALL preserve supported Assistant and Workspace conversations by reading their exact canonical context metadata. Unknown versions, unknown owner kinds and unresolved legacy context SHALL fail visibly and MUST NOT be assigned to a recent Project or default Assistant Space.
-
-#### Scenario: Existing Assistant conversation is migrated
-
-- **WHEN** a current Assistant lifecycle context is read by the new catalog producer
-- **THEN** it is projected with its exact Assistant Space owner and existing transcript identity
-- **AND** the former synthetic `content:<assistantSpaceId>` Project identity is not emitted
-
-#### Scenario: Existing Workspace conversation is migrated
-
-- **WHEN** a legacy Workspace conversation has an exact resolvable Workspace identity and grant
-- **THEN** the canonical context migration commits once and the conversation appears under the matching Project
-- **AND** its Pi transcript and branch identities are unchanged
-
-#### Scenario: Legacy context cannot be resolved
-
-- **WHEN** a conversation lacks exact context and no migration authority can resolve it
-- **THEN** catalog/restore exposes an unresolved-context diagnostic
-- **AND** it does not return an empty success projection or another owner's conversation
-
-#### Scenario: Retired embedded-context Pi table is migrated
-
-- **WHEN** startup finds the exact retired `pi_conversations` shape with embedded context columns
-- **THEN** Agent Runtime transactionally rebuilds it into the canonical Pi catalog shape before opening any writer
-- **AND** existing conversation, branch and Pi Session identities remain unchanged
-- **AND** an old Workspace row keeps its exact `workspace_id`
-- **AND** an old Scratch row retains its exact `context_id` only as Pi runtime scope and is not assigned to the default Assistant Space
-- **AND** the obsolete context columns and indexes are absent after migration
-
-#### Scenario: Pi table shape is unknown
-
-- **WHEN** the existing `pi_conversations` table is neither canonical nor the exact retired embedded-context shape
-- **THEN** startup fails visibly before writing or rebuilding the table
-- **AND** Agent launch does not retry with a compatibility INSERT or partial default values
 
 ### Requirement: PrimarySidebar is the user-visible conversation switcher
 
@@ -186,7 +137,6 @@ PrimarySidebar SHALL provide the user-visible grouped conversation navigation fo
 - **THEN** Desktop launches and materializes the exact owner-bound Agent conversation
 - **AND** the user message and real provider response become visible in the Agent panel
 - **AND** the new exact conversation appears in PrimarySidebar without a global launch error
-- **AND** acceptance drives the UI controls rather than creating the conversation through fixture automation or a direct bridge call
 
 #### Scenario: Initial provider port crosses the Desktop composition boundary
 
@@ -202,27 +152,6 @@ PrimarySidebar SHALL provide the user-visible grouped conversation navigation fo
 - **AND** completion publishes the terminal state removal to that connection
 - **AND** the completed response is not displayed together with a stale Thinking or Stop state
 - **AND** the launch lifecycle records the exact initial turn as completed rather than leaving it running
-
-#### Scenario: Room contains participant AgentSessions
-
-- **WHEN** a future Room runtime uses multiple internal participant AgentSessions
-- **THEN** those sessions remain Room-owned runtime participants
-- **AND** they are not projected as user-visible Agent Tabs or unrelated sidebar conversations
-
-### Requirement: Agent development acceptance uses visible and batch real-provider lanes
-
-Agent user-feature acceptance SHALL use actual visible Electron controls with a real provider API.
-Batch behavior evaluation SHALL run without a visible UI while retaining the complete Desktop
-session owner, public Agent input path and real provider API. Neither lane SHALL use bridge-created
-conversation setup, a direct turn runner, mock provider or alternate session assembly as behavior
-evidence.
-
-#### Scenario: Conversation lifecycle behavior is accepted
-
-- **WHEN** Agent session, persistence, generation or projection behavior changes
-- **THEN** visible feature evidence covers the affected user controls and presentation
-- **AND** batch evidence covers the affected cells among conversation, compaction, reopen restoration, generation-record restoration, switching and isolation
-- **AND** the verification record identifies covered, unaffected and blocked matrix cells
 
 ### Requirement: PrimarySidebar separates current Project and Assistant contexts
 
@@ -249,50 +178,10 @@ PrimarySidebar SHALL present two explicit current sections in the stable order `
 
 ### Requirement: Navigation section counts have one meaning
 
-The Projects section count SHALL equal the number of visible Project-context groups, including unavailable Workspace context groups. The Conversations section count SHALL equal the total Personal Assistant Conversation records. Project row counts SHALL continue to equal their exact child Workspace Conversation count. A future owner that has no current visible section SHALL NOT expose a UI count.
+The Projects section count SHALL equal the number of visible Project-context groups, including unavailable Workspace context groups. The Conversations section count SHALL equal the total Personal Assistant Conversation records. Project row counts SHALL equal their exact child Workspace Conversation count. An owner kind without a visible section SHALL NOT expose a UI count.
 
 #### Scenario: Mixed navigation is counted
 
 - **WHEN** two valid Project groups, one unavailable Workspace context group, and five Personal Assistant Conversations are visible
 - **THEN** the section counts are Projects `3` and Conversations `5`
 - **AND** the count does not represent a mixture of group kinds
-
-### Requirement: Future owner classifications do not expose unsupported product surfaces
-
-PrimarySidebar SHALL reserve Character, Room, and World as future owner classifications without rendering their sections until each corresponding package-owned projection and product runtime is implemented. The reservation MUST NOT create a generic registry, feature-flag path, placeholder DTO, fake record, empty heading, zero count, action, or route. Desktop MUST NOT infer a Character, Room, or World record from a Project profile, Workspace, Personal Assistant Conversation, current Scene, or local file.
-
-#### Scenario: Current Project exists without future owner projections
-
-- **WHEN** a current Project is visible and no Character, Room, or World owner projection exists
-- **THEN** the Project remains under Projects and no World section is rendered
-- **AND** Desktop does not reinterpret it as a Character, Room, World Experience, Run, Save, placeholder, route, or clickable entry
-
-#### Scenario: Future Character and Room owners are not implemented
-
-- **WHEN** the current product composition has no Character or Room runtime and no corresponding package-owned visible projection
-- **THEN** PrimarySidebar renders no Character or Room section, row, count, action, or route
-- **AND** Conversations continues to contain only Personal Assistant Conversations
-
-#### Scenario: Future owner is implemented later
-
-- **WHEN** a later change adds a package-owned Character, Room, or World projection and complete product runtime
-- **THEN** that change explicitly extends the typed owner classification and composes its own visible section
-- **AND** it does not reinterpret Project or Personal Assistant records as the new owner type
-
-### Requirement: Release does not restore hidden creative conversations
-
-Release MUST reject Character, Room and World conversation restore at the Host Scene boundary while preserving their durable
-conversation and transcript records. Development MUST continue to restore those conversations by exact owner identity.
-
-#### Scenario: Release receives a Character or Room restore intent
-
-- **WHEN** the caller requests restore for an exact Character or Room conversation in Release
-- **THEN** Host SHALL return an owner-qualified unavailable result
-- **AND** it SHALL NOT attach the conversation to an Assistant or Workspace Scene
-- **AND** the conversation, transcript and protected runtime SHALL remain unchanged
-
-#### Scenario: Development restores the same conversation
-
-- **WHEN** the caller requests restore for an exact Character or Room conversation in Development
-- **THEN** Host SHALL use the existing exact Character interaction composition
-- **AND** no active, recent or Assistant fallback SHALL participate

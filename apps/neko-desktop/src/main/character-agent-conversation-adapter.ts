@@ -9,7 +9,10 @@ import type {
 } from '@neko/chara-domain/application';
 
 export function createCharacterAgentConversationAdapter(options: {
-  readonly conversations: DshDomainConversationService;
+  readonly conversations: Pick<
+    DshDomainConversationService,
+    'publish' | 'archivePublishedConversation' | 'submitTurn'
+  >;
   readonly createConversationId?: (characterRunId: string) => string;
 }): CharacterAgentConversationPort {
   const createConversationId = options.createConversationId ?? createCharacterConversationId;

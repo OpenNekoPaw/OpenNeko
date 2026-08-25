@@ -17,6 +17,21 @@ import { createDesktopI18n } from './i18n';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
+const dialogueCapabilities = {
+  status: 'available',
+  providers: [
+    {
+      providerId: 'openai',
+      displayName: 'OpenAI',
+      source: 'catalog',
+      settingsNamespace: 'llm-pi-ai',
+      settingsPath: ['providers', 'openai'],
+    },
+  ],
+  protocols: ['openai-completions', 'openai-responses', 'anthropic-messages'],
+  diagnostics: [],
+} as const;
+
 describe('Desktop Settings surfaces', () => {
   afterEach(() => {
     document.body.replaceChildren();
@@ -114,6 +129,7 @@ describe('Desktop Settings surfaces', () => {
 
   it('shows provider groups directly while keeping provider editing on demand', async () => {
     const projection = {
+      dialogueCapabilities,
       providers: [
         {
           id: 'deepseek',
@@ -226,6 +242,7 @@ describe('Desktop Settings surfaces', () => {
 
   it('projects a local Ollama provider as dialogue-only without a credential field', async () => {
     const projection = {
+      dialogueCapabilities,
       providers: [
         {
           id: 'ollama-local',
@@ -278,6 +295,7 @@ describe('Desktop Settings surfaces', () => {
 
   it('keeps the selected Provider identity aligned with API and credential fields', async () => {
     const projection = {
+      dialogueCapabilities,
       providers: [
         {
           id: 'deepseek-chat',
@@ -380,8 +398,63 @@ describe('Desktop Settings surfaces', () => {
     await act(async () => root.unmount());
   });
 
+  it('creates dialogue Providers from the live DSH catalog without a local preset', async () => {
+    const projection = { dialogueCapabilities, providers: [], models: [], defaults: {} };
+    const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
+    const saveProvider = vi.fn(async () => response);
+    const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
+      get: async () => projection,
+      saveProvider,
+      saveModel: async () => response,
+      deleteProvider: async () => response,
+      deleteModel: async () => response,
+      setDefault: async () => response,
+    };
+    const { container, root } = await renderSettings({
+      aiModelSettings,
+      initialSection: 'agent',
+    });
+    await act(async () => Promise.resolve());
+
+    await act(async () => findButton(container, 'Add dialogue provider').click());
+    const providerSelector = container.querySelector<HTMLSelectElement>(
+      '.desktop-settings__editor select',
+    );
+    if (!providerSelector) throw new Error('DSH Provider catalog selector is unavailable.');
+    expect([...providerSelector.options].map((option) => option.textContent)).toEqual([
+      'OpenAI',
+      'Add provider',
+    ]);
+    expect(
+      [...container.querySelectorAll<HTMLInputElement>('.desktop-settings__editor input')].find(
+        (input) => input.value === 'openai',
+      )?.disabled,
+    ).toBe(true);
+    expect(container.querySelector<HTMLInputElement>('input[type="url"]')?.value).toBe('');
+    expect(
+      [...container.querySelectorAll<HTMLSelectElement>('.desktop-settings__editor select')].find(
+        (select) => select.value === '',
+      )?.textContent,
+    ).toContain('DSH catalog default');
+
+    await act(async () => findButton(container, 'Save').click());
+    expect(saveProvider).toHaveBeenCalledWith(
+      {
+        id: 'openai',
+        displayName: 'OpenAI',
+        type: 'openai',
+        apiUrl: '',
+        supportedModelFamilies: ['dialogue'],
+        enabled: true,
+      },
+      undefined,
+    );
+    await act(async () => root.unmount());
+  });
+
   it('requires explicit confirmation before deleting an empty configured provider', async () => {
     const projection = {
+      dialogueCapabilities,
       providers: [
         {
           id: 'custom-empty',
@@ -452,6 +525,7 @@ describe('Desktop Settings surfaces', () => {
       credentialStatus: 'configured' as const,
     }));
     const projection = {
+      dialogueCapabilities,
       providers,
       models: [
         modelFixture('chat-model', 'chat', 'llm'),
@@ -492,7 +566,7 @@ describe('Desktop Settings surfaces', () => {
   });
 
   it('prefills the official MiniMax generation Provider before model configuration', async () => {
-    const projection = { providers: [], models: [], defaults: {} };
+    const projection = { dialogueCapabilities, providers: [], models: [], defaults: {} };
     const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
     const saveProvider = vi.fn(async () => response);
     const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
@@ -550,6 +624,7 @@ describe('Desktop Settings surfaces', () => {
 
   it('adds MiniMax H3 through its canonical model template', async () => {
     const projection = {
+      dialogueCapabilities,
       providers: [
         {
           id: 'minimax-media',

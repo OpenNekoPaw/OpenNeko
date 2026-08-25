@@ -157,6 +157,18 @@ describe('DSH domain Conversation service', () => {
     );
     expect(fixture.conversations.prompt).not.toHaveBeenCalled();
   });
+
+  it('deletes an unavailable record through the package-owned cleanup application', async () => {
+    const fixture = createFixture();
+
+    await expect(
+      fixture.service.deleteUnavailableConversation('conversation:character:run-1'),
+    ).resolves.toBeUndefined();
+    expect(fixture.archive.deleteUnavailableConversation).toHaveBeenCalledWith(
+      'conversation:character:run-1',
+    );
+    expect(fixture.conversations.prompt).not.toHaveBeenCalled();
+  });
 });
 
 function createFixture(order: string[] = []) {
@@ -197,6 +209,7 @@ function createFixture(order: string[] = []) {
   };
   const archive = {
     archiveConversation: vi.fn(async () => undefined),
+    deleteUnavailableConversation: vi.fn(async () => undefined),
   };
   return {
     publication,

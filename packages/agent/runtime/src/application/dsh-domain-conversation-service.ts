@@ -19,6 +19,7 @@ export interface DshDomainConversationService {
     readonly context: AgentConversationContext;
   }): Promise<void>;
   archivePublishedConversation(conversationId: string): Promise<void>;
+  deleteUnavailableConversation(conversationId: string): Promise<void>;
   submitTurn(input: {
     readonly requestId: string;
     readonly conversationId: string;
@@ -56,6 +57,11 @@ export function createDshDomainConversationService(options: {
     archivePublishedConversation(conversationIdValue: string) {
       const conversationId = requireIdentity(conversationIdValue, 'Conversation');
       return options.archive.archiveConversation(conversationId);
+    },
+
+    deleteUnavailableConversation(conversationIdValue: string) {
+      const conversationId = requireIdentity(conversationIdValue, 'Conversation');
+      return options.archive.deleteUnavailableConversation(conversationId);
     },
 
     async submitTurn(input: Parameters<DshDomainConversationService['submitTurn']>[0]) {

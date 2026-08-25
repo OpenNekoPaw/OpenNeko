@@ -1,18 +1,17 @@
 ## Why
 
-OpenNeko needs one trusted product boundary for professional applications before it can safely hand resources to ComfyUI, automate supported operations, and ingest verified outputs.
+Professional Application binding and readiness are already canonical, but OpenNeko still lacks one safe end-to-end path for handing an exact authorized resource to ComfyUI, executing a qualified workflow, and ingesting only verified outputs.
 
 ## What Changes
 
-- Add professional-application identity, readiness, launch, document handoff, and capability management.
-- Add explicit ComfyUI API/MCP workflow support and separately qualified Computer Use operations.
-- Return only verified outputs to their owning OpenNeko resource services.
+- Add semantic resource actions and exact authorized handoff to an enabled ComfyUI binding.
+- Add explicit ComfyUI API workflow execution and separately qualified Computer Use operations without transport fallback.
+- Correlate progress, cancellation and output retrieval with one Generation Job, and ingest only verified outputs through their owning resource services.
 
 ## Capabilities
 
 ### New Capabilities
 
-- `professional-application-management`
 - `professional-resource-handoff`
 - `comfyui-professional-workflow`
 
@@ -22,4 +21,4 @@ OpenNeko needs one trusted product boundary for professional applications before
 
 ## Impact
 
-Host owns application/process/file trust, resource owners authorize inputs and ingest outputs, and ComfyUI remains an external application. No generic executable or fallback automation authority is added.
+The existing Professional Application binding lifecycle supplies exact enablement and readiness. Host owns application/process/file trust, resource owners authorize inputs and ingest outputs, Generation owns Job lifecycle, and ComfyUI remains an external application. No generic executable or fallback automation authority is added.

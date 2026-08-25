@@ -82,6 +82,38 @@ function createFixture(initializeResponse: InitializeResponse) {
 }
 
 describe('DshAcpApplicationClient', () => {
+  it('reads the DSH-owned Provider capability projection', async () => {
+    const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
+    fixture.connection.extMethod = vi.fn(async () => ({
+      providers: [
+        {
+          providerId: 'openai',
+          displayName: 'OpenAI',
+          settingsNamespace: 'llm-pi-ai',
+          settingsPath: ['providers', 'openai'],
+          source: 'catalog',
+        },
+      ],
+      protocols: ['openai-completions'],
+      diagnostics: [],
+    }));
+    const client = await DshAcpApplicationClient.connect({
+      transport: unusedTransport,
+      virtualCwd: '/virtual/workspace',
+      handlers: createHandlers(),
+      createConnection: fixture.createConnection,
+    });
+
+    await expect(client.readProviderCapabilities()).resolves.toMatchObject({
+      providers: [{ providerId: 'openai' }],
+      protocols: ['openai-completions'],
+    });
+    expect(fixture.connection.extMethod).toHaveBeenCalledWith(
+      'openneko/providers/capabilities/read',
+      {},
+    );
+  });
+
   it('dispatches exact Skill and MCP lifecycle extension methods', async () => {
     const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
     fixture.connection.extMethod = vi.fn(async () => ({}));
