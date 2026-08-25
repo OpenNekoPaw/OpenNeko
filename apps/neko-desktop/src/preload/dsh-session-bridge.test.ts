@@ -9,6 +9,7 @@ import {
   DSH_RUNTIME_HOST_CHANNEL,
 } from '@neko/agent-contracts/dsh-runtime-host';
 import { internalVersionFields } from '@neko/agent-contracts/testing';
+import { DESKTOP_BRIDGE_CHANNELS } from '../shared/bridge-contract';
 
 const state = vi.hoisted(() => ({
   bridge: undefined as typeof window.openNekoDesktop | undefined,
@@ -122,6 +123,67 @@ describe('DSH Session preload bridge', () => {
       conversationId: 'conversation-1',
       input: { kind: 'message', text: 'hello', references: [], images: [], contextPayloads: [] },
     });
+  });
+
+  it('uses the renderer session established by the sender-bound lifecycle', async () => {
+    state.invoke.mockImplementation(async (channel: string, request: Record<string, unknown>) => {
+      if (channel === DESKTOP_BRIDGE_CHANNELS.bootstrapGet) {
+        return bootstrap(request.requestId as string);
+      }
+      expect(channel).toBe(DSH_SESSION_HOST_CHANNEL);
+      return {
+        requestId: request.requestId,
+        stopReason: 'end_turn',
+        projection: {
+          conversationId: 'conversation-1',
+          dshSessionId: 'session-1',
+          title: 'Hello',
+          inbox: { nextTurn: [], nextStep: [] },
+          events: [],
+        },
+      };
+    });
+    const bridge = requireBridge();
+    await bridge.bootstrap.get();
+    const dispose = bridge.lifecycle.subscribe(vi.fn());
+    const lifecycle = state.listeners.get(DESKTOP_BRIDGE_CHANNELS.lifecycleEvent);
+    lifecycle?.({}, lifecycleEvent('renderer-loading', 'renderer-2', 1));
+    lifecycle?.({}, lifecycleEvent('renderer-ready', 'renderer-2', 2));
+
+    await bridge.dshSessions.submit('conversation-1', {
+      kind: 'message',
+      text: 'hello after reload',
+      references: [],
+      images: [],
+      contextPayloads: [],
+    });
+
+    expect(state.invoke).toHaveBeenLastCalledWith(
+      DSH_SESSION_HOST_CHANNEL,
+      expect.objectContaining({
+        windowId: 'window-1',
+        rendererSessionId: 'renderer-2',
+        conversationId: 'conversation-1',
+      }),
+    );
+    dispose();
+  });
+
+  it('rejects lifecycle identity changes from another application Window', async () => {
+    state.invoke.mockImplementation(async (_channel: string, request: Record<string, unknown>) =>
+      bootstrap(request.requestId as string),
+    );
+    const bridge = requireBridge();
+    await bridge.bootstrap.get();
+    const dispose = bridge.lifecycle.subscribe(vi.fn());
+
+    expect(() =>
+      state.listeners.get(DESKTOP_BRIDGE_CHANNELS.lifecycleEvent)?.(
+        {},
+        { ...lifecycleEvent('renderer-loading', 'renderer-2', 1), windowId: 'window-other' },
+      ),
+    ).toThrow(/does not match the bootstrapped application Window/u);
+    dispose();
   });
 
   it('routes inbox send-now with exact Conversation and Message identities', async () => {
@@ -493,5 +555,19 @@ function bootstrap(requestId: string) {
     host: { id: 'host-1', kind: 'electron', ui: 'graphical' },
     runtime: { platform: 'darwin' },
     status: 'foundation-ready',
+  };
+}
+
+function lifecycleEvent(
+  type: 'renderer-loading' | 'renderer-ready',
+  rendererSessionId: string,
+  sequence: number,
+) {
+  return {
+    applicationInstanceId: 'application-1',
+    windowId: 'window-1',
+    rendererSessionId,
+    sequence,
+    type,
   };
 }

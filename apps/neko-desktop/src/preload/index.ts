@@ -290,7 +290,13 @@ import {
 
 let requestSequence = 0;
 let desktopWindowContext:
-  { readonly windowId: string; readonly rendererSessionId: string } | undefined;
+  | {
+      readonly applicationInstanceId: string;
+      readonly windowId: string;
+      readonly rendererSessionId: string;
+    }
+  | undefined;
+let desktopLifecycleProjectionStarted = false;
 let latestShellProjection: DesktopShellMutationContext | undefined;
 let currentResourceIdentity: ResourceBrowserIdentity | undefined;
 let currentResourceEventSequence = 0;
@@ -348,6 +354,9 @@ const dshSessionListeners = new Set<
 >();
 const dshRuntimeListeners = new Set<
   Parameters<OpenNekoDshRuntimeBridge['dshRuntime']['subscribe']>[0]
+>();
+const desktopLifecycleListeners = new Set<
+  Parameters<OpenNekoDesktopBridge['lifecycle']['subscribe']>[0]
 >();
 
 const bridge: OpenNekoDesktopBridge &
@@ -1128,20 +1137,18 @@ const bridge: OpenNekoDesktopBridge &
         request,
       );
       const projection = parseDesktopBootstrapProjection(response, requestId);
-      desktopWindowContext = projection.window;
+      desktopWindowContext = {
+        applicationInstanceId: projection.application.instanceId,
+        ...projection.window,
+      };
+      startDesktopLifecycleProjection();
       return projection;
     },
   },
   lifecycle: {
     subscribe(listener: (event: DesktopLifecycleEvent) => void): () => void {
-      const handler = (_event: Electron.IpcRendererEvent, value: unknown): void => {
-        const event = parseDesktopLifecycleEvent(value);
-        listener(event);
-      };
-      ipcRenderer.on(DESKTOP_BRIDGE_CHANNELS.lifecycleEvent, handler);
-      return () => {
-        ipcRenderer.removeListener(DESKTOP_BRIDGE_CHANNELS.lifecycleEvent, handler);
-      };
+      desktopLifecycleListeners.add(listener);
+      return () => desktopLifecycleListeners.delete(listener);
     },
   },
   settings: {
@@ -2304,6 +2311,36 @@ function requireDesktopWindowContext(): {
     throw new Error('DSH permission request requires an authoritative Desktop bootstrap.');
   }
   return desktopWindowContext;
+}
+
+function rememberDesktopWindowLifecycle(event: DesktopLifecycleEvent): void {
+  const current = desktopWindowContext;
+  if (!current) {
+    throw new Error('Desktop lifecycle event requires an authoritative Desktop bootstrap.');
+  }
+  if (
+    current.applicationInstanceId !== event.applicationInstanceId ||
+    current.windowId !== event.windowId
+  ) {
+    throw new Error('Desktop lifecycle event does not match the bootstrapped application Window.');
+  }
+  if (event.type !== 'renderer-loading' && current.rendererSessionId !== event.rendererSessionId) {
+    throw new Error('Desktop lifecycle event does not match the active renderer session.');
+  }
+  desktopWindowContext = {
+    ...current,
+    rendererSessionId: event.rendererSessionId,
+  };
+}
+
+function startDesktopLifecycleProjection(): void {
+  if (desktopLifecycleProjectionStarted) return;
+  desktopLifecycleProjectionStarted = true;
+  ipcRenderer.on(DESKTOP_BRIDGE_CHANNELS.lifecycleEvent, (_event, value: unknown) => {
+    const event = parseDesktopLifecycleEvent(value);
+    rememberDesktopWindowLifecycle(event);
+    for (const listener of desktopLifecycleListeners) listener(event);
+  });
 }
 
 function requireDshSessionConversation(
