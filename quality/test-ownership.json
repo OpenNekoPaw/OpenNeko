@@ -99,22 +99,22 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/chara",
-      "owner": "packages/chara",
+      "path": "packages/chara/domain",
+      "owner": "packages/chara/domain",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/chara-node",
-      "owner": "packages/chara-node",
+      "path": "packages/chara/node",
+      "owner": "packages/chara/node",
       "mode": "self",
       "sourceScope": "src/**/*.ts",
       "testScope": "src/**/*.test.ts"
     },
     {
-      "path": "packages/chara-webview",
-      "owner": "packages/chara-webview",
+      "path": "packages/chara/webview",
+      "owner": "packages/chara/webview",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
@@ -127,8 +127,8 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/content",
-      "owner": "packages/content",
+      "path": "packages/content/domain",
+      "owner": "packages/content/domain",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
@@ -183,8 +183,8 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/generation",
-      "owner": "packages/generation",
+      "path": "packages/generation/domain",
+      "owner": "packages/generation/domain",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
@@ -225,22 +225,22 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/project",
-      "owner": "packages/project",
+      "path": "packages/project/domain",
+      "owner": "packages/project/domain",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/project-node",
-      "owner": "packages/project-node",
+      "path": "packages/project/node",
+      "owner": "packages/project/node",
       "mode": "self",
       "sourceScope": "src/**/*.ts",
       "testScope": "src/**/*.test.ts"
     },
     {
-      "path": "packages/project-webview",
-      "owner": "packages/project-webview",
+      "path": "packages/project/webview",
+      "owner": "packages/project/webview",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
@@ -302,22 +302,22 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/world",
-      "owner": "packages/world",
+      "path": "packages/world/domain",
+      "owner": "packages/world/domain",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/world-node",
-      "owner": "packages/world-node",
+      "path": "packages/world/node",
+      "owner": "packages/world/node",
       "mode": "self",
       "sourceScope": "src/**/*.ts",
       "testScope": "src/**/*.test.ts"
     },
     {
-      "path": "packages/world-webview",
-      "owner": "packages/world-webview",
+      "path": "packages/world/webview",
+      "owner": "packages/world/webview",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"

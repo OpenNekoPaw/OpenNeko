@@ -35,8 +35,8 @@ const RULES = Object.freeze([
     'packages/agent/contracts/src/dsh-session-host',
   ]),
   rule('tool-result-delivery', 'agent-runtime.stream-delivery', [
-    'packages/content/src/document/read-document-tool.ts',
-    'packages/content/src/document/read-image-tool.ts',
+    'packages/content/domain/src/document/read-document-tool.ts',
+    'packages/content/domain/src/document/read-image-tool.ts',
     'packages/agent/runtime/src/acp/dsh-acp-projection',
     'packages/agent/runtime/src/input/message-resource-projector',
     'packages/agent/runtime/src/runtime/turn/multimodal-context-packet',
@@ -58,7 +58,7 @@ const RULES = Object.freeze([
     'packages/agent/runtime/src/tools/core/file-access-policy',
     'packages/agent/runtime/src/tools/core/read-tool',
     'packages/agent/runtime/src/tools/core/write-tool',
-    'packages/content/src/node/workspace-content-writer',
+    'packages/content/domain/src/node/workspace-content-writer',
     'packages/text-editor/domain/src/text-document-session',
   ]),
   rule('capability-tool-routing', 'agent-runtime.media-tool-routing', [
@@ -73,9 +73,9 @@ const RULES = Object.freeze([
     'packages/ai/sdk/src/',
   ]),
   rule('creative-media-workflow', 'agent-runtime.creative-media-workflow', [
-    'packages/chara/src/application/character-dsh-tool',
+    'packages/chara/domain/src/application/character-dsh-tool',
     'packages/chara/dsh-plugin/',
-    'packages/world/src/application/world-dsh-tool',
+    'packages/world/domain/src/application/world-dsh-tool',
     'packages/world/dsh-plugin/',
     'packages/agent/runtime/src/acp/world-host-adapter',
     'packages/cut/domain/src/dsh-tool',
@@ -110,11 +110,11 @@ const RULES = Object.freeze([
     'packages/agent/runtime/src/acp/dsh-acp-application-client',
     'packages/agent/contracts/src/agent-message-queue',
     'packages/agent/runtime/src/tools/generation/media-agent-tools',
-    'packages/generation/src/media/media-generation-executor',
+    'packages/generation/domain/src/media/media-generation-executor',
     'packages/canvas/node/src/canvas-generation-node-runtime',
   ]),
   rule('creative-media-workflow', 'agent-runtime.creative-media-workflow', [
-    'packages/generation/src/media/',
+    'packages/generation/domain/src/media/',
   ]),
   rule('desktop-event-projection', 'agent-runtime.stream-delivery', [
     'packages/agent/contracts/src/dsh-session-host',
@@ -187,12 +187,12 @@ export function isAgentEvaluationRelevantPath(rawPath) {
     path.startsWith('packages/host/src/settings/') ||
     path.startsWith('packages/cut/domain/src/dsh-tool') ||
     path.startsWith('packages/cut/dsh-plugin/') ||
-    path.startsWith('packages/chara/src/application/character-dsh-tool') ||
+    path.startsWith('packages/chara/domain/src/application/character-dsh-tool') ||
     path.startsWith('packages/chara/dsh-plugin/') ||
-    path.startsWith('packages/world/src/application/world-dsh-tool') ||
+    path.startsWith('packages/world/domain/src/application/world-dsh-tool') ||
     path.startsWith('packages/world/dsh-plugin/') ||
-    path === 'packages/content/src/document/read-document-tool.ts' ||
-    path === 'packages/content/src/document/read-image-tool.ts' ||
+    path === 'packages/content/domain/src/document/read-document-tool.ts' ||
+    path === 'packages/content/domain/src/document/read-image-tool.ts' ||
     path.startsWith('scripts/agent-eval/')
   );
 }

@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import type { CanvasHostRuntimeIdentity } from '@neko/canvas-domain';
-import { type ContentLocator } from '@neko/content';
+import { type ContentLocator } from '@neko/content-domain';
 import {
   DEFAULT_CANVAS_DATA,
   isCanvasEmbedNode,

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 import type { GlobalLibraryBrowserRuntime } from '../global-library';
 import { AssetCenterController } from './controller';
 import { AssetCenterSession } from './session';

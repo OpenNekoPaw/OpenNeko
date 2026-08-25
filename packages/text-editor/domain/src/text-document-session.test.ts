@@ -1,4 +1,4 @@
-import type { AuthorizedWorkspaceWriter, ContentReadService } from '@neko/content';
+import type { AuthorizedWorkspaceWriter, ContentReadService } from '@neko/content-domain';
 import { describe, expect, it } from 'vitest';
 import { TextDocumentError } from './contracts';
 import { TextDocumentSession, TextDocumentSessionManager } from './text-document-session';

@@ -2,7 +2,7 @@ import {
   isWorkspaceFileContentLocator,
   validateContentLocator,
   type WorkspaceFileContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 import {
   GENERATION_RECIPE_KINDS,
   GENERATION_RECIPE_PURPOSES,
@@ -19,7 +19,7 @@ import {
   type ImageGenerationRecipe,
   type PromptGenerationRecipe,
   type VideoGenerationRecipe,
-} from '@neko/generation';
+} from '@neko/generation-domain';
 import { isJobRef, type JobRef } from '@neko/shared/job-lifecycle';
 
 export const CANVAS_GENERATION_KINDS = GENERATION_RECIPE_KINDS;

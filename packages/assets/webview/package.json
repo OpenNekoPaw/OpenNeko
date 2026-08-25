@@ -22,7 +22,7 @@
     "@neko/ui": "workspace:*",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "@neko/content": "workspace:*"
+    "@neko/content-domain": "workspace:*"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",

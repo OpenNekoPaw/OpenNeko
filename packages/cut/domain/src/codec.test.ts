@@ -13,7 +13,7 @@ import {
   type OtioClip,
   type OtioTimeline,
 } from '.';
-import { serializeContentReferenceTarget } from '@neko/content';
+import { serializeContentReferenceTarget } from '@neko/content-domain';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();

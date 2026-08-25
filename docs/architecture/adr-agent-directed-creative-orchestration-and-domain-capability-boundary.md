@@ -63,7 +63,7 @@ validation 或 export evidence 证明。
 - 漫画/剧本/小说/插画纵向场景运行聚焦真实 Agent/provider evaluation；
 - 最终报告引用真实文件、项目 revision、diagnostic 和 validation evidence。
 
-相关决策见 [`adr-pi-agent-runtime.md`](adr-pi-agent-runtime.md)、
+相关决策见 [`agent.md`](agent.md)、
 [`adr-agent-prompt-skill-validator-boundary.md`](adr-agent-prompt-skill-validator-boundary.md)、
 [`adr-agent-tool-call-domain-job-lifecycle-boundary.md`](adr-agent-tool-call-domain-job-lifecycle-boundary.md) 和
 [`headless-project-authoring.md`](headless-project-authoring.md)。

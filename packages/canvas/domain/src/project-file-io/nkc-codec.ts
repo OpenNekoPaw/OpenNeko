@@ -3,8 +3,11 @@ import type { CanvasData } from '../types/canvas';
 import {
   createProjectFileDiagnostic,
   type ProjectFileDiagnostic,
-} from '@neko/content/project-file-io';
-import { ProjectFormatCodecRegistry, type ProjectFormatCodec } from '@neko/content/project-file-io';
+} from '@neko/content-domain/project-file-io';
+import {
+  ProjectFormatCodecRegistry,
+  type ProjectFormatCodec,
+} from '@neko/content-domain/project-file-io';
 
 export const nkcProjectFormatCodec: ProjectFormatCodec<CanvasData> = {
   formatId: 'nkc',

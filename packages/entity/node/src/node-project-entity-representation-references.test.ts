@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { contentLocatorKey } from '@neko/content';
+import { contentLocatorKey } from '@neko/content-domain';
 import { NodeProjectEntityRepository } from './node-project-entity-repository';
 import { NodeProjectEntityRepresentationReferenceService } from './node-project-entity-representation-references';
 

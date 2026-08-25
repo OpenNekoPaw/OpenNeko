@@ -37,6 +37,16 @@ OpenNeko 采用“架构优先、契约优先、风险分级、证据驱动”�
 | L3   | Node/FFmpeg、Proto、媒体流、渲染、项目格式、AI workflow、打包、资源访问 | 架构 review、单元/契约/集成测试、smoke 或 fixture 验证，必要时性能/UX 证据。 |
 | L4   | release、安装、重大 UX、核心创作工作流                                  | 完整本地/CI 门禁、安装或运行 smoke、UX 证据和明确残余风险。                  |
 
+## OpenSpec 适用边界
+
+OpenSpec 只约束能够独立命名的系统级或产品级功能变更，并且必须改变系统能力边界、核心产品工作流、
+持久用户事实或安全/信任边界。提案在实施前建立，只冻结产品意图、系统边界和产品级验收。
+
+局部 UI/交互、缺陷、性能、重构、清理、包/目录/内部 contract 调整、测试/质量门禁、构建/依赖/工具及
+inventory/audit/status 不使用 OpenSpec。它们直接修改代码和测试，必要证据进入提交、PR、交付说明或
+gitignored report，不创建 research/status/verification 文档。代码已经形成 canonical path、只剩局部修补或
+补充验证时，删除提案；task 只保留少量产品里程碑，不跟踪代码实现进度。
+
 ## 通用检查
 
 - 不新增生产 `any`、不安全 `as Type` 或正式 `console.log` 日志。
@@ -57,12 +67,12 @@ OpenNeko 采用“架构优先、契约优先、风险分级、证据驱动”�
 - Webview 可访问 URI 只能由 Host 注入的 `WebviewContentProjectionPort` 在授权后生成；`LocalResourceAccessService` 只存在于该 Host adapter 内。投影失败必须返回明确 diagnostic 或 fail closed，不能回退为 raw local/cache/source path。
 - 异步流程处理错误、取消、超时、资源释放和竞态边界。
 - 公共契约、关键分支和失败路径有测试或明确残余风险。
-- 影响行为、架构、配置、包入口或公共契约时同步更新对应文档。
+- 仅当系统架构、开发规范或核心产品设计发生变化时更新对应文档；普通行为、配置、包入口和内部契约变化以代码与测试为准。
 
 ## Package 与 Desktop ownership evidence
 
-新增或实质修改 `apps/*`、`packages/*` 生产模块时，OpenSpec design/tasks 与质量 review 必须提供
-同一组结构化证据：
+新增或实质修改 `apps/*`、`packages/*` 生产模块时，质量 review 必须提供以下结构化证据。
+产品功能变更的 OpenSpec 只保存稳定产品边界和产品级里程碑，不复制以下实现证据：
 
 | 字段                  | 必须回答                                                                                         |
 | --------------------- | ------------------------------------------------------------------------------------------------ |
@@ -86,11 +96,11 @@ source alias；当前例外必须有 owner 和 removal task，新增例外默认
 
 OpenNeko 使用本地开发、手动远程验证和合并验收三类入口。除 `main` 外的非空分支名都属于开发分支，普通开发分支 push 不自动触发 GitHub Actions；`main` 是唯一发布分支，只接受开发分支到 `main` 的 Pull Request。
 
-| 入口                    | 稳定入口           | 验证范围                                                                                                              | 权威信号                     |
-| ----------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| 开发分支本地提交前      | `pnpm gate:local`  | format、lint、build、普通 workspace tests（无 coverage）和仓库质量门禁                                                | 本地命令退出码               |
+| 入口                    | 稳定入口           | 验证范围                                                                                                               | 权威信号                     |
+| ----------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| 开发分支本地提交前      | `pnpm gate:local`  | format、lint、build、普通 workspace tests（无 coverage）和仓库质量门禁                                                 | 本地命令退出码               |
 | 手动 GitHub runner 验证 | `pnpm gate:remote` | coverage 源码门禁、完整 Proto/OpenSpec 和仓库质量；不包含原生 Desktop 构建、GUI、真实 API 或 PR-only dependency review | GitHub Actions `Manual Gate` |
-| 开发分支合入 main       | 开发分支到 main PR | 与 Manual Gate 相同的共享 job graph，加唯一 promotion source 和 dependency review；任一 required job 不成功都阻止合并 | GitHub Actions `Merge Gate`  |
+| 开发分支合入 main       | 开发分支到 main PR | 与 Manual Gate 相同的共享 job graph，加唯一 promotion source 和 dependency review；任一 required job 不成功都阻止合并  | GitHub Actions `Merge Gate`  |
 
 `gate:local` 不收集 coverage，用于提交前完整反馈；`check:fast` 只是迭代期快速检查，不能替代提交前门禁。`gate:remote` 提供 Manual/Merge 源码部分的串行本地复现。
 
@@ -172,7 +182,7 @@ suite/case/run、identity、assertion/artifact refs、failure classification 和
 
 ## 新需求可行性检查
 
-L3/L4 变更在大规模实现前必须先证明关键路径可行：可以通过 spike、fixture、失败测试、
+L3/L4 产品功能变更在大规模实现前必须先证明关键路径可行：可以通过 spike、fixture、失败测试、
 Node/FFmpeg smoke、Desktop package、真实 Electron 场景或原型完成。可行性证据写入
 OpenSpec design/tasks；若无法运行，必须记录原因、风险和后续关闭方式。可行性 spike
 不能替代最终功能验收。
@@ -247,7 +257,8 @@ Webview/React 变更新增组件前，review 必须确认已经做过组件复�
 - 如果公共入口缺少能力，是否优先扩展公共契约、公共 adapter、公共 hook/primitive 或 domain service，而不是复制一份功能包私有实现。
 - 如果能力留在 owning package，是否说明了业务边界、依赖方向、后续提取条件和验证命令。
 
-缺少公共基础能力审计的新横切能力，应视为架构风险；若影响多个包或公共契约，应进入 OpenSpec proposal/design 后再实现。
+缺少公共基础能力审计的新横切能力，应视为架构风险。若它新增或改变产品功能、运行时行为或公共契约
+语义，应进入 OpenSpec proposal/design 后再实现；行为等价的跨包提取直接实施并在质量 review 中记录。
 
 ### 内容访问、透明缓存与路径解析审计
 
@@ -285,7 +296,7 @@ proposal / spec scenario
   -> task
   -> code change
   -> test / smoke / manual evidence
-  -> residual risk or archive
+  -> residual risk / canonical promotion / proposal deletion
 ```
 
 非平凡变更交付时应说明：
@@ -294,7 +305,8 @@ proposal / spec scenario
 - 是否违反 proposal non-goals。
 - 每个新增公共契约或关键 scenario 对应哪个测试或 smoke。
 - 哪些验证未运行以及原因。
-- 剩余风险进入 OpenSpec follow-up、`TODO_CN.md` / `TODO.md` 或 `ROADMAP_CN.md` / `ROADMAP.md`。
+- 功能剩余风险进入适用的 OpenSpec follow-up；非功能整改进入 `TODO_CN.md` / `TODO.md`，长期方向进入
+  `ROADMAP_CN.md` / `ROADMAP.md`。
 
 ## 自动化与人工边界
 
@@ -304,4 +316,5 @@ UI 参考验证可以组合自动化功能证据和人工视觉判断，并遵�
 权威运行时和 fail-visible 报告语义。其结果不参与代码完成判定；图形化 Electron 执行、视觉判断及相关
 契约测试不纳入 CI 或通用 gate。
 
-新增质量工具时，应优先接入现有脚本或 OpenSpec validation tasks，避免形成只靠口头约定的并行流程。
+新增质量工具时，应优先接入现有脚本、稳定架构文档和聚焦自测，避免形成只靠口头约定的并行流程；
+质量工具本身不得为此创建 OpenSpec。

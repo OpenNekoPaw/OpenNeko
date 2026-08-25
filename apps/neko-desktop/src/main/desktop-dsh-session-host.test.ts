@@ -1504,7 +1504,7 @@ function createHost(overrides: {
     readonly windowId: string;
     readonly references: readonly {
       readonly label: string;
-      readonly contentLocator: import('@neko/content').ContentLocator;
+      readonly contentLocator: import('@neko/content-domain').ContentLocator;
     }[];
     readonly images: readonly import('@neko/agent-contracts').DshComposerImageInput[];
     readonly modelSupportsImageInput: boolean;
@@ -1515,7 +1515,7 @@ function createHost(overrides: {
       contextPayloads?: readonly import('@neko/agent-contracts').AgentContextPayload[],
       selectedResources?: readonly {
         readonly label: string;
-        readonly contentLocator: import('@neko/content').ContentLocator;
+        readonly contentLocator: import('@neko/content-domain').ContentLocator;
       }[],
       canvasTurnTarget?: import('@neko/canvas-domain').CanvasWorkspaceTurnTarget,
     ): Promise<string>;

@@ -5,9 +5,8 @@
 当前 Desktop 已组合 Agent、Generation、Assets/Entity、Canvas、Cut、Preview 和 Media
 Runtime。Chara、Search、Quality 与媒体比较 Tools 仍保留领域 package，但尚未全部形成
 Desktop 产品路径；本索引中的“保留”不等于“已经接入”。Assets 的产品入口是单一 Media
-Library，Creative Entity 通过稳定引用与其连接。Generation 的实现中边界由
-[`extract-generation-domain-package`](../../openspec/changes/extract-generation-domain-package/)
-约束，稳定后再建立领域目录；Chara、World 与 Project 的稳定边界见下方索引。新增领域目录时使用
+Library，Creative Entity 通过稳定引用与其连接。Generation 的边界由 owning package 的公共
+contract 约束；Chara、World 与 Project 的稳定边界见下方索引。新增领域目录时使用
 `docs/domains/<domain>/`，并优先提供：
 
 - `README.md`：范围、参与包、横切能力和阅读路径；

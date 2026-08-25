@@ -1,5 +1,5 @@
 import type { AgentConversationContext, AgentContextPayload } from '@neko/agent-contracts';
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 import {
   createCanvasWorkspaceBoardTarget,
   type CanvasWorkspaceIndexService,

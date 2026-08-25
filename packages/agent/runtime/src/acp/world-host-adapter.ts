@@ -7,7 +7,7 @@ import {
   WORLD_DSH_TOOL_NAME,
   WorldDshAuthoringService,
   decodeWorldDshToolInput,
-} from '@neko/world/application';
+} from '@neko/world-domain/application';
 import { enforceDshDomainToolEffect } from './dsh-domain-tool-access';
 
 export class WorldDshHostAdapter {

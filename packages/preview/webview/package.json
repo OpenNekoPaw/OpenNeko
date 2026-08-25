@@ -26,7 +26,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "three": "^0.180.0",
-    "@neko/content": "workspace:*"
+    "@neko/content-domain": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",

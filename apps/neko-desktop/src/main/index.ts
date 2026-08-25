@@ -127,7 +127,7 @@ import {
   WorldPortablePackageService,
   WorldRuntimeService,
   WorldRuntimeWorkbenchService,
-} from '@neko/world/application';
+} from '@neko/world-domain/application';
 import {
   CharacterAuthoringService,
   CharacterDshAuthoringService,
@@ -150,7 +150,7 @@ import {
   CharacterStorylineService,
   createCharacterDurableCatalogPort,
   UserCharacterRelationshipService,
-} from '@neko/chara/application';
+} from '@neko/chara-domain/application';
 import {
   ProjectAuthoringNavigationService,
   ProjectCharacterVersionReferenceReader,
@@ -162,13 +162,13 @@ import {
   ProjectDependencyService,
   ProjectLocalAuthoringService,
   ProjectWorkspaceObjectMutationService,
-} from '@neko/project/application';
+} from '@neko/project-domain/application';
 import {
   ProjectEntityCharacterAssociationRepository,
   ProjectLocalAuthoringCommitRepository,
   ProjectMembershipRepository,
 } from '@neko/project-node';
-import type { ProjectGlobalReference } from '@neko/project/contracts';
+import type { ProjectGlobalReference } from '@neko/project-domain/contracts';
 import { createDesktopCharacterCreationSourceAuthority } from './desktop-character-creation-source-authority';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import {
@@ -194,21 +194,24 @@ import {
   CANVAS_TEXT_FILE_PREVIEW_MAX_BYTES,
   type CanvasHostRuntimeIdentity,
 } from '@neko/canvas-domain';
-import { GenerationApplicationRuntime } from '@neko/generation/job';
-import { ComfyUiLocalApi, ComfyUiWorkflowRunner } from '@neko/generation/comfyui';
-import { PromptGenerationService, createAiSdkPromptCompletionPort } from '@neko/generation/prompt';
+import { GenerationApplicationRuntime } from '@neko/generation-domain/job';
+import { ComfyUiLocalApi, ComfyUiWorkflowRunner } from '@neko/generation-domain/comfyui';
+import {
+  PromptGenerationService,
+  createAiSdkPromptCompletionPort,
+} from '@neko/generation-domain/prompt';
 import {
   createContentReadMediaRequestAssetMaterializer,
   createMediaPlatform,
   createNodeGenerationJobOwner,
-} from '@neko/generation/media';
+} from '@neko/generation-domain/media';
 import {
   createNodeHostContentReadService,
   NodeAuthorizedWorkspaceWriter,
-} from '@neko/content/node';
-import { createNodeDocumentLowLevelAccess } from '@neko/content/document/node';
+} from '@neko/content-domain/node';
+import { createNodeDocumentLowLevelAccess } from '@neko/content-domain/document/node';
 import { resolveWorkspaceContentLocator } from '@neko/assets-node';
-import { isWorkspaceFileContentLocator, type ContentLocator } from '@neko/content';
+import { isWorkspaceFileContentLocator, type ContentLocator } from '@neko/content-domain';
 import {
   createPreviewResourceProjectionService,
   type PreviewResourceSource,
@@ -1732,7 +1735,7 @@ async function startDesktop(): Promise<void> {
   });
   const resolveCharacterRepository = (input: {
     readonly workspace: AssetWorkspaceResolution;
-    readonly authority: import('@neko/chara/contracts').CharacterAuthoringAuthority;
+    readonly authority: import('@neko/chara-domain/contracts').CharacterAuthoringAuthority;
   }) => {
     requireProjectIdentity(input.workspace.workspaceId, input.authority.projectId);
     return createCharacterAuthoringFileRepository({
@@ -1742,7 +1745,7 @@ async function startDesktop(): Promise<void> {
   };
   const resolveCharacterAuthoring = async (input: {
     readonly workspace: AssetWorkspaceResolution;
-    readonly authority: import('@neko/chara/contracts').CharacterAuthoringAuthority;
+    readonly authority: import('@neko/chara-domain/contracts').CharacterAuthoringAuthority;
     readonly characterProjectId: string;
   }) => {
     const repository = resolveCharacterRepository(input);
@@ -1776,7 +1779,7 @@ async function startDesktop(): Promise<void> {
   };
   const resolveWorldAuthoring = async (input: {
     readonly workspace: AssetWorkspaceResolution;
-    readonly authority: import('@neko/world/contracts').WorldAuthoringAuthority;
+    readonly authority: import('@neko/world-domain/contracts').WorldAuthoringAuthority;
     readonly worldProjectId: string;
   }) => {
     requireProjectIdentity(input.workspace.workspaceId, input.authority.projectId);
@@ -1792,7 +1795,7 @@ async function startDesktop(): Promise<void> {
   };
   const resolveWorldPortablePackage = (input: {
     readonly workspace: AssetWorkspaceResolution;
-    readonly authority: import('@neko/world/contracts').WorldAuthoringAuthority;
+    readonly authority: import('@neko/world-domain/contracts').WorldAuthoringAuthority;
   }) =>
     new WorldPortablePackageService(
       createWorldPortableWorkspaceRepository({

@@ -72,7 +72,7 @@ describe('Agent Contracts public surface convergence', () => {
       readonly dependencies?: Readonly<Record<string, string>>;
     };
     for (const dependency of [
-      '@neko/chara',
+      '@neko/chara-domain',
       '@neko/entity-domain',
       '@neko/media',
       '@neko/search-domain',

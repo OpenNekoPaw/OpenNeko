@@ -6,7 +6,7 @@ Canvas、Cut、Asset 与媒体字节仍由各自领域拥有；Project 不复制
 
 参与包：
 
-- `@neko/project`：L0 contract、application service 与 rebuildable projection；
+- `@neko/project-domain`：L0 contract、application service 与 rebuildable projection；
 - `@neko/project-node`：授权 Workspace 内的 association fact IO 与普通同步计划；
 - `@neko/project-webview`：Project catalog / Project Content presentation；
 - Chara、World、Entity 与文档 owner：通过固定、精确 public port 提供当前事实和引用；

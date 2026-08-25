@@ -4,8 +4,8 @@ import { join } from 'node:path';
 import {
   createEmptyCharacterBackgroundStory,
   createEmptyCharacterOriginSetting,
-} from '@neko/chara/contracts';
-import { CharacterAuthoringService } from '@neko/chara/application';
+} from '@neko/chara-domain/contracts';
+import { CharacterAuthoringService } from '@neko/chara-domain/application';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node';
 import { afterEach, describe, expect, it } from 'vitest';
 import {

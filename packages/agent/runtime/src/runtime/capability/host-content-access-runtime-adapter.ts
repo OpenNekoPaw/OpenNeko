@@ -2,14 +2,14 @@ import {
   DocumentAccessError,
   DocumentContentAccessRuntime,
   type IDocumentAccessService,
-} from '@neko/content/document';
+} from '@neko/content-domain/document';
 import {
   type ContentReadService,
   type ContentLocator,
   type ContentRepresentationService,
   type WorkspaceFileContentLocator,
   isWorkspaceFileContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 import {
   createAgentContentAccessDiagnostic,
   type AgentContentAccessDiagnostic,
@@ -109,7 +109,7 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
   }
 
   async loadRepresentationAsset(input: {
-    readonly handle: import('@neko/content').ContentRepresentationHandle;
+    readonly handle: import('@neko/content-domain').ContentRepresentationHandle;
     readonly maxBytes: number;
   }): Promise<AgentProviderAssetResult> {
     const service = this.services.contentRepresentation;
@@ -181,7 +181,7 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
       { status: 'ready' }
     >,
   ): Promise<{
-    readonly imageInfo?: readonly import('@neko/content').DocumentImageInfo[];
+    readonly imageInfo?: readonly import('@neko/content-domain').DocumentImageInfo[];
     readonly imageCount?: number;
     readonly imagesTruncated?: boolean;
     readonly diagnostics: readonly AgentContentAccessDiagnostic[];

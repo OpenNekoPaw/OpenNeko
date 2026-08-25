@@ -1,116 +1,20 @@
 # @neko/markdown
 
-`@neko/markdown` owns Neko's Markdown contract and keeps its default entry host-neutral. The default
-entry parses authoritative CommonMark/GFM source into exhaustive Neko-owned nodes, annotations,
-diagnostics and revision-associated resolution contracts without importing Agent, Canvas, Electron,
-React, DOM, Milkdown, CodeMirror, Streamdown or content services. The package is not a user-visible
-Neko Markdown dialect or an application-specific renderer.
+`@neko/markdown` 拥有 OpenNeko 的 host-neutral CommonMark/GFM 语义契约。原始 Markdown 字符串是
+内容 authority；解析结果、标注、诊断、outline 与 reference 都是可重建投影。
 
-The explicit browser-only `@neko/markdown/rich-surface` entry owns the controlled Milkdown lifecycle,
-GFM round-trip gate, composition, history and reconciliation shared by Text Editor and Canvas. It
-does not own either caller's document/session state, Host port, media lease or persisted source.
+## 公共入口
 
-The package exports `OpenNekoGfmProfile` and a shared conformance corpus while parsing through
-`remark-gfm`. The profile follows CommonMark plus GFM 0.29-gfm autolink literals, one- or two-tilde
-strikethrough, tables, task-list items and tagfilter behavior. Mermaid, Math, footnotes, mentions and
-Workspace resource references are separately declared extensions. Raw HTML remains source evidence
-and is inert by default in browser presentations. Cross-surface consumer adoption is tracked by
-`openspec/changes/adopt-gfm-authoring-and-agent-rendering-surfaces/`.
+- 默认入口：解析与流式语义 contract，不依赖 React、DOM、Electron 或具体编辑器。
+- `@neko/markdown/rich-surface`：浏览器侧受控 Rich Surface；调用方继续拥有文档和 session 状态。
+- package-owned conformance corpus：约束所有 presentation adapter 的 GFM 与扩展语义。
 
-## Canonical entry points
+## 边界
 
-- `parseNormalizedMarkdown(source, options?)`: parse one authoritative source revision into a normalized document or explicit failed result.
-- `MarkdownStreamingSession`: append/finalize lifecycle for one Markdown source identity. Streaming updates produce revisions while retaining session identity; finalization finalizes the same session.
-- `@neko/markdown/rich-surface`: browser-only controlled Rich surface; callers retain exact source
-  authority and provide optional presentation plugins through its narrow extension contract.
-- document/node contracts: exhaustive standard CommonMark/GFM nodes plus registered Neko extension nodes.
-- annotation contracts: range/node-linked overlapping semantics such as prompt spans and creative-table interpretation.
-- resolution contracts: immutable, revision-associated host results for resources, mentions, images, authorization and handoff references.
-- diagnostic contracts: stable phase/code/severity/parameters; final localized messages remain host-owned.
+- Workspace 引用、mention、Mermaid、Math 与 footnote 是显式扩展，不冒充 GFM。
+- parser 不执行文件 IO、资源授权、Canvas mutation 或 Agent workflow。
+- 第三方 AST、DOM、selection、runtime URL 与 cache path 不跨公共边界。
+- 不支持或失效的语义返回局部 diagnostic，不切换 parser、renderer 或事实来源。
 
-Host adapters consume these contracts. They must not expose or depend on remark/MDAST types as the cross-package boundary.
-
-## Source and identity model
-
-The original Markdown string is authoritative. Every source-backed range is a half-open UTF-16 range:
-
-```ts
-{
-  (startOffset, endOffset);
-} // [startOffset, endOffset)
-```
-
-Source offsets, Unicode code points, grapheme clusters and terminal display columns are distinct units. Hosts may use grapheme/display metrics for layout, but they must not derive source offsets from visual width.
-
-Session, revision, node and annotation identities are opaque/branded. Node and annotation identity is deterministic only within its associated session/revision contract; callers must validate containment, bounds, collisions and association instead of inventing IDs.
-
-## Semantic layers
-
-```text
-authoritative Markdown source
-  -> normalized document + source-backed/synthetic nodes
-  -> overlapping annotations
-  -> immutable host resolution snapshot associated with session/revision
-  -> host projector / React presentation adapter
-```
-
-Parsing is pure and does not perform workspace, entity, resource, authorization or file IO. Runtime render URIs, blob URLs, cache paths and Webview handles are presentation-only data and never become normalized semantic identity.
-
-## Scope
-
-- Parse CommonMark/GFM-compatible source without rewriting the original Markdown.
-- Preserve GFM table alignment, ragged source rows, escaped pipes, links, references, images, raw HTML and normalized fenced-code language identity.
-- Project Neko extension syntax and metadata such as creative-table interpretation, `@` mentions, resource-reference tokens, semantic prompt spans, diagnostics and stable handoff refs.
-- Preserve unsupported or malformed extension-like syntax as source with diagnostics instead of inventing successful semantics.
-- Enforce a deterministic source hard limit and fail without returning a partial successful AST when the contract is exceeded.
-
-## Non-goals
-
-- Validate or mutate Canvas fields, profiles, nodes, connections, prompts or resources.
-- Authorize resources or resolve workspace files inside the parser.
-- Choose Agent Skills, tools, lifecycle phases or approval decisions.
-- Make the default host-neutral entry depend on React, DOM or a browser editor engine.
-- Own application layout, Desktop theme, Text Document sessions, Canvas nodes or Host media authority.
-
-## Host adapter boundary
-
-Semantic consumers use normalized snapshots through package-local adapters:
-
-```text
-authoritative source/revision
-  -> @neko/markdown normalized semantic projection
-  -> outline/reference/diagnostic/resource extension consumer
-```
-
-Resize reprojects/reflows the unchanged normalized revision; it does not reparse source. Layout,
-table presentation, code wrapping and theme behavior remain renderer-owned presentation policy.
-
-Text Editor Rich, Canvas Markdown Rich, Text Editor Source and Agent message content have separate
-application adapters,
-but all must pass the package-owned GFM/extension conformance corpus. A surface engine's third-party
-AST remains private to that surface. It cannot become a cross-package semantic model, file authority
-or fallback renderer. Text Editor and Canvas reuse the browser-only controlled Milkdown Surface while
-applying changes through their own exact owners; CodeMirror Source remains Text Editor-owned.
-Streamdown 2.5.0 was evaluated and rejected for the current Agent surface because incomplete
-emphasis and Neko resource/semantic/creative presentation parity did not pass. Production Agent
-messages continue to use `MarkdownStreamingSession` and the package-local renderer as the one
-canonical path.
-
-## Diagnostics, resources and security
-
-- Contract violations and invalid associations fail visibly.
-- Source/content diagnostics preserve semantic evidence; hosts localize final text.
-- External resolution/highlighting failures are presentation diagnostics and cannot mutate normalized source semantics.
-- Model-authored URI content is inert until Desktop Main validates and authorizes it at the trust boundary.
-- A host must reject stale resolution/highlight results whose session, revision or generation no longer matches.
-
-## Syntax notes
-
-| Syntax                        | Projection meaning                                                                                             |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| GFM table                     | Standard normalized table with alignment/source shape; creative interpretation is separate annotation data     |
-| `@Rin`                        | Semantic mention token resolved only through caller-provided candidates                                        |
-| `![alt](P1#panel_2)`          | CommonMark image target plus host resolution hint                                                              |
-| `![[cover.png]]`              | Neko resource-reference embed; unresolved/unsupported behavior remains diagnostic until host resolution exists |
-| `[[script.md#Scene 2]]`       | Neko document/resource link token, not automatically media                                                     |
-| semantic prompt span metadata | Read-only display/handoff annotation for prompt-first creative workflows                                       |
+系统级渲染与资源边界见
+[`docs/architecture/adr-unified-markdown-resource-rendering.md`](../../docs/architecture/adr-unified-markdown-resource-rendering.md)。

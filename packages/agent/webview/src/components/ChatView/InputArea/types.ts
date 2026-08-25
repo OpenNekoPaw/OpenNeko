@@ -123,7 +123,7 @@ export const DEFAULT_COMPOSER_MENU_STATE: Readonly<ComposerMenuState> = {
 
 // Project file for @ reference
 export interface ProjectFile {
-  locator: import('@neko/content').WorkspaceFileContentLocator;
+  locator: import('@neko/content-domain').WorkspaceFileContentLocator;
   name: string;
   type: 'file' | 'folder';
   icon?: string;
@@ -148,7 +148,7 @@ export interface MentionItem {
   /** Secondary hint text */
   description?: string;
   /** Stable Host-issued content identity used when this item is selected. */
-  contentLocator?: import('@neko/content').ContentLocator;
+  contentLocator?: import('@neko/content-domain').ContentLocator;
   /** Exact Host identity used only to materialize a selected Asset into the Workspace. */
   assetId?: string;
   /** Optional icon supplied by host protocol */

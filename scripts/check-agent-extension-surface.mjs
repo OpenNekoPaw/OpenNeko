@@ -34,21 +34,11 @@ export function validateSurfaceStructure(surface) {
   const capability = requireRecord(surface, 'hostCapability', findings);
   const standardsSupport = requireRecord(surface, 'standardsSupport', findings);
 
-  expectEqual(
-    skill?.definition,
-    'dsh-filesystem-skill',
-    'portableSkill.definition',
-    findings,
-  );
+  expectEqual(skill?.definition, 'dsh-filesystem-skill', 'portableSkill.definition', findings);
   expectEqual(skill?.classification, 'dsh-skill', 'portableSkill.classification', findings);
   expectFalse(skill?.hostManifestRequired, 'portableSkill.hostManifestRequired', findings);
   expectFalse(skill?.mcpRequired, 'portableSkill.mcpRequired', findings);
-  expectStringArray(
-    skill?.sourceKinds,
-    dshSkillSourceKinds,
-    'portableSkill.sourceKinds',
-    findings,
-  );
+  expectStringArray(skill?.sourceKinds, dshSkillSourceKinds, 'portableSkill.sourceKinds', findings);
   expectStringArray(
     skill?.layouts,
     ['directory-skill-md', 'flat-markdown'],
@@ -57,14 +47,7 @@ export function validateSurfaceStructure(surface) {
   );
   expectStringArray(
     skill?.frontmatter,
-    [
-      'name',
-      'description',
-      'whenToUse',
-      'metadata',
-      'disable-model-invocation',
-      'user-invocable',
-    ],
+    ['name', 'description', 'whenToUse', 'metadata', 'disable-model-invocation', 'user-invocable'],
     'portableSkill.frontmatter',
     findings,
   );
@@ -478,14 +461,14 @@ async function checkCanonicalSourceEvidence(root, findings) {
   }
   if (
     !generationToolsSource.includes('GENERATION_DSH_TOOL_NAME') ||
-    !generationToolsSource.includes("from '@neko/generation'") ||
+    !generationToolsSource.includes("from '@neko/generation-domain'") ||
     !/ctx\.tools\.register\s*\(/u.test(generationToolsSource)
   ) {
     findings.push('Generation DSH plugin does not register exact openneko.generation');
   }
   if (
     !characterToolsSource.includes('CHARACTER_DSH_TOOL_NAME') ||
-    !characterToolsSource.includes("from '@neko/chara/application'") ||
+    !characterToolsSource.includes("from '@neko/chara-domain/application'") ||
     !/ctx\.tools\.register\s*\(/u.test(characterToolsSource)
   ) {
     findings.push('Character DSH plugin does not register exact openneko.character');
@@ -522,7 +505,7 @@ async function checkCanonicalSourceEvidence(root, findings) {
   }
   if (
     !documentToolsSource.includes('DOCUMENT_DSH_TOOL_NAME') ||
-    !documentToolsSource.includes("from '@neko/content/document'") ||
+    !documentToolsSource.includes("from '@neko/content-domain/document'") ||
     !/ctx\.tools\.register\s*\(/u.test(documentToolsSource)
   ) {
     findings.push('Document DSH plugin does not register exact openneko.document');
@@ -546,9 +529,7 @@ async function checkCanonicalSourceEvidence(root, findings) {
     ...validateCanonicalAgentRegistrationGraph({
       runtimes: ['dsh'],
       tools: [
-        ...Array(countMatches(agentToolsSource, /ctx\.tools\.register\s*\(/gu)).fill(
-          'CreateSkill',
-        ),
+        ...Array(countMatches(agentToolsSource, /ctx\.tools\.register\s*\(/gu)).fill('CreateSkill'),
         ...Array(countMatches(characterToolsSource, /ctx\.tools\.register\s*\(/gu)).fill(
           'openneko.character',
         ),

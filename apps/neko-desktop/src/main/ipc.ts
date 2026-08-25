@@ -20,18 +20,18 @@ import {
   parseCharacterPortableHostRequest,
   CHARACTER_AVATAR_HOST_CHANNEL,
   CHARACTER_ROOM_WORKBENCH_CHANNELS,
-} from '@neko/chara/contracts';
+} from '@neko/chara-domain/contracts';
 import {
   WORLD_AUTHORING_HOST_CHANNEL,
   WORLD_MANAGEMENT_HOST_CHANNEL,
   WORLD_PORTABLE_HOST_CHANNELS,
   WORLD_RUNTIME_HOST_CHANNEL,
   parseWorldPortableHostRequest,
-} from '@neko/world/contracts';
+} from '@neko/world-domain/contracts';
 import {
   PROJECT_AUTHORING_HOST_CHANNEL,
   PROJECT_LOCAL_AUTHORING_HOST_CHANNEL,
-} from '@neko/project/contracts';
+} from '@neko/project-domain/contracts';
 import type { DesktopAppHost } from './app-host';
 import type { DesktopDshPermissionHost } from './desktop-dsh-permission-host';
 import { DSH_SESSION_HOST_CHANNEL } from '@neko/agent-contracts/dsh-session-host';

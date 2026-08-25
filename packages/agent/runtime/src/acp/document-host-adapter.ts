@@ -8,7 +8,7 @@ import {
   decodeDocumentDshToolInput,
   documentDshJsonValue,
   type DocumentDshToolInput,
-} from '@neko/content/document';
+} from '@neko/content-domain/document';
 import type {
   AgentContentAccessRuntime,
   AgentDocumentContentResult,

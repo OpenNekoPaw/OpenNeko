@@ -1,4 +1,4 @@
-import { contentLocatorKey, contentLocatorsEqual, type ContentLocator } from '@neko/content';
+import { contentLocatorKey, contentLocatorsEqual, type ContentLocator } from '@neko/content-domain';
 import type { CanvasData } from './types/canvas';
 import type {
   CanvasMaterialActionDescriptor,

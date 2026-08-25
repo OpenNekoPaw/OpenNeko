@@ -1,5 +1,9 @@
 import type { CanvasAgentProvenance, CanvasAgentTargetRef } from './types/canvas-agent-operations';
-import { isContentLocator, isHostProjectedRuntimeValue, type ContentLocator } from '@neko/content';
+import {
+  isContentLocator,
+  isHostProjectedRuntimeValue,
+  type ContentLocator,
+} from '@neko/content-domain';
 
 export const CANVAS_MARKDOWN_CAPABILITY_IDS = [
   'canvas.ingestMarkdown',

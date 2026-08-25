@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@neko/content": "workspace:*"
+    "@neko/content-domain": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

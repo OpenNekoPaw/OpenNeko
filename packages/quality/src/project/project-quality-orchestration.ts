@@ -4,7 +4,7 @@ import {
   type ProjectQualityRequest,
   type ProjectQualityResult,
 } from './project-quality-contract';
-import { type ContentLocator } from '@neko/content';
+import { type ContentLocator } from '@neko/content-domain';
 import {
   type QualityDiagnostic,
   type QualityEvidence,
@@ -12,7 +12,7 @@ import {
   type QualityGateIssue,
   type QualityProjectRef,
   type QualityTarget,
-} from '@neko/generation';
+} from '@neko/generation-domain';
 
 export interface ProjectQualityFacadeResolver {
   resolve(project: QualityProjectRef): Promise<ProjectQualityFacade | undefined>;

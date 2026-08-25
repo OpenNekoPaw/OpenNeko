@@ -1,5 +1,5 @@
 import type React from 'react';
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 import type { CanvasNode, CanvasNodeType, CanvasViewport } from '@neko/canvas-domain';
 import type { NodeTypeDescriptorRegistry } from './nodeTypeDescriptor';
 import type { ConnectionDragTargetState } from '../../hooks/useConnectionDrag';

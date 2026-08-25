@@ -6,12 +6,12 @@ import { resolveGlobalAssetItemPath } from '@neko/assets-node';
 import {
   CharacterAvatarAuthorityService,
   CharacterPresentationError,
-} from '@neko/chara/application';
+} from '@neko/chara-domain/application';
 import {
   type CharacterAvatarHostDiagnosticCode,
   type CharacterAvatarHostResult,
   type CharacterAvatarHostRequest,
-} from '@neko/chara/contracts';
+} from '@neko/chara-domain/contracts';
 import type { DesktopResourceLease, DesktopResourceRegistry } from './desktop-resource-registry';
 
 type CharacterAvatarOpenRequest = Extract<

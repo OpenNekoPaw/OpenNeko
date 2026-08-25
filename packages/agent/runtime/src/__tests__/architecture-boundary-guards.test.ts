@@ -364,7 +364,7 @@ describe('agent architecture boundary guards', () => {
     }
   });
 
-  it('keeps Character domain runtime in @neko/chara', () => {
+  it('keeps Character domain runtime in @neko/chara-domain', () => {
     for (const fileName of [
       'character-runtime-policy.ts',
       'character-evidence.ts',
@@ -372,13 +372,14 @@ describe('agent architecture boundary guards', () => {
       'embody-character-session.ts',
     ]) {
       expect(existsSync(join(agentSrc, 'runtime', fileName)), fileName).toBe(false);
-      expect(existsSync(join(workspaceRoot, 'packages/chara/src/core', fileName)), fileName).toBe(
-        true,
-      );
+      expect(
+        existsSync(join(workspaceRoot, 'packages/chara/domain/src/core', fileName)),
+        fileName,
+      ).toBe(true);
     }
     expect(
       existsSync(
-        join(workspaceRoot, 'packages/chara/src/application/character-dialogue-runtime.ts'),
+        join(workspaceRoot, 'packages/chara/domain/src/application/character-dialogue-runtime.ts'),
       ),
     ).toBe(true);
   });

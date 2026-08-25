@@ -8,8 +8,8 @@ import type {
 import {
   createNodeHostContentReadService,
   NodeAuthorizedWorkspaceWriter,
-} from '@neko/content/node';
-import type { WorkspaceFileContentLocator } from '@neko/content';
+} from '@neko/content-domain/node';
+import type { WorkspaceFileContentLocator } from '@neko/content-domain';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import type { NodeTextEditorMarkdownMediaService } from '@neko/text-editor-node';
 import {

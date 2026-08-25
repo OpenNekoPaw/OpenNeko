@@ -1,4 +1,4 @@
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 
 export function projectContentLocatorPath(locator: ContentLocator): string {
   const filePath =

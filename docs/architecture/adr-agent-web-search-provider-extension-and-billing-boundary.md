@@ -154,7 +154,7 @@ projection、Renderer 和测试，完成验收后再将本 ADR 提升为 Accepte
 相关决策：
 
 - [`adr-agent-runtime-single-authority-and-simplification-boundary.md`](adr-agent-runtime-single-authority-and-simplification-boundary.md)
-- [`adr-pi-agent-runtime.md`](adr-pi-agent-runtime.md)
+- [`agent.md`](agent.md)
 - [`adr-ai-native-product-surface-and-capability-composition-boundary.md`](adr-ai-native-product-surface-and-capability-composition-boundary.md)
 - [`adr-agent-sandbox-and-external-processing-boundary.md`](adr-agent-sandbox-and-external-processing-boundary.md)
 - [`auth.md`](auth.md)

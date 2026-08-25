@@ -1,4 +1,4 @@
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 
 export const MODEL_PREVIEW_FORMATS = ['glb', 'gltf', 'obj', 'stl', 'ply'] as const;
 export type ModelPreviewFormat = (typeof MODEL_PREVIEW_FORMATS)[number];

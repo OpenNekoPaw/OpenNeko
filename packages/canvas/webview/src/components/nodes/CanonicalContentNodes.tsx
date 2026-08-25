@@ -1,4 +1,4 @@
-import { contentLocatorKey, type ContentLocator } from '@neko/content';
+import { contentLocatorKey, type ContentLocator } from '@neko/content-domain';
 import type {
   CanvasTextFilePreviewDiagnosticCode,
   CanvasTextFilePreviewKind,

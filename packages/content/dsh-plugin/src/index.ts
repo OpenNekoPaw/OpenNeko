@@ -16,14 +16,14 @@ import {
   decodeContentImageDshToolSource,
   type ContentImageDshChunk,
   type ContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 import {
   DOCUMENT_DSH_TOOL_NAME,
   DOCUMENT_DSH_TOOL_PARAMETERS,
   decodeDocumentDshToolArgs,
   documentDshJsonValue,
   probeImageMetadata,
-} from '@neko/content/document';
+} from '@neko/content-domain/document';
 import sharp from 'sharp';
 
 export const name = 'openneko-content-tools';

@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { type QualityEvidence, type QualityGatePolicy, type QualityTarget } from '@neko/generation';
+import {
+  type QualityEvidence,
+  type QualityGatePolicy,
+  type QualityTarget,
+} from '@neko/generation-domain';
 import {
   aggregateQualityGate,
   createQualityGateRuntime,

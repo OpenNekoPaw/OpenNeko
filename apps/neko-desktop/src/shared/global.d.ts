@@ -15,7 +15,7 @@ import type { OpenNekoDesktopProjectPortabilityBridge } from '@neko/assets-domai
 import type {
   OpenNekoDesktopProjectAuthoringBridge,
   OpenNekoDesktopProjectLocalAuthoringBridge,
-} from '@neko/project/contracts';
+} from '@neko/project-domain/contracts';
 import type { OpenNekoAssetCenterBridge } from '@neko/assets-domain/asset-center/host-contract';
 import type { OpenNekoAgentExtensionManagementBridge } from '@neko/agent-contracts/extension-management-host';
 import type { OpenNekoProfessionalApplicationBridge } from '@neko/professional-apps-contracts/host';
@@ -26,13 +26,13 @@ import type {
   OpenNekoDesktopCharacterPortableBridge,
   OpenNekoDesktopCharacterAvatarBridge,
   OpenNekoDesktopCharacterRoomWorkbenchBridge,
-} from '@neko/chara/contracts';
+} from '@neko/chara-domain/contracts';
 import type {
   OpenNekoDesktopWorldAuthoringBridge,
   OpenNekoDesktopWorldManagementBridge,
   OpenNekoDesktopWorldPortableBridge,
   OpenNekoDesktopWorldRuntimeBridge,
-} from '@neko/world/contracts';
+} from '@neko/world-domain/contracts';
 
 declare global {
   interface Window {

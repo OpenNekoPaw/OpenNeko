@@ -10,9 +10,9 @@ import {
   type CanvasWorkspaceResourceProjectionArtifact,
   type CanvasWorkspaceProjectionRequest,
 } from '../canvas-workspace-board';
-import type { GeneratedImage } from '@neko/generation';
-import { createGeneratedAssetRevisionRef } from '@neko/generation';
-import type { WorkspaceFileContentLocator } from '@neko/content';
+import type { GeneratedImage } from '@neko/generation-domain';
+import { createGeneratedAssetRevisionRef } from '@neko/generation-domain';
+import type { WorkspaceFileContentLocator } from '@neko/content-domain';
 
 const generatedLocator: WorkspaceFileContentLocator = {
   file: { authority: 'workspace', path: 'neko/generated/image/shot-1.png' },

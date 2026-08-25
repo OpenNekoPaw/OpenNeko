@@ -44,7 +44,7 @@ import type {
   DesktopProjectPortabilityRequest,
   OpenNekoDesktopProjectPortabilityBridge,
 } from '@neko/assets-domain/contracts';
-import type { RoomView } from '@neko/chara/contracts';
+import type { RoomView } from '@neko/chara-domain/contracts';
 import type { DesktopLifecycleEvent } from '../shared/bridge-contract';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });

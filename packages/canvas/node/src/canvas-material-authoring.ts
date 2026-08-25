@@ -20,7 +20,7 @@ import {
   type ContentLocator,
   type PackageResourceContentLocator,
   type WorkspaceFileContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 import {
   type CanvasData,
   type CanvasMaterialAuthoringRequest,

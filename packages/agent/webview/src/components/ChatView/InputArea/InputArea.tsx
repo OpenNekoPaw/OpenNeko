@@ -69,7 +69,7 @@ import { projectInputAreaUi } from '../../../presenters/input-area-presenter';
 import { isOptimisticQueuedMessageItem } from '../../../presenters/message-queue-presenter';
 import { projectClipboardTextToContextPayload } from '../../../presenters/clipboard-context-presenter';
 import { type ChatModelOption } from '@neko/ai-contracts';
-import { contentLocatorKey, type ContentLocator } from '@neko/content';
+import { contentLocatorKey, type ContentLocator } from '@neko/content-domain';
 import type { AgentContextPayload, ShellExecutionMode } from '@neko/agent-contracts';
 import { projectContentLocatorPath } from '../../../presenters/content-locator-presenter';
 import type { AgentModelSlots, AgentQueuedMessageItem, SessionMode } from '@neko/agent-contracts';

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { createEmptyCanvasData, planCanvasWorkspaceBoardProjection } from '@neko/canvas-domain';
-import { NodeAuthorizedWorkspaceWriter } from '@neko/content/node';
+import { NodeAuthorizedWorkspaceWriter } from '@neko/content-domain/node';
 import type { DshWorkspaceBoardArtifactDeliveryInput } from '@neko/agent-runtime/application';
 import {
   createDshWorkspaceBoardContentRead,

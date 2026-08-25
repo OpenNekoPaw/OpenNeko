@@ -3,7 +3,7 @@ import {
   isProjectDurableContentLocator,
   type ContentIoDiagnostic,
   type ContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 import type {
   CreativeEntityOccurrenceProjection,
   CreativeEntityRelationshipProjection,

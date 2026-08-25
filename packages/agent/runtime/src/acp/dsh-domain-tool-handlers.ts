@@ -8,9 +8,9 @@ import type {
   CutExportTaskSnapshot,
   CutProjectAuthoringService,
 } from '@neko/cut-domain';
-import type { GenerationJobSnapshot, PurposeGenerationJobPort } from '@neko/generation/job';
-import type { CharacterDshAuthoringService } from '@neko/chara/application';
-import type { WorldDshAuthoringService } from '@neko/world/application';
+import type { GenerationJobSnapshot, PurposeGenerationJobPort } from '@neko/generation-domain/job';
+import type { CharacterDshAuthoringService } from '@neko/chara-domain/application';
+import type { WorldDshAuthoringService } from '@neko/world-domain/application';
 import type { AgentContentAccessRuntime } from '../runtime/capability/agent-content-access-runtime';
 
 import type {

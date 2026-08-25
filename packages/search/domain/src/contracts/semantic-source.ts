@@ -1,5 +1,5 @@
-import type { CharacterMemorySourceRange, EntityMention } from '@neko/chara';
-import { isCharacterMemorySourceRef, type CharacterMemorySourceRef } from '@neko/chara';
+import type { CharacterMemorySourceRange, EntityMention } from '@neko/chara-domain';
+import { isCharacterMemorySourceRef, type CharacterMemorySourceRef } from '@neko/chara-domain';
 import type {
   CreativeEntityKind,
   CreativeEntityRef,
@@ -8,7 +8,7 @@ import type {
   ProjectEntityCandidateSourceOwner,
   ProjectEntityRecord,
 } from '@neko/entity-domain';
-import { isContentLocator, type ContentLocator } from '@neko/content';
+import { isContentLocator, type ContentLocator } from '@neko/content-domain';
 import type {
   MediaSemanticIndex,
   MediaTextRange,

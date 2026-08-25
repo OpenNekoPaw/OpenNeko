@@ -3,7 +3,7 @@ import {
   WORLD_PORTABLE_HOST_CHANNELS,
   createWorldPortableHostRequest,
   type WorldPortableHostBinding,
-} from '@neko/world/contracts';
+} from '@neko/world-domain/contracts';
 
 const electron = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, payload: unknown) => unknown>(),
@@ -54,13 +54,11 @@ describe('Desktop World portable IPC', () => {
       result: { requestId: context.requestId, status: 'completed' as const, result },
       archiveBytes,
     }));
-    const saveWorldPackage = vi.fn(
-      async (_event: unknown, produce: () => Promise<Uint8Array>) => {
-        expect(createWorldPortableExport).not.toHaveBeenCalled();
-        expect(await produce()).toEqual(archiveBytes);
-        return true;
-      },
-    );
+    const saveWorldPackage = vi.fn(async (_event: unknown, produce: () => Promise<Uint8Array>) => {
+      expect(createWorldPortableExport).not.toHaveBeenCalled();
+      expect(await produce()).toEqual(archiveBytes);
+      return true;
+    });
     registerDesktopIpc({ createWorldPortableExport } as never, options({ saveWorldPackage }));
     const handler = electron.handlers.get(WORLD_PORTABLE_HOST_CHANNELS.exportPackage);
     if (!handler) throw new Error('World export IPC handler was not registered.');

@@ -1,4 +1,4 @@
-import { createNodeArchiveResource } from '@neko/content/document/node';
+import { createNodeArchiveResource } from '@neko/content-domain/document/node';
 import { getEpubResourceMediaType } from '@neko/preview-domain';
 
 export interface EpubPreviewResourceTreeEntry {

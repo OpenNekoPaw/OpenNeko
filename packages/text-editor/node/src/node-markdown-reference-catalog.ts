@@ -4,7 +4,10 @@ import {
   searchProjectMediaLibraryContentEntries,
   searchWorkspaceContentEntries,
 } from '@neko/assets-node';
-import { isWorkspaceFileContentLocator, serializeContentReferenceTarget } from '@neko/content';
+import {
+  isWorkspaceFileContentLocator,
+  serializeContentReferenceTarget,
+} from '@neko/content-domain';
 import { readProjectEntityResources } from '@neko/entity-node';
 import type { NekoHostPorts } from '@neko/host/ports';
 import {

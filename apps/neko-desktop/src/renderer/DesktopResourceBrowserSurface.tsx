@@ -17,12 +17,12 @@ import type {
 import {
   createEmptyCharacterDefinition,
   type CharacterCreationSourceSelection,
-} from '@neko/chara/contracts';
+} from '@neko/chara-domain/contracts';
 import type {
   OpenNekoDesktopProjectLocalAuthoringBridge,
   ProjectLocalAuthoringHostBinding,
   ProjectLocalCharacterEntitySelection,
-} from '@neko/project/contracts';
+} from '@neko/project-domain/contracts';
 
 const ResourceBrowserRoot = lazy(async () => {
   const module = await import('@neko/assets-webview/resource-browser/root');

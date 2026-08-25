@@ -1,11 +1,11 @@
-import type { ContentReadService, WorkspaceFileContentLocator } from '@neko/content';
+import type { ContentReadService, WorkspaceFileContentLocator } from '@neko/content-domain';
 import {
   authorizeWorkspaceContainedPath,
   createNodeHostContentReadService,
   type AuthorizeWorkspacePathInput,
   type CreateNodeHostContentReadServiceOptions,
   type WorkspacePathGuardResult,
-} from '@neko/content/node';
+} from '@neko/content-domain/node';
 import { realpath } from 'node:fs/promises';
 import * as path from 'node:path';
 import { ProjectMediaLibraryBindingRepository } from './project-media-library-binding-repository';

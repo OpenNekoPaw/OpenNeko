@@ -2,7 +2,7 @@ import {
   CONTENT_LOCATOR_DRAG_MIME,
   parseContentLocatorDragData,
   type ContentLocatorDragData,
-} from '@neko/content';
+} from '@neko/content-domain';
 
 const URI_MIME_TYPES = ['application/vnd.code.uri-list', 'text/uri-list'] as const;
 

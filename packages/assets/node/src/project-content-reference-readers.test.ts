@@ -9,7 +9,7 @@ import {
   type OtioTimeline,
 } from '@neko/cut-domain';
 import { loadNkc, type CanvasData } from '@neko/canvas-domain';
-import { contentLocatorKey, serializeContentReferenceTarget } from '@neko/content';
+import { contentLocatorKey, serializeContentReferenceTarget } from '@neko/content-domain';
 import { describe, expect, it } from 'vitest';
 import {
   readProjectContentReferences,

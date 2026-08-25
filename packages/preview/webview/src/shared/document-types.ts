@@ -11,7 +11,7 @@ import type {
   DocumentRange,
   DocumentRegion,
   DocumentSourceRef,
-} from '@neko/content';
+} from '@neko/content-domain';
 
 export type DocumentViewerCoordinate =
   | ContentPageSelector

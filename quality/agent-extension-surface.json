@@ -28,7 +28,7 @@
     "evidence": [
       "packages/dsh-bridge/package.json",
       "packages/skills/README.md",
-      "openspec/changes/align-dsh-skill-runtime-semantics/compatibility-inventory.md"
+      "openspec/specs/dsh-authoring-contract/spec.md"
     ]
   },
   "compositionPackage": {

@@ -81,7 +81,7 @@ import { moveGlobalLibraryFiles } from './global-library-file-mutations';
 import type { AssetLibraryMembershipRepository } from '@neko/assets-domain/global-library/membership';
 import { createCanvasHostSessionId } from '@neko/canvas-domain';
 import { createResourceBrowserViewId } from '@neko/assets-domain/resource-browser/contract';
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 import {
   createWorkspaceLinkedMediaLibrary,
   replaceWorkspaceLinkedMediaLibrary,

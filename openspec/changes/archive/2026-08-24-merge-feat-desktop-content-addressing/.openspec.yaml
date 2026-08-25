@@ -1,6 +1,0 @@
-schema: spec-driven
-
-change:
-  id: merge-feat-desktop-content-addressing
-  owner: content-canvas
-  status: in-progress

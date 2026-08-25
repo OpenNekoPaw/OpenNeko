@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import type { DshAcpDomainToolRequest } from '@neko/agent-contracts/dsh-acp';
 import { createOtioTimeline, serializeOtio } from '@neko/cut-domain';
-import type { GenerationJobPort, GenerationJobSnapshot } from '@neko/generation/job';
+import type { GenerationJobPort, GenerationJobSnapshot } from '@neko/generation-domain/job';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createDesktopDshDomainToolHandlers } from './desktop-dsh-domain-tool-handlers';

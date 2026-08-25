@@ -8,9 +8,9 @@ const desktopCanvasRuntimePath = 'apps/neko-desktop/src/main/desktop-canvas-runt
 describe('project file I/O guardrails', () => {
   it('keeps browser-visible add-source helpers free of Node builtins', () => {
     const browserVisibleFiles = [
-      'packages/content/src/project-file-io/add-source.ts',
-      'packages/content/src/project-file-io/ingest.ts',
-      'packages/content/src/project-file-io/add-source-flow.ts',
+      'packages/content/domain/src/project-file-io/add-source.ts',
+      'packages/content/domain/src/project-file-io/ingest.ts',
+      'packages/content/domain/src/project-file-io/add-source-flow.ts',
       'packages/canvas/webview/src/hooks/useDragDrop.ts',
     ];
 
@@ -81,7 +81,9 @@ describe('project file I/O guardrails', () => {
   it('keeps drag-and-drop acquisition on the canonical project:addSource path', () => {
     const dragDropPath = 'packages/canvas/webview/src/hooks/useDragDrop.ts';
     const dragDropSource = readSource(dragDropPath);
-    const protocolSource = readSource('packages/content/src/project-file-io/add-source-flow.ts');
+    const protocolSource = readSource(
+      'packages/content/domain/src/project-file-io/add-source-flow.ts',
+    );
 
     expect(dragDropSource).toContain('createProjectSourceAddClient({');
     expect(protocolSource).toContain("readonly type: 'project:addSource'");
@@ -131,7 +133,9 @@ describe('project file I/O guardrails', () => {
   });
 
   it('keeps save-reason diagnostics broad enough to distinguish add-source saves', () => {
-    expect(readSource('packages/content/src/project-file-io/store.ts')).toContain("| 'add-source'");
+    expect(readSource('packages/content/domain/src/project-file-io/store.ts')).toContain(
+      "| 'add-source'",
+    );
   });
 });
 

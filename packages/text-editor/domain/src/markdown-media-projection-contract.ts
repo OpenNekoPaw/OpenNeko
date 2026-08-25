@@ -3,7 +3,7 @@ import {
   isWorkspaceFileContentLocator,
   normalizeWorkspaceContentPath,
   validateContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 import type { TextDocumentIdentity } from './contracts';
 
 export type TextEditorMarkdownMediaKind = 'image' | 'audio' | 'video';

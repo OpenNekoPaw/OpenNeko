@@ -1,7 +1,7 @@
 import type { DshAcpHostToolPort, DshAcpJsonValue } from '@neko/agent-contracts/dsh-acp';
 import type { Context } from '@deepseek-ai/cordis';
 import { defineTool, type JsonValue, type ToolRunContext } from '@deepseek-ai/dsh-tools';
-import { GENERATION_DSH_TOOL_NAME, GENERATION_DSH_TOOL_PARAMETERS } from '@neko/generation';
+import { GENERATION_DSH_TOOL_NAME, GENERATION_DSH_TOOL_PARAMETERS } from '@neko/generation-domain';
 
 export const name = 'openneko-generation-tools';
 export const inject = ['opennekoHostTools', 'tools'];

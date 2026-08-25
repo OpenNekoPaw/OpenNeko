@@ -1,4 +1,4 @@
-import type { ContentFingerprint, WorkspaceFileContentLocator } from '@neko/content';
+import type { ContentFingerprint, WorkspaceFileContentLocator } from '@neko/content-domain';
 import type { FountainDocument } from '@neko/screenplay-domain';
 
 export const TEXT_DOCUMENT_MAX_BYTES = 2 * 1024 * 1024;

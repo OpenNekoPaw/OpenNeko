@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@neko/assets-domain": "workspace:*",
-    "@neko/content": "workspace:*",
+    "@neko/content-domain": "workspace:*",
     "@neko/local-metadata": "workspace:*",
     "@neko/cut-domain": "workspace:*",
     "@neko/media": "workspace:*",

@@ -1,7 +1,7 @@
 import { lstat, realpath } from 'node:fs/promises';
 import * as path from 'node:path';
-import type { ContentIoDiagnosticCode, WorkspaceFileContentLocator } from '@neko/content';
-import { authorizeWorkspaceContainedPath } from '@neko/content/node';
+import type { ContentIoDiagnosticCode, WorkspaceFileContentLocator } from '@neko/content-domain';
+import { authorizeWorkspaceContainedPath } from '@neko/content-domain/node';
 import { workspaceLinkedMediaLibraryPath } from '@neko/assets-domain/contracts';
 import type { ProjectMediaLibraryBindingRepository } from './project-media-library-binding-repository';
 import { resolveGlobalMediaLibraryTarget } from './global-media-library-files';

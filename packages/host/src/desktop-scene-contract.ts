@@ -5,7 +5,7 @@ import {
   type AgentConversationOwnerRef,
   type AgentHomeNavigationIdentity,
 } from '@neko/agent-contracts';
-import { parseWorldRuntimeBinding, type WorldRuntimeBinding } from '@neko/world/contracts';
+import { parseWorldRuntimeBinding, type WorldRuntimeBinding } from '@neko/world-domain/contracts';
 
 export const DESKTOP_APPLICATION_SIDEBAR_DEFAULT_WIDTH = 240;
 export const DESKTOP_APPLICATION_SIDEBAR_WIDTH_LIMITS = { min: 208, max: 360 } as const;

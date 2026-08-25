@@ -3,8 +3,8 @@ import type {
   ContentLocator,
   DocumentImageInfo,
   DocumentReadResult,
-} from '@neko/content';
-import type { ContentDocumentCursor, ContentDocumentManifest } from '@neko/content/document';
+} from '@neko/content-domain';
+import type { ContentDocumentCursor, ContentDocumentManifest } from '@neko/content-domain/document';
 
 export type AgentContentAccessStatus =
   'ready' | 'missing-source' | 'unsupported-source' | 'unauthorized' | 'failed';

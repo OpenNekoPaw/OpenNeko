@@ -14,7 +14,7 @@ import type {
   CanvasTextFilePreviewRequest,
   CanvasTextFilePreviewResult,
 } from '@neko/canvas-domain';
-import { validateContentLocator, type ContentLocator } from '@neko/content';
+import { validateContentLocator, type ContentLocator } from '@neko/content-domain';
 import {
   parsePreviewMediaDescriptor,
   type PreviewContentKind,

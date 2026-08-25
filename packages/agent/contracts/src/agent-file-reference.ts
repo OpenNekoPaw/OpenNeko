@@ -1,4 +1,4 @@
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 
 export type AgentFileReferenceSource =
   'workspace' | 'media-library' | 'asset-library' | 'entity-graph' | 'story' | 'canvas';

@@ -1,4 +1,4 @@
-import { validateContentLocator, type ContentLocator } from '@neko/content';
+import { validateContentLocator, type ContentLocator } from '@neko/content-domain';
 
 export const MEDIA_LIBRARY_PROJECTION_CAPABILITIES = [
   'read',

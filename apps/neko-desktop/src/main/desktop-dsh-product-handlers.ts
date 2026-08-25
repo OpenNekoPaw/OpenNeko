@@ -13,11 +13,11 @@ import type {
   DshAcpSessionUpdateNotification,
   DshAcpSessionUpdateDelivery,
 } from '@neko/agent-runtime/acp';
-import type { GenerationApplicationRuntime } from '@neko/generation/job';
+import type { GenerationApplicationRuntime } from '@neko/generation-domain/job';
 import type { CutProjectAuthoringService } from '@neko/cut-domain';
 import type { CutExportApplicationService } from '@neko/cut-node';
-import type { CharacterDshAuthoringService } from '@neko/chara/application';
-import type { WorldDshAuthoringService } from '@neko/world/application';
+import type { CharacterDshAuthoringService } from '@neko/chara-domain/application';
+import type { WorldDshAuthoringService } from '@neko/world-domain/application';
 import type { DesktopWorkspaceGrantAuthorityPort } from '@neko/host/desktop-workspace-grant-authority';
 import type { WorkspaceConfigManagerAuthority } from '@neko/host/settings';
 import type { ProfessionalApplicationBindingRepository } from '@neko/professional-apps-node';

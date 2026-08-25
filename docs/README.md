@@ -1,64 +1,26 @@
 # 文档索引
 
-本文是 `docs/` 的导航入口。根目录 `README_CN.md` / `README.md` 介绍项目和当前能力；`docs/`
-承载当前稳定架构、领域资料，以及带日期和来源的调研输入。
+仓库文档只承担三类长期职责：系统架构、开发规范和核心产品设计。实际业务逻辑、功能实现与实现进度以代码和测试为准。
 
-## 发现路径
+## 入口
 
-| 想了解                        | 先读                                                                       |
-| ----------------------------- | -------------------------------------------------------------------------- |
-| 项目定位和包分组              | [`../README_CN.md`](../README_CN.md)                                       |
-| Desktop 分期开发路线          | [`../ROADMAP_CN.md`](../ROADMAP_CN.md)                                     |
-| 参与开发与验证入口            | [`../CONTRIBUTING_CN.md`](../CONTRIBUTING_CN.md)                           |
-| 系统分层和硬约束              | [`architecture/README.md`](architecture/README.md)                         |
-| 仓库工作规则                  | [`../AGENTS.md`](../AGENTS.md)                                             |
-| 子包边界、UI 层和公共代码规范 | [`architecture/package-boundaries.md`](architecture/package-boundaries.md) |
-| Package 角色、拆分与命名      | [`architecture/package-taxonomy.md`](architecture/package-taxonomy.md)     |
-| 系统级架构决策                | [`architecture/README.md`](architecture/README.md)                         |
-| 领域能力和领域架构            | [`domains/README.md`](domains/README.md)                                   |
-| 调研、竞品和技术方案对比      | [`research/README.md`](research/README.md)                                 |
-| 当前 Gap、迁移与审计快照      | [`status/README.md`](status/README.md)                                     |
-| 活跃设计变更                  | [`../openspec/`](../openspec/)                                             |
-| 质量门禁机器输入              | [`../quality/README.md`](../quality/README.md)                             |
+| 内容                   | 入口                                               |
+| ---------------------- | -------------------------------------------------- |
+| 产品定位与当前能力     | [`../README_CN.md`](../README_CN.md)               |
+| 产品路线               | [`../ROADMAP_CN.md`](../ROADMAP_CN.md)             |
+| 开发与验证             | [`../CONTRIBUTING_CN.md`](../CONTRIBUTING_CN.md)   |
+| 系统架构与开发规范     | [`architecture/README.md`](architecture/README.md) |
+| 核心领域设计           | [`domains/README.md`](domains/README.md)           |
+| 系统级或产品级活跃提案 | [`../openspec/changes/`](../openspec/changes/)     |
+| 机器可读质量规则       | [`../quality/README.md`](../quality/README.md)     |
 
-## 分类规则
+## 写入规则
 
-| 文档类型   | 位置                                | 说明                                             |
-| ---------- | ----------------------------------- | ------------------------------------------------ |
-| 系统架构   | `docs/architecture/`                | 跨领域、跨包、跨运行平面的约束和 ADR             |
-| 领域文档   | `docs/domains/<domain>/`            | 单个创作领域的能力模型、数据流和领域架构         |
-| 调研分析   | `docs/research/`                    | 带日期、来源和不确定性说明的决策输入             |
-| 状态快照   | `docs/status/`                      | 带日期的 Gap、迁移、资格化和审计结果             |
-| 开发中变更 | `openspec/changes/`                 | 尚未固化的需求、设计、任务和规格变更             |
-| 任务队列   | 根目录 TODO（存在时）               | 当前排队事项和轻量行动项，不承载设计正文         |
-| 产品路线   | 根目录 Roadmap（存在时）            | 方向性目标和优先级，不承诺具体发布节奏           |
-| 质量输入   | `quality/`                          | 供脚本和 CI 消费的 JSON 台账、规则数据和门禁输入 |
-| 包私有实现 | canonical package root 下的 `docs/` | 只服务某个包的配置、实现和维护说明               |
+- `docs/architecture/` 只保存系统级架构、开发规范和跨领域长期不变量。
+- `docs/domains/<domain>/` 只保存核心产品能力模型与稳定领域边界。
+- 不提交调研归档、状态快照、Gap、审计、迁移日志、验证报告、命令输出或实现清单。
+- 不用文档复制目录、文件、类、函数或控制流；内部实现直接阅读代码和测试。
+- package README 只简要说明 public entry、运行边界和使用入口，不记录私有实现细节。
+- 普通代码重构不要求同步文档；只有系统架构或核心产品设计发生变化时才更新对应文档。
 
-## 写入原则
-
-新增或移动文档前，先判断它是在描述稳定约束、领域模型、开发变更还是包私有实现。
-
-- 会约束多个领域或多个运行平面：写入 `docs/architecture/`。
-- 只解释一个领域内部能力：写入 `docs/domains/<domain>/`。
-- 调研、竞品、开源方案对比或 UX 分析：写入 `docs/research/`，并记录日期、来源与不确定性。
-- 阶段进度或临时审计：写入 `docs/status/`；需要推进时再转入 OpenSpec、TODO 或 Roadmap。
-- 仍在设计或实施中：优先写入 `openspec/changes/`。
-- 只是当前排队事项：写入仓库采用的根目录 TODO；没有现存入口时先按仓库治理补齐导航。
-- 只是方向性产品目标：写入仓库采用的根目录 Roadmap；没有现存入口时先按仓库治理补齐导航。
-- 供脚本或 CI 消费的机器可读质量数据：写入 `quality/`。
-- 只影响一个包的维护者：写入 `packages/<name>/docs/` 或 `packages/<family>/<role>/docs/`。
-
-## 命名约定
-
-领域目录内优先使用固定文件名，方便人和 Agent 发现：
-
-| 文件                | 用途                                      |
-| ------------------- | ----------------------------------------- |
-| `README.md`         | 领域入口、范围、参与包/横切能力、阅读路径 |
-| `architecture.md`   | 领域内部架构和边界                        |
-| `capability-map.md` | 能力地图和扩展点                          |
-| `data-flow.md`      | 核心数据流和状态流                        |
-| `integration.md`    | 与 Host、Media、Agent、Assets 等边界      |
-
-不要把实现日志、命令输出、阶段完成记录或临时状态写成架构事实。
+OpenSpec 只承载尚未落地的系统级或产品级功能变更。局部 UI、缺陷、性能、重构、清理、测试和工具变更直接修改代码，不创建提案或配套文档。

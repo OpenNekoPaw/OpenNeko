@@ -36,7 +36,7 @@ import {
 } from '../types/canvas-material-contracts';
 import { isCanvasGenerationNodeData } from '../types/canvas-generation-node';
 import { isJobRef } from '@neko/shared/job-lifecycle';
-import { validateContentLocator } from '@neko/content';
+import { validateContentLocator } from '@neko/content-domain';
 import { isJsonPointerPath, writeJsonPointer } from './fieldBinding';
 import { assertNoRuntimeResourceIdentity } from './canvasDurableResourceIdentity';
 import {

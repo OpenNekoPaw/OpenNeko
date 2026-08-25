@@ -4,7 +4,7 @@ function rolePathPattern(role, predicate = () => true) {
   const paths = packageRoleCatalog.packages
     .filter((entry) => entry.roles.includes(role) && predicate(entry))
     .map((entry) => entry.path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  return `^(?:${paths.join('|')})/`;
+  return `^(?:${paths.join('|')})/src/`;
 }
 
 /** @type {import('dependency-cruiser').IConfiguration} */

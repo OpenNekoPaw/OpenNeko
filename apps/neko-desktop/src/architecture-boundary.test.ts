@@ -95,7 +95,10 @@ describe('Desktop architecture boundaries', () => {
 
   it('keeps the DSH Session bridge as the only Renderer Agent path', () => {
     const preload = readFileSync(path.join(sourceRoot, 'preload', 'index.ts'), 'utf8');
-    const renderer = readFileSync(path.join(sourceRoot, 'renderer', 'DesktopAgentSurface.tsx'), 'utf8');
+    const renderer = readFileSync(
+      path.join(sourceRoot, 'renderer', 'DesktopAgentSurface.tsx'),
+      'utf8',
+    );
 
     expect(preload).toContain('dshSessions: {');
     expect(preload).toContain('dshPermissions: {');
@@ -117,7 +120,10 @@ describe('Desktop architecture boundaries', () => {
     const agentRuntimeRoot = path.join(repositoryRoot, 'packages/agent/runtime/src/application');
     const agentWebviewRoot = path.join(repositoryRoot, 'packages/agent/webview/src');
     const charaLaunchContract = readFileSync(
-      path.join(repositoryRoot, 'packages/chara/src/contracts/character-conversation-launch.ts'),
+      path.join(
+        repositoryRoot,
+        'packages/chara/domain/src/contracts/character-conversation-launch.ts',
+      ),
       'utf8',
     );
     const retiredEntryTargetService = path.join(agentRuntimeRoot, 'agent-entry-target-service.ts');
@@ -212,10 +218,7 @@ describe('Desktop architecture boundaries', () => {
   it('keeps direct Canvas Generation on owning services without an Agent turn', () => {
     const application = readFileSync(path.join(sourceRoot, 'main', 'index.ts'), 'utf8');
     const canvasHost = readFileSync(
-      path.join(
-        repositoryRoot,
-        'packages/canvas/webview/src/host-runtime/canvas-webview-host.ts',
-      ),
+      path.join(repositoryRoot, 'packages/canvas/webview/src/host-runtime/canvas-webview-host.ts'),
       'utf8',
     );
     const canvasSurface = readFileSync(
@@ -261,7 +264,7 @@ describe('Desktop architecture boundaries', () => {
       'utf8',
     );
     const contentLocatorContract = readFileSync(
-      path.join(repositoryRoot, 'packages/content/src/contracts/content-locator.ts'),
+      path.join(repositoryRoot, 'packages/content/domain/src/contracts/content-locator.ts'),
       'utf8',
     );
 

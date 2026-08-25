@@ -2,10 +2,10 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { IDocumentAccessService } from '@neko/content/document';
-import { createNodeDocumentAccessService } from '@neko/content/document/node';
-import type { ContentRepresentationService } from '@neko/content';
-import { createNodeHostContentReadService } from '@neko/content/node';
+import type { IDocumentAccessService } from '@neko/content-domain/document';
+import { createNodeDocumentAccessService } from '@neko/content-domain/document/node';
+import type { ContentRepresentationService } from '@neko/content-domain';
+import { createNodeHostContentReadService } from '@neko/content-domain/node';
 import { resolveWorkspaceContentLocator } from '@neko/assets-node';
 import { createHostAgentContentAccessRuntime } from '../capability/host-content-access-runtime-adapter';
 

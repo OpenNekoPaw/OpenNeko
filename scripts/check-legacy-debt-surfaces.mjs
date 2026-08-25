@@ -525,8 +525,8 @@ function isExternalContractSurface(lowerFile, lowerLine, term) {
   }
   if (term !== 'compat') return false;
   return (
-    lowerFile === 'packages/generation/src/media/adapters/openai-compat-media-adapter.ts' ||
-    (lowerFile === 'packages/generation/src/media/index.ts' &&
+    lowerFile === 'packages/generation/domain/src/media/adapters/openai-compat-media-adapter.ts' ||
+    (lowerFile === 'packages/generation/domain/src/media/index.ts' &&
       containsAny(lowerLine, ['openaicompat', 'openai-compat', 'openai-compatible'])) ||
     (lowerFile === 'packages/agent/runtime/src/pi/capability-tool-bridge.ts' &&
       lowerLine.includes('openai_compatible_tool_name'))

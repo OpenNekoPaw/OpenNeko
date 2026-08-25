@@ -31,6 +31,10 @@ describe('architecture boundary failing fixtures', () => {
     const contractRule = rules.get('contracts-no-runtime-implementation');
     assert.ok(new RegExp(domainRule.from.path).test('packages/cut/domain/src/index.ts'));
     assert.ok(new RegExp(domainRule.to.path).test('packages/cut/webview/src/root.tsx'));
+    assert.equal(
+      new RegExp(domainRule.from.path).test('packages/chara/webview/src/root.tsx'),
+      false,
+    );
     assert.ok(new RegExp(contractRule.from.path).test('packages/agent/contracts/src/index.ts'));
     assert.ok(new RegExp(contractRule.to.path).test('packages/agent/runtime/src/index.ts'));
   });

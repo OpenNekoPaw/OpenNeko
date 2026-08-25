@@ -6,13 +6,16 @@ import { test } from 'node:test';
 
 import { CANVAS_DSH_TOOL_NAME, CANVAS_DSH_TOOL_OPERATIONS } from '@neko/canvas-domain';
 import { CUT_DSH_TOOL_NAME, CUT_DSH_TOOL_OPERATIONS } from '@neko/cut-domain';
-import { GENERATION_DSH_TOOL_NAME, GENERATION_DSH_TOOL_OPERATIONS } from '@neko/generation';
-import { DOCUMENT_DSH_TOOL_NAME, DOCUMENT_DSH_TOOL_OPERATIONS } from '@neko/content/document';
+import { GENERATION_DSH_TOOL_NAME, GENERATION_DSH_TOOL_OPERATIONS } from '@neko/generation-domain';
+import {
+  DOCUMENT_DSH_TOOL_NAME,
+  DOCUMENT_DSH_TOOL_OPERATIONS,
+} from '@neko/content-domain/document';
 import {
   CHARACTER_DSH_TOOL_NAME,
   CHARACTER_DSH_TOOL_OPERATIONS,
-} from '@neko/chara/application';
-import { WORLD_DSH_TOOL_NAME, WORLD_DSH_TOOL_OPERATIONS } from '@neko/world/application';
+} from '@neko/chara-domain/application';
+import { WORLD_DSH_TOOL_NAME, WORLD_DSH_TOOL_OPERATIONS } from '@neko/world-domain/application';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
 
@@ -59,16 +62,16 @@ test('production Agent Tool inventory matches every DSH plugin registration', as
 
 test('retired Character and World capability providers cannot return as Agent Tools', async () => {
   const retiredPaths = [
-    'packages/chara/src/application/character-authoring-capability-provider.ts',
-    'packages/world/src/application/world-authoring-capability-provider.ts',
+    'packages/chara/domain/src/application/character-authoring-capability-provider.ts',
+    'packages/world/domain/src/application/world-authoring-capability-provider.ts',
   ];
   for (const path of retiredPaths)
     assert.equal(existsSync(join(repositoryRoot, path)), false, path);
 
   const source = await Promise.all(
     [
-      'packages/chara/src/application/index.ts',
-      'packages/world/src/application/index.ts',
+      'packages/chara/domain/src/application/index.ts',
+      'packages/world/domain/src/application/index.ts',
       'packages/agent/contracts/src/tool-names.ts',
     ].map((path) => readFile(join(repositoryRoot, path), 'utf8')),
   );

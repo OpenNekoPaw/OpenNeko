@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validateContentLocator } from '@neko/content';
+import { validateContentLocator } from '@neko/content-domain';
 import {
   validateCreativeMediaOperationDispatch,
   validateCreativeMediaOperationRequest,
@@ -14,7 +14,7 @@ import {
   type QualityEvidence,
   type QualityGateResult,
   type QualityTarget,
-} from '@neko/generation';
+} from '@neko/generation-domain';
 import {
   validateProjectQualityPreview,
   validateProjectQualityResult,

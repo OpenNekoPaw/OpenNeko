@@ -13,7 +13,7 @@ import {
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createNodeHostContentReadService } from '@neko/content/node';
+import { createNodeHostContentReadService } from '@neko/content-domain/node';
 import {
   createWorkspaceLinkedMediaLibrary,
   listWorkspaceLinkedMediaLibraries,

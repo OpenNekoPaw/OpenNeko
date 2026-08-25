@@ -1,4 +1,8 @@
-import { contentLocatorKey, validateContentLocator, type ContentLocator } from '@neko/content';
+import {
+  contentLocatorKey,
+  validateContentLocator,
+  type ContentLocator,
+} from '@neko/content-domain';
 import { isCanvasDurableMaterialContentLocator } from '@neko/canvas-domain';
 
 export function readCanonicalContentLocator(value: unknown): ContentLocator | undefined {

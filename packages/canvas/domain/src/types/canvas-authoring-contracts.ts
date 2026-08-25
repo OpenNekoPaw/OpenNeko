@@ -1,4 +1,4 @@
-import { isHostProjectedRuntimeValue } from '@neko/content';
+import { isHostProjectedRuntimeValue } from '@neko/content-domain';
 
 export type CanvasAuthoringDiagnosticSeverity = 'info' | 'warning' | 'error';
 

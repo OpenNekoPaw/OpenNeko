@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { type ProjectQualityFacade } from '@neko/quality/project';
-import { type QualityProjectRef, type QualityTarget } from '@neko/generation';
+import { type QualityProjectRef, type QualityTarget } from '@neko/generation-domain';
 import { collectProjectQualityEvidence } from '../project/index';
 
 const project: QualityProjectRef = {

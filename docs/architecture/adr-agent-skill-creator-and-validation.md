@@ -105,4 +105,4 @@ authority、feature flag 或 compatibility dispatcher。
 
 相关决策见 [`adr-agent-skill-catalog-activation-boundary.md`](adr-agent-skill-catalog-activation-boundary.md)、
 [`adr-agent-prompt-skill-validator-boundary.md`](adr-agent-prompt-skill-validator-boundary.md) 和
-[`adr-pi-agent-runtime.md`](adr-pi-agent-runtime.md)（历史文件名，正文已记录 DSH 原子替换）。
+[`adr-dsh-cordis-replace-agent-extension-runtime.md`](adr-dsh-cordis-replace-agent-extension-runtime.md)。

@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@neko/content": "workspace:*",
+    "@neko/content-domain": "workspace:*",
     "@neko/local-metadata": "workspace:*",
     "@neko/professional-apps-contracts": "workspace:*"
   },

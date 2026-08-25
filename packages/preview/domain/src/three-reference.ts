@@ -3,7 +3,7 @@ import {
   type ModelPreviewFormat,
   type NormalizedModelFacts,
 } from './model-preview.js';
-import { contentLocatorsEqual, isContentLocator, type ContentLocator } from '@neko/content';
+import { contentLocatorsEqual, isContentLocator, type ContentLocator } from '@neko/content-domain';
 
 export const THREE_REFERENCE_PURPOSES = ['appearance', 'pose', 'camera', 'panorama-scene'] as const;
 export type ThreeReferencePurpose = (typeof THREE_REFERENCE_PURPOSES)[number];

@@ -79,11 +79,11 @@ const config: KnipConfig = {
     'packages/ai/contracts': {},
     'packages/automation/contracts': {},
     'packages/automation/node': {},
-    'packages/content': {
+    'packages/content/domain': {
       entry: ['src/index.ts', 'src/document/index.ts'],
     },
     'packages/media': {},
-    'packages/chara': {
+    'packages/chara/domain': {
       entry: [
         'src/index.ts',
         'src/application/index.ts',
@@ -91,13 +91,13 @@ const config: KnipConfig = {
         'src/testing/index.ts',
       ],
     },
-    'packages/chara-node': {
+    'packages/chara/node': {
       entry: ['src/index.ts'],
     },
-    'packages/chara-webview': {
+    'packages/chara/webview': {
       entry: ['src/root.tsx'],
     },
-    'packages/world': {
+    'packages/world/domain': {
       entry: [
         'src/index.ts',
         'src/contracts/index.ts',
@@ -106,10 +106,10 @@ const config: KnipConfig = {
         'src/testing/index.ts',
       ],
     },
-    'packages/world-node': {
+    'packages/world/node': {
       entry: ['src/index.ts'],
     },
-    'packages/generation': {},
+    'packages/generation/domain': {},
     'packages/quality': {},
     'packages/entity/domain': {
       entry: [
@@ -182,11 +182,7 @@ const config: KnipConfig = {
       ],
     },
     'packages/agent/runtime': {
-      entry: [
-        'src/index.ts',
-        'src/runtime/index.ts',
-        'src/workspace/index.ts',
-      ],
+      entry: ['src/index.ts', 'src/runtime/index.ts', 'src/workspace/index.ts'],
     },
     'scripts/dsh-q0': {
       entry: [

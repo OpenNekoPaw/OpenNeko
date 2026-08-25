@@ -8,8 +8,8 @@ import {
   type CharacterRun,
   type CharacterVersion as PublishedCharacter,
   type RoomRun,
-} from '@neko/chara/contracts';
-import { CharacterAvatarAuthorityService } from '@neko/chara/application';
+} from '@neko/chara-domain/contracts';
+import { CharacterAvatarAuthorityService } from '@neko/chara-domain/application';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DesktopCharacterAvatarRuntime } from './desktop-character-avatar-runtime';
 import { DesktopResourceRegistry } from './desktop-resource-registry';

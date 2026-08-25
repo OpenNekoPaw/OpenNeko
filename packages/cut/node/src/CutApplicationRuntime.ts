@@ -27,7 +27,7 @@ import {
   parseContentLocatorDragData,
   type ContentLocator,
   type ContentLocatorDragData,
-} from '@neko/content';
+} from '@neko/content-domain';
 import { CutExportApplicationService } from './CutExportApplicationService';
 import { CutExportTaskRegistry } from './CutExportTaskRegistry';
 import {

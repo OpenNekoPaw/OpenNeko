@@ -1,4 +1,4 @@
-import type { MediaProvider } from '@neko/generation/media';
+import type { MediaProvider } from '@neko/generation-domain/media';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createDesktopMediaExecutionProviderResolver } from './desktop-media-execution-provider';

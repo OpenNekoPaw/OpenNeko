@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { stat } from 'node:fs/promises';
-import { contentLocatorsEqual, type ContentLocator } from '@neko/content';
+import { contentLocatorsEqual, type ContentLocator } from '@neko/content-domain';
 import {
   AssetCenterController,
   AssetCenterSession,

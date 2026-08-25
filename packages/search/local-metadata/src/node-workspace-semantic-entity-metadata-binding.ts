@@ -12,7 +12,7 @@ import type {
   ProjectEntityProjectionRecord,
   ProjectEntityCandidateSourceOwner,
 } from '@neko/entity-domain';
-import { contentLocatorsEqual, type ContentLocator } from '@neko/content';
+import { contentLocatorsEqual, type ContentLocator } from '@neko/content-domain';
 import { isSemanticSourceDescriptor } from '@neko/search-domain';
 import { resolveGlobalStorageLayout } from '@neko/local-metadata';
 import type { LocalMetadataPartition, LocalMetadataStore } from '@neko/local-metadata';

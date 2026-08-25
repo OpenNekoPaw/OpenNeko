@@ -5,7 +5,6 @@
 本文件定义 OpenNeko Agent 的稳定系统边界。迁移中的实现与验收状态由
 `openspec/changes/replace-pi-with-dsh-runtime-atomically/` 管理；目标决策见
 [`adr-dsh-cordis-replace-agent-extension-runtime.md`](adr-dsh-cordis-replace-agent-extension-runtime.md)。
-历史 [`adr-pi-agent-runtime.md`](adr-pi-agent-runtime.md) 已被该决策取代，不再描述当前 authority。
 
 ## 系统定位
 
@@ -91,7 +90,7 @@ cross-session identity、过大 payload 或权限拒绝必须 fail-local、fail-
 
 ACP content block 是 Desktop 到 DSH 的唯一消息输入协议。Composer 图片通过 Host 授权和 DSH attachment admission 后以 DSH 原生 image block 进入 exact Session；运行中发现的文档图片通过 `openneko.read_image` Tool 返回同一原生 image block。当前 DSH 只原生持久化 PNG、JPEG、WebP 与 GIF；音频、视频、文档和其他文件在公开 block/lifecycle 补齐前，只能由 owning media/content Tool 生成有界、带来源的文本、metadata、转写或采样表示，不把 raw path、bearer URL 或旧多模态 packet 写入 Session。
 
-当前 Agent 模型是媒体语义理解的唯一 LLM authority。附件或 Tool 结果所需模态受支持时由同一模型继续处理；不支持时只拒绝当前 submit 或 Tool call，并明确提示切换模型。产品不配置第二媒体分析模型，不隐式切换 provider/model，也不允许 Tool 用隐藏模型伪造成功。Generation 媒体模型/参数继续由 `@neko/generation` owner 独立管理；未来专用 ASR/OCR/安全审核模型只能属于对应 Tool/service 的显式能力与审批边界。
+当前 Agent 模型是媒体语义理解的唯一 LLM authority。附件或 Tool 结果所需模态受支持时由同一模型继续处理；不支持时只拒绝当前 submit 或 Tool call，并明确提示切换模型。产品不配置第二媒体分析模型，不隐式切换 provider/model，也不允许 Tool 用隐藏模型伪造成功。Generation 媒体模型/参数继续由 `@neko/generation-domain` owner 独立管理；未来专用 ASR/OCR/安全审核模型只能属于对应 Tool/service 的显式能力与审批边界。
 
 ## Credential 与安全
 

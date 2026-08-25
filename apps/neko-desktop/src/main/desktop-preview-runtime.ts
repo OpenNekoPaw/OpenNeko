@@ -27,7 +27,7 @@ import type {
   ResourceBrowserItem,
   ResourceBrowserQuickPreviewDescriptor,
 } from '@neko/assets-domain/resource-browser/contract';
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 import {
   closeMainView,
   findMainGroupForView,

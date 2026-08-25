@@ -1,4 +1,4 @@
-import { isWorkspaceFileContentLocator, validateContentLocator } from '@neko/content';
+import { isWorkspaceFileContentLocator, validateContentLocator } from '@neko/content-domain';
 import { parseFountainDocument } from '@neko/screenplay-domain';
 import { isTextDocumentDiagnosticCode } from './contracts';
 import {

@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import type { DshAcpDomainToolResponse } from '@neko/agent-contracts/dsh-acp';
-import { CONTENT_IMAGE_DSH_CHUNK_BYTES } from '@neko/content';
+import { CONTENT_IMAGE_DSH_CHUNK_BYTES } from '@neko/content-domain';
 import sharp from 'sharp';
 import { describe, expect, it, vi } from 'vitest';
 

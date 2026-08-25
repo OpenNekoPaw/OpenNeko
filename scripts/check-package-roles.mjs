@@ -49,6 +49,14 @@ export function validatePackageRoleCatalog(catalog, workspacePackages) {
   const catalogByPath = new Map();
   const names = new Set();
 
+  for (const workspace of workspacePackages) {
+    if (workspace.path.split('/').length !== 2) continue;
+    if (!workspacePackages.some((entry) => entry.path.startsWith(`${workspace.path}/`))) continue;
+    findings.push(
+      `${workspace.path}: family root workspace must not coexist with nested role packages`,
+    );
+  }
+
   for (const [index, entry] of catalog.packages.entries()) {
     const label = `catalog.packages[${index}]`;
     validateExactKeys(label, entry, packageKeys, findings);
@@ -158,15 +166,23 @@ function validateCanonicalPackageIdentity(label, entry, findings) {
   if (entry.path.startsWith('packages/neko-')) {
     findings.push(`${label}.path must not use the redundant packages/neko-* prefix`);
   }
+  const segments = entry.path.split('/');
+  if (
+    segments.length === 2 &&
+    /-(?:contracts|domain|application|runtime|node|webview|infrastructure|testing|dsh-plugin)$/u.test(
+      segments[1] ?? '',
+    )
+  ) {
+    findings.push(
+      `${label}.path must nest role packages under packages/<family>/<role> instead of using a flat sibling`,
+    );
+  }
   if (typeof entry.name !== 'string' || !entry.name.startsWith('@neko/')) {
     findings.push(`${label}.name must use the single @neko/* scope`);
     return;
   }
-  const segments = entry.path.split('/');
   const expectedName =
-    segments.length === 3
-      ? `@neko/${segments[1]}-${segments[2]}`
-      : `@neko/${segments[1]}`;
+    segments.length === 3 ? `@neko/${segments[1]}-${segments[2]}` : `@neko/${segments[1]}`;
   if (entry.name !== expectedName) {
     findings.push(
       `${label} path/name mismatch: ${entry.path} must declare ${expectedName}, found ${entry.name}`,

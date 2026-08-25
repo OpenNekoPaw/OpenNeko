@@ -1,5 +1,5 @@
 import { type CanvasHostRuntimeIdentity } from '@neko/canvas-domain';
-import { isContentLocator, type ContentLocator } from '@neko/content';
+import { isContentLocator, type ContentLocator } from '@neko/content-domain';
 
 interface DesktopCanvasWebviewDelegate {
   postMessage(message: unknown): void;
@@ -19,8 +19,7 @@ export function createDesktopCanvasWebviewDelegate(
   };
   return {
     supportsMessage: (messageType) =>
-      messageType === 'preview:resolveResource' ||
-      messageType === 'preview:releaseResource',
+      messageType === 'preview:resolveResource' || messageType === 'preview:releaseResource',
     postMessage(message) {
       if (isRecord(message) && message['type'] === 'preview:resolveResource') {
         const request = parsePreviewResourceMessage(message);

@@ -5,7 +5,7 @@ import {
   requireCanonicalBase64,
   type DshComposerImageInput,
 } from '@neko/agent-contracts';
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 
 import { normalizeProviderImage } from '../provider/image-batch-transport';
 

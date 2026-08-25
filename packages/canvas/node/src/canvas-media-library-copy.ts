@@ -3,7 +3,7 @@ import {
   type ContentLocator,
   type ContentReadService,
   type WorkspaceFileContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 import {
   isCanvasMediaLibraryCopyRequest,
   type CanvasMediaLibraryCopyRequest,

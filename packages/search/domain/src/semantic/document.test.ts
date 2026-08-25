@@ -6,9 +6,9 @@ import type {
   DocumentManifest,
   DocumentReadResult,
   DocumentSourceRef,
-} from '@neko/content';
+} from '@neko/content-domain';
 import { describe, expect, it } from 'vitest';
-import type { DocumentReadCoordinate, IDocumentAccessService } from '@neko/content/document';
+import type { DocumentReadCoordinate, IDocumentAccessService } from '@neko/content-domain/document';
 import { extractSemanticDocument, SemanticDocumentExtractionError } from './document';
 import {
   readSemanticOccurrenceContext,

@@ -11,7 +11,7 @@ import {
   validateCanvasMaterialNodePersistence,
 } from '../types/canvas-material-contracts';
 import { isCanvasGenerationNodeData } from '../types/canvas-generation-node';
-import { isContentLocator, normalizeWorkspaceContentPath } from '@neko/content';
+import { isContentLocator, normalizeWorkspaceContentPath } from '@neko/content-domain';
 import { validateNkcNodeDurableResourceIdentity } from '../utils/canvasDurableResourceIdentity';
 import { isJobRef } from '@neko/shared/job-lifecycle';
 

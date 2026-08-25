@@ -3,7 +3,7 @@ import {
   isWorkspaceFileContentLocator,
   validateContentLocator,
   type WorkspaceFileContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 import {
   isCanvasMaterialGenerationContext,
   type CanvasConnection,

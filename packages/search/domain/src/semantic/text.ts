@@ -7,7 +7,7 @@ import type {
   SemanticTextSegmentKind,
 } from '../contracts';
 import type { CreativeEntityKind } from '@neko/entity-domain';
-import type { ContentTextRangeSelector } from '@neko/content';
+import type { ContentTextRangeSelector } from '@neko/content-domain';
 import { isMap, isNode, isScalar, isSeq, parseDocument, type Node } from 'yaml';
 
 type SemanticTextSegmentDraft = Omit<SemanticTextSegment, 'locator'> & {

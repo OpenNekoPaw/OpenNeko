@@ -25,7 +25,7 @@ import {
   validateContentLocator,
   type ContentLocator,
   type WorkspaceFileContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 import { decodedBase64ByteLength, requireCanonicalBase64 } from './canonical-base64';
 import {
   parseAgentEntryTargetBinding,

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ResourceBrowserItem } from '@neko/assets-domain/resource-browser/contract';
-import type { OpenNekoDesktopProjectLocalAuthoringBridge } from '@neko/project/contracts';
+import type { OpenNekoDesktopProjectLocalAuthoringBridge } from '@neko/project-domain/contracts';
 import { createDesktopProjectCharacterFromResource } from './DesktopResourceBrowserSurface';
 
 const binding = {

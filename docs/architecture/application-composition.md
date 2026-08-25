@@ -150,7 +150,7 @@ scene，只组合 package-owned 全局目录 Main 与可选版本详情 Secondar
 编辑。正式运行使用独立 `world-runtime` scene 和 exact
 `GlobalWorld + WorldVersion -> WorldRun -> WorldSave/branch` identity。Main/preload 只转发各自的 strict
 management、authoring、portable 和 runtime contract；Project、Version、Run、Save、branch 与 event 事务均由
-`@neko/world` / `@neko/world-node` 拥有。离开任一 scene 后对应 Root 必须卸载，但 durable World 记录和受保护后台
+`@neko/world-domain` / `@neko/world-node` 拥有。离开任一 scene 后对应 Root 必须卸载，但 durable World 记录和受保护后台
 能力不受影响。创作预览只做纯定义检查，不创建 Run、Save、branch、event 或 Agent 记录；确定性 Foundation
 runtime 不得冒充 Story、Gameplay、WorldExperience、Agent Play 或 realtime generation。
 

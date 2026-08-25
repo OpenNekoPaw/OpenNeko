@@ -13,7 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@neko/content": "workspace:*",
+    "@neko/content-domain": "workspace:*",
     "@neko/cut-domain": "workspace:*",
     "@neko/media": "workspace:*",
     "@neko/shared": "workspace:*",

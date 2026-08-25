@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { createNodeHostContentReadService } from '@neko/content/node';
-import { type ContentReadService, type WorkspaceFileContentLocator } from '@neko/content';
+import { createNodeHostContentReadService } from '@neko/content-domain/node';
+import { type ContentReadService, type WorkspaceFileContentLocator } from '@neko/content-domain';
 import {
   beginCanvasGenerationRun,
   bindCanvasGenerationNodeJob,
@@ -23,7 +23,7 @@ import {
   type GenerationJobRequest,
   type GenerationJobSnapshot,
   type SubmitGenerationJobInput,
-} from '@neko/generation';
+} from '@neko/generation-domain';
 import { isTerminalJobPhase } from '@neko/shared/job-lifecycle';
 
 export interface CanvasGenerationWorkspaceJobResolver {

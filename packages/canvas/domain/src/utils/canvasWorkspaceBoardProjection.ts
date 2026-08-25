@@ -12,7 +12,7 @@ import type {
   GroupCanvasNode,
 } from '../types/canvas';
 import type { CanvasHeadlessAuthoringOperation } from '../types/canvas-headless-authoring';
-import { contentLocatorKey, isContentLocator } from '@neko/content';
+import { contentLocatorKey, isContentLocator } from '@neko/content-domain';
 import { hashStableValue } from '@neko/shared';
 import {
   applyCanvasHeadlessAuthoringOperations,

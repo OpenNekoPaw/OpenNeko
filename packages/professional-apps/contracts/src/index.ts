@@ -1,4 +1,4 @@
-import { validateContentLocator, type ContentLocator } from '@neko/content';
+import { validateContentLocator, type ContentLocator } from '@neko/content-domain';
 
 export type ProfessionalApplicationPlatform = 'macos' | 'windows' | 'linux';
 export type ProfessionalApplicationCategory =

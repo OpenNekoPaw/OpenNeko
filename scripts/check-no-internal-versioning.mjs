@@ -23,6 +23,8 @@ const exactExcludedFiles = new Set([
   'scripts/check-legacy-debt-surfaces.mjs',
   'scripts/check-no-internal-versioning.mjs',
   'scripts/check-no-internal-versioning.test.mjs',
+  'scripts/check-openspec-successor-dispositions.mjs',
+  'scripts/check-openspec-successor-dispositions.test.mjs',
 ]);
 const generatedDirectoryNames = new Set([
   '.git',

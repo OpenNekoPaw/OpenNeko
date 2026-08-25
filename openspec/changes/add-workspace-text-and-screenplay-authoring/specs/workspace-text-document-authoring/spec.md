@@ -5,7 +5,7 @@
 The system SHALL admit only the declared bounded UTF-8 workspace text formats and SHALL open each
 exact Window + Workspace + ContentLocator through one package-owned `TextDocumentSession`. Workspace
 file bytes SHALL remain authoritative, and every read and save MUST use the canonical
-`@neko/content` authorization and fingerprint path.
+`@neko/content-domain` authorization and fingerprint path.
 
 #### Scenario: User opens an admitted text file
 

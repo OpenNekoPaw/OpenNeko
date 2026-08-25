@@ -6,7 +6,7 @@ import type {
   CanvasSerializableRecord,
   CanvasSerializableValue,
 } from '@neko/canvas-domain';
-import { isContentLocator } from '@neko/content';
+import { isContentLocator } from '@neko/content-domain';
 import {
   CANVAS_AUDIO_NODE_DEFAULT_SIZE,
   CANVAS_NODE_DEFAULT_SIZES,

@@ -1,6 +1,6 @@
 # ADR: 统一 Markdown 与资源增强渲染边界
 
-状态：Accepted（实施验收由活跃 OpenSpec 跟踪）
+状态：Accepted
 
 更新日期：2026-08-09
 
@@ -15,14 +15,14 @@ owner；它不是用户可见的私有 Markdown 方言。默认入口保持 host
 
 不同用户意图使用一个精确的 presentation owner，不共享 renderer，也不得在失败后切换：
 
-| 意图                                     | Presentation owner                     | 约束                                                 |
-| ---------------------------------------- | -------------------------------------- | ---------------------------------------------------- |
+| 意图                                     | Presentation owner                       | 约束                                                 |
+| ---------------------------------------- | ---------------------------------------- | ---------------------------------------------------- |
 | Markdown Rich 引擎                       | `@neko/markdown/rich-surface` / Milkdown | 只投影 caller-owned source，不拥有文档               |
-| Markdown 文件 Rich 编辑                  | Text Editor Webview adapter            | exact Text Document session 拥有 accepted source     |
-| Canvas Markdown Rich 编辑                | Canvas Webview adapter                 | exact Canvas Markdown node 拥有 inline source        |
-| Markdown Source 与其他文本编辑           | Text Editor Webview / CodeMirror 6     | 完整源码编辑；Milkdown code-block component 不能替代 |
-| Agent text content block                 | Agent Webview / package-local renderer | partial 到 final 使用同一 surface                    |
-| Tool、Approval、Artifact、媒体和领域结果 | owning typed presenter                 | 不进入 Markdown renderer                             |
+| Markdown 文件 Rich 编辑                  | Text Editor Webview adapter              | exact Text Document session 拥有 accepted source     |
+| Canvas Markdown Rich 编辑                | Canvas Webview adapter                   | exact Canvas Markdown node 拥有 inline source        |
+| Markdown Source 与其他文本编辑           | Text Editor Webview / CodeMirror 6       | 完整源码编辑；Milkdown code-block component 不能替代 |
+| Agent text content block                 | Agent Webview / package-local renderer   | partial 到 final 使用同一 surface                    |
+| Tool、Approval、Artifact、媒体和领域结果 | owning typed presenter                   | 不进入 Markdown renderer                             |
 
 ```text
 authoritative Markdown source/revision
@@ -90,35 +90,6 @@ user intent 和显式 target hint。它不直接调用 Canvas mutation。Agent �
 Canvas 拥有 schema、资源绑定、节点创建、布局、validation 和项目写入。Markdown renderer 不猜测
 active/recent Canvas，不生成私有 Canvas DTO，也不绕过 revisioned apply。
 
-## 当前实施状态
-
-`@neko/markdown` 已定义公共 GFM profile、extension declaration、conformance corpus、Rich
-round-trip assessment、outline、reference projection 和显式 browser-only controlled Rich Surface。
-Text Editor 与 Canvas 通过各自 adapter 复用该 Surface，且保留各自 authority。Agent core writer 已使用 freshness/CAS，
-`.nkc`/`.otio` generic-file denial 和 Text Editor external-change watcher 已实施。Markdown Text
-Editor 已使用 lazy Milkdown `Rich | Source | Split`，CodeMirror 继续拥有完整 Source 和其他文本；
-Source 已组合 GFM snippet 与 Workspace mention/resource completion，Rich/Split 已从精确授权投影展示
-CommonMark/`![[...]]` image、audio 和 video，并在可见 surface 生命周期内释放 lease。Agent 继续使用
-`MarkdownStreamingSession` 与 package-local React renderer。Streamdown 仅为 dev spike，不是生产依赖
-路径。
-
-剩余可见 Desktop UI、Agent native-file 和 package gate 验收由
-[`../../openspec/changes/adopt-gfm-authoring-and-agent-rendering-surfaces/`](../../openspec/changes/adopt-gfm-authoring-and-agent-rendering-surfaces/)
-跟踪；本 ADR 只记录已经选定并实施的 canonical 边界。
-
-## 验证
-
-- shared conformance corpus 覆盖 GFM、extension、round-trip、partial delta、range、diagnostic 和
-  finalization；
-- Rich/Source/Split 测试证明同一 Text Document session、stale edit 拒绝和语义丢失 fail-visible；
-- Agent renderer path 测试证明 partial/final 同一 surface，旧 renderer 和 fallback 被 poison；
-- resource ref 测试证明路径和短生命周期 URL 不进入持久内容；
-- handoff 路径断言先进入 Agent，再命中 Canvas public capability；
-- streaming、资源展示、CSP 和编辑器交互使用真实 Electron Desktop fixture。
-
-实现与选型证据见
-[`../../openspec/changes/adopt-gfm-authoring-and-agent-rendering-surfaces/`](../../openspec/changes/adopt-gfm-authoring-and-agent-rendering-surfaces/) 和
-[`../research/markdown-authoring-and-agent-rendering-options-2026-08-08.md`](../research/markdown-authoring-and-agent-rendering-options-2026-08-08.md)。
 相关边界见 [`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)、
 [`adr-agent-markdown-deliverable-authoring-and-canvas-projection-boundary.md`](adr-agent-markdown-deliverable-authoring-and-canvas-projection-boundary.md) 和
 [`package-boundaries.md`](package-boundaries.md)。

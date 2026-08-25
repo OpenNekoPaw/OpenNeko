@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 import type { DshAcpProjectedEvent } from '../acp/dsh-acp-projection';
 import {
   collectDshWorkspaceBoardCompletedToolArtifacts,

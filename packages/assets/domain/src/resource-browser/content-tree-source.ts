@@ -1,5 +1,5 @@
 import type { MediaLibraryProjectionEntry } from '@neko/assets-domain/contracts';
-import type { WorkspaceFileContentLocator } from '@neko/content';
+import type { WorkspaceFileContentLocator } from '@neko/content-domain';
 import type { ResourceBrowserContentEntry } from './ports';
 
 export type ResourceBrowserContentTreeEntryType = 'file' | 'directory' | 'symlink' | 'unknown';

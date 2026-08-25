@@ -9,7 +9,7 @@ import {
   isRuntimeOnlyContentRef,
   type ContentLocator,
   type ContentSourceRef,
-} from '@neko/content';
+} from '@neko/content-domain';
 import {
   validateMediaTextRangeForSourceRef,
   type ContributionDiagnostic,
@@ -20,7 +20,7 @@ import {
   type MediaTextSourceKind,
   type MediaTextSegmentKind,
 } from './media-semantic-index';
-import type { CharacterObservation } from '@neko/chara';
+import type { CharacterObservation } from '@neko/chara-domain';
 
 export type ProjectSearchItemKind =
   | 'story-scene'

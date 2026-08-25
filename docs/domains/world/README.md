@@ -1,8 +1,8 @@
 # World 领域
 
 World 是工作区世界、全局世界与不可变领域版本、World Run/Save/branch 和世界交互投影的 owner。host-neutral
-domain/application 位于 `packages/world`，本地持久化和 ZIP adapter 位于 `packages/world-node`，browser-only
-管理、创作与运行视图位于 `packages/world-webview`。
+domain/application 位于 `packages/world`，本地持久化和 ZIP adapter 位于 `packages/world/node`，browser-only
+管理、创作与运行视图位于 `packages/world/webview`。
 
 ## 管理、创作与互动
 

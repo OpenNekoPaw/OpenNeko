@@ -6,7 +6,7 @@ import {
   validateContentLocator,
   type ContentLocator,
   type WorkspaceFileContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 import { isEntityRepresentationRole, type EntityRepresentationRole } from '@neko/entity-domain';
 
 export const CANVAS_MATERIAL_ORIGINS = ['referenced', 'generated'] as const;

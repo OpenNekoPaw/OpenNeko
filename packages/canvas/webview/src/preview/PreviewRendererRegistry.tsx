@@ -6,7 +6,7 @@ import {
 } from '@neko/preview-domain';
 import { LightweightPreview, type LightweightPreviewPlayback } from '@neko/preview-webview/root';
 import type { DelegateAction } from '@neko/canvas-domain';
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 import { dispatchPreviewDelegate } from './previewDelegates';
 import type { PreviewPlaybackControl, PreviewSourceDescriptor } from './types';
 import type { PlaybackSurfaceKind } from '../stores/playbackStore';

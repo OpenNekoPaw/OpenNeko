@@ -63,17 +63,20 @@ import { parseWorkspaceMediaLibraryPath } from './project-media-library-content-
 import {
   CreativeDocumentCreationService,
   WorkspaceEntryCreationService,
-} from '@neko/content/project-file-io';
+} from '@neko/content-domain/project-file-io';
 import {
   NodeAuthorizedWorkspaceDirectoryCreator,
   NodeAuthorizedWorkspaceWriter,
-} from '@neko/content/node';
+} from '@neko/content-domain/node';
 import {
   createEmptyCanvasDocumentBytes,
   isValidCanvasDocumentBytes,
 } from '@neko/canvas-domain/project-file-io';
 import { createEmptyCutDocumentBytes, isValidCutDocumentBytes } from '@neko/cut-domain';
-import { isWorkspaceFileContentLocator, type WorkspaceFileContentLocator } from '@neko/content';
+import {
+  isWorkspaceFileContentLocator,
+  type WorkspaceFileContentLocator,
+} from '@neko/content-domain';
 
 const FILE_SCAN_LIMIT = 5_000;
 const EXCLUDED_DIRECTORIES = new Set([
@@ -1376,7 +1379,7 @@ export async function resolveResourceBrowserItemPath(input: {
 }
 
 function requireWorkspaceFileLocator(item: {
-  readonly locator: import('@neko/content').ContentLocator;
+  readonly locator: import('@neko/content-domain').ContentLocator;
 }): WorkspaceFileContentLocator {
   if (!isWorkspaceFileContentLocator(item.locator) || item.locator.selector) {
     throw new Error('Resource Browser Files operation requires a Workspace File locator.');

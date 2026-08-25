@@ -50,11 +50,10 @@ composition。
 | [`adr-unified-markdown-resource-rendering.md`](adr-unified-markdown-resource-rendering.md)                                                                   | 统一 GFM 语义契约、Milkdown/CodeMirror/Agent message surface 分工、资源增强渲染和 Send to Canvas 边界                       |
 | [`adr-canvas-cut-playback-route-and-timeline-boundary.md`](adr-canvas-cut-playback-route-and-timeline-boundary.md)                                           | Canvas 预览路线矩阵、Cut 剪辑时间线、Agent 顺序感知和跨包协议边界                                                           |
 | [`adr-ui-domain-panels-and-shared-primitives.md`](adr-ui-domain-panels-and-shared-primitives.md)                                                             | 创作领域面板与共享 UI 原语的复用边界                                                                                        |
-| [`adr-asset-library-sources-and-unified-entity-boundary.md`](adr-asset-library-sources-and-unified-entity-boundary.md)                                       | 媒体库直接文件入口、本地 manifest Asset Library 与统一实体边界                                                              |
 | [`agent.md`](agent.md)                                                                                                                                       | Agent-first、execution mode、skill/prompt/tool/provider 控制面和宿主分层                                                    |
-| [`asset-library.md`](asset-library.md)                                                                                                                       | 媒体库逻辑 locator、本机 binding、全局连接，以及本地版本化素材包与搜索投影                                                 |
+| [`asset-library.md`](asset-library.md)                                                                                                                       | 媒体库逻辑 locator、本机 binding、全局连接，以及本地版本化素材包与搜索投影                                                  |
 | [`auth.md`](auth.md)                                                                                                                                         | 无独立 Auth 产品时的用户凭据、workspace policy、host adapter 和 session 边界                                                |
-| [`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)                                                                                           | 项目/媒体 locator、`.neko` 本机 binding、派生存储、窄内容读写与 Webview 投影                                               |
+| [`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)                                                                                           | 项目/媒体 locator、`.neko` 本机 binding、派生存储、窄内容读写与 Webview 投影                                                |
 | [`client-targets.md`](client-targets.md)                                                                                                                     | OpenNeko Desktop 的产品目标、职责边界和验证重点                                                                             |
 | [`creative-resource-semantic-boundaries.md`](creative-resource-semantic-boundaries.md)                                                                       | 资源、Project Entity、Character 与 World 的简化用户模型、唯一 owner、创建、关联、引用和页面边界                             |
 | [`media-runtime.md`](media-runtime.md)                                                                                                                       | Node/FFmpeg、OpenNeko Range/PCM、原生媒体 consumer、编解码、10-bit/HDR hardware preparation 和损坏范围边界                  |
@@ -86,7 +85,8 @@ composition。
 | 单个领域内部架构             | `docs/domains/<domain>/architecture.md` |
 | 尚未稳定的开发变更           | `openspec/changes/`                     |
 | 供脚本和 CI 消费的 JSON 台账 | `quality/`                              |
-| 单包实现细节                 | canonical package root 下的 `docs/`     |
+| 单包实现细节                 | 代码、测试与必要的简短注释              |
+| Package 公共入口与使用方式   | package 根目录的简短 `README.md`        |
 
 ## 写作要求
 

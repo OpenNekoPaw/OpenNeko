@@ -5,7 +5,7 @@ import {
   type ContentFingerprint,
   type ContentReadService,
   type WorkspaceFileContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 
 import { parseOtio, serializeOtio } from './codec';
 import { applyCutCommand, CutCommandError, type CutCommand } from './commands';

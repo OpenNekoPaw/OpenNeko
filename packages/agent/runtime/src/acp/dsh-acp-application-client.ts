@@ -71,11 +71,11 @@ import {
 import type { DshSkillAuthoringLayout } from '@neko/agent-contracts/dsh-skill-authoring';
 import { CANVAS_DSH_TOOL_NAME } from '@neko/canvas-domain';
 import { CUT_DSH_TOOL_NAME } from '@neko/cut-domain';
-import { GENERATION_DSH_TOOL_NAME } from '@neko/generation';
-import { DOCUMENT_DSH_TOOL_NAME } from '@neko/content/document';
-import { CONTENT_IMAGE_DSH_TOOL_NAME } from '@neko/content';
-import { CHARACTER_DSH_TOOL_NAME } from '@neko/chara/application';
-import { WORLD_DSH_TOOL_NAME } from '@neko/world/application';
+import { GENERATION_DSH_TOOL_NAME } from '@neko/generation-domain';
+import { DOCUMENT_DSH_TOOL_NAME } from '@neko/content-domain/document';
+import { CONTENT_IMAGE_DSH_TOOL_NAME } from '@neko/content-domain';
+import { CHARACTER_DSH_TOOL_NAME } from '@neko/chara-domain/application';
+import { WORLD_DSH_TOOL_NAME } from '@neko/world-domain/application';
 import { CREATE_SKILL_DSH_TOOL_NAME } from '@neko/agent-contracts/dsh-skill-authoring';
 import { DshAcpProjection } from './dsh-acp-projection';
 

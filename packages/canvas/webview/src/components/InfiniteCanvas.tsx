@@ -5,7 +5,7 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 import type {
   CanvasNode,
   CanvasConnection,

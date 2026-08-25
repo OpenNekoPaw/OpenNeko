@@ -6,7 +6,7 @@ import { createConversationId as createCanonicalConversationId } from '@neko/age
 import type {
   CharacterAgentConversationPort,
   CharacterAgentTurnContext,
-} from '@neko/chara/application';
+} from '@neko/chara-domain/application';
 
 export function createCharacterAgentConversationAdapter(options: {
   readonly conversations: DshDomainConversationService;

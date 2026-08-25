@@ -28,8 +28,8 @@ Desktop 不拥有：
 
 Desktop 原生构建目标精确为：
 
-| Target         | 原生构建 Host            | 当前证据                                                   |
-| -------------- | ------------------------ | ---------------------------------------------------------- |
+| Target         | 原生构建 Host            | 当前证据                                                     |
+| -------------- | ------------------------ | ------------------------------------------------------------ |
 | `darwin-arm64` | 本地 Apple Silicon macOS | Forge DMG 已验证；GitHub Release 明确披露 ad-hoc、未公证状态 |
 
 Windows x64 与 Linux 只运行 typecheck、orchestration、SQLite、lint、测试、OpenSpec、依赖
@@ -41,12 +41,12 @@ ID、公证或正常 Gatekeeper 接受资格，这些能力仍需独立验收。
 
 ## Package 复用
 
-- `@neko/shared`、`@neko/host`、`@neko/media`、`@neko/content` 和 `@neko/entity-domain`
+- `@neko/shared`、`@neko/host`、`@neko/media`、`@neko/content-domain` 和 `@neko/entity-domain`
   提供当前 Desktop 路径使用的 host-neutral 能力。
 - `@neko/ui` 和一级 Webview package 只提供 browser-safe React UI。
 - Agent、Assets、Canvas、Cut、Preview 和 Generation 由各自 owning package 拥有 contract、
   runtime/node adapter 或 UI；Desktop 通过 public entry 显式注入。
-- `@neko/chara`、`@neko/search-domain` 和 `@neko/quality` 仍是保留 package；
+- `@neko/chara-domain`、`@neko/search-domain` 和 `@neko/quality` 仍是保留 package；
   接入前必须建立真实 Desktop composition、产品入口和路径级验收，不能因 package 存在而
   宣称能力可用。
 - 未来新增另一应用宿主必须先建立独立 OpenSpec 和真实 adapter 需求；当前不保留
@@ -55,13 +55,13 @@ ID、公证或正常 Gatekeeper 接受资格，这些能力仍需独立验收。
 
 ## 验证重点
 
-| 层级             | 最低验证                                                                                       |
-| ---------------- | ---------------------------------------------------------------------------------------------- |
-| Contract/domain  | owning package tests、typecheck/build、生产者/消费者路径断言                                   |
-| Main/preload/IPC | Desktop contract/security tests、unknown message 与 stale identity rejection                   |
-| Renderer/UI      | package build/test，加真实 Electron visual/interaction/CSP/message 场景                        |
-| Media            | Node/FFmpeg focused tests、Range/PCM/取消/释放和 production bundle inspection                  |
-| Product          | macOS 原生 `pnpm package:desktop`、隔离 fixture project-open 与受影响 creative surface         |
+| 层级             | 最低验证                                                                               |
+| ---------------- | -------------------------------------------------------------------------------------- |
+| Contract/domain  | owning package tests、typecheck/build、生产者/消费者路径断言                           |
+| Main/preload/IPC | Desktop contract/security tests、unknown message 与 stale identity rejection           |
+| Renderer/UI      | package build/test，加真实 Electron visual/interaction/CSP/message 场景                |
+| Media            | Node/FFmpeg focused tests、Range/PCM/取消/释放和 production bundle inspection          |
+| Product          | macOS 原生 `pnpm package:desktop`、隔离 fixture project-open 与受影响 creative surface |
 
 相关边界见 [`application-composition.md`](application-composition.md)、
 [`package-boundaries.md`](package-boundaries.md) 和 [`media-runtime.md`](media-runtime.md)。

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ContentReadService } from '@neko/content';
+import type { ContentReadService } from '@neko/content-domain';
 import { CANVAS_TEXT_FILE_PREVIEW_MAX_BYTES } from '@neko/canvas-domain';
 import { CanvasTextFilePreviewService } from './canvas-text-file-preview-service';
 

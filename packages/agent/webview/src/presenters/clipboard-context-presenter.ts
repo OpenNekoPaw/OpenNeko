@@ -1,6 +1,6 @@
 import type { AgentContextPayload } from '@neko/agent-contracts';
-import type { ContentLocator } from '@neko/content';
-import { isContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
+import { isContentLocator } from '@neko/content-domain';
 import { projectContentLocatorPath } from './content-locator-presenter';
 
 export function projectClipboardTextToContextPayload(text: string): AgentContextPayload | null {

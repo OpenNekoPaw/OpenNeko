@@ -18,14 +18,14 @@ import {
   type ProjectSourceAddClient,
   type ProjectSourceAddClientInput,
   type ProjectSourceAddResult,
-} from '@neko/content/project-file-io';
+} from '@neko/content-domain/project-file-io';
 import {
   CONTENT_LOCATOR_DRAG_MIME,
   parseContentLocatorDragData,
   probeImageMetadata,
   type ContentLocator,
   type WorkspaceFileContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 import { isMediaLibraryDragData } from '@neko/assets-domain/contracts';
 import {
   type CanvasMaterialMediaKind,

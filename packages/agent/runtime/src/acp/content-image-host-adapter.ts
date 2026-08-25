@@ -8,8 +8,8 @@ import {
   CONTENT_IMAGE_DSH_CHUNK_BYTES,
   CONTENT_IMAGE_DSH_TOOL_NAME,
   decodeContentImageDshChunkRequest,
-} from '@neko/content';
-import { probeImageMetadata } from '@neko/content/document';
+} from '@neko/content-domain';
+import { probeImageMetadata } from '@neko/content-domain/document';
 import type { AgentContentAccessRuntime } from '../runtime/capability/agent-content-access-runtime';
 
 export class ContentImageDshHostAdapter {

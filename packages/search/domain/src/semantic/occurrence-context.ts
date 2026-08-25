@@ -1,6 +1,6 @@
 import type { SemanticEntityOccurrenceRecord } from '../contracts';
-import type { ContentLocator, DocumentReadResult, DocumentSourceRef } from '@neko/content';
-import type { DocumentReadCoordinate, IDocumentAccessService } from '@neko/content/document';
+import type { ContentLocator, DocumentReadResult, DocumentSourceRef } from '@neko/content-domain';
+import type { DocumentReadCoordinate, IDocumentAccessService } from '@neko/content-domain/document';
 
 export type SemanticOccurrenceContextErrorCode =
   'semantic-occurrence-context-missing-locator' | 'semantic-occurrence-context-stale';

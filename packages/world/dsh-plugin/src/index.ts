@@ -1,7 +1,7 @@
 import type { DshAcpHostToolPort, DshAcpJsonValue } from '@neko/agent-contracts/dsh-acp';
 import type { Context } from '@deepseek-ai/cordis';
 import { defineTool, type JsonValue, type ToolRunContext } from '@deepseek-ai/dsh-tools';
-import { WORLD_DSH_TOOL_NAME, WORLD_DSH_TOOL_PARAMETERS } from '@neko/world/application';
+import { WORLD_DSH_TOOL_NAME, WORLD_DSH_TOOL_PARAMETERS } from '@neko/world-domain/application';
 
 export const name = 'openneko-world-tools';
 export const inject = ['opennekoHostTools', 'tools'];

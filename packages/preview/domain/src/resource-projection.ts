@@ -1,4 +1,4 @@
-import type { ContentLocator, ContentRepresentationHandle } from '@neko/content';
+import type { ContentLocator, ContentRepresentationHandle } from '@neko/content-domain';
 import {
   detectPreviewContentKind,
   parsePreviewMediaDescriptor,

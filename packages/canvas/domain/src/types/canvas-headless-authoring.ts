@@ -1,5 +1,5 @@
 import type { CanvasData, CanvasConnection, CanvasNode } from './canvas';
-import type { QualityProjectRef } from '@neko/generation';
+import type { QualityProjectRef } from '@neko/generation-domain';
 import type {
   CanvasAgentApplyContentResult,
   CanvasAgentContentPayload,

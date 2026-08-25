@@ -1,4 +1,4 @@
-import type { WorkspaceFileContentLocator } from '@neko/content';
+import type { WorkspaceFileContentLocator } from '@neko/content-domain';
 
 export const WORKSPACE_ASSET_DIRECTORY = 'assets';
 

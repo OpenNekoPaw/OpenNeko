@@ -1,4 +1,4 @@
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
@@ -2799,7 +2799,7 @@ function createRuntime(
   registerPreviewResource?: (input: {
     readonly identity: CanvasHostRuntimeIdentity;
     readonly workspace: DesktopCanvasViewGrant['workspace'];
-    readonly locator: import('@neko/content').ContentLocator;
+    readonly locator: import('@neko/content-domain').ContentLocator;
     readonly purpose: 'viewer-source';
     readonly mediaType?: string;
   }) => Promise<{

@@ -3,7 +3,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CONTENT_LOCATOR_DRAG_MIME } from '@neko/content';
+import { CONTENT_LOCATOR_DRAG_MIME } from '@neko/content-domain';
 import {
   ResourceBrowserOperationRejectedError,
   type ResourceBrowserHostRuntime,

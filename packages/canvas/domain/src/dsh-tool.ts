@@ -1,4 +1,4 @@
-import { normalizeWorkspaceContentPath } from '@neko/content';
+import { normalizeWorkspaceContentPath } from '@neko/content-domain';
 
 import {
   CANVAS_NODE_TYPES,

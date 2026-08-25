@@ -1,5 +1,5 @@
-import type { CharacterCreationSourceAuthority } from '@neko/chara/application';
-import { createNodeHostContentReadService } from '@neko/content/node';
+import type { CharacterCreationSourceAuthority } from '@neko/chara-domain/application';
+import { createNodeHostContentReadService } from '@neko/content-domain/node';
 import { NodeProjectEntityAuthoringService } from '@neko/entity-node';
 
 export interface DesktopCharacterCreationWorkspaceResolution {
@@ -46,9 +46,7 @@ export function createDesktopCharacterCreationSourceAuthority(input: {
         );
         const projectId = `content:${resolution.workspace.workspaceId}`;
         if (source.projectId !== projectId) {
-          throw new Error(
-            `Project '${source.projectId}' does not match the authorized Workspace.`,
-          );
+          throw new Error(`Project '${source.projectId}' does not match the authorized Workspace.`);
         }
         await new NodeProjectEntityAuthoringService({
           workspace: {

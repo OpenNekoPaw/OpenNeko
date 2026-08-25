@@ -14,7 +14,7 @@ import {
   type CanvasTextFilePreviewResult,
 } from '@neko/canvas-domain';
 import { isValidNkc, type CanvasData, type CanvasViewport } from '@neko/canvas-domain';
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 import type {
   CanvasMaterialActionDescriptor,
   CanvasMaterialActionIntent,

@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@neko/content": "workspace:*"
+    "@neko/content-domain": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

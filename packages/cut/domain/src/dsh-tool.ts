@@ -1,4 +1,4 @@
-import { normalizeWorkspaceContentPath } from '@neko/content';
+import { normalizeWorkspaceContentPath } from '@neko/content-domain';
 
 import type { CutCommand } from './commands';
 import type { CutProjectSnapshot } from './cut-project-authoring-service';

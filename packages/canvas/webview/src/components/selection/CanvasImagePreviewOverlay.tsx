@@ -6,7 +6,7 @@ import {
   type CanvasNode,
   type CanvasSerializableRecord,
 } from '@neko/canvas-domain';
-import { validateContentLocator } from '@neko/content';
+import { validateContentLocator } from '@neko/content-domain';
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon } from '@neko/ui/icons';
 import { IconButton } from '@neko/ui/primitives';

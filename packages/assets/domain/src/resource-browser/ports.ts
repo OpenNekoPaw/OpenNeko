@@ -1,4 +1,4 @@
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 import type { GlobalAssetItem } from '../global-library/contract';
 import type { MediaLibraryProjectionEntry } from '@neko/assets-domain/contracts';
 import type {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ContentLocator, ContentReadOptions, ContentStat } from '@neko/content';
+import type { ContentLocator, ContentReadOptions, ContentStat } from '@neko/content-domain';
 import {
   ProjectEntityBindingAvailabilityService,
   type ProjectEntityBindingResourcePort,

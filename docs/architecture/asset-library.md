@@ -6,9 +6,8 @@
 > 直接访问，不需要 catalog membership。独立 **Asset Library / 素材库** 仅管理显式导入
 > 或安装的本地版本化素材包，其完整实现由活跃 OpenSpec
 > [`establish-manifest-backed-asset-library`](../../openspec/changes/establish-manifest-backed-asset-library/)
-> 跟踪；项目本机绑定、同步与便携性的新边界由
-> [`restore-workspace-linked-media-access`](../../openspec/changes/restore-workspace-linked-media-access/)
-> 负责收敛；资源展示与 Entity/Character/World 的稳定边界见
+> 跟踪；项目本机绑定、同步与便携性的稳定边界见
+> [`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)；资源展示与 Entity/Character/World 的稳定边界见
 > [`unified-entity-representation-bindings`](../../openspec/specs/unified-entity-representation-bindings/spec.md)
 > 与 [`workspace-project-browser`](../../openspec/specs/workspace-project-browser/spec.md)。
 > 远程分发、发布、账户与云同步不属于当前 Asset change；未来需要独立 OpenSpec。
@@ -18,9 +17,8 @@
 > 使用；它不是媒体身份、项目 binding 或全局登记的替代品。
 
 本文定义媒体库文件入口、素材包生命周期、项目受管链接、搜索投影、显式操作及其与
-Project Entity、Content I/O、DocumentAccess、生成结果和 package owner 的边界。跨领域决策见
-[`adr-asset-library-sources-and-unified-entity-boundary.md`](adr-asset-library-sources-and-unified-entity-boundary.md)，
-路径安全见 [`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)，跨领域 owner 模型见
+Project Entity、Content I/O、DocumentAccess、生成结果和 package owner 的边界。路径安全见
+[`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)，跨领域 owner 模型见
 [`creative-resource-semantic-boundaries.md`](creative-resource-semantic-boundaries.md)。
 
 Media Library 是可选的专业能力，不是创建或打开项目的前置条件。项目文件始终是文档和普通导入的默认

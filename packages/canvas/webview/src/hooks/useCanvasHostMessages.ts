@@ -28,7 +28,7 @@ import type {
 import {
   isProjectFileSnapshotRequestMessage,
   PROJECT_FILE_SNAPSHOT_RESPONSE,
-} from '@neko/content/project-file-io';
+} from '@neko/content-domain/project-file-io';
 import { isCanvasNodeType, isJsonPointerPath } from '@neko/canvas-domain';
 import { setLocale } from '../i18n';
 import {

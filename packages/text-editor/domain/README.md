@@ -2,7 +2,7 @@
 
 Host-neutral application owner for bounded workspace text admission, exact document sessions,
 revisioned edits, dirty state, JSON diagnostics, canonical Fountain projection, save conflicts and
-close decisions. Workspace bytes remain authoritative through the injected `@neko/content` reader
+close decisions. Workspace bytes remain authoritative through the injected `@neko/content-domain` reader
 and writer ports.
 
 The package also owns the exact Workspace/document/request-qualified Markdown reference catalog and

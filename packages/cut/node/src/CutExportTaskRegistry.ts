@@ -8,7 +8,7 @@ import type {
   CutUserDiagnostic,
   TimelineView,
 } from '@neko/cut-domain';
-import { normalizeWorkspaceContentPath } from '@neko/content';
+import { normalizeWorkspaceContentPath } from '@neko/content-domain';
 import { NodeFfmpegCutMediaAdapter } from './NodeFfmpegCutMediaAdapter';
 import { isTerminalJobPhase } from '@neko/shared/job-lifecycle';
 import {

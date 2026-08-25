@@ -12,7 +12,7 @@ import type {
   ProjectEntityCandidateProjection,
   ProjectEntityRecord,
 } from '@neko/entity-domain';
-import type { EntityMention } from '@neko/chara';
+import type { EntityMention } from '@neko/chara-domain';
 import { parseEntityUri } from '@neko/entity-domain';
 import { normalizeCreativeEntityLookupKey } from '@neko/entity-domain';
 

@@ -2,7 +2,7 @@ import {
   isProjectDurableContentLocator,
   validateContentLocator,
   type ContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 import { isCreativeEntityKind, type CreativeEntityKind } from './creative-entity-identity';
 import {
   isEntityRepresentationRole,

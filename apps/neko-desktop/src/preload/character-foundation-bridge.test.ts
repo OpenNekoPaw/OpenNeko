@@ -3,8 +3,8 @@ import {
   CHARACTER_FOUNDATION_HOST_CHANNEL,
   CHARACTER_ROOM_WORKBENCH_CHANNELS,
   type RoomView,
-} from '@neko/chara/contracts';
-import { WORLD_MANAGEMENT_HOST_CHANNEL } from '@neko/world/contracts';
+} from '@neko/chara-domain/contracts';
+import { WORLD_MANAGEMENT_HOST_CHANNEL } from '@neko/world-domain/contracts';
 
 const electron = vi.hoisted(() => ({
   bridge: undefined as typeof window.openNekoDesktop | undefined,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { contentLocatorKey } from '@neko/content';
+import { contentLocatorKey } from '@neko/content-domain';
 import {
   createCanvasPlaybackPlan,
   resolveEffectiveCanvasPlaybackRoutes,

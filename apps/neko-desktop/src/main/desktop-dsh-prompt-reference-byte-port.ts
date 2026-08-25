@@ -3,7 +3,7 @@ import type {
   AgentPromptReference,
   AgentPromptReferenceBytePort,
 } from '@neko/agent-runtime/application';
-import { isWorkspaceFileContentLocator, type ContentReadService } from '@neko/content';
+import { isWorkspaceFileContentLocator, type ContentReadService } from '@neko/content-domain';
 
 export function createDesktopDshPromptReferenceBytePort(options: {
   readonly contexts: {

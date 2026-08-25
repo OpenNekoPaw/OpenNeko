@@ -217,9 +217,7 @@ describe('Desktop renderer styles', () => {
   });
 
   it('stretches the Settings overlay layout through the Dialog body', () => {
-    expect(styles).toMatch(
-      /\.desktop-settings-overlay__layout\s*\{[^}]*height\s*:\s*100%/u,
-    );
+    expect(styles).toMatch(/\.desktop-settings-overlay__layout\s*\{[^}]*height\s*:\s*100%/u);
   });
 
   it('uses a text-only primary brand action without icon chrome', () => {
@@ -526,11 +524,11 @@ describe('Desktop renderer styles', () => {
 
   it('aligns Character and World detail content with their management catalogs', () => {
     const characterStyles = readFileSync(
-      new URL('../../../packages/chara-webview/src/style.css', import.meta.url),
+      new URL('../../../packages/chara/webview/src/style.css', import.meta.url),
       'utf8',
     );
     const worldStyles = readFileSync(
-      new URL('../../../packages/world-webview/src/style.css', import.meta.url),
+      new URL('../../../packages/world/webview/src/style.css', import.meta.url),
       'utf8',
     );
     const panelRule = styles.match(/\.desktop-workbench-main-panel\s*\{(?<body>[\s\S]*?)\n\}/u);

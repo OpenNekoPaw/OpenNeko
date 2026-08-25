@@ -4,7 +4,7 @@ import {
   type ContentLocator,
   type ContentReadOptions,
   type ContentStat,
-} from '@neko/content';
+} from '@neko/content-domain';
 import {
   ProjectEntityContractError,
   type EntityBindingAvailabilityProjectionValue,

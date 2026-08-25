@@ -1,4 +1,4 @@
-import { validateContentLocator, type ContentLocator } from '@neko/content';
+import { validateContentLocator, type ContentLocator } from '@neko/content-domain';
 import type { CanvasData, CanvasNode, GenerationCanvasNode } from './types/canvas';
 import {
   selectedCanvasGenerationOutput,

@@ -6,9 +6,9 @@ import {
   type CanvasWorkspaceResourceProjectionArtifact,
   type CanvasWorkspaceProjectionRequest,
 } from '../../types/canvas-workspace-board';
-import type { GenerationJobSnapshot } from '@neko/generation/job';
+import type { GenerationJobSnapshot } from '@neko/generation-domain/job';
 import type { CanvasNode } from '../../types/canvas';
-import type { ContentLocator, WorkspaceFileContentLocator } from '@neko/content';
+import type { ContentLocator, WorkspaceFileContentLocator } from '@neko/content-domain';
 import { createEmptyCanvasData } from '../canvasHeadlessAuthoring';
 import { planCanvasWorkspaceBoardProjection } from '../canvasWorkspaceBoardProjection';
 

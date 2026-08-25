@@ -20,8 +20,8 @@ import {
   createCanvasMaterialActionOwner,
 } from '@neko/canvas-domain';
 import type { NekoHostPorts } from '@neko/host/ports';
-import { contentLocatorKey, type ContentLocator } from '@neko/content';
-import { createNodeHostContentReadService } from '@neko/content/node';
+import { contentLocatorKey, type ContentLocator } from '@neko/content-domain';
+import { createNodeHostContentReadService } from '@neko/content-domain/node';
 import {
   loadNkc,
   saveNkc,

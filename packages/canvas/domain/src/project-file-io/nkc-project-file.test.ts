@@ -4,7 +4,7 @@ import {
   ProjectFileStore,
   ProjectFormatCodecRegistry,
   type ProjectFormatCodec,
-} from '@neko/content/project-file-io';
+} from '@neko/content-domain/project-file-io';
 import { createNkcProjectFormatCodecRegistry } from './nkc-codec';
 
 describe('ProjectFormatCodecRegistry', () => {

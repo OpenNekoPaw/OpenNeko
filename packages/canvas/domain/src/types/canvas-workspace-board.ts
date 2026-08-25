@@ -1,12 +1,12 @@
-import { validateContentLocator, type ContentLocator } from '@neko/content';
-import { isHostProjectedRuntimeValue } from '@neko/content';
+import { validateContentLocator, type ContentLocator } from '@neko/content-domain';
+import { isHostProjectedRuntimeValue } from '@neko/content-domain';
 import type {
   GeneratedAsset,
   GeneratedAssetMediaKind,
   GenerationRecipe,
   GenerationRecipePurpose,
-} from '@neko/generation';
-import type { GenerationJobSnapshot } from '@neko/generation/job';
+} from '@neko/generation-domain';
+import type { GenerationJobSnapshot } from '@neko/generation-domain/job';
 import { isCanvasMaterialGenerationContext, type CanvasMaterialGenerationContext } from './canvas';
 import {
   isCanvasGenerationEvidence,

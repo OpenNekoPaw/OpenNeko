@@ -29,7 +29,7 @@
   },
   "dependencies": {
     "@neko/text-editor-domain": "workspace:*",
-    "@neko/content": "workspace:*",
+    "@neko/content-domain": "workspace:*",
     "@neko/entity-domain": "workspace:*",
     "@neko/preview-domain": "workspace:*",
     "@neko/shared": "workspace:*"

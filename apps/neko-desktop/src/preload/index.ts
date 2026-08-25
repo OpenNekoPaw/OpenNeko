@@ -223,7 +223,7 @@ import {
   parseProjectAuthoringNavigationHostResult,
   type OpenNekoDesktopProjectAuthoringBridge,
   type OpenNekoDesktopProjectLocalAuthoringBridge,
-} from '@neko/project/contracts';
+} from '@neko/project-domain/contracts';
 import {
   AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL,
   parseAgentExtensionManagementHostRequest,
@@ -263,7 +263,7 @@ import {
   type OpenNekoDesktopCharacterPortableBridge,
   type OpenNekoDesktopCharacterAvatarBridge,
   type OpenNekoDesktopCharacterRoomWorkbenchBridge,
-} from '@neko/chara/contracts';
+} from '@neko/chara-domain/contracts';
 import {
   WORLD_AUTHORING_HOST_CHANNEL,
   WORLD_MANAGEMENT_HOST_CHANNEL,
@@ -285,7 +285,7 @@ import {
   type OpenNekoDesktopWorldPortableBridge,
   type OpenNekoDesktopWorldAuthoringBridge,
   type OpenNekoDesktopWorldRuntimeBridge,
-} from '@neko/world/contracts';
+} from '@neko/world-domain/contracts';
 
 let requestSequence = 0;
 let desktopWindowContext:
@@ -1182,7 +1182,10 @@ const bridge: OpenNekoDesktopBridge &
         requestId: nextRequestId('desktop-ai-model-settings'),
         operation: 'get',
       });
-      const response: unknown = await ipcRenderer.invoke(DESKTOP_AI_MODEL_SETTINGS_CHANNEL, request);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_AI_MODEL_SETTINGS_CHANNEL,
+        request,
+      );
       return parseDesktopAiModelSettingsResponse(response, request.requestId).projection;
     },
     async saveProvider(provider, apiKey) {
@@ -1192,7 +1195,10 @@ const bridge: OpenNekoDesktopBridge &
         provider,
         ...(apiKey === undefined ? {} : { apiKey }),
       });
-      const response: unknown = await ipcRenderer.invoke(DESKTOP_AI_MODEL_SETTINGS_CHANNEL, request);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_AI_MODEL_SETTINGS_CHANNEL,
+        request,
+      );
       return parseDesktopAiModelSettingsResponse(response, request.requestId);
     },
     async saveModel(model) {
@@ -1201,7 +1207,10 @@ const bridge: OpenNekoDesktopBridge &
         operation: 'save-model',
         model,
       });
-      const response: unknown = await ipcRenderer.invoke(DESKTOP_AI_MODEL_SETTINGS_CHANNEL, request);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_AI_MODEL_SETTINGS_CHANNEL,
+        request,
+      );
       return parseDesktopAiModelSettingsResponse(response, request.requestId);
     },
     async deleteProvider(providerId) {
@@ -1210,7 +1219,10 @@ const bridge: OpenNekoDesktopBridge &
         operation: 'delete-provider',
         providerId,
       });
-      const response: unknown = await ipcRenderer.invoke(DESKTOP_AI_MODEL_SETTINGS_CHANNEL, request);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_AI_MODEL_SETTINGS_CHANNEL,
+        request,
+      );
       return parseDesktopAiModelSettingsResponse(response, request.requestId);
     },
     async deleteModel(modelId) {
@@ -1219,7 +1231,10 @@ const bridge: OpenNekoDesktopBridge &
         operation: 'delete-model',
         modelId,
       });
-      const response: unknown = await ipcRenderer.invoke(DESKTOP_AI_MODEL_SETTINGS_CHANNEL, request);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_AI_MODEL_SETTINGS_CHANNEL,
+        request,
+      );
       return parseDesktopAiModelSettingsResponse(response, request.requestId);
     },
     async setDefault(modelType, ref) {
@@ -1229,7 +1244,10 @@ const bridge: OpenNekoDesktopBridge &
         modelType,
         ref,
       });
-      const response: unknown = await ipcRenderer.invoke(DESKTOP_AI_MODEL_SETTINGS_CHANNEL, request);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_AI_MODEL_SETTINGS_CHANNEL,
+        request,
+      );
       return parseDesktopAiModelSettingsResponse(response, request.requestId);
     },
   },

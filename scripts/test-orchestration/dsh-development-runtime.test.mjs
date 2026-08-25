@@ -22,13 +22,19 @@ describe('Desktop development DSH runtime builder', () => {
       'packages/dsh-bridge/src/index.ts',
       'packages/agent/contracts/src/dsh-acp.ts',
       'packages/canvas/domain/src/dsh-tool.ts',
-      'packages/chara/src/application/character-dsh-tool.ts',
-      'packages/content/src/document/dsh-tool.ts',
+      'packages/chara/domain/src/application/character-dsh-tool.ts',
+      'packages/content/domain/src/document/dsh-tool.ts',
       'packages/cut/domain/src/dsh-tool.ts',
-      'packages/generation/src/dsh-tool.ts',
-      'packages/world/src/application/world-dsh-tool.ts',
+      'packages/generation/domain/src/dsh-tool.ts',
+      'packages/world/domain/src/application/world-dsh-tool.ts',
     ]) {
       assert.ok(inputs.includes(join(repositoryRoot, path)), `missing development input ${path}`);
+    }
+    for (const family of ['chara', 'content', 'generation', 'world']) {
+      assert.ok(
+        inputs.every((path) => !path.startsWith(join(repositoryRoot, 'packages', family, 'src'))),
+        `development inputs must not use the ${family} family container as a package root`,
+      );
     }
   });
 

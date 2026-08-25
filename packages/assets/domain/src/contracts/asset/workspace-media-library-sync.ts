@@ -5,7 +5,7 @@ import {
   validateContentLocator,
   type ContentLocator,
   type WorkspaceFileContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 import { isPortablePathSegment } from '@neko/shared/path';
 
 export type ProjectContentReferenceOwnerKind = 'canvas' | 'cut' | 'entity-representation';

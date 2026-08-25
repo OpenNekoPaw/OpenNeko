@@ -4,8 +4,8 @@ import type {
   CanvasGenerationRunBinding,
 } from './types/canvas-generation-node';
 import type { CanvasHostRuntimeIdentity } from './canvas-host-runtime-contract';
-import type { WorkspaceFileContentLocator } from '@neko/content';
-import type { GenerationJobRef, GenerationJobSnapshot } from '@neko/generation';
+import type { WorkspaceFileContentLocator } from '@neko/content-domain';
+import type { GenerationJobRef, GenerationJobSnapshot } from '@neko/generation-domain';
 
 export interface CanvasGenerationWorkspace {
   readonly workspaceId: string;

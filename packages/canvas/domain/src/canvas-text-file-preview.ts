@@ -2,7 +2,7 @@ import {
   validateContentLocator,
   type ContentIoDiagnosticCode,
   type ContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 import type { CanvasHostRuntimeIdentity } from './canvas-host-runtime-contract';
 
 export const CANVAS_TEXT_FILE_PREVIEW_MAX_BYTES = 64 * 1024;

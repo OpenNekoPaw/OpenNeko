@@ -1,7 +1,7 @@
 import type { SemanticSourceDescriptor, SemanticTextSegment } from '../contracts';
-import type { ContentLocator, DocumentFormat, DocumentSourceRef } from '@neko/content';
-import { contentLocatorKey } from '@neko/content';
-import type { DocumentReadCoordinate, IDocumentAccessService } from '@neko/content/document';
+import type { ContentLocator, DocumentFormat, DocumentSourceRef } from '@neko/content-domain';
+import { contentLocatorKey } from '@neko/content-domain';
+import type { DocumentReadCoordinate, IDocumentAccessService } from '@neko/content-domain/document';
 import { extractSemanticText } from './text';
 
 export const DEFAULT_SEMANTIC_DOCUMENT_MAX_UNITS = 500;

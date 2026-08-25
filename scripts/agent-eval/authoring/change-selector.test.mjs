@@ -56,10 +56,10 @@ describe('Agent Evaluation change-to-suite selector', () => {
         'packages/agent/runtime/src/session/agent-session.ts',
         'packages/agent/runtime/src/subagent/task-tool.ts',
         'packages/agent/runtime/src/acp/dsh-acp-application-client.ts',
-        'packages/generation/src/media/media-generation-executor.ts',
-        'packages/generation/src/media/generated-output-adoption.ts',
-        'packages/content/src/document/read-document-tool.ts',
-        'packages/content/src/document/read-image-tool.ts',
+        'packages/generation/domain/src/media/media-generation-executor.ts',
+        'packages/generation/domain/src/media/generated-output-adoption.ts',
+        'packages/content/domain/src/document/read-document-tool.ts',
+        'packages/content/domain/src/document/read-image-tool.ts',
         'packages/agent/runtime/src/acp/dsh-acp-projection.ts',
         'packages/agent/runtime/src/acp/dsh-acp-projection.ts',
         'packages/agent/runtime/src/runtime/turn/multimodal-context-packet.ts',
@@ -221,7 +221,7 @@ describe('Agent Evaluation change-to-suite selector', () => {
 
   it('maps the Character DSH Tool vertical slice to creative workflow coverage', () => {
     const paths = [
-      'packages/chara/src/application/character-dsh-tool.ts',
+      'packages/chara/domain/src/application/character-dsh-tool.ts',
       'packages/chara/dsh-plugin/src/index.ts',
       'packages/agent/runtime/src/acp/character-host-adapter.ts',
       'apps/neko-desktop/src/main/desktop-dsh-domain-tool-handlers.ts',
@@ -239,7 +239,7 @@ describe('Agent Evaluation change-to-suite selector', () => {
 
   it('maps the World DSH Tool vertical slice to creative workflow coverage', () => {
     const paths = [
-      'packages/world/src/application/world-dsh-tool.ts',
+      'packages/world/domain/src/application/world-dsh-tool.ts',
       'packages/world/dsh-plugin/src/index.ts',
       'packages/agent/runtime/src/acp/world-host-adapter.ts',
       'apps/neko-desktop/src/main/desktop-dsh-domain-tool-handlers.ts',

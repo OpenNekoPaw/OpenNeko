@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { lstat, readFile, readdir, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { createNodeDocumentAccessService } from '@neko/content/document/node';
-import type { IDocumentAccessService } from '@neko/content/document';
+import { createNodeDocumentAccessService } from '@neko/content-domain/document/node';
+import type { IDocumentAccessService } from '@neko/content-domain/document';
 import {
   SemanticSourceCoordinator,
   TextEntityAnalyzer,

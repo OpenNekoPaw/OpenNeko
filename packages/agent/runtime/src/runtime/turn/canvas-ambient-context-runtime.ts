@@ -1,4 +1,4 @@
-import type { GenerationModelConfig } from '@neko/generation';
+import type { GenerationModelConfig } from '@neko/generation-domain';
 import type { CanvasNode, CanvasNodeType } from '@neko/canvas-domain';
 
 export const DEFAULT_CANVAS_AMBIENT_SCOPE_ID = 'default';

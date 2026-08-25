@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DshDomainConversationService } from '@neko/agent-runtime/application';
 import { isCanonicalConversationId } from '@neko/agent-runtime/session/conversation-id';
-import type { CharacterAgentTurnContext } from '@neko/chara/application';
+import type { CharacterAgentTurnContext } from '@neko/chara-domain/application';
 import {
   createEmptyCharacterBackgroundStory,
   createEmptyCharacterOriginSetting,
-} from '@neko/chara/contracts';
+} from '@neko/chara-domain/contracts';
 import { createCharacterAgentConversationAdapter } from './character-agent-conversation-adapter';
 
 describe('Character Agent Conversation adapter', () => {

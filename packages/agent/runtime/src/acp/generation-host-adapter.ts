@@ -3,20 +3,20 @@ import type {
   DshAcpDomainToolResponse,
   DshAcpJsonValue,
 } from '@neko/agent-contracts/dsh-acp';
-import type { WorkspaceFileContentLocator } from '@neko/content';
+import type { WorkspaceFileContentLocator } from '@neko/content-domain';
 import {
   GENERATION_DSH_TOOL_NAME,
   decodeGenerationDshToolInput,
   projectGenerationJobSnapshot,
   type GenerationDshToolComfyUiSubmitInput,
-} from '@neko/generation';
+} from '@neko/generation-domain';
 import {
   GENERATION_JOB_KIND,
   GenerationJobError,
   type GenerationJobRef,
   type GenerationJobSnapshot,
   type PurposeGenerationJobPort,
-} from '@neko/generation/job';
+} from '@neko/generation-domain/job';
 import { isTerminalJobPhase } from '@neko/shared/job-lifecycle';
 import { enforceDshDomainToolEffect } from './dsh-domain-tool-access';
 

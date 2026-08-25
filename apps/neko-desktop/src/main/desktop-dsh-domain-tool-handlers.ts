@@ -19,8 +19,8 @@ import {
   createNodeHostContentReadService,
   createNodeDocumentAccessService,
   NodeAuthorizedWorkspaceWriter,
-} from '@neko/content/node';
-import { createNodeDocumentLowLevelAccess } from '@neko/content/document/node';
+} from '@neko/content-domain/node';
+import { createNodeDocumentLowLevelAccess } from '@neko/content-domain/document/node';
 import { join } from 'node:path';
 import { CutProjectAuthoringService } from '@neko/cut-domain';
 import type { CutExportApplicationService } from '@neko/cut-node';
@@ -28,13 +28,13 @@ import {
   createPurposeGenerationJobPort,
   type GenerationApplicationRuntime,
   type GenerationJobSnapshot,
-} from '@neko/generation/job';
+} from '@neko/generation-domain/job';
 import { createHash } from 'node:crypto';
 import type { ProfessionalApplicationBindingRepository } from '@neko/professional-apps-node';
 import type { DesktopWorkspaceGrantAuthorityPort } from '@neko/host/desktop-workspace-grant-authority';
 import type { ConfigManager, WorkspaceConfigManagerAuthority } from '@neko/host/settings';
-import type { CharacterDshAuthoringService } from '@neko/chara/application';
-import type { WorldDshAuthoringService } from '@neko/world/application';
+import type { CharacterDshAuthoringService } from '@neko/chara-domain/application';
+import type { WorldDshAuthoringService } from '@neko/world-domain/application';
 import type { DshSkillAuthoringService } from '@neko/agent-runtime/application';
 
 export interface DesktopDshGenerationProjectionPort {

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { CanvasDshHostAdapter } from './canvas-host-adapter';
 import { GenerationDshHostAdapter } from './generation-host-adapter';
 import type { DshAcpDomainToolRequest } from '@neko/agent-contracts/dsh-acp';
-import type { GenerationJobSnapshot, PurposeGenerationJobPort } from '@neko/generation/job';
+import type { GenerationJobSnapshot, PurposeGenerationJobPort } from '@neko/generation-domain/job';
 import {
   CanvasProjectAuthoringError,
   type CanvasProjectAuthoringService,

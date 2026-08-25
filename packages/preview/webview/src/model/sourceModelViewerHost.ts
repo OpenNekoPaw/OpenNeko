@@ -6,7 +6,7 @@ import {
   type ThreeReferencePanelSubject,
   type ThreeReferenceStagingSnapshot,
 } from '@neko/preview-domain';
-import { contentLocatorsEqual } from '@neko/content';
+import { contentLocatorsEqual } from '@neko/content-domain';
 import { createSourceModelStaging } from '@neko/preview-domain';
 import type { ModelViewerHostPort } from './modelViewerHost';
 

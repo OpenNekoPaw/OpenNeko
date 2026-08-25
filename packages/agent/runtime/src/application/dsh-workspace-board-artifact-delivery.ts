@@ -2,19 +2,19 @@ import { createHash } from 'node:crypto';
 import type { DshAcpProjectedEvent } from '../acp/dsh-acp-projection';
 import type { AgentConversationContext } from '@neko/agent-contracts';
 import type { CanvasWorkspaceTurnTarget } from '@neko/canvas-domain';
-import { DOCUMENT_DSH_TOOL_NAME, decodeDocumentDshToolArgs } from '@neko/content/document';
+import { DOCUMENT_DSH_TOOL_NAME, decodeDocumentDshToolArgs } from '@neko/content-domain/document';
 import {
   CONTENT_IMAGE_DSH_TOOL_NAME,
   contentLocatorKey,
   decodeContentImageDshToolSource,
   isContentLocator,
   type ContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 import { hashStableValue } from '@neko/shared';
 import {
   resolveWorkspaceGeneratedAssetRelativeDirectory,
   sanitizeGeneratedAssetPathSegment,
-} from '@neko/generation';
+} from '@neko/generation-domain';
 import {
   createAgentTerminalArtifactAdmission,
   parseAgentTerminalMarkdown,

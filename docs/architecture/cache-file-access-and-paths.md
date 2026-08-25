@@ -8,10 +8,7 @@
 旧媒体库 `${VAR}`、旧 ContentAccess cache contract 和旧 locator 分支不进入新产品读取、启动或自动 cleanup 路径。
 canonical 内容地址只由文件 authority、规范化路径和可选文件内 selector 组成。
 
-本文定义 Desktop 产品中的工作区路径、内容读写、文档访问、runtime 投影和可重建派生物边界。Creative Entity 与 Media Library 的业务语义分别见 [`unified-entity.md`](unified-entity.md) 和 [`asset-library.md`](asset-library.md)。
-实施与验收记录由
-[`restore-workspace-linked-media-access`](../../openspec/changes/restore-workspace-linked-media-access/)
-跟踪。`neko/assets/<libraryName>` 受管软链接是 binding 派生的 Workspace 访问路径，不是媒体身份或授权 authority。
+本文定义 Desktop 产品中的工作区路径、内容读写、文档访问、runtime 投影和可重建派生物边界。Creative Entity 与 Media Library 的业务语义分别见 [`unified-entity.md`](unified-entity.md) 和 [`asset-library.md`](asset-library.md)。`neko/assets/<libraryName>` 受管软链接是 binding 派生的 Workspace 访问路径，不是媒体身份或授权 authority。
 
 ## 核心原则
 
@@ -29,17 +26,17 @@ canonical 内容地址只由文件 authority、规范化路径和可选文件内
 
 ## Locator 分类
 
-| 形态                                              | 是否可持久化 | 用途                                                                      |
-| ------------------------------------------------- | ------------ | ------------------------------------------------------------------------- |
-| workspace-relative path                           | 是           | 工作区 source 与项目文件                                                  |
-| package authority + packageId/revision/path        | 是           | package-owned resource                                                       |
-| `neko/assets/<name>/<descendant>`                  | 仅 Agent 投影 | sender-bound Workspace 访问，不写回项目领域事实                            |
-| document source + locator/entryPath               | 是           | PDF/EPUB/DOCX/CBZ 等文档定位                                              |
-| stable `ContentLocator` / Asset / Entity identity | 是           | workspace/package file、document entry 与领域事实的跨包身份                |
-| `${VAR}/path`                                     | 有条件       | 其他非媒体库既有配置 root；不得用于新媒体库 source                        |
-| 本机绝对路径或 link target                        | 否           | Host 打开文件时的内部结果                                                 |
-| Host/Renderer/Node token 或 stream URL            | 否           | 当前 runtime projection                                                   |
-| derived/cache/temp/materialized path              | 否           | Host 内部可重建表现或 scratch                                             |
+| 形态                                              | 是否可持久化  | 用途                                                        |
+| ------------------------------------------------- | ------------- | ----------------------------------------------------------- |
+| workspace-relative path                           | 是            | 工作区 source 与项目文件                                    |
+| package authority + packageId/revision/path       | 是            | package-owned resource                                      |
+| `neko/assets/<name>/<descendant>`                 | 仅 Agent 投影 | sender-bound Workspace 访问，不写回项目领域事实             |
+| document source + locator/entryPath               | 是            | PDF/EPUB/DOCX/CBZ 等文档定位                                |
+| stable `ContentLocator` / Asset / Entity identity | 是            | workspace/package file、document entry 与领域事实的跨包身份 |
+| `${VAR}/path`                                     | 有条件        | 其他非媒体库既有配置 root；不得用于新媒体库 source          |
+| 本机绝对路径或 link target                        | 否            | Host 打开文件时的内部结果                                   |
+| Host/Renderer/Node token 或 stream URL            | 否            | 当前 runtime projection                                     |
+| derived/cache/temp/materialized path              | 否            | Host 内部可重建表现或 scratch                               |
 
 普通 workspace source 和受管媒体链接都使用 `WorkspaceFileContentLocator`；package 资源使用
 `PackageResourceContentLocator`。它们都不把 cache、物理 target 或 runtime projection 写入内容身份。
@@ -47,18 +44,18 @@ canonical 内容地址只由文件 authority、规范化路径和可选文件内
 
 ## 服务职责
 
-| 服务                                                 | 负责                                                                                   | 不负责                                              |
-| ---------------------------------------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| `PathResolver`                                       | 普通 workspace-relative path 和 portable relative descendant 的 normalization          | 媒体库授权策略、cache、Webview                      |
-| workspace file guard                                 | absolute/traversal 拒绝、普通 containment、exact managed-link containment               | link 生命周期、fallback target、Asset membership    |
-| Assets binding/managed-link service                  | binding、global connection 校验、link 投影、名称冲突与 target containment               | 项目事实、fallback target、target 内容               |
-| `ContentReadService`                                 | locator stat、bounded bytes/Range、Renderer/media/processor opaque projection          | cache policy、项目写入 ownership、公开 localPath    |
-| `ContentRepresentationService`                       | thumbnail/proxy/waveform/raster 等语义表现请求                                         | 向调用方公开存储方式、cache status 或 root          |
-| Host derived store (`ResourceCacheService` internal) | fingerprint、生成复用、in-flight 去重、freshness、retention、quota、GC                 | 产品子包协议、source identity、正式 Asset/输出      |
-| `@neko/content/document`                             | 文档 format、manifest/range/locator/cursor、native entry 读取语义                      | cache root、Webview URI、Agent 解包协议             |
-| authorized workspace writer                          | 有界、原子、安全的 workspace bytes 写入 primitive                                      | 决定 project/Asset/generated/export/cache ownership |
-| `ProjectFileStore` + domain codec                    | NK/JSON 项目事实 canonical shape、诊断与原子保存                                       | 二进制表现、runtime token、cache lifecycle          |
-| Domain import/save service                           | Asset、generated output、package、export 的用户意图与 durable ownership                | 透明 cache destination、任意 absolute write         |
+| 服务                                                 | 负责                                                                          | 不负责                                              |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------- |
+| `PathResolver`                                       | 普通 workspace-relative path 和 portable relative descendant 的 normalization | 媒体库授权策略、cache、Webview                      |
+| workspace file guard                                 | absolute/traversal 拒绝、普通 containment、exact managed-link containment     | link 生命周期、fallback target、Asset membership    |
+| Assets binding/managed-link service                  | binding、global connection 校验、link 投影、名称冲突与 target containment     | 项目事实、fallback target、target 内容              |
+| `ContentReadService`                                 | locator stat、bounded bytes/Range、Renderer/media/processor opaque projection | cache policy、项目写入 ownership、公开 localPath    |
+| `ContentRepresentationService`                       | thumbnail/proxy/waveform/raster 等语义表现请求                                | 向调用方公开存储方式、cache status 或 root          |
+| Host derived store (`ResourceCacheService` internal) | fingerprint、生成复用、in-flight 去重、freshness、retention、quota、GC        | 产品子包协议、source identity、正式 Asset/输出      |
+| `@neko/content-domain/document`                      | 文档 format、manifest/range/locator/cursor、native entry 读取语义             | cache root、Webview URI、Agent 解包协议             |
+| authorized workspace writer                          | 有界、原子、安全的 workspace bytes 写入 primitive                             | 决定 project/Asset/generated/export/cache ownership |
+| `ProjectFileStore` + domain codec                    | NK/JSON 项目事实 canonical shape、诊断与原子保存                              | 二进制表现、runtime token、cache lifecycle          |
+| Domain import/save service                           | Asset、generated output、package、export 的用户意图与 durable ownership       | 透明 cache destination、任意 absolute write         |
 
 Host 为不同 consumer 注入 capability-scoped port。调用方不能通过 `caller` 或 `intent` 字符串自行提升权限；公共 result 使用 discriminated union，只返回该操作的 bytes、metadata 或 opaque projection。
 
@@ -68,7 +65,7 @@ Host 为不同 consumer 注入 capability-scoped port。调用方不能通过 `c
 | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
 | 纯文本、Markdown、Fountain、普通 JSON/TOML/YAML 内容源                                 | Agent/Editor scoped authorized file writer                                |
 | Canvas NKC、Cut OTIO 等结构化项目事实                                                  | owning `ProjectFileStore`、领域 codec 与 authoring service                |
-| workspace/managed-link 原始图片、音视频、文档文件                                     | owner-qualified `ContentReadService` source read；不先创建 representation |
+| workspace/managed-link 原始图片、音视频、文档文件                                      | owner-qualified `ContentReadService` source read；不先创建 representation |
 | EPUB/DOCX/CBZ 原生 archive entry                                                       | DocumentAccess + bounded entry read；不持久物化                           |
 | PDF/CBZ Range、DOCX bounded full read、EPUB entry transport                            | DocumentAccess + Preview Node adapter                                     |
 | thumbnail、proxy、preview transcode、waveform/loudness、raster page、OCR/ASR/embedding | `ContentRepresentationService`；Host 内部 derived store                   |
@@ -108,7 +105,7 @@ Electron Main 并非真正 OS sandbox，因此仍需上述 guard；Desktop 只�
 | Assets  | source locator、thumbnail spec、Asset ownership                                                             | ResourceCache provider/root/manifest/GC                                            |
 | Canvas  | source locator、thumbnail/preview/raster spec                                                               | cache status、materialized path、startup GC                                        |
 | Cut     | source locator、proxy/waveform/loudness spec                                                                | cache provider、quota、retention、root                                             |
-| Preview | canonical content locator、runtime representation handle/projection                                      | selected-content cache、physical path                                               |
+| Preview | canonical content locator、runtime representation handle/projection                                         | selected-content cache、physical path                                              |
 | Agent   | owner-qualified content locator、document entry、safe bytes/metadata；结构化项目的 owning-domain projection | `.neko`、connection/target、cache path、archive implementation、NKC/OTIO raw bytes |
 | Tools   | stable diagnostics、maintenance command result                                                              | 任意 cache path 或 provider-private payload                                        |
 

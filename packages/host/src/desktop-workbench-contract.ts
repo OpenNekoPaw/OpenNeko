@@ -1,5 +1,5 @@
 import type { PreviewContentKind } from '@neko/preview-domain';
-import { validateContentLocator, type ContentLocator } from '@neko/content';
+import { validateContentLocator, type ContentLocator } from '@neko/content-domain';
 
 export const DESKTOP_PRIMARY_MAIN_GROUP_ID = 'main:primary';
 export const DESKTOP_SECONDARY_MAIN_GROUP_ID = 'main:secondary';

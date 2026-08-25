@@ -19,7 +19,7 @@ import {
   type ThreeReferencePurpose,
   type ThreeReferenceStagingSnapshot,
 } from '@neko/preview-domain';
-import { contentLocatorsEqual } from '@neko/content';
+import { contentLocatorsEqual } from '@neko/content-domain';
 import { useTranslation } from '../i18n/I18nContext';
 import {
   browserThreeRuntimeFactory,

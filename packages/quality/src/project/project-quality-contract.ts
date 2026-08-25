@@ -2,12 +2,12 @@ import {
   isHostProjectedRuntimeValue,
   isProjectDurableContentLocator,
   type ContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 import {
   type QualityDiagnostic,
   type QualityProjectRef,
   type QualityTarget,
-} from '@neko/generation';
+} from '@neko/generation-domain';
 
 export type ProjectQualityOperation =
   | 'validate-project'

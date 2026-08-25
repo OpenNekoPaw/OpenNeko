@@ -1,5 +1,5 @@
 import type { CanvasMaterialGenerationContext, CanvasNode } from '@neko/canvas-domain';
-import { validateContentLocator } from '@neko/content';
+import { validateContentLocator } from '@neko/content-domain';
 import { deriveCanvasMaterialOrigin, isCanvasGenerationEvidence } from '@neko/canvas-domain';
 
 export type CanvasMaterialSource = 'referenced' | 'generated';

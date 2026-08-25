@@ -1,5 +1,5 @@
-import { isTextualDocumentFormat, type DocumentFormat } from '@neko/content';
-import { detectDocumentFormat, isSupportedDocumentPath } from '@neko/content/document';
+import { isTextualDocumentFormat, type DocumentFormat } from '@neko/content-domain';
+import { detectDocumentFormat, isSupportedDocumentPath } from '@neko/content-domain/document';
 import { detectMediaType, getFileExtension, getMimeType } from '@neko/media';
 
 export type AgentContentPathClass =

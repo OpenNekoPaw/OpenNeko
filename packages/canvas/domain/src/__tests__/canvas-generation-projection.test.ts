@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contentLocatorKey, type WorkspaceFileContentLocator } from '@neko/content';
+import { contentLocatorKey, type WorkspaceFileContentLocator } from '@neko/content-domain';
 import { createEmptyCanvasData, type CanvasData } from '@neko/canvas-domain';
 import { projectResolvedCanvasMaterialToCanvas } from '../canvas-content-authoring';
 import {

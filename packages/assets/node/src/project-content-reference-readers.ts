@@ -12,7 +12,7 @@ import {
   validateContentLocator,
   type ContentLocator,
   type WorkspaceFileContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 import {
   aggregateWorkspaceMediaLibraryRequirements,
   type ProjectContentReferenceOwnerSnapshot,

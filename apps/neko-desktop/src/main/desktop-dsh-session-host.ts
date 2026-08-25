@@ -40,7 +40,7 @@ import {
   isWorkspaceFileContentLocator,
   validateContentLocator,
   type ContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 
 import type { DesktopSenderIdentity } from './window-registry';
 
@@ -82,7 +82,7 @@ export class DesktopDshSessionHost {
           selectedContextPayloads?: readonly import('@neko/agent-contracts').AgentContextPayload[],
           selectedResources?: readonly {
             readonly label: string;
-            readonly contentLocator: import('@neko/content').ContentLocator;
+            readonly contentLocator: import('@neko/content-domain').ContentLocator;
           }[],
           canvasTurnTarget?: CanvasWorkspaceTurnTarget,
         ): Promise<string>;
@@ -594,7 +594,7 @@ function resolveNewNextTurnMessageId(
 }
 
 function serializeContentLocatorResourceUri(
-  locator: import('@neko/content').ContentLocator,
+  locator: import('@neko/content-domain').ContentLocator,
 ): string {
   return `openneko-content:${encodeURIComponent(JSON.stringify(locator))}`;
 }

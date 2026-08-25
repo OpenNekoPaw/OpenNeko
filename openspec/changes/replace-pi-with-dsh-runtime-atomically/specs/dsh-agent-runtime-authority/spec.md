@@ -574,3 +574,36 @@ Product-shipped first-party Skills SHALL be exposed to the DSH `standard` preset
 - **AND** a selected file, media or materialized Asset locator is submitted as one ACP resource link, while an Entity context receipt is appended as untrusted data to the exact DSH turn context
 - **AND** opening or filtering the mention menu never materializes an Asset
 - **AND** missing authority remains local and cannot search raw paths or infer another Workspace
+
+### Requirement: Exact live Inbox items support canonical send-now interruption
+
+OpenNeko SHALL expose one sender-bound `send-now` operation for an exact pending DSH `nextTurn`
+Message. DSH SHALL remain the only owner of Inbox order, active cancellation and subsequent Turn
+execution. The operation SHALL move the selected Message ahead of sibling `nextTurn` Messages and
+cancel the active DSH Turn with Inbox preservation in one synchronous DSH owner boundary. DSH SHALL
+start the selected Message only after the prior Turn becomes terminal, and SHALL NOT execute two
+Turns concurrently for the same Session.
+
+The queue panel SHALL render above the current Draft context bar so the context bar remains adjacent
+to the Composer it describes. Webview SHALL submit only exact Conversation and Message identities,
+and SHALL render only queue actions that have an available canonical handler.
+
+#### Scenario: User immediately sends a pending queue item
+
+- **WHEN** one DSH Turn is active and the user invokes `send-now` on an exact pending `nextTurn` Message
+- **THEN** DSH moves that Message ahead of sibling `nextTurn` Messages and cancels the active Turn with `keepInbox`
+- **AND** the active Turn reaches terminal before DSH claims the selected Message into the next Turn
+- **AND** the Conversation and DSH Session identities remain unchanged and no same-Session Turn runs concurrently
+- **AND** the selected Message retains its exact Canvas/context admission while sibling admissions keep their relative order
+
+#### Scenario: Send-now targets stale or ineligible state
+
+- **WHEN** the Message is stale, belongs to `nextStep` or another Session, or the Session is not running
+- **THEN** only that operation fails with an explicit diagnostic
+- **AND** no sibling Inbox item, Canvas/context admission, Conversation or Session is cancelled, reordered or replaced
+
+#### Scenario: Queue and Draft context hierarchy is rendered
+
+- **WHEN** an authoritative queue and a current Workspace/Canvas context bar are both visible
+- **THEN** the queue appears before the context bar and the context bar remains adjacent to the Composer
+- **AND** controls without a canonical handler are omitted instead of presented as permanently disabled capabilities

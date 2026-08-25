@@ -5,7 +5,7 @@ import {
   type ContentFingerprint,
   type ContentReadService,
   type WorkspaceFileContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 
 import { loadNkc, saveNkc } from './nkc';
 import type { CanvasConnection, CanvasData, CanvasNode } from './types/canvas';

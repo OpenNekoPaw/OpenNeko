@@ -2,7 +2,7 @@ import {
   isWorkspaceFileContentLocator,
   validateContentLocator,
   type ContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 import {
   isCanvasMaterialActionDescriptor,
   isCanvasMaterialActionIntent,

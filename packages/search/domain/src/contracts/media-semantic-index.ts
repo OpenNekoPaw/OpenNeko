@@ -6,7 +6,7 @@
 // facts, media payloads, Webview URIs, or provider runtime handles.
 // =============================================================================
 
-import { isHostProjectedRuntimeValue, type ContentStableSourceRef } from '@neko/content';
+import { isHostProjectedRuntimeValue, type ContentStableSourceRef } from '@neko/content-domain';
 import {
   CHARACTER_MEMORY_OBSERVATION_SOURCES,
   CHARACTER_MEMORY_SOURCE_REF_KINDS,
@@ -21,7 +21,7 @@ import {
   type CharacterObservation,
   type CharacterObservationSource,
   type EntityMention,
-} from '@neko/chara';
+} from '@neko/chara-domain';
 import type { ProjectEntityCandidateProjection } from '@neko/entity-domain';
 
 export const MEDIA_TEXT_SEGMENT_KINDS = [

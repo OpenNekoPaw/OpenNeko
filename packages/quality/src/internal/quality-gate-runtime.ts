@@ -1,4 +1,4 @@
-import { type ContentLocator } from '@neko/content';
+import { type ContentLocator } from '@neko/content-domain';
 import {
   qualityTargetsMatch,
   validateQualityEvidence,
@@ -12,7 +12,7 @@ import {
   type QualityRepairAction,
   type QualityTarget,
   type QualityTargetKind,
-} from '@neko/generation';
+} from '@neko/generation-domain';
 
 export const QUALITY_PROFILE_IDS = [
   'image',

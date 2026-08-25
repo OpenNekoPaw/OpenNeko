@@ -2,7 +2,7 @@ import { lstat, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ContentLocator, ContentReadService } from '@neko/content';
+import type { ContentLocator, ContentReadService } from '@neko/content-domain';
 import {
   copyDesktopGlobalMediaLibraryContent,
   createGlobalMediaLibraryConnection,

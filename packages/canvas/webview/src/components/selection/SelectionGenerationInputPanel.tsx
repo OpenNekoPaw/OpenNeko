@@ -13,7 +13,7 @@ import {
   type CanvasViewport,
   type GenerationCanvasNode,
 } from '@neko/canvas-domain';
-import { CONTENT_LOCATOR_DRAG_MIME, parseContentLocatorDragData } from '@neko/content';
+import { CONTENT_LOCATOR_DRAG_MIME, parseContentLocatorDragData } from '@neko/content-domain';
 import {
   CheckIcon,
   ChevronDownIcon,

@@ -215,7 +215,7 @@ describe('internal versioning audit', () => {
   it('allows only exact Character or managed Asset domain occurrences inside their owners', () => {
     const [finding] = scanSources([
       {
-        path: 'packages/chara/src/character-project.ts',
+        path: 'packages/chara/domain/src/character-project.ts',
         content: 'export interface CharacterVersion { characterVersion: string }',
       },
     ]);
@@ -225,7 +225,7 @@ describe('internal versioning audit', () => {
       path: finding.path,
       category: finding.category,
       token: finding.token,
-      domainOwner: '@neko/chara',
+      domainOwner: '@neko/chara-domain',
       businessRequirement: 'Published character snapshots are immutable and user-referenceable.',
       fieldScope: 'Character publication identity only.',
       isolationRule: 'The identity never selects a contract, codec, migration, or component shape.',

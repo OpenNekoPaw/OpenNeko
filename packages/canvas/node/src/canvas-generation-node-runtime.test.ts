@@ -12,7 +12,7 @@ import {
   type GenerationJobPort,
   type GenerationJobSnapshot,
   type SubmitGenerationJobInput,
-} from '@neko/generation';
+} from '@neko/generation-domain';
 import { describe, expect, it, vi } from 'vitest';
 import { CanvasGenerationNodeRuntime } from './canvas-generation-node-runtime';
 

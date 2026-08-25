@@ -7,8 +7,7 @@
 Project facts、项目 `.neko` 与 Media Library binding 的后续原子切换由
 [`separate-project-facts-local-state-and-media-bindings`](../../openspec/changes/separate-project-facts-local-state-and-media-bindings/)
 负责；
-在该 change 完成前，本文是目标约束，不表示所有路径已在产品中可用。当前实现差距见
-[`2026-08-12-resource-entity-character-world-gap.md`](../status/2026-08-12-resource-entity-character-world-gap.md)。
+在该 change 完成前，本文是目标约束，不表示所有路径已在产品中可用。
 
 ## 用户概念与内部 owner
 

@@ -1,0 +1,24 @@
+{
+  "name": "@neko/chara-node",
+  "description": "Node persistence adapters for the OpenNeko Character domain",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@zip.js/zip.js": "^2.8.26",
+    "@neko/chara-domain": "workspace:*",
+    "@neko/local-metadata": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "4.1.2"
+  },
+  "license": "AGPL-3.0-or-later"
+}

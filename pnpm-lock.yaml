@@ -47,21 +47,21 @@ importers:
       '@neko/canvas-domain':
         specifier: workspace:*
         version: link:packages/canvas/domain
-      '@neko/chara':
+      '@neko/chara-domain':
         specifier: workspace:*
-        version: link:packages/chara
+        version: link:packages/chara/domain
       '@neko/chara-node':
         specifier: workspace:*
-        version: link:packages/chara-node
+        version: link:packages/chara/node
       '@neko/cut-domain':
         specifier: workspace:*
         version: link:packages/cut/domain
       '@neko/entity-domain':
         specifier: workspace:*
         version: link:packages/entity/domain
-      '@neko/generation':
+      '@neko/generation-domain':
         specifier: workspace:*
-        version: link:packages/generation
+        version: link:packages/generation/domain
       '@neko/local-metadata':
         specifier: workspace:*
         version: link:packages/local-metadata
@@ -155,18 +155,18 @@ importers:
       '@neko/canvas-webview':
         specifier: workspace:*
         version: link:../../packages/canvas/webview
-      '@neko/chara':
+      '@neko/chara-domain':
         specifier: workspace:*
-        version: link:../../packages/chara
+        version: link:../../packages/chara/domain
       '@neko/chara-node':
         specifier: workspace:*
-        version: link:../../packages/chara-node
+        version: link:../../packages/chara/node
       '@neko/chara-webview':
         specifier: workspace:*
-        version: link:../../packages/chara-webview
-      '@neko/content':
+        version: link:../../packages/chara/webview
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../../packages/content
+        version: link:../../packages/content/domain
       '@neko/cut-domain':
         specifier: workspace:*
         version: link:../../packages/cut/domain
@@ -182,9 +182,9 @@ importers:
       '@neko/entity-node':
         specifier: workspace:*
         version: link:../../packages/entity/node
-      '@neko/generation':
+      '@neko/generation-domain':
         specifier: workspace:*
-        version: link:../../packages/generation
+        version: link:../../packages/generation/domain
       '@neko/host':
         specifier: workspace:*
         version: link:../../packages/host
@@ -212,15 +212,15 @@ importers:
       '@neko/professional-apps-webview':
         specifier: workspace:*
         version: link:../../packages/professional-apps/webview
-      '@neko/project':
+      '@neko/project-domain':
         specifier: workspace:*
-        version: link:../../packages/project
+        version: link:../../packages/project/domain
       '@neko/project-node':
         specifier: workspace:*
-        version: link:../../packages/project-node
+        version: link:../../packages/project/node
       '@neko/project-webview':
         specifier: workspace:*
-        version: link:../../packages/project-webview
+        version: link:../../packages/project/webview
       '@neko/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -236,15 +236,15 @@ importers:
       '@neko/ui':
         specifier: workspace:*
         version: link:../../packages/ui
-      '@neko/world':
+      '@neko/world-domain':
         specifier: workspace:*
-        version: link:../../packages/world
+        version: link:../../packages/world/domain
       '@neko/world-node':
         specifier: workspace:*
-        version: link:../../packages/world-node
+        version: link:../../packages/world/node
       '@neko/world-webview':
         specifier: workspace:*
-        version: link:../../packages/world-webview
+        version: link:../../packages/world/webview
       '@zip.js/zip.js':
         specifier: ^2.8.26
         version: 2.8.26
@@ -321,9 +321,9 @@ importers:
       '@neko/canvas-domain':
         specifier: workspace:*
         version: link:../../canvas/domain
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../../content
+        version: link:../../content/domain
     devDependencies:
       typescript:
         specifier: ^5.8.3
@@ -371,18 +371,18 @@ importers:
       '@neko/canvas-domain':
         specifier: workspace:*
         version: link:../../canvas/domain
-      '@neko/chara':
+      '@neko/chara-domain':
         specifier: workspace:*
-        version: link:../../chara
-      '@neko/content':
+        version: link:../../chara/domain
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../../content
+        version: link:../../content/domain
       '@neko/cut-domain':
         specifier: workspace:*
         version: link:../../cut/domain
-      '@neko/generation':
+      '@neko/generation-domain':
         specifier: workspace:*
-        version: link:../../generation
+        version: link:../../generation/domain
       '@neko/host':
         specifier: workspace:*
         version: link:../../host
@@ -395,9 +395,9 @@ importers:
       '@neko/shared':
         specifier: workspace:*
         version: link:../../shared
-      '@neko/world':
+      '@neko/world-domain':
         specifier: workspace:*
-        version: link:../../world
+        version: link:../../world/domain
       sharp:
         specifier: ^0.35.3
         version: 0.35.3(@types/node@24.13.3)
@@ -423,9 +423,9 @@ importers:
       '@neko/canvas-domain':
         specifier: workspace:*
         version: link:../../canvas/domain
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../../content
+        version: link:../../content/domain
       '@neko/media':
         specifier: workspace:*
         version: link:../../media
@@ -494,9 +494,9 @@ importers:
 
   packages/assets/domain:
     dependencies:
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../../content
+        version: link:../../content/domain
       '@neko/entity-domain':
         specifier: workspace:*
         version: link:../../entity/domain
@@ -530,10 +530,10 @@ importers:
         version: link:../../canvas/domain
       '@neko/chara-node':
         specifier: workspace:*
-        version: link:../../chara-node
-      '@neko/content':
+        version: link:../../chara/node
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../../content
+        version: link:../../content/domain
       '@neko/cut-domain':
         specifier: workspace:*
         version: link:../../cut/domain
@@ -555,12 +555,12 @@ importers:
       '@neko/preview-node':
         specifier: workspace:*
         version: link:../../preview/node
-      '@neko/project':
+      '@neko/project-domain':
         specifier: workspace:*
-        version: link:../../project
+        version: link:../../project/domain
       '@neko/world-node':
         specifier: workspace:*
-        version: link:../../world-node
+        version: link:../../world/node
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -580,9 +580,9 @@ importers:
       '@neko/assets-domain':
         specifier: workspace:*
         version: link:../domain
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../../content
+        version: link:../../content/domain
       '@neko/preview-webview':
         specifier: workspace:*
         version: link:../../preview/webview
@@ -651,15 +651,15 @@ importers:
 
   packages/canvas/domain:
     dependencies:
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../../content
+        version: link:../../content/domain
       '@neko/entity-domain':
         specifier: workspace:*
         version: link:../../entity/domain
-      '@neko/generation':
+      '@neko/generation-domain':
         specifier: workspace:*
-        version: link:../../generation
+        version: link:../../generation/domain
       '@neko/local-metadata':
         specifier: workspace:*
         version: link:../../local-metadata
@@ -716,12 +716,12 @@ importers:
       '@neko/canvas-domain':
         specifier: workspace:*
         version: link:../domain
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../../content
-      '@neko/generation':
+        version: link:../../content/domain
+      '@neko/generation-domain':
         specifier: workspace:*
-        version: link:../../generation
+        version: link:../../generation/domain
       '@neko/host':
         specifier: workspace:*
         version: link:../../host
@@ -747,9 +747,9 @@ importers:
       '@neko/canvas-domain':
         specifier: workspace:*
         version: link:../domain
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../../content
+        version: link:../../content/domain
       '@neko/markdown':
         specifier: workspace:*
         version: link:../../markdown
@@ -809,20 +809,20 @@ importers:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@6.4.2(patch_hash=dc45f11845a36f6e449d48f96309546ee59c02cf4bf9e3f6ae79992160198537)(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
-  packages/chara:
+  packages/chara/domain:
     dependencies:
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../content
+        version: link:../../content/domain
       '@neko/entity-domain':
         specifier: workspace:*
-        version: link:../entity/domain
+        version: link:../../entity/domain
       '@neko/screenplay-domain':
         specifier: workspace:*
-        version: link:../screenplay/domain
+        version: link:../../screenplay/domain
       '@neko/shared':
         specifier: workspace:*
-        version: link:../shared
+        version: link:../../shared
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -834,14 +834,14 @@ importers:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(patch_hash=dc45f11845a36f6e449d48f96309546ee59c02cf4bf9e3f6ae79992160198537)(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
-  packages/chara-node:
+  packages/chara/node:
     dependencies:
-      '@neko/chara':
+      '@neko/chara-domain':
         specifier: workspace:*
-        version: link:../chara
+        version: link:../domain
       '@neko/local-metadata':
         specifier: workspace:*
-        version: link:../local-metadata
+        version: link:../../local-metadata
       '@zip.js/zip.js':
         specifier: ^2.8.26
         version: 2.8.26
@@ -856,14 +856,14 @@ importers:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(patch_hash=dc45f11845a36f6e449d48f96309546ee59c02cf4bf9e3f6ae79992160198537)(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
-  packages/chara-webview:
+  packages/chara/webview:
     dependencies:
-      '@neko/chara':
+      '@neko/chara-domain':
         specifier: workspace:*
-        version: link:../chara
+        version: link:../domain
       '@neko/ui':
         specifier: workspace:*
-        version: link:../ui
+        version: link:../../ui
       react:
         specifier: 18.3.1
         version: 18.3.1
@@ -910,9 +910,9 @@ importers:
       '@neko/agent-contracts':
         specifier: workspace:*
         version: link:../../agent/contracts
-      '@neko/chara':
+      '@neko/chara-domain':
         specifier: workspace:*
-        version: link:..
+        version: link:../domain
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -927,11 +927,11 @@ importers:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(patch_hash=dc45f11845a36f6e449d48f96309546ee59c02cf4bf9e3f6ae79992160198537)(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
-  packages/content:
+  packages/content/domain:
     dependencies:
       '@neko/shared':
         specifier: workspace:*
-        version: link:../shared
+        version: link:../../shared
       '@zip.js/zip.js':
         specifier: ^2.8.26
         version: 2.8.26
@@ -990,9 +990,9 @@ importers:
       '@neko/agent-contracts':
         specifier: workspace:*
         version: link:../../agent/contracts
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:..
+        version: link:../domain
       sharp:
         specifier: ^0.35.3
         version: 0.35.3(@types/node@24.13.3)
@@ -1015,9 +1015,9 @@ importers:
       '@neko/agent-contracts':
         specifier: workspace:*
         version: link:../../agent/contracts
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../../content
+        version: link:../../content/domain
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -1062,9 +1062,9 @@ importers:
       '@neko/assets-domain':
         specifier: workspace:*
         version: link:../../assets/domain
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../../content
+        version: link:../../content/domain
       '@neko/cut-domain':
         specifier: workspace:*
         version: link:../domain
@@ -1090,9 +1090,9 @@ importers:
 
   packages/cut/webview:
     dependencies:
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../../content
+        version: link:../../content/domain
       '@neko/cut-domain':
         specifier: workspace:*
         version: link:../domain
@@ -1242,9 +1242,9 @@ importers:
 
   packages/entity/domain:
     dependencies:
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../../content
+        version: link:../../content/domain
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -1258,9 +1258,9 @@ importers:
 
   packages/entity/node:
     dependencies:
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../../content
+        version: link:../../content/domain
       '@neko/entity-domain':
         specifier: workspace:*
         version: link:../domain
@@ -1318,35 +1318,35 @@ importers:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(patch_hash=dc45f11845a36f6e449d48f96309546ee59c02cf4bf9e3f6ae79992160198537)(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
-  packages/generation:
+  packages/generation/domain:
     dependencies:
       '@ai-sdk/provider':
         specifier: ^4.0.7
         version: 4.0.7
       '@neko/ai-contracts':
         specifier: workspace:*
-        version: link:../ai/contracts
+        version: link:../../ai/contracts
       '@neko/ai-sdk':
         specifier: workspace:*
-        version: link:../ai/sdk
-      '@neko/content':
+        version: link:../../ai/sdk
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../content
+        version: link:../../content/domain
       '@neko/entity-domain':
         specifier: workspace:*
-        version: link:../entity/domain
+        version: link:../../entity/domain
       '@neko/local-metadata':
         specifier: workspace:*
-        version: link:../local-metadata
+        version: link:../../local-metadata
       '@neko/media':
         specifier: workspace:*
-        version: link:../media
+        version: link:../../media
       '@neko/preview-domain':
         specifier: workspace:*
-        version: link:../preview/domain
+        version: link:../../preview/domain
       '@neko/shared':
         specifier: workspace:*
-        version: link:../shared
+        version: link:../../shared
       ai:
         specifier: ^7.0.78
         version: 7.0.78(zod@4.4.3)
@@ -1372,9 +1372,9 @@ importers:
       '@neko/agent-contracts':
         specifier: workspace:*
         version: link:../../agent/contracts
-      '@neko/generation':
+      '@neko/generation-domain':
         specifier: workspace:*
-        version: link:..
+        version: link:../domain
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -1403,9 +1403,9 @@ importers:
       '@neko/canvas-domain':
         specifier: workspace:*
         version: link:../canvas/domain
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../content
+        version: link:../content/domain
       '@neko/cut-domain':
         specifier: workspace:*
         version: link:../cut/domain
@@ -1418,9 +1418,9 @@ importers:
       '@neko/shared':
         specifier: workspace:*
         version: link:../shared
-      '@neko/world':
+      '@neko/world-domain':
         specifier: workspace:*
-        version: link:../world
+        version: link:../world/domain
       smol-toml:
         specifier: 1.6.1
         version: 1.6.1
@@ -1440,9 +1440,9 @@ importers:
       '@neko/assets-domain':
         specifier: workspace:*
         version: link:../assets/domain
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../content
+        version: link:../content/domain
       '@neko/entity-domain':
         specifier: workspace:*
         version: link:../entity/domain
@@ -1514,9 +1514,9 @@ importers:
 
   packages/media:
     dependencies:
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../content
+        version: link:../content/domain
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -1533,9 +1533,9 @@ importers:
 
   packages/preview/domain:
     dependencies:
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../../content
+        version: link:../../content/domain
     devDependencies:
       typescript:
         specifier: ^5.8.3
@@ -1546,9 +1546,9 @@ importers:
 
   packages/preview/node:
     dependencies:
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../../content
+        version: link:../../content/domain
       '@neko/preview-domain':
         specifier: workspace:*
         version: link:../domain
@@ -1568,9 +1568,9 @@ importers:
 
   packages/preview/webview:
     dependencies:
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../../content
+        version: link:../../content/domain
       '@neko/media':
         specifier: workspace:*
         version: link:../../media
@@ -1644,9 +1644,9 @@ importers:
 
   packages/professional-apps/contracts:
     dependencies:
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../../content
+        version: link:../../content/domain
     devDependencies:
       typescript:
         specifier: ^5.9.3
@@ -1657,9 +1657,9 @@ importers:
 
   packages/professional-apps/node:
     dependencies:
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../../content
+        version: link:../../content/domain
       '@neko/local-metadata':
         specifier: workspace:*
         version: link:../../local-metadata
@@ -1705,23 +1705,23 @@ importers:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@6.4.2(patch_hash=dc45f11845a36f6e449d48f96309546ee59c02cf4bf9e3f6ae79992160198537)(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
-  packages/project:
+  packages/project/domain:
     dependencies:
-      '@neko/chara':
+      '@neko/chara-domain':
         specifier: workspace:*
-        version: link:../chara
-      '@neko/content':
+        version: link:../../chara/domain
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../content
+        version: link:../../content/domain
       '@neko/entity-domain':
         specifier: workspace:*
-        version: link:../entity/domain
+        version: link:../../entity/domain
       '@neko/search-domain':
         specifier: workspace:*
-        version: link:../search/domain
-      '@neko/world':
+        version: link:../../search/domain
+      '@neko/world-domain':
         specifier: workspace:*
-        version: link:../world
+        version: link:../../world/domain
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -1733,29 +1733,29 @@ importers:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(patch_hash=dc45f11845a36f6e449d48f96309546ee59c02cf4bf9e3f6ae79992160198537)(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
-  packages/project-node:
+  packages/project/node:
     dependencies:
-      '@neko/chara':
+      '@neko/chara-domain':
         specifier: workspace:*
-        version: link:../chara
+        version: link:../../chara/domain
       '@neko/chara-node':
         specifier: workspace:*
-        version: link:../chara-node
+        version: link:../../chara/node
       '@neko/entity-domain':
         specifier: workspace:*
-        version: link:../entity/domain
+        version: link:../../entity/domain
       '@neko/local-metadata':
         specifier: workspace:*
-        version: link:../local-metadata
-      '@neko/project':
+        version: link:../../local-metadata
+      '@neko/project-domain':
         specifier: workspace:*
-        version: link:../project
-      '@neko/world':
+        version: link:../domain
+      '@neko/world-domain':
         specifier: workspace:*
-        version: link:../world
+        version: link:../../world/domain
       '@neko/world-node':
         specifier: workspace:*
-        version: link:../world-node
+        version: link:../../world/node
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -1767,14 +1767,14 @@ importers:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(patch_hash=dc45f11845a36f6e449d48f96309546ee59c02cf4bf9e3f6ae79992160198537)(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
-  packages/project-webview:
+  packages/project/webview:
     dependencies:
-      '@neko/project':
+      '@neko/project-domain':
         specifier: workspace:*
-        version: link:../project
+        version: link:../domain
       '@neko/ui':
         specifier: workspace:*
-        version: link:../ui
+        version: link:../../ui
       react:
         specifier: 18.3.1
         version: 18.3.1
@@ -1806,12 +1806,12 @@ importers:
 
   packages/quality:
     dependencies:
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../content
-      '@neko/generation':
+        version: link:../content/domain
+      '@neko/generation-domain':
         specifier: workspace:*
-        version: link:../generation
+        version: link:../generation/domain
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -1838,12 +1838,12 @@ importers:
 
   packages/search/domain:
     dependencies:
-      '@neko/chara':
+      '@neko/chara-domain':
         specifier: workspace:*
-        version: link:../../chara
-      '@neko/content':
+        version: link:../../chara/domain
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../../content
+        version: link:../../content/domain
       '@neko/entity-domain':
         specifier: workspace:*
         version: link:../../entity/domain
@@ -1866,9 +1866,9 @@ importers:
 
   packages/search/local-metadata:
     dependencies:
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../../content
+        version: link:../../content/domain
       '@neko/entity-domain':
         specifier: workspace:*
         version: link:../../entity/domain
@@ -1899,9 +1899,9 @@ importers:
 
   packages/text-editor/domain:
     dependencies:
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../../content
+        version: link:../../content/domain
       '@neko/screenplay-domain':
         specifier: workspace:*
         version: link:../../screenplay/domain
@@ -1921,9 +1921,9 @@ importers:
       '@neko/assets-node':
         specifier: workspace:*
         version: link:../../assets/node
-      '@neko/content':
+      '@neko/content-domain':
         specifier: workspace:*
-        version: link:../../content
+        version: link:../../content/domain
       '@neko/entity-node':
         specifier: workspace:*
         version: link:../../entity/node
@@ -2105,7 +2105,7 @@ importers:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@6.4.2(patch_hash=dc45f11845a36f6e449d48f96309546ee59c02cf4bf9e3f6ae79992160198537)(@types/node@25.7.0)(jiti@1.21.7)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
-  packages/world:
+  packages/world/domain:
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -2117,14 +2117,14 @@ importers:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(patch_hash=dc45f11845a36f6e449d48f96309546ee59c02cf4bf9e3f6ae79992160198537)(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
-  packages/world-node:
+  packages/world/node:
     dependencies:
       '@neko/local-metadata':
         specifier: workspace:*
-        version: link:../local-metadata
-      '@neko/world':
+        version: link:../../local-metadata
+      '@neko/world-domain':
         specifier: workspace:*
-        version: link:../world
+        version: link:../domain
       '@zip.js/zip.js':
         specifier: ^2.8.26
         version: 2.8.26
@@ -2139,14 +2139,14 @@ importers:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(patch_hash=dc45f11845a36f6e449d48f96309546ee59c02cf4bf9e3f6ae79992160198537)(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
-  packages/world-webview:
+  packages/world/webview:
     dependencies:
       '@neko/ui':
         specifier: workspace:*
-        version: link:../ui
-      '@neko/world':
+        version: link:../../ui
+      '@neko/world-domain':
         specifier: workspace:*
-        version: link:../world
+        version: link:../domain
       react:
         specifier: 18.3.1
         version: 18.3.1
@@ -2187,9 +2187,9 @@ importers:
       '@neko/agent-contracts':
         specifier: workspace:*
         version: link:../../agent/contracts
-      '@neko/world':
+      '@neko/world-domain':
         specifier: workspace:*
-        version: link:..
+        version: link:../domain
     devDependencies:
       '@types/node':
         specifier: ^24.0.0

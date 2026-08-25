@@ -12,7 +12,10 @@
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
-  "files": ["dist", "cordis.patch.yml"],
+  "files": [
+    "dist",
+    "cordis.patch.yml"
+  ],
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
@@ -27,7 +30,7 @@
     "@deepseek-ai/cordis": "4.0.1",
     "@deepseek-ai/dsh-tools": "0.1.0-rc.8",
     "@neko/agent-contracts": "workspace:*",
-    "@neko/generation": "workspace:*"
+    "@neko/generation-domain": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

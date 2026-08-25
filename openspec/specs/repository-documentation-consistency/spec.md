@@ -2,7 +2,8 @@
 
 ## Purpose
 
-TBD - created by archiving change synchronize-desktop-only-documentation. Update Purpose after archive.
+Keep current repository documentation aligned with executable topology, canonical authorities, and
+the product-functional OpenSpec lifecycle.
 
 ## Requirements
 
@@ -40,25 +41,27 @@ Historical documents that retain those facts MUST be explicitly marked historica
 - **WHEN** a contributor reads the repository rules
 - **THEN** every canonical validation command resolves to an existing Desktop, TypeScript, or Node/FFmpeg path
 
-### Requirement: Roadmap and implementation status remain separate
+### Requirement: Code owns implementation truth
 
-Roadmap documents SHALL own direction, sequencing, and acceptance gates. Volatile task progress and
-temporary implementation blockers MUST remain in OpenSpec artifacts or dated status snapshots.
+Repository documents SHALL contain only system architecture, development rules, and core product
+design. Code and tests SHALL be the sole source of truth for business logic, feature implementation,
+module structure, control flow, and implementation status. Documents and proposals MUST NOT copy
+those details or require synchronization after ordinary code changes.
 
-#### Scenario: A phase implementation progresses
+#### Scenario: Internal implementation changes
 
-- **WHEN** individual OpenSpec tasks change state
-- **THEN** the roadmap remains valid without copying those task-level completion details
+- **WHEN** code is refactored without changing a system boundary or core product design
+- **THEN** no repository document or proposal requires an update
 
 ### Requirement: Documentation navigation resolves and exposes authority
 
-Current documentation entry points SHALL link to existing local targets and SHALL distinguish current
-core documents, proposed decisions, historical decisions, and dated status snapshots.
+Current documentation entry points SHALL link only to current system architecture, development
+rules, core product design, and active system/product proposals.
 
-#### Scenario: OpenSpec change moves to archive
+#### Scenario: OpenSpec change is completed
 
 - **WHEN** an active architecture document still links to that implementation change
-- **THEN** its link points to the archived location or the document explicitly records that the implementation artifact was retired
+- **THEN** the stable conclusion is promoted to a canonical spec or architecture document and the link is updated before the completed proposal is deleted
 
 ### Requirement: Contributor guidance has a canonical detailed source
 

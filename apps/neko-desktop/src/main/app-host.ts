@@ -167,7 +167,7 @@ import {
   type CharacterRoomWorkbenchProjectionEvent,
   type CharacterRoomWorkbenchSnapshotResult,
   type RoomView,
-} from '@neko/chara/contracts';
+} from '@neko/chara-domain/contracts';
 import type { DesktopCharacterAvatarRuntime } from './desktop-character-avatar-runtime';
 import type {
   CharacterFoundationCommandPort,
@@ -175,7 +175,7 @@ import type {
   CharacterInteractionService,
   CharacterRoomMessageSubmissionResult,
   SubmitCharacterRoomMessageInput,
-} from '@neko/chara/application';
+} from '@neko/chara-domain/application';
 import {
   parseWorldAuthoringHostRequest,
   parseWorldManagementHostRequest,
@@ -193,8 +193,11 @@ import {
   type WorldPortableOperationResult,
   type WorldRuntimeBinding,
   type WorldRuntimeHostResult,
-} from '@neko/world/contracts';
-import type { WorldManagementService, WorldRuntimeWorkbenchService } from '@neko/world/application';
+} from '@neko/world-domain/contracts';
+import type {
+  WorldManagementService,
+  WorldRuntimeWorkbenchService,
+} from '@neko/world-domain/application';
 import {
   parseProjectLocalAuthoringHostRequest,
   parseProjectAuthoringHostRequest,
@@ -210,7 +213,7 @@ import {
   type ProjectLocalAuthoringHostResult,
   type ProjectAuthoringNavigationHostResult,
   type ProjectAuthoringNavigationItem,
-} from '@neko/project/contracts';
+} from '@neko/project-domain/contracts';
 
 export interface DesktopAppHostOptions {
   readonly host: NekoHostPorts;
@@ -266,7 +269,7 @@ export interface DesktopAppHostOptions {
       readonly workspace: AssetWorkspaceResolution;
       readonly authority: CharacterAuthoringAuthority;
       readonly characterProjectId: string;
-    }): Promise<import('@neko/chara/contracts').CharacterPortableExportScope>;
+    }): Promise<import('@neko/chara-domain/contracts').CharacterPortableExportScope>;
     exportCharacterPackage(input: {
       readonly workspace: AssetWorkspaceResolution;
       readonly authority: CharacterAuthoringAuthority;

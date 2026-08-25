@@ -2,7 +2,7 @@
 
 ### Requirement: Generation owns the canonical Recipe contract
 
-`@neko/generation` SHALL own the one strict Prompt/Text, Image, Video and Audio Recipe union, its typed defaults, validation, purpose mapping and projection to canonical GenerationJob requests. Canvas and other consumers MAY persist or display the public Recipe value but SHALL NOT define a parallel union, default catalog, validator or request mapper.
+`@neko/generation-domain` SHALL own the one strict Prompt/Text, Image, Video and Audio Recipe union, its typed defaults, validation, purpose mapping and projection to canonical GenerationJob requests. Canvas and other consumers MAY persist or display the public Recipe value but SHALL NOT define a parallel union, default catalog, validator or request mapper.
 
 #### Scenario: Canvas authors and runs a Recipe
 

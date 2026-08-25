@@ -7,7 +7,7 @@ import {
   CHARACTER_DSH_TOOL_NAME,
   CharacterDshAuthoringService,
   decodeCharacterDshToolInput,
-} from '@neko/chara/application';
+} from '@neko/chara-domain/application';
 import { enforceDshDomainToolEffect } from './dsh-domain-tool-access';
 
 export class CharacterDshHostAdapter {

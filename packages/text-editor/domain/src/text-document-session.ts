@@ -3,7 +3,7 @@ import {
   type AuthorizedWorkspaceWriter,
   type ContentFingerprint,
   type ContentReadService,
-} from '@neko/content';
+} from '@neko/content-domain';
 import { parseFountainDocument } from '@neko/screenplay-domain';
 import { admitTextDocument, encodeTextDocument } from './admission';
 import {

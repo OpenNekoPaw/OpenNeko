@@ -5,7 +5,7 @@ import {
   type ProjectEntityDocumentRepository,
   type ProjectEntityDiagnostic,
 } from '@neko/entity-domain';
-import { contentLocatorKey, type ContentLocator } from '@neko/content';
+import { contentLocatorKey, type ContentLocator } from '@neko/content-domain';
 import {
   NodeProjectEntityRepository,
   type ProjectEntityAvailableDocumentReader,

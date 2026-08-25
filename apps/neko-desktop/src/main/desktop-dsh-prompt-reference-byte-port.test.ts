@@ -1,4 +1,4 @@
-import type { ContentLocator, ContentReadService } from '@neko/content';
+import type { ContentLocator, ContentReadService } from '@neko/content-domain';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createDesktopDshPromptReferenceBytePort } from './desktop-dsh-prompt-reference-byte-port';

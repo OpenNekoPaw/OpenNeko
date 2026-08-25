@@ -1,18 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DESKTOP_WORKSPACE_GRANT_CHANNEL } from '@neko/host/desktop-workspace-grant-contract';
-import { PROJECT_AUTHORING_HOST_CHANNEL } from '@neko/project/contracts';
+import { PROJECT_AUTHORING_HOST_CHANNEL } from '@neko/project-domain/contracts';
 import {
   CHARACTER_AUTHORING_HOST_CHANNEL,
   createEmptyCharacterBackgroundStory,
   createEmptyCharacterOriginSetting,
-} from '@neko/chara/contracts';
+} from '@neko/chara-domain/contracts';
 import {
   WORLD_AUTHORING_HOST_CHANNEL,
   WORLD_PORTABLE_HOST_CHANNELS,
   WORLD_RUNTIME_HOST_CHANNEL,
   type WorldPortableHostBinding,
   type WorldRuntimeBinding,
-} from '@neko/world/contracts';
+} from '@neko/world-domain/contracts';
 import { createDefaultDesktopWorkbenchLayout } from '@neko/host/desktop-workbench-contract';
 import {
   createDefaultDesktopAgentScene,

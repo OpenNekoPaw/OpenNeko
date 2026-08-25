@@ -1,4 +1,4 @@
-import type { WorkspaceFileContentLocator } from '@neko/content';
+import type { WorkspaceFileContentLocator } from '@neko/content-domain';
 import type { CanvasImageDimensions } from './canvas-node-sizing';
 
 export type CanvasDroppedAssetKind = 'media' | 'text' | 'file' | 'canvas';

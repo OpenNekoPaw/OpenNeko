@@ -1,4 +1,4 @@
-import type { MediaExecutionProviderResolver, MediaProvider } from '@neko/generation/media';
+import type { MediaExecutionProviderResolver, MediaProvider } from '@neko/generation-domain/media';
 import type { ConfigManager, ProviderCredentialReader } from '@neko/host/settings';
 
 export function createDesktopMediaExecutionProviderResolver(input: {

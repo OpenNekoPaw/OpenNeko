@@ -5,17 +5,17 @@ import {
   contentLocatorKey,
   type ContentReadService,
   type WorkspaceFileContentLocator,
-} from '@neko/content';
+} from '@neko/content-domain';
 import { createCharacterAuthoringFileRepository } from '@neko/chara-node';
 import { createWorldAuthoringFileRepository } from '@neko/world-node';
 import {
   deriveProjectDependencySnapshot,
   type ProjectContentReferenceCatalog,
-} from '@neko/project/application';
+} from '@neko/project-domain/application';
 import {
   projectPublicationDependencyKey,
   type ProjectDependencySnapshot,
-} from '@neko/project/contracts';
+} from '@neko/project-domain/contracts';
 import {
   parsePortableMediaLibrarySnapshotPlan,
   parsePortableMediaLibrarySnapshotProgress,

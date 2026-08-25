@@ -12,7 +12,7 @@
   "dependencies": {
     "@neko/assets-domain": "workspace:*",
     "@neko/assets-node": "workspace:*",
-    "@neko/content": "workspace:*",
+    "@neko/content-domain": "workspace:*",
     "@neko/entity-node": "workspace:*",
     "@neko/host": "workspace:*",
     "@neko/markdown": "workspace:*",

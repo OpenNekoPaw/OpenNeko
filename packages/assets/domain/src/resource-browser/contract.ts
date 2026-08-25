@@ -1,4 +1,4 @@
-import { validateContentLocator, type ContentLocator } from '@neko/content';
+import { validateContentLocator, type ContentLocator } from '@neko/content-domain';
 import { isPortablePathSegment } from '@neko/shared/path';
 
 export function createResourceBrowserViewId(projectViewId: string): string {

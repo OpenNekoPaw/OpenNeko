@@ -6,7 +6,7 @@ import type {
 import type { CanvasSerializableRecord, CanvasSerializableValue } from './canvas-serializable';
 import type { CanvasPlaybackMetadata } from './canvas-playback';
 import type { CanvasCreativeScope, CanvasRelatedBoardRef } from './canvas-creative-scope';
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 import type { JobRef } from '@neko/shared/job-lifecycle';
 import type {
   CanvasEntityRepresentationEvidence,

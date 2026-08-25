@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { resolveProjectWorkspaceContentLocator } from '@neko/assets-node';
-import { isProjectDurableContentLocator, parseContentReferenceTarget } from '@neko/content';
+import { isProjectDurableContentLocator, parseContentReferenceTarget } from '@neko/content-domain';
 import { projectNekoMarkdownExtensions } from '@neko/markdown';
 import { detectPreviewContentKind, getPreviewMediaType } from '@neko/preview-domain';
 import {

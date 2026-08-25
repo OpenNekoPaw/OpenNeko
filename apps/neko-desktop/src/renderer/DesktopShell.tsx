@@ -106,13 +106,13 @@ import {
 import type {
   ProjectAuthoringPresentationSnapshotRef,
   ProjectMixedDomainTargetItem,
-} from '@neko/project/contracts';
+} from '@neko/project-domain/contracts';
 import '@neko/project-webview/style.css';
 import {
   type CharacterAuthoringSnapshot,
   type CharacterProductHandoff,
-} from '@neko/chara/contracts';
-import type { WorldAuthoringSnapshot } from '@neko/world/contracts';
+} from '@neko/chara-domain/contracts';
+import type { WorldAuthoringSnapshot } from '@neko/world-domain/contracts';
 import { DesktopAssetCenterMainSurface } from './DesktopAssetCenterMainSurface';
 import { DesktopAssistantPreviewSurface } from './DesktopAssistantPreviewSurface';
 import { DesktopAssetCenterRuntime } from './desktop-asset-center-runtime';
@@ -176,13 +176,13 @@ type HomeSection = 'create' | 'characters' | 'worlds' | 'assets' | 'extensions' 
 type TranslationFunction = ReturnType<typeof useTranslation>['t'];
 type CharacterPortableWorkflow = {
   readonly kind: 'export';
-  readonly binding: import('@neko/chara/contracts').CharacterPortableHostBinding;
+  readonly binding: import('@neko/chara-domain/contracts').CharacterPortableHostBinding;
   readonly scope: CharacterPortableExportScopePresentation;
 };
 type WorldPortableWorkflow = {
   readonly kind: 'export';
-  readonly binding: import('@neko/world/contracts').WorldPortableHostBinding;
-  readonly detail: import('@neko/world/contracts').WorldManagementDetailProjection;
+  readonly binding: import('@neko/world-domain/contracts').WorldPortableHostBinding;
+  readonly detail: import('@neko/world-domain/contracts').WorldManagementDetailProjection;
 };
 type RetainedMetadataDiagnostic = Extract<
   NonNullable<DesktopShellProjection['stateDiagnostics']>[number],
@@ -279,10 +279,10 @@ interface ShellActions {
   readonly onTransitionScene: (intent: DesktopSceneTransitionIntent) => void;
   readonly onExportCharacterPackage: (globalCharacterId: string) => void;
   readonly onImportCharacterPackage: (
-    target?: import('@neko/chara/contracts').CharacterPortableImportTarget,
+    target?: import('@neko/chara-domain/contracts').CharacterPortableImportTarget,
   ) => void;
   readonly onImportWorldPackage: (
-    target?: import('@neko/world/contracts').WorldPortableImportTarget,
+    target?: import('@neko/world-domain/contracts').WorldPortableImportTarget,
   ) => void;
   readonly onExportWorldPackage: (globalWorldId: string) => void;
   readonly onStartGlobalCharacterConversation: (input: {
@@ -3558,13 +3558,7 @@ function MainViewGroupSurface({
         mainGroupId: group.groupId,
         submission,
       }),
-    [
-      actions,
-      group.groupId,
-      resourceBrowserIdentity,
-      workbench,
-      workbenchInstanceId,
-    ],
+    [actions, group.groupId, resourceBrowserIdentity, workbench, workbenchInstanceId],
   );
   if (activeView && requestedTarget) {
     targetViews.current.set(requestedTarget.identity, activeView);

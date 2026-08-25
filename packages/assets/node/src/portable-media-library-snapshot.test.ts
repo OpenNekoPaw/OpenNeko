@@ -11,7 +11,7 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import { type ContentReadService } from '@neko/content';
+import { type ContentReadService } from '@neko/content-domain';
 import {
   type LocalMetadataRepositories,
   type TaskCheckpointRepository,

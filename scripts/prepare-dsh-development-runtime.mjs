@@ -41,11 +41,11 @@ const workspaceSourceInputs = Object.freeze([
   ...packageInputs.map(({ path }) => path),
   'packages/agent/contracts',
   'packages/canvas/domain',
-  'packages/chara',
-  'packages/content',
+  'packages/chara/domain',
+  'packages/content/domain',
   'packages/cut/domain',
-  'packages/generation',
-  'packages/world',
+  'packages/generation/domain',
+  'packages/world/domain',
 ]);
 const profileBundles = Object.freeze([
   '@deepseek-ai/dsh-base',

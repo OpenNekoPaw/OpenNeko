@@ -11,7 +11,7 @@ import {
   validateCanvasBoardRef,
 } from '@neko/canvas-domain';
 import type { CanvasDroppedAsset, ProjectedCanvasStatus } from '@neko/canvas-domain';
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content-domain';
 import type {
   CanvasBoardNavigationDiagnostic,
   CanvasBoardRef,

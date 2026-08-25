@@ -13,8 +13,11 @@ import {
   isWorkspaceFileContentLocator,
   type AuthorizedWorkspaceWriter,
   type ContentReadService,
-} from '@neko/content';
-import { createNodeHostContentReadService, type NodeDocumentEntryReader } from '@neko/content/node';
+} from '@neko/content-domain';
+import {
+  createNodeHostContentReadService,
+  type NodeDocumentEntryReader,
+} from '@neko/content-domain/node';
 import {
   WorkspaceBoardDeliveryCoordinator,
   WorkspaceBoardDeliveryLedger,
@@ -23,7 +26,7 @@ import {
   type CanvasWorkspaceProjectionRequest,
   type CanvasWorkspaceProjectionResult,
 } from '@neko/canvas-domain';
-import type { GenerationJobSnapshot } from '@neko/generation/job';
+import type { GenerationJobSnapshot } from '@neko/generation-domain/job';
 import { WorkspaceBoardNodeMutation } from '@neko/canvas-node';
 import type { NekoHostPorts } from '@neko/host/ports';
 import type { LocalMetadataStore } from '@neko/local-metadata';

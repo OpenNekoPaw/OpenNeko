@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import { dirname, isAbsolute, join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
-import * as characterContracts from '@neko/chara/contracts';
-import type { CharacterAuthoringRepository } from '@neko/chara/application';
+import * as characterContracts from '@neko/chara-domain/contracts';
+import type { CharacterAuthoringRepository } from '@neko/chara-domain/application';
 import type {
   LocalMetadataSqlExecutor,
   LocalMetadataSqlRow,

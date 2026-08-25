@@ -1,6 +1,6 @@
 import { type SupportedLocale } from '@neko/ui/i18n';
 import { PositionedContextMenu, type MenuItem } from '@neko/ui/primitives';
-import { CONTENT_LOCATOR_DRAG_MIME, createContentLocatorDragData } from '@neko/content';
+import { CONTENT_LOCATOR_DRAG_MIME, createContentLocatorDragData } from '@neko/content-domain';
 import {
   ChevronDownIcon,
   ChevronRightIcon,

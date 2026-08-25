@@ -10,7 +10,7 @@ import type {
   MarkdownCanvasNode,
 } from '@neko/canvas-domain';
 import { createEmptyCanvasData } from '@neko/canvas-domain';
-import { CONTENT_LOCATOR_DRAG_MIME, createContentLocatorDragData } from '@neko/content';
+import { CONTENT_LOCATOR_DRAG_MIME, createContentLocatorDragData } from '@neko/content-domain';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

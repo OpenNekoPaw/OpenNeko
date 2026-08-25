@@ -1,6 +1,6 @@
 # Chara 领域
 
-Chara 是角色工作区对象、全局角色与不可变领域版本、个人故事线、日常长期记忆、Dialogue/Room 和角色表现语义的 owner。host-neutral domain/application 位于 `packages/chara`，本地持久化 adapter 位于 `packages/chara-node`，browser-only 管理与互动视图位于 `packages/chara-webview`。
+Chara 是角色工作区对象、全局角色与不可变领域版本、个人故事线、日常长期记忆、Dialogue/Room 和角色表现语义的 owner。host-neutral domain/application 位于 `packages/chara`，本地持久化 adapter 位于 `packages/chara/node`，browser-only 管理与互动视图位于 `packages/chara/webview`。
 
 OpenNeko Agent application 拥有 Conversation catalog/binding，DSH Session 继续唯一拥有 turn、queue、Tool、Approval、provider/model 执行、transcript 和 compaction；Desktop 只负责 Electron sender/Window/Scene、typed IPC、本地资源授权和 public Surface 组合。
 
@@ -125,4 +125,4 @@ Character 全局管理、Project Workspace 创作、Dialogue/Room 和 portable Z
 - [`architecture.md`](architecture.md)：Chara owner、依赖、运行边界、上下文和错误隔离；
 - [`../../architecture/package-boundaries.md`](../../architecture/package-boundaries.md)：跨包约束；
 - [`../../architecture/adr-agent-runtime-single-authority-and-simplification-boundary.md`](../../architecture/adr-agent-runtime-single-authority-and-simplification-boundary.md)：Agent 单一 authority；
-- [`../../../openspec/changes/separate-companion-and-narrative-character-conversations/`](../../../openspec/changes/separate-companion-and-narrative-character-conversations/)：当前模式、故事线、记忆和 Workbench 变更。
+- [`architecture.md`](architecture.md)：当前模式、故事线、记忆和 Workbench 边界。

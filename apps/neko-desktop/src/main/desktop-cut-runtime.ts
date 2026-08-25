@@ -31,8 +31,8 @@ import {
   type ContentLocator,
   type AuthorizedWorkspaceWriter,
   type WorkspaceFileContentLocator,
-} from '@neko/content';
-import { NodeAuthorizedWorkspaceWriter } from '@neko/content/node';
+} from '@neko/content-domain';
+import { NodeAuthorizedWorkspaceWriter } from '@neko/content-domain/node';
 import { resolveWorkspaceContentLocator } from '@neko/assets-node';
 
 import type { DesktopShellService } from '@neko/host/desktop-shell-service';
@@ -837,15 +837,15 @@ function createCutDocumentStorage(
         { file: { authority: 'workspace', path: documentId } },
         bytes,
         {
-        conflict: options.expectedFingerprint === undefined ? 'fail-if-exists' : 'replace',
-        ...(options.expectedFingerprint === undefined
-          ? {}
-          : {
-              expectedFingerprint: {
-                strategy: 'mtime-size' as const,
-                value: options.expectedFingerprint,
-              },
-            }),
+          conflict: options.expectedFingerprint === undefined ? 'fail-if-exists' : 'replace',
+          ...(options.expectedFingerprint === undefined
+            ? {}
+            : {
+                expectedFingerprint: {
+                  strategy: 'mtime-size' as const,
+                  value: options.expectedFingerprint,
+                },
+              }),
         },
       );
       if (result.status !== 'written') {
