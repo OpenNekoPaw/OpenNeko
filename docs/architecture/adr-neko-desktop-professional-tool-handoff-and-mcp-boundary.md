@@ -433,7 +433,6 @@ Electron 与隔离 workspace 验收。
 
 - [`adr-neko-desktop-composition-and-open-source-reference-boundary.md`](adr-neko-desktop-composition-and-open-source-reference-boundary.md)
 - [`application-composition.md`](application-composition.md)
-- [`adr-agent-sandbox-and-external-processing-boundary.md`](adr-agent-sandbox-and-external-processing-boundary.md)
-- [`adr-agent-runtime-architecture-comparison-boundary.md`](adr-agent-runtime-architecture-comparison-boundary.md)
+- [`agent.md`](agent.md)
 - [`adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md`](adr-cut-html-video-node-ffmpeg-media-runtime-boundary.md)
 - [`asset-library.md`](asset-library.md)

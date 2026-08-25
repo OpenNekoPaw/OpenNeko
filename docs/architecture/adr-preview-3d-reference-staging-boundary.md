@@ -33,6 +33,6 @@ identity 与参数，不保存 resource URL、blob URL 或缓存路径。
 - CSP、资源授权、真实交互、截图与 recursive disposal 使用 Electron Desktop fixture；
 - 不支持的模型、缺失 dependency 或陈旧 session 返回明确 diagnostic。
 
-相关边界见 [`adr-agent-driven-avatar-preview-runtime-boundary.md`](adr-agent-driven-avatar-preview-runtime-boundary.md)、
+相关边界见 [`agent.md`](agent.md)、
 [`adr-ui-domain-panels-and-shared-primitives.md`](adr-ui-domain-panels-and-shared-primitives.md) 和
 [`package-boundaries.md`](package-boundaries.md)。

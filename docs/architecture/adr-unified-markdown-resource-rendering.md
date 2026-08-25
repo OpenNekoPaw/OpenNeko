@@ -91,5 +91,5 @@ Canvas 拥有 schema、资源绑定、节点创建、布局、validation 和项�
 active/recent Canvas，不生成私有 Canvas DTO，也不绕过 revisioned apply。
 
 相关边界见 [`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)、
-[`adr-agent-markdown-deliverable-authoring-and-canvas-projection-boundary.md`](adr-agent-markdown-deliverable-authoring-and-canvas-projection-boundary.md) 和
+[`agent.md`](agent.md) 和
 [`package-boundaries.md`](package-boundaries.md)。

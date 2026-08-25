@@ -124,5 +124,5 @@ Character 全局管理、Project Workspace 创作、Dialogue/Room 和 portable Z
 
 - [`architecture.md`](architecture.md)：Chara owner、依赖、运行边界、上下文和错误隔离；
 - [`../../architecture/package-boundaries.md`](../../architecture/package-boundaries.md)：跨包约束；
-- [`../../architecture/adr-agent-runtime-single-authority-and-simplification-boundary.md`](../../architecture/adr-agent-runtime-single-authority-and-simplification-boundary.md)：Agent 单一 authority；
+- [`../../architecture/agent.md`](../../architecture/agent.md)：Agent 单一 authority；
 - [`architecture.md`](architecture.md)：当前模式、故事线、记忆和 Workbench 边界。

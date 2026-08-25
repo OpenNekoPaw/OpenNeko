@@ -4,10 +4,7 @@
 - 日期：2026-07-25
 - 范围：OpenNeko Desktop 产品入口、Agent runtime、Skill、Tool/capability contribution、Canvas、Cut、Assets/Entity、Preview、Quality 与 Export
 
-本文补充
-[`adr-agent-directed-creative-orchestration-and-domain-capability-boundary.md`](adr-agent-directed-creative-orchestration-and-domain-capability-boundary.md)、
-[`adr-agent-command-skill-trigger-boundary.md`](adr-agent-command-skill-trigger-boundary.md)、
-[`adr-agent-prompt-skill-validator-boundary.md`](adr-agent-prompt-skill-validator-boundary.md) 与
+本文补充 [`agent.md`](agent.md) 与
 [`application-composition.md`](application-composition.md)。
 
 既有 ADR 已确定普通 Agent ReAct 是唯一智能编排循环，Skill 提供方法，Tool 与领域 owner

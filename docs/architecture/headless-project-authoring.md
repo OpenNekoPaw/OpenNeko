@@ -76,4 +76,4 @@ Canvas Board 的二进制生成媒体必须先提交到项目拥有的稳定生�
 - 内容文件断言证明 Markdown/Fountain 不被误路由到 Canvas/Cut authoring service。
 
 内容与结构化项目的完整分类见
-[`adr-agent-content-file-and-structured-project-authoring-boundary.md`](adr-agent-content-file-and-structured-project-authoring-boundary.md)。
+[`agent.md`](agent.md)。

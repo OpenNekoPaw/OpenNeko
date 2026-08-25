@@ -4,13 +4,13 @@
 - 日期：2026-08-20
 - 范围：Agent、Session、Tool、Skill、MCP、Plugin runtime 与产品投影
 - 上游依据：[deepseek-ai/deepseek-harness@47f9438](https://github.com/deepseek-ai/deepseek-harness/tree/47f943859bef60e4160492346772ded9b24f765a)
-- 关联：`application-composition.md`、`agent.md`、`package-boundaries.md`、`adr-agent-runtime-single-authority-and-simplification-boundary.md`
+- 关联：`application-composition.md`、`agent.md`、`package-boundaries.md`
 
 ## 状态与取代关系
 
 本 ADR 仍处于 Proposed。只有对应 OpenSpec 完成设计、实施和验收后，本决策才能成为当前架构事实。
 
-本 ADR 接受后，DSH 取代由 OpenNeko 直接集成 Pi 作为 Agent、Session、Skill 与 Tool 执行内核的实现选择；单一权威、精确身份、领域 ownership、用户数据保护和 fail-visible 等架构不变量继续有效。`adr-agent-runtime-single-authority-and-simplification-boundary.md` 中的单一 Timeline authority、后台任务生命周期和无 fallback 约束同样继续有效。
+本 ADR 接受后，DSH 取代由 OpenNeko 直接集成 Pi 作为 Agent、Session、Skill 与 Tool 执行内核的实现选择；[`agent.md`](agent.md) 定义的单一权威、精确身份、Timeline、后台任务、用户数据保护和 fail-visible 等架构不变量继续有效。
 
 ## 背景
 

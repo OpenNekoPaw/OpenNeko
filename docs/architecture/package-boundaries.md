@@ -323,7 +323,7 @@ snapshot-first `observe(afterRevision)` 消费 commit 后事件，不直接轮�
 Agent 运行身份只保留前台 Agent Run 和显式 SubagentRun。独立 BackgroundAgentRun 没有生产
 owner，不进入 runtime、协议或 UI；未来若出现真实独立需求，必须重新建立 OpenSpec。
 
-Quality 的边界由 [`adr-agent-runtime-single-authority-and-simplification-boundary.md`](adr-agent-runtime-single-authority-and-simplification-boundary.md) 定义：`@neko/quality` 已建立为中立 runtime，拥有 canonical contract validation、evidence freshness、Gate aggregation、provider-neutral evaluator port 和通用 ProjectQuality facade orchestration；owning package 继续拥有领域 rubric、目标 materialization、确定性检查、Gate policy、repair 和 apply。无产品消费者时不得保留独立 provider/model ref 或直连 LLM adapter；未来模型证据必须由 owning Tool/service 通过当前公开授权与执行边界生成后注入 evaluator port。跨包 contract 暂留 `@neko/shared`；Desktop Agent composition 只保留 Tool、授权资源与领域 service 适配。
+`@neko/quality` 是中立 runtime，拥有 canonical contract validation、evidence freshness、Gate aggregation、provider-neutral evaluator port 和通用 ProjectQuality facade orchestration；owning package 继续拥有领域 rubric、目标 materialization、确定性检查、Gate policy、repair 和 apply。无产品消费者时不得保留独立 provider/model ref 或直连 LLM adapter；未来模型证据必须由 owning Tool/service 通过当前公开授权与执行边界生成后注入 evaluator port。跨包 contract 暂留 `@neko/shared`；Desktop Agent composition 只保留 Tool、授权资源与领域 service 适配。
 
 用户可见“能力与集成”场景组合三种独立 authority：DSH Skill、DSH MCP 的只读投影，以及
 Professional Applications 的 profile-gated device-local 投影；三者不得合并 contract、store、安装或
