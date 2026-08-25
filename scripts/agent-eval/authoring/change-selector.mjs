@@ -42,6 +42,10 @@ const RULES = Object.freeze([
     'packages/agent/runtime/src/runtime/turn/multimodal-context-packet',
     'apps/neko-desktop/src/main/desktop-dsh-session-host',
   ]),
+  rule('workspace-board-delivery', 'agent-runtime.workflow-controller', [
+    'packages/agent/runtime/src/application/dsh-workspace-board-artifact-delivery',
+    'apps/neko-desktop/src/main/desktop-dsh-workspace-board-delivery',
+  ]),
   regexRule(
     'portable-skill-content',
     (match) => `skill.${match[1]}`,

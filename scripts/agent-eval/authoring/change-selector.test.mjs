@@ -67,6 +67,8 @@ describe('Agent Evaluation change-to-suite selector', () => {
         'packages/agent/runtime/src/acp/dsh-acp-projection.ts',
         'packages/agent/contracts/src/dsh-session-host.ts',
         'apps/neko-desktop/src/main/desktop-dsh-session-host.ts',
+        'packages/agent/runtime/src/application/dsh-workspace-board-artifact-delivery.ts',
+        'apps/neko-desktop/src/main/desktop-dsh-workspace-board-delivery.ts',
         'packages/agent/runtime/src/input/message-resource-projector.ts',
         'apps/neko-desktop/src/main/desktop-dsh-agent-runtime.ts',
         'apps/neko-desktop/src/preload/dsh-session-bridge.test.ts',
@@ -119,6 +121,14 @@ describe('Agent Evaluation change-to-suite selector', () => {
           behaviorId: 'creative-media-workflow',
           suiteId: 'agent-runtime.creative-media-workflow',
           suiteIds: ['agent-runtime.creative-media-workflow'],
+        }),
+        expect.objectContaining({
+          behaviorId: 'workspace-board-delivery',
+          suiteId: 'agent-runtime.workflow-controller',
+          suiteIds: [
+            'agent-runtime.creative-media-workflow',
+            'agent-runtime.workflow-controller',
+          ],
         }),
         expect.objectContaining({
           behaviorId: 'tool-result-delivery',

@@ -155,9 +155,10 @@ export class DesktopDshWorkspaceBoardDelivery
     input: Parameters<DshDurableMarkdownArtifactPublicationPort['resolve']>[0],
   ): ReturnType<DshDurableMarkdownArtifactPublicationPort['resolve']> {
     const workspace = await this.restoreExactWorkspace(input.workspaceId);
-    return resolveDshDurableMarkdownArtifact(input, {
-      read: this.options.createContentRead(workspace.workspacePath),
-    });
+    return resolveDshDurableMarkdownArtifact(
+      input,
+      this.options.createContentRead(workspace.workspacePath),
+    );
   }
 
   private async resolveResourceFingerprints(
@@ -289,7 +290,7 @@ export async function publishDshDurableMarkdownArtifact(
 
 export async function resolveDshDurableMarkdownArtifact(
   input: Parameters<DshDurableMarkdownArtifactPublicationPort['resolve']>[0],
-  ports: { readonly read: Pick<ContentReadService, 'read'> },
+  content: Pick<ContentReadService, 'stat'>,
 ): ReturnType<DshDurableMarkdownArtifactPublicationPort['resolve']> {
   if (
     !isWorkspaceFileContentLocator(input.contentLocator) ||
@@ -297,22 +298,12 @@ export async function resolveDshDurableMarkdownArtifact(
   ) {
     throw new Error('Durable Markdown resolution requires a Workspace file ContentLocator.');
   }
-  const expected = new TextEncoder().encode(input.markdown);
-  const existing = await ports.read.read(input.contentLocator, { maxBytes: expected.byteLength });
+  const existing = await content.stat(input.contentLocator);
   if (existing.status === 'unavailable') {
     if (existing.diagnostic.code === 'content-missing') return undefined;
     throw new Error(`Durable Markdown resolution failed: ${existing.diagnostic.code}.`);
   }
-  if (
-    existing.bytes.byteLength !== expected.byteLength ||
-    !Buffer.from(existing.bytes).equals(Buffer.from(expected))
-  ) {
-    throw new Error('Durable Markdown resolution conflicts with existing Workspace content.');
-  }
-  return {
-    contentLocator: input.contentLocator,
-    contentFingerprint: input.contentFingerprint,
-  };
+  return { contentLocator: input.contentLocator };
 }
 
 export async function resolveDshWorkspaceBoardResourceFingerprints(

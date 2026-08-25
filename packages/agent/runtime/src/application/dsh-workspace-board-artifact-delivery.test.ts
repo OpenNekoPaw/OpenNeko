@@ -45,7 +45,6 @@ describe('DSH Workspace Board terminal Markdown delivery', () => {
     }));
     const resolution = vi.fn(async (input) => ({
       contentLocator: input.contentLocator,
-      contentFingerprint: input.contentFingerprint,
     }));
     const delivery = vi.fn(async () => ({ status: 'accepted' as const }));
     const service = createDshWorkspaceBoardArtifactDeliveryService({
@@ -139,7 +138,6 @@ describe('DSH Workspace Board terminal Markdown delivery', () => {
     const events = terminalEvents(markdown);
     const resolution = vi.fn(async (input) => ({
       contentLocator: input.contentLocator,
-      contentFingerprint: input.contentFingerprint,
     }));
     const service = createDshWorkspaceBoardArtifactDeliveryService({
       contexts: {
@@ -172,6 +170,12 @@ describe('DSH Workspace Board terminal Markdown delivery', () => {
       },
     });
     expect(resolution).toHaveBeenCalledOnce();
+    expect(resolution).toHaveBeenCalledWith({
+      workspaceId: 'workspace-1',
+      contentLocator: expect.objectContaining({
+        file: expect.objectContaining({ authority: 'workspace' }),
+      }),
+    });
 
     resolution.mockResolvedValueOnce(undefined);
     await expect(
@@ -182,6 +186,39 @@ describe('DSH Workspace Board terminal Markdown delivery', () => {
         events,
       }),
     ).resolves.toBeUndefined();
+  });
+
+  it('rejects a resolver that substitutes another Workspace file', async () => {
+    const service = createDshWorkspaceBoardArtifactDeliveryService({
+      contexts: {
+        readContext: async () => ({
+          kind: 'workspace' as const,
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+        }),
+      },
+      publication: {
+        publish: vi.fn(),
+        resolve: vi.fn(async () => ({
+          contentLocator: {
+            file: { authority: 'workspace' as const, path: 'neko/generated/file/another.md' },
+          },
+        })),
+      },
+      delivery: { deliver: vi.fn() },
+      diagnostics: { report: vi.fn() },
+    });
+
+    await expect(
+      service.resolveTerminalArtifact({
+        conversationId: 'conversation-1',
+        dshSessionId: 'dsh-1',
+        messageId: 'assistant-1',
+        events: terminalEvents(
+          'Saved the durable plan.\n\n<!-- neko:artifact -->\n\n# Animation Plan\n\nReviewable content.',
+        ),
+      }),
+    ).rejects.toThrow('resolution returned another ContentLocator');
   });
 
   it('rejects malformed admitted Markdown before publication', async () => {

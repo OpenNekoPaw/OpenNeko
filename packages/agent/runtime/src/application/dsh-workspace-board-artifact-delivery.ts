@@ -104,11 +104,7 @@ export interface DshDurableMarkdownArtifactPublicationPort {
   resolve(input: {
     readonly workspaceId: string;
     readonly contentLocator: ContentLocator;
-    readonly markdown: string;
-    readonly contentFingerprint: string;
-  }): Promise<
-    { readonly contentLocator: ContentLocator; readonly contentFingerprint: string } | undefined
-  >;
+  }): Promise<{ readonly contentLocator: ContentLocator } | undefined>;
 }
 
 export interface DshTerminalMarkdownArtifactReference {
@@ -245,18 +241,16 @@ export function createDshWorkspaceBoardArtifactDeliveryService(options: {
       const result = parseAgentTerminalMarkdown(event.text, createAgentTerminalArtifactAdmission());
       if (result.artifact === undefined) return undefined;
       const artifact = deriveTerminalMarkdownArtifact(result.artifact);
-      const published = await options.publication.resolve({
+      const resolved = await options.publication.resolve({
         workspaceId: context.workspaceId,
         contentLocator: artifact.contentLocator,
-        markdown: artifact.markdown,
-        contentFingerprint: artifact.contentFingerprint,
       });
-      if (published === undefined) return undefined;
-      assertPublishedTerminalArtifact(artifact, published);
+      if (resolved === undefined) return undefined;
+      assertResolvedTerminalArtifact(artifact, resolved);
       return {
         messageId: event.messageId,
         title: artifact.title,
-        contentLocator: published.contentLocator,
+        contentLocator: resolved.contentLocator,
       };
     },
   });
@@ -294,6 +288,15 @@ function assertPublishedTerminalArtifact(
   }
   if (published.contentFingerprint !== expected.contentFingerprint) {
     throw new Error('Durable Markdown publication returned another content fingerprint.');
+  }
+}
+
+function assertResolvedTerminalArtifact(
+  expected: DerivedTerminalMarkdownArtifact,
+  resolved: { readonly contentLocator: ContentLocator },
+): void {
+  if (contentLocatorKey(resolved.contentLocator) !== contentLocatorKey(expected.contentLocator)) {
+    throw new Error('Durable Markdown resolution returned another ContentLocator.');
   }
 }
 

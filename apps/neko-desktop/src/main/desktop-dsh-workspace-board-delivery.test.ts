@@ -166,7 +166,7 @@ describe('Desktop DSH Workspace Board projection request', () => {
     ).resolves.toBe(input.markdown);
   });
 
-  it('resolves a durable Markdown reference from exact persisted bytes', async () => {
+  it('keeps a durable Markdown reference available after the user edits the file', async () => {
     const workspacePath = await mkdtemp(join(tmpdir(), 'openneko-dsh-markdown-resolve-'));
     const read = createDshWorkspaceBoardContentRead({
       workspacePath,
@@ -188,17 +188,23 @@ describe('Desktop DSH Workspace Board projection request', () => {
       markdown: '# Durable analysis\n\nResult.',
       contentFingerprint: 'sha256:durable',
     };
-
-    await expect(resolveDshDurableMarkdownArtifact(input, { read })).resolves.toBeUndefined();
-    await publishDshDurableMarkdownArtifact(input, { writer, read });
-    await expect(resolveDshDurableMarkdownArtifact(input, { read })).resolves.toEqual({
+    const reference = {
+      workspaceId: input.workspaceId,
       contentLocator: input.contentLocator,
-      contentFingerprint: input.contentFingerprint,
+    };
+
+    await expect(resolveDshDurableMarkdownArtifact(reference, read)).resolves.toBeUndefined();
+    await publishDshDurableMarkdownArtifact(input, { writer, read });
+    await expect(resolveDshDurableMarkdownArtifact(reference, read)).resolves.toEqual({
+      contentLocator: input.contentLocator,
     });
-    await writeFile(join(workspacePath, input.contentLocator.file.path), '# Different content\n');
-    await expect(resolveDshDurableMarkdownArtifact(input, { read })).rejects.toThrow(
-      'conflicts with existing Workspace content',
+    await writeFile(
+      join(workspacePath, input.contentLocator.file.path),
+      '# User-edited analysis\n\nThe current Workspace contents remain authoritative.\n',
     );
+    await expect(resolveDshDurableMarkdownArtifact(reference, read)).resolves.toEqual({
+      contentLocator: input.contentLocator,
+    });
   });
 });
 
