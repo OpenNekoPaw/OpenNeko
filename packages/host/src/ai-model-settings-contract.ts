@@ -12,6 +12,16 @@ export { defaultDesktopAiModelCapabilities } from './ai-model-provider-presets';
 
 export type DesktopAiModelProtocol = string;
 
+export const DESKTOP_AI_CUSTOM_DIALOGUE_PROVIDER_TYPES = [
+  'generic',
+  'openai',
+  'anthropic',
+  'google',
+  'azure',
+  'newapi',
+  'oneapi',
+] as const satisfies readonly ProviderType[];
+
 export interface DesktopAiModelTemplate {
   readonly id: string;
   readonly providerType: ProviderType;
@@ -115,9 +125,11 @@ export type DesktopAiModelSettingsRequest =
         readonly displayName: string;
         readonly type: ProviderType;
         readonly apiUrl: string;
+        readonly connectionKind: ProviderConnectionKind;
         readonly protocol?: DesktopAiModelProtocol;
         readonly presetId?: string;
         readonly supportedModelFamilies: readonly ProviderModelFamily[];
+        readonly requiresApiKey: boolean;
         readonly enabled: boolean;
       };
       readonly apiKey?: string;
@@ -213,9 +225,11 @@ export function parseDesktopAiModelSettingsRequest(value: unknown): DesktopAiMod
         'displayName',
         'type',
         'apiUrl',
+        'connectionKind',
         'protocol',
         'presetId',
         'supportedModelFamilies',
+        'requiresApiKey',
         'enabled',
       ],
       'Provider input',
@@ -231,6 +245,11 @@ export function parseDesktopAiModelSettingsRequest(value: unknown): DesktopAiMod
         displayName: nonEmpty(provider['displayName'], 'provider.displayName'),
         type: oneOf(provider['type'], PROVIDER_TYPES, 'provider.type'),
         apiUrl: httpUrlOrEmpty(provider['apiUrl']),
+        connectionKind: oneOf(
+          provider['connectionKind'],
+          ['gateway', 'local', 'direct'] as const,
+          'provider.connectionKind',
+        ),
         ...(provider['protocol'] === undefined
           ? {}
           : {
@@ -240,6 +259,7 @@ export function parseDesktopAiModelSettingsRequest(value: unknown): DesktopAiMod
           ? {}
           : { presetId: identity(provider['presetId'], 'provider.presetId') }),
         supportedModelFamilies: providerModelFamilies(provider['supportedModelFamilies']),
+        requiresApiKey: booleanValue(provider['requiresApiKey'], 'provider.requiresApiKey'),
         enabled: booleanValue(provider['enabled'], 'provider.enabled'),
       },
       ...(apiKey === undefined ? {} : { apiKey: nonEmpty(apiKey, 'apiKey') }),

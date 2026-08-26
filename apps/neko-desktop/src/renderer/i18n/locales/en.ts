@@ -119,7 +119,7 @@ export const en = {
     'Choose an official or compatible provider; official types prefill the standard API URL.',
   'settings.agent.providerPreset.generation.description':
     'Choose a generation service; MiniMax H3 and Seedance prefill official API URLs and model templates.',
-  'settings.agent.providerType': 'Provider adapter',
+  'settings.agent.providerType': 'Provider type',
   'settings.agent.modelCatalog': 'Model catalog',
   'settings.agent.modelCatalogDescription':
     'Configure models supported by this provider, including each default.',
@@ -133,6 +133,7 @@ export const en = {
   'settings.agent.providerSettingsDescription':
     'Update credentials and expand connection or model settings only when needed.',
   'settings.agent.customProvider': 'Add provider',
+  'settings.agent.customLocalProvider': 'Local OpenAI-compatible provider',
   'settings.agent.customProviderDescription':
     'Choose a provider type and configure its official or custom connection.',
   'settings.agent.advancedProviderSettings': 'Custom settings',
@@ -150,6 +151,13 @@ export const en = {
   'settings.agent.apiUrl': 'API URL',
   'settings.agent.apiUrl.catalogDefault': 'DSH catalog endpoint',
   'settings.agent.apiUrlPlaceholder': 'https://gateway.example/v1',
+  'settings.agent.connectionKind': 'Connection',
+  'settings.agent.connectionKind.gateway': 'Gateway',
+  'settings.agent.connectionKind.local': 'Local',
+  'settings.agent.connectionKind.direct': 'Direct',
+  'settings.agent.authentication': 'Authentication',
+  'settings.agent.authentication.apiKey': 'API Key',
+  'settings.agent.authentication.none': 'No API Key',
   'settings.agent.apiKey': 'API Key',
   'settings.agent.apiKeyPlaceholder': 'Enter API Key',
   'settings.agent.apiKeyKeep': 'Leave empty to keep the existing credential',

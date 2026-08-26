@@ -13,6 +13,7 @@ import type {
   DesktopAiModelSettingsRequest,
   DesktopAiProviderView,
 } from './ai-model-settings-contract';
+import { DESKTOP_AI_CUSTOM_DIALOGUE_PROVIDER_TYPES } from './ai-model-settings-contract';
 
 export interface DesktopAiDialogueCapabilityReader {
   read(): Promise<Extract<DesktopAiDialogueCapabilityProjection, { readonly status: 'available' }>>;
@@ -88,11 +89,6 @@ export class DesktopAiModelSettingsService {
           `Generation Provider capability ${request.provider.presetId} does not exist.`,
         );
       }
-      if (existing && existing.type !== request.provider.type) {
-        throw new Error(
-          `Provider ${existing.id} type is immutable (${existing.type}); create another Provider for ${request.provider.type}.`,
-        );
-      }
       if (existing && request.provider.presetId) {
         throw new Error(
           `Provider ${existing.id} already exists. Choose another Provider ID or edit the existing record.`,
@@ -103,8 +99,15 @@ export class DesktopAiModelSettingsService {
       }
       assertProviderFamiliesSupported(request.provider);
       if (isDialogue) {
-        assertDialogueProviderCapability(request.provider, await this.dialogueCapabilities.read());
+        const dialogueCapabilities = await this.dialogueCapabilities.read();
+        assertDialogueProviderCapability(request.provider, dialogueCapabilities);
+        assertDialogueProviderTypeMutation(existing, request.provider, dialogueCapabilities);
       } else {
+        if (existing && existing.type !== request.provider.type) {
+          throw new Error(
+            `Generation Provider ${existing.id} type is immutable (${existing.type}); create another Provider for ${request.provider.type}.`,
+          );
+        }
         const runtimeCapability =
           generationCapability ??
           findGenerationCapabilityForProvider(
@@ -120,9 +123,20 @@ export class DesktopAiModelSettingsService {
           throw new Error(`Generation Provider ${request.provider.id} requires an API endpoint.`);
         }
       }
-      const isLocalOllama = request.provider.type === 'ollama';
-      const requiresApiKey =
-        generationCapability?.requiresApiKey ?? existing?.requiresApiKey ?? !isLocalOllama;
+      const requiresApiKey = request.provider.requiresApiKey;
+      if (generationCapability && requiresApiKey !== generationCapability.requiresApiKey) {
+        throw new Error(
+          `Generation Provider ${request.provider.id} credential requirement is owned by capability ${generationCapability.id}.`,
+        );
+      }
+      if (request.provider.type === 'ollama' && requiresApiKey) {
+        throw new Error(`Ollama Provider ${request.provider.id} must not require an API key.`);
+      }
+      if (existing && requiresApiKey !== (existing.requiresApiKey ?? existing.type !== 'ollama')) {
+        throw new Error(
+          `Provider ${existing.id} credential requirement is immutable; create another Provider for the new authentication mode.`,
+        );
+      }
       if (!requiresApiKey && request.apiKey !== undefined) {
         throw new Error(`Provider ${request.provider.id} does not accept an API key.`);
       }
@@ -136,10 +150,7 @@ export class DesktopAiModelSettingsService {
         type: request.provider.type,
         apiUrl: request.provider.apiUrl,
         enabled: request.provider.enabled,
-        connectionKind:
-          generationCapability?.connectionKind ??
-          existing?.connectionKind ??
-          (isLocalOllama ? 'local' : 'direct'),
+        connectionKind: request.provider.connectionKind,
         ...(request.provider.protocol === undefined
           ? {}
           : { protocolProfile: request.provider.protocol }),
@@ -153,7 +164,8 @@ export class DesktopAiModelSettingsService {
         requiresApiKey,
         supportsBeta: existing?.supportsBeta ?? request.provider.type === 'anthropic',
         useBearerAuth:
-          existing?.useBearerAuth ?? (!isLocalOllama && request.provider.type !== 'anthropic'),
+          existing?.useBearerAuth ??
+          (request.provider.type !== 'ollama' && request.provider.type !== 'anthropic'),
         ...(existing?.options ? { options: existing.options } : {}),
         ...(existing?.protocolVariant ? { protocolVariant: existing.protocolVariant } : {}),
       });
@@ -415,6 +427,8 @@ function assertGenerationCapabilityMatchesRequest(
 ): void {
   if (
     provider.type !== capability.providerType ||
+    provider.connectionKind !== capability.connectionKind ||
+    provider.requiresApiKey !== capability.requiresApiKey ||
     provider.supportedModelFamilies.length !== 1 ||
     provider.supportedModelFamilies[0] !== 'generation' ||
     provider.protocol !== undefined
@@ -469,6 +483,11 @@ function assertDialogueProviderCapability(
   capabilities: Extract<DesktopAiDialogueCapabilityProjection, { readonly status: 'available' }>,
 ): void {
   if (provider.protocol !== undefined) {
+    if (!DESKTOP_AI_CUSTOM_DIALOGUE_PROVIDER_TYPES.some((type) => type === provider.type)) {
+      throw new Error(
+        `Dialogue Provider ${provider.id} type '${provider.type}' is not available for a custom DSH route.`,
+      );
+    }
     if (!capabilities.protocols.includes(provider.protocol)) {
       throw new Error(
         `Dialogue Provider ${provider.id} protocol '${provider.protocol}' is not advertised by the current DSH runtime.`,
@@ -488,6 +507,26 @@ function assertDialogueProviderCapability(
     throw new Error(
       `Dialogue Provider ${provider.id} must select a protocol advertised by DSH because it is not a DSH catalog route.`,
     );
+  }
+  if (
+    provider.type !== catalog.providerType ||
+    provider.connectionKind !== catalog.connectionKind ||
+    provider.requiresApiKey !== catalog.requiresApiKey
+  ) {
+    throw new Error(
+      `Dialogue Provider ${provider.id} must preserve its DSH catalog type, connection, and credential requirements.`,
+    );
+  }
+}
+
+function assertDialogueProviderTypeMutation(
+  existing: ReturnType<ConfigManager['getProvider']>,
+  provider: Extract<DesktopAiModelSettingsRequest, { operation: 'save-provider' }>['provider'],
+  capabilities: Extract<DesktopAiDialogueCapabilityProjection, { readonly status: 'available' }>,
+): void {
+  if (!existing || existing.type === provider.type) return;
+  if (capabilities.providers.some((candidate) => candidate.providerId === existing.id)) {
+    throw new Error(`DSH catalog Provider ${existing.id} type is immutable (${existing.type}).`);
   }
 }
 

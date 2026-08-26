@@ -13,6 +13,7 @@ import { Dialog } from '@neko/ui/primitives';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { DesktopApplicationPreferences } from '@neko/host/application-settings';
 import {
+  DESKTOP_AI_CUSTOM_DIALOGUE_PROVIDER_TYPES,
   defaultDesktopAiModelCapabilities,
   type DesktopAiModelCapability,
   type DesktopAiModelTemplate,
@@ -750,10 +751,31 @@ interface ProviderCreationOption {
   readonly displayName: string;
   readonly providerType: DesktopAiProviderType;
   readonly defaultApiUrl: string;
+  readonly connectionKind: DesktopAiProviderView['connectionKind'];
   readonly protocol?: DesktopAiModelProtocol;
   readonly presetId?: string;
   readonly requiresApiKey: boolean;
   readonly requiresApiUrl: boolean;
+}
+
+const PROVIDER_CONNECTION_KINDS = [
+  'gateway',
+  'local',
+  'direct',
+] as const satisfies readonly DesktopAiProviderView['connectionKind'][];
+
+function requireCustomDialogueProviderType(value: string): DesktopAiProviderType {
+  const providerType = DESKTOP_AI_CUSTOM_DIALOGUE_PROVIDER_TYPES.find(
+    (candidate) => candidate === value,
+  );
+  if (!providerType) throw new Error(`Custom dialogue Provider type '${value}' is unavailable.`);
+  return providerType;
+}
+
+function requireProviderConnectionKind(value: string): DesktopAiProviderView['connectionKind'] {
+  const connectionKind = PROVIDER_CONNECTION_KINDS.find((candidate) => candidate === value);
+  if (!connectionKind) throw new Error(`Provider connection kind '${value}' is unavailable.`);
+  return connectionKind;
 }
 
 function createProviderCreationOptions(
@@ -761,6 +783,7 @@ function createProviderCreationOptions(
   dialogueCapabilities: DesktopAiModelSettingsProjection['dialogueCapabilities'] | undefined,
   generationCapabilities: DesktopAiModelSettingsProjection['generationCapabilities'],
   customLabel: string,
+  localCustomLabel: string,
 ): readonly ProviderCreationOption[] {
   if (family === 'dialogue') {
     if (dialogueCapabilities?.status !== 'available') return [];
@@ -774,6 +797,7 @@ function createProviderCreationOptions(
           displayName: provider.displayName,
           providerType: provider.providerType,
           defaultApiUrl: provider.defaultApiUrl,
+          connectionKind: provider.connectionKind,
           requiresApiKey: provider.requiresApiKey,
           requiresApiUrl: false,
         })),
@@ -787,8 +811,21 @@ function createProviderCreationOptions(
               displayName: customLabel,
               providerType: 'generic' as const,
               defaultApiUrl: '',
+              connectionKind: 'gateway' as const,
               protocol: dialogueCapabilities.protocols[0],
               requiresApiKey: true,
+              requiresApiUrl: true,
+            },
+            {
+              id: 'dsh-custom-local',
+              kind: 'dsh-custom' as const,
+              suggestedProviderId: '',
+              displayName: localCustomLabel,
+              providerType: 'generic' as const,
+              defaultApiUrl: '',
+              connectionKind: 'local' as const,
+              protocol: dialogueCapabilities.protocols[0],
+              requiresApiKey: false,
               requiresApiUrl: true,
             },
           ]),
@@ -801,6 +838,7 @@ function createProviderCreationOptions(
     displayName: capability.displayName,
     providerType: capability.providerType,
     defaultApiUrl: capability.defaultApiUrl,
+    connectionKind: capability.connectionKind,
     presetId: capability.id,
     requiresApiKey: capability.requiresApiKey,
     requiresApiUrl: capability.requiresApiUrl,
@@ -838,9 +876,11 @@ function ProviderForm({
       readonly displayName: string;
       readonly type: DesktopAiProviderType;
       readonly apiUrl: string;
+      readonly connectionKind: DesktopAiProviderView['connectionKind'];
       readonly protocol?: DesktopAiModelProtocol;
       readonly presetId?: string;
       readonly supportedModelFamilies: readonly DesktopAiProviderModelFamily[];
+      readonly requiresApiKey: boolean;
       readonly enabled: boolean;
     },
     apiKey?: string,
@@ -864,6 +904,7 @@ function ProviderForm({
     dialogueCapabilities,
     generationCapabilities,
     t('settings.agent.customProvider'),
+    t('settings.agent.customLocalProvider'),
   );
   const initialOption = initial ? undefined : creationOptions[0];
   if (!initial && !initialOption) {
@@ -879,16 +920,20 @@ function ProviderForm({
   const [providerType, setProviderType] = useState<DesktopAiProviderType>(
     initial?.type ?? initialOption?.providerType ?? 'generic',
   );
+  const [connectionKind, setConnectionKind] = useState<DesktopAiProviderView['connectionKind']>(
+    initial?.connectionKind ?? initialOption?.connectionKind ?? 'direct',
+  );
   const [protocol, setProtocol] = useState<DesktopAiModelProtocol | undefined>(
     initial?.protocol ?? initialOption?.protocol,
   );
   const [apiKey, setApiKey] = useState('');
+  const [requiresApiKey, setRequiresApiKey] = useState(
+    initial ? initial.credentialStatus !== 'not-required' : (initialOption?.requiresApiKey ?? true),
+  );
   const [advancedOpen, setAdvancedOpen] = useState(!initial);
   const [showModelForm, setShowModelForm] = useState(false);
   const [editingModel, setEditingModel] = useState<DesktopAiModelView>();
   const [confirmProviderDelete, setConfirmProviderDelete] = useState(false);
-  const requiresApiKey =
-    selectedOption?.requiresApiKey ?? initial?.credentialStatus !== 'not-required';
   const generationCapability = generationCapabilities.find(
     (capability) => capability.providerType === (initial?.type ?? providerType),
   );
@@ -901,6 +946,9 @@ function ProviderForm({
           (provider) => provider.source === 'catalog' && provider.providerId === id,
         )));
   const isCatalogueRoute = isCatalogueProvider && protocol === undefined;
+  const canSelectProviderType = modelFamily.includes('dialogue') && !isCatalogueProvider;
+  const canConfigureCustomConnection =
+    !initial && modelFamily.includes('dialogue') && selectedOption?.kind === 'dsh-custom';
   const canSave = Boolean(
     /^[a-z0-9][a-z0-9._:-]*$/iu.test(id.trim()) &&
     displayName.trim() &&
@@ -915,11 +963,13 @@ function ProviderForm({
         displayName: displayName.trim(),
         type: providerType,
         apiUrl: apiUrl.trim(),
+        connectionKind,
         ...(protocol === undefined ? {} : { protocol }),
         ...(initial || selectedOption?.presetId === undefined
           ? {}
           : { presetId: selectedOption.presetId }),
         supportedModelFamilies: modelFamily,
+        requiresApiKey,
         enabled: true,
       },
       apiKey.trim() || undefined,
@@ -969,7 +1019,9 @@ function ProviderForm({
                   setDisplayName(next.displayName);
                   setApiUrl(next.defaultApiUrl);
                   setProviderType(next.providerType);
+                  setConnectionKind(next.connectionKind);
                   setProtocol(next.protocol);
+                  setRequiresApiKey(next.requiresApiKey);
                 }}
               >
                 {creationOptions.map((option) => (
@@ -1046,8 +1098,55 @@ function ProviderForm({
           ) : null}
           <label>
             <span>{t('settings.agent.providerType')}</span>
-            <input disabled readOnly value={providerType} />
+            {canSelectProviderType ? (
+              <select
+                disabled={disabled}
+                value={providerType}
+                onChange={(event) =>
+                  setProviderType(requireCustomDialogueProviderType(event.currentTarget.value))
+                }
+              >
+                {DESKTOP_AI_CUSTOM_DIALOGUE_PROVIDER_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input disabled readOnly value={providerType} />
+            )}
           </label>
+          {canConfigureCustomConnection ? (
+            <>
+              <label>
+                <span>{t('settings.agent.connectionKind')}</span>
+                <select
+                  disabled={disabled}
+                  value={connectionKind}
+                  onChange={(event) =>
+                    setConnectionKind(requireProviderConnectionKind(event.currentTarget.value))
+                  }
+                >
+                  {PROVIDER_CONNECTION_KINDS.map((kind) => (
+                    <option key={kind} value={kind}>
+                      {t(`settings.agent.connectionKind.${kind}`)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>{t('settings.agent.authentication')}</span>
+                <select
+                  disabled={disabled}
+                  value={requiresApiKey ? 'api-key' : 'none'}
+                  onChange={(event) => setRequiresApiKey(event.currentTarget.value === 'api-key')}
+                >
+                  <option value="api-key">{t('settings.agent.authentication.apiKey')}</option>
+                  <option value="none">{t('settings.agent.authentication.none')}</option>
+                </select>
+              </label>
+            </>
+          ) : null}
           <label>
             <span>{t('settings.agent.apiUrl')}</span>
             <input

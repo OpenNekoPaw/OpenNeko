@@ -200,8 +200,10 @@ describe('DesktopAiModelSettingsService', () => {
         displayName: 'Provider A',
         type: 'generic',
         apiUrl: 'https://example.test/v1',
+        connectionKind: 'direct',
         protocol: 'openai-chat',
         supportedModelFamilies: ['dialogue'],
+        requiresApiKey: true,
         enabled: true,
       },
       apiKey: 'secret-value',
@@ -217,6 +219,49 @@ describe('DesktopAiModelSettingsService', () => {
     expect(credentials.replaceApiKey).toHaveBeenCalledWith('provider-a', 'secret-value');
     expect(result.executionConfigurationChanged).toBe(true);
     expect(JSON.stringify(result)).not.toContain('secret-value');
+  });
+
+  it('creates an explicit local keyless custom DSH Provider without touching credentials', async () => {
+    const { config } = createConfig();
+    const credentials = {
+      read: vi.fn(async () => undefined),
+      replaceApiKey: vi.fn(async () => undefined),
+    } as unknown as ProviderCredentialAuthority;
+    const capabilities: DesktopAiDialogueCapabilityReader = {
+      read: vi.fn(async () => ({
+        status: 'available' as const,
+        providers: [],
+        protocols: ['openai-completions'],
+        diagnostics: [],
+      })),
+    };
+
+    await createService(config, credentials, capabilities).execute({
+      requestId: 'request-local-keyless',
+      operation: 'save-provider',
+      provider: {
+        id: 'local-oneapi',
+        displayName: 'Local OneAPI',
+        type: 'oneapi',
+        apiUrl: 'http://127.0.0.1:8000/v1',
+        connectionKind: 'local',
+        protocol: 'openai-completions',
+        supportedModelFamilies: ['dialogue'],
+        requiresApiKey: false,
+        enabled: true,
+      },
+    });
+
+    expect(config.setProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'local-oneapi',
+        type: 'oneapi',
+        connectionKind: 'local',
+        protocolProfile: 'openai-completions',
+        requiresApiKey: false,
+      }),
+    );
+    expect(credentials.replaceApiKey).not.toHaveBeenCalled();
   });
 
   it('creates an unknown DSH catalog Provider without a local preset or endpoint override', async () => {
@@ -254,7 +299,9 @@ describe('DesktopAiModelSettingsService', () => {
         displayName: 'Future Provider',
         type: 'generic',
         apiUrl: '',
+        connectionKind: 'direct',
         supportedModelFamilies: ['dialogue'],
+        requiresApiKey: true,
         enabled: true,
       },
       apiKey: 'future-secret',
@@ -293,8 +340,10 @@ describe('DesktopAiModelSettingsService', () => {
           displayName: provider.displayName,
           type: provider.type,
           apiUrl: provider.apiUrl,
+          connectionKind: 'direct',
           protocol: 'removed-by-dsh',
           supportedModelFamilies: ['dialogue'],
+          requiresApiKey: true,
           enabled: true,
         },
       }),
@@ -346,8 +395,10 @@ describe('DesktopAiModelSettingsService', () => {
         displayName: 'Provider A renamed',
         type: 'newapi',
         apiUrl: provider.apiUrl,
+        connectionKind: 'direct',
         protocol: 'openai-chat',
         supportedModelFamilies: ['dialogue'],
+        requiresApiKey: true,
         enabled: true,
       },
     });
@@ -380,8 +431,10 @@ describe('DesktopAiModelSettingsService', () => {
         displayName: provider.displayName,
         type: 'generic',
         apiUrl: provider.apiUrl,
+        connectionKind: 'direct',
         protocol: 'ollama',
         supportedModelFamilies: ['dialogue'],
+        requiresApiKey: true,
         enabled: true,
       },
     });
@@ -398,7 +451,7 @@ describe('DesktopAiModelSettingsService', () => {
     expect(saved).not.toHaveProperty('builtin');
   });
 
-  it('rejects changing the exact type of an existing Provider', async () => {
+  it('changes the local Provider type only for an explicit custom DSH route', async () => {
     const { config, provider } = createConfig();
     Object.assign(provider, {
       requiresApiKey: true,
@@ -411,21 +464,65 @@ describe('DesktopAiModelSettingsService', () => {
       replaceApiKey: vi.fn(async () => undefined),
     } as unknown as ProviderCredentialAuthority;
 
+    const capabilities: DesktopAiDialogueCapabilityReader = {
+      read: vi.fn(async () => ({
+        status: 'available' as const,
+        providers: [],
+        protocols: ['openai-completions'],
+        diagnostics: [],
+      })),
+    };
+
+    await createService(config, credentials, capabilities).execute({
+      requestId: 'request-custom-oneapi',
+      operation: 'save-provider',
+      provider: {
+        id: provider.id,
+        displayName: 'OneAPI Gateway',
+        type: 'oneapi',
+        apiUrl: 'https://oneapi.example/v1',
+        connectionKind: 'gateway',
+        protocol: 'openai-completions',
+        supportedModelFamilies: ['dialogue'],
+        requiresApiKey: true,
+        enabled: true,
+      },
+    });
+
+    expect(config.setProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: provider.id,
+        type: 'oneapi',
+        connectionKind: 'gateway',
+        protocolProfile: 'openai-completions',
+      }),
+    );
+  });
+
+  it('keeps a DSH catalog Provider type immutable', async () => {
+    const { config, provider } = createConfig();
+    Object.assign(provider, { requiresApiKey: true, connectionKind: 'direct' });
+    const credentials = {
+      read: vi.fn(async () => undefined),
+    } as unknown as ProviderCredentialAuthority;
+
     await expect(
       createService(config, credentials).execute({
-        requestId: 'request-custom-ollama',
+        requestId: 'request-catalog-type-mutation',
         operation: 'save-provider',
         provider: {
           id: provider.id,
-          displayName: 'Local Ollama',
-          type: 'ollama',
-          apiUrl: 'http://localhost:11434/api',
-          protocol: 'ollama',
+          displayName: provider.displayName,
+          type: 'oneapi',
+          apiUrl: provider.apiUrl,
+          connectionKind: 'direct',
+          protocol: 'openai-completions',
           supportedModelFamilies: ['dialogue'],
+          requiresApiKey: true,
           enabled: true,
         },
       }),
-    ).rejects.toThrow(/type is immutable/u);
+    ).rejects.toThrow(/catalog Provider .* type is immutable/u);
 
     expect(config.setProvider).not.toHaveBeenCalled();
   });
@@ -445,8 +542,10 @@ describe('DesktopAiModelSettingsService', () => {
           displayName: 'Hybrid Provider',
           type: 'generic',
           apiUrl: 'https://example.test/v1',
+          connectionKind: 'direct',
           protocol: 'openai-chat',
           supportedModelFamilies: ['dialogue', 'generation'],
+          requiresApiKey: true,
           enabled: true,
         },
       }),
@@ -471,8 +570,10 @@ describe('DesktopAiModelSettingsService', () => {
           displayName: 'Colliding Provider',
           type: 'newapi',
           apiUrl: 'https://example.test/v1',
+          connectionKind: 'gateway',
           presetId: 'generation-newapi',
           supportedModelFamilies: ['generation'],
+          requiresApiKey: true,
           enabled: true,
         },
       }),
@@ -496,8 +597,10 @@ describe('DesktopAiModelSettingsService', () => {
         displayName: provider.displayName,
         type: 'newapi',
         apiUrl: provider.apiUrl,
+        connectionKind: 'direct',
         protocol: 'openai-responses',
         supportedModelFamilies: ['dialogue'],
+        requiresApiKey: true,
         enabled: true,
       },
     });
@@ -507,7 +610,7 @@ describe('DesktopAiModelSettingsService', () => {
     );
   });
 
-  it('rejects credentials for local Ollama providers', async () => {
+  it('rejects credentials for local keyless dialogue Providers', async () => {
     const { config } = createConfig();
     const credentials = {
       read: vi.fn(async () => undefined),
@@ -516,15 +619,17 @@ describe('DesktopAiModelSettingsService', () => {
 
     await expect(
       createService(config, credentials).execute({
-        requestId: 'request-ollama-key',
+        requestId: 'request-local-key',
         operation: 'save-provider',
         provider: {
-          id: 'local-ollama',
-          displayName: 'Local Ollama',
-          type: 'ollama',
-          apiUrl: 'http://localhost:11434/api',
-          protocol: 'ollama',
+          id: 'local-oneapi',
+          displayName: 'Local OneAPI',
+          type: 'oneapi',
+          apiUrl: 'http://localhost:8000/v1',
+          connectionKind: 'local',
+          protocol: 'openai-completions',
           supportedModelFamilies: ['dialogue'],
+          requiresApiKey: false,
           enabled: true,
         },
         apiKey: 'must-not-store',
@@ -565,8 +670,10 @@ describe('DesktopAiModelSettingsService', () => {
         displayName: preset.displayName,
         type: preset.type,
         apiUrl: preset.apiUrl,
+        connectionKind: 'direct',
         presetId: preset.presetId,
         supportedModelFamilies: ['generation'],
+        requiresApiKey: true,
         enabled: true,
       },
       apiKey: 'generation-secret',
@@ -599,8 +706,10 @@ describe('DesktopAiModelSettingsService', () => {
         displayName: 'MiniMax Proxy',
         type: 'minimax',
         apiUrl: 'https://minimax-proxy.example/v2',
+        connectionKind: 'direct',
         presetId: 'generation-minimax-h3',
         supportedModelFamilies: ['generation'],
+        requiresApiKey: true,
         enabled: true,
       },
       apiKey: 'generation-secret',
@@ -1102,8 +1211,10 @@ describe('DesktopAiModelSettingsService', () => {
           displayName: 'Renamed Provider',
           type: 'generic',
           apiUrl: 'https://config.example/v2',
+          connectionKind: 'direct',
           protocol: 'openai-chat',
           supportedModelFamilies: ['dialogue'],
+          requiresApiKey: true,
           enabled: true,
         },
       });

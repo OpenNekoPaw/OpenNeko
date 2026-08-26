@@ -475,7 +475,16 @@ describe('Desktop Settings surfaces', () => {
     expect(container.querySelector<HTMLInputElement>('input[type="url"]')?.value).toBe(
       'https://www.nekoapi.com/v1',
     );
-    expect(container.querySelector<HTMLSelectElement>('select')?.value).toBe('openai-responses');
+    expect(
+      [...container.querySelectorAll<HTMLSelectElement>('select')].some(
+        (select) => select.value === 'openai-responses',
+      ),
+    ).toBe(true);
+    const providerType = [...container.querySelectorAll<HTMLSelectElement>('select')].find(
+      (select) => [...select.options].some((option) => option.value === 'newapi'),
+    );
+    if (!providerType) throw new Error('Custom Provider type selector is unavailable.');
+    await setSelectValue(providerType, 'newapi');
     const nekoKey = container.querySelector<HTMLInputElement>('input[type="password"]');
     expect(nekoKey?.value).toBe('');
     if (!nekoKey) throw new Error('Neko API Provider requires an API Key field.');
@@ -490,10 +499,12 @@ describe('Desktop Settings surfaces', () => {
       {
         id: 'neko-chat',
         displayName: 'Neko API Chat',
-        type: 'generic',
+        type: 'newapi',
         apiUrl: 'https://www.nekoapi.com/v1',
+        connectionKind: 'direct',
         protocol: 'openai-responses',
         supportedModelFamilies: ['dialogue'],
+        requiresApiKey: true,
         enabled: true,
       },
       'neko-draft-key',
@@ -623,6 +634,7 @@ describe('Desktop Settings surfaces', () => {
     expect([...providerSelector.options].map((option) => option.textContent)).toEqual([
       'OpenAI',
       'Add provider',
+      'Local OpenAI-compatible provider',
     ]);
     expect(
       [...container.querySelectorAll<HTMLInputElement>('.desktop-settings__editor input')].find(
@@ -646,10 +658,82 @@ describe('Desktop Settings surfaces', () => {
         displayName: 'OpenAI',
         type: 'openai',
         apiUrl: '',
+        connectionKind: 'direct',
         supportedModelFamilies: ['dialogue'],
+        requiresApiKey: true,
         enabled: true,
       },
       'openai-secret',
+    );
+    await act(async () => root.unmount());
+  });
+
+  it('creates a local keyless custom dialogue Provider with an explicit type and DSH protocol', async () => {
+    const projection = {
+      dialogueCapabilities,
+      generationCapabilities,
+      providers: [],
+      models: [],
+      defaults: {},
+    };
+    const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
+    const saveProvider = vi.fn(async () => response);
+    const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
+      get: async () => projection,
+      saveProvider,
+      saveModel: async () => response,
+      deleteProvider: async () => response,
+      deleteModel: async () => response,
+      setDefault: async () => response,
+    };
+    const { container, root } = await renderSettings({
+      aiModelSettings,
+      initialSection: 'agent',
+    });
+    await act(async () => Promise.resolve());
+    await act(async () => findButton(container, 'Add dialogue provider').click());
+
+    const providerPreset = container.querySelector<HTMLSelectElement>(
+      '.desktop-settings__editor select',
+    );
+    if (!providerPreset) throw new Error('Provider preset selector is unavailable.');
+    await setSelectValue(providerPreset, 'dsh-custom-local');
+
+    const providerId = container.querySelector<HTMLInputElement>(
+      'input[placeholder="For example, acme-gateway"]',
+    );
+    const apiUrl = container.querySelector<HTMLInputElement>('input[type="url"]');
+    if (!providerId || !apiUrl) throw new Error('Local Provider identity fields are unavailable.');
+    await setInputValue(providerId, 'local-oneapi');
+    await setInputValue(apiUrl, 'http://127.0.0.1:8000/v1');
+
+    const providerType = [...container.querySelectorAll<HTMLSelectElement>('select')].find(
+      (select) => [...select.options].some((option) => option.value === 'oneapi'),
+    );
+    if (!providerType) throw new Error('Custom Provider type selector is unavailable.');
+    await setSelectValue(providerType, 'oneapi');
+
+    expect(container.querySelector('input[type="password"]')).toBeNull();
+    expect(
+      [...container.querySelectorAll<HTMLSelectElement>('select')].map((select) => select.value),
+    ).toEqual(
+      expect.arrayContaining(['dsh-custom-local', 'oneapi', 'local', 'none', 'openai-completions']),
+    );
+
+    await act(async () => findButton(container, 'Save').click());
+    expect(saveProvider).toHaveBeenCalledWith(
+      {
+        id: 'local-oneapi',
+        displayName: 'Local OpenAI-compatible provider',
+        type: 'oneapi',
+        apiUrl: 'http://127.0.0.1:8000/v1',
+        connectionKind: 'local',
+        protocol: 'openai-completions',
+        supportedModelFamilies: ['dialogue'],
+        requiresApiKey: false,
+        enabled: true,
+      },
+      undefined,
     );
     await act(async () => root.unmount());
   });
@@ -826,8 +910,10 @@ describe('Desktop Settings surfaces', () => {
         displayName: 'MiniMax H3',
         type: 'minimax',
         apiUrl: 'https://api.minimaxi.com/v2',
+        connectionKind: 'direct',
         presetId: 'generation-minimax-h3',
         supportedModelFamilies: ['generation'],
+        requiresApiKey: true,
         enabled: true,
       },
       'minimax-secret',
@@ -992,6 +1078,15 @@ async function setInputValue(input: HTMLInputElement, value: string): Promise<vo
     if (!setValue) throw new Error('HTMLInputElement value setter is unavailable.');
     setValue.call(input, value);
     input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+async function setSelectValue(select: HTMLSelectElement, value: string): Promise<void> {
+  await act(async () => {
+    const setValue = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+    if (!setValue) throw new Error('HTMLSelectElement value setter is unavailable.');
+    setValue.call(select, value);
+    select.dispatchEvent(new Event('change', { bubbles: true }));
   });
 }
 
