@@ -265,6 +265,8 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
     const readyMidpointState = await seekCutToTimelineMidpoint({ click, evaluate });
     const readyScreenshot = await captureSettledScreenshot(screenshot, 'cut-editor-ready');
     checkpoint('cut-ready-visual-midpoint', { visualMidpoint: readyMidpointState.evidence });
+    const playbackRestart = await qualifyCutPlaybackRestartAtEnd({ click, evaluate, screenshot });
+    checkpoint('cut-playback-restarted-at-end', playbackRestart.evidence);
     const seekMidpointState = await seekCutToTimelineMidpoint({ click, evaluate });
     const seekScreenshot = await captureSettledScreenshot(screenshot, 'cut-playback-seek-visible');
     checkpoint('cut-seek-ready', {
@@ -325,6 +327,7 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
       emptyDraftAdd,
       rulerSticky,
       compactLayout,
+      playbackRestart: playbackRestart.evidence,
       visualMidpoints: {
         ready: readyMidpointState.evidence,
         seek: seekMidpointState.evidence,
@@ -335,6 +338,7 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
         emptyDraftCompactScreenshot,
         emptyDraftAddedScreenshot,
         readyScreenshot,
+        playbackRestart.screenshot,
         seekScreenshot,
         ...tabPanel.screenshots,
         authoringScreenshot,
@@ -355,6 +359,13 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
     }
     if (!evidence.previewRequestChanged || evidence.releasedStatus !== 0) {
       throw new Error('Cut seek did not replace and release its prior preview request.');
+    }
+    if (
+      !evidence.playbackRestart?.restartedFromBeginning ||
+      !evidence.playbackRestart?.advanced ||
+      evidence.playbackRestart?.previewErrors?.length > 0
+    ) {
+      throw new Error('Cut playback did not restart cleanly from the Timeline end.');
     }
     if (
       !evidence.trustedInteractions?.some(
@@ -1055,6 +1066,43 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
   };
 }
 
+async function qualifyCutPlaybackRestartAtEnd({ click, evaluate, screenshot }) {
+  await click(`${ACTIVE_CUT_ROOT_SELECTOR} .cut-preview-primary-controls button:nth-of-type(5)`);
+  const deadline = Date.now() + 10_000;
+  let endOutput;
+  while (Date.now() < deadline) {
+    endOutput = await evaluate(
+      `document.querySelector(${JSON.stringify(
+        ACTIVE_CUT_ROOT_SELECTOR,
+      )})?.querySelector('.cut-preview-controls output')?.textContent`,
+    );
+    const clocks = endOutput?.split('/').map((value) => value.trim());
+    if (clocks?.length === 2 && clocks[0] === clocks[1]) break;
+    await delay(100);
+  }
+  const endClocks = endOutput?.split('/').map((value) => value.trim());
+  if (endClocks?.length !== 2 || endClocks[0] !== endClocks[1]) {
+    throw new Error(`Cut playback did not reach the Timeline end: ${String(endOutput)}`);
+  }
+
+  await click(`${ACTIVE_CUT_ROOT_SELECTOR} [data-testid="cut-preview-toggle-playback"]`);
+  const restarted = await waitForCutPlayback(evaluate);
+  const sample = await evaluate(cutVideoSeekSampleExpression());
+  const previewErrors = [...(sample?.toasts ?? []), ...(sample?.alerts ?? [])].filter((message) =>
+    /preview|预览/iu.test(message ?? ''),
+  );
+  const screenshotArtifact = await screenshot('cut-playback-restarted-from-end');
+  return {
+    evidence: {
+      endOutput,
+      restartedFromBeginning: restarted.startTime < 1,
+      advanced: restarted.endTime > restarted.startTime,
+      previewErrors,
+    },
+    screenshot: screenshotArtifact,
+  };
+}
+
 async function waitForCutPlayback(evaluate) {
   const deadline = Date.now() + 30_000;
   let first;
@@ -1317,6 +1365,8 @@ function cutVideoSeekSampleExpression() {
       output,
       timelineTime: readClock(output.split('/')[0] ?? ''),
       clickEvidence: window.__openNekoCutClickEvidence,
+      alerts: [...(root?.querySelectorAll('[role="alert"]') ?? [])].map((item) => item.textContent),
+      toasts: [...(root?.querySelectorAll('[role="status"]') ?? [])].map((item) => item.textContent),
       videos: videos.map((candidate) => ({
         url: candidate.src,
         currentTime: candidate.currentTime,

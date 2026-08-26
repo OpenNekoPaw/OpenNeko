@@ -178,7 +178,8 @@ describe('Cut OTIO Webview boundary', () => {
     expect(app).toMatch(/previewClockRef\.current\?\.read\(\)/);
     expect(app).not.toMatch(/EngineAvStreamLifecycle|AudioStreamClient/);
     expect(app).toMatch(/timelineEndSeconds: prepared\.playbackEndSeconds/);
-    expect(app).toMatch(/controller\.startPreview\(\s*playheadSeconds,/);
+    expect(app).toMatch(/resolveTimelinePlaybackEndSeconds\(view\)/);
+    expect(app).toMatch(/controller\.startPreview\(\s*previewStartSeconds,/);
     expect(app).toMatch(/controller\.preparePreview\(playheadSeconds\)/);
     expect(app).toMatch(/controller\.activatePreview\(previewRequestId\)/);
     expect(app.match(/controller\.startPreview\(/g)).toHaveLength(2);

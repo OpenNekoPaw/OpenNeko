@@ -4,8 +4,30 @@ import {
   applyPreviewPlaybackAdvance,
   finishPreviewPlaybackSegment,
   previewPreparationLeadSeconds,
+  resolvePreviewPlaybackStartSeconds,
   shouldAcceptPreviewReady,
 } from './previewPlayback';
+
+describe('resolvePreviewPlaybackStartSeconds', () => {
+  it('keeps an in-range playhead and restarts playback from zero at the media end', () => {
+    expect(resolvePreviewPlaybackStartSeconds(3, 8)).toBe(3);
+    expect(resolvePreviewPlaybackStartSeconds(8, 8)).toBe(0);
+    expect(resolvePreviewPlaybackStartSeconds(10, 8)).toBe(0);
+  });
+
+  it('does not invent a preview start when the Timeline has no enabled media', () => {
+    expect(resolvePreviewPlaybackStartSeconds(0, 0)).toBeUndefined();
+  });
+
+  it('rejects invalid playback bounds visibly', () => {
+    expect(() => resolvePreviewPlaybackStartSeconds(-1, 8)).toThrow(
+      'Cut preview playback bounds must be non-negative finite numbers.',
+    );
+    expect(() => resolvePreviewPlaybackStartSeconds(0, Number.NaN)).toThrow(
+      'Cut preview playback bounds must be non-negative finite numbers.',
+    );
+  });
+});
 
 describe('advancePreviewPlayback', () => {
   it('requests a media-segment switch exactly at the next Clip boundary', () => {
