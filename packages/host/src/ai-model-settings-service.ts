@@ -8,19 +8,18 @@ import type { ConfigManager } from './settings/config-manager';
 import type { ProviderCredentialAuthority } from './settings/provider-credential-authority';
 import type {
   DesktopAiDialogueCapabilityProjection,
+  DesktopAiGenerationProviderCapability,
   DesktopAiModelSettingsProjection,
   DesktopAiModelSettingsRequest,
   DesktopAiProviderView,
 } from './ai-model-settings-contract';
-import {
-  DESKTOP_AI_PROVIDER_PRESETS,
-  getDesktopAiModelTemplate,
-  getDesktopAiProviderPreset,
-  type DesktopAiProviderPreset,
-} from './ai-model-provider-presets';
 
 export interface DesktopAiDialogueCapabilityReader {
   read(): Promise<Extract<DesktopAiDialogueCapabilityProjection, { readonly status: 'available' }>>;
+}
+
+export interface DesktopAiGenerationCapabilityReader {
+  read(): readonly DesktopAiGenerationProviderCapability[];
 }
 
 export class DesktopAiModelSettingsService {
@@ -28,10 +27,12 @@ export class DesktopAiModelSettingsService {
     private readonly config: ConfigManager,
     private readonly credentials: ProviderCredentialAuthority,
     private readonly dialogueCapabilities: DesktopAiDialogueCapabilityReader,
+    private readonly generationCapabilities: DesktopAiGenerationCapabilityReader,
   ) {}
 
   async project(): Promise<DesktopAiModelSettingsProjection> {
     const dialogueCapabilities = await this.projectDialogueCapabilities();
+    const generationCapabilities = this.generationCapabilities.read();
     const providers = await Promise.all(
       this.config
         .getProviders()
@@ -40,6 +41,7 @@ export class DesktopAiModelSettingsService {
     const projectedProviderIds = new Set(providers.map((provider) => provider.id));
     return {
       dialogueCapabilities,
+      generationCapabilities,
       providers,
       models: this.config
         .getModels()
@@ -72,17 +74,19 @@ export class DesktopAiModelSettingsService {
       return { projection: await this.project(), executionConfigurationChanged: false };
     if (request.operation === 'save-provider') {
       const existing = this.config.getProvider(request.provider.id);
-      const preset = request.provider.presetId
-        ? getDesktopAiProviderPreset(request.provider.presetId)
+      const generationCapability = request.provider.presetId
+        ? findGenerationCapability(this.generationCapabilities.read(), request.provider.presetId)
         : undefined;
       const isDialogue = request.provider.supportedModelFamilies.includes('dialogue');
-      if (!existing && !preset && !isDialogue) {
+      if (!existing && !generationCapability && !isDialogue) {
         throw new Error(
           `New Provider ${request.provider.id} requires an explicit Provider preset.`,
         );
       }
-      if (request.provider.presetId && !preset) {
-        throw new Error(`Provider preset ${request.provider.presetId} does not exist.`);
+      if (request.provider.presetId && !generationCapability) {
+        throw new Error(
+          `Generation Provider capability ${request.provider.presetId} does not exist.`,
+        );
       }
       if (existing && existing.type !== request.provider.type) {
         throw new Error(
@@ -94,15 +98,36 @@ export class DesktopAiModelSettingsService {
           `Provider ${existing.id} already exists. Choose another Provider ID or edit the existing record.`,
         );
       }
-      if (preset) assertPresetMatchesRequest(preset, request.provider);
+      if (generationCapability) {
+        assertGenerationCapabilityMatchesRequest(generationCapability, request.provider);
+      }
       assertProviderFamiliesSupported(request.provider);
       if (isDialogue) {
         assertDialogueProviderCapability(request.provider, await this.dialogueCapabilities.read());
+      } else {
+        const runtimeCapability =
+          generationCapability ??
+          findGenerationCapabilityForProvider(
+            this.generationCapabilities.read(),
+            request.provider.type,
+          );
+        if (!runtimeCapability) {
+          throw new Error(
+            `Provider type ${request.provider.type} is not supported by the generation runtime.`,
+          );
+        }
+        if (runtimeCapability.requiresApiUrl && request.provider.apiUrl.length === 0) {
+          throw new Error(`Generation Provider ${request.provider.id} requires an API endpoint.`);
+        }
       }
       const isLocalOllama = request.provider.type === 'ollama';
-      const requiresApiKey = preset?.requiresApiKey ?? existing?.requiresApiKey ?? !isLocalOllama;
+      const requiresApiKey =
+        generationCapability?.requiresApiKey ?? existing?.requiresApiKey ?? !isLocalOllama;
       if (!requiresApiKey && request.apiKey !== undefined) {
         throw new Error(`Provider ${request.provider.id} does not accept an API key.`);
+      }
+      if (!existing && requiresApiKey && request.apiKey === undefined) {
+        throw new Error(`Provider ${request.provider.id} requires an API key.`);
       }
       await this.config.setProvider({
         id: request.provider.id,
@@ -112,17 +137,17 @@ export class DesktopAiModelSettingsService {
         apiUrl: request.provider.apiUrl,
         enabled: request.provider.enabled,
         connectionKind:
-          preset?.connectionKind ??
+          generationCapability?.connectionKind ??
           existing?.connectionKind ??
           (isLocalOllama ? 'local' : 'direct'),
         ...(request.provider.protocol === undefined
           ? {}
           : { protocolProfile: request.provider.protocol }),
         supportLevel:
-          preset === undefined
+          generationCapability === undefined
             ? (existing?.supportLevel ?? 'custom')
-            : request.provider.apiUrl === preset.defaultApiUrl
-              ? preset.supportLevel
+            : request.provider.apiUrl === generationCapability.defaultApiUrl
+              ? generationCapability.supportLevel
               : 'custom',
         supportedModelFamilies: request.provider.supportedModelFamilies,
         requiresApiKey,
@@ -168,8 +193,28 @@ export class DesktopAiModelSettingsService {
           `Provider ${provider.id} does not support ${modelFamily} models. Add the model to a matching Provider instead.`,
         );
       }
+      const generationCapability =
+        request.model.type === 'llm'
+          ? undefined
+          : findGenerationCapabilityForProvider(this.generationCapabilities.read(), provider.type);
+      if (request.model.type !== 'llm' && !generationCapability) {
+        throw new Error(
+          `Provider ${provider.id} type ${provider.type} is not supported by the generation runtime.`,
+        );
+      }
+      if (
+        generationCapability &&
+        request.model.type !== 'llm' &&
+        !generationCapability.supportedModelTypes.includes(request.model.type)
+      ) {
+        throw new Error(
+          `Provider ${provider.id} does not support ${request.model.type} generation models.`,
+        );
+      }
       const template = request.model.templateId
-        ? getDesktopAiModelTemplate(request.model.templateId)
+        ? generationCapability?.modelTemplates.find(
+            (candidate) => candidate.id === request.model.templateId,
+          )
         : undefined;
       if (request.model.templateId && !template) {
         throw new Error(`Model template ${request.model.templateId} does not exist.`);
@@ -190,17 +235,12 @@ export class DesktopAiModelSettingsService {
       } else {
         assertRequiredModelCapabilities(request.model.type, request.model.capabilities);
       }
-      const matchingPresets = DESKTOP_AI_PROVIDER_PRESETS.filter(
-        (preset) => preset.providerType === provider.type && preset.family === modelFamily,
-      );
       if (
-        matchingPresets.length > 0 &&
-        matchingPresets.every((preset) => !preset.allowCustomModels) &&
+        generationCapability !== undefined &&
+        !generationCapability.allowCustomModels &&
         template === undefined
       ) {
-        const templateIds = matchingPresets.flatMap((preset) =>
-          preset.modelTemplates.map((candidate) => candidate.id),
-        );
+        const templateIds = generationCapability.modelTemplates.map((candidate) => candidate.id);
         throw new Error(
           `Provider ${provider.id} supports only builtin model templates: ${templateIds.join(', ')}.`,
         );
@@ -369,18 +409,37 @@ export class DesktopAiModelSettingsService {
   }
 }
 
-function assertPresetMatchesRequest(
-  preset: DesktopAiProviderPreset,
+function assertGenerationCapabilityMatchesRequest(
+  capability: DesktopAiGenerationProviderCapability,
   provider: Extract<DesktopAiModelSettingsRequest, { operation: 'save-provider' }>['provider'],
 ): void {
   if (
-    provider.type !== preset.providerType ||
+    provider.type !== capability.providerType ||
     provider.supportedModelFamilies.length !== 1 ||
-    provider.supportedModelFamilies[0] !== preset.family ||
-    provider.protocol !== preset.protocol
+    provider.supportedModelFamilies[0] !== 'generation' ||
+    provider.protocol !== undefined
   ) {
-    throw new Error(`Provider preset ${preset.id} does not match the submitted Provider contract.`);
+    throw new Error(
+      `Generation Provider capability ${capability.id} does not match the submitted Provider contract.`,
+    );
   }
+  if (capability.requiresApiUrl && provider.apiUrl.length === 0) {
+    throw new Error(`Generation Provider ${provider.id} requires an API endpoint.`);
+  }
+}
+
+function findGenerationCapability(
+  capabilities: readonly DesktopAiGenerationProviderCapability[],
+  id: string,
+): DesktopAiGenerationProviderCapability | undefined {
+  return capabilities.find((capability) => capability.id === id);
+}
+
+function findGenerationCapabilityForProvider(
+  capabilities: readonly DesktopAiGenerationProviderCapability[],
+  providerType: ProviderType,
+): DesktopAiGenerationProviderCapability | undefined {
+  return capabilities.find((capability) => capability.providerType === providerType);
 }
 
 function assertProviderFamiliesSupported(

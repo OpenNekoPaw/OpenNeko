@@ -186,6 +186,14 @@ export const desktopAiModelSettingsScenario = Object.freeze({
       provider.dispatchEvent(new Event('change', { bubbles: true }));
       const protocol = selects[1];
       const inputs = [...editor?.querySelectorAll('input') ?? []];
+      const apiKey = inputs.find((input) => input.type === 'password');
+      if (!(apiKey instanceof HTMLInputElement)) {
+        throw new Error('DSH Provider API-key input is unavailable.');
+      }
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      if (!setValue) throw new Error('HTML input value setter is unavailable.');
+      setValue.call(apiKey, 'functional-openai-key');
+      apiKey.dispatchEvent(new Event('input', { bubbles: true }));
       return {
         providerValues: [...provider.options].map((option) => option.value),
         providerLabels: [...provider.options].map((option) => option.textContent?.trim() ?? ''),
@@ -267,6 +275,14 @@ export const desktopAiModelSettingsScenario = Object.freeze({
       if (!(preset instanceof HTMLSelectElement) || !(apiUrl instanceof HTMLInputElement)) {
         throw new Error('Generation Provider preset form is incomplete.');
       }
+      const apiKey = inputs.find((input) => input.type === 'password');
+      if (!(apiKey instanceof HTMLInputElement)) {
+        throw new Error('Generation Provider API-key input is unavailable.');
+      }
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      if (!setValue) throw new Error('HTML input value setter is unavailable.');
+      setValue.call(apiKey, 'functional-minimax-key');
+      apiKey.dispatchEvent(new Event('input', { bubbles: true }));
       return {
         selectedPreset: preset.value,
         presetLabels: [...preset.options].map((option) => option.textContent?.trim() ?? ''),
@@ -279,7 +295,24 @@ export const desktopAiModelSettingsScenario = Object.freeze({
       generationPresetState.apiUrl !== 'https://api.minimaxi.com/v2' ||
       !generationPresetState.providerTypeVisible ||
       JSON.stringify(generationPresetState.presetLabels) !==
-        JSON.stringify(['MiniMax H3', 'ByteDance Ark / Seedance', 'Custom NewAPI Media'])
+        JSON.stringify([
+          'MiniMax H3',
+          'ByteDance Ark / Seedance',
+          'OpenAI',
+          'NewAPI Media',
+          'OneAPI Media',
+          'OpenAI-compatible Media',
+          'xAI Media',
+          'Kling',
+          'Runway',
+          'Luma Dream Machine',
+          'LiblibAI',
+          'Suno',
+          'Vidu',
+          'Midjourney Proxy',
+          'fal',
+          'DashScope',
+        ])
     ) {
       throw new Error(
         `Generation Provider preset state is incorrect: ${JSON.stringify(generationPresetState)}`,
@@ -334,10 +367,15 @@ export const desktopAiModelSettingsScenario = Object.freeze({
       const selects = [...editor?.querySelectorAll('select') ?? []];
       const inputs = [...editor?.querySelectorAll('input') ?? []];
       if (!(editor instanceof HTMLElement)) throw new Error('MiniMax model editor is missing.');
+      const fields = [...editor.querySelectorAll('[data-model-field]')];
       return {
         template: selects[0]?.value,
         modelType: selects[1]?.value,
         values: inputs.map((input) => input.value),
+        fieldOrder: fields.map((field) => field.getAttribute('data-model-field')),
+        fieldLabels: fields.map((field) =>
+          field.querySelector(':scope > span')?.textContent?.trim() ?? '',
+        ),
         lockedControlCount: [...inputs, ...selects].filter((control) => control.disabled).length,
         checkedCapabilities: [...document.querySelectorAll('[data-model-capability]')]
           .filter((option) => option.getAttribute('aria-checked') === 'true')
@@ -350,6 +388,12 @@ export const desktopAiModelSettingsScenario = Object.freeze({
       h3TemplateState.template !== 'minimax-h3' ||
       h3TemplateState.modelType !== 'video' ||
       !h3TemplateState.values.includes('MiniMax-H3') ||
+      JSON.stringify(h3TemplateState.fieldOrder) !==
+        JSON.stringify(['type', 'capabilities', 'api-name', 'display-name']) ||
+      ![
+        ['模型类型', '模型能力', 'API 模型名称', '显示名称（可选）'],
+        ['Model type', 'Model capabilities', 'API model name', 'Display name (optional)'],
+      ].some((labels) => JSON.stringify(labels) === JSON.stringify(h3TemplateState.fieldLabels)) ||
       h3TemplateState.lockedControlCount < 3 ||
       JSON.stringify(h3TemplateState.checkedCapabilities) !==
         JSON.stringify(['textToVideo', 'imageToVideo', 'videoToVideo']) ||
@@ -568,6 +612,209 @@ export const desktopAiModelSettingsScenario = Object.freeze({
         deleteConfirmationScreenshot,
         refreshedEntryScreenshot,
       ],
+    };
+  },
+});
+
+export const desktopAiProviderCapabilityScenario = Object.freeze({
+  id: 'desktop-ai-provider-capabilities',
+  owner: '@neko/host',
+  prepare: (context) => desktopAiModelSettingsScenario.prepare(context),
+  async run({ evaluate, screenshot, waitForSelector }) {
+    await waitForSelector('[data-primary-sidebar="application"]');
+    await evaluate(`(() => {
+      window.resizeTo(1440, 960);
+      const settings = [...document.querySelectorAll('button')].find((button) =>
+        /设置|Settings/u.test(button.getAttribute('aria-label') ?? ''),
+      );
+      if (!(settings instanceof HTMLButtonElement)) throw new Error('Desktop Settings is unavailable.');
+      settings.click();
+      return true;
+    })()`);
+    await waitForSelector('[data-settings-overlay="true"]');
+    await evaluate(`(() => {
+      const navigation = [...document.querySelectorAll(
+        '.desktop-settings__navigation .home-nav-button',
+      )];
+      const agent = navigation.at(-1);
+      if (!(agent instanceof HTMLButtonElement)) throw new Error('Agent Settings is unavailable.');
+      agent.click();
+      return true;
+    })()`);
+    await waitForSelector('[data-provider-group="dialogue"]');
+    await waitForCondition(
+      evaluate,
+      `[...document.querySelectorAll('.desktop-settings__provider-card')].some((card) =>
+        card.textContent?.includes('Functional Generation'))`,
+      'Provider capability directories did not finish loading.',
+    );
+
+    await evaluate(`(() => {
+      const add = document.querySelector(
+        '[data-provider-group="dialogue"] .desktop-settings__provider-group-actions .desktop-settings__action',
+      );
+      if (!(add instanceof HTMLButtonElement)) throw new Error('Dialogue Provider add action is unavailable.');
+      add.click();
+      return true;
+    })()`);
+    await waitForSelector('.desktop-settings__editor');
+    const dialogue = await evaluate(`(() => {
+      const editor = document.querySelector('.desktop-settings__editor');
+      const provider = editor?.querySelector('select');
+      const save = [...editor?.querySelectorAll('button') ?? []].find((button) =>
+        /保存|Save/u.test(button.textContent ?? ''),
+      );
+      const apiKey = editor?.querySelector('input[type="password"]');
+      if (!(provider instanceof HTMLSelectElement) || !(save instanceof HTMLButtonElement) ||
+          !(apiKey instanceof HTMLInputElement)) {
+        throw new Error('Dialogue Provider capability form is incomplete.');
+      }
+      const beforeKey = save.disabled;
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      if (!setValue) throw new Error('HTML input value setter is unavailable.');
+      setValue.call(apiKey, 'functional-dialogue-key');
+      apiKey.dispatchEvent(new Event('input', { bubbles: true }));
+      return {
+        labels: [...provider.options].map((option) => option.textContent?.trim() ?? ''),
+        selected: provider.value,
+        beforeKey,
+      };
+    })()`);
+    await waitForCondition(
+      evaluate,
+      `(() => {
+        const editor = document.querySelector('.desktop-settings__editor');
+        const save = [...editor?.querySelectorAll('button') ?? []].find((button) =>
+          /保存|Save/u.test(button.textContent ?? ''),
+        );
+        return save instanceof HTMLButtonElement && !save.disabled;
+      })()`,
+      'Dialogue Provider save did not enable after required fields were completed.',
+    );
+    if (
+      !dialogue.beforeKey ||
+      !dialogue.selected.startsWith('dsh-catalog:') ||
+      !dialogue.labels.some((label) => label.toLocaleLowerCase() === 'openai')
+    ) {
+      throw new Error(
+        `Dialogue Provider capability state is incorrect: ${JSON.stringify(dialogue)}`,
+      );
+    }
+    const dialogueScreenshot = await screenshot('desktop-dialogue-provider-capability-form');
+    await evaluate(`(() => {
+      const cancel = [...document.querySelectorAll('.desktop-settings__editor button')].find((button) =>
+        /取消|Cancel/u.test(button.textContent ?? ''),
+      );
+      if (!(cancel instanceof HTMLButtonElement)) throw new Error('Dialogue Provider cancel is unavailable.');
+      cancel.click();
+      return true;
+    })()`);
+
+    await evaluate(`(() => {
+      const add = document.querySelector(
+        '[data-provider-group="generation"] .desktop-settings__provider-group-actions .desktop-settings__action',
+      );
+      if (!(add instanceof HTMLButtonElement)) throw new Error('Generation Provider add action is unavailable.');
+      add.click();
+      return true;
+    })()`);
+    await waitForSelector('.desktop-settings__editor');
+    const generation = await evaluate(`(() => {
+      const editor = document.querySelector('.desktop-settings__editor');
+      const provider = editor?.querySelector('select');
+      const save = [...editor?.querySelectorAll('button') ?? []].find((button) =>
+        /保存|Save/u.test(button.textContent ?? ''),
+      );
+      const apiKey = editor?.querySelector('input[type="password"]');
+      if (!(provider instanceof HTMLSelectElement) || !(save instanceof HTMLButtonElement) ||
+          !(apiKey instanceof HTMLInputElement)) {
+        throw new Error('Generation Provider capability form is incomplete.');
+      }
+      const beforeKey = save.disabled;
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      if (!setValue) throw new Error('HTML input value setter is unavailable.');
+      setValue.call(apiKey, 'functional-generation-key');
+      apiKey.dispatchEvent(new Event('input', { bubbles: true }));
+      return {
+        labels: [...provider.options].map((option) => option.textContent?.trim() ?? ''),
+        selected: provider.value,
+        beforeKey,
+        apiUrl: editor.querySelector('input[type="url"]')?.value ?? '',
+      };
+    })()`);
+    await waitForCondition(
+      evaluate,
+      `(() => {
+        const editor = document.querySelector('.desktop-settings__editor');
+        const save = [...editor?.querySelectorAll('button') ?? []].find((button) =>
+          /保存|Save/u.test(button.textContent ?? ''),
+        );
+        return save instanceof HTMLButtonElement && !save.disabled;
+      })()`,
+      'Generation Provider save did not enable after required fields were completed.',
+    );
+    if (
+      !generation.beforeKey ||
+      generation.labels.length !== 16 ||
+      generation.selected !== 'product-preset:generation-minimax-h3' ||
+      generation.apiUrl !== 'https://api.minimaxi.com/v2'
+    ) {
+      throw new Error(
+        `Generation Provider capability state is incorrect: ${JSON.stringify(generation)}`,
+      );
+    }
+    const generationScreenshot = await screenshot('desktop-generation-provider-capability-form');
+    await evaluate(`(() => {
+      const cancel = [...document.querySelectorAll('.desktop-settings__editor button')].find((button) =>
+        /取消|Cancel/u.test(button.textContent ?? ''),
+      );
+      if (!(cancel instanceof HTMLButtonElement)) throw new Error('Generation Provider cancel is unavailable.');
+      cancel.click();
+      return true;
+    })()`);
+
+    await openProvider(evaluate, 'Functional Generation');
+    await waitForSelector('.desktop-settings__editor');
+    await evaluate(`(() => {
+      const addModel = document.querySelector(
+        '.desktop-settings__provider-models-heading .desktop-settings__action',
+      );
+      if (!(addModel instanceof HTMLButtonElement)) throw new Error('Generation model add action is unavailable.');
+      addModel.click();
+      return true;
+    })()`);
+    await waitForSelector('.desktop-settings__model-editor');
+    const model = await evaluate(`(() => {
+      const editor = document.querySelector('.desktop-settings__model-editor');
+      if (!(editor instanceof HTMLElement)) throw new Error('Generation model editor is unavailable.');
+      const type = editor.querySelector('[data-model-field="type"] select');
+      const fields = [...editor.querySelectorAll('[data-model-field]')].map((field) =>
+        field.getAttribute('data-model-field'),
+      );
+      const capability = editor.querySelector('[data-model-capability-trigger="true"]');
+      if (!(type instanceof HTMLSelectElement) || !(capability instanceof HTMLButtonElement)) {
+        throw new Error('Generation model capability controls are incomplete.');
+      }
+      capability.click();
+      return {
+        types: [...type.options].map((option) => option.value),
+        fields,
+        capabilityLabel: capability.getAttribute('aria-label'),
+      };
+    })()`);
+    if (
+      JSON.stringify(model.types) !== JSON.stringify(['image', 'video', 'audio']) ||
+      JSON.stringify(model.fields) !==
+        JSON.stringify(['type', 'capabilities', 'api-name', 'display-name'])
+    ) {
+      throw new Error(`Generation model form state is incorrect: ${JSON.stringify(model)}`);
+    }
+    const modelScreenshot = await screenshot('desktop-generation-model-capability-menu');
+    return {
+      dialogue,
+      generation,
+      model,
+      screenshots: [dialogueScreenshot, generationScreenshot, modelScreenshot],
     };
   },
 });

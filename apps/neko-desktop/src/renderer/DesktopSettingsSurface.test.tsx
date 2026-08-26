@@ -34,11 +34,69 @@ const dialogueCapabilities = {
       source: 'catalog',
       settingsNamespace: 'llm-pi-ai',
       settingsPath: ['providers', 'openai'],
+      providerType: 'openai',
+      defaultApiUrl: '',
+      connectionKind: 'direct',
+      requiresApiKey: true,
     },
   ],
   protocols: ['openai-completions', 'openai-responses', 'anthropic-messages'],
   diagnostics: [],
 } as const;
+
+const generationCapabilities = [
+  {
+    id: 'generation-minimax-h3',
+    displayName: 'MiniMax H3',
+    suggestedProviderId: 'minimax-media',
+    providerType: 'minimax',
+    defaultApiUrl: 'https://api.minimaxi.com/v2',
+    requiresApiUrl: true,
+    connectionKind: 'direct',
+    supportLevel: 'verified',
+    requiresApiKey: true,
+    allowCustomModels: false,
+    supportedModelTypes: ['video'],
+    modelTemplates: [
+      {
+        id: 'minimax-h3',
+        providerType: 'minimax',
+        apiName: 'MiniMax-H3',
+        displayName: 'MiniMax H3',
+        type: 'video',
+        capabilities: ['text_to_video', 'video.generate', 'image_to_video', 'video_to_video'],
+      },
+    ],
+  },
+  {
+    id: 'generation-bytedance-seedance',
+    displayName: 'ByteDance Ark / Seedance',
+    suggestedProviderId: 'bytedance-media',
+    providerType: 'bytedance',
+    defaultApiUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+    requiresApiUrl: true,
+    connectionKind: 'direct',
+    supportLevel: 'verified',
+    requiresApiKey: true,
+    allowCustomModels: false,
+    supportedModelTypes: ['image', 'video'],
+    modelTemplates: [],
+  },
+  {
+    id: 'generation-newapi',
+    displayName: 'Custom NewAPI Media',
+    suggestedProviderId: 'newapi-media',
+    providerType: 'newapi',
+    defaultApiUrl: '',
+    requiresApiUrl: true,
+    connectionKind: 'gateway',
+    supportLevel: 'custom',
+    requiresApiKey: true,
+    allowCustomModels: true,
+    supportedModelTypes: ['image', 'video', 'audio'],
+    modelTemplates: [],
+  },
+] as const;
 
 describe('Desktop Settings surfaces', () => {
   afterEach(() => {
@@ -138,6 +196,7 @@ describe('Desktop Settings surfaces', () => {
   it('shows provider groups directly while keeping provider editing on demand', async () => {
     const projection = {
       dialogueCapabilities,
+      generationCapabilities,
       providers: [
         {
           id: 'deepseek',
@@ -254,6 +313,7 @@ describe('Desktop Settings surfaces', () => {
   it('projects a local Ollama provider as dialogue-only without a credential field', async () => {
     const projection = {
       dialogueCapabilities,
+      generationCapabilities,
       providers: [
         {
           id: 'ollama-local',
@@ -305,16 +365,21 @@ describe('Desktop Settings surfaces', () => {
     const modelEditor = container.querySelector<HTMLElement>('.desktop-settings__model-editor');
     if (!modelEditor) throw new Error('Ollama fixture requires a model editor.');
     expect(modelEditor.textContent).not.toContain('Model ID');
-    const modelNameLabel = [...modelEditor.querySelectorAll('label')].find(
-      (label) => label.querySelector(':scope > span')?.textContent === 'Model name',
+    expect(
+      [...modelEditor.querySelectorAll<HTMLElement>('[data-model-field]')].map((field) =>
+        field.getAttribute('data-model-field'),
+      ),
+    ).toEqual(['type', 'capabilities', 'api-name', 'display-name']);
+    const apiModelNameLabel = [...modelEditor.querySelectorAll('label')].find(
+      (label) => label.querySelector(':scope > span')?.textContent === 'API model name',
     );
-    const modelNameInput = modelNameLabel?.querySelector<HTMLInputElement>('input');
-    if (!modelNameInput) throw new Error('Ollama fixture requires a model name field.');
+    const apiModelNameInput = apiModelNameLabel?.querySelector<HTMLInputElement>('input');
+    if (!apiModelNameInput) throw new Error('Ollama fixture requires an API model name field.');
     await act(async () => {
       const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
       if (!setValue) throw new Error('HTMLInputElement value setter is unavailable.');
-      setValue.call(modelNameInput, 'qwen2.5-7b');
-      modelNameInput.dispatchEvent(new Event('input', { bubbles: true }));
+      setValue.call(apiModelNameInput, 'qwen2.5-7b');
+      apiModelNameInput.dispatchEvent(new Event('input', { bubbles: true }));
     });
     await act(async () =>
       modelEditor.querySelector<HTMLButtonElement>('button.desktop-settings__action')?.click(),
@@ -333,6 +398,7 @@ describe('Desktop Settings surfaces', () => {
   it('keeps the selected Provider identity aligned with API and credential fields', async () => {
     const projection = {
       dialogueCapabilities,
+      generationCapabilities,
       providers: [
         {
           id: 'deepseek-chat',
@@ -438,6 +504,7 @@ describe('Desktop Settings surfaces', () => {
   it('edits authoritative capability tags for an existing custom dialogue model', async () => {
     const projection = {
       dialogueCapabilities,
+      generationCapabilities,
       providers: [
         {
           id: 'nekoapi-chat',
@@ -525,7 +592,13 @@ describe('Desktop Settings surfaces', () => {
   });
 
   it('creates dialogue Providers from the live DSH catalog without a local preset', async () => {
-    const projection = { dialogueCapabilities, providers: [], models: [], defaults: {} };
+    const projection = {
+      dialogueCapabilities,
+      generationCapabilities,
+      providers: [],
+      models: [],
+      defaults: {},
+    };
     const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
     const saveProvider = vi.fn(async () => response);
     const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
@@ -563,6 +636,9 @@ describe('Desktop Settings surfaces', () => {
       )?.textContent,
     ).toContain('DSH catalog default');
 
+    const dialogueApiKey = container.querySelector<HTMLInputElement>('input[type="password"]');
+    if (!dialogueApiKey) throw new Error('DSH Provider form requires an API-key input.');
+    await setInputValue(dialogueApiKey, 'openai-secret');
     await act(async () => findButton(container, 'Save').click());
     expect(saveProvider).toHaveBeenCalledWith(
       {
@@ -573,7 +649,7 @@ describe('Desktop Settings surfaces', () => {
         supportedModelFamilies: ['dialogue'],
         enabled: true,
       },
-      undefined,
+      'openai-secret',
     );
     await act(async () => root.unmount());
   });
@@ -581,6 +657,7 @@ describe('Desktop Settings surfaces', () => {
   it('requires explicit confirmation before deleting an empty configured provider', async () => {
     const projection = {
       dialogueCapabilities,
+      generationCapabilities,
       providers: [
         {
           id: 'custom-empty',
@@ -652,6 +729,7 @@ describe('Desktop Settings surfaces', () => {
     }));
     const projection = {
       dialogueCapabilities,
+      generationCapabilities,
       providers,
       models: [
         modelFixture('chat-model', 'chat', 'llm'),
@@ -692,7 +770,13 @@ describe('Desktop Settings surfaces', () => {
   });
 
   it('prefills the official MiniMax generation Provider before model configuration', async () => {
-    const projection = { dialogueCapabilities, providers: [], models: [], defaults: {} };
+    const projection = {
+      dialogueCapabilities,
+      generationCapabilities,
+      providers: [],
+      models: [],
+      defaults: {},
+    };
     const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
     const saveProvider = vi.fn(async () => response);
     const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
@@ -732,6 +816,9 @@ describe('Desktop Settings surfaces', () => {
     );
     expect(container.querySelectorAll('.desktop-settings__model-editor')).toHaveLength(0);
     expect(saveProvider).not.toHaveBeenCalled();
+    const generationApiKey = container.querySelector<HTMLInputElement>('input[type="password"]');
+    if (!generationApiKey) throw new Error('Generation Provider form requires an API-key input.');
+    await setInputValue(generationApiKey, 'minimax-secret');
     await act(async () => findButton(container, 'Save').click());
     expect(saveProvider).toHaveBeenCalledWith(
       {
@@ -743,7 +830,7 @@ describe('Desktop Settings surfaces', () => {
         supportedModelFamilies: ['generation'],
         enabled: true,
       },
-      undefined,
+      'minimax-secret',
     );
     await act(async () => root.unmount());
   });
@@ -751,6 +838,7 @@ describe('Desktop Settings surfaces', () => {
   it('adds MiniMax H3 through its canonical model template', async () => {
     const projection = {
       dialogueCapabilities,
+      generationCapabilities,
       providers: [
         {
           id: 'minimax-media',
@@ -896,6 +984,15 @@ function findButtonContaining(container: HTMLElement, label: string): HTMLButton
   );
   if (!button) throw new Error(`Settings fixture requires button containing '${label}'.`);
   return button;
+}
+
+async function setInputValue(input: HTMLInputElement, value: string): Promise<void> {
+  await act(async () => {
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    if (!setValue) throw new Error('HTMLInputElement value setter is unavailable.');
+    setValue.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
 }
 
 function modelFixture(id: string, providerId: string, type: 'llm' | 'image' | 'video' | 'audio') {

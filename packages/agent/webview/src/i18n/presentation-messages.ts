@@ -3,6 +3,7 @@ import type { MessageBundle } from '@neko/ui/i18n';
 const en = {
   'chat.selectModel': 'Select model',
   'chat.noModelsAvailable': 'No available models',
+  'chat.modelCatalog.loading': 'Loading models...',
   'chat.entryContext.bindingBar': 'Current context',
   'chat.entryContext.clearTarget': 'Clear',
   'chat.entryQuickActions.label': 'Quick start',
@@ -166,6 +167,7 @@ const en = {
 const zhCn = {
   'chat.selectModel': '选择模型',
   'chat.noModelsAvailable': '无可用模型',
+  'chat.modelCatalog.loading': '正在加载模型…',
   'chat.entryContext.bindingBar': '当前上下文',
   'chat.entryContext.clearTarget': '清除',
   'chat.entryQuickActions.label': '快速开始',

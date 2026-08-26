@@ -79,6 +79,7 @@ describe('Desktop AI model settings contract', () => {
           runtimeEffect: 'unchanged',
           projection: {
             dialogueCapabilities,
+            generationCapabilities: [],
             providers: [
               {
                 id: 'deepseek',
@@ -123,6 +124,7 @@ describe('Desktop AI model settings contract', () => {
           runtimeEffect: 'unchanged',
           projection: {
             dialogueCapabilities,
+            generationCapabilities: [],
             providers: [
               {
                 id: 'deepseek',

@@ -10,7 +10,10 @@ import { assetLibraryRecordRemovalScenario } from '../../packages/assets/webview
 import { desktopMarkdownMediaScenario } from '../../packages/text-editor/webview/functional/desktop-markdown-media.mjs';
 import { desktopTextEditorScenario } from '../../packages/text-editor/webview/functional/desktop-text-editor.mjs';
 import { desktopAgentProviderUiScenario } from './desktop-agent-provider-ui.mjs';
-import { desktopAiModelSettingsScenario } from './desktop-ai-model-settings.mjs';
+import {
+  desktopAiModelSettingsScenario,
+  desktopAiProviderCapabilityScenario,
+} from './desktop-ai-model-settings.mjs';
 import { desktopAgentDiagnosticPortalScenario } from './desktop-agent-diagnostic-portal.mjs';
 import { desktopInvalidWindowConvergenceScenario } from './desktop-invalid-window-convergence.mjs';
 import { characterManagementDialogueScenario } from './character-management-dialogue.mjs';
@@ -44,6 +47,7 @@ const scenarios = new Map(
     previewOpenNekoConsumerScenario,
     desktopAgentProviderUiScenario,
     desktopAiModelSettingsScenario,
+    desktopAiProviderCapabilityScenario,
     desktopAgentDiagnosticPortalScenario,
     desktopInvalidWindowConvergenceScenario,
     characterManagementDialogueScenario,

@@ -195,7 +195,11 @@ import {
 import { resolveGenerationModelParameterProfile } from '@neko/generation-domain';
 import { GenerationApplicationRuntime } from '@neko/generation-domain/job';
 import { ComfyUiLocalApi, ComfyUiWorkflowRunner } from '@neko/generation-domain/comfyui';
-import { PromptGenerationService, createAiSdkPromptCompletionPort } from '@neko/generation-domain/prompt';
+import {
+  PromptGenerationService,
+  createAiSdkPromptCompletionPort,
+} from '@neko/generation-domain/prompt';
+import { GENERATION_PROVIDER_CAPABILITIES } from '@neko/generation-domain/provider-capabilities';
 import {
   createContentReadMediaRequestAssetMaterializer,
   createMediaPlatform,
@@ -225,6 +229,7 @@ import {
 } from '@neko/host/application-settings-state';
 import { DesktopApplicationSettingsService } from '@neko/host/application-settings-service';
 import { DesktopAiModelSettingsService } from '@neko/host/ai-model-settings-service';
+import { projectDesktopDshProviderCapability } from './desktop-dsh-provider-capability-projection';
 import { DesktopStorageSettingsRuntime } from './desktop-storage-settings-runtime';
 import {
   DESKTOP_APPLICATION_SETTINGS_CHANNELS,
@@ -522,12 +527,13 @@ async function startDesktop(): Promise<void> {
         const projection = await read();
         return {
           status: 'available' as const,
-          providers: projection.providers,
+          providers: projection.providers.map(projectDesktopDshProviderCapability),
           protocols: projection.protocols,
           diagnostics: projection.diagnostics.map((diagnostic) => diagnostic.message),
         };
       },
     },
+    { read: () => GENERATION_PROVIDER_CAPABILITIES },
   );
   const storageSettings = new DesktopStorageSettingsRuntime({
     homedir,

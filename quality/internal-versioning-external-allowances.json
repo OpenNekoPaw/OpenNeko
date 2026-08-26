@@ -2662,33 +2662,103 @@
     },
     {
       "category": "versioned-path-or-key",
-      "externalOwner": "OpenAI-compatible API",
-      "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
-      "fieldScope": "defaultApiUrl: 'https://api.openai.com/v1', (packages/host/src/ai-model-provider-presets.ts:74)",
-      "isolationRule": "The route belongs to the explicitly configured external provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
-      "id": "ca674868e4a1af61819c",
-      "path": "packages/host/src/ai-model-provider-presets.ts",
-      "token": "/v1"
-    },
-    {
-      "category": "versioned-path-or-key",
       "externalOwner": "MiniMax Video Generation V2 API",
       "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
-      "fieldScope": "defaultApiUrl: 'https://api.minimaxi.com/v2', (packages/host/src/ai-model-provider-presets.ts:126)",
-      "isolationRule": "The versioned endpoint belongs to the explicitly configured MiniMax provider and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
-      "id": "609546648827971c44e2",
-      "path": "packages/host/src/ai-model-provider-presets.ts",
+      "fieldScope": "Generation provider capability fixture defaultApiUrl in Desktop settings tests",
+      "isolationRule": "The endpoint belongs to the explicitly selected MiniMax provider and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
+      "id": "1dac1fae31ae11288ef2",
+      "path": "apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx",
       "token": "/v2"
     },
     {
       "category": "versioned-path-or-key",
       "externalOwner": "ByteDance Ark API",
       "normativeSource": "https://ai-sdk.dev/providers/ai-sdk-providers/bytedance",
-      "fieldScope": "defaultApiUrl: 'https://ark.cn-beijing.volces.com/api/v3', (packages/host/src/ai-model-provider-presets.ts:139)",
-      "isolationRule": "The versioned endpoint belongs to the explicitly configured ByteDance Ark provider and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
-      "id": "e4bfb8a23e00ff33a957",
-      "path": "packages/host/src/ai-model-provider-presets.ts",
+      "fieldScope": "Generation provider capability fixture defaultApiUrl in Desktop settings tests",
+      "isolationRule": "The endpoint belongs to the explicitly selected ByteDance Ark provider and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
+      "id": "4f208a466c6be3092997",
+      "path": "apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx",
       "token": "/v3"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "MiniMax Video Generation V2 API",
+      "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
+      "fieldScope": "Canonical MiniMax generation provider default API endpoint",
+      "isolationRule": "The endpoint is provider-specific configuration for the explicitly selected MiniMax adapter and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
+      "id": "811ba287ad069341480d",
+      "path": "packages/generation/domain/src/provider-capabilities.ts",
+      "token": "/v2"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "ByteDance Ark API",
+      "normativeSource": "https://ai-sdk.dev/providers/ai-sdk-providers/bytedance",
+      "fieldScope": "Canonical ByteDance generation provider default API endpoint",
+      "isolationRule": "The endpoint is provider-specific configuration for the explicitly selected ByteDance Ark adapter and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
+      "id": "2ce656ae3baa373f3adf",
+      "path": "packages/generation/domain/src/provider-capabilities.ts",
+      "token": "/v3"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI-compatible API",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
+      "fieldScope": "Canonical OpenAI generation provider default API endpoint",
+      "isolationRule": "The endpoint is provider-specific configuration for the explicitly selected OpenAI adapter and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
+      "id": "dcc06ca2c4ad3bc57a42",
+      "path": "packages/generation/domain/src/provider-capabilities.ts",
+      "token": "/v1"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Vidu API",
+      "normativeSource": "https://platform.vidu.com/docs/en/api",
+      "fieldScope": "Canonical Vidu generation provider default API endpoint",
+      "isolationRule": "The endpoint remains inside the explicitly selected Vidu adapter and cannot dispatch an OpenNeko contract, migration, component state, or alternate provider.",
+      "id": "17bc6ebe8bd47ff32e15",
+      "path": "packages/generation/domain/src/provider-capabilities.ts",
+      "token": "/v1"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Alibaba Cloud Model Studio API",
+      "normativeSource": "https://help.aliyun.com/zh/model-studio/text-to-image-api-reference",
+      "fieldScope": "Canonical DashScope generation provider default API endpoint",
+      "isolationRule": "The endpoint remains inside the explicitly selected DashScope adapter and cannot dispatch an OpenNeko contract, migration, component state, or alternate provider.",
+      "id": "37a1016a93b4ed775f9a",
+      "path": "packages/generation/domain/src/provider-capabilities.ts",
+      "token": "/v1"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "MiniMax Video Generation V2 API",
+      "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
+      "fieldScope": "Generation capability reader fixture defaultApiUrl in Host settings service tests",
+      "isolationRule": "The endpoint configures only the explicitly selected MiniMax test provider and cannot dispatch an OpenNeko contract, migration, or alternate provider.",
+      "id": "2bcdaf2bfc0e89e0a5f6",
+      "path": "packages/host/src/ai-model-settings-service.test.ts",
+      "token": "/v2"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "ByteDance Ark API",
+      "normativeSource": "https://ai-sdk.dev/providers/ai-sdk-providers/bytedance",
+      "fieldScope": "Generation capability reader fixture defaultApiUrl in Host settings service tests",
+      "isolationRule": "The endpoint configures only the explicitly selected ByteDance Ark test provider and cannot dispatch an OpenNeko contract, migration, or alternate provider.",
+      "id": "fb89a951ef23fbab3969",
+      "path": "packages/host/src/ai-model-settings-service.test.ts",
+      "token": "/v3"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "MiniMax Video Generation V2 API",
+      "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
+      "fieldScope": "Desktop functional assertion for the projected MiniMax provider endpoint",
+      "isolationRule": "The endpoint is asserted only for the explicitly selected MiniMax provider and cannot dispatch an OpenNeko contract, migration, component state, or alternate provider.",
+      "id": "875f889173b2eba820ee",
+      "path": "scripts/desktop-functional/desktop-ai-model-settings.mjs",
+      "token": "/v2"
     },
     {
       "category": "versioned-path-or-key",

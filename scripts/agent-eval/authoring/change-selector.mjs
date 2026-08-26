@@ -73,7 +73,11 @@ const RULES = Object.freeze([
     'packages/agent/runtime/src/provider/',
     'packages/dsh-bridge/src/',
     'packages/host/src/settings/',
+    'packages/host/src/ai-model-settings',
     'packages/ai/sdk/src/',
+    'packages/generation/domain/src/provider-capabilities',
+    'apps/neko-desktop/src/main/desktop-dsh-provider-capability-projection',
+    'apps/neko-desktop/src/renderer/DesktopSettingsSurface',
   ]),
   rule('creative-media-workflow', 'agent-runtime.creative-media-workflow', [
     'packages/chara/domain/src/application/character-dsh-tool',
@@ -180,6 +184,7 @@ export function isAgentEvaluationRelevantPath(rawPath) {
     path.startsWith('packages/dsh-bridge/') ||
     path.startsWith('packages/automation/') ||
     path.startsWith('packages/ai/sdk/src/') ||
+    path.startsWith('packages/generation/domain/src/provider-capabilities') ||
     path.startsWith('apps/neko-desktop/src/main/desktop-agent') ||
     path.startsWith('apps/neko-desktop/src/main/desktop-dsh-') ||
     path.startsWith('apps/neko-desktop/src/main/desktop-automation-') ||
@@ -188,11 +193,13 @@ export function isAgentEvaluationRelevantPath(rawPath) {
     path.startsWith('apps/neko-desktop/src/preload/desktop-agent') ||
     path.startsWith('apps/neko-desktop/src/preload/dsh-') ||
     path.startsWith('apps/neko-desktop/src/renderer/DesktopAgent') ||
+    path.startsWith('apps/neko-desktop/src/renderer/DesktopSettingsSurface') ||
     path.startsWith('apps/neko-desktop/src/renderer/desktop-agent') ||
     path.startsWith('apps/neko-desktop/src/renderer/desktop-automation-') ||
     path.startsWith('apps/neko-desktop/src/shared/automation-target-selection-contract') ||
     path.startsWith('packages/agent/webview/src/') ||
     path.startsWith('packages/host/src/settings/') ||
+    path.startsWith('packages/host/src/ai-model-settings') ||
     path.startsWith('packages/cut/domain/src/dsh-tool') ||
     path.startsWith('packages/cut/dsh-plugin/') ||
     path.startsWith('packages/chara/domain/src/application/character-dsh-tool') ||

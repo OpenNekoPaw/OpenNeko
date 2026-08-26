@@ -8,7 +8,8 @@
     "./comfyui": "./src/comfyui/index.ts",
     "./job": "./src/job/index.ts",
     "./media": "./src/media/index.ts",
-    "./prompt": "./src/prompt/index.ts"
+    "./prompt": "./src/prompt/index.ts",
+    "./provider-capabilities": "./src/provider-capabilities.ts"
   },
   "scripts": {
     "test": "vitest run",

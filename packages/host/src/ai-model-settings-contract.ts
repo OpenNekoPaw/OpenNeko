@@ -1,19 +1,40 @@
 import type {
+  ModelCapability,
   ModelType,
   ProviderType,
   ProviderConnectionKind,
   ProviderModelFamily,
+  ProviderSupportLevel,
 } from '@neko/ai-contracts';
 import { PROVIDER_TYPES } from '@neko/ai-contracts';
-import type { DesktopAiModelProtocol } from './ai-model-provider-presets';
 
-export {
-  DESKTOP_AI_PROVIDER_PRESETS,
-  defaultDesktopAiModelCapabilities,
-  type DesktopAiModelProtocol,
-  type DesktopAiModelTemplate,
-  type DesktopAiProviderPreset,
-} from './ai-model-provider-presets';
+export { defaultDesktopAiModelCapabilities } from './ai-model-provider-presets';
+
+export type DesktopAiModelProtocol = string;
+
+export interface DesktopAiModelTemplate {
+  readonly id: string;
+  readonly providerType: ProviderType;
+  readonly apiName: string;
+  readonly displayName: string;
+  readonly type: ModelType;
+  readonly capabilities: readonly ModelCapability[];
+}
+
+export interface DesktopAiGenerationProviderCapability {
+  readonly id: string;
+  readonly displayName: string;
+  readonly suggestedProviderId: string;
+  readonly providerType: ProviderType;
+  readonly defaultApiUrl: string;
+  readonly requiresApiUrl: boolean;
+  readonly connectionKind: ProviderConnectionKind;
+  readonly supportLevel: ProviderSupportLevel;
+  readonly requiresApiKey: boolean;
+  readonly allowCustomModels: boolean;
+  readonly supportedModelTypes: readonly Exclude<ModelType, 'llm'>[];
+  readonly modelTemplates: readonly DesktopAiModelTemplate[];
+}
 
 export const DESKTOP_AI_MODEL_SETTINGS_CHANNEL = 'openneko:desktop:ai-model-settings:execute';
 
@@ -56,6 +77,10 @@ export interface DesktopAiDialogueProviderCapability {
   readonly source: 'catalog' | 'declared';
   readonly settingsNamespace: string;
   readonly settingsPath: readonly string[];
+  readonly providerType: ProviderType;
+  readonly defaultApiUrl: string;
+  readonly connectionKind: ProviderConnectionKind;
+  readonly requiresApiKey: boolean;
 }
 
 export type DesktopAiDialogueCapabilityProjection =
@@ -74,6 +99,7 @@ export type DesktopAiDialogueCapabilityProjection =
 
 export interface DesktopAiModelSettingsProjection {
   readonly dialogueCapabilities: DesktopAiDialogueCapabilityProjection;
+  readonly generationCapabilities: readonly DesktopAiGenerationProviderCapability[];
   readonly providers: readonly DesktopAiProviderView[];
   readonly models: readonly DesktopAiModelView[];
   readonly defaults: Readonly<Partial<Record<ModelType, DesktopAiModelRef>>>;
@@ -306,11 +332,15 @@ export function parseDesktopAiModelSettingsProjection(
   const record = exactRecord(value, 'AI model settings projection');
   exactKeys(
     record,
-    ['dialogueCapabilities', 'providers', 'models', 'defaults'],
+    ['dialogueCapabilities', 'generationCapabilities', 'providers', 'models', 'defaults'],
     'AI model settings projection',
   );
-  if (!Array.isArray(record['providers']) || !Array.isArray(record['models'])) {
-    throw invalid('AI model settings providers and models must be arrays.');
+  if (
+    !Array.isArray(record['generationCapabilities']) ||
+    !Array.isArray(record['providers']) ||
+    !Array.isArray(record['models'])
+  ) {
+    throw invalid('AI model settings capabilities, providers, and models must be arrays.');
   }
   const defaultsRecord = exactRecord(record['defaults'], 'AI model defaults');
   exactKeys(defaultsRecord, ['llm', 'image', 'video', 'audio'], 'AI model defaults');
@@ -319,8 +349,18 @@ export function parseDesktopAiModelSettingsProjection(
     const raw = defaultsRecord[type];
     if (raw !== undefined) defaults[type] = parseModelRef(raw);
   }
+  const generationCapabilities = record['generationCapabilities'].map(parseGenerationCapability);
+  assertUnique(
+    generationCapabilities.map((capability) => capability.id),
+    'Generation Provider capability IDs',
+  );
+  assertUnique(
+    generationCapabilities.map((capability) => capability.providerType),
+    'Generation Provider capability types',
+  );
   return {
     dialogueCapabilities: parseDialogueCapabilities(record['dialogueCapabilities']),
+    generationCapabilities,
     providers: record['providers'].map(parseProviderView),
     models: record['models'].map(parseModelView),
     defaults,
@@ -393,7 +433,17 @@ function parseDialogueCapabilities(value: unknown): DesktopAiDialogueCapabilityP
     const provider = exactRecord(value, `Dialogue Provider capability ${index}`);
     exactKeys(
       provider,
-      ['providerId', 'displayName', 'source', 'settingsNamespace', 'settingsPath'],
+      [
+        'providerId',
+        'displayName',
+        'source',
+        'settingsNamespace',
+        'settingsPath',
+        'providerType',
+        'defaultApiUrl',
+        'connectionKind',
+        'requiresApiKey',
+      ],
       `Dialogue Provider capability ${index}`,
     );
     if (
@@ -420,6 +470,21 @@ function parseDialogueCapabilities(value: unknown): DesktopAiDialogueCapabilityP
         `capabilities.providers[${index}].settingsNamespace`,
       ),
       settingsPath: [...provider['settingsPath']],
+      providerType: oneOf(
+        provider['providerType'],
+        PROVIDER_TYPES,
+        `capabilities.providers[${index}].providerType`,
+      ),
+      defaultApiUrl: httpUrlOrEmpty(provider['defaultApiUrl']),
+      connectionKind: oneOf(
+        provider['connectionKind'],
+        ['gateway', 'local', 'direct'] as const,
+        `capabilities.providers[${index}].connectionKind`,
+      ),
+      requiresApiKey: booleanValue(
+        provider['requiresApiKey'],
+        `capabilities.providers[${index}].requiresApiKey`,
+      ),
     };
   });
   const protocols = record['protocols'].map((entry, index) =>
@@ -440,6 +505,101 @@ function parseDialogueCapabilities(value: unknown): DesktopAiDialogueCapabilityP
     };
   }
   return { status, providers, protocols, diagnostics };
+}
+
+function parseGenerationCapability(
+  value: unknown,
+  index: number,
+): DesktopAiGenerationProviderCapability {
+  const record = exactRecord(value, `Generation Provider capability ${index}`);
+  exactKeys(
+    record,
+    [
+      'id',
+      'displayName',
+      'suggestedProviderId',
+      'providerType',
+      'defaultApiUrl',
+      'requiresApiUrl',
+      'connectionKind',
+      'supportLevel',
+      'requiresApiKey',
+      'allowCustomModels',
+      'supportedModelTypes',
+      'modelTemplates',
+    ],
+    `Generation Provider capability ${index}`,
+  );
+  if (!Array.isArray(record['supportedModelTypes']) || record['supportedModelTypes'].length === 0) {
+    throw invalid(`Generation Provider capability ${index} supportedModelTypes is invalid.`);
+  }
+  if (!Array.isArray(record['modelTemplates'])) {
+    throw invalid(`Generation Provider capability ${index} modelTemplates is invalid.`);
+  }
+  const providerType = oneOf(record['providerType'], PROVIDER_TYPES, 'providerType');
+  const supportedModelTypes = record['supportedModelTypes'].map((type) =>
+    oneOf(type, ['image', 'video', 'audio'] as const, 'supportedModelType'),
+  );
+  assertUnique(supportedModelTypes, `Generation Provider capability ${index} model types`);
+  const modelTemplates = record['modelTemplates'].map((template, templateIndex) =>
+    parseModelTemplate(template, index, templateIndex, providerType),
+  );
+  assertUnique(
+    modelTemplates.map((template) => template.id),
+    `Generation Provider capability ${index} model template IDs`,
+  );
+  return {
+    id: identity(record['id'], `generationCapabilities[${index}].id`),
+    displayName: nonEmpty(record['displayName'], `generationCapabilities[${index}].displayName`),
+    suggestedProviderId: identity(
+      record['suggestedProviderId'],
+      `generationCapabilities[${index}].suggestedProviderId`,
+    ),
+    providerType,
+    defaultApiUrl: httpUrlOrEmpty(record['defaultApiUrl']),
+    requiresApiUrl: booleanValue(record['requiresApiUrl'], 'requiresApiUrl'),
+    connectionKind: oneOf(
+      record['connectionKind'],
+      ['gateway', 'local', 'direct'] as const,
+      'connectionKind',
+    ),
+    supportLevel: oneOf(
+      record['supportLevel'],
+      ['verified', 'compatible', 'custom'] as const,
+      'supportLevel',
+    ),
+    requiresApiKey: booleanValue(record['requiresApiKey'], 'requiresApiKey'),
+    allowCustomModels: booleanValue(record['allowCustomModels'], 'allowCustomModels'),
+    supportedModelTypes,
+    modelTemplates,
+  };
+}
+
+function parseModelTemplate(
+  value: unknown,
+  capabilityIndex: number,
+  templateIndex: number,
+  providerType: ProviderType,
+): DesktopAiModelTemplate {
+  const label = `Generation Provider capability ${capabilityIndex} model template ${templateIndex}`;
+  const record = exactRecord(value, label);
+  exactKeys(
+    record,
+    ['id', 'providerType', 'apiName', 'displayName', 'type', 'capabilities'],
+    label,
+  );
+  const templateProviderType = oneOf(record['providerType'], PROVIDER_TYPES, 'providerType');
+  if (templateProviderType !== providerType) {
+    throw invalid(`${label} providerType does not match its Provider capability.`);
+  }
+  return {
+    id: identity(record['id'], `${label}.id`),
+    providerType: templateProviderType,
+    apiName: nonEmpty(record['apiName'], `${label}.apiName`),
+    displayName: nonEmpty(record['displayName'], `${label}.displayName`),
+    type: oneOf(record['type'], ['image', 'video', 'audio'] as const, `${label}.type`),
+    capabilities: modelCapabilities(record['capabilities']) as readonly ModelCapability[],
+  };
 }
 
 function parseModelView(value: unknown): DesktopAiModelView {
@@ -509,6 +669,11 @@ function exactKeys(record: Record<string, unknown>, keys: readonly string[], lab
   const allowed = new Set(keys);
   const extras = Object.keys(record).filter((key) => !allowed.has(key));
   if (extras.length > 0) throw invalid(`${label} contains unknown fields: ${extras.join(', ')}.`);
+}
+
+function assertUnique(values: readonly string[], label: string): void {
+  if (new Set(values).size !== values.length)
+    throw invalid(`${label} must not contain duplicates.`);
 }
 
 function nonEmpty(value: unknown, label: string): string {

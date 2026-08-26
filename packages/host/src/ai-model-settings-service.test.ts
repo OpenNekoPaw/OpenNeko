@@ -9,7 +9,9 @@ import { FileUserConfigManager } from './settings/user-config';
 import {
   DesktopAiModelSettingsService,
   type DesktopAiDialogueCapabilityReader,
+  type DesktopAiGenerationCapabilityReader,
 } from './ai-model-settings-service';
+import type { DesktopAiGenerationProviderCapability } from './ai-model-settings-contract';
 
 const dialogueCapabilities: DesktopAiDialogueCapabilityReader = {
   read: vi.fn(async () => ({
@@ -21,6 +23,10 @@ const dialogueCapabilities: DesktopAiDialogueCapabilityReader = {
         source: 'catalog' as const,
         settingsNamespace: 'llm-pi-ai',
         settingsPath: ['providers', 'provider-a'],
+        providerType: 'generic' as const,
+        defaultApiUrl: '',
+        connectionKind: 'direct' as const,
+        requiresApiKey: true,
       },
     ],
     protocols: [
@@ -35,12 +41,84 @@ const dialogueCapabilities: DesktopAiDialogueCapabilityReader = {
   })),
 };
 
+const generationCapabilityValues = [
+  {
+    id: 'generation-minimax-h3',
+    displayName: 'MiniMax H3',
+    suggestedProviderId: 'minimax-media',
+    providerType: 'minimax',
+    defaultApiUrl: 'https://api.minimaxi.com/v2',
+    requiresApiUrl: true,
+    connectionKind: 'direct',
+    supportLevel: 'verified',
+    requiresApiKey: true,
+    allowCustomModels: false,
+    supportedModelTypes: ['video'],
+    modelTemplates: [
+      {
+        id: 'minimax-h3',
+        providerType: 'minimax',
+        apiName: 'MiniMax-H3',
+        displayName: 'MiniMax H3',
+        type: 'video',
+        capabilities: ['text_to_video', 'video.generate', 'image_to_video', 'video_to_video'],
+      },
+    ],
+  },
+  {
+    id: 'generation-bytedance-seedance',
+    displayName: 'ByteDance Ark / Seedance',
+    suggestedProviderId: 'bytedance-media',
+    providerType: 'bytedance',
+    defaultApiUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+    requiresApiUrl: true,
+    connectionKind: 'direct',
+    supportLevel: 'verified',
+    requiresApiKey: true,
+    allowCustomModels: false,
+    supportedModelTypes: ['image', 'video'],
+    modelTemplates: [
+      {
+        id: 'bytedance-seedance-2',
+        providerType: 'bytedance',
+        apiName: 'doubao-seedance-2-0-260128',
+        displayName: 'Seedance 2.0',
+        type: 'video',
+        capabilities: ['text_to_video', 'video.generate', 'image_to_video'],
+      },
+    ],
+  },
+  {
+    id: 'generation-newapi',
+    displayName: 'NewAPI Media',
+    suggestedProviderId: 'newapi-media',
+    providerType: 'newapi',
+    defaultApiUrl: '',
+    requiresApiUrl: true,
+    connectionKind: 'gateway',
+    supportLevel: 'custom',
+    requiresApiKey: true,
+    allowCustomModels: true,
+    supportedModelTypes: ['image', 'video', 'audio'],
+    modelTemplates: [],
+  },
+] as const satisfies readonly DesktopAiGenerationProviderCapability[];
+
+const generationCapabilities: DesktopAiGenerationCapabilityReader = {
+  read: () => generationCapabilityValues,
+};
+
 function createService(
   config: ConfigManager,
   credentials: ProviderCredentialAuthority,
   capabilities: DesktopAiDialogueCapabilityReader = dialogueCapabilities,
 ) {
-  return new DesktopAiModelSettingsService(config, credentials, capabilities);
+  return new DesktopAiModelSettingsService(
+    config,
+    credentials,
+    capabilities,
+    generationCapabilities,
+  );
 }
 
 function createConfig() {
@@ -157,6 +235,10 @@ describe('DesktopAiModelSettingsService', () => {
             source: 'catalog' as const,
             settingsNamespace: 'llm-pi-ai',
             settingsPath: ['providers', 'future-provider'],
+            providerType: 'generic' as const,
+            defaultApiUrl: '',
+            connectionKind: 'direct' as const,
+            requiresApiKey: true,
           },
         ],
         protocols: ['future-protocol'],
@@ -175,6 +257,7 @@ describe('DesktopAiModelSettingsService', () => {
         supportedModelFamilies: ['dialogue'],
         enabled: true,
       },
+      apiKey: 'future-secret',
     });
 
     expect(config.setProvider).toHaveBeenCalledWith(
@@ -338,7 +421,6 @@ describe('DesktopAiModelSettingsService', () => {
           type: 'ollama',
           apiUrl: 'http://localhost:11434/api',
           protocol: 'ollama',
-          presetId: 'dialogue-ollama',
           supportedModelFamilies: ['dialogue'],
           enabled: true,
         },
@@ -389,9 +471,8 @@ describe('DesktopAiModelSettingsService', () => {
           displayName: 'Colliding Provider',
           type: 'newapi',
           apiUrl: 'https://example.test/v1',
-          protocol: 'openai-chat',
-          presetId: 'dialogue-newapi',
-          supportedModelFamilies: ['dialogue'],
+          presetId: 'generation-newapi',
+          supportedModelFamilies: ['generation'],
           enabled: true,
         },
       }),
@@ -443,7 +524,6 @@ describe('DesktopAiModelSettingsService', () => {
           type: 'ollama',
           apiUrl: 'http://localhost:11434/api',
           protocol: 'ollama',
-          presetId: 'dialogue-ollama',
           supportedModelFamilies: ['dialogue'],
           enabled: true,
         },
@@ -474,6 +554,7 @@ describe('DesktopAiModelSettingsService', () => {
     const { config } = createConfig();
     const credentials = {
       read: vi.fn(async () => undefined),
+      replaceApiKey: vi.fn(async () => undefined),
     } as unknown as ProviderCredentialAuthority;
 
     await createService(config, credentials).execute({
@@ -488,6 +569,7 @@ describe('DesktopAiModelSettingsService', () => {
         supportedModelFamilies: ['generation'],
         enabled: true,
       },
+      apiKey: 'generation-secret',
     });
 
     expect(config.setProvider).toHaveBeenCalledWith(
@@ -506,6 +588,7 @@ describe('DesktopAiModelSettingsService', () => {
     const { config } = createConfig();
     const credentials = {
       read: vi.fn(async () => undefined),
+      replaceApiKey: vi.fn(async () => undefined),
     } as unknown as ProviderCredentialAuthority;
 
     await createService(config, credentials).execute({
@@ -520,6 +603,7 @@ describe('DesktopAiModelSettingsService', () => {
         supportedModelFamilies: ['generation'],
         enabled: true,
       },
+      apiKey: 'generation-secret',
     });
 
     expect(config.setProvider).toHaveBeenCalledWith(

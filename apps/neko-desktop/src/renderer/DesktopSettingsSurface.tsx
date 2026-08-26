@@ -13,7 +13,6 @@ import { Dialog } from '@neko/ui/primitives';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { DesktopApplicationPreferences } from '@neko/host/application-settings';
 import {
-  DESKTOP_AI_PROVIDER_PRESETS,
   defaultDesktopAiModelCapabilities,
   type DesktopAiModelCapability,
   type DesktopAiModelTemplate,
@@ -672,6 +671,7 @@ function AgentModelSettingsGroup({
             }
             defaults={projection?.defaults ?? {}}
             dialogueCapabilities={projection?.dialogueCapabilities}
+            generationCapabilities={projection?.generationCapabilities ?? []}
             onCancel={() => {
               setEditingProvider(undefined);
               setCreatingProviderFamily(undefined);
@@ -753,28 +753,31 @@ interface ProviderCreationOption {
   readonly protocol?: DesktopAiModelProtocol;
   readonly presetId?: string;
   readonly requiresApiKey: boolean;
+  readonly requiresApiUrl: boolean;
 }
 
 function createProviderCreationOptions(
   family: DesktopAiProviderModelFamily | undefined,
-  capabilities: DesktopAiModelSettingsProjection['dialogueCapabilities'] | undefined,
+  dialogueCapabilities: DesktopAiModelSettingsProjection['dialogueCapabilities'] | undefined,
+  generationCapabilities: DesktopAiModelSettingsProjection['generationCapabilities'],
   customLabel: string,
 ): readonly ProviderCreationOption[] {
   if (family === 'dialogue') {
-    if (capabilities?.status !== 'available') return [];
+    if (dialogueCapabilities?.status !== 'available') return [];
     return [
-      ...capabilities.providers
+      ...dialogueCapabilities.providers
         .filter((provider) => provider.source === 'catalog')
         .map((provider) => ({
           id: `dsh-catalog:${provider.providerId}`,
           kind: 'dsh-catalog' as const,
           suggestedProviderId: provider.providerId,
           displayName: provider.displayName,
-          providerType: providerTypeForDshProvider(provider.providerId),
-          defaultApiUrl: '',
-          requiresApiKey: provider.providerId !== 'ollama',
+          providerType: provider.providerType,
+          defaultApiUrl: provider.defaultApiUrl,
+          requiresApiKey: provider.requiresApiKey,
+          requiresApiUrl: false,
         })),
-      ...(capabilities.protocols.length === 0
+      ...(dialogueCapabilities.protocols.length === 0
         ? []
         : [
             {
@@ -784,43 +787,31 @@ function createProviderCreationOptions(
               displayName: customLabel,
               providerType: 'generic' as const,
               defaultApiUrl: '',
-              protocol: capabilities.protocols[0],
+              protocol: dialogueCapabilities.protocols[0],
               requiresApiKey: true,
+              requiresApiUrl: true,
             },
           ]),
     ];
   }
-  return DESKTOP_AI_PROVIDER_PRESETS.filter((preset) => preset.family === family).map((preset) => ({
-    id: `product-preset:${preset.id}`,
+  return generationCapabilities.map((capability) => ({
+    id: `product-preset:${capability.id}`,
     kind: 'product-preset' as const,
-    suggestedProviderId: preset.suggestedProviderId,
-    displayName: preset.displayName,
-    providerType: preset.providerType,
-    defaultApiUrl: preset.defaultApiUrl,
-    ...(preset.protocol === undefined ? {} : { protocol: preset.protocol }),
-    presetId: preset.id,
-    requiresApiKey: preset.requiresApiKey,
+    suggestedProviderId: capability.suggestedProviderId,
+    displayName: capability.displayName,
+    providerType: capability.providerType,
+    defaultApiUrl: capability.defaultApiUrl,
+    presetId: capability.id,
+    requiresApiKey: capability.requiresApiKey,
+    requiresApiUrl: capability.requiresApiUrl,
   }));
-}
-
-function providerTypeForDshProvider(providerId: string): DesktopAiProviderType {
-  switch (providerId) {
-    case 'openai':
-    case 'anthropic':
-    case 'google':
-    case 'azure':
-    case 'ollama':
-    case 'xai':
-      return providerId;
-    default:
-      return 'generic';
-  }
 }
 
 function ProviderForm({
   disabled,
   defaults,
   dialogueCapabilities,
+  generationCapabilities,
   initial,
   modelFamily,
   models,
@@ -834,6 +825,7 @@ function ProviderForm({
   readonly disabled: boolean;
   readonly defaults: DesktopAiModelSettingsProjection['defaults'];
   readonly dialogueCapabilities?: DesktopAiModelSettingsProjection['dialogueCapabilities'];
+  readonly generationCapabilities: DesktopAiModelSettingsProjection['generationCapabilities'];
   readonly initial?: DesktopAiProviderView;
   readonly modelFamily: readonly DesktopAiProviderModelFamily[];
   readonly models: readonly DesktopAiModelView[];
@@ -870,6 +862,7 @@ function ProviderForm({
   const creationOptions = createProviderCreationOptions(
     creationFamily,
     dialogueCapabilities,
+    generationCapabilities,
     t('settings.agent.customProvider'),
   );
   const initialOption = initial ? undefined : creationOptions[0];
@@ -896,6 +889,10 @@ function ProviderForm({
   const [confirmProviderDelete, setConfirmProviderDelete] = useState(false);
   const requiresApiKey =
     selectedOption?.requiresApiKey ?? initial?.credentialStatus !== 'not-required';
+  const generationCapability = generationCapabilities.find(
+    (capability) => capability.providerType === (initial?.type ?? providerType),
+  );
+  const requiresApiUrl = selectedOption?.requiresApiUrl ?? generationCapability?.requiresApiUrl;
   const isCatalogueProvider =
     modelFamily.includes('dialogue') &&
     (selectedOption?.kind === 'dsh-catalog' ||
@@ -905,18 +902,19 @@ function ProviderForm({
         )));
   const isCatalogueRoute = isCatalogueProvider && protocol === undefined;
   const canSave = Boolean(
-    id.trim() &&
+    /^[a-z0-9][a-z0-9._:-]*$/iu.test(id.trim()) &&
     displayName.trim() &&
-    (isCatalogueRoute || !modelFamily.includes('dialogue') || apiUrl.trim()),
+    (isCatalogueRoute || requiresApiUrl === false || apiUrl.trim()) &&
+    (!requiresApiKey || initial !== undefined || apiKey.trim()),
   );
   const submit = (event: FormEvent): void => {
     event.preventDefault();
     void onSave(
       {
-        id,
-        displayName,
+        id: id.trim(),
+        displayName: displayName.trim(),
         type: providerType,
-        apiUrl,
+        apiUrl: apiUrl.trim(),
         ...(protocol === undefined ? {} : { protocol }),
         ...(initial || selectedOption?.presetId === undefined
           ? {}
@@ -924,7 +922,7 @@ function ProviderForm({
         supportedModelFamilies: modelFamily,
         enabled: true,
       },
-      apiKey.trim() ? apiKey : undefined,
+      apiKey.trim() || undefined,
     );
   };
   return (
@@ -1055,7 +1053,7 @@ function ProviderForm({
             <input
               disabled={disabled}
               placeholder={t('settings.agent.apiUrlPlaceholder')}
-              required={!isCatalogueRoute}
+              required={!isCatalogueRoute && requiresApiUrl !== false}
               type="url"
               value={apiUrl}
               onChange={(e) => setApiUrl(e.currentTarget.value)}
@@ -1149,11 +1147,15 @@ function ProviderForm({
         {initial && showModelForm ? (
           <ModelForm
             key={editingModel ? `edit:${editingModel.id}` : 'new-model'}
-            allowCustomModels={providerAllowsCustomModels(initial.type, modelFamily)}
+            allowCustomModels={providerAllowsCustomModels(generationCapability)}
             disabled={disabled}
             initial={editingModel}
-            modelTemplates={modelTemplatesForProvider(initial.type, modelFamily)}
-            supportedTypes={modelTypesForFamilies(modelFamily, protocol)}
+            modelTemplates={generationCapability?.modelTemplates ?? []}
+            supportedTypes={modelTypesForFamilies(
+              modelFamily,
+              protocol,
+              generationCapability?.supportedModelTypes,
+            )}
             providerId={initial.id}
             onCancel={() => {
               setEditingModel(undefined);
@@ -1358,16 +1360,25 @@ function ModelForm({
             </select>
           </label>
         ) : null}
-        <label>
-          <span>{t('settings.agent.apiModelName')}</span>
-          <input
-            disabled={disabled || selectedTemplate !== undefined}
-            required
-            value={apiName}
-            onChange={(e) => setApiName(e.currentTarget.value)}
-          />
+        <label data-model-field="type">
+          <span>{t('settings.agent.modelType')}</span>
+          <select
+            disabled={disabled || initial !== undefined || selectedTemplate !== undefined}
+            value={type}
+            onChange={(e) => {
+              const nextType = e.currentTarget.value as DesktopAiModelType;
+              setType(nextType);
+              setCapabilities(defaultDesktopAiModelCapabilities(nextType));
+            }}
+          >
+            {supportedTypes.map((candidate) => (
+              <option key={candidate} value={candidate}>
+                {t(`settings.agent.modelType.${candidate}`)}
+              </option>
+            ))}
+          </select>
         </label>
-        <div className="desktop-settings__model-capability-field">
+        <div className="desktop-settings__model-capability-field" data-model-field="capabilities">
           <span>{t('settings.agent.modelCapabilities')}</span>
           <Popover
             align="end"
@@ -1436,25 +1447,16 @@ function ModelForm({
             </div>
           </Popover>
         </div>
-        <label>
-          <span>{t('settings.agent.modelType')}</span>
-          <select
-            disabled={disabled || initial !== undefined || selectedTemplate !== undefined}
-            value={type}
-            onChange={(e) => {
-              const nextType = e.currentTarget.value as DesktopAiModelType;
-              setType(nextType);
-              setCapabilities(defaultDesktopAiModelCapabilities(nextType));
-            }}
-          >
-            {supportedTypes.map((candidate) => (
-              <option key={candidate} value={candidate}>
-                {t(`settings.agent.modelType.${candidate}`)}
-              </option>
-            ))}
-          </select>
+        <label data-model-field="api-name">
+          <span>{t('settings.agent.apiModelName')}</span>
+          <input
+            disabled={disabled || selectedTemplate !== undefined}
+            required
+            value={apiName}
+            onChange={(e) => setApiName(e.currentTarget.value)}
+          />
         </label>
-        <label>
+        <label data-model-field="display-name">
           <span>{t('settings.agent.modelName')}</span>
           <input
             disabled={disabled}
@@ -1484,31 +1486,20 @@ function ModelForm({
 function modelTypesForFamilies(
   families: readonly DesktopAiProviderModelFamily[],
   protocol: DesktopAiModelProtocol | undefined,
+  generationModelTypes: readonly Exclude<DesktopAiModelType, 'llm'>[] | undefined,
 ): readonly DesktopAiModelType[] {
   if (protocol === 'ollama') return ['llm'];
   return [
     ...(families.includes('dialogue') ? (['llm'] as const) : []),
-    ...(families.includes('generation') ? (['image', 'video', 'audio'] as const) : []),
+    ...(families.includes('generation') ? (generationModelTypes ?? []) : []),
   ];
 }
 
-function modelTemplatesForProvider(
-  providerType: DesktopAiProviderType,
-  families: readonly DesktopAiProviderModelFamily[],
-): readonly DesktopAiModelTemplate[] {
-  return DESKTOP_AI_PROVIDER_PRESETS.filter(
-    (preset) => preset.providerType === providerType && families.includes(preset.family),
-  ).flatMap((preset) => preset.modelTemplates);
-}
-
 function providerAllowsCustomModels(
-  providerType: DesktopAiProviderType,
-  families: readonly DesktopAiProviderModelFamily[],
+  generationCapability:
+    DesktopAiModelSettingsProjection['generationCapabilities'][number] | undefined,
 ): boolean {
-  const presets = DESKTOP_AI_PROVIDER_PRESETS.filter(
-    (preset) => preset.providerType === providerType && families.includes(preset.family),
-  );
-  return presets.length === 0 || presets.some((preset) => preset.allowCustomModels);
+  return generationCapability?.allowCustomModels ?? true;
 }
 
 function ProviderModelCatalog({

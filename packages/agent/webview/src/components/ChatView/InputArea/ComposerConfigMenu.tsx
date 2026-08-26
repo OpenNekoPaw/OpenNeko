@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { SessionMode } from '@neko/agent-contracts';
 import type { ChatModelOption } from '@neko/ai-contracts';
 import { SettingsIcon } from '@neko/ui/icons';
@@ -29,6 +29,7 @@ import type {
 
 interface ComposerConfigMenuProps {
   readonly activeMode: SessionMode;
+  readonly modelCatalogStatus?: 'loading' | 'ready';
   readonly availableModels: readonly ChatModelOption[];
   readonly selectedModel: string;
   readonly onModelSelect: (modelId: string) => void;
@@ -92,6 +93,7 @@ const AUDIO_TYPE_OPTIONS = [
 
 export function ComposerConfigMenu({
   activeMode,
+  modelCatalogStatus = 'ready',
   availableModels,
   selectedModel,
   onModelSelect,
@@ -126,15 +128,22 @@ export function ComposerConfigMenu({
     mediaModelSelection,
     availableMediaModels,
   });
-  const canOpen = !disabled;
+  const catalogLoading = modelCatalogStatus === 'loading';
+  const canOpen = !disabled && !catalogLoading;
   const modelTriggerTitle =
     disabledReason ??
     selected?.label ??
-    (activeMode === 'agent'
-      ? t('chat.noModelsAvailable')
-      : t('chat.generation.model.unconfigured', {
-          category: getCategoryLabel(t, activeMode),
-        }));
+    (catalogLoading
+      ? t('chat.modelCatalog.loading')
+      : activeMode === 'agent'
+        ? t('chat.noModelsAvailable')
+        : t('chat.generation.model.unconfigured', {
+            category: getCategoryLabel(t, activeMode),
+          }));
+
+  useEffect(() => {
+    if (catalogLoading && isOpen) setIsOpen(false);
+  }, [catalogLoading, isOpen, setIsOpen]);
 
   const parameterSummary =
     activeMode === 'agent' ? undefined : getMediaParameterSummary(activeMode, genParams, t);
@@ -157,11 +166,12 @@ export function ComposerConfigMenu({
     <div className="agent-model-config relative flex min-w-0" ref={menuRef}>
       <button
         type="button"
+        data-agent-model-config-trigger="true"
         onClick={() => openConfig('model')}
         aria-label={t('chat.modelMenu.trigger')}
         aria-haspopup="dialog"
         aria-expanded={isOpen && section === 'model'}
-        disabled={disabled}
+        disabled={!canOpen}
         className={`agent-control-chip agent-control-chip-model agent-model-config-trigger ${
           selected ? '' : 'agent-control-chip-muted'
         }`}
@@ -478,6 +488,7 @@ function ExactModelGroup({
       <div className="agent-model-config-radio-list" role="radiogroup" aria-label={label}>
         {leadingOption ? (
           <ModelRadio
+            optionId={leadingOption.id}
             label={leadingOption.label}
             checked={selectedId === leadingOption.id}
             muted
@@ -493,6 +504,7 @@ function ExactModelGroup({
             {group.models.map((model) => (
               <ModelRadio
                 key={model.id}
+                optionId={model.id}
                 label={shortenModelLabel(model)}
                 checked={selectedId === model.id}
                 tags={buildModelTags(model, t)}
@@ -510,12 +522,14 @@ function ExactModelGroup({
 }
 
 function ModelRadio({
+  optionId,
   label,
   checked,
   tags,
   muted = false,
   onSelect,
 }: {
+  readonly optionId: string;
   readonly label: string;
   readonly checked: boolean;
   readonly tags?: readonly string[];
@@ -525,6 +539,7 @@ function ModelRadio({
   return (
     <button
       type="button"
+      data-agent-model-option-id={optionId}
       role="radio"
       aria-checked={checked}
       aria-label={label}
