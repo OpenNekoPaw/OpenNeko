@@ -1097,6 +1097,10 @@ describe('DesktopCanvasRuntime', () => {
     expect(separate.snapshot.canvas.nodes).toHaveLength(2);
     expect(separate.snapshot.canvas.nodes[1]).toMatchObject({
       type: 'media',
+      position: {
+        x: node.position.x + node.size.width + 40,
+        y: node.position.y,
+      },
       data: {
         mediaType: 'audio',
         title: 'clip-audio.m4a',

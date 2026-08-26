@@ -9,6 +9,8 @@ import { planCanvasNodeCreation } from './utils/canvasHeadlessAuthoring';
 import { type CanvasData, type CanvasConnection } from './types/canvas';
 import { resolveCanvasImageNodeSize, type CanvasImageDimensions } from './canvas-node-sizing';
 
+const DERIVED_CANVAS_NODE_GAP = 40;
+
 /**
  * Host-resolved, portable material ready for a Canvas commit.
  * Authorization, linking and copying must already be complete.
@@ -107,16 +109,30 @@ export function projectDerivedCanvasMaterialToCanvas(input: {
   ) {
     throw new Error('Canvas derived output requires unique source node identities.');
   }
-  const existingNodeIds = new Set(input.canvas.nodes.map((node) => node.id));
-  for (const sourceNodeId of input.sourceNodeIds) {
-    if (!sourceNodeId.trim() || !existingNodeIds.has(sourceNodeId)) {
+  const existingNodesById = new Map(input.canvas.nodes.map((node) => [node.id, node]));
+  const sourceNodes = input.sourceNodeIds.map((sourceNodeId) => {
+    const sourceNode = existingNodesById.get(sourceNodeId);
+    if (!sourceNodeId.trim() || !sourceNode) {
       throw new Error(`Canvas derived output source node "${sourceNodeId}" does not exist.`);
     }
-  }
+    return sourceNode;
+  });
+  const existingNodeIds = new Set(existingNodesById.keys());
+  const material = input.material.position
+    ? input.material
+    : {
+        ...input.material,
+        position: {
+          x:
+            Math.max(...sourceNodes.map((node) => node.position.x + node.size.width)) +
+            DERIVED_CANVAS_NODE_GAP,
+          y: Math.min(...sourceNodes.map((node) => node.position.y)),
+        },
+      };
 
   const projected = projectResolvedCanvasMaterialToCanvas({
     canvas: input.canvas,
-    material: input.material,
+    material,
     ...(input.generateId ? { generateId: input.generateId } : {}),
   });
   const outputs = projected.nodes.filter((node) => !existingNodeIds.has(node.id));

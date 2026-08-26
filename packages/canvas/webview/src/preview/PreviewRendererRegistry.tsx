@@ -23,7 +23,6 @@ export interface PreviewRendererProps {
   surfaceKind?: PlaybackSurfaceKind;
   playbackControl?: PreviewPlaybackControl;
   chrome?: 'contained' | 'full-bleed';
-  audioLayout?: 'transport' | 'node-card';
   mediaPlayback?: 'interactive' | 'inline' | 'ambient';
 }
 

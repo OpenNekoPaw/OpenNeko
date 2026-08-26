@@ -749,7 +749,7 @@ describe('CanvasHostRuntimeSession', () => {
   it.each([
     ['prompt', { width: 120, height: 80 }],
     ['image', { width: 120, height: 90 }],
-    ['audio', { width: 120, height: 60 }],
+    ['audio', { width: 240, height: 100 }],
     ['video', { width: 120, height: 90 }],
   ] as const)(
     'creates an empty canonical %s Generation Node with the matching content size',

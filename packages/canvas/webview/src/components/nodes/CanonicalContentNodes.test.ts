@@ -31,9 +31,8 @@ describe('canonical content node runtime boundaries', () => {
     expect(source).toContain('<PreviewSurface');
     expect(source).toContain('surfaceKind="inline"');
     expect(source).not.toContain('audioPresentation');
-    expect(source).toContain('audioLayout={mediaType ===');
+    expect(source).not.toContain('audioLayout');
     expect(source).toContain("className={mediaType === 'image' ? 'canvas-image-node-frame'");
-    expect(source).toContain("'node-card'");
     expect(source).not.toContain('canvas-audio-node-title');
     expect(source).not.toContain('onPointerEnter');
     expect(source).not.toContain('onPointerLeave');

@@ -167,7 +167,6 @@ export function MediaNode({
               source={previewSource}
               surfaceKind="inline"
               chrome="full-bleed"
-              audioLayout={mediaType === 'audio' ? 'node-card' : undefined}
               mediaPlayback={mediaType === 'video' ? 'inline' : undefined}
             />
           )}

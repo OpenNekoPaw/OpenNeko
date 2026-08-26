@@ -47,6 +47,18 @@ describe('PreviewRoot', () => {
     expect(rootStyles).toMatch(/\.neko-preview-root__viewer\s*\{[^}]*position:\s*relative;/u);
   });
 
+  it('keeps compact audio waveform and transport controls on two rows', () => {
+    expect(rootStyles).toMatch(
+      /\.neko-preview-lightweight-audio__player\s*\{[^}]*grid-template-rows:\s*minmax\(0, 1fr\) auto;/u,
+    );
+    expect(rootStyles).toMatch(
+      /\.neko-preview-lightweight-audio__controls\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto minmax\(0, 1fr\);/u,
+    );
+    expect(rootStyles).toMatch(
+      /\.neko-preview-lightweight-audio__button\.is-primary\s*\{[^}]*grid-column:\s*2;/u,
+    );
+  });
+
   it('registers image, video, audio, text, document and model viewers explicitly', () => {
     expect(getRegisteredPreviewContentKinds()).toEqual([
       'image',

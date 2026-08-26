@@ -26,8 +26,13 @@ export const CANVAS_NODE_DEFAULT_SIZES = {
 export const CANVAS_TEXT_REFERENCE_NODE_DEFAULT_SIZE = CANVAS_NODE_DEFAULT_SIZES.markdown;
 
 export const CANVAS_AUDIO_NODE_DEFAULT_SIZE = {
-  width: CANVAS_NODE_DEFAULT_SIZES.media.width,
-  height: 60,
+  width: 240,
+  height: 100,
+} as const satisfies CanvasNodeSize;
+
+export const CANVAS_AUDIO_NODE_MIN_SIZE = {
+  width: 180,
+  height: 90,
 } as const satisfies CanvasNodeSize;
 
 /** Maximum Canvas-unit extent for a newly authored image node. */
@@ -38,7 +43,7 @@ export const CANVAS_IMAGE_NODE_MIN_LONG_EDGE = 50;
 export const CANVAS_GENERATION_NODE_DEFAULT_SIZES = {
   prompt: { width: 120, height: 80 },
   image: CANVAS_NODE_DEFAULT_SIZES.generation,
-  audio: { width: 120, height: 60 },
+  audio: CANVAS_AUDIO_NODE_DEFAULT_SIZE,
   video: CANVAS_NODE_DEFAULT_SIZES.generation,
 } as const satisfies Readonly<Record<CanvasGenerationKind, CanvasNodeSize>>;
 
