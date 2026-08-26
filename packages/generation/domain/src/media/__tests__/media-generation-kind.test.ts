@@ -1,7 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { resolveImageGenerationType, resolveVideoGenerationType } from '../media-generation-kind';
+import {
+  resolveImageGenerationType,
+  resolveMediaModelType,
+  resolveVideoGenerationType,
+} from '../media-generation-kind';
 
 describe('media generation type resolution', () => {
+  it.each([
+    ['text-to-image', 'image'],
+    ['image-to-image', 'image'],
+    ['image-edit', 'image'],
+    ['text-to-video', 'video'],
+    ['image-to-video', 'video'],
+    ['video-to-video', 'video'],
+    ['video-edit', 'video'],
+    ['text-to-audio', 'audio'],
+    ['text-to-music', 'audio'],
+  ] as const)('maps %s to the configured %s model type', (generationType, modelType) => {
+    expect(resolveMediaModelType(generationType)).toBe(modelType);
+  });
+
+  it('rejects workflow routing because it does not identify one media model type', () => {
+    expect(() => resolveMediaModelType('workflow')).toThrow(
+      'Workflow generation does not identify one media model type.',
+    );
+  });
+
   it('uses text-to-image without reference inputs', () => {
     expect(resolveImageGenerationType({ prompt: 'paint a cat' })).toBe('text-to-image');
   });

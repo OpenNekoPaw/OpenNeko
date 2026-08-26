@@ -62,6 +62,7 @@ import {
   type DshDomainConversationService,
 } from '@neko/agent-runtime/application';
 import {
+  canvasGenerationModelSupportsPurpose,
   createCanvasWorkspaceIndexService,
   projectCanvasGenerationModels,
 } from '@neko/canvas-domain';
@@ -242,7 +243,6 @@ import {
   FileUserConfigManager,
   ProviderCredentialAuthority,
   WorkspaceConfigManagerAuthority,
-  modelSupportsPurpose,
 } from '@neko/host/settings';
 import {
   listGlobalMediaLibraryConnections,
@@ -996,7 +996,7 @@ async function startDesktop(): Promise<void> {
             `Canvas Generation model '${binding.modelId}' is not available from provider '${binding.providerId}'.`,
           );
         }
-        if (!modelSupportsPurpose(model, binding.purpose)) {
+        if (!canvasGenerationModelSupportsPurpose(model, binding.purpose)) {
           throw new Error(
             `Canvas Generation model '${binding.modelId}' does not support purpose '${binding.purpose}'.`,
           );
@@ -1164,7 +1164,6 @@ async function startDesktop(): Promise<void> {
       return projectCanvasGenerationModels({
         providers: config.getEnabledProviders(),
         models: config.getEnabledModels(),
-        supportsPurpose: modelSupportsPurpose,
         resolveParameterProfile: (model) => {
           const provider = config.getProvider(model.providerId);
           if (!provider) {

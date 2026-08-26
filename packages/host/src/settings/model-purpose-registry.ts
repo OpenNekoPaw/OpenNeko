@@ -46,6 +46,16 @@ const PURPOSE_CAPABILITY_MATCHES: Record<AgentModelPurpose, PurposeCapabilityRul
   'local.video.probe': { capabilities: ['local.video.probe'] },
 };
 
+const PURPOSE_MODEL_TYPE_MATCHES: Partial<Record<AgentModelPurpose, NonNullable<Model['type']>>> = {
+  'image.generate': 'image',
+  'image.edit': 'image',
+  'video.generate': 'video',
+  'audio.generate': 'audio',
+  'audio.tts': 'audio',
+  'audio.asr': 'audio',
+  'audio.music.generate': 'audio',
+};
+
 export function getModelPurposeCapabilityMatches(purpose: AgentModelPurpose): readonly string[] {
   return PURPOSE_CAPABILITY_MATCHES[purpose].capabilities;
 }
@@ -62,9 +72,14 @@ export function modelSupportsPurpose(
   purpose: string,
 ): boolean {
   const modelCapabilities = model.capabilities;
-  const rule = PURPOSE_CAPABILITY_MATCHES[purpose as AgentModelPurpose];
+  const canonicalPurpose = purpose as AgentModelPurpose;
+  const rule = PURPOSE_CAPABILITY_MATCHES[canonicalPurpose];
   if (!rule) {
     return modelCapabilities.includes(purpose);
+  }
+  const requiredModelType = PURPOSE_MODEL_TYPE_MATCHES[canonicalPurpose];
+  if (requiredModelType) {
+    return model.type === requiredModelType;
   }
   if ('type' in model && rule.modelType && model.type !== rule.modelType) {
     return false;

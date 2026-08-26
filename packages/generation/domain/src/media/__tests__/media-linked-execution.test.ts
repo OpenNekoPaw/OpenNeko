@@ -34,6 +34,7 @@ const model: Model = {
   name: 'linked-image',
   displayName: 'Linked Image',
   providerId: provider.id,
+  type: 'image',
   capabilities: ['text_to_image'],
   enabled: true,
 };
@@ -43,6 +44,39 @@ describe('MediaGenerationExecutor linked execution', () => {
     getMediaAdapterRegistry().unregisterBuiltin('runway');
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it('rejects a wrong-type model before provider execution even when its capability matches', async () => {
+    const capabilityOnlyModel: Model = {
+      ...model,
+      id: 'capability-only-image',
+      type: 'llm',
+    };
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const config: MediaGenerationConfigPort = {
+      getProvider: (id) => (id === provider.id ? provider : undefined),
+      getModel: (id) => (id === capabilityOnlyModel.id ? capabilityOnlyModel : undefined),
+      getDefaultModelRef: () => ({
+        providerId: provider.id,
+        modelId: capabilityOnlyModel.id,
+      }),
+    };
+    const executor = new MediaGenerationExecutor(config, {
+      resolveProvider: async (id) => (id === provider.id ? provider : undefined),
+    });
+
+    await expect(
+      executor.executeLinked({
+        generationType: 'text-to-image',
+        providerId: provider.id,
+        modelId: capabilityOnlyModel.id,
+        request: { prompt: 'paint a cat' },
+      }),
+    ).rejects.toThrow(
+      `Model ${provider.id}/${capabilityOnlyModel.id} has type "llm", but text-to-image requires type "image".`,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('persists an AI SDK video task checkpoint before the first status query', async () => {
@@ -57,6 +91,7 @@ describe('MediaGenerationExecutor linked execution', () => {
       id: 'h3-model',
       name: 'MiniMax-H3',
       providerId: h3Provider.id,
+      type: 'video',
       capabilities: ['text_to_video'],
     };
     let checkpointPersisted = false;
@@ -129,6 +164,7 @@ describe('MediaGenerationExecutor linked execution', () => {
       id: 'seedance-model',
       name: 'doubao-seedance-2-0-260128',
       providerId: seedanceProvider.id,
+      type: 'video',
       capabilities: ['text_to_video'],
     };
     let submittedBody: Record<string, unknown> | undefined;

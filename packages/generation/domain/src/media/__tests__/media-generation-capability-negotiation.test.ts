@@ -95,6 +95,7 @@ function createService(providerInput: Provider, options: { readonly modelName?: 
     name: options.modelName ?? `${provider.id}-video`,
     displayName: 'Video model',
     providerId: provider.id,
+    type: 'video',
     capabilities: ['image_to_video'],
     enabled: true,
   };

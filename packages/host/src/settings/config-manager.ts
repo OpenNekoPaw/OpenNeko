@@ -437,7 +437,11 @@ export class ConfigManager {
   }
 
   resolveModelRefForPurpose(purpose: string): ModelRefConfig | undefined {
-    return this.getDefaultModelPurposeRef(purpose);
+    if (!isAgentModelPurpose(purpose)) return undefined;
+    const ref = this.getDefaultModelPurposeRef(purpose);
+    if (!ref) return undefined;
+    this.assertModelPurposeRef(purpose, ref);
+    return ref;
   }
 
   async setDefaultModelPurposeRefs(
@@ -457,24 +461,7 @@ export class ConfigManager {
       if (!ref) {
         throw new Error(`Model purpose ${purpose} requires an exact provider/model reference.`);
       }
-      const provider = this.providers.get(ref.providerId);
-      const model = this.models.get(ref.modelId);
-      if (!provider || provider.enabled === false) {
-        throw new Error(`Provider ${ref.providerId} is unavailable for purpose ${purpose}.`);
-      }
-      if (!model || model.enabled === false) {
-        throw new Error(
-          `Model ${ref.providerId}/${ref.modelId} is unavailable for purpose ${purpose}.`,
-        );
-      }
-      if (model.providerId !== provider.id) {
-        throw new Error(
-          `Model ${model.id} belongs to provider ${model.providerId}, not ${provider.id}.`,
-        );
-      }
-      if (!modelSupportsPurpose(model, purpose)) {
-        throw new Error(`Model ${provider.id}/${model.id} does not support purpose ${purpose}.`);
-      }
+      this.assertModelPurposeRef(purpose, ref);
     }
 
     await this.userConfigManager!.updateScalars({
@@ -484,6 +471,28 @@ export class ConfigManager {
       },
     });
     this.reloadConfig();
+  }
+
+  private assertModelPurposeRef(purpose: AgentModelPurpose, ref: ModelRefConfig): void {
+    this.ensureMerged();
+    const provider = this.providers.get(ref.providerId);
+    const model = this.models.get(ref.modelId);
+    if (!provider || provider.enabled === false) {
+      throw new Error(`Provider ${ref.providerId} is unavailable for purpose ${purpose}.`);
+    }
+    if (!model || model.enabled === false) {
+      throw new Error(
+        `Model ${ref.providerId}/${ref.modelId} is unavailable for purpose ${purpose}.`,
+      );
+    }
+    if (model.providerId !== provider.id) {
+      throw new Error(
+        `Model ${model.id} belongs to provider ${model.providerId}, not ${provider.id}.`,
+      );
+    }
+    if (!modelSupportsPurpose(model, purpose)) {
+      throw new Error(`Model ${provider.id}/${model.id} does not support purpose ${purpose}.`);
+    }
   }
 
   getTemperature(): number {

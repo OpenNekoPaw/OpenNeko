@@ -1,4 +1,43 @@
-import type { ImageGenerationRequest, VideoGenerationRequest } from '@neko/generation-domain';
+import type { MediaModelType, ModelConfig } from '@neko/ai-contracts';
+import type {
+  ImageGenerationRequest,
+  MediaGenerationType,
+  VideoGenerationRequest,
+} from '@neko/generation-domain';
+
+const MEDIA_MODEL_TYPE_BY_GENERATION_TYPE: Record<
+  Exclude<MediaGenerationType, 'workflow'>,
+  MediaModelType
+> = {
+  'text-to-image': 'image',
+  'image-to-image': 'image',
+  'image-edit': 'image',
+  'text-to-video': 'video',
+  'image-to-video': 'video',
+  'video-to-video': 'video',
+  'video-edit': 'video',
+  'text-to-audio': 'audio',
+  'text-to-music': 'audio',
+};
+
+export function resolveMediaModelType(generationType: MediaGenerationType): MediaModelType {
+  if (generationType === 'workflow') {
+    throw new Error('Workflow generation does not identify one media model type.');
+  }
+  return MEDIA_MODEL_TYPE_BY_GENERATION_TYPE[generationType];
+}
+
+export function assertMediaModelType(
+  model: Pick<ModelConfig, 'id' | 'providerId' | 'type'>,
+  generationType: MediaGenerationType,
+): void {
+  const requiredModelType = resolveMediaModelType(generationType);
+  if (model.type !== requiredModelType) {
+    throw new Error(
+      `Model ${model.providerId}/${model.id} has type "${model.type ?? 'unset'}", but ${generationType} requires type "${requiredModelType}".`,
+    );
+  }
+}
 
 export function resolveImageGenerationType(
   request: ImageGenerationRequest,

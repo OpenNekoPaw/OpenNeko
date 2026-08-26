@@ -60,6 +60,7 @@ import {
   type MediaGenerationErrorSummary,
 } from './media-generation-error';
 import type { ResolvedProviderSource } from '@neko/ai-sdk';
+import { assertMediaModelType } from './media-generation-kind';
 
 const logger = getLogger('MediaGenerationExecutor');
 const DEFAULT_IMAGE_TASK_TIMEOUT_MS = 10 * 60 * 1000;
@@ -257,6 +258,7 @@ export class MediaGenerationExecutor {
         error: `Provider or model not found: ${providerId}/${modelId}`,
       };
     }
+    assertMediaModelType(model, generationType);
 
     throwIfAborted(context?.signal);
     const capabilities = model.capabilities ?? [];

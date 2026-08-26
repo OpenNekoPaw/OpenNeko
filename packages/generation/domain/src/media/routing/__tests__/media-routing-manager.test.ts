@@ -78,6 +78,7 @@ describe('MediaRoutingManager', () => {
       id: 'dall-e-3',
       name: 'DALL-E 3',
       providerId: 'openai',
+      type: 'image',
       capabilities: ['text_to_image'],
       enabled: true,
     });
@@ -86,6 +87,7 @@ describe('MediaRoutingManager', () => {
       id: 'stable-diffusion-xl',
       name: 'Stable Diffusion XL',
       providerId: 'stability',
+      type: 'image',
       capabilities: ['text_to_image'],
       enabled: true,
     });
@@ -94,6 +96,7 @@ describe('MediaRoutingManager', () => {
       id: 'tts-1',
       name: 'TTS 1',
       providerId: 'openai',
+      type: 'audio',
       capabilities: ['text_to_audio'],
       enabled: true,
     });
@@ -115,6 +118,37 @@ describe('MediaRoutingManager', () => {
       const result = await manager.selectProvider('text-to-image', 'openai', 'stable-diffusion-xl');
 
       expect(result).toBeNull();
+    });
+
+    it('should reject an explicit model with the wrong type even when its capability matches', async () => {
+      configManager.addModel({
+        id: 'chat-audio',
+        name: 'Chat Audio',
+        providerId: 'openai',
+        type: 'llm',
+        capabilities: ['text_to_audio'],
+        enabled: true,
+      });
+
+      await expect(manager.selectProvider('text-to-audio', 'openai', 'chat-audio')).rejects.toThrow(
+        'Model openai/chat-audio has type "llm", but text-to-audio requires type "audio".',
+      );
+    });
+
+    it('should reject an explicit media model without a configured type', async () => {
+      configManager.addModel({
+        id: 'untyped-image',
+        name: 'Untyped Image',
+        providerId: 'openai',
+        capabilities: ['text_to_image'],
+        enabled: true,
+      });
+
+      await expect(
+        manager.selectProvider('text-to-image', 'openai', 'untyped-image'),
+      ).rejects.toThrow(
+        'Model openai/untyped-image has type "unset", but text-to-image requires type "image".',
+      );
     });
 
     it('should use configured default model when no model specified', async () => {
@@ -171,6 +205,16 @@ describe('MediaRoutingManager', () => {
       expect(result).toBeNull();
     });
 
+    it('should reject a configured default model with the wrong type', async () => {
+      configManager.setDefaultModels({
+        audio: { providerId: 'openai', modelId: 'dall-e-3' },
+      });
+
+      await expect(manager.selectProvider('text-to-audio')).rejects.toThrow(
+        'Model openai/dall-e-3 has type "image", but text-to-audio requires type "audio".',
+      );
+    });
+
     it('should return null when default model provider is not configured', async () => {
       configManager.addProvider({
         id: 'empty-gateway',
@@ -187,6 +231,7 @@ describe('MediaRoutingManager', () => {
         id: 'empty-gateway-image',
         name: 'gpt-image-2',
         providerId: 'empty-gateway',
+        type: 'image',
         capabilities: ['text_to_image'],
         enabled: true,
       });

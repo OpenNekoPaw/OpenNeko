@@ -1405,7 +1405,7 @@ async function exerciseCanvasGenerationAuthoring({
       kind: 'audio',
       contentKind: 'audio',
       label: ['Audio', '音频'],
-      modelLabel: 'Canvas Audio',
+      modelLabel: 'Canvas Audio|Canvas Music',
       emptyIconClass: 'codicon-music',
       expectedSize: { width: 120, height: 60 },
     },
@@ -1808,8 +1808,10 @@ async function exerciseCanvasGenerationAuthoring({
           '.selection-generation-input-panel__model-menu .selection-generation-input-panel__model-option strong',
         ),
       ].map((element) => element.textContent?.trim() ?? '')`);
-      if (musicModels.join('|') !== 'Canvas Music') {
-        throw new Error(`Canvas music model filtering is invalid: ${JSON.stringify(musicModels)}`);
+      if (musicModels.join('|') !== 'Canvas Music|Canvas Audio') {
+        throw new Error(
+          `Canvas music model type matching is invalid: ${JSON.stringify(musicModels)}`,
+        );
       }
       screenshots.push(await screenshot('canvas-generation-audio-music-mode'));
       await click('.selection-generation-input-panel__model-option');

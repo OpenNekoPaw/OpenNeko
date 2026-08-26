@@ -728,6 +728,106 @@ describe('ConfigManager', () => {
       });
     });
 
+    it('matches generation purpose bindings by model type instead of capabilities', async () => {
+      const capabilityOnlyModel: Model = {
+        ...SAMPLE_MODEL,
+        id: 'capability-only-audio',
+        type: 'llm',
+        capabilities: ['audio'],
+      };
+      const typedAudioModel: Model = {
+        ...SAMPLE_MODEL,
+        id: 'typed-audio',
+        type: 'audio',
+        capabilities: ['chat'],
+      };
+      const userConfigManager = createMockUserConfigManager({
+        providers: [SAMPLE_PROVIDER],
+        models: [capabilityOnlyModel, typedAudioModel],
+      });
+      const updateScalars = vi.spyOn(userConfigManager, 'updateScalars');
+      const manager = new ConfigManager({ userConfigManager });
+
+      await expect(
+        manager.setDefaultModelPurposeRefs({
+          'audio.generate': {
+            providerId: SAMPLE_PROVIDER.id,
+            modelId: capabilityOnlyModel.id,
+          },
+        }),
+      ).rejects.toThrow(
+        `Model ${SAMPLE_PROVIDER.id}/${capabilityOnlyModel.id} does not support purpose audio.generate.`,
+      );
+      expect(updateScalars).not.toHaveBeenCalled();
+
+      await manager.setDefaultModelPurposeRefs({
+        'audio.generate': {
+          providerId: SAMPLE_PROVIDER.id,
+          modelId: typedAudioModel.id,
+        },
+      });
+
+      expect(updateScalars).toHaveBeenCalledTimes(1);
+      expect(manager.resolveModelRefForPurpose('audio.generate')).toEqual({
+        providerId: SAMPLE_PROVIDER.id,
+        modelId: typedAudioModel.id,
+      });
+    });
+
+    it('rejects a persisted generation purpose binding with a capability-only model', () => {
+      const localProvider: Provider = {
+        id: 'local-media',
+        name: 'local-media',
+        displayName: 'Local Media',
+        type: 'generic',
+        apiUrl: 'http://localhost:8080',
+        enabled: true,
+        connectionKind: 'local',
+        protocolProfile: 'openai-chat',
+        requiresApiKey: false,
+      };
+      const capabilityOnlyModel: Model = {
+        id: 'capability-only-audio',
+        name: 'capability-only-audio',
+        providerId: localProvider.id,
+        type: 'llm',
+        capabilities: ['audio'],
+        enabled: true,
+      };
+      const chatModel: Model = {
+        id: 'chat-model',
+        name: 'chat-model',
+        providerId: localProvider.id,
+        type: 'llm',
+        capabilities: ['chat'],
+        enabled: true,
+      };
+      const manager = new ConfigManager({
+        userConfigManager: createReadResultUserConfigManager({
+          status: 'ok',
+          filePath: '/tmp/neko/config.toml',
+          config: {
+            providers: [localProvider],
+            models: [chatModel, capabilityOnlyModel],
+            defaultModelPurposes: {
+              'audio.generate': {
+                providerId: localProvider.id,
+                modelId: capabilityOnlyModel.id,
+              },
+            },
+          },
+        }),
+      });
+
+      expect(manager.getConfigDiagnostic()).toMatchObject({
+        code: 'invalidDefaultModelBinding',
+        path: 'default_model_purposes.audio.generate',
+      });
+      expect(() => manager.resolveModelRefForPurpose('audio.generate')).toThrow(
+        `Model ${localProvider.id}/${capabilityOnlyModel.id} does not support purpose audio.generate.`,
+      );
+    });
+
     it('persists one typed default model without replacing sibling defaults', async () => {
       const imageModel: Model = {
         ...SAMPLE_MODEL,

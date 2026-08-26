@@ -7,30 +7,14 @@
  * partial request.
  */
 
-import type { MediaModelType } from '@neko/ai-contracts';
 import type { MediaGenerationType } from '@neko/generation-domain';
+import { assertMediaModelType, resolveMediaModelType } from '../media-generation-kind';
 import type {
   MediaExecutionProviderResolver,
   MediaGenerationConfigPort,
   MediaProvider,
   MediaRoutingResult,
 } from '../types';
-
-/**
- * Map generation type to media model type
- */
-const GENERATION_TYPE_TO_MEDIA_TYPE: Record<MediaGenerationType, MediaModelType> = {
-  'text-to-image': 'image',
-  'image-to-image': 'image',
-  'image-edit': 'image',
-  'text-to-video': 'video',
-  'image-to-video': 'video',
-  'video-to-video': 'video',
-  'video-edit': 'video',
-  'text-to-audio': 'audio',
-  'text-to-music': 'audio',
-  workflow: 'image', // Default to image for workflow
-};
 
 /**
  * Media routing manager
@@ -59,6 +43,7 @@ export class MediaRoutingManager {
     providerId?: string,
     modelId?: string,
   ): Promise<MediaRoutingResult | null> {
+    const mediaType = resolveMediaModelType(generationType);
     if (providerId || modelId) {
       if (!providerId || !modelId) {
         return null;
@@ -76,6 +61,7 @@ export class MediaRoutingManager {
         model.providerId === provider.id &&
         isExecutionProviderAvailable(provider)
       ) {
+        assertMediaModelType(model, generationType);
         return {
           providerId,
           modelId,
@@ -87,7 +73,6 @@ export class MediaRoutingManager {
 
     // Try to use configured default media model for this type
     if (!modelId) {
-      const mediaType = GENERATION_TYPE_TO_MEDIA_TYPE[generationType];
       const defaultModel = this.configManager.getDefaultModelRef(mediaType);
       if (defaultModel) {
         const provider = await this.providerResolver.resolveProvider(defaultModel.providerId);
@@ -99,6 +84,7 @@ export class MediaRoutingManager {
           provider.id === defaultModel.providerId &&
           isExecutionProviderAvailable(provider)
         ) {
+          assertMediaModelType(model, generationType);
           return {
             providerId: provider.id,
             modelId: model.id,

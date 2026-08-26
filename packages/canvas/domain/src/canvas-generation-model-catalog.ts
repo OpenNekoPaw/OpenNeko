@@ -15,7 +15,10 @@ export interface CanvasGenerationCatalogModel {
   readonly providerId: string;
   readonly name: string;
   readonly displayName?: string;
+  readonly type?: CanvasGenerationModelType;
 }
+
+export type CanvasGenerationModelType = 'llm' | 'image' | 'video' | 'audio';
 
 export interface CanvasGenerationCatalogModelRef {
   readonly providerId: string;
@@ -27,7 +30,6 @@ export interface CanvasGenerationModelCatalogInput<
 > {
   readonly providers: readonly CanvasGenerationCatalogProvider[];
   readonly models: readonly Model[];
-  readonly supportsPurpose: (model: Model, purpose: CanvasGenerationPurpose) => boolean;
   readonly resolveParameterProfile?: (model: Model) => GenerationModelParameterProfile | undefined;
   readonly getDefaultModelPurposeRef: (
     purpose: CanvasGenerationPurpose,
@@ -47,7 +49,7 @@ export function projectCanvasGenerationModels<Model extends CanvasGenerationCata
       if (!provider) return [];
       const parameterProfile = input.resolveParameterProfile?.(model);
       return CANVAS_GENERATION_PURPOSES.filter((purpose) =>
-        input.supportsPurpose(model, purpose),
+        canvasGenerationModelSupportsPurpose(model, purpose),
       ).map((purpose) => {
         const configuredDefault =
           input.getDefaultModelPurposeRef(purpose) ??
@@ -63,18 +65,26 @@ export function projectCanvasGenerationModels<Model extends CanvasGenerationCata
       });
     })
     .sort((left, right) => {
-      if (left.binding.purpose === right.binding.purpose && left.isDefault !== right.isDefault) {
+      if (left.binding.purpose !== right.binding.purpose) {
+        return left.binding.purpose.localeCompare(right.binding.purpose);
+      }
+      if (left.isDefault !== right.isDefault) {
         return left.isDefault ? -1 : 1;
       }
-      return `${left.providerLabel}\u0000${left.label}\u0000${left.binding.purpose}`.localeCompare(
-        `${right.providerLabel}\u0000${right.label}\u0000${right.binding.purpose}`,
+      return `${left.providerLabel}\u0000${left.label}`.localeCompare(
+        `${right.providerLabel}\u0000${right.label}`,
       );
     });
 }
 
-function modelTypeForPurpose(
+export function canvasGenerationModelSupportsPurpose(
+  model: Pick<CanvasGenerationCatalogModel, 'type'>,
   purpose: CanvasGenerationPurpose,
-): 'llm' | 'image' | 'video' | 'audio' {
+): boolean {
+  return model.type === modelTypeForPurpose(purpose);
+}
+
+function modelTypeForPurpose(purpose: CanvasGenerationPurpose): CanvasGenerationModelType {
   switch (purpose) {
     case 'canvas.prompt':
       return 'llm';
