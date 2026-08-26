@@ -105,6 +105,7 @@ export {
   CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID,
   createCanvasMaterialActionOwner,
   type CanvasGenerationActionAvailability,
+  type CanvasMaterialActionAvailability,
   type CanvasMaterialActionExecutionResult,
   type CanvasMaterialActionOwner,
 } from './application/canvas-material-action-owner';

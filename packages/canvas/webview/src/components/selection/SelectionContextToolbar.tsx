@@ -515,14 +515,21 @@ function createOwnerAction(
     label: descriptor.label,
     icon: materialActionIcon(descriptor.id, descriptor.effect),
     ...presentation,
-    run: () => {
-      reportExecutionDiagnostic(undefined);
-      void host
-        .executeMaterialAction(descriptor.id, selectedNodeIds, descriptor.executionPayload ?? {})
-        .catch((error: unknown) => {
-          reportExecutionDiagnostic(error instanceof Error ? error.message : String(error));
-        });
-    },
+    disabledReason: descriptor.unavailable?.message,
+    run: descriptor.unavailable
+      ? undefined
+      : () => {
+          reportExecutionDiagnostic(undefined);
+          void host
+            .executeMaterialAction(
+              descriptor.id,
+              selectedNodeIds,
+              descriptor.executionPayload ?? {},
+            )
+            .catch((error: unknown) => {
+              reportExecutionDiagnostic(error instanceof Error ? error.message : String(error));
+            });
+        },
   };
 }
 

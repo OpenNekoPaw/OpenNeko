@@ -311,7 +311,10 @@ describe('Desktop Canvas material action owner', () => {
         documentId: 'edits/sequence.otio',
       },
     } as const;
-    const resolveAddToCut = vi.fn(async () => executionPayload);
+    const resolveAddToCut = vi.fn(async () => ({
+      status: 'available' as const,
+      executionPayload,
+    }));
     const addToCut = vi.fn(async () => undefined);
     const owner = createCanvasMaterialActionOwner({ resolveAddToCut, addToCut });
 
@@ -362,7 +365,7 @@ describe('Desktop Canvas material action owner', () => {
     } as const;
     const separateAudioInCut = vi.fn(async () => undefined);
     const owner = createCanvasMaterialActionOwner({
-      resolveAddToCut: async () => executionPayload,
+      resolveAddToCut: async () => ({ status: 'available', executionPayload }),
       addToCut: async () => undefined,
       separateAudioInCut,
     });
@@ -394,6 +397,52 @@ describe('Desktop Canvas material action owner', () => {
       target: videoTarget,
       executionPayload,
     });
+  });
+
+  it('projects a fail-visible Cut diagnostic and refuses unavailable execution', async () => {
+    const videoTarget: CanvasMaterialActionTarget = {
+      nodeId: 'video-unavailable',
+      mediaKind: 'video',
+      origin: 'referenced',
+      locator: { file: { authority: 'workspace', path: 'media/unavailable.mp4' } },
+    };
+    const diagnostic = {
+      code: 'cut-canvas-source-stale',
+      message: 'The Canvas View is stale.',
+    } as const;
+    const addToCut = vi.fn(async () => undefined);
+    const owner = createCanvasMaterialActionOwner({
+      resolveAddToCut: async () => ({ status: 'unavailable', diagnostic }),
+      addToCut,
+    });
+
+    const descriptors = await owner.resolve({ identity, targets: [videoTarget] });
+    expect(descriptors).toEqual([
+      expect.objectContaining({
+        id: CANVAS_ADD_TO_CUT_ACTION_ID,
+        unavailable: diagnostic,
+      }),
+    ]);
+    const unavailable = descriptors[0];
+    if (!unavailable) throw new Error('Unavailable Cut descriptor is missing.');
+    await expect(
+      owner.execute({
+        identity,
+        descriptor: unavailable,
+        action: {
+          identity: {
+            projectId: identity.projectId,
+            canvasId: identity.documentId,
+            canvasSessionId: identity.sessionId,
+          },
+          actionId: unavailable.id,
+          selectedNodeIds: [videoTarget.nodeId],
+          payload: {},
+        },
+        targets: [videoTarget],
+      }),
+    ).rejects.toThrow(diagnostic.message);
+    expect(addToCut).not.toHaveBeenCalled();
   });
 
   it('exposes explicit project/global Media Library copies and never an Asset promotion action', async () => {

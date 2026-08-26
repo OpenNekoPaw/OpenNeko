@@ -13,6 +13,7 @@ import {
   type CanvasHostRuntimeIdentity,
   type CanvasHostSnapshot,
   type CanvasMaterialActionResolution,
+  type CanvasMaterialActionAvailability,
   type CanvasMaterialActionTarget,
   type CanvasTextFilePreviewResult,
   type CanvasGenerationApplicationPort,
@@ -174,7 +175,7 @@ export class DesktopCanvasRuntime {
       readonly resolveAddToCut?: (input: {
         readonly identity: CanvasHostRuntimeIdentity;
         readonly target: CanvasMaterialActionTarget;
-      }) => Promise<Readonly<Record<string, unknown>> | undefined>;
+      }) => Promise<CanvasMaterialActionAvailability>;
       readonly addToCut?: (input: {
         readonly identity: CanvasHostRuntimeIdentity;
         readonly target: CanvasMaterialActionTarget;

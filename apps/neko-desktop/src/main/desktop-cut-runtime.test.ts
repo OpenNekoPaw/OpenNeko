@@ -185,7 +185,10 @@ describe('DesktopCutRuntime', () => {
 
     await expect(
       harness.runtime.resolveAvailableCanvasHandoffTarget(unavailableIdentity),
-    ).resolves.toBeUndefined();
+    ).resolves.toMatchObject({
+      status: 'unavailable',
+      diagnostic: { code: 'desktop-cut-project-owner-unavailable' },
+    });
     await expect(harness.runtime.resolveCanvasHandoffTarget(unavailableIdentity)).rejects.toThrow(
       'has no exact Project View owner',
     );
@@ -1661,11 +1664,11 @@ async function createDraftRuntimeHarness(options: {
   let failWorkbenchUpdates = false;
   workbench = openOrFocusMainView(workbench, {
     viewId: 'canvas-view-1',
-    viewInstanceId: 'view-instance-1',
+    viewInstanceId: 'canvas-view-instance-1',
     projectId: 'project-1',
     workspaceId: 'workspace-1',
     kind: 'canvas',
-    ownerId: 'canvas-session:canvas-view-1:view-instance-1',
+    ownerId: 'canvas-session:canvas-view-1:canvas-view-instance-1',
     displayLabel: 'Workspace Canvas',
     documentId: 'neko/boards/workspace.nkc',
   });
@@ -1786,7 +1789,7 @@ async function createDraftRuntimeHarness(options: {
       workspaceId: 'workspace-1',
       windowId: 'window-1',
       viewId: 'canvas-view-1',
-      viewInstanceId: 'view-instance-1',
+      viewInstanceId: 'canvas-view-instance-1',
       rendererSessionId: 'endpoint-1',
     }),
   };

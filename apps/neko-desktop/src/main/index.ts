@@ -1379,8 +1379,27 @@ async function startDesktop(): Promise<void> {
       });
     },
     resolveAddToCut: async ({ identity }) => {
-      const target = await cutRuntime.resolveAvailableCanvasHandoffTarget(identity);
-      return target ? createCutCanvasHandoffPayload(target) : undefined;
+      const availability = await cutRuntime.resolveAvailableCanvasHandoffTarget(identity);
+      if (availability.status === 'available') {
+        return {
+          status: 'available' as const,
+          executionPayload: createCutCanvasHandoffPayload(availability.target),
+        };
+      }
+      return {
+        status: 'unavailable' as const,
+        diagnostic: {
+          code:
+            availability.diagnostic.code === 'desktop-cut-project-owner-unavailable'
+              ? ('cut-project-owner-unavailable' as const)
+              : ('cut-canvas-source-stale' as const),
+          message: canvasUsesChineseLabels
+            ? availability.diagnostic.code === 'desktop-cut-project-owner-unavailable'
+              ? '当前画布未绑定到有效的项目工作区。'
+              : '当前画布视图已失效，请重新打开画布。'
+            : availability.diagnostic.message,
+        },
+      };
     },
     addToCut: async ({ identity, target, executionPayload }) => {
       const label =

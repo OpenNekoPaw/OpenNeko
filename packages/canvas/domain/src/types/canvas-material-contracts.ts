@@ -159,9 +159,17 @@ export interface CanvasMaterialActionSelection {
   readonly maximum?: number;
 }
 
+export type CanvasMaterialActionUnavailableDiagnosticCode =
+  'cut-project-owner-unavailable' | 'cut-canvas-source-stale';
+
+export interface CanvasMaterialActionUnavailableDiagnostic {
+  readonly code: CanvasMaterialActionUnavailableDiagnosticCode;
+  readonly message: string;
+}
+
 /**
  * Descriptors are contributed by capability owners and projected by Canvas.
- * Unavailable capabilities do not contribute descriptors.
+ * Capability owners may contribute an unavailable diagnostic for stable UI actions.
  */
 export interface CanvasMaterialActionDescriptor {
   readonly id: string;
@@ -171,6 +179,7 @@ export interface CanvasMaterialActionDescriptor {
   readonly origins: readonly CanvasMaterialOrigin[];
   readonly selection: CanvasMaterialActionSelection;
   readonly effect: CanvasMaterialActionEffect;
+  readonly unavailable?: CanvasMaterialActionUnavailableDiagnostic;
   /** JSON-safe, owner-projected parameters that must still match at execution time. */
   readonly executionPayload?: Readonly<Record<string, unknown>>;
 }
@@ -395,6 +404,7 @@ export function isCanvasMaterialActionDescriptor(
       'origins',
       'selection',
       'effect',
+      'unavailable',
       'executionPayload',
     ]) &&
     isNonEmptyString(value['id']) &&
@@ -404,8 +414,19 @@ export function isCanvasMaterialActionDescriptor(
     isNonEmptyArray(value['origins'], isCanvasMaterialOrigin) &&
     isCanvasMaterialActionSelection(value['selection']) &&
     isCanvasMaterialActionEffect(value['effect']) &&
+    (value['unavailable'] === undefined ||
+      (isRecord(value['unavailable']) &&
+        hasOnlyKeys(value['unavailable'], ['code', 'message']) &&
+        isCanvasMaterialActionUnavailableDiagnosticCode(value['unavailable']['code']) &&
+        isNonEmptyString(value['unavailable']['message']))) &&
     (value['executionPayload'] === undefined || isJsonSafeRecord(value['executionPayload']))
   );
+}
+
+function isCanvasMaterialActionUnavailableDiagnosticCode(
+  value: unknown,
+): value is CanvasMaterialActionUnavailableDiagnosticCode {
+  return value === 'cut-project-owner-unavailable' || value === 'cut-canvas-source-stale';
 }
 
 function isJsonSafeRecord(value: unknown): value is Readonly<Record<string, unknown>> {

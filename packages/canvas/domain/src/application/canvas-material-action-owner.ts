@@ -5,6 +5,7 @@ import type {
   CanvasMaterialActionDescriptor,
   CanvasMaterialActionIntent,
   CanvasMaterialMediaKind,
+  CanvasMaterialActionUnavailableDiagnostic,
 } from '../types/canvas-material-contracts';
 
 const MATERIAL_MEDIA_KINDS: readonly CanvasMaterialMediaKind[] = [
@@ -52,6 +53,16 @@ export interface CanvasGenerationActionAvailability {
   readonly regenerate: boolean;
   readonly editAndGenerate: boolean;
 }
+
+export type CanvasMaterialActionAvailability =
+  | {
+      readonly status: 'available';
+      readonly executionPayload: Readonly<Record<string, unknown>>;
+    }
+  | {
+      readonly status: 'unavailable';
+      readonly diagnostic: CanvasMaterialActionUnavailableDiagnostic;
+    };
 
 export interface CanvasMaterialActionOwner {
   resolve(input: {
@@ -102,7 +113,7 @@ export function createCanvasMaterialActionOwner(options: {
   readonly resolveAddToCut?: (input: {
     readonly identity: CanvasHostRuntimeIdentity;
     readonly target: CanvasMaterialActionTarget;
-  }) => Promise<Readonly<Record<string, unknown>> | undefined>;
+  }) => Promise<CanvasMaterialActionAvailability>;
   readonly addToCut?: (input: {
     readonly identity: CanvasHostRuntimeIdentity;
     readonly target: CanvasMaterialActionTarget;
@@ -225,30 +236,32 @@ export function createCanvasMaterialActionOwner(options: {
         options.resolveAddToCut &&
         options.addToCut
       ) {
-        const executionPayload = await options.resolveAddToCut({ identity, target });
-        if (executionPayload) {
+        const availability = await options.resolveAddToCut({ identity, target });
+        const availabilityFields =
+          availability.status === 'available'
+            ? { executionPayload: availability.executionPayload }
+            : { unavailable: availability.diagnostic };
+        descriptors.push({
+          id: CANVAS_ADD_TO_CUT_ACTION_ID,
+          ownerId: 'cut',
+          label: options.labels?.addToCut ?? 'Add to Cut',
+          mediaKinds: ['video', 'audio'],
+          origins: ['referenced', 'generated'],
+          selection: { minimum: 1, maximum: 1 },
+          effect: 'handoff',
+          ...availabilityFields,
+        });
+        if (target.mediaKind === 'video' && options.separateAudioInCut) {
           descriptors.push({
-            id: CANVAS_ADD_TO_CUT_ACTION_ID,
+            id: CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID,
             ownerId: 'cut',
-            label: options.labels?.addToCut ?? 'Add to Cut',
-            mediaKinds: ['video', 'audio'],
+            label: options.labels?.separateAudio ?? 'Separate audio',
+            mediaKinds: ['video'],
             origins: ['referenced', 'generated'],
             selection: { minimum: 1, maximum: 1 },
-            effect: 'handoff',
-            executionPayload,
+            effect: 'derive',
+            ...availabilityFields,
           });
-          if (target.mediaKind === 'video' && options.separateAudioInCut) {
-            descriptors.push({
-              id: CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID,
-              ownerId: 'cut',
-              label: options.labels?.separateAudio ?? 'Separate audio',
-              mediaKinds: ['video'],
-              origins: ['referenced', 'generated'],
-              selection: { minimum: 1, maximum: 1 },
-              effect: 'derive',
-              executionPayload,
-            });
-          }
         }
       }
       if (target && options.resolveMediaLibraryCopy) {
@@ -306,6 +319,9 @@ export function createCanvasMaterialActionOwner(options: {
     async execute({ identity, descriptor, action, targets }) {
       if (descriptor.id !== action.actionId) {
         throw new Error('Desktop Canvas material action descriptor does not match its intent.');
+      }
+      if (descriptor.unavailable) {
+        throw new Error(descriptor.unavailable.message);
       }
       const target = requireSingleTarget(targets);
       if (action.actionId === CANVAS_PREVIEW_ACTION_ID && options.preview) {

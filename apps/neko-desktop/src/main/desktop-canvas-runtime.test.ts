@@ -963,7 +963,10 @@ describe('DesktopCanvasRuntime', () => {
         sessionId: 'cut-session:cut-view-1:view-instance-1',
       },
     } as const;
-    const resolveAddToCut = vi.fn(async () => executionPayload);
+    const resolveAddToCut = vi.fn(async () => ({
+      status: 'available' as const,
+      executionPayload,
+    }));
     const addToCut = vi.fn(async () => undefined);
     const separateAudioInCut = vi.fn(async () => undefined);
     const runtime = new DesktopCanvasRuntime({
@@ -1138,7 +1141,10 @@ describe('DesktopCanvasRuntime', () => {
         workbenchInstanceId: 'workbench-1',
       },
     } as const;
-    const resolveAddToCut = vi.fn(async () => executionPayload);
+    const resolveAddToCut = vi.fn(async () => ({
+      status: 'available' as const,
+      executionPayload,
+    }));
     const runtime = new DesktopCanvasRuntime({
       shell: {
         resolveCanvasViewGrant: vi.fn(async (): Promise<DesktopCanvasViewGrant> => ({

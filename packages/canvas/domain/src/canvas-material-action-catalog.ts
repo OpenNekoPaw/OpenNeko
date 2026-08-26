@@ -105,9 +105,8 @@ export function resolveCanvasMaterialActionTargets(
 }
 
 /**
- * Projects only descriptors contributed by currently available capability
- * owners. Canvas does not infer actions from extensions or implement owner
- * behavior.
+ * Projects descriptors contributed by capability owners. Owners may expose a
+ * fail-visible unavailability diagnostic for stable actions.
  */
 export function projectCanvasMaterialActionCatalog(input: {
   readonly descriptors: readonly CanvasMaterialActionDescriptor[];

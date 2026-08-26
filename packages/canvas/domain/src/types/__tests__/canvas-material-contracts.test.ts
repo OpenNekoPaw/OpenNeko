@@ -251,6 +251,22 @@ describe('Canvas material contracts', () => {
         executionPayload: { target: new Date() },
       }),
     ).toBe(false);
+    expect(
+      isCanvasMaterialActionDescriptor({
+        ...descriptor,
+        executionPayload: undefined,
+        unavailable: {
+          code: 'cut-canvas-source-stale',
+          message: 'The Canvas View is stale.',
+        },
+      }),
+    ).toBe(true);
+    expect(
+      isCanvasMaterialActionDescriptor({
+        ...descriptor,
+        unavailable: { code: 'unknown-owner', message: 'Unknown diagnostic code.' },
+      }),
+    ).toBe(false);
     expect(isCanvasMaterialActionIntent(intent)).toBe(true);
     expect(isCanvasMaterialActionIntent({ ...intent, selectedNodeIds: [] })).toBe(false);
   });

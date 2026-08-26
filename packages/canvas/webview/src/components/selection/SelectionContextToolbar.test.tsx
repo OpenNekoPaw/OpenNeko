@@ -780,6 +780,36 @@ describe('SelectionContextToolbar', () => {
     await toolbar.dispose();
   });
 
+  it('shows the capability-owner diagnostic for an unavailable Cut action', async () => {
+    const node = mediaNode('video-stale', 'video', 'media/stale.mp4');
+    const executeMaterialAction = vi.fn(async () => materialActionSnapshot());
+    const reason = '当前画布视图已失效，请重新打开画布。';
+    const toolbar = await renderToolbar(
+      [node],
+      [node.id],
+      [
+        {
+          ...descriptor('cut:add-resource', '剪辑', 'handoff'),
+          unavailable: {
+            code: 'cut-canvas-source-stale',
+            message: reason,
+          },
+        },
+      ],
+      executeMaterialAction,
+    );
+
+    const action = toolbar.container.querySelector<HTMLButtonElement>(
+      '[data-selection-action="cut:add-resource"]',
+    );
+    expect(action?.disabled).toBe(true);
+    expect(action?.getAttribute('data-disabled-reason')).toBe(reason);
+    expect(action?.title).toBe(reason);
+    action?.click();
+    expect(executeMaterialAction).not.toHaveBeenCalled();
+    await toolbar.dispose();
+  });
+
   it('keeps Group visible and exposes batch Duplicate and Delete for multi-selection', () => {
     const nodes: readonly CanvasNode[] = [
       {

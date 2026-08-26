@@ -58,6 +58,19 @@ interface DesktopCutOpenInput {
   readonly absolutePath: string;
 }
 
+export type DesktopCutCanvasHandoffAvailability =
+  | {
+      readonly status: 'available';
+      readonly target: CutCanvasHandoffTarget;
+    }
+  | {
+      readonly status: 'unavailable';
+      readonly diagnostic: {
+        readonly code: 'desktop-cut-project-owner-unavailable' | 'desktop-cut-canvas-view-stale';
+        readonly message: string;
+      };
+    };
+
 export interface DesktopCutRuntimeOptions {
   readonly shell: Pick<
     DesktopShellService,
@@ -228,23 +241,22 @@ export class DesktopCutRuntime {
   async resolveCanvasHandoffTarget(
     identity: CutCanvasSourceIdentity,
   ): Promise<CutCanvasHandoffTarget> {
-    const target = await this.resolveCanvasHandoffTargetInternal(identity, true);
-    if (!target) {
-      throw new Error('Desktop Cut Canvas handoff has no exact Project View owner.');
+    const availability = await this.resolveCanvasHandoffAvailability(identity);
+    if (availability.status === 'unavailable') {
+      throw new Error(availability.diagnostic.message);
     }
-    return target;
+    return availability.target;
   }
 
   resolveAvailableCanvasHandoffTarget(
     identity: CutCanvasSourceIdentity,
-  ): Promise<CutCanvasHandoffTarget | undefined> {
-    return this.resolveCanvasHandoffTargetInternal(identity, false);
+  ): Promise<DesktopCutCanvasHandoffAvailability> {
+    return this.resolveCanvasHandoffAvailability(identity);
   }
 
-  private async resolveCanvasHandoffTargetInternal(
+  private async resolveCanvasHandoffAvailability(
     identity: CutCanvasSourceIdentity,
-    requireExactOwner: boolean,
-  ): Promise<CutCanvasHandoffTarget | undefined> {
+  ): Promise<DesktopCutCanvasHandoffAvailability> {
     this.requireActive();
     const current = await this.options.shell.getProjection(identity.windowId);
     if (current.rendererSessionId !== identity.rendererSessionId) {
@@ -255,16 +267,33 @@ export class DesktopCutRuntime {
         candidate.projectId === identity.projectId &&
         candidate.workspaceId === identity.workspaceId,
     );
-    const tab = current.window.tabs.find(
-      (candidate) =>
-        candidate.projectId === identity.projectId &&
-        candidate.viewInstanceId === identity.viewInstanceId,
-    );
+    const tab = current.window.tabs.find((candidate) => candidate.projectId === identity.projectId);
     if (!project || !tab) {
-      if (requireExactOwner) {
-        throw new Error('Desktop Cut Canvas handoff has no exact Project View owner.');
-      }
-      return undefined;
+      return {
+        status: 'unavailable',
+        diagnostic: {
+          code: 'desktop-cut-project-owner-unavailable',
+          message: 'Desktop Cut Canvas handoff has no exact Project View owner.',
+        },
+      };
+    }
+    const scene = current.window.workbench.scene;
+    const interaction = scene.slots.interaction;
+    if (
+      scene.context.kind !== 'agent' ||
+      scene.context.scope.kind !== 'workspace' ||
+      scene.context.scope.workspaceId !== identity.workspaceId ||
+      interaction?.kind !== 'agent' ||
+      interaction.scope.kind !== 'workspace' ||
+      interaction.scope.workspaceId !== identity.workspaceId
+    ) {
+      return {
+        status: 'unavailable',
+        diagnostic: {
+          code: 'desktop-cut-canvas-view-stale',
+          message: 'Desktop Cut Canvas handoff source View is stale.',
+        },
+      };
     }
     const workbench = resolveDesktopWindowWorkspaceWorkbench(current.window, identity.workspaceId);
     const canvasView = workbench.layout.main.views.find(
@@ -276,10 +305,13 @@ export class DesktopCutRuntime {
         candidate.workspaceId === identity.workspaceId,
     );
     if (!canvasView) {
-      if (requireExactOwner) {
-        throw new Error('Desktop Cut Canvas handoff source View is stale.');
-      }
-      return undefined;
+      return {
+        status: 'unavailable',
+        diagnostic: {
+          code: 'desktop-cut-canvas-view-stale',
+          message: 'Desktop Cut Canvas handoff source View is stale.',
+        },
+      };
     }
     const activeCut =
       workbench.layout.cutPanel?.presentation === 'docked'
@@ -302,11 +334,14 @@ export class DesktopCutRuntime {
           };
         })()
       : undefined;
-    return resolveCutCanvasHandoffTarget({
-      source: identity,
-      workbenchInstanceId: workbench.workbenchInstanceId,
-      ...(activeCutTarget ? { activeCut: activeCutTarget } : {}),
-    });
+    return {
+      status: 'available',
+      target: resolveCutCanvasHandoffTarget({
+        source: identity,
+        workbenchInstanceId: workbench.workbenchInstanceId,
+        ...(activeCutTarget ? { activeCut: activeCutTarget } : {}),
+      }),
+    };
   }
 
   async addCanvasMaterial(input: {
