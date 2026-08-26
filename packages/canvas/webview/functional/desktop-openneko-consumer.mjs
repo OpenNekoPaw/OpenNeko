@@ -881,7 +881,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     await hover(
       '[data-owner-view-id="canvas:functional:video"] [data-testid="canvas-media-node"][data-media-type="video"]',
     );
-    await waitForCanvasMediaPaused(evaluate, 'canvas:functional:video', 'video', true);
+    await waitForCanvasMediaPaused(evaluate, 'canvas:functional:video', 'video', true, false);
     checkpoint('canvas-video-hover-remains-paused');
     await setCanvasMediaPaused(evaluate, 'canvas:functional:video', 'video', false);
     const videoPlayback = await waitForCanvasMediaPlayback(
@@ -1448,6 +1448,7 @@ async function exerciseCanvasGenerationAuthoring({
         right.bottom <= left.top
       );
       return {
+        nodeId: node.getAttribute('data-node-id'),
         kind: node.querySelector('[data-canvas-generation-node]')?.getAttribute(
           'data-canvas-generation-node',
         ),
@@ -1482,6 +1483,11 @@ async function exerciseCanvasGenerationAuthoring({
         nodeControlCount: node.querySelectorAll('textarea, input, select, button').length,
         toolbarLabel:
           toolbar.querySelector('[data-selection-kind-label="true"]')?.textContent?.trim() ?? '',
+        toolbarActionIds: [...toolbar.querySelectorAll('[data-selection-action]')].map((action) =>
+          action.getAttribute('data-selection-action'),
+        ),
+        previewCount: node.querySelectorAll('[data-preview-ui="lightweight"]').length,
+        generationStatusCount: node.querySelectorAll('[data-generation-phase]').length,
         labels: controls.map((control) =>
           control.getAttribute('aria-label') ?? control.getAttribute('title') ?? '',
         ),
@@ -1558,6 +1564,7 @@ async function exerciseCanvasGenerationAuthoring({
     })()`);
     if (
       state.kind !== action.kind ||
+      !state.nodeId?.startsWith('generation-') ||
       state.contentKind !== action.contentKind ||
       !action.label.includes(state.nodeLabel) ||
       !state.emptyIconClass.includes(action.emptyIconClass) ||
@@ -1576,6 +1583,9 @@ async function exerciseCanvasGenerationAuthoring({
       state.inputInsideNode ||
       state.nodeControlCount !== 0 ||
       !action.label.includes(state.toolbarLabel) ||
+      state.toolbarActionIds.join('|') !== 'node:duplicate' ||
+      state.previewCount !== 0 ||
+      state.generationStatusCount !== 0 ||
       state.runButtonCount !== 1 ||
       state.modelTriggerCount !== 1 ||
       state.selectedModelLabel !== action.modelLabel ||
@@ -1950,6 +1960,10 @@ async function exerciseCanvasGenerationAuthoring({
     }
   }
 
+  if (new Set(kinds.map((item) => item.nodeId)).size !== actions.length) {
+    throw new Error(`Canvas Generation node identities were reused: ${JSON.stringify(kinds)}`);
+  }
+
   return { catalog, kinds, maximumNodeCount, screenshots };
 }
 
@@ -2184,7 +2198,7 @@ async function waitForCanvasRoots(evaluate) {
     const ready = await evaluate(`(() => {
       const roots = [...document.querySelectorAll('[data-owner-root="canvas"]')];
       return roots.length === 2 &&
-        document.querySelector('[data-owner-view-id="canvas:functional:video"] video[controls]') !== null &&
+        document.querySelector('[data-owner-view-id="canvas:functional:video"] video:not([controls])') !== null &&
         document.querySelector('[data-owner-view-id="canvas:functional:audio"] audio:not([controls])') !== null &&
         document.querySelector('[data-owner-view-id="canvas:functional:audio"] [data-testid="preview-lightweight-audio-waveform"]') !== null;
     })()`);
@@ -2252,8 +2266,8 @@ async function setCanvasMediaPaused(evaluate, viewId, mediaType, paused) {
   await evaluate(`(() => {
     const root = document.querySelector('[data-owner-view-id=${JSON.stringify(viewId)}]');
     const media = root?.querySelector(${JSON.stringify(mediaType)});
-    if (!(media instanceof HTMLMediaElement) || !media.controls) {
-      throw new Error('Canvas native ${mediaType} controls are unavailable.');
+    if (!(media instanceof HTMLMediaElement)) {
+      throw new Error('Canvas ${mediaType} element is unavailable.');
     }
     if (${JSON.stringify(paused)}) media.pause();
     else void media.play();

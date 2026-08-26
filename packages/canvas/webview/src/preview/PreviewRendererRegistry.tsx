@@ -24,6 +24,7 @@ export interface PreviewRendererProps {
   playbackControl?: PreviewPlaybackControl;
   chrome?: 'contained' | 'full-bleed';
   audioLayout?: 'transport' | 'node-card';
+  mediaPlayback?: 'interactive' | 'passive' | 'ambient';
 }
 
 export type PreviewRenderer = ComponentType<PreviewRendererProps>;
@@ -53,6 +54,7 @@ function CanonicalPreviewRenderer({
   source,
   chrome = 'contained',
   playbackControl,
+  mediaPlayback,
 }: PreviewRendererProps): ReactNode {
   const { descriptor, diagnostic } = useCanvasPreviewDescriptor(source);
   const contentKind = previewContentKind(source);
@@ -98,7 +100,12 @@ function CanonicalPreviewRenderer({
           {diagnostic}
         </div>
       ) : descriptor ? (
-        <LightweightPreview descriptor={descriptor} locale={getLocale()} playback={playback} />
+        <LightweightPreview
+          descriptor={descriptor}
+          locale={getLocale()}
+          playback={playback}
+          mediaPlayback={mediaPlayback}
+        />
       ) : (
         <div
           className="flex h-full items-center justify-center text-xs text-[var(--node-fg-secondary)]"

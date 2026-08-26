@@ -185,6 +185,7 @@ export const zhCN = {
   'generation.outputCount': '{count} 张',
   'generation.selectOutput': '选择生成结果 {number}',
   'generation.elapsed': '已用时间',
+  'generation.elapsedValue': '耗时 {elapsed}',
   'generation.empty': '配置生成参数后运行节点',
   'generation.textUnavailable': '生成文本暂不可用',
   'generation.recipeStale': '此结果来自较早的配方或输入。',

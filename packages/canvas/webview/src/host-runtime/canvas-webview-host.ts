@@ -197,6 +197,9 @@ export function createCanvasWebviewHost(
         } else if (wasDirty && !event.snapshot.dirty) {
           emit({ type: 'canvas.saveSucceeded' });
         }
+        if (snapshotContainsPendingRemoval(event.snapshot, pendingRemovedNodeIds)) {
+          return;
+        }
         if (event.originCommandId && localCommandIds.has(event.originCommandId)) {
           adoptLocalSnapshot(event.snapshot);
           return;
@@ -444,6 +447,10 @@ export function createCanvasWebviewHost(
     },
     async resolveMaterialActions(selectedNodeIds) {
       await waitForOperationQueueToSettle();
+      if (selectedNodeIds.some((nodeId) => pendingRemovedNodeIds.has(nodeId))) return [];
+      const current = snapshot ?? (await runtime.getSnapshot());
+      const currentNodeIds = new Set(current.canvas.nodes.map((node) => node.id));
+      if (selectedNodeIds.some((nodeId) => !currentNodeIds.has(nodeId))) return [];
       materialActionRequestSequence += 1;
       const requestId = `canvas-webview-material-actions:${materialActionRequestSequence}`;
       currentMaterialActionRequestId = requestId;
@@ -604,6 +611,21 @@ export function createCanvasWebviewHost(
       listeners.clear();
     },
   };
+}
+
+function snapshotContainsPendingRemoval(
+  snapshot: CanvasHostSnapshot,
+  pendingRemovedNodeIds: ReadonlySet<string>,
+): boolean {
+  if (pendingRemovedNodeIds.size === 0) return false;
+  return (
+    snapshot.canvas.nodes.some((node) => pendingRemovedNodeIds.has(node.id)) ||
+    snapshot.canvas.connections.some(
+      (connection) =>
+        pendingRemovedNodeIds.has(connection.sourceId) ||
+        pendingRemovedNodeIds.has(connection.targetId),
+    )
+  );
 }
 
 function applyContentNodeDelta(

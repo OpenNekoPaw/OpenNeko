@@ -189,6 +189,7 @@ export const en = {
   'generation.outputCount': '{count} outputs',
   'generation.selectOutput': 'Select generated output {number}',
   'generation.elapsed': 'Elapsed time',
+  'generation.elapsedValue': 'Took {elapsed}',
   'generation.empty': 'Configure the Recipe and run this node',
   'generation.textUnavailable': 'Generated text is unavailable',
   'generation.recipeStale': 'This output was generated from an earlier Recipe or input.',

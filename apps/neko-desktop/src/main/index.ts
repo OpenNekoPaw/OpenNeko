@@ -1378,8 +1378,10 @@ async function startDesktop(): Promise<void> {
         absolutePath,
       });
     },
-    resolveAddToCut: async ({ identity }) =>
-      createCutCanvasHandoffPayload(await cutRuntime.resolveCanvasHandoffTarget(identity)),
+    resolveAddToCut: async ({ identity }) => {
+      const target = await cutRuntime.resolveAvailableCanvasHandoffTarget(identity);
+      return target ? createCutCanvasHandoffPayload(target) : undefined;
+    },
     addToCut: async ({ identity, target, executionPayload }) => {
       const label =
         target.locator.file.authority === 'workspace'

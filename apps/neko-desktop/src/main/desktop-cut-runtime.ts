@@ -228,6 +228,23 @@ export class DesktopCutRuntime {
   async resolveCanvasHandoffTarget(
     identity: CutCanvasSourceIdentity,
   ): Promise<CutCanvasHandoffTarget> {
+    const target = await this.resolveCanvasHandoffTargetInternal(identity, true);
+    if (!target) {
+      throw new Error('Desktop Cut Canvas handoff has no exact Project View owner.');
+    }
+    return target;
+  }
+
+  resolveAvailableCanvasHandoffTarget(
+    identity: CutCanvasSourceIdentity,
+  ): Promise<CutCanvasHandoffTarget | undefined> {
+    return this.resolveCanvasHandoffTargetInternal(identity, false);
+  }
+
+  private async resolveCanvasHandoffTargetInternal(
+    identity: CutCanvasSourceIdentity,
+    requireExactOwner: boolean,
+  ): Promise<CutCanvasHandoffTarget | undefined> {
     this.requireActive();
     const current = await this.options.shell.getProjection(identity.windowId);
     if (current.rendererSessionId !== identity.rendererSessionId) {
@@ -244,7 +261,10 @@ export class DesktopCutRuntime {
         candidate.viewInstanceId === identity.viewInstanceId,
     );
     if (!project || !tab) {
-      throw new Error('Desktop Cut Canvas handoff has no exact Project View owner.');
+      if (requireExactOwner) {
+        throw new Error('Desktop Cut Canvas handoff has no exact Project View owner.');
+      }
+      return undefined;
     }
     const workbench = resolveDesktopWindowWorkspaceWorkbench(current.window, identity.workspaceId);
     const canvasView = workbench.layout.main.views.find(
@@ -256,7 +276,10 @@ export class DesktopCutRuntime {
         candidate.workspaceId === identity.workspaceId,
     );
     if (!canvasView) {
-      throw new Error('Desktop Cut Canvas handoff source View is stale.');
+      if (requireExactOwner) {
+        throw new Error('Desktop Cut Canvas handoff source View is stale.');
+      }
+      return undefined;
     }
     const activeCut =
       workbench.layout.cutPanel?.presentation === 'docked'

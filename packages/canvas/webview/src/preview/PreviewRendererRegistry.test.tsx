@@ -73,7 +73,7 @@ describe('PreviewSurface canonical descriptor lifecycle', () => {
     await act(async () => {
       root.render(
         <CanvasHostProvider host={host}>
-          <PreviewSurface source={source} />
+          <PreviewSurface source={source} mediaPlayback="passive" />
         </CanvasHostProvider>,
       );
       await import('@neko/preview-webview/root');
@@ -92,6 +92,7 @@ describe('PreviewSurface canonical descriptor lifecycle', () => {
     expect(container.querySelector('video')?.getAttribute('src')).toBe(
       'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     );
+    expect(container.querySelector('video')?.controls).toBe(false);
 
     await act(async () => root.unmount());
     expect(

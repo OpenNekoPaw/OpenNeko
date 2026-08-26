@@ -1012,6 +1012,74 @@ describe('createCanvasWebviewHost', () => {
     runtime.dispose();
   });
 
+  it('does not resurrect a locally deleted node from a late Host projection', async () => {
+    const identity = {
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      windowId: 'window-1',
+      viewId: 'view-1',
+      viewInstanceId: 'view-instance-1',
+      documentId: 'neko/boards/workspace.nkc',
+      sessionId: 'session-1',
+      rendererSessionId: 'endpoint-1',
+    };
+    const deletedNode: MediaCanvasNode = {
+      id: 'video-to-delete',
+      type: 'media',
+      position: { x: 20, y: 20 },
+      size: { width: 320, height: 180 },
+      zIndex: 1,
+      data: {
+        mediaType: 'video',
+        assetPath: 'media/old.mp4',
+        contentLocator: { file: { authority: 'workspace', path: 'media/old.mp4' } },
+      },
+    };
+    const initialCanvas = { ...DEFAULT_CANVAS_DATA, nodes: [deletedNode] };
+    const session = new CanvasHostRuntimeSession({ identity, initialCanvas, effects: {} });
+    const host = createCanvasWebviewHost(session);
+    const messages: unknown[] = [];
+    host.subscribe((message) => messages.push(message));
+    host.postMessage({ type: 'ready' });
+    await vi.waitFor(() =>
+      expect(messages).toContainEqual({ type: 'update', data: initialCanvas }),
+    );
+
+    host.postMessage({
+      type: 'canvasContentNodeDeltaApplied',
+      removedNodeIds: [deletedNode.id],
+      restoredNodeIds: [],
+    });
+    const initialUpdateCount = messages.filter(isCanvasUpdateMessage).length;
+    await session.executeIntent(
+      createCanvasHostIntentRequest({
+        requestId: 'late-projection-request',
+        commandId: 'late-projection-command',
+        identity,
+        intent: {
+          type: 'update-presentation',
+          presentation: { viewport: { pan: { x: 0, y: 0 }, zoom: 1 }, selectedNodeIds: [] },
+        },
+      }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(messages.filter(isCanvasUpdateMessage)).toHaveLength(initialUpdateCount);
+    await expect(host.resolveMaterialActions([deletedNode.id])).resolves.toEqual([]);
+
+    host.postMessage({
+      type: 'canvasStatus',
+      data: {
+        ...initialCanvas,
+        nodes: [],
+        _selection: { nodeIds: [] },
+      },
+    });
+    await vi.waitFor(async () => expect((await session.getSnapshot()).canvas.nodes).toEqual([]));
+
+    host.dispose();
+    session.dispose();
+  });
+
   it('projects autosave failures without replacing the loaded Canvas', async () => {
     const runtime = new CanvasHostRuntimeSession({
       identity: {

@@ -561,6 +561,45 @@ describe('PreviewRoot', () => {
     expect(pause).toHaveBeenCalled();
   });
 
+  it('renders passive compact video without native controls or autoplay', async () => {
+    const play = vi
+      .spyOn(HTMLMediaElement.prototype, 'play')
+      .mockImplementation(async () => undefined);
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        withPreviewSnapshots(
+          <LightweightPreview
+            locale="en"
+            mediaPlayback="passive"
+            descriptor={{
+              descriptorId: 'descriptor-video-passive',
+              sourceFingerprint: 'fingerprint-passive',
+              contentLocator: previewContentLocator,
+              url: 'openneko://resource/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+              contentKind: 'video',
+              mediaType: 'video/mp4',
+              displayName: 'passive.mp4',
+              byteLength: 42,
+            }}
+          />,
+        ),
+      );
+      await import('../video/VideoPlayer');
+    });
+
+    const video = container.querySelector('video');
+    expect(video?.controls).toBe(false);
+    expect(video?.autoplay).toBe(false);
+    expect(play).not.toHaveBeenCalled();
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
   it('keeps controlled video source failures distinct from play rejection', async () => {
     vi.spyOn(HTMLMediaElement.prototype, 'play').mockRejectedValue(
       new DOMException('User gesture required.', 'NotAllowedError'),

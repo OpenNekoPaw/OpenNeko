@@ -139,6 +139,35 @@ describe('SelectionContextToolbar', () => {
     container.remove();
   });
 
+  it('does not project material actions for a Generation node without a selected output', () => {
+    const node: CanvasNode = {
+      id: 'generation-video-failed',
+      type: 'generation',
+      position: { x: 100, y: 100 },
+      size: { width: 320, height: 180 },
+      zIndex: 1,
+      data: {
+        recipe: { kind: 'video', prompt: 'Generate a clip' },
+        outputs: [],
+      },
+    };
+
+    const markup = renderToStaticMarkup(
+      <SelectionContextToolbar
+        nodes={[node]}
+        selectedNodeIds={[node.id]}
+        viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
+        viewportSize={{ width: 800, height: 600 }}
+      />,
+    );
+
+    expect(markup).toContain('data-selection-action="node:duplicate"');
+    expect(markup).not.toContain('data-selection-action="cut:add-resource"');
+    expect(markup).not.toContain('data-selection-action="video:separate-audio"');
+    expect(markup).not.toContain('data-selection-action="preview:open"');
+    expect(markup).not.toContain('data-material-actions-status="error"');
+  });
+
   it('keeps the toolbar preview owned by Main Preview without duplicating Canvas fullscreen', async () => {
     const node = mediaNode('image-preview', 'image', 'assets/image.png');
     const executeMaterialAction = vi.fn(async () => materialActionSnapshot());
@@ -510,8 +539,8 @@ describe('SelectionContextToolbar', () => {
     expect(markup).toContain('data-selection-kind-label="true"');
     expect(markup).toContain('>Image</span>');
     expect(markup).toContain('data-selection-action="node:duplicate"');
-    expect(markup).toContain('data-selection-action="preview:open"');
-    expect(markup).toContain('data-disabled-reason="This capability is unavailable"');
+    expect(markup).not.toContain('data-selection-action="preview:open"');
+    expect(markup).not.toContain('data-disabled-reason');
     expect(markup).not.toContain('text:edit');
     expect(markup).not.toContain('cut:add-resource');
   });
@@ -562,7 +591,7 @@ describe('SelectionContextToolbar', () => {
     await toolbar.dispose();
   });
 
-  it('enables and disables stable Video slots without reordering as capability changes', async () => {
+  it('projects Video material actions only while a selected output exists', async () => {
     const emptyNode: CanvasNode = {
       id: 'generation-video',
       type: 'generation',
@@ -617,13 +646,8 @@ describe('SelectionContextToolbar', () => {
       render(emptyNode);
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    expect(
-      container.querySelector<HTMLButtonElement>('[data-selection-action="cut:add-resource"]')
-        ?.disabled,
-    ).toBe(true);
-    const stableOrder = Array.from(
-      container.querySelectorAll('[data-selection-action-location="primary"]'),
-    ).map((element) => element.getAttribute('data-selection-action'));
+    expect(container.querySelector('[data-selection-action="cut:add-resource"]')).toBeNull();
+    expect(container.querySelector('[data-selection-action="video:separate-audio"]')).toBeNull();
 
     await act(async () => {
       render(completedNode);
@@ -640,25 +664,20 @@ describe('SelectionContextToolbar', () => {
       Array.from(container.querySelectorAll('[data-selection-action-location="primary"]')).map(
         (element) => element.getAttribute('data-selection-action'),
       ),
-    ).toEqual(stableOrder);
+    ).toEqual(['cut:add-resource', 'video:separate-audio', 'node:duplicate', 'preview:open']);
 
     await act(async () => {
       render(emptyNode);
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
+    expect(container.querySelector('[data-selection-action="cut:add-resource"]')).toBeNull();
+    expect(container.querySelector('[data-selection-action="video:separate-audio"]')).toBeNull();
     expect(resolveMaterialActions).toHaveBeenCalledTimes(3);
-    expect(
-      container.querySelector<HTMLButtonElement>('[data-selection-action="cut:add-resource"]')
-        ?.disabled,
-    ).toBe(true);
     expect(
       Array.from(container.querySelectorAll('[data-selection-action-location="primary"]')).map(
         (element) => element.getAttribute('data-selection-action'),
       ),
-    ).toEqual(stableOrder);
-    expect(
-      container.querySelector('[data-selection-action="video:separate-audio"]'),
-    ).not.toBeNull();
+    ).toEqual(['node:duplicate']);
     await act(async () => root.unmount());
     container.remove();
   });

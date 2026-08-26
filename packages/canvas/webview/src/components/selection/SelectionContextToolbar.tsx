@@ -34,6 +34,7 @@ import {
   CANVAS_VIDEO_OPEN_EDITOR_TOOLS_ACTION_ID,
   CANVAS_VIDEO_REMOVE_SUBTITLES_ACTION_ID,
   CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID,
+  selectedCanvasGenerationOutput,
 } from '@neko/canvas-domain';
 import { Button, IconButton, Popover } from '@neko/ui/primitives';
 import {
@@ -536,7 +537,9 @@ function stableMaterialActionIds(selectedNodes: readonly CanvasNode[]): readonly
 
 function materialKindForNode(node: CanvasNode): CanvasMaterialMediaKind | undefined {
   if (node.type === 'generation') {
-    return node.data.recipe.kind === 'prompt' ? 'document' : node.data.recipe.kind;
+    const output = selectedCanvasGenerationOutput(node.data);
+    if (!output) return undefined;
+    return output.kind === 'prompt' ? 'document' : output.kind;
   }
   if (node.type === 'media') return node.data.mediaType;
   if (node.type === 'file') return node.data.mediaKind ?? 'document';

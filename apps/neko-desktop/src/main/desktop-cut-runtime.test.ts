@@ -176,6 +176,22 @@ describe('DesktopCutRuntime', () => {
     await harness.runtime.dispose();
   });
 
+  it('treats a missing exact Canvas Project View as unavailable during action discovery', async () => {
+    const harness = await createDraftRuntimeHarness({});
+    const unavailableIdentity = {
+      ...harness.canvasSourceIdentity(),
+      projectId: 'missing-project',
+    };
+
+    await expect(
+      harness.runtime.resolveAvailableCanvasHandoffTarget(unavailableIdentity),
+    ).resolves.toBeUndefined();
+    await expect(harness.runtime.resolveCanvasHandoffTarget(unavailableIdentity)).rejects.toThrow(
+      'has no exact Project View owner',
+    );
+    await harness.runtime.dispose();
+  });
+
   it('creates one exact draft for Canvas media, preserves the source and deduplicates its Cut command', async () => {
     const probe = vi.fn(async () => ({
       durationSeconds: 3,

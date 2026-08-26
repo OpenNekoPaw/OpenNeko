@@ -106,6 +106,7 @@ export function GenerationNode({
                   surfaceKind="inline"
                   chrome="full-bleed"
                   audioLayout={recipe.kind === 'audio' ? 'node-card' : undefined}
+                  mediaPlayback={recipe.kind === 'video' ? 'passive' : undefined}
                 />
                 {active ? <ActivityScan /> : null}
               </div>
@@ -230,7 +231,11 @@ function GenerationStatus({
       title={projection.diagnostic?.message}
     >
       <span>{label}</span>
-      {elapsed ? <span aria-label={t('generation.elapsed')}>{elapsed}</span> : null}
+      {elapsed ? (
+        <span aria-label={t('generation.elapsed')}>
+          {t('generation.elapsedValue', { elapsed })}
+        </span>
+      ) : null}
       {percent !== undefined ? <span>{Math.round(percent)}%</span> : null}
       {active && percent !== undefined ? (
         <span className="canvas-generation-node__progress" aria-hidden="true">
