@@ -126,14 +126,7 @@ describe('Desktop DSH composer configuration', () => {
       selectedProviderId: 'openai',
       selectedModelId: 'gpt-5',
     });
-    expect(setSessionConfigOption).toHaveBeenCalledWith(
-      'conversation-1',
-      'model',
-      '["openai","gpt-5-api",8192]',
-    );
-    expect(setSessionConfigOption.mock.invocationCallOrder[0]).toBeLessThan(
-      workspaceConfig.setAssistantSettings.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
-    );
+    expect(setSessionConfigOption).not.toHaveBeenCalled();
     expect(applicationConfig.setAssistantSettings).not.toHaveBeenCalled();
 
     await expect(
@@ -144,6 +137,26 @@ describe('Desktop DSH composer configuration', () => {
         permissionPresetId: 'danger-full-access',
       }),
     ).resolves.toMatchObject({ permissionPresetId: 'danger-full-access' });
+    expect(setPermissionPreset).not.toHaveBeenCalled();
+
+    await expect(
+      service.bindTurnConfiguration('conversation-1', 'window-1', true),
+    ).resolves.toEqual({
+      supportsImageInput: false,
+      configuration: {
+        model: '["openai","gpt-5-api",8192]',
+        permissionPresetId: 'danger-full-access',
+      },
+    });
+    expect(setSessionConfigOption).not.toHaveBeenCalled();
+    expect(setPermissionPreset).not.toHaveBeenCalled();
+
+    await service.bindTurnConfiguration('conversation-1', 'window-1', false);
+    expect(setSessionConfigOption).toHaveBeenCalledWith(
+      'conversation-1',
+      'model',
+      '["openai","gpt-5-api",8192]',
+    );
     expect(setPermissionPreset).toHaveBeenCalledWith('conversation-1', 'danger-full-access');
 
     await service.selectMediaModel({
@@ -720,9 +733,6 @@ describe('Desktop DSH composer configuration', () => {
       blockingDiagnostic: { message: 'Selected model was removed.' },
     });
     await expect(service.applyConversation('conversation-1', 'window-1')).resolves.toEqual({
-      supportsImageInput: false,
-    });
-    await expect(service.readConversationExecution('conversation-1', 'window-1')).resolves.toEqual({
       supportsImageInput: false,
     });
     expect(setSessionConfigOption).toHaveBeenCalledOnce();

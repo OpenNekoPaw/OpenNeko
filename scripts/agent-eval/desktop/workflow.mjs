@@ -64,6 +64,7 @@ async function executeStep(input) {
         followupPrompt: step.followupPrompt,
         delivery: step.delivery,
         activeTimeoutMs: step.activeTimeoutMs,
+        ...resolveFollowupModelOverride(step, input.modelProfiles),
       });
     case 'wait-for-idle': {
       const idle = await driver.waitForIdle(requireConversationId(conversationId), step.timeoutMs);
@@ -160,6 +161,12 @@ function resolveModelOverride(step, profiles) {
         : { providerExpressionProfileId: profile.chat.providerExpressionProfileId }),
     },
   };
+}
+
+function resolveFollowupModelOverride(step, profiles) {
+  if (step.followupModelProfileId === undefined) return {};
+  const override = resolveModelOverride({ modelProfileId: step.followupModelProfileId }, profiles);
+  return override.chatModel === undefined ? {} : { followupChatModel: override.chatModel };
 }
 
 function requireConversationId(value) {

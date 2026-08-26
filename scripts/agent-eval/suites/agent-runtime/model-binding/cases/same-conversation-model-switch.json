@@ -5,12 +5,13 @@
   "caseGroup": "workflow",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Finish the first Turn, update the exact idle DSH Session model, then run a second Turn with the updated model in the same Conversation.",
+    "userBehavior": "While a visible Turn is running, switch models through the enabled Composer control and send a follow-up that keeps its exact configuration binding.",
     "canonicalPath": [
       "same Desktop Conversation",
       "first immutable Turn configuration snapshot",
-      "idle exact-Session model update",
-      "second immutable Turn configuration snapshot",
+      "visible active-Turn model selection",
+      "message-bound inbox configuration",
+      "next immutable Turn configuration snapshot",
       "exact DSH Session model configuration"
     ],
     "observables": [
@@ -21,8 +22,8 @@
         "required": true
       }
     ],
-    "expectedResult": "The first Turn retains gpt-5.5, the second Turn uses gpt-5.6-luna, and both belong to the same Conversation without fallback.",
-    "expectedFailure": "Mutable in-flight configuration, unavailable binding, implicit default fallback, changed Conversation identity, or missing per-Turn facts fails."
+    "expectedResult": "The active Turn remains on gpt-5.5, the queued follow-up uses gpt-5.6-luna, and both remain in the same Conversation without fallback.",
+    "expectedFailure": "A disabled model control, mutation of the active request, processing-time configuration lookup, unavailable binding, implicit fallback, changed Conversation identity, or missing per-Turn facts fails."
   },
   "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
@@ -40,34 +41,27 @@
       "timeoutMs": 180000
     },
     {
-      "id": "idle-model-update",
-      "kind": "update-configuration",
-      "providerId": "nekoapi-chat",
-      "modelId": "gpt-5.6-luna",
-      "modelProfileId": "nekoapi-gpt-5.6-luna",
-      "expectedStatus": "applied",
-      "turnState": "idle",
-      "timeoutMs": 30000
-    },
-    {
-      "id": "second",
-      "kind": "submit",
-      "prompt": "Reply with one concise sentence identifying this as the second turn in the same conversation.",
-      "modelProfileId": "nekoapi-gpt-5.6-luna"
+      "id": "active-model-followup",
+      "kind": "submit-with-followup",
+      "prompt": "Give a careful multi-paragraph explanation of local-first state ownership, then end with ACTIVE_MODEL_FIRST_DONE.",
+      "followupPrompt": "After the current response finishes, reply with exactly ACTIVE_MODEL_FOLLOWUP_DONE.",
+      "followupModelProfileId": "nekoapi-gpt-5.6-luna",
+      "delivery": "send-now",
+      "activeTimeoutMs": 120000
     },
     { "id": "second-idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
   ],
   "assertions": [
     { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "model-sequence-facts" },
     {
-      "id": "idle-update",
+      "id": "active-update",
       "kind": "configuration-update",
-      "stepId": "idle-model-update",
+      "stepId": "active-model-followup",
       "providerId": "nekoapi-chat",
       "modelId": "gpt-5.6-luna",
       "modelProfileId": "nekoapi-gpt-5.6-luna",
       "status": "applied",
-      "turnState": "idle",
+      "turnState": "active",
       "turnCreated": false,
       "evidenceRef": "model-sequence-facts"
     },
@@ -89,16 +83,17 @@
     {
       "id": "answer",
       "kind": "final-answer",
-      "mode": "non-empty",
+      "mode": "contains",
+      "text": ["ACTIVE_MODEL_FOLLOWUP_DONE"],
       "evidenceRef": "model-sequence-facts"
     }
   ],
   "artifactChecks": [],
   "budget": { "timeoutMs": 360000, "repetitions": 1 },
   "execution": {
-    "evidenceLevel": "hidden-desktop",
-    "resourceClass": "text",
-    "protected": false,
+    "evidenceLevel": "visible-desktop",
+    "resourceClass": "visible-ui",
+    "protected": true,
     "startSurface": "workspace"
   }
 }

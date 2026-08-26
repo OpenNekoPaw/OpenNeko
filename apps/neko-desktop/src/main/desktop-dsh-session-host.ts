@@ -20,6 +20,7 @@ import {
   decodeDshAcpImageAttachmentRefProjection,
   decodeDshAcpJsonPayload,
   type DshAcpImageAttachmentRefProjection,
+  type DshAcpTurnConfiguration,
 } from '@neko/agent-contracts/dsh-acp';
 import type {
   AgentPromptImage,
@@ -133,10 +134,14 @@ export class DesktopDshSessionHost {
           conversationId: string,
           windowId: string,
         ): Promise<{ readonly supportsImageInput: boolean }>;
-        readConversationExecution(
+        bindTurnConfiguration(
           conversationId: string,
           windowId: string,
-        ): Promise<{ readonly supportsImageInput: boolean }>;
+          running: boolean,
+        ): Promise<{
+          readonly supportsImageInput: boolean;
+          readonly configuration: DshAcpTurnConfiguration;
+        }>;
       };
       readonly promptImages: {
         admit(input: {
@@ -424,9 +429,11 @@ export class DesktopDshSessionHost {
     const admission = this.options.turnCanvasTargets.admit(dshSessionId, input.canvasTurnTarget);
     let retainAdmission = false;
     try {
-      const appliedModel = isRunning
-        ? await this.options.composer.readConversationExecution(conversationId, windowId)
-        : await this.options.composer.applyConversation(conversationId, windowId);
+      const boundTurn = await this.options.composer.bindTurnConfiguration(
+        conversationId,
+        windowId,
+        isRunning,
+      );
       const context = await this.options.promptContext.resolve(
         conversationId,
         input.kind === 'message' ? input.contextPayloads : [],
@@ -455,7 +462,7 @@ export class DesktopDshSessionHost {
         windowId,
         references: input.references,
         images: input.images,
-        modelSupportsImageInput: appliedModel.supportsImageInput,
+        modelSupportsImageInput: boundTurn.supportsImageInput,
       });
       const imageByReferenceIndex = new Map(
         images.flatMap((image) =>
@@ -510,6 +517,7 @@ export class DesktopDshSessionHost {
             })),
           ],
           contextText: context,
+          configuration: boundTurn.configuration,
         });
         const messageId = resolveNewNextTurnMessageId(before, after);
         this.options.turnCanvasTargets.bindQueuedMessage(admission.admissionId, messageId);

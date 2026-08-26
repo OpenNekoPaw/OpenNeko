@@ -22,6 +22,11 @@ const workspaceBoardTarget = {
   workspaceId: 'workspace-1',
 };
 
+const turnConfiguration = {
+  model: '["openai","gpt-5",8192]',
+  permissionPresetId: 'workspace-write',
+} as const;
+
 describe('Desktop DSH Session Host', () => {
   it('publishes and submits the first message through one sender-bound create command', async () => {
     const createConversation = vi.fn(async () => ({
@@ -487,7 +492,7 @@ describe('Desktop DSH Session Host', () => {
     );
   });
 
-  it('enqueues an ordinary message into the exact running DSH Session without reconfiguring it', async () => {
+  it('binds configuration to an ordinary message without reconfiguring the running Turn', async () => {
     const projection = new DshAcpProjection();
     projection.acceptSessionEvent({
       sessionId: identity.dshSessionId,
@@ -503,7 +508,10 @@ describe('Desktop DSH Session Host', () => {
     }));
     const prompt = vi.fn(async () => ({ stopReason: 'end_turn' as const }));
     const applyConversation = vi.fn(async () => ({ supportsImageInput: false }));
-    const readConversationExecution = vi.fn(async () => ({ supportsImageInput: false }));
+    const bindTurnConfiguration = vi.fn(async () => ({
+      supportsImageInput: false,
+      configuration: turnConfiguration,
+    }));
     const setSessionContext = vi.fn(async () => undefined);
     const resolve = vi.fn(async () => 'OpenNeko exact Canvas context');
     const canvasTurnTarget = {
@@ -516,7 +524,7 @@ describe('Desktop DSH Session Host', () => {
       enqueueInboxMessage,
       prompt,
       applyConversation,
-      readConversationExecution,
+      bindTurnConfiguration,
       setSessionContext,
       promptContext: { resolve },
     });
@@ -540,9 +548,10 @@ describe('Desktop DSH Session Host', () => {
       prompt: [{ type: 'text', text: 'next request' }],
       displayContent: [{ type: 'text', text: 'next request' }],
       contextText: 'OpenNeko exact Canvas context',
+      configuration: turnConfiguration,
     });
     expect(resolve).toHaveBeenCalledWith(identity.conversationId, [], [], canvasTurnTarget);
-    expect(readConversationExecution).toHaveBeenCalledWith(identity.conversationId, 'window-1');
+    expect(bindTurnConfiguration).toHaveBeenCalledWith(identity.conversationId, 'window-1', true);
     expect(prompt).not.toHaveBeenCalled();
     expect(applyConversation).not.toHaveBeenCalled();
     expect(setSessionContext).not.toHaveBeenCalled();
@@ -573,7 +582,10 @@ describe('Desktop DSH Session Host', () => {
       projection,
       enqueueInboxMessage,
       admitPromptImages,
-      readConversationExecution: vi.fn(async () => ({ supportsImageInput: true })),
+      bindTurnConfiguration: vi.fn(async () => ({
+        supportsImageInput: true,
+        configuration: turnConfiguration,
+      })),
     });
 
     await host.execute(
@@ -601,6 +613,7 @@ describe('Desktop DSH Session Host', () => {
       ],
       displayContent: [{ type: 'image', name: 'clipboard.png' }],
       contextText: 'OpenNeko test context',
+      configuration: turnConfiguration,
     });
   });
 
@@ -1577,10 +1590,9 @@ function createHost(overrides: {
     conversationId: string,
     windowId: string,
   ) => Promise<{ readonly supportsImageInput: boolean }>;
-  readonly readConversationExecution?: (
-    conversationId: string,
-    windowId: string,
-  ) => Promise<{ readonly supportsImageInput: boolean }>;
+  readonly bindTurnConfiguration?: ConstructorParameters<
+    typeof DesktopDshSessionHost
+  >[0]['composer']['bindTurnConfiguration'];
   readonly enqueueInboxMessage?: ConversationDshSessionBoundClient['enqueueInboxMessage'];
   readonly sendInboxMessageNow?: ConversationDshSessionBoundClient['sendInboxMessageNow'];
   readonly readImageAttachment?: ConversationDshSessionBoundClient['readImageAttachment'];
@@ -1630,6 +1642,16 @@ function createHost(overrides: {
     typeof DesktopDshSessionHost
   >[0]['openTerminalArtifact'];
 }) {
+  const applyConversation =
+    overrides.applyConversation ?? vi.fn(async () => ({ supportsImageInput: false }));
+  const bindTurnConfiguration =
+    overrides.bindTurnConfiguration ??
+    vi.fn(async (conversationId: string, windowId: string, running: boolean) => ({
+      ...(running
+        ? { supportsImageInput: false }
+        : await applyConversation(conversationId, windowId)),
+      configuration: turnConfiguration,
+    }));
   return new DesktopDshSessionHost({
     bindings: {
       getByDshSessionId: overrides.getByDshSessionId ?? (async () => ({ ...identity })),
@@ -1691,10 +1713,8 @@ function createHost(overrides: {
           },
           source: 'asset-library' as const,
         })),
-      applyConversation:
-        overrides.applyConversation ?? vi.fn(async () => ({ supportsImageInput: false })),
-      readConversationExecution:
-        overrides.readConversationExecution ?? vi.fn(async () => ({ supportsImageInput: false })),
+      applyConversation,
+      bindTurnConfiguration,
     },
     promptImages: {
       admit: overrides.admitPromptImages ?? vi.fn(async () => []),

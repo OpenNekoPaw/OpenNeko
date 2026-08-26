@@ -209,12 +209,20 @@ describe('DSH ACP extension contract', () => {
         prompt: [{ type: 'text', text: 'next' }],
         displayContent: [{ type: 'text', text: 'next' }],
         contextText: 'workspace context',
+        configuration: {
+          model: '["openai","gpt-5",8192]',
+          permissionPresetId: 'workspace-write',
+        },
       }),
     ).toEqual({
       sessionId: 'session-1',
       prompt: [{ type: 'text', text: 'next' }],
       displayContent: [{ type: 'text', text: 'next' }],
       contextText: 'workspace context',
+      configuration: {
+        model: '["openai","gpt-5",8192]',
+        permissionPresetId: 'workspace-write',
+      },
     });
     expect(() =>
       decodeDshAcpInboxEnqueueRequest({
@@ -222,6 +230,10 @@ describe('DSH ACP extension contract', () => {
         prompt: [{ type: 'text', text: 'next' }],
         displayContent: [{ type: 'text', text: 'next' }],
         contextText: 'workspace context',
+        configuration: {
+          model: '["openai","gpt-5",8192]',
+          permissionPresetId: 'workspace-write',
+        },
         fallbackQueue: true,
       }),
     ).toThrow(/must contain exactly/u);
@@ -239,6 +251,10 @@ describe('DSH ACP extension contract', () => {
         ],
         displayContent: [{ type: 'image', name: 'clipboard.png' }],
         contextText: 'workspace context',
+        configuration: {
+          model: '["openai","gpt-5",8192]',
+          permissionPresetId: 'workspace-write',
+        },
       }),
     ).toMatchObject({
       prompt: [{ type: 'image', _meta: { opennekoDisplayName: 'clipboard.png' } }],
@@ -259,8 +275,24 @@ describe('DSH ACP extension contract', () => {
         ],
         displayContent: [{ type: 'image', name: 'large.png' }],
         contextText: 'workspace context',
+        configuration: {
+          model: '["openai","gpt-5",8192]',
+          permissionPresetId: 'workspace-write',
+        },
       }).prompt[0],
     ).toMatchObject({ type: 'image', data: imageData });
+    expect(() =>
+      decodeDshAcpInboxEnqueueRequest({
+        sessionId: 'session-1',
+        prompt: [{ type: 'text', text: 'next' }],
+        displayContent: [{ type: 'text', text: 'next' }],
+        contextText: 'workspace context',
+        configuration: {
+          model: '["openai","gpt-5",8192]',
+          permissionPresetId: '',
+        },
+      }),
+    ).toThrow(/turn permissionPresetId/u);
   });
 
   it('accepts only the exact bounded Session context payload', () => {

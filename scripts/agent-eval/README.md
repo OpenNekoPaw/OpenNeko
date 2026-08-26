@@ -12,7 +12,7 @@ Evaluation infrastructure but is not itself AI behavior Evaluation.
 The Desktop application is the only product host. Desktop Evaluation uses the public DSH Session,
 Permission, Runtime and Shell bridges inside the complete application owner. The focused runner has no case-id
 whitelist: it resolves an indexed Scenario into an immutable execution case and interprets canonical
-submit, idle-only model configuration, typed Command/Skill invocation, approval, cancellation,
+submit, idle or message-bound active-Turn model configuration, typed Command/Skill invocation, approval, cancellation,
 resume/restart, feedback, lifecycle and idle steps through one driver. The focused
 `submit-with-followup` step drives the visible Composer and exact DSH Inbox row's send-now action;
 ordinary first submit stays on the visible Composer path, and no generic queue/send-now DSL or

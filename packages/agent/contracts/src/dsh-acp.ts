@@ -503,6 +503,11 @@ export interface DshAcpModelConfiguration {
   readonly maxTokens: number;
 }
 
+export interface DshAcpTurnConfiguration {
+  readonly model: string;
+  readonly permissionPresetId: string;
+}
+
 export interface DshAcpSessionContextSetRequest {
   readonly sessionId: string;
   readonly text: string;
@@ -848,6 +853,7 @@ export interface DshAcpInboxEnqueueRequest {
   readonly prompt: readonly DshAcpInboxPromptBlock[];
   readonly displayContent: readonly DshAcpContentBlock[];
   readonly contextText: string;
+  readonly configuration: DshAcpTurnConfiguration;
 }
 
 export interface DshAcpInboxSnapshot {
@@ -1187,7 +1193,7 @@ export function decodeDshAcpInboxEnqueueRequest(
   decodeDshAcpJsonPayload(projectInboxPayloadMetadata(input), 'inbox enqueue request metadata');
   requireExactKeys(
     input,
-    ['sessionId', 'prompt', 'displayContent', 'contextText'],
+    ['sessionId', 'prompt', 'displayContent', 'contextText', 'configuration'],
     'inbox enqueue request',
   );
   if (!Array.isArray(input.prompt) || input.prompt.length === 0) {
@@ -1203,6 +1209,17 @@ export function decodeDshAcpInboxEnqueueRequest(
       decodeContentBlock(block, `displayContent[${index}]`),
     ),
     contextText: requireString(input.contextText, 'contextText'),
+    configuration: decodeDshAcpTurnConfiguration(input.configuration),
+  };
+}
+
+export function decodeDshAcpTurnConfiguration(input: unknown): DshAcpTurnConfiguration {
+  const record = requireRecord(input, 'turn configuration');
+  requireExactKeys(record, ['model', 'permissionPresetId'], 'turn configuration');
+  const model = encodeDshAcpModelConfiguration(decodeDshAcpModelConfiguration(record.model));
+  return {
+    model,
+    permissionPresetId: requireNonEmptyString(record.permissionPresetId, 'turn permissionPresetId'),
   };
 }
 

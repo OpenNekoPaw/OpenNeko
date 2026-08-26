@@ -14,7 +14,7 @@ describe('canonical DSH Desktop evaluation driver', () => {
     expect(expression).toContain('DSH Desktop Session has no effective selected model.');
   });
 
-  it('selects an advertised model only on the exact idle DSH Conversation surface', () => {
+  it('selects an advertised model for the declared exact DSH Conversation turn state', () => {
     const expression = dshDriverExpression({
       kind: 'update-model',
       conversationId: 'conversation-1',
@@ -23,10 +23,23 @@ describe('canonical DSH Desktop evaluation driver', () => {
       turnState: 'idle',
     });
     expect(expression).toContain('surface.scope?.conversationId !== conversationId');
-    expect(expression).toContain('DSH model update requires an idle Session.');
+    expect(expression).toContain(
+      'DSH model update does not match the required Session turn state.',
+    );
     expect(expression).toContain('sessions.selectComposerModel');
     expect(expression).toContain('turnCountBefore');
     expect(expression).toContain('turnCountAfter');
+
+    const visibleActiveExpression = dshDriverExpression({
+      kind: 'update-model',
+      conversationId: 'conversation-1',
+      providerId: 'provider-1',
+      modelId: 'model-1',
+      turnState: 'active',
+      visibleControl: true,
+    });
+    expect(visibleActiveExpression).toContain('data-agent-model-config-trigger');
+    expect(visibleActiveExpression).toContain('data-agent-model-option-id');
   });
 
   it('drives active-session follow-up through the visible Composer and exact queue row', () => {

@@ -2,6 +2,7 @@ import {
   DSH_ACP_MODEL_CONFIG_ID,
   encodeDshAcpModelConfiguration,
   type DshAcpPermissionPresetProjection,
+  type DshAcpTurnConfiguration,
 } from '@neko/agent-contracts/dsh-acp';
 import type {
   DshComposerContextProjection,
@@ -110,6 +111,7 @@ export function createDesktopDshComposerConfiguration(options: {
 }) {
   let mentionRequestSequence = 0;
   const executionByConversation = new Map<string, { readonly supportsImageInput: boolean }>();
+  const selectedPermissionByConversation = new Map<string, string>();
   const resolveConfiguration = async (
     binding: AgentConversationContext,
     windowId: string,
@@ -167,6 +169,15 @@ export function createDesktopDshComposerConfiguration(options: {
         })
       : options.sessions.readInputCatalog(conversationId);
 
+  const readPermissionProjection = async (
+    conversationId: string | undefined,
+  ): Promise<DshAcpPermissionPresetProjection> => {
+    const projection = await options.permissions.read(conversationId);
+    if (conversationId === undefined) return projection;
+    const selected = selectedPermissionByConversation.get(conversationId);
+    return selected === undefined ? projection : { ...projection, currentValue: selected };
+  };
+
   return Object.freeze({
     async project(input: ComposerSurfaceIdentity): Promise<DshComposerConfigurationProjection> {
       const scope = await options.resolveSurface(input);
@@ -174,7 +185,7 @@ export function createDesktopDshComposerConfiguration(options: {
       return projectConfiguration(
         resolved.config,
         options.executionCatalog,
-        await options.permissions.read(scope.conversationId),
+        await readPermissionProjection(scope.conversationId),
         resolved.context,
         await readInputCatalog(scope.conversationId, scope.binding),
       );
@@ -291,22 +302,6 @@ export function createDesktopDshComposerConfiguration(options: {
           `Composer model '${selected.providerId}/${selected.modelId}' is not executable by the current DSH runtime.`,
         );
       }
-      if (scope.conversationId !== undefined) {
-        const state = config.getAssistantConfigState();
-        await options.sessions.setSessionConfigOption(
-          scope.conversationId,
-          DSH_ACP_MODEL_CONFIG_ID,
-          encodeDshAcpModelConfiguration({
-            providerId: execution.providerId,
-            modelId: execution.apiModelName,
-            maxTokens: state.maxTokens,
-          }),
-        );
-        executionByConversation.set(
-          scope.conversationId,
-          Object.freeze({ supportsImageInput: execution.input.includes('image') }),
-        );
-      }
       await config.setAssistantSettings({
         selectedProviderId: selected.providerId,
         selectedModelId: selected.modelId,
@@ -314,7 +309,7 @@ export function createDesktopDshComposerConfiguration(options: {
       return projectConfiguration(
         config,
         options.executionCatalog,
-        await options.permissions.read(scope.conversationId),
+        await readPermissionProjection(scope.conversationId),
         resolved.context,
         await readInputCatalog(scope.conversationId, scope.binding),
       );
@@ -331,10 +326,10 @@ export function createDesktopDshComposerConfiguration(options: {
           `DSH permission preset '${input.permissionPresetId}' is not advertised by the runtime.`,
         );
       }
-      const projection =
-        scope.conversationId === undefined
-          ? { ...current, currentValue: input.permissionPresetId }
-          : await options.permissions.set(scope.conversationId, input.permissionPresetId);
+      if (scope.conversationId !== undefined) {
+        selectedPermissionByConversation.set(scope.conversationId, input.permissionPresetId);
+      }
+      const projection = { ...current, currentValue: input.permissionPresetId };
       return projectConfiguration(
         resolved.config,
         options.executionCatalog,
@@ -374,7 +369,7 @@ export function createDesktopDshComposerConfiguration(options: {
       return projectConfiguration(
         config,
         options.executionCatalog,
-        await options.permissions.read(scope.conversationId),
+        await readPermissionProjection(scope.conversationId),
         resolved.context,
         await readInputCatalog(scope.conversationId, scope.binding),
       );
@@ -392,21 +387,49 @@ export function createDesktopDshComposerConfiguration(options: {
       return apply(conversationId, resolved.config);
     },
 
-    async readConversationExecution(
+    async bindTurnConfiguration(
       conversationId: string,
-      _windowId: string,
-    ): Promise<{ readonly supportsImageInput: boolean }> {
-      const execution = executionByConversation.get(conversationId);
-      if (execution === undefined) {
+      windowId: string,
+      running: boolean,
+    ): Promise<{
+      readonly supportsImageInput: boolean;
+      readonly configuration: DshAcpTurnConfiguration;
+    }> {
+      const binding = await options.contexts.readContext(conversationId);
+      if (binding === undefined) {
+        throw new Error(`Conversation '${conversationId}' has no authoritative domain context.`);
+      }
+      const resolved = await resolveConfiguration(binding, windowId);
+      const effective = requireEffectiveConfiguration(resolved.config, options.executionCatalog);
+      const permissions = await readPermissionProjection(conversationId);
+      if (!permissions.options.some((option) => option.value === permissions.currentValue)) {
         throw new Error(
-          `Conversation '${conversationId}' has no active DSH model execution binding.`,
+          `DSH permission preset '${permissions.currentValue}' is not advertised by the runtime.`,
         );
       }
-      return execution;
+      const model = encodeDshAcpModelConfiguration(effective.model);
+      if (!running) {
+        await options.sessions.setSessionConfigOption(
+          conversationId,
+          DSH_ACP_MODEL_CONFIG_ID,
+          model,
+        );
+        await options.permissions.set(conversationId, permissions.currentValue);
+      }
+      const execution = Object.freeze({ supportsImageInput: effective.supportsImageInput });
+      executionByConversation.set(conversationId, execution);
+      return {
+        ...execution,
+        configuration: Object.freeze({
+          model,
+          permissionPresetId: permissions.currentValue,
+        }),
+      };
     },
 
     resetSessionExecutions(): void {
       executionByConversation.clear();
+      selectedPermissionByConversation.clear();
     },
   });
 }

@@ -924,6 +924,55 @@ body {
   line-height: 1.55;
 }
 
+.agent-turn-progress {
+  box-sizing: border-box;
+  width: min(760px, calc(100% - 28px));
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 6px 5px;
+  color: var(--agent-fg-secondary);
+}
+
+.agent-turn-progress__label {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--agent-fg);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.agent-turn-progress .markdown-content {
+  color: var(--agent-fg-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.agent-turn-progress .markdown-content > :first-child {
+  margin-top: 0;
+}
+
+.agent-turn-progress .markdown-content > :last-child {
+  margin-bottom: 0;
+}
+
+.agent-tool-activity-note {
+  margin: 0;
+  padding: 0 9px 7px 25px;
+  color: var(--agent-fg-secondary);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.agent-tool-activity-list {
+  display: flex;
+  max-height: min(46vh, 440px);
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+
 @media (max-width: 560px) {
   .agent-message-row > .flex {
     padding-inline: 4px;

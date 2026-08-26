@@ -44,6 +44,17 @@ export function createDshDesktopAgentDriver(input) {
       if (activeSnapshot?.currentTurn === undefined) {
         throw new Error('DSH Desktop Session did not expose an active turn for inbox enqueue.');
       }
+      const configurationUpdate =
+        command.followupChatModel === undefined
+          ? {}
+          : await operations.updateConfiguration({
+              conversationId: command.conversationId,
+              providerId: command.followupChatModel.providerId,
+              modelId: command.followupChatModel.modelId,
+              turnState: 'active',
+              timeoutMs: command.activeTimeoutMs,
+              visibleControl: true,
+            });
       const followup = await evaluate({
         kind: 'composer-submit',
         conversationId: command.conversationId,
@@ -70,6 +81,7 @@ export function createDshDesktopAgentDriver(input) {
       });
       return {
         ...promoted,
+        ...configurationUpdate,
         accepted: true,
         facts: {
           inboxEnqueued: true,
@@ -365,8 +377,9 @@ export function dshDriverExpression(command) {
           throw new Error('DSH model update requires the exact visible Conversation surface.');
         }
         const before = await sessions.getSnapshot(conversationId);
-        if (!isIdle(before)) {
-          throw new Error('DSH model update requires an idle Session.');
+        const turnStateAtUpdate = isIdle(before) ? 'idle' : 'active';
+        if (command.turnState !== turnStateAtUpdate) {
+          throw new Error('DSH model update does not match the required Session turn state.');
         }
         const configuration = await sessions.getComposerConfiguration(
           surface.workbenchInstanceId,
@@ -382,7 +395,7 @@ export function dshDriverExpression(command) {
             conversationId,
             providerId: command.providerId,
             modelId: command.modelId,
-            turnStateAtUpdate: 'idle',
+            turnStateAtUpdate,
             turnCountBefore: turnCount(before),
             turnCountAfter: turnCount(before),
             diagnosticMessage: 'Requested DSH model is unavailable on the exact Agent surface.',
@@ -392,11 +405,35 @@ export function dshDriverExpression(command) {
           throw new Error('Requested DSH model must resolve to exactly one Composer option.');
         }
         const selected = matches[0];
-        const applied = await sessions.selectComposerModel(
-          surface.workbenchInstanceId,
-          surface.agentSurfaceId,
-          selected.id,
-        );
+        let applied;
+        if (command.visibleControl === true) {
+          const trigger = document.querySelector('[data-agent-model-config-trigger="true"]');
+          if (!(trigger instanceof HTMLButtonElement) || trigger.disabled) {
+            throw new Error('Visible DSH model configuration control is unavailable.');
+          }
+          trigger.click();
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+          const option = [...document.querySelectorAll('[data-agent-model-option-id]')].find(
+            (item) => item.getAttribute('data-agent-model-option-id') === selected.id,
+          );
+          if (!(option instanceof HTMLButtonElement) || option.disabled) {
+            throw new Error('Visible DSH model option is unavailable.');
+          }
+          option.click();
+          applied = await waitFor('Visible DSH model configuration', command.timeoutMs, async () => {
+            const next = await sessions.getComposerConfiguration(
+              surface.workbenchInstanceId,
+              surface.agentSurfaceId,
+            );
+            return next.selectedModelOptionId === selected.id ? next : undefined;
+          });
+        } else {
+          applied = await sessions.selectComposerModel(
+            surface.workbenchInstanceId,
+            surface.agentSurfaceId,
+            selected.id,
+          );
+        }
         const effective = applied.models.find(
           (item) => item.id === applied.selectedModelOptionId,
         );
@@ -413,7 +450,7 @@ export function dshDriverExpression(command) {
           conversationId,
           providerId: command.providerId,
           modelId: command.modelId,
-          turnStateAtUpdate: 'idle',
+          turnStateAtUpdate,
           turnCountBefore: turnCount(before),
           turnCountAfter: turnCount(after),
           projection: {

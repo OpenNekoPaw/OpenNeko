@@ -518,6 +518,7 @@ describe('DshAgentView content-creation composer', () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole('button', { name: /工作进度.*1 项操作已完成/u }));
     fireEvent.click(screen.getByRole('button', { name: /openneko\.document/u }));
     const output = view.container.querySelector('[data-agent-tool-payload="结果"]');
     expect(output?.className).toContain('overflow-y-auto');
@@ -569,9 +570,190 @@ describe('DshAgentView content-creation composer', () => {
       />,
     );
 
+    const activity = view.container.querySelector('[data-agent-tool-activity="is-danger"]');
+    expect(activity).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /工作进度.*1 项失败.*0\/1 项完成/u }));
     const toolCard = view.container.querySelector('[data-agent-tool-call-id="tool-failed"]');
     expect(toolCard?.className).toContain('is-danger');
     expect(screen.getByRole('button', { name: /openneko\.document.*失败/u })).toBeTruthy();
+  });
+
+  it('presents Agent progress separately and merges duplicate Tool lifecycle events', () => {
+    const view = renderAgent(
+      <DshComposerHarness
+        onSubmit={vi.fn(async () => true)}
+        projection={{
+          conversationId: 'conversation-progress',
+          dshSessionId: 'dsh-progress',
+          title: 'Storyboard review',
+          currentTurn: 2,
+          inbox: { nextTurn: [], nextStep: [] },
+          events: [
+            {
+              kind: 'message',
+              role: 'assistant',
+              turn: 2,
+              step: 1,
+              text: '我先核对画布内容，再整理动画化建议。',
+              messageId: 'message-progress',
+              state: 'final',
+            },
+            {
+              kind: 'tool',
+              turn: 2,
+              toolCallId: 'tool-read',
+              title: 'openneko.document',
+              status: 'pending',
+              rawInput: { operation: 'read' },
+            },
+            {
+              kind: 'tool',
+              turn: 2,
+              toolCallId: 'tool-read',
+              title: 'openneko.document',
+              status: 'completed',
+              rawOutput: { title: 'Storyboard' },
+            },
+            {
+              kind: 'tool',
+              turn: 2,
+              toolCallId: 'tool-image',
+              title: 'openneko.read_image',
+              status: 'in_progress',
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(
+      view.container.querySelector('[data-agent-progress-note="final"]')?.textContent,
+    ).toContain('过程说明我先核对画布内容，再整理动画化建议。');
+    expect(screen.getByRole('button', { name: /工作进度.*1\/2 项操作已完成/u })).toBeTruthy();
+    expect(view.container.querySelectorAll('[data-agent-tool-call-id]')).toHaveLength(0);
+    expect(screen.queryByText(/模型未提供额外的过程说明/u)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /工作进度.*1\/2 项操作已完成/u }));
+    expect(view.container.querySelectorAll('[data-agent-tool-call-id]')).toHaveLength(2);
+    expect(view.container.querySelectorAll('[data-agent-tool-call-id="tool-read"]')).toHaveLength(
+      1,
+    );
+    expect(screen.getByRole('button', { name: /openneko\.document.*已完成/u })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /openneko\.read_image.*运行中/u })).toBeTruthy();
+  });
+
+  it('states when an active Tool group has no model-authored progress update', () => {
+    renderAgent(
+      <DshComposerHarness
+        onSubmit={vi.fn(async () => true)}
+        projection={{
+          conversationId: 'conversation-no-progress',
+          dshSessionId: 'dsh-no-progress',
+          title: 'Tool-only turn',
+          currentTurn: 3,
+          inbox: { nextTurn: [], nextStep: [] },
+          events: [
+            {
+              kind: 'tool',
+              turn: 3,
+              toolCallId: 'tool-only',
+              title: 'openneko.document',
+              status: 'in_progress',
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('模型未提供额外的过程说明；可展开查看当前工具状态。')).toBeTruthy();
+    expect(screen.queryByText('过程说明')).toBeNull();
+  });
+
+  it('shows completed Tool work as successful while the Agent is still composing', () => {
+    const view = renderAgent(
+      <DshComposerHarness
+        onSubmit={vi.fn(async () => true)}
+        projection={{
+          conversationId: 'conversation-composing',
+          dshSessionId: 'dsh-composing',
+          title: 'Composing final answer',
+          currentTurn: 4,
+          inbox: { nextTurn: [], nextStep: [] },
+          events: [
+            {
+              kind: 'tool',
+              turn: 4,
+              toolCallId: 'tool-complete',
+              title: 'openneko.document',
+              status: 'completed',
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(view.container.querySelector('[data-agent-tool-activity="is-success"]')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /工作进度.*1 项操作已完成/u })).toBeTruthy();
+  });
+
+  it('resets expanded Tool details when the exact Conversation or DSH Session changes', () => {
+    const firstProjection = {
+      conversationId: 'conversation-first',
+      dshSessionId: 'dsh-first',
+      title: 'First conversation',
+      inbox: { nextTurn: [], nextStep: [] },
+      events: [
+        {
+          kind: 'tool' as const,
+          turn: 1,
+          toolCallId: 'tool-first',
+          title: 'openneko.document',
+          status: 'completed' as const,
+          rawInput: { operation: 'read' },
+        },
+      ],
+    };
+    const view = renderAgent(
+      <DshComposerHarness
+        conversationId="conversation-first"
+        onSubmit={vi.fn(async () => true)}
+        projection={firstProjection}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /工作进度.*1 项操作已完成/u }));
+    expect(view.container.querySelector('[data-agent-tool-call-id="tool-first"]')).toBeTruthy();
+
+    rerenderAgent(
+      view,
+      <DshComposerHarness
+        conversationId="conversation-second"
+        onSubmit={vi.fn(async () => true)}
+        projection={{
+          conversationId: 'conversation-second',
+          dshSessionId: 'dsh-second',
+          title: 'Second conversation',
+          inbox: { nextTurn: [], nextStep: [] },
+          events: [
+            {
+              kind: 'tool',
+              turn: 1,
+              toolCallId: 'tool-second',
+              title: 'openneko.read_image',
+              status: 'completed',
+              rawInput: { operation: 'read' },
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(view.container.querySelectorAll('[data-agent-tool-call-id]')).toHaveLength(0);
+    expect(
+      screen
+        .getByRole('button', { name: /工作进度.*1 项操作已完成/u })
+        .getAttribute('aria-expanded'),
+    ).toBe('false');
   });
 
   it('keeps the final title, context rail, model, mode, attachment, and send controls', () => {
@@ -695,6 +877,35 @@ describe('DshAgentView content-creation composer', () => {
         },
       },
     );
+  });
+
+  it('keeps composer configuration controls available while the current Turn is running', () => {
+    const onModelChange = vi.fn();
+    const onPermissionPresetChange = vi.fn();
+    renderAgent(
+      <DshComposerHarness
+        onModelChange={onModelChange}
+        onPermissionPresetChange={onPermissionPresetChange}
+        onSubmit={vi.fn(async () => true)}
+        projection={{
+          conversationId: 'conversation-running-model-change',
+          dshSessionId: 'dsh-running-model-change',
+          title: 'Running model change',
+          currentTurn: 1,
+          inbox: { nextTurn: [], nextStep: [] },
+          events: [],
+        }}
+      />,
+    );
+
+    const trigger = screen.getByRole('button', { name: '配置模型' }) as HTMLButtonElement;
+    expect(trigger.disabled).toBe(false);
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole('radio', { name: 'GPT-5' }));
+    expect(onModelChange).toHaveBeenCalledWith('openai:gpt-5');
+    fireEvent.click(screen.getByRole('button', { name: '执行模式' }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: '完全访问' }));
+    expect(onPermissionPresetChange).toHaveBeenCalledWith('danger-full-access');
   });
 
   it('restores the exact Conversation Canvas after the Agent scene unmounts', async () => {
@@ -1856,6 +2067,8 @@ function DshComposerHarness({
   conversationId = 'conversation-1',
   mentionItems = [],
   messageAuthorPresentation,
+  onModelChange = vi.fn(),
+  onPermissionPresetChange = vi.fn(),
   onRequestMentions = vi.fn(),
   onMaterializeAsset,
   onRemoveQueuedMessage,
@@ -1868,6 +2081,10 @@ function DshComposerHarness({
   readonly messageAuthorPresentation?: React.ComponentProps<
     typeof DshAgentView
   >['messageAuthorPresentation'];
+  readonly onModelChange?: React.ComponentProps<typeof DshAgentView>['onModelChange'];
+  readonly onPermissionPresetChange?: React.ComponentProps<
+    typeof DshAgentView
+  >['onPermissionPresetChange'];
   readonly onRequestMentions?: (filter: string) => void;
   readonly onMaterializeAsset?: React.ComponentProps<typeof DshAgentView>['onMaterializeAsset'];
   readonly onRemoveQueuedMessage?: React.ComponentProps<
@@ -1897,11 +2114,23 @@ function DshComposerHarness({
             category: 'llm',
             capabilities: ['chat'],
           },
+          {
+            id: 'openai:gpt-5',
+            label: 'GPT-5',
+            providerId: 'openai',
+            modelId: 'gpt-5',
+            providerLabel: 'OpenAI',
+            category: 'llm',
+            capabilities: ['chat'],
+          },
         ],
         selectedModelOptionId: 'deepseek-official:deepseek-v4',
         selectedMediaModelOptionIds: {},
         permissionPresetId: 'workspace-write',
-        permissionPresets: [{ id: 'workspace-write', label: 'workspace-write', selectable: true }],
+        permissionPresets: [
+          { id: 'workspace-write', label: 'workspace-write', selectable: true },
+          { id: 'danger-full-access', label: 'danger-full-access', selectable: true },
+        ],
         context: {
           kind: 'workspace',
           workspaceId: 'workspace-1',
@@ -1949,8 +2178,8 @@ function DshComposerHarness({
       onCancelTurn={vi.fn()}
       onDecidePermission={vi.fn()}
       onDraftChange={setDraft}
-      onModelChange={vi.fn()}
-      onPermissionPresetChange={vi.fn()}
+      onModelChange={onModelChange}
+      onPermissionPresetChange={onPermissionPresetChange}
       onRemoveQueuedMessage={onRemoveQueuedMessage}
       onSendQueuedMessageNow={onSendQueuedMessageNow}
       onRequestMentions={onRequestMentions}

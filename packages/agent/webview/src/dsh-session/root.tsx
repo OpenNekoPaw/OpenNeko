@@ -63,6 +63,7 @@ import {
   useDshComposerPresentationSnapshotStore,
   type DshComposerCanvasSelectionScope,
 } from './presentation-snapshot';
+import { projectDshTranscriptPresentation, type ToolEvent } from './transcript-presentation';
 
 import '../index.css';
 import './root.css';
@@ -183,6 +184,10 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   const conversationTitle = props.projection?.title ?? copy.newConversation;
   const runtimeReady = props.runtime?.status === 'running';
   const hasEvents = (props.projection?.events.length ?? 0) > 0;
+  const transcriptItems = useMemo(
+    () => projectDshTranscriptPresentation(props.projection?.events ?? []),
+    [props.projection?.events],
+  );
   const activeTurnStart = findActiveTurnStart(props.projection);
   const showEmptyState =
     props.conversationId === undefined && !hasEvents && !props.conversationFeed;
@@ -495,16 +500,32 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
             aria-live="polite"
           >
             {props.conversationFeed}
-            {props.projection?.events.map((event, index) => (
-              <DshSessionEvent
-                copy={copy}
-                event={event}
-                key={eventKey(event, index)}
-                messageAuthorPresentation={props.messageAuthorPresentation}
-                onOpenTerminalArtifact={props.onOpenTerminalArtifact}
-                onResolveImageAttachmentPreview={props.onResolveImageAttachmentPreview}
-              />
-            ))}
+            {transcriptItems.map((item) =>
+              item.kind === 'tool-group' ? (
+                <DshToolActivity
+                  active={props.projection?.currentTurn === item.turn}
+                  copy={copy}
+                  hasProcessNote={item.hasProcessNote}
+                  key={`tool-group:${props.conversationId}:${props.projection?.dshSessionId}:${item.turn}:${item.sourceIndex}`}
+                  tools={item.tools}
+                />
+              ) : item.kind === 'progress-note' ? (
+                <DshProgressNote
+                  copy={copy}
+                  event={item.event}
+                  key={`progress:${item.event.turn}:${item.event.step}:${item.event.messageId}`}
+                />
+              ) : (
+                <DshSessionEvent
+                  copy={copy}
+                  event={item.event}
+                  key={eventKey(item.event, item.sourceIndex)}
+                  messageAuthorPresentation={props.messageAuthorPresentation}
+                  onOpenTerminalArtifact={props.onOpenTerminalArtifact}
+                  onResolveImageAttachmentPreview={props.onResolveImageAttachmentPreview}
+                />
+              ),
+            )}
             {activeTurnStart ? (
               <DshActiveTurnStatus
                 copy={copy}
@@ -916,7 +937,7 @@ function DshComposer({
                       : { description: preset.description }),
                   })),
                   onChange: onPermissionPresetChange,
-                  disabled: currentTurn !== undefined || submitting,
+                  disabled: false,
                 }
           }
           submissionBlocked={submissionBlocked}
@@ -1301,6 +1322,28 @@ function assertImagePreviewMatches(
   }
 }
 
+function DshProgressNote({
+  copy,
+  event,
+}: {
+  readonly copy: DshAgentCopy;
+  readonly event: Extract<
+    DshSessionHostEvent,
+    { readonly kind: 'message'; readonly role: 'assistant' }
+  >;
+}): JSX.Element {
+  return (
+    <div className="agent-message-list-item py-0.5" data-agent-progress-note={event.state}>
+      <div className="agent-transcript-rail">
+        <div className="agent-turn-progress ml-7">
+          <span className="agent-turn-progress__label">{copy.processNote}</span>
+          <MarkdownDocumentView className="markdown-content" value={event.text} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DshSessionEvent({
   copy,
   event,
@@ -1592,12 +1635,94 @@ function formatTurnDuration(copy: DshAgentCopy, durationMs: number): string {
     .replace('{seconds}', String(seconds).padStart(2, '0'));
 }
 
+function DshToolActivity({
+  active,
+  copy,
+  hasProcessNote,
+  tools,
+}: {
+  readonly active: boolean;
+  readonly copy: DshAgentCopy;
+  readonly hasProcessNote: boolean;
+  readonly tools: readonly ToolEvent[];
+}): JSX.Element {
+  const [expanded, setExpanded] = useState(false);
+  const completedCount = tools.filter((tool) => tool.status === 'completed').length;
+  const failedCount = tools.filter((tool) => tool.status === 'failed').length;
+  const running = tools.some((tool) => tool.status === 'pending' || tool.status === 'in_progress');
+  const tone = failedCount > 0 ? 'is-danger' : running ? 'is-info' : 'is-success';
+  const status =
+    failedCount > 0
+      ? copy.workProgressFailed
+          .replace('{failed}', String(failedCount))
+          .replace('{completed}', String(completedCount))
+          .replace('{total}', String(tools.length))
+      : running
+        ? copy.workProgressRunning
+            .replace('{completed}', String(completedCount))
+            .replace('{total}', String(tools.length))
+        : copy.workProgressCompleted.replace('{total}', String(tools.length));
+  const icon =
+    failedCount > 0 ? (
+      <ErrorIcon className="h-3 w-3 shrink-0 text-[var(--agent-danger)]" />
+    ) : running ? (
+      <LoadingIcon className="h-3 w-3 shrink-0 text-[var(--agent-info)]" />
+    ) : (
+      <SuccessIcon className="h-3 w-3 shrink-0 text-[var(--agent-success)]" />
+    );
+
+  return (
+    <div className="agent-message-list-item py-0.5">
+      <div className="agent-transcript-rail">
+        <div className="agent-turn-activity ml-7" data-agent-tool-activity={tone}>
+          <div className={`agent-inline-card ${tone}`}>
+            <button
+              aria-expanded={expanded}
+              className="agent-inline-header flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[11px] transition-colors"
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+            >
+              {icon}
+              <span className="shrink-0 font-medium text-[var(--agent-fg)]">
+                {copy.workProgress}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[10px] text-[var(--agent-fg-secondary)]">
+                {status}
+              </span>
+              <ChevronDownIcon
+                className={`h-3 w-3 shrink-0 text-[var(--agent-fg-secondary)] transition-transform ${expanded ? 'rotate-180' : ''}`}
+              />
+            </button>
+            {active && !hasProcessNote ? (
+              <p className="agent-tool-activity-note">{copy.processNoteUnavailable}</p>
+            ) : null}
+            {expanded ? (
+              <div className="agent-tool-activity-list border-t border-[var(--agent-divider)] px-2 py-2">
+                {tools.map((tool) => (
+                  <DshToolEvent
+                    copy={copy}
+                    embedded
+                    event={tool}
+                    key={`${tool.turn}:${tool.toolCallId}`}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DshToolEvent({
   copy,
   event,
+  embedded = false,
 }: {
   readonly copy: DshAgentCopy;
   readonly event: Extract<DshSessionHostEvent, { readonly kind: 'tool' }>;
+  readonly embedded?: boolean;
 }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
   const expandable = event.rawInput !== undefined || event.rawOutput !== undefined;
@@ -1618,38 +1743,40 @@ function DshToolEvent({
       <CodeIcon className="h-3 w-3 shrink-0 text-[var(--agent-info)]" />
     );
 
+  const card = (
+    <div className={`agent-inline-card ${tone}`} data-agent-tool-call-id={event.toolCallId}>
+      <button
+        className="agent-inline-header flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[11px] transition-colors"
+        disabled={!expandable}
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+      >
+        {icon}
+        <span className="min-w-0 max-w-[70%] truncate font-medium text-[var(--agent-fg)]">
+          {event.title ?? event.toolCallId}
+        </span>
+        <span className="flex-1 truncate font-mono text-[10px] text-[var(--agent-fg-secondary)]">
+          {copy.toolStatus[event.status]}
+        </span>
+        {expandable ? (
+          <ChevronDownIcon
+            className={`h-3 w-3 shrink-0 text-[var(--agent-fg-secondary)] transition-transform ${expanded ? 'rotate-180' : ''}`}
+          />
+        ) : null}
+      </button>
+      {expanded ? (
+        <div className="border-t border-[var(--agent-divider)] px-3 py-2 text-[10px]">
+          <ToolPayload copy={copy} label={copy.input} value={event.rawInput} />
+          <ToolPayload copy={copy} label={copy.output} value={event.rawOutput} />
+        </div>
+      ) : null}
+    </div>
+  );
+  if (embedded) return <div className="agent-turn-activity-item">{card}</div>;
   return (
     <div className="agent-message-list-item py-0.5">
       <div className="agent-transcript-rail">
-        <div className="agent-turn-activity ml-7">
-          <div className={`agent-inline-card ${tone}`} data-agent-tool-call-id={event.toolCallId}>
-            <button
-              className="agent-inline-header flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[11px] transition-colors"
-              disabled={!expandable}
-              type="button"
-              onClick={() => setExpanded((value) => !value)}
-            >
-              {icon}
-              <span className="min-w-0 max-w-[70%] truncate font-medium text-[var(--agent-fg)]">
-                {event.title ?? event.toolCallId}
-              </span>
-              <span className="flex-1 truncate font-mono text-[10px] text-[var(--agent-fg-secondary)]">
-                {copy.toolStatus[event.status]}
-              </span>
-              {expandable ? (
-                <ChevronDownIcon
-                  className={`h-3 w-3 shrink-0 text-[var(--agent-fg-secondary)] transition-transform ${expanded ? 'rotate-180' : ''}`}
-                />
-              ) : null}
-            </button>
-            {expanded ? (
-              <div className="border-t border-[var(--agent-divider)] px-3 py-2 text-[10px]">
-                <ToolPayload copy={copy} label={copy.input} value={event.rawInput} />
-                <ToolPayload copy={copy} label={copy.output} value={event.rawOutput} />
-              </div>
-            ) : null}
-          </div>
-        </div>
+        <div className="agent-turn-activity ml-7">{card}</div>
       </div>
     </div>
   );
@@ -1930,6 +2057,8 @@ interface DshAgentCopy {
   readonly openPersistedDocument: string;
   readonly permissions: string;
   readonly placeholder: string;
+  readonly processNote: string;
+  readonly processNoteUnavailable: string;
   readonly restartRuntime: string;
   readonly restartingRuntime: string;
   readonly runtimeUnavailableTitle: string;
@@ -1943,6 +2072,10 @@ interface DshAgentCopy {
   readonly turnElapsed: string;
   readonly turnEnded: string;
   readonly turnInProgress: string;
+  readonly workProgress: string;
+  readonly workProgressCompleted: string;
+  readonly workProgressFailed: string;
+  readonly workProgressRunning: string;
   readonly you: string;
   readonly youAvatar: string;
   readonly unavailable: string;
@@ -1993,6 +2126,9 @@ const EN_COPY: DshAgentCopy = {
   modelRequired: 'Select a configured model before sending.',
   permissions: 'Pending permissions',
   placeholder: 'Ask the DSH Agent…',
+  processNote: 'Progress update',
+  processNoteUnavailable:
+    'The model provided no additional progress update. Expand this section to inspect the current Tool status.',
   restartRuntime: 'Restart DSH',
   restartingRuntime: 'Restarting DSH runtime…',
   runtimeUnavailableTitle: 'DSH runtime unavailable',
@@ -2004,13 +2140,17 @@ const EN_COPY: DshAgentCopy = {
     completed: 'Completed',
     failed: 'Failed',
   },
-  thought: 'Reasoning',
+  thought: 'Model reasoning summary',
   turnDuration: 'Ran for {duration}',
   durationSeconds: '{seconds}s',
   durationMinutesSeconds: '{minutes}m {seconds}s',
   turnElapsed: '{duration} elapsed',
   turnEnded: 'Turn {turn} ended',
   turnInProgress: 'Turn {turn} in progress',
+  workProgress: 'Work progress',
+  workProgressCompleted: '{total} operations completed',
+  workProgressFailed: '{failed} failed · {completed}/{total} completed',
+  workProgressRunning: '{completed}/{total} operations completed',
   you: 'You',
   youAvatar: 'ME',
   unavailable: 'Unavailable',
@@ -2060,19 +2200,25 @@ const ZH_COPY: DshAgentCopy = {
   modelRequired: '发送前请选择已配置的模型。',
   permissions: '待处理权限',
   placeholder: '向 DSH Agent 提问…',
+  processNote: '过程说明',
+  processNoteUnavailable: '模型未提供额外的过程说明；可展开查看当前工具状态。',
   restartRuntime: '重启 DSH',
   restartingRuntime: '正在重启 DSH 运行时…',
   runtimeUnavailableTitle: 'DSH 运行时不可用',
   send: '发送消息',
   selectModel: '选择模型',
   toolStatus: { pending: '等待中', in_progress: '运行中', completed: '已完成', failed: '失败' },
-  thought: '思考过程',
+  thought: '模型推理摘要',
   turnDuration: '用时 {duration}',
   durationSeconds: '{seconds}秒',
   durationMinutesSeconds: '{minutes}分{seconds}秒',
   turnElapsed: '已用时 {duration}',
   turnEnded: '回合 {turn} 已结束',
   turnInProgress: '回合 {turn} 处理中',
+  workProgress: '工作进度',
+  workProgressCompleted: '{total} 项操作已完成',
+  workProgressFailed: '{failed} 项失败 · {completed}/{total} 项完成',
+  workProgressRunning: '{completed}/{total} 项操作已完成',
   you: '你',
   youAvatar: '我',
   unavailable: '不可用',

@@ -367,13 +367,18 @@ describe('DesktopAgentSurface', () => {
 
     expect(await screen.findByText('Create a node')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Workspace planning' })).toBeTruthy();
-    expect(screen.getByText('Canvas create node')).toBeTruthy();
-    expect(screen.getByText('Running')).toBeTruthy();
+    const workProgress = screen.getByRole('button', {
+      name: /Work progress.*0\/1 operations completed/u,
+    });
+    expect(screen.queryByText('Canvas create node')).toBeNull();
     expect(screen.getByText('Allow Canvas write?')).toBeTruthy();
     expect(container.querySelector('[data-markdown-document="ready"]')).toBeTruthy();
     expect(container.querySelector('.agent-transcript-rail')).toBeTruthy();
     expect(container.querySelector('.agent-composer-shell')).toBeTruthy();
 
+    fireEvent.click(workProgress);
+    expect(screen.getByText('Canvas create node')).toBeTruthy();
+    expect(screen.getByText('Running')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Canvas create node/u }));
     expect(screen.getByText(/"operation": "create-node"/u)).toBeTruthy();
     expect(screen.getByText(/"accepted": true/u)).toBeTruthy();

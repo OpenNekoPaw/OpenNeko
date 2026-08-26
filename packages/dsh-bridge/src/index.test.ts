@@ -795,29 +795,21 @@ describe('OpenNeko DSH ACP bridge boundaries', () => {
     expect(source).toMatch(/async setSessionConfigOption\(params\)/u);
     expect(source).toMatch(/params\.configId !== DSH_ACP_MODEL_CONFIG_ID/u);
     expect(source).toMatch(/current\.handle\.agent\.status !== 'idle'/u);
+    expect(source).toMatch(/current\.runtimeContext\.modelConfiguration\.apply\(configuration\)/u);
     expect(source).toMatch(
-      /replaceOwnedAgent\(ctx, owned, params\.sessionId, current, configuration, preset\)/u,
+      /installModelSelection\(agentCtx, runtimeContext\.modelConfiguration\.modelSelection\)/u,
     );
-    expect(source).toMatch(/resumeSessionId: sessionId/u);
-    expect(source).toMatch(/isSameModelConfiguration\(current\.configuration, configuration\)/u);
+    expect(source).toMatch(/agentOptions: \{\}/u);
     expect(source).toContain('const requireReadyOwned = async');
-    expect(source).toContain('current.replacement = replacement');
     expect(source).toMatch(
       /DSH_ACP_EXTENSION_METHODS\.readPermissionPresets[\s\S]*await requireReadyOwned\(sessionId\)/u,
     );
-    expect(source).not.toMatch(
-      /async function replaceOwnedAgent[\s\S]*owned\.delete\(rawSessionId\);\s*await current\.outputTail/u,
-    );
-    expect(source).toMatch(
-      /catch \(error\) \{\s*if \(owned\.get\(rawSessionId\) === current\) owned\.delete\(rawSessionId\);\s*throw error/u,
-    );
-    expect(source).toMatch(
-      /const quiesce[\s\S]*record\.replacement !== undefined[\s\S]*await record\.replacement\.catch/u,
-    );
+    expect(source).not.toContain('replaceOwnedAgent');
+    expect(source).not.toContain('record.replacement');
     expect(source).not.toMatch(/fallbackProvider|fallbackModel|tryNextProvider/u);
   });
 
-  it('binds product context to the exact DSH Agent scope and preserves it across model rebuilds', () => {
+  it('binds product context and message configuration to the exact DSH Agent scope', () => {
     const source = readPackageFile('src/index.ts');
 
     expect(source).toMatch(/DSH_ACP_EXTENSION_METHODS\.setSessionContext/u);
@@ -826,11 +818,11 @@ describe('OpenNeko DSH ACP bridge boundaries', () => {
     expect(source).toMatch(/name: 'openneko:product-protocol'/u);
     expect(source).toMatch(/text: OPENNEKO_PRODUCT_SYSTEM_PROMPT/u);
     expect(source).toMatch(/name: 'openneko:product-context'/u);
-    expect(source).toMatch(
-      /setup: setupSessionRuntimeContext\(ctx, preset, current\.runtimeContext\)/u,
-    );
     expect(source).toMatch(/ctx\.agentPresets\.mount\(agentCtx, preset\)/u);
-    expect(source).toMatch(/createOwnedSession\(handle, configuration, current\.runtimeContext\)/u);
+    expect(source).toMatch(/opennekoTurnConfiguration: request\.configuration/u);
+    expect(source).toMatch(/readOpenNekoTurnConfiguration\(message\.source\)/u);
+    expect(source).toMatch(/record\.runtimeContext\.modelConfiguration\.apply/u);
+    expect(source).toMatch(/source: current\.source/u);
     expect(source).toMatch(/record\.handle\.agent\.status !== 'idle'/u);
   });
 

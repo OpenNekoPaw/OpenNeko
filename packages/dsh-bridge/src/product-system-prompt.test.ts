@@ -32,4 +32,17 @@ describe('OpenNeko DSH product system prompt', () => {
       /creative proposal fields|analysis report fields|project proposal fields/u,
     );
   });
+
+  it('requests concise evidence-based progress without exposing chain-of-thought', () => {
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('before the first Tool call');
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'objective, approach, or blocking condition materially changes',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('one or two factual sentences');
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('Do not narrate every Tool call');
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('hidden chain-of-thought');
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'never proves that a Tool action, side effect, or artifact succeeded',
+    );
+  });
 });

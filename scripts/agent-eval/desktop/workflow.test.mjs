@@ -102,7 +102,11 @@ describe('Desktop Agent workflow interpreter', () => {
         eventOffset: 0,
         conversationId: 'conversation-1',
       })),
-      waitForIdentity: vi.fn(async () => identity),
+      waitForIdentity: vi.fn(async () => ({
+        conversationId: 'conversation-1',
+        dshSessionId: 'dsh-session-1',
+        turn: 1,
+      })),
       waitForIdle: vi.fn(async () => ({
         identity: { conversationId: 'conversation-1', dshSessionId: 'dsh-session-1', turn: 1 },
       })),
@@ -250,5 +254,47 @@ describe('Desktop Agent workflow interpreter', () => {
         }),
       ]),
     );
+  });
+
+  it('binds an explicit follow-up model to an active-session Composer workflow', async () => {
+    const identity = { conversationId: 'conversation-1', dshSessionId: 'dsh-session-1', turn: 2 };
+    const driver = {
+      submitWithFollowup: vi.fn(async () => ({ accepted: true })),
+      waitForIdle: vi.fn(async () => ({ identity })),
+    };
+
+    await executeDesktopAgentWorkflow({
+      driver,
+      conversationId: 'conversation-1',
+      defaultTimeoutMs: 1000,
+      modelProfiles: [
+        {
+          id: 'next-model',
+          selection: 'explicit',
+          chat: { providerId: 'provider', modelId: 'model-b' },
+        },
+      ],
+      steps: [
+        {
+          id: 'active-followup',
+          kind: 'submit-with-followup',
+          prompt: 'first',
+          followupPrompt: 'second',
+          followupModelProfileId: 'next-model',
+          delivery: 'send-now',
+          activeTimeoutMs: 1000,
+        },
+        { id: 'idle', kind: 'wait-for-idle', timeoutMs: 1000 },
+      ],
+    });
+
+    expect(driver.submitWithFollowup).toHaveBeenCalledWith({
+      conversationId: 'conversation-1',
+      prompt: 'first',
+      followupPrompt: 'second',
+      delivery: 'send-now',
+      activeTimeoutMs: 1000,
+      followupChatModel: { providerId: 'provider', modelId: 'model-b', category: 'llm' },
+    });
   });
 });
