@@ -503,6 +503,11 @@ describe('Desktop scene Workbench', () => {
     expect(mainGroupSource.indexOf('variant="tab"')).toBeGreaterThan(
       mainGroupSource.indexOf('<WorkbenchEditorTabs'),
     );
+    expect(mainGroupSource).toContain('data-main-tab-context-actions="true"');
+    expect(mainGroupSource.indexOf('data-main-tab-context-actions="true"')).toBeGreaterThan(
+      mainGroupSource.indexOf('variant="tab"'),
+    );
+    expect(mainGroupSource).not.toContain('contextActionsRef={setContextActionsTarget}');
     expect(standaloneEmptySource).toContain('<EmptyMainSurface />');
     expect(standaloneEmptySource).not.toContain('WorkspaceQuickCreateControl');
   });

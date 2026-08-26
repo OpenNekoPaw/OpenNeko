@@ -496,6 +496,9 @@ describe('Desktop renderer styles', () => {
     const mainCreateRule = styles.match(
       /\.workspace-main-quick-create__tab-trigger\s*\{(?<body>[\s\S]*?)\n\}/u,
     );
+    const mainContextActionsRule = styles.match(
+      /\.project-main-group__context-actions\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
     const resourceDockRule = styles.match(/\.project-resource-dock\s*\{(?<body>[\s\S]*?)\n\}/u);
 
     expect(workspaceRule?.groups?.body).toMatch(
@@ -511,8 +514,14 @@ describe('Desktop renderer styles', () => {
     expect(mainTabsRule?.groups?.body).toMatch(/width\s*:\s*max-content/u);
     expect(mainTabsRule?.groups?.body).toMatch(/max-width\s*:\s*calc\(100% - 32px\)/u);
     expect(mainTabsRule?.groups?.body).toMatch(/flex\s*:\s*0 1 auto/u);
+    expect(mainTabsRule?.groups?.body).toMatch(/overflow\s*:\s*hidden/u);
     expect(mainCreateRule?.groups?.body).toMatch(/width\s*:\s*24px/u);
     expect(mainCreateRule?.groups?.body).toMatch(/height\s*:\s*24px/u);
+    expect(mainContextActionsRule?.groups?.body).toMatch(/flex\s*:\s*0 0 auto/u);
+    expect(mainContextActionsRule?.groups?.body).toMatch(/margin-left\s*:\s*auto/u);
+    expect(mainContextActionsRule?.groups?.body).toMatch(
+      /background\s*:\s*var\(--neko-desktop-chrome\)/u,
+    );
     expect(styles).toMatch(
       /\.project-workspace\[data-right-presentation='hidden'\] \.project-main-group__tabs,[\s\S]*?\.project-workspace\[data-right-presentation='overlay'\] \.project-main-group__tabs\s*\{[^}]*padding-right\s*:\s*132px/u,
     );

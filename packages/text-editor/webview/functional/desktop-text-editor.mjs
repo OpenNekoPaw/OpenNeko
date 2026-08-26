@@ -88,6 +88,9 @@ export const desktopTextEditorScenario = Object.freeze({
       !markdownDefault.outlineText.includes('创作笔记') ||
       markdownDefault.hasInternalToolbar ||
       !markdownDefault.contextActionsInTabRow ||
+      !markdownDefault.tabRowControlOrder ||
+      !markdownDefault.addControlAdjacentToTabs ||
+      !markdownDefault.contextActionsInsideSafeTabRow ||
       markdownDefault.segmented.map((item) => item.label).join(',') !== '源码,所见即所得,分栏' ||
       !markdownDefault.segmented[0]?.icon.includes('codicon-code') ||
       !markdownDefault.segmented[1]?.icon.includes('codicon-edit') ||
@@ -365,7 +368,11 @@ export const desktopTextEditorScenario = Object.freeze({
       compact.rootWidth > compact.viewportWidth ||
       compact.toolbarScrollWidth > compact.toolbarClientWidth + 1 ||
       compact.overlappingControls ||
-      compact.tabControlsOverlap
+      compact.tabControlsOverlap ||
+      compact.addControlsOverlap ||
+      !compact.tabRowControlOrder ||
+      !compact.addControlAdjacentToTabs ||
+      !compact.contextActionsInsideSafeTabRow
     ) {
       throw new Error(
         `Compact Text Editor controls overflow or overlap: ${JSON.stringify(compact)}`,
@@ -408,6 +415,10 @@ export const desktopTextEditorScenario = Object.freeze({
       darkCompact.toolbarScrollWidth > darkCompact.toolbarClientWidth + 1 ||
       darkCompact.overlappingControls ||
       darkCompact.tabControlsOverlap ||
+      darkCompact.addControlsOverlap ||
+      !darkCompact.tabRowControlOrder ||
+      !darkCompact.addControlAdjacentToTabs ||
+      !darkCompact.contextActionsInsideSafeTabRow ||
       !darkCompact.splitHorizontal ||
       darkCompact.rootBackground === 'rgba(0, 0, 0, 0)' ||
       darkCompact.rootBackground === 'rgb(255, 255, 255)' ||
@@ -486,15 +497,21 @@ export const desktopTextEditorScenario = Object.freeze({
       'Successful retry did not clear the local Resource Browser operation diagnostic.',
     );
     const capacityRetried = await inspectMainViewCapacity(evaluate, rejectedDocument);
+    const denseTabRow = await inspectTextEditor(evaluate);
     if (
       capacityRetried.mainViewCount !== 8 ||
       capacityRetried.activeDocument !== rejectedDocument ||
       !capacityRetried.resourceVisible ||
       capacityRetried.resourceUnavailable ||
-      capacityRetried.alertText.length > 0
+      capacityRetried.alertText.length > 0 ||
+      !denseTabRow.tabRowControlOrder ||
+      !denseTabRow.addControlAdjacentToTabs ||
+      !denseTabRow.contextActionsInsideSafeTabRow ||
+      denseTabRow.tabControlsOverlap ||
+      denseTabRow.addControlsOverlap
     ) {
       throw new Error(
-        `Main View capacity retry did not use the canonical open path: ${JSON.stringify(capacityRetried)}`,
+        `Main View capacity retry or dense tab-row layout is invalid: ${JSON.stringify({ capacityRetried, denseTabRow })}`,
       );
     }
     const capacityRetriedScreenshot = await screenshot('main-view-capacity-explicit-close-retry');
@@ -519,6 +536,7 @@ export const desktopTextEditorScenario = Object.freeze({
       cleanSessionRecovery,
       capacityRejected,
       capacityRetried,
+      denseTabRow,
       screenshots: [
         markdownDefaultScreenshot,
         markdownRichInputScreenshot,
@@ -934,7 +952,10 @@ async function inspectTextEditor(evaluate) {
     const root = document.querySelector('.neko-text-editor-root');
     const contextActions = document.querySelector('.neko-text-editor-context-actions');
     const contextTarget = contextActions?.parentElement;
-    const tabList = contextTarget?.previousElementSibling;
+    const tabHeader = contextTarget?.closest('.project-main-group__tabs');
+    const editorTabs = tabHeader?.querySelector('.neko-workbench-editor-tabs');
+    const tabList = editorTabs?.querySelector('.neko-workbench-editor-tabs__list');
+    const addButton = tabHeader?.querySelector('.workspace-main-quick-create__tab-trigger');
     if (!(root instanceof HTMLElement) || !(contextActions instanceof HTMLElement)) {
       throw new Error('Text Editor presentation is unavailable.');
     }
@@ -953,6 +974,9 @@ async function inspectTextEditor(evaluate) {
     const outlineRect = outline?.getBoundingClientRect();
     const controls = [...contextActions.querySelectorAll('button')].map((button) => button.getBoundingClientRect());
     const contextTargetRect = contextTarget?.getBoundingClientRect();
+    const tabHeaderRect = tabHeader?.getBoundingClientRect();
+    const editorTabsRect = editorTabs?.getBoundingClientRect();
+    const addButtonRect = addButton?.getBoundingClientRect();
     const tabListRect = tabList?.getBoundingClientRect();
     const tabRects = [...(tabList?.querySelectorAll('.neko-workbench-editor-tab') ?? [])]
       .map((tab) => {
@@ -1025,8 +1049,20 @@ async function inspectTextEditor(evaluate) {
       highlightedTokenCount: root.querySelectorAll('.cm-content .cm-line > span').length,
       hasInternalToolbar: root.querySelector('.neko-text-editor-toolbar') !== null,
       contextActionsInTabRow:
-        contextTarget?.classList.contains('neko-workbench-editor-tabs__context-actions') === true &&
-        contextTarget?.closest('.project-main-group__tabs') !== null,
+        contextTarget?.classList.contains('project-main-group__context-actions') === true &&
+        tabHeader !== null,
+      tabRowControlOrder:
+        editorTabs?.nextElementSibling === addButton &&
+        addButton?.nextElementSibling === contextTarget &&
+        contextTarget?.nextElementSibling === null,
+      addControlAdjacentToTabs:
+        editorTabsRect !== undefined &&
+        addButtonRect !== undefined &&
+        addButtonRect.left >= editorTabsRect.right - 1,
+      contextActionsInsideSafeTabRow:
+        contextTargetRect !== undefined &&
+        tabHeaderRect !== undefined &&
+        contextTargetRect.right <= tabHeaderRect.right + 1,
       viewportWidth: document.documentElement.clientWidth,
       rootWidth: root.getBoundingClientRect().width,
       rootBackground: rootStyle.backgroundColor,
@@ -1046,6 +1082,13 @@ async function inspectTextEditor(evaluate) {
             tab.bottom > contextTargetRect.top
           )
         : false,
+      addControlsOverlap:
+        contextTargetRect !== undefined &&
+        addButtonRect !== undefined &&
+        addButtonRect.left < contextTargetRect.right &&
+        addButtonRect.right > contextTargetRect.left &&
+        addButtonRect.top < contextTargetRect.bottom &&
+        addButtonRect.bottom > contextTargetRect.top,
     };
   })()`);
 }

@@ -850,6 +850,140 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     await waitForSelector(
       '[data-owner-view-id="canvas:functional:video"] [data-testid="canvas-playback-controller"]',
     );
+    const storylineViewportSelector =
+      '[data-owner-view-id="canvas:functional:video"] .canvas-playback-storyline-viewport';
+    const storylineViewport = await inspectCanvasStorylineViewport(
+      evaluate,
+      'canvas:functional:video',
+    );
+    if (
+      storylineViewport.wheelOwner !== 'content' ||
+      storylineViewport.overflowX !== 'auto' ||
+      storylineViewport.overflowY !== 'auto' ||
+      !storylineViewport.orderStatus ||
+      storylineViewport.routeLabels.length !== 2 ||
+      storylineViewport.orderPositions.length !== 2 ||
+      storylineViewport.orderPositions.some((position) => position !== 'unsequenced') ||
+      storylineViewport.edgeCount !== 0 ||
+      storylineViewport.arrowCount !== 0 ||
+      (!storylineViewport.horizontalOverflow && !storylineViewport.verticalOverflow)
+    ) {
+      throw new Error(
+        `Canvas Storyline viewport is not scrollable: ${JSON.stringify(storylineViewport)}`,
+      );
+    }
+    const storylineScrollDelta = storylineViewport.verticalOverflow
+      ? { deltaX: 0, deltaY: 96 }
+      : { deltaX: 96, deltaY: 0 };
+    await scroll(storylineViewportSelector, 0, storylineScrollDelta);
+    await evaluate('new Promise((resolve) => setTimeout(resolve, 100))');
+    const storylineScrolled = await inspectCanvasStorylineViewport(
+      evaluate,
+      'canvas:functional:video',
+    );
+    if (
+      (storylineViewport.verticalOverflow
+        ? storylineScrolled.scrollTop <= storylineViewport.scrollTop
+        : storylineScrolled.scrollLeft <= storylineViewport.scrollLeft) ||
+      storylineScrolled.viewportTransform !== storylineViewport.viewportTransform
+    ) {
+      throw new Error(
+        `Canvas Storyline wheel scrolling is invalid: ${JSON.stringify({ before: storylineViewport, after: storylineScrolled })}`,
+      );
+    }
+    checkpoint('canvas-storyline-overflow-scroll', {
+      before: storylineViewport,
+      after: storylineScrolled,
+    });
+    const storylineScrolledScreenshot = await screenshot('canvas-storyline-overflow-scroll');
+    await scroll(storylineViewportSelector, 0, {
+      deltaX: -storylineScrollDelta.deltaX,
+      deltaY: -storylineScrollDelta.deltaY,
+    });
+    await evaluate('new Promise((resolve) => setTimeout(resolve, 100))');
+    const storylineScrollRestored = await inspectCanvasStorylineViewport(
+      evaluate,
+      'canvas:functional:video',
+    );
+    if (
+      storylineScrollRestored.scrollLeft > storylineViewport.scrollLeft + 1 ||
+      storylineScrollRestored.scrollTop > storylineViewport.scrollTop + 1
+    ) {
+      throw new Error(
+        `Canvas Storyline scroll did not return to its initial position: ${JSON.stringify({ initial: storylineViewport, restored: storylineScrollRestored })}`,
+      );
+    }
+    await click(
+      '[data-owner-view-id="canvas:functional:video"] [data-storyline-order-action="begin"]',
+    );
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:video"] [data-testid="canvas-playback-sequence-editor"]',
+    );
+    const storylineOrderEditor = await inspectCanvasStorylineOrderEditor(
+      evaluate,
+      'canvas:functional:video',
+    );
+    if (
+      storylineOrderEditor.nodeIds.join('|') !== 'video-node|epub-image-node' ||
+      storylineOrderEditor.graphRoles.some((role) => role !== 'isolated') ||
+      storylineOrderEditor.edgeCount !== 0 ||
+      storylineOrderEditor.inputHandleCount !== 0 ||
+      storylineOrderEditor.outputHandleCount !== 2 ||
+      storylineOrderEditor.branchOrderActionCount !== 0 ||
+      storylineOrderEditor.routeSelectorCount !== 0 ||
+      !storylineOrderEditor.instruction
+    ) {
+      throw new Error(
+        `Canvas Storyline order editor is invalid: ${JSON.stringify(storylineOrderEditor)}`,
+      );
+    }
+    checkpoint('canvas-storyline-order-editor', storylineOrderEditor);
+    await drag(
+      '[data-owner-view-id="canvas:functional:video"] [data-storyline-output-node-id="video-node"]',
+      '[data-owner-view-id="canvas:functional:video"] [data-storyline-node="true"][data-source-node-id="epub-image-node"]',
+      {
+        sourcePosition: { xRatio: 0.5, yRatio: 0.5 },
+        targetPosition: { xRatio: 0.5, yRatio: 0.5 },
+      },
+    );
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:video"] .canvas-playback-storyline-network-edge',
+    );
+    const storylineGraphConnected = await inspectCanvasStorylineOrderEditor(
+      evaluate,
+      'canvas:functional:video',
+    );
+    if (
+      storylineGraphConnected.graphRoles.join('|') !== 'start|end' ||
+      storylineGraphConnected.edgeCount !== 1 ||
+      storylineGraphConnected.selectedSourceNodeId !== null
+    ) {
+      throw new Error(
+        `Canvas Storyline graph connection is invalid: ${JSON.stringify(storylineGraphConnected)}`,
+      );
+    }
+    checkpoint('canvas-storyline-graph-connected', storylineGraphConnected);
+    const storylineOrderEditorScreenshot = await screenshot('canvas-storyline-graph-connected');
+    await click(
+      '[data-owner-view-id="canvas:functional:video"] .canvas-playback-storyline-network-edge',
+    );
+    await waitForCondition(
+      evaluate,
+      `document.querySelectorAll(
+        '[data-owner-view-id="canvas:functional:video"] .canvas-playback-storyline-network-edge'
+      ).length === 0`,
+      'Canvas Storyline graph edge was not removed.',
+    );
+    await click(
+      '[data-owner-view-id="canvas:functional:video"] [data-storyline-order-action="cancel"]',
+    );
+    await waitForCondition(
+      evaluate,
+      `document.querySelector(
+        '[data-owner-view-id="canvas:functional:video"] [data-testid="canvas-playback-sequence-editor"]'
+      ) === null`,
+      'Canvas Storyline order editor did not close after cancel.',
+    );
     await waitForInteractiveSelector(
       evaluate,
       '[data-owner-view-id="canvas:functional:video"] [data-storyline-node="true"][data-source-node-id="video-node"]',
@@ -1138,6 +1272,13 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       inlineVideoPausedScreenshot,
       locatorBackedNodes: ['video', 'audio', 'epub-document-entry-image'],
       nativeElements: ['video', 'audio', 'img'],
+      storylineViewport,
+      storylineScrolled,
+      storylineScrollRestored,
+      storylineScrolledScreenshot,
+      storylineOrderEditor,
+      storylineGraphConnected,
+      storylineOrderEditorScreenshot,
       storylineAdvancedTo: storylinePlayback.currentTime,
       videoManualStartTime: playback.videoTime,
       videoAdvancedTo: playback.videoTimeAfterPointerLeave,
@@ -1270,6 +1411,33 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
         'cut:add-resource|audio:voice-denoise|node:duplicate|preview:open' ||
       evidence.audioActions.disabledActionIds.join('|') !== 'audio:voice-denoise' ||
       evidence.audioActions.overflowActionIds.length !== 0 ||
+      evidence.storylineViewport.wheelOwner !== 'content' ||
+      !evidence.storylineViewport.orderStatus ||
+      evidence.storylineViewport.routeLabels.length !== 2 ||
+      evidence.storylineViewport.orderPositions.length !== 2 ||
+      evidence.storylineViewport.orderPositions.some((position) => position !== 'unsequenced') ||
+      evidence.storylineViewport.edgeCount !== 0 ||
+      evidence.storylineViewport.arrowCount !== 0 ||
+      (!evidence.storylineViewport.horizontalOverflow &&
+        !evidence.storylineViewport.verticalOverflow) ||
+      (evidence.storylineViewport.verticalOverflow
+        ? evidence.storylineScrolled.scrollTop <= evidence.storylineViewport.scrollTop
+        : evidence.storylineScrolled.scrollLeft <= evidence.storylineViewport.scrollLeft) ||
+      evidence.storylineScrolled.viewportTransform !==
+        evidence.storylineViewport.viewportTransform ||
+      evidence.storylineScrollRestored.scrollLeft > evidence.storylineViewport.scrollLeft + 1 ||
+      evidence.storylineScrollRestored.scrollTop > evidence.storylineViewport.scrollTop + 1 ||
+      evidence.storylineOrderEditor.nodeIds.join('|') !== 'video-node|epub-image-node' ||
+      evidence.storylineOrderEditor.graphRoles.some((role) => role !== 'isolated') ||
+      evidence.storylineOrderEditor.edgeCount !== 0 ||
+      evidence.storylineOrderEditor.inputHandleCount !== 0 ||
+      evidence.storylineOrderEditor.outputHandleCount !== 2 ||
+      evidence.storylineOrderEditor.branchOrderActionCount !== 0 ||
+      evidence.storylineOrderEditor.routeSelectorCount !== 0 ||
+      !evidence.storylineOrderEditor.instruction ||
+      evidence.storylineGraphConnected.graphRoles.join('|') !== 'start|end' ||
+      evidence.storylineGraphConnected.edgeCount !== 1 ||
+      evidence.storylineGraphConnected.selectedSourceNodeId !== null ||
       evidence.storylineAdvancedTo <= 0 ||
       evidence.videoAdvancedTo <= evidence.videoManualStartTime + 0.15 ||
       evidence.audioAdvancedTo <= 0
@@ -2590,6 +2758,75 @@ function inspectCanvasMarkdownEditor(evaluate, viewId) {
       viewportTransform:
         root?.querySelector('[data-canvas-viewport-layer]')?.getAttribute('style') ?? '',
       text: overlay?.textContent ?? '',
+    };
+  })()`);
+}
+
+function inspectCanvasStorylineViewport(evaluate, viewId) {
+  return evaluate(`(() => {
+    const root = document.querySelector('[data-owner-view-id=${JSON.stringify(viewId)}]');
+    const viewport = root?.querySelector('.canvas-playback-storyline-viewport');
+    if (!(viewport instanceof HTMLElement)) {
+      throw new Error('Canvas Storyline viewport is unavailable.');
+    }
+    const style = getComputedStyle(viewport);
+    return {
+      wheelOwner: viewport.getAttribute('data-canvas-wheel-owner'),
+      overflowX: style.overflowX,
+      overflowY: style.overflowY,
+      scrollbarGutter: style.scrollbarGutter,
+      scrollbarWidth: style.scrollbarWidth,
+      scrollLeft: viewport.scrollLeft,
+      scrollTop: viewport.scrollTop,
+      scrollWidth: viewport.scrollWidth,
+      scrollHeight: viewport.scrollHeight,
+      clientWidth: viewport.clientWidth,
+      clientHeight: viewport.clientHeight,
+      horizontalOverflow: viewport.scrollWidth > viewport.clientWidth,
+      verticalOverflow: viewport.scrollHeight > viewport.clientHeight,
+      orderStatus:
+        root?.querySelector('.canvas-playback-storyline-order-status')?.textContent?.trim() ?? '',
+      routeLabels: Array.from(
+        root?.querySelectorAll('.canvas-playback-storyline-route-selector option') ?? [],
+        (option) => option.textContent?.trim() ?? '',
+      ),
+      orderPositions: Array.from(
+        root?.querySelectorAll('[data-storyline-node="true"]') ?? [],
+        (node) => node.getAttribute('data-order-position'),
+      ),
+      edgeCount: root?.querySelectorAll('.canvas-playback-storyline-edge').length ?? 0,
+      arrowCount: root?.querySelectorAll('.canvas-playback-storyline-arrow').length ?? 0,
+      viewportTransform:
+        root?.querySelector('[data-canvas-viewport-layer]')?.getAttribute('style') ?? '',
+    };
+  })()`);
+}
+
+function inspectCanvasStorylineOrderEditor(evaluate, viewId) {
+  return evaluate(`(() => {
+    const root = document.querySelector('[data-owner-view-id=${JSON.stringify(viewId)}]');
+    const editor = root?.querySelector('[data-testid="canvas-playback-sequence-editor"]');
+    if (!(editor instanceof HTMLElement)) {
+      throw new Error('Canvas Storyline order editor is unavailable.');
+    }
+    const nodes = [...editor.querySelectorAll('[data-storyline-node="true"]')];
+    return {
+      nodeIds: nodes.map((node) => node.getAttribute('data-source-node-id')),
+      graphRoles: nodes.map((node) => node.getAttribute('data-graph-role')),
+      selectedSourceNodeId:
+        nodes.find((node) => node.getAttribute('data-connection-source') === 'true')?.getAttribute(
+          'data-source-node-id',
+        ) ?? null,
+      edgeCount: editor.querySelectorAll('.canvas-playback-storyline-network-edge').length,
+      inputHandleCount: editor.querySelectorAll('[data-storyline-input-node-id]').length,
+      outputHandleCount: editor.querySelectorAll('[data-storyline-output-node-id]').length,
+      branchOrderActionCount: editor.querySelectorAll(
+        '.canvas-playback-storyline-branch-order-actions button',
+      ).length,
+      routeSelectorCount:
+        root?.querySelectorAll('.canvas-playback-storyline-route-selector').length ?? 0,
+      instruction:
+        root?.querySelector('.canvas-playback-storyline-order-message')?.textContent?.trim() ?? '',
     };
   })()`);
 }

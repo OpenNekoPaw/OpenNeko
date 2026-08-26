@@ -360,6 +360,55 @@ describe('Canvas creative workbench layout boundary', () => {
       /\.canvas-playback-storyline-viewport\s*\{[\s\S]*?flex:\s*1 1 auto;[\s\S]*?overflow:\s*auto;/,
     );
     expect(cssSource).toMatch(
+      /\.canvas-playback-storyline-viewport\s*\{[\s\S]*?overscroll-behavior:\s*contain;[\s\S]*?scrollbar-gutter:\s*stable;[\s\S]*?scrollbar-width:\s*thin;/,
+    );
+    expect(playbackWorkspaceSource).toMatch(
+      /className="canvas-playback-storyline-viewport" data-canvas-wheel-owner="content"/,
+    );
+    expect(playbackWorkspaceSource).toMatch(/className="canvas-playback-storyline-order-status"/);
+    expect(playbackWorkspaceSource).toMatch(/data-storyline-order-action="begin"/);
+    expect(playbackWorkspaceSource).toMatch(/data-storyline-order-action="save"/);
+    expect(playbackWorkspaceSource).toMatch(/data-storyline-order-action="cancel"/);
+    expect(playbackWorkspaceSource).toMatch(/data-testid="canvas-playback-sequence-editor"/);
+    expect(playbackWorkspaceSource).toMatch(/canvas-playback-storyline-network-edge/);
+    expect(playbackWorkspaceSource).not.toMatch(/data-storyline-input-node-id/);
+    expect(playbackWorkspaceSource).toMatch(/data-storyline-output-node-id/);
+    expect(playbackWorkspaceSource).toMatch(
+      /closest<HTMLElement>\('\[data-storyline-node="true"\]'\)/,
+    );
+    expect(playbackWorkspaceSource).toMatch(/onPointerMove/);
+    expect(playbackWorkspaceSource).toMatch(/moveStorylineGraphNode/);
+    expect(playbackWorkspaceSource).toMatch(/data-branch-position/);
+    expect(playbackWorkspaceSource).toMatch(/wouldCreateStorylineSequenceCycle/);
+    expect(playbackWorkspaceSource).toMatch(/data-connection-source/);
+    expect(canvasStoreSource).toMatch(/replacePlaybackSequenceGraph:/);
+    expect(canvasStoreSource).toMatch(/createSequenceGraphSyncPlan/);
+    expect(playbackWorkspaceSource).toMatch(
+      /markerEnd=\{`url\(#\$\{storylineEdgeMarkerId\(edge\.id\)\}\)`\}/,
+    );
+    expect(playbackWorkspaceSource).toMatch(/data-order-position=\{orderPosition\}/);
+    expect(cssSource).toMatch(
+      /\.canvas-playback-storyline-order-status\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?display:\s*flex;/,
+    );
+    expect(cssSource).toMatch(
+      /\.canvas-playback-storyline-order-message\s*\{[\s\S]*?text-overflow:\s*ellipsis;/,
+    );
+    expect(cssSource).toMatch(
+      /\.canvas-playback-storyline-sequence-editor\s*\{[\s\S]*?position:\s*relative;[\s\S]*?min-width:\s*100%;/,
+    );
+    expect(cssSource).toMatch(
+      /\.canvas-playback-storyline-network-edge-hit\s*\{[\s\S]*?stroke:\s*transparent;[\s\S]*?pointer-events:\s*stroke;/,
+    );
+    expect(cssSource).toMatch(
+      /\.canvas-playback-storyline-connection-handle\s*\{[\s\S]*?cursor:\s*crosshair;/,
+    );
+    expect(cssSource).toMatch(/\.canvas-playback-storyline-edge-preview\s*\{/);
+    expect(cssSource).not.toMatch(/\.canvas-playback-storyline-branch-order-actions\s*\{/);
+    expect(cssSource).not.toMatch(/\.canvas-playback-storyline-branch-label\s*\{/);
+    expect(cssSource).toMatch(
+      /\.canvas-playback-storyline-arrow\[data-selected='true'\]\s*\{[\s\S]*?fill:/,
+    );
+    expect(cssSource).toMatch(
       /\.canvas-audio-transport\s*\{[\s\S]*?width:\s*min\(100%,\s*640px\);[\s\S]*?grid-template-columns:\s*auto auto minmax\(32px,\s*1fr\) auto;/,
     );
     const audioTransportCss = cssSource.slice(

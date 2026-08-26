@@ -3772,7 +3772,6 @@ function MainViewGroupSurface({
               activeId={group.activeViewId}
               emptyLabel={t('workspace.mainTabs.empty')}
               label={t('workspace.mainTabs.label')}
-              contextActionsRef={setContextActionsTarget}
               tabs={views.map((view) => ({
                 id: view.viewId,
                 label: view.displayLabel,
@@ -3799,6 +3798,11 @@ function MainViewGroupSurface({
               }}
             />
             <WorkspaceQuickCreateControl onCreate={quickCreate} variant="tab" />
+            <div
+              className="project-main-group__context-actions"
+              data-main-tab-context-actions="true"
+              ref={setContextActionsTarget}
+            />
           </>
         ) : undefined
       }

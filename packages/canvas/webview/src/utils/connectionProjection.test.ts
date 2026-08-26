@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CanvasConnection, CanvasNode } from '@neko/canvas-domain';
 import {
   createSequenceEdgeSyncPlan,
+  createSequenceGraphSyncPlan,
   createsDisallowedConnectionCycle,
   getDefaultConnectionOrderSyncMode,
   projectCanvasConnectionView,
@@ -234,6 +235,53 @@ describe('connectionProjection', () => {
       matchedConnectionIds: ['shot-1-shot-2'],
       missingEdges: [{ sourceId: 'shot-2', targetId: 'shot-3', order: 1 }],
       staleConnectionIds: ['shot-3-shot-1'],
+    });
+  });
+
+  it('creates branch and merge sequence graph sync plans', () => {
+    const existing = [
+      connection('start-left', 'start', 'left', 'sequence'),
+      connection('stale', 'right', 'left', 'sequence'),
+    ];
+
+    expect(
+      createSequenceGraphSyncPlan(
+        existing,
+        ['start', 'left', 'right', 'end'],
+        [
+          { sourceId: 'start', targetId: 'left', order: 0 },
+          { sourceId: 'start', targetId: 'right', order: 1 },
+          { sourceId: 'left', targetId: 'end', order: 2 },
+          { sourceId: 'right', targetId: 'end', order: 3 },
+        ],
+      ),
+    ).toMatchObject({
+      matchedConnectionIds: ['start-left'],
+      missingEdges: [
+        { sourceId: 'start', targetId: 'right', order: 1 },
+        { sourceId: 'left', targetId: 'end', order: 2 },
+        { sourceId: 'right', targetId: 'end', order: 3 },
+      ],
+      staleConnectionIds: ['stale'],
+    });
+  });
+
+  it('removes duplicate stored sequence edges while retaining one canonical match', () => {
+    const existing = [
+      connection('first', 'start', 'branch', 'sequence'),
+      connection('duplicate', 'start', 'branch', 'sequence'),
+    ];
+
+    expect(
+      createSequenceGraphSyncPlan(
+        existing,
+        ['start', 'branch'],
+        [{ sourceId: 'start', targetId: 'branch', order: 0 }],
+      ),
+    ).toMatchObject({
+      matchedConnectionIds: ['first'],
+      missingEdges: [],
+      staleConnectionIds: ['duplicate'],
     });
   });
 

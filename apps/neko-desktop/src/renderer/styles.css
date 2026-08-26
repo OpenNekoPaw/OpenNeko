@@ -4708,7 +4708,7 @@ code {
   height: var(--neko-desktop-workbench-panel-header-height);
   min-height: var(--neko-desktop-workbench-panel-header-height);
   flex: 0 1 auto;
-  overflow-x: auto;
+  overflow: hidden;
   padding-right: 2px;
   padding-block: 4px;
 }
@@ -4729,6 +4729,19 @@ code {
 .workspace-main-quick-create__tab-trigger:hover,
 .workspace-main-quick-create__tab-trigger:focus-visible {
   color: var(--neko-foreground);
+}
+
+.project-main-group__context-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  flex: 0 0 auto;
+  align-items: center;
+  margin-left: auto;
+  padding: 4px 8px;
+  background: var(--neko-desktop-chrome);
 }
 
 .workspace-main-quick-create__empty-trigger {
