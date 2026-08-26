@@ -382,45 +382,6 @@ export class DesktopCutRuntime {
     });
   }
 
-  async addCanvasMaterialAndSeparateAudio(input: {
-    readonly identity: CutCanvasSourceIdentity;
-    readonly nodeId: string;
-    readonly label: string;
-    readonly locator: ContentLocator;
-    readonly target: CutCanvasHandoffTarget;
-  }): Promise<CutHostRuntimeSnapshot> {
-    const currentTarget = await this.resolveCanvasHandoffTarget(input.identity);
-    if (!sameCutCanvasHandoffTarget(currentTarget, input.target)) {
-      throw new Error('Desktop Cut Canvas handoff target changed before execution.');
-    }
-    const target =
-      currentTarget.kind === 'existing-cut'
-        ? currentTarget
-        : await this.resolveCreatedDraftTarget(input.identity, currentTarget);
-    return this.addResource({
-      resourceIdentity: {
-        projectId: input.identity.projectId,
-        workspaceId: input.identity.workspaceId,
-        windowId: input.identity.windowId,
-        viewId: input.identity.viewId,
-        viewInstanceId: input.identity.viewInstanceId,
-        rendererSessionId: input.identity.rendererSessionId,
-      },
-      item: {
-        resourceId: `canvas-material:${input.nodeId}:separate-audio`,
-        source: 'files',
-        role: 'content',
-        depth: 0,
-        kind: 'file',
-        label: input.label,
-        locator: input.locator,
-        capabilities: ['add-to-cut'],
-      },
-      target,
-      postImportAction: 'separate-audio',
-    });
-  }
-
   private async resolveCreatedDraftTarget(
     identity: CutCanvasSourceIdentity,
     target: Extract<CutCanvasHandoffTarget, { readonly kind: 'new-cut-draft' }>,
@@ -671,7 +632,6 @@ export class DesktopCutRuntime {
       readonly documentId: string;
       readonly sessionId: string;
     };
-    readonly postImportAction?: 'separate-audio';
   }): Promise<CutHostRuntimeSnapshot> {
     this.requireActive();
     return this.application.addResource(input);

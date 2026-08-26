@@ -145,7 +145,6 @@ export class CutApplicationRuntime {
       readonly documentId: string;
       readonly sessionId: string;
     };
-    readonly postImportAction?: 'separate-audio';
   }): Promise<CutHostRuntimeSnapshot> {
     this.requireActive();
     if (
@@ -171,7 +170,6 @@ export class CutApplicationRuntime {
       input.resourceIdentity.viewId,
       input.item.resourceId,
       identity.sessionId,
-      input.postImportAction ?? 'link',
     ].join(':');
     const completed = entry.completedCommands.get(commandId);
     if (completed) return completed.snapshot;
@@ -193,9 +191,6 @@ export class CutApplicationRuntime {
       const trackKind = probe.hasVideo ? 'Video' : probe.hasAudio ? 'Audio' : undefined;
       if (!trackKind) {
         throw new Error('Cut resource has no supported video or audio stream.');
-      }
-      if (input.postImportAction === 'separate-audio' && (!probe.hasVideo || !probe.hasAudio)) {
-        throw new Error('Cut audio separation requires a source with video and audio streams.');
       }
       const rate = current.profile
         ? current.profile.editRateNumerator / current.profile.editRateDenominator
@@ -241,24 +236,10 @@ export class CutApplicationRuntime {
             },
             linkCommand,
           ];
-      const commands: readonly CutCommand[] =
-        input.postImportAction === 'separate-audio'
-          ? [
-              ...linkCommands,
-              {
-                type: 'separate-audio',
-                videoClipId: linkCommand.clipId,
-                audioClipId: `clip-${randomUUID()}`,
-                audioTrackId:
-                  current.tracks.find((track) => track.kind === 'Audio' && !track.locked)
-                    ?.trackId ?? `track-${randomUUID()}`,
-              },
-            ]
-          : linkCommands;
       entry.session.applyBatch({
         documentUri: identity.documentId,
         sessionId: identity.sessionId,
-        commands,
+        commands: linkCommands,
       });
       committed = true;
       const snapshot = this.projectSnapshot(entry);

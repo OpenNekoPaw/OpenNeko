@@ -160,7 +160,12 @@ export interface CanvasMaterialActionSelection {
 }
 
 export type CanvasMaterialActionUnavailableDiagnosticCode =
-  'cut-project-owner-unavailable' | 'cut-canvas-source-stale';
+  | 'cut-project-owner-unavailable'
+  | 'cut-canvas-source-stale'
+  | 'media-source-unavailable'
+  | 'media-video-stream-unavailable'
+  | 'media-audio-stream-unavailable'
+  | 'media-probe-failed';
 
 export interface CanvasMaterialActionUnavailableDiagnostic {
   readonly code: CanvasMaterialActionUnavailableDiagnosticCode;
@@ -426,7 +431,14 @@ export function isCanvasMaterialActionDescriptor(
 function isCanvasMaterialActionUnavailableDiagnosticCode(
   value: unknown,
 ): value is CanvasMaterialActionUnavailableDiagnosticCode {
-  return value === 'cut-project-owner-unavailable' || value === 'cut-canvas-source-stale';
+  return (
+    value === 'cut-project-owner-unavailable' ||
+    value === 'cut-canvas-source-stale' ||
+    value === 'media-source-unavailable' ||
+    value === 'media-video-stream-unavailable' ||
+    value === 'media-audio-stream-unavailable' ||
+    value === 'media-probe-failed'
+  );
 }
 
 function isJsonSafeRecord(value: unknown): value is Readonly<Record<string, unknown>> {

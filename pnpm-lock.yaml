@@ -723,6 +723,9 @@ importers:
       '@neko/host':
         specifier: workspace:*
         version: link:../../host
+      '@neko/media':
+        specifier: workspace:*
+        version: link:../../media
       '@neko/shared':
         specifier: workspace:*
         version: link:../../shared

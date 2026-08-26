@@ -185,6 +185,7 @@ import {
 import { DesktopPreviewRuntime } from './desktop-preview-runtime';
 import { DesktopTextEditorRuntime } from './desktop-text-editor-runtime';
 import {
+  CanvasAudioExtractionService,
   CanvasGenerationNodeRuntime,
   listAvailableProjectMediaLibraryDestinations,
 } from '@neko/canvas-node';
@@ -1121,6 +1122,21 @@ async function startDesktop(): Promise<void> {
     },
     host,
     globalMediaLibraryRoot: globalStorage.mediaLibraries,
+    audioExtraction: new CanvasAudioExtractionService({
+      globalMediaLibraryRoot: globalStorage.mediaLibraries,
+      ...(canvasUsesChineseLabels
+        ? {
+            messages: {
+              sourceUnavailable: '所选视频文件不可用。',
+              videoStreamUnavailable: '所选文件不包含视频流。',
+              audioStreamUnavailable: '该视频不包含可分离的音轨。',
+              probeFailed: '无法检查该视频的媒体流。',
+              extractionFailed: '无法从该视频生成音频文件。',
+              outputUnavailable: '工作区音频派生目录不可用。',
+            },
+          }
+        : {}),
+    }),
     watchFile: (directory, fileName, onChange) =>
       watch(directory, (_eventType, changedFileName) => {
         if (changedFileName !== null && changedFileName.toString() !== fileName) return;
@@ -1407,19 +1423,6 @@ async function startDesktop(): Promise<void> {
           ? path.posix.basename(target.locator.file.path)
           : target.nodeId;
       await cutRuntime.addCanvasMaterial({
-        identity,
-        nodeId: target.nodeId,
-        label,
-        locator: target.locator,
-        target: parseCutCanvasHandoffPayload(executionPayload),
-      });
-    },
-    separateAudioInCut: async ({ identity, target, executionPayload }) => {
-      const label =
-        target.locator.file.authority === 'workspace'
-          ? path.posix.basename(target.locator.file.path)
-          : target.nodeId;
-      await cutRuntime.addCanvasMaterialAndSeparateAudio({
         identity,
         nodeId: target.nodeId,
         label,

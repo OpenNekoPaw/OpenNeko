@@ -106,6 +106,7 @@ export {
   createCanvasMaterialActionOwner,
   type CanvasGenerationActionAvailability,
   type CanvasMaterialActionAvailability,
+  type CanvasMaterialActionCapabilityAvailability,
   type CanvasMaterialActionExecutionResult,
   type CanvasMaterialActionOwner,
 } from './application/canvas-material-action-owner';

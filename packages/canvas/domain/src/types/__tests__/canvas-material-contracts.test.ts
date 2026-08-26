@@ -256,8 +256,8 @@ describe('Canvas material contracts', () => {
         ...descriptor,
         executionPayload: undefined,
         unavailable: {
-          code: 'cut-canvas-source-stale',
-          message: 'The Canvas View is stale.',
+          code: 'media-audio-stream-unavailable',
+          message: 'This video has no audio stream.',
         },
       }),
     ).toBe(true);

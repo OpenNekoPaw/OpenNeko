@@ -4,6 +4,12 @@ export {
   type CanvasMaterialAuthoringOptions,
 } from './canvas-material-authoring';
 export {
+  CanvasAudioExtractionService,
+  type CanvasAudioExtractionMediaPort,
+  type CanvasAudioExtractionMessages,
+  type CanvasAudioExtractionResult,
+} from './canvas-audio-extraction';
+export {
   CanvasMediaLibraryCopyService,
   listAvailableProjectMediaLibraryDestinations,
   type CanvasMediaLibraryCopyResult,

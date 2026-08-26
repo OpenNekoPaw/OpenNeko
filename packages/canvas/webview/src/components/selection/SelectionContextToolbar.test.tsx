@@ -810,6 +810,37 @@ describe('SelectionContextToolbar', () => {
     await toolbar.dispose();
   });
 
+  it('keeps Video editing enabled while explaining that a silent Video has no audio to separate', async () => {
+    const node = mediaNode('silent-video', 'video', 'media/silent.mp4');
+    const reason = '该视频不包含可分离的音轨。';
+    const toolbar = await renderToolbar(
+      [node],
+      [node.id],
+      [
+        descriptor('cut:add-resource', '剪辑', 'handoff'),
+        {
+          ...descriptor('video:separate-audio', '音频分离', 'derive'),
+          unavailable: {
+            code: 'media-audio-stream-unavailable',
+            message: reason,
+          },
+        },
+      ],
+    );
+
+    const edit = toolbar.container.querySelector<HTMLButtonElement>(
+      '[data-selection-action="cut:add-resource"]',
+    );
+    const separate = toolbar.container.querySelector<HTMLButtonElement>(
+      '[data-selection-action="video:separate-audio"]',
+    );
+    expect(edit?.disabled).toBe(false);
+    expect(separate?.disabled).toBe(true);
+    expect(separate?.getAttribute('data-disabled-reason')).toBe(reason);
+    expect(separate?.title).toBe(reason);
+    await toolbar.dispose();
+  });
+
   it('keeps Group visible and exposes batch Duplicate and Delete for multi-selection', () => {
     const nodes: readonly CanvasNode[] = [
       {

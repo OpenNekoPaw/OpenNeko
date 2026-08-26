@@ -36,6 +36,7 @@ import type { DesktopCanvasViewGrant } from '@neko/host/desktop-shell-service';
 import type { DesktopWorkbenchLayoutProjection } from '@neko/host/desktop-workbench-contract';
 import {
   CanvasMaterialAuthoringService,
+  CanvasAudioExtractionService,
   CanvasMediaLibraryCopyService,
   CanvasTextFilePreviewService,
   type CanvasExternalSource,
@@ -181,11 +182,7 @@ export class DesktopCanvasRuntime {
         readonly target: CanvasMaterialActionTarget;
         readonly executionPayload: Readonly<Record<string, unknown>>;
       }) => Promise<void>;
-      readonly separateAudioInCut?: (input: {
-        readonly identity: CanvasHostRuntimeIdentity;
-        readonly target: CanvasMaterialActionTarget;
-        readonly executionPayload: Readonly<Record<string, unknown>>;
-      }) => Promise<void>;
+      readonly audioExtraction?: CanvasAudioExtractionService;
       readonly requestProjectMediaLibraryCopy?: (input: {
         readonly identity: CanvasHostRuntimeIdentity;
         readonly workspace: DesktopCanvasViewGrant['workspace'];
@@ -426,6 +423,7 @@ export class DesktopCanvasRuntime {
     this.releasePreviewLeases(() => true);
     this.presentationSnapshots.clear();
     this.materialAuthoring.dispose();
+    await this.options.audioExtraction?.dispose();
     await this.options.generation?.dispose();
   }
 
@@ -488,7 +486,7 @@ export class DesktopCanvasRuntime {
     const openInCut = this.options.openInCut;
     const resolveAddToCut = this.options.resolveAddToCut;
     const addToCut = this.options.addToCut;
-    const separateAudioInCut = this.options.separateAudioInCut;
+    const audioExtraction = this.options.audioExtraction;
     const requestProjectMediaLibraryCopy = this.options.requestProjectMediaLibraryCopy;
     const requestGlobalMediaLibraryCopy = this.options.requestGlobalMediaLibraryCopy;
     const generation = this.options.generation;
@@ -614,24 +612,34 @@ export class DesktopCanvasRuntime {
               readonly target: CanvasMaterialActionTarget;
               readonly executionPayload: Readonly<Record<string, unknown>>;
             }) => addToCut({ identity: requestIdentity, target, executionPayload }),
-            ...(separateAudioInCut
-              ? {
-                  separateAudioInCut: ({
-                    identity: requestIdentity,
-                    target,
-                    executionPayload,
-                  }: {
-                    readonly identity: CanvasHostRuntimeIdentity;
-                    readonly target: CanvasMaterialActionTarget;
-                    readonly executionPayload: Readonly<Record<string, unknown>>;
-                  }) =>
-                    separateAudioInCut({
-                      identity: requestIdentity,
-                      target,
-                      executionPayload,
-                    }),
-                }
-              : {}),
+          }
+        : {}),
+      ...(audioExtraction
+        ? {
+            resolveSeparateAudio: ({
+              identity: requestIdentity,
+              target,
+            }: {
+              readonly identity: CanvasHostRuntimeIdentity;
+              readonly target: CanvasMaterialActionTarget;
+            }) =>
+              audioExtraction.resolveAvailability({
+                projectId: requestIdentity.projectId,
+                workspace: grant.workspace,
+                source: target.locator,
+              }),
+            separateAudio: async ({
+              identity: requestIdentity,
+              target,
+            }: {
+              readonly identity: CanvasHostRuntimeIdentity;
+              readonly target: CanvasMaterialActionTarget;
+            }) =>
+              audioExtraction.extract({
+                projectId: requestIdentity.projectId,
+                workspace: grant.workspace,
+                source: target.locator,
+              }),
           }
         : {}),
       ...(requestProjectMediaLibraryCopy || requestGlobalMediaLibraryCopy
@@ -817,7 +825,7 @@ export class DesktopCanvasRuntime {
         revealResource: ({ identity: requestIdentity, locator }) =>
           revealEffect(requestIdentity, locator),
         executeMaterialAction: async ({
-          canvas: _canvas,
+          canvas,
           identity: requestIdentity,
           descriptor,
           action,
@@ -832,7 +840,15 @@ export class DesktopCanvasRuntime {
           if (result.generationProjection) {
             throw new Error('Historical Canvas material regeneration is no longer supported.');
           }
-          return {};
+          if (!result.authoringRequest) return {};
+          return {
+            canvas: await this.materialAuthoring.author({
+              canvas,
+              identity: requestIdentity,
+              workspace: grant.workspace,
+              request: result.authoringRequest,
+            }),
+          };
         },
       },
     });

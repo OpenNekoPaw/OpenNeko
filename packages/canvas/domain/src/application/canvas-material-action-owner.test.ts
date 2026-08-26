@@ -349,25 +349,25 @@ describe('Desktop Canvas material action owner', () => {
     await expect(owner.resolve({ identity, targets: [target] })).resolves.toEqual([]);
   });
 
-  it('contributes and dispatches Cut-owned Video audio separation with the exact target payload', async () => {
+  it('derives an audio authoring request without a Cut target or payload', async () => {
     const videoTarget: CanvasMaterialActionTarget = {
       nodeId: 'video-1',
       mediaKind: 'video',
       origin: 'generated',
       locator: { file: { authority: 'workspace', path: 'neko/generated/video-output-1.mp4' } },
     };
-    const executionPayload = {
-      target: {
-        kind: 'existing-cut',
-        viewId: 'cut-view-1',
-        documentId: 'edits/sequence.otio',
+    const separateAudio = vi.fn(async () => ({
+      locator: {
+        file: {
+          authority: 'workspace' as const,
+          path: 'neko/derived/audio/video-output-1-audio.m4a',
+        },
       },
-    } as const;
-    const separateAudioInCut = vi.fn(async () => undefined);
+      title: 'video-output-1-audio.m4a',
+    }));
     const owner = createCanvasMaterialActionOwner({
-      resolveAddToCut: async () => ({ status: 'available', executionPayload }),
-      addToCut: async () => undefined,
-      separateAudioInCut,
+      resolveSeparateAudio: async () => ({ status: 'available' }),
+      separateAudio,
     });
 
     const descriptors = await owner.resolve({ identity, targets: [videoTarget] });
@@ -376,27 +376,82 @@ describe('Desktop Canvas material action owner', () => {
     );
     if (!descriptor) throw new Error('Video audio-separation descriptor is missing.');
 
-    await owner.execute({
-      identity,
-      descriptor,
-      action: {
+    expect(descriptor).toMatchObject({ ownerId: 'media', effect: 'derive' });
+    expect(descriptor).not.toHaveProperty('executionPayload');
+    await expect(
+      owner.execute({
+        identity,
+        descriptor,
+        action: {
+          identity: {
+            projectId: identity.projectId,
+            canvasId: identity.documentId,
+            canvasSessionId: identity.sessionId,
+          },
+          actionId: descriptor.id,
+          selectedNodeIds: [videoTarget.nodeId],
+          payload: {},
+        },
+        targets: [videoTarget],
+      }),
+    ).resolves.toEqual({
+      authoringRequest: {
+        kind: 'derived-output-commit',
         identity: {
           projectId: identity.projectId,
           canvasId: identity.documentId,
           canvasSessionId: identity.sessionId,
         },
-        actionId: descriptor.id,
-        selectedNodeIds: [videoTarget.nodeId],
-        payload: executionPayload,
+        locator: {
+          file: {
+            authority: 'workspace',
+            path: 'neko/derived/audio/video-output-1-audio.m4a',
+          },
+        },
+        mediaKind: 'audio',
+        title: 'video-output-1-audio.m4a',
+        sourceNodeIds: [videoTarget.nodeId],
       },
-      targets: [videoTarget],
+    });
+    expect(separateAudio).toHaveBeenCalledWith({ identity, target: videoTarget });
+  });
+
+  it('keeps Cut editing available while disabling audio separation for a silent video', async () => {
+    const videoTarget: CanvasMaterialActionTarget = {
+      nodeId: 'silent-video',
+      mediaKind: 'video',
+      origin: 'generated',
+      locator: { file: { authority: 'workspace', path: 'neko/generated/silent.mp4' } },
+    };
+    const executionPayload = {
+      target: { kind: 'new-cut-draft', workbenchInstanceId: 'workbench-1' },
+    } as const;
+    const diagnostic = {
+      code: 'media-audio-stream-unavailable',
+      message: 'This video does not contain an audio stream to separate.',
+    } as const;
+    const owner = createCanvasMaterialActionOwner({
+      resolveAddToCut: async () => ({ status: 'available', executionPayload }),
+      addToCut: async () => undefined,
+      resolveSeparateAudio: async () => ({ status: 'unavailable', diagnostic }),
+      separateAudio: async () => {
+        throw new Error('Unavailable audio extraction must not execute.');
+      },
     });
 
-    expect(separateAudioInCut).toHaveBeenCalledWith({
-      identity,
-      target: videoTarget,
-      executionPayload,
-    });
+    const descriptors = await owner.resolve({ identity, targets: [videoTarget] });
+    expect(descriptors).toEqual([
+      expect.objectContaining({
+        id: CANVAS_ADD_TO_CUT_ACTION_ID,
+        executionPayload,
+      }),
+      expect.objectContaining({
+        id: CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID,
+        unavailable: diagnostic,
+      }),
+    ]);
+    expect(descriptors[0]).not.toHaveProperty('unavailable');
+    expect(descriptors[1]).not.toHaveProperty('executionPayload');
   });
 
   it('projects a fail-visible Cut diagnostic and refuses unavailable execution', async () => {

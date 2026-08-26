@@ -18,6 +18,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { DesktopCanvasRuntime } from './desktop-canvas-runtime';
+import { CanvasAudioExtractionService } from '@neko/canvas-node';
 import {
   CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID,
   CANVAS_ADD_TO_CUT_ACTION_ID,
@@ -948,7 +949,7 @@ describe('DesktopCanvasRuntime', () => {
     await runtime.dispose();
   });
 
-  it('offers Add to Cut for video with the exact owner-projected target payload', async () => {
+  it('keeps Cut handoff and Canvas audio derivation as independent video actions', async () => {
     const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-add-cut-action-'));
     roots.push(workspacePath);
     await writeFixtureFile(workspacePath, 'media/clip.mp4', 'video');
@@ -968,7 +969,16 @@ describe('DesktopCanvasRuntime', () => {
       executionPayload,
     }));
     const addToCut = vi.fn(async () => undefined);
-    const separateAudioInCut = vi.fn(async () => undefined);
+    const probe = vi.fn(async () => availableVideoProbe());
+    const transcode = vi.fn(async (_sourcePath: string, outputPath: string) => {
+      await writeFile(outputPath, 'derived-audio');
+    });
+    const disposeMedia = vi.fn(async () => undefined);
+    const audioExtraction = new CanvasAudioExtractionService({
+      globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
+      media: { probe, transcode, dispose: disposeMedia },
+      createId: () => 'audio-output-1',
+    });
     const runtime = new DesktopCanvasRuntime({
       shell: {
         resolveCanvasViewGrant: vi.fn(async (): Promise<DesktopCanvasViewGrant> => ({
@@ -990,7 +1000,7 @@ describe('DesktopCanvasRuntime', () => {
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
       resolveAddToCut,
       addToCut,
-      separateAudioInCut,
+      audioExtraction,
     });
     await runtime.getSnapshot('window-1', identity);
     const authored = await runtime.executeIntent(
@@ -1027,13 +1037,14 @@ describe('DesktopCanvasRuntime', () => {
       }),
       expect.objectContaining({
         id: CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID,
-        ownerId: 'cut',
-        executionPayload,
+        ownerId: 'media',
       }),
     ]);
     expect(
       resolution.descriptors.some((descriptor) => descriptor.id === CANVAS_OPEN_IN_CUT_ACTION_ID),
     ).toBe(false);
+    expect(resolution.descriptors[1]).not.toHaveProperty('executionPayload');
+    expect(probe).toHaveBeenCalledWith(await realpath(path.join(workspacePath, 'media/clip.mp4')));
 
     const action = await runtime.executeIntent(
       'window-1',
@@ -1076,23 +1087,38 @@ describe('DesktopCanvasRuntime', () => {
             identity: materialIdentity(identity),
             actionId: CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID,
             selectedNodeIds: [node.id],
-            payload: executionPayload,
+            payload: {},
           },
         },
       }),
     );
 
-    expect(separate.status).toBe('accepted');
-    expect(separateAudioInCut).toHaveBeenCalledWith({
-      identity,
-      target: expect.objectContaining({
-        nodeId: node.id,
-        mediaKind: 'video',
-        locator: { file: { authority: 'workspace', path: 'media/clip.mp4' } },
-      }),
-      executionPayload,
+    if (separate.status !== 'accepted') throw new Error(separate.diagnostic.message);
+    expect(separate.snapshot.canvas.nodes).toHaveLength(2);
+    expect(separate.snapshot.canvas.nodes[1]).toMatchObject({
+      type: 'media',
+      data: {
+        mediaType: 'audio',
+        title: 'clip-audio.m4a',
+        contentLocator: {
+          file: {
+            authority: 'workspace',
+            path: 'neko/derived/audio/clip-audio-audio-output-1.m4a',
+          },
+        },
+      },
     });
+    expect(separate.snapshot.canvas.connections).toEqual([
+      expect.objectContaining({ sourceId: node.id, type: 'derived-from' }),
+    ]);
+    expect(
+      await readFile(
+        path.join(workspacePath, 'neko/derived/audio/clip-audio-audio-output-1.m4a'),
+        'utf8',
+      ),
+    ).toBe('derived-audio');
     await runtime.dispose();
+    expect(disposeMedia).toHaveBeenCalledOnce();
   });
 
   it('projects Cut actions for the exact selected output of a Video Generation node', async () => {
@@ -1100,6 +1126,7 @@ describe('DesktopCanvasRuntime', () => {
       path.join(tmpdir(), 'openneko-canvas-generated-video-actions-'),
     );
     roots.push(workspacePath);
+    await writeFixtureFile(workspacePath, 'neko/generated/video-output-1.mp4', 'video');
     const identity = createIdentity();
     const documentPath = path.join(workspacePath, identity.documentId);
     await mkdir(path.dirname(documentPath), { recursive: true });
@@ -1145,6 +1172,14 @@ describe('DesktopCanvasRuntime', () => {
       status: 'available' as const,
       executionPayload,
     }));
+    const audioExtraction = new CanvasAudioExtractionService({
+      globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
+      media: {
+        probe: vi.fn(async () => availableVideoProbe()),
+        transcode: vi.fn(async () => undefined),
+        dispose: vi.fn(async () => undefined),
+      },
+    });
     const runtime = new DesktopCanvasRuntime({
       shell: {
         resolveCanvasViewGrant: vi.fn(async (): Promise<DesktopCanvasViewGrant> => ({
@@ -1166,7 +1201,7 @@ describe('DesktopCanvasRuntime', () => {
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
       resolveAddToCut,
       addToCut: vi.fn(async () => undefined),
-      separateAudioInCut: vi.fn(async () => undefined),
+      audioExtraction,
     });
 
     const resolution = await runtime.resolveMaterialActions('window-1', {
@@ -1177,7 +1212,7 @@ describe('DesktopCanvasRuntime', () => {
 
     expect(resolution.descriptors).toEqual([
       expect.objectContaining({ id: CANVAS_ADD_TO_CUT_ACTION_ID, ownerId: 'cut' }),
-      expect.objectContaining({ id: CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID, ownerId: 'cut' }),
+      expect.objectContaining({ id: CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID, ownerId: 'media' }),
     ]);
     expect(resolveAddToCut).toHaveBeenCalledWith({
       identity,
@@ -2979,6 +3014,29 @@ async function bindProjectMediaLibrary(
     connectionId: libraryId,
     expectedBindingFingerprint: null,
   });
+}
+
+function availableVideoProbe() {
+  return {
+    durationSeconds: 5,
+    formatName: 'mov,mp4',
+    video: {
+      streamIndex: 0,
+      codecName: 'h264',
+      width: 1280,
+      height: 720,
+      framesPerSecond: 30,
+      color: {},
+    },
+    audioStreams: [
+      {
+        streamIndex: 1,
+        codecName: 'aac',
+        sampleRate: 48_000,
+        channels: 2,
+      },
+    ],
+  };
 }
 
 async function writeFixtureFile(
