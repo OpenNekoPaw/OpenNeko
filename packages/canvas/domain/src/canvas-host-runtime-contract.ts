@@ -162,11 +162,6 @@ export type CanvasHostIntent =
       readonly outputId: string;
     }
   | {
-      readonly type: 'author-generation-text';
-      readonly nodeId: string;
-      readonly text: string;
-    }
-  | {
       readonly type: 'preview-resource' | 'reveal-resource';
       readonly locator: ContentLocator;
     }
@@ -578,17 +573,6 @@ function parseCanvasHostIntent(value: unknown): CanvasHostIntent {
         record['outputId'],
         'Canvas Generation output identity is invalid.',
       ),
-    };
-  }
-  if (type === 'author-generation-text') {
-    requireExactKeys(record, ['type', 'nodeId', 'text']);
-    return {
-      type,
-      nodeId: requireOpaqueIdentity(
-        record['nodeId'],
-        'Canvas Generation node identity is invalid.',
-      ),
-      text: requireString(record['text'], 'Canvas Generation authored text is invalid.'),
     };
   }
   if (type === 'preview-resource' || type === 'reveal-resource') {

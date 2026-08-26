@@ -241,26 +241,9 @@ async function commitComfyUiWorkflowResult(input: {
   for (const [index, output] of input.generation.outputs.entries()) {
     const extension = detectMediaExtension(output.mimeType, 'workflow', 'image');
     const outputPath = path.join(outputDir, `${input.operationId}_${index}${extension}`);
-    const temporaryPath = `${outputPath}.part-${randomUUID()}`;
     const bytes = Buffer.from(output.bytes);
     const digest = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
-    try {
-      try {
-        const existing = await fs.readFile(outputPath);
-        const existingDigest = `sha256:${createHash('sha256').update(existing).digest('hex')}`;
-        if (existingDigest !== digest) {
-          throw new Error(
-            `ComfyUI output ${index} conflicts with the exact persisted Job output path.`,
-          );
-        }
-      } catch (error) {
-        if (!isMissingFileError(error)) throw error;
-        await fs.writeFile(temporaryPath, bytes, { flag: 'wx' });
-        await fs.rename(temporaryPath, outputPath);
-      }
-    } finally {
-      await fs.unlink(temporaryPath).catch(() => undefined);
-    }
+    await publishGeneratedBytes(outputPath, bytes);
     hostOutputPaths.push(outputPath);
     digests.push(digest);
   }
@@ -310,12 +293,6 @@ function createComfyUiHistoryOutputIdentity(
   return `comfyui-history:${query.toString()}`;
 }
 
-function isMissingFileError(error: unknown): boolean {
-  return (
-    error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT'
-  );
-}
-
 async function commitPromptGenerationResult(input: {
   readonly operationId: string;
   readonly text: string;
@@ -327,8 +304,18 @@ async function commitPromptGenerationResult(input: {
   const relativePath = path.posix.join('neko', 'generated', 'text', `${outputId}.md`);
   const outputPath = path.join(input.ownerRoot, ...relativePath.split('/'));
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
-  await fs.writeFile(outputPath, bytes);
+  await publishGeneratedBytes(outputPath, bytes);
   return [{ file: { authority: 'workspace', path: relativePath } }];
+}
+
+async function publishGeneratedBytes(outputPath: string, bytes: Uint8Array): Promise<void> {
+  const temporaryPath = `${outputPath}.part-${randomUUID()}`;
+  try {
+    await fs.writeFile(temporaryPath, bytes, { flag: 'wx' });
+    await fs.link(temporaryPath, outputPath);
+  } finally {
+    await fs.unlink(temporaryPath).catch(() => undefined);
+  }
 }
 
 function toGeneratedMediaKind(type: string): GeneratedMediaKind {

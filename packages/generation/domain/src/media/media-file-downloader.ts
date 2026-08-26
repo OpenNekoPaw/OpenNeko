@@ -120,19 +120,13 @@ export async function downloadMediaOutputs(
       : detectMediaExtension(remoteContentType, generationType, output.type);
     const rawPath = path.join(outputDir, `${operationId}_${i}${detectedExt}`);
     const rawTempPath = `${rawPath}.part-${randomUUID()}`;
-    const requiresTranscode = needsTranscode(detectedExt) && options.transcodeFile;
+    const transcodeFile = needsTranscode(detectedExt) ? options.transcodeFile : undefined;
     const mediaType = generationType.includes('video') ? 'video' : 'audio';
     const compatExt = mediaType === 'video' ? '.mp4' : '.mp3';
     const compatPath = path.join(outputDir, `${operationId}_${i}${compatExt}`);
     const compatTempPath = `${compatPath}.part-${randomUUID()}`;
 
     try {
-      const terminalPath = requiresTranscode ? compatPath : rawPath;
-      if (await pathExists(terminalPath)) {
-        savedPaths.push(terminalPath);
-        continue;
-      }
-
       if (sourcePath) {
         if (path.resolve(sourcePath) !== path.resolve(rawTempPath)) {
           await fs.copyFile(sourcePath, rawTempPath);
@@ -142,15 +136,15 @@ export async function downloadMediaOutputs(
         await fs.writeFile(rawTempPath, remoteBuffer, { flag: 'wx' });
       }
 
-      if (requiresTranscode) {
-        const ok = await options.transcodeFile!(rawTempPath, compatTempPath, mediaType);
+      if (transcodeFile) {
+        const ok = await transcodeFile(rawTempPath, compatTempPath, mediaType);
         if (!ok) throw new Error('Generated output transcode returned false.');
-        await fs.rename(compatTempPath, compatPath);
+        await fs.link(compatTempPath, compatPath);
         savedPaths.push(compatPath);
         continue;
       }
 
-      await fs.rename(rawTempPath, rawPath);
+      await fs.link(rawTempPath, rawPath);
       savedPaths.push(rawPath);
     } catch (error) {
       logger.error('Failed to materialize generated output', { outputIndex: i, error });
@@ -167,13 +161,4 @@ export async function downloadMediaOutputs(
 function toLocalPath(value: string): string | undefined {
   if (value.startsWith('file://')) return fileURLToPath(value);
   return path.isAbsolute(value) ? value : undefined;
-}
-
-async function pathExists(filePath: string): Promise<boolean> {
-  try {
-    await fs.access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
 }

@@ -3,7 +3,6 @@ import { loadNkc, saveNkc } from '../../nkc';
 import type { CanvasData, GenerationCanvasNode } from '../canvas';
 import {
   applyCanvasGenerationOutputs,
-  authorCanvasGeneratedText,
   beginCanvasGenerationRun,
   bindCanvasGenerationJob,
   createCanvasGenerationNodeData,
@@ -116,7 +115,7 @@ describe('Canvas Generation Node contract', () => {
     expect(applied.data.outputs).toHaveLength(1);
   });
 
-  it('derives editable prompt text without rewriting the immutable generated output', () => {
+  it('keeps generated Prompt content locator-backed without an inline authored body', () => {
     const jobRef = { kind: 'generation' as const, jobId: 'job-text' };
     const initial = {
       recipe: {
@@ -138,13 +137,13 @@ describe('Canvas Generation Node contract', () => {
     };
     expect(isCanvasGenerationNodeData(initial)).toBe(true);
 
-    const authored = authorCanvasGeneratedText(initial, 'Edited scene');
-    expect(authored.authoredText).toEqual({
-      text: 'Edited scene',
-      sourceOutputId: 'text-output',
-    });
-    expect(authored.outputs).toEqual(initial.outputs);
-    expect(selectCanvasGenerationOutput(authored, 'text-output').authoredText).toBeUndefined();
+    expect(
+      isCanvasGenerationNodeData({
+        ...initial,
+        authoredText: { text: 'Edited scene', sourceOutputId: 'text-output' },
+      }),
+    ).toBe(false);
+    expect(selectCanvasGenerationOutput(initial, 'text-output')).toEqual(initial);
   });
 
   it('requires the distinct music purpose without introducing another node kind', () => {

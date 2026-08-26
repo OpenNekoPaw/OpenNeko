@@ -36,7 +36,6 @@ import {
 import {
   applyCanvasGenerationNodeOutputs,
   attachCanvasGenerationReference,
-  authorCanvasGenerationNodeText,
   createCanvasGenerationNode,
   requireCanvasGenerationNode,
   selectCanvasGenerationNodeOutput,
@@ -572,17 +571,6 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
         });
         this.generationNodes.set(intent.nodeId, result.projection);
       }
-      return this.accepted(request);
-    }
-    if (intent.type === 'author-generation-text') {
-      this.commitCanvas(
-        authorCanvasGenerationNodeText({
-          canvas: this.canvas,
-          nodeId: intent.nodeId,
-          text: intent.text,
-        }),
-        request.commandId,
-      );
       return this.accepted(request);
     }
     if (intent.type === 'run-generation-node') {

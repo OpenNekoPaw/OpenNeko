@@ -26,7 +26,7 @@ export function GenerationNode({
   const projection = host?.getGenerationProjection(node.id);
   const selected = selectedCanvasGenerationOutput(node.data);
   const title = generationContentLabel(recipe.kind);
-  const textOutput = node.data.authoredText?.text ?? projection?.text;
+  const textOutput = projection?.text;
   const active =
     projection?.phase === 'binding' ||
     projection?.phase === 'pending' ||

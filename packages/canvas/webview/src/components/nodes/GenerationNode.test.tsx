@@ -465,7 +465,6 @@ function createHost(
     runGenerationNode: async () => snapshot(),
     cancelGenerationNode: async () => snapshot(),
     selectGenerationOutput: async () => snapshot(),
-    authorGenerationText: async () => snapshot(),
     getGenerationProjection: () => projection,
     projectContent: async () => snapshot(),
     previewResource: async () => undefined,

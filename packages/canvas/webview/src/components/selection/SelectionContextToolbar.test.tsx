@@ -1003,9 +1003,6 @@ function createMaterialHost(
     selectGenerationOutput: async () => {
       throw new Error('Not used by this static component test.');
     },
-    authorGenerationText: async () => {
-      throw new Error('Not used by this static component test.');
-    },
     getGenerationProjection: () => undefined,
     projectContent: async () => {
       throw new Error('Not used by this static component test.');

@@ -2,7 +2,6 @@ import type { CanvasConnection, CanvasData, GenerationCanvasNode } from './types
 import type { GenerationModelParameterProfile } from '@neko/generation-domain';
 import {
   applyCanvasGenerationOutputs,
-  authorCanvasGeneratedText,
   bindCanvasGenerationJob,
   createCanvasGenerationNodeData,
   selectCanvasGenerationOutput,
@@ -87,17 +86,6 @@ export function selectCanvasGenerationNodeOutput(input: {
   return replaceGenerationNode(input.canvas, input.nodeId, (node) => ({
     ...node,
     data: selectCanvasGenerationOutput(node.data, input.outputId),
-  }));
-}
-
-export function authorCanvasGenerationNodeText(input: {
-  readonly canvas: CanvasData;
-  readonly nodeId: string;
-  readonly text: string;
-}): CanvasData {
-  return replaceGenerationNode(input.canvas, input.nodeId, (node) => ({
-    ...node,
-    data: authorCanvasGeneratedText(node.data, input.text),
   }));
 }
 

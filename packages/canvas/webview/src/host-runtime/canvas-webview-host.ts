@@ -72,7 +72,6 @@ export interface CanvasWebviewHostPort extends CanvasHostMessagePort {
   runGenerationNode(nodeId: string): Promise<CanvasHostSnapshot>;
   cancelGenerationNode(nodeId: string): Promise<CanvasHostSnapshot>;
   selectGenerationOutput(nodeId: string, outputId: string): Promise<CanvasHostSnapshot>;
-  authorGenerationText(nodeId: string, text: string): Promise<CanvasHostSnapshot>;
   getGenerationProjection(nodeId: string): CanvasGenerationRuntimeProjection | undefined;
   projectContent(
     locator: CanvasReferencedContentLocator,
@@ -560,13 +559,6 @@ export function createCanvasWebviewHost(
     async selectGenerationOutput(nodeId, outputId) {
       return queueOperation(async () => {
         const next = await executeIntent({ type: 'select-generation-output', nodeId, outputId });
-        publishSnapshot(next);
-        return next;
-      });
-    },
-    async authorGenerationText(nodeId, text) {
-      return queueOperation(async () => {
-        const next = await executeIntent({ type: 'author-generation-text', nodeId, text });
         publishSnapshot(next);
         return next;
       });

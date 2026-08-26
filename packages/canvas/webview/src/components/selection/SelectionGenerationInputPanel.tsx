@@ -1294,7 +1294,6 @@ export function resolveUntouchedRecipeConfiguredDefault(
     node.data.latestRun ||
     node.data.outputs.length > 0 ||
     node.data.selectedOutputId ||
-    node.data.authoredText ||
     connections.some((connection) => connection.targetId === node.id) ||
     !isUntouchedGenerationRecipe(node.data.recipe)
   ) {

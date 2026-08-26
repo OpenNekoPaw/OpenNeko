@@ -57,17 +57,11 @@ export interface CanvasGenerationOutputBinding {
   readonly recipeInputFingerprint: string;
 }
 
-export interface CanvasGenerationAuthoredText {
-  readonly text: string;
-  readonly sourceOutputId: string;
-}
-
 export interface CanvasGenerationNodeData {
   readonly recipe: CanvasGenerationRecipe;
   readonly latestRun?: CanvasGenerationRunBinding;
   readonly outputs: readonly CanvasGenerationOutputBinding[];
   readonly selectedOutputId?: string;
-  readonly authoredText?: CanvasGenerationAuthoredText;
 }
 
 export interface CanvasGenerationDiagnostic {
@@ -147,15 +141,6 @@ export function isCanvasGenerationNodeData(value: unknown): value is CanvasGener
     (typeof value['selectedOutputId'] !== 'string' || !outputIds.has(value['selectedOutputId']))
   ) {
     return false;
-  }
-  if (value['authoredText'] !== undefined) {
-    if (
-      value['recipe'].kind !== 'prompt' ||
-      !isCanvasGenerationAuthoredText(value['authoredText'])
-    ) {
-      return false;
-    }
-    if (!outputIds.has(value['authoredText'].sourceOutputId)) return false;
   }
   return true;
 }
@@ -282,7 +267,6 @@ export function applyCanvasGenerationOutputs(
       ...current,
       outputs: [...merged.values()],
       selectedOutputId: selected.outputId,
-      authoredText: undefined,
     },
   };
 }
@@ -295,22 +279,7 @@ export function selectCanvasGenerationOutput(
   if (!current.outputs.some((output) => output.outputId === outputId)) {
     throw new Error(`Canvas Generation output "${outputId}" does not exist.`);
   }
-  return { ...current, selectedOutputId: outputId, authoredText: undefined };
-}
-
-export function authorCanvasGeneratedText(
-  current: CanvasGenerationNodeData,
-  text: string,
-): CanvasGenerationNodeData {
-  assertGenerationData(current);
-  if (current.recipe.kind !== 'prompt') {
-    throw new Error('Only a Prompt Generation Node can own authored text.');
-  }
-  const sourceOutputId = current.selectedOutputId;
-  if (!sourceOutputId) {
-    throw new Error('Authored Canvas text requires a selected generated source output.');
-  }
-  return { ...current, authoredText: { text, sourceOutputId } };
+  return { ...current, selectedOutputId: outputId };
 }
 
 export function selectedCanvasGenerationOutput(
@@ -342,15 +311,6 @@ function isCanvasGenerationOutputBinding(value: unknown): value is CanvasGenerat
     locator.locator.selector === undefined &&
     isCanvasGenerationKind(value['kind']) &&
     isNonEmptyString(value['recipeInputFingerprint'])
-  );
-}
-
-function isCanvasGenerationAuthoredText(value: unknown): value is CanvasGenerationAuthoredText {
-  return (
-    isRecord(value) &&
-    hasOnlyKeys(value, AUTHORED_TEXT_KEYS) &&
-    typeof value['text'] === 'string' &&
-    isNonEmptyString(value['sourceOutputId'])
   );
 }
 
@@ -392,11 +352,4 @@ const OUTPUT_BINDING_KEYS = new Set([
   'kind',
   'recipeInputFingerprint',
 ]);
-const AUTHORED_TEXT_KEYS = new Set(['text', 'sourceOutputId']);
-const GENERATION_NODE_DATA_KEYS = new Set([
-  'recipe',
-  'latestRun',
-  'outputs',
-  'selectedOutputId',
-  'authoredText',
-]);
+const GENERATION_NODE_DATA_KEYS = new Set(['recipe', 'latestRun', 'outputs', 'selectedOutputId']);

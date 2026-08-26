@@ -454,8 +454,9 @@ Generation recipe、viewer/editor 或 provider execution。素材进入 Canvas �
 2. 全局 Media Library 文件必须先由 Media Library owner 创建项目 binding 和匹配的 Workspace link，
    或由用户显式复制到项目可授权位置；
 3. 任意工作区外文件由 Host 原子复制到 `neko/imports/<kind>/`，再用新的项目 locator 创建节点；
-4. AI 素材先进入 Generation-owned draft/Job；owner 成功提交字节后返回 canonical Workspace
-   `ContentLocator`，output identity、digest、Job 与 lineage 仍由 Generation 记录拥有。
+4. AI 素材先进入 Generation-owned draft/Job；owner 以 create-only 操作成功提交字节后返回 canonical
+   Workspace `ContentLocator`，目标已存在时当前 Job 局部失败且不得比较、复用、改名或覆盖；output
+   identity、digest、Job 与 lineage 仍由 Generation 记录拥有。
 
 素材地址只由 validated `ContentLocator.file` 与可选 selector 推导；素材是 referenced 还是 generated
 由对应领域 authority/provenance 决定。扩展名、目录名、
@@ -463,11 +464,17 @@ provenance 文本、历史 prompt 和运行时 URL 都不得成为来源 authori
 展示；重新生成必须用稳定 `JobRef<'generation'>` 向 Generation owner 解析权威 recipe，
 并创建新的 Job、output identity 和 lineage，不能覆盖旧结果。
 
+生成结果提交后以该 `ContentLocator` 指向的文件作为唯一内容事实。用户可以通过 owning editor 的
+显式编辑操作更新受支持文件；Generation Job、恢复流程和 Canvas projection 不得再次写入该文件。
+Canvas 不得为生成文本保存并行正文，显示和下游输入都通过 Content authority 读取当前文件。
+
 Canvas selection toolbar 只投影 Host 在精确 project/Canvas session/request/selection 上解析出的
 owner capability descriptors。Preview、Cut、媒体/模型和 Generation 继续由各自 package
 执行；Canvas 不导入或复制其 viewer、editor、codec、provider 或文件写入实现。普通引用节点
 只得到适用的读取、复制、交接和非破坏派生动作；生成结果节点在 Generation authority 仍可
 解析时，才额外得到重新生成或进入 Generation/Agent draft 的入口。
+受支持的生成文本文档可以显式交接到 owning Text Editor，用户保存仍写入同一 locator；该交接不授予
+Generation 或 Canvas 自动更新文件的权限。
 
 ## 验证命令
 

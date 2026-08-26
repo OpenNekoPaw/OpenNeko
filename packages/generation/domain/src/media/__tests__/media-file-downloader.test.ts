@@ -16,7 +16,7 @@ afterEach(async () => {
 });
 
 describe('downloadMediaOutputs', () => {
-  it('atomically copies local outputs and reuses the same terminal file on replay', async () => {
+  it('atomically copies local outputs and rejects an existing terminal file on replay', async () => {
     const root = await createTemporaryDirectory();
     const sourcePath = path.join(root, 'provider.png');
     const outputDir = path.join(root, 'neko', 'generated', 'image');
@@ -29,14 +29,15 @@ describe('downloadMediaOutputs', () => {
       outputDir,
     );
     await fs.writeFile(sourcePath, 'changed provider source');
-    const replay = await downloadMediaOutputs(
-      'task-1',
-      'text-to-image',
-      [{ url: sourcePath, type: 'image' }],
-      outputDir,
-    );
+    await expect(
+      downloadMediaOutputs(
+        'task-1',
+        'text-to-image',
+        [{ url: sourcePath, type: 'image' }],
+        outputDir,
+      ),
+    ).rejects.toMatchObject({ code: 'EEXIST' });
 
-    expect(replay).toEqual(first);
     expect(await fs.readFile(first[0]!, 'utf8')).toBe('first revision');
     expect(await fs.readdir(outputDir)).toEqual(['task-1_0.png']);
   });

@@ -136,13 +136,7 @@ async function resolveGenerationSource(
   }
   if (output.kind === 'prompt') {
     await authorize(source.id, output.locator, 'document', port);
-    const text =
-      source.data.authoredText?.sourceOutputId === output.outputId
-        ? {
-            text: source.data.authoredText.text,
-            digest: await port.fingerprintText(source.data.authoredText.text),
-          }
-        : await port.readText(output.locator);
+    const text = await port.readText(output.locator);
     return { kind: 'text', sourceNodeId: source.id, ...text };
   }
   return resolveLocator(source.id, output.locator, output.kind, port);

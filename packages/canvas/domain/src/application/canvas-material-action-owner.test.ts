@@ -255,7 +255,7 @@ describe('Desktop Canvas material action owner', () => {
     expect(resolveCut).not.toHaveBeenCalled();
   });
 
-  it('contributes Text Editor only for an admitted referenced document target', async () => {
+  it('contributes Text Editor for admitted referenced and generated document targets', async () => {
     const textTarget: CanvasMaterialActionTarget = {
       nodeId: 'notes-1',
       mediaKind: 'document',
@@ -273,11 +273,17 @@ describe('Desktop Canvas material action owner', () => {
     const owner = createCanvasMaterialActionOwner({ resolveEditText, editText });
 
     const descriptors = await owner.resolve({ identity, targets: [textTarget] });
-    await expect(owner.resolve({ identity, targets: [generatedTextTarget] })).resolves.toEqual([]);
+    const generatedDescriptors = await owner.resolve({
+      identity,
+      targets: [generatedTextTarget],
+    });
 
     expect(descriptors.map((descriptor) => descriptor.id)).toEqual([CANVAS_EDIT_TEXT_ACTION_ID]);
-    expect(resolveEditText).toHaveBeenCalledTimes(1);
-    const descriptor = descriptors[0];
+    expect(generatedDescriptors.map((descriptor) => descriptor.id)).toEqual([
+      CANVAS_EDIT_TEXT_ACTION_ID,
+    ]);
+    expect(resolveEditText).toHaveBeenCalledTimes(2);
+    const descriptor = generatedDescriptors[0];
     if (!descriptor) throw new Error('Text Editor descriptor is missing.');
     await owner.execute({
       identity,
@@ -289,12 +295,12 @@ describe('Desktop Canvas material action owner', () => {
           canvasSessionId: identity.sessionId,
         },
         actionId: descriptor.id,
-        selectedNodeIds: [textTarget.nodeId],
+        selectedNodeIds: [generatedTextTarget.nodeId],
         payload: {},
       },
-      targets: [textTarget],
+      targets: [generatedTextTarget],
     });
-    expect(editText).toHaveBeenCalledWith({ identity, target: textTarget });
+    expect(editText).toHaveBeenCalledWith({ identity, target: generatedTextTarget });
   });
 
   it('contributes Add to Cut only for audio/video and preserves the exact owner payload', async () => {

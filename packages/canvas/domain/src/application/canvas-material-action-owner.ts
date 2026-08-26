@@ -210,7 +210,6 @@ export function createCanvasMaterialActionOwner(options: {
       }
       if (
         target?.mediaKind === 'document' &&
-        target.origin === 'referenced' &&
         options.resolveEditText &&
         options.editText &&
         (await options.resolveEditText({ identity, target }))
@@ -220,7 +219,7 @@ export function createCanvasMaterialActionOwner(options: {
           ownerId: 'text-editor',
           label: options.labels?.editText ?? 'Edit text',
           mediaKinds: ['document'],
-          origins: ['referenced'],
+          origins: ['referenced', 'generated'],
           selection: { minimum: 1, maximum: 1 },
           effect: 'handoff',
         });

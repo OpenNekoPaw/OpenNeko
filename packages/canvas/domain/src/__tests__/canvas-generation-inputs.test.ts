@@ -72,6 +72,54 @@ describe('Canvas Generation input resolution', () => {
       resolveCanvasGenerationInputs({ canvas, nodeId: 'target', port: authorizedPort }),
     ).rejects.toMatchObject({ code: 'generation-input-type-mismatch' });
   });
+
+  it('reads the current generated Prompt file as the only text source', async () => {
+    const jobRef = { kind: 'generation' as const, jobId: 'job-text' };
+    const prompt = generation('source', 'prompt');
+    if (prompt.type !== 'generation') throw new Error('Expected Generation node fixture.');
+    const locator = {
+      file: { authority: 'workspace' as const, path: 'neko/generated/text/output.md' },
+    };
+    const canvas = canvasWith([
+      {
+        ...prompt,
+        data: {
+          ...prompt.data,
+          latestRun: { jobRef, recipeInputFingerprint: 'digest:recipe' },
+          outputs: [
+            {
+              outputId: 'output-text',
+              jobRef,
+              locator,
+              kind: 'prompt',
+              recipeInputFingerprint: 'digest:recipe',
+            },
+          ],
+          selectedOutputId: 'output-text',
+        },
+      },
+      generation('target', 'image'),
+    ]);
+    canvas.connections = [connect('source', 'target')];
+    const port = {
+      fingerprintText: vi.fn(),
+      readText: vi.fn(async () => ({ text: 'user-edited text', digest: 'digest:edited' })),
+      authorizeLocator: vi.fn(async () => true),
+    };
+
+    await expect(
+      resolveCanvasGenerationInputs({ canvas, nodeId: 'target', port }),
+    ).resolves.toEqual([
+      {
+        kind: 'text',
+        sourceNodeId: 'source',
+        text: 'user-edited text',
+        digest: 'digest:edited',
+      },
+    ]);
+    expect(port.readText).toHaveBeenCalledWith(locator);
+    expect(port.fingerprintText).not.toHaveBeenCalled();
+  });
 });
 
 function canvasWith(nodes: CanvasNode[]): CanvasData {
