@@ -488,14 +488,6 @@ function GenerationInputPanel({
         </button>
       </div>
 
-      {projection?.recipeStale ? (
-        <div
-          className="selection-generation-input-panel__warning"
-          data-canvas-generation-recipe-stale="true"
-        >
-          {t('generation.recipeStale')}
-        </div>
-      ) : null}
       {!recipe.model && availableModels.length === 0 ? (
         <div className="selection-generation-input-panel__warning" role="status">
           {t('generation.noModelsForPurpose')}
@@ -1472,9 +1464,9 @@ function resolveGenerationInputPanelMetrics(
 ): { readonly width: number; readonly minHeight: number; readonly panelHeight: number } {
   const viewportWidth = Math.max(0, viewportSize.width);
   const edgeInset = 16;
-  const width = Math.min(620, Math.max(280, viewportWidth - edgeInset * 2));
+  const width = Math.min(520, Math.max(280, viewportWidth - edgeInset * 2));
   const minHeight =
-    viewportWidth <= 520 ? (kind === 'audio' ? 300 : 246) : kind === 'audio' ? 280 : 246;
+    viewportWidth <= 520 ? (kind === 'audio' ? 264 : 224) : kind === 'audio' ? 244 : 210;
   return { width, minHeight, panelHeight: Math.max(minHeight, measuredPanelHeight ?? 0) };
 }
 

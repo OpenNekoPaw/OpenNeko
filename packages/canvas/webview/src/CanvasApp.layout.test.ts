@@ -154,7 +154,7 @@ describe('Canvas creative workbench layout boundary', () => {
 
   it('keeps the Image composer and parameter popovers aligned with the compact reference layout', () => {
     expect(cssSource).toMatch(
-      /\.selection-generation-input-panel__prompt\s*\{[^}]*min-height:\s*92px;[^}]*flex:\s*1 1 auto;/s,
+      /\.selection-generation-input-panel__prompt\s*\{[^}]*min-height:\s*64px;[^}]*flex:\s*1 1 auto;/s,
     );
     expect(cssSource).toMatch(
       /\.selection-generation-input-panel__parameter-menu\s*\{[^}]*width:\s*min\(380px,/s,

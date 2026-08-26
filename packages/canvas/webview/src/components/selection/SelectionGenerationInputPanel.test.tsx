@@ -77,7 +77,9 @@ describe('SelectionGenerationInputPanel', () => {
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
       'Provider rejected this run.',
     );
-    expect(container.querySelector('[data-canvas-generation-recipe-stale="true"]')).not.toBeNull();
+    expect(container.textContent).not.toContain(
+      'This output was generated from an earlier Recipe or input.',
+    );
     expect(container.textContent).not.toContain('Text generation');
   });
 
@@ -328,7 +330,7 @@ describe('SelectionGenerationInputPanel', () => {
     const parameterMenu = document.querySelector<HTMLElement>(
       '.selection-generation-input-panel__parameter-menu',
     );
-    expect(parameterMenu?.style.getPropertyValue('--generation-input-panel-width')).toBe('620px');
+    expect(parameterMenu?.style.getPropertyValue('--generation-input-panel-width')).toBe('520px');
     expect(
       parameterMenu?.querySelectorAll('.selection-generation-input-panel__option-group'),
     ).toHaveLength(3);
@@ -612,7 +614,7 @@ describe('SelectionGenerationInputPanel', () => {
     expect(
       container.querySelector<HTMLElement>('[data-canvas-generation-input="true"]')?.style
         .minHeight,
-    ).toBe('246px');
+    ).toBe('224px');
   });
 
   it('uses a compact node-following composer on desktop', () => {
@@ -620,10 +622,10 @@ describe('SelectionGenerationInputPanel', () => {
     render([node], [], [node.id], createHost(), { width: 1000, height: 700 });
 
     const panel = container.querySelector<HTMLElement>('[data-canvas-generation-input="true"]');
-    expect(panel?.style.width).toBe('620px');
+    expect(panel?.style.width).toBe('520px');
     expect(panel?.style.left).toBe('400px');
     expect(panel?.style.top).toBe('416px');
-    expect(panel?.style.minHeight).toBe('246px');
+    expect(panel?.style.minHeight).toBe('210px');
     expect(
       panel?.querySelector('.selection-generation-input-panel__reference-slot'),
     ).not.toBeNull();
@@ -639,7 +641,7 @@ describe('SelectionGenerationInputPanel', () => {
         { pan: { x: 100, y: 50 }, zoom: 0.5 },
         { width: 1000, height: 700 },
       ),
-    ).toMatchObject({ x: 300, top: 266, width: 620, placement: 'node-below' });
+    ).toMatchObject({ x: 300, top: 266, width: 520, placement: 'node-below' });
     expect(
       resolveGenerationInputPanelPosition(
         { ...node, position: { x: 240, y: 430 } },
@@ -658,7 +660,7 @@ describe('SelectionGenerationInputPanel', () => {
         { pan: { x: 12, y: 0 }, zoom: 1 },
         { width: 500, height: 640 },
       ),
-    ).toEqual({ x: -150, y: -38 });
+    ).toEqual({ x: -150, y: -16 });
     expect(
       resolveGenerationSelectionSafePan(
         node,

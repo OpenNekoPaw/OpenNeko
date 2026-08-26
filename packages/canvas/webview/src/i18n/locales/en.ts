@@ -192,7 +192,6 @@ export const en = {
   'generation.elapsedValue': 'Took {elapsed}',
   'generation.empty': 'Configure the Recipe and run this node',
   'generation.textUnavailable': 'Generated text is unavailable',
-  'generation.recipeStale': 'This output was generated from an earlier Recipe or input.',
   'generation.phase.idle': 'Idle',
   'generation.phase.binding': 'Binding',
   'generation.phase.pending': 'Pending',

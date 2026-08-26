@@ -188,7 +188,6 @@ export const zhCN = {
   'generation.elapsedValue': '耗时 {elapsed}',
   'generation.empty': '配置生成参数后运行节点',
   'generation.textUnavailable': '生成文本暂不可用',
-  'generation.recipeStale': '此结果来自较早的配方或输入。',
   'generation.phase.idle': '未运行',
   'generation.phase.binding': '正在绑定',
   'generation.phase.pending': '等待中',
