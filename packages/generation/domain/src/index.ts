@@ -1,4 +1,5 @@
 export * from './generation-params';
+export * from './model-parameter-profile';
 export * from './recipe';
 export type {
   AudioGenerationRequest,

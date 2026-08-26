@@ -115,4 +115,38 @@ describe('Generation Recipe ownership', () => {
       ),
     ).toThrow('does not support an audio reference input');
   });
+
+  it('projects model-owned video controls without inventing fixed parameters', () => {
+    expect(
+      projectGenerationRecipeRequest(
+        {
+          kind: 'video',
+          prompt: 'A quiet cinematic street',
+          model: {
+            purpose: 'video.generate',
+            providerId: 'bytedance-provider',
+            modelId: 'seedance-2',
+          },
+          aspectRatio: 'adaptive',
+          resolution: '720p',
+          duration: 5,
+          generateAudio: true,
+        },
+        [],
+      ),
+    ).toEqual({
+      generationType: 'text-to-video',
+      providerId: 'bytedance-provider',
+      modelId: 'seedance-2',
+      request: {
+        prompt: 'A quiet cinematic street',
+        providerId: 'bytedance-provider',
+        modelId: 'seedance-2',
+        aspectRatio: 'adaptive',
+        resolution: '720p',
+        duration: 5,
+        generateAudio: true,
+      },
+    });
+  });
 });

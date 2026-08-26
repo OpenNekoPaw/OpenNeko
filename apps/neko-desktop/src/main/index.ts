@@ -192,6 +192,7 @@ import {
   CANVAS_TEXT_FILE_PREVIEW_MAX_BYTES,
   type CanvasHostRuntimeIdentity,
 } from '@neko/canvas-domain';
+import { resolveGenerationModelParameterProfile } from '@neko/generation-domain';
 import { GenerationApplicationRuntime } from '@neko/generation-domain/job';
 import { ComfyUiLocalApi, ComfyUiWorkflowRunner } from '@neko/generation-domain/comfyui';
 import { PromptGenerationService, createAiSdkPromptCompletionPort } from '@neko/generation-domain/prompt';
@@ -1142,6 +1143,18 @@ async function startDesktop(): Promise<void> {
         providers: config.getEnabledProviders(),
         models: config.getEnabledModels(),
         supportsPurpose: modelSupportsPurpose,
+        resolveParameterProfile: (model) => {
+          const provider = config.getProvider(model.providerId);
+          if (!provider) {
+            throw new Error(
+              `Canvas Generation model "${model.id}" has no configured provider "${model.providerId}".`,
+            );
+          }
+          return resolveGenerationModelParameterProfile({
+            providerType: provider.type,
+            modelName: model.name,
+          });
+        },
         getDefaultModelPurposeRef: (purpose) => config.getDefaultModelPurposeRef(purpose),
         getDefaultModelRef: (type) => config.getDefaultModelRef(type),
       });

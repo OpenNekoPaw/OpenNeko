@@ -1,3 +1,4 @@
+import type { GenerationModelParameterProfile } from '@neko/generation-domain';
 import type { CanvasGenerationModelOption } from './canvas-host-runtime-contract';
 import {
   CANVAS_GENERATION_PURPOSES,
@@ -27,6 +28,7 @@ export interface CanvasGenerationModelCatalogInput<
   readonly providers: readonly CanvasGenerationCatalogProvider[];
   readonly models: readonly Model[];
   readonly supportsPurpose: (model: Model, purpose: CanvasGenerationPurpose) => boolean;
+  readonly resolveParameterProfile?: (model: Model) => GenerationModelParameterProfile | undefined;
   readonly getDefaultModelPurposeRef: (
     purpose: CanvasGenerationPurpose,
   ) => CanvasGenerationCatalogModelRef | undefined;
@@ -43,6 +45,7 @@ export function projectCanvasGenerationModels<Model extends CanvasGenerationCata
     .flatMap((model) => {
       const provider = providers.get(model.providerId);
       if (!provider) return [];
+      const parameterProfile = input.resolveParameterProfile?.(model);
       return CANVAS_GENERATION_PURPOSES.filter((purpose) =>
         input.supportsPurpose(model, purpose),
       ).map((purpose) => {
@@ -55,6 +58,7 @@ export function projectCanvasGenerationModels<Model extends CanvasGenerationCata
           providerLabel: provider.displayName,
           isDefault:
             configuredDefault?.providerId === provider.id && configuredDefault.modelId === model.id,
+          ...(purpose === 'video.generate' && parameterProfile ? { parameterProfile } : {}),
         };
       });
     })

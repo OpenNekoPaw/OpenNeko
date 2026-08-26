@@ -168,6 +168,27 @@ describe('Canvas Generation Node contract', () => {
       }),
     ).toBe(false);
   });
+
+  it('does not invent video parameters when the selected model has no verified profile', () => {
+    const model = {
+      purpose: 'video.generate' as const,
+      providerId: 'custom-provider',
+      modelId: 'custom-video-model',
+    };
+
+    expect(createCanvasGenerationNodeData('video', model)).toEqual({
+      recipe: { kind: 'video', prompt: '', model },
+      outputs: [],
+    });
+    expect(
+      isCanvasGenerationRecipe({
+        kind: 'video',
+        prompt: 'A city at night',
+        model,
+        generateAudio: true,
+      }),
+    ).toBe(true);
+  });
 });
 
 function generationNode(): GenerationCanvasNode {

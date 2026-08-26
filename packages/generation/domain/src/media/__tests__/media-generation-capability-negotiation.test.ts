@@ -46,13 +46,53 @@ describe('MediaGenerationService capability negotiation', () => {
       }),
     );
   });
+
+  it('rejects parameters outside the selected model profile before linked execution', async () => {
+    const harness = createService(
+      { ...baseProvider, type: 'minimax' },
+      { modelName: 'MiniMax-H3' },
+    );
+
+    await expect(
+      harness.service.generateVideo({
+        prompt: 'A cat waving at the camera',
+        providerId: harness.provider.id,
+        modelId: harness.model.id,
+        aspectRatio: '16:9',
+        resolution: '720p',
+        duration: 5,
+        fps: 24,
+      }),
+    ).rejects.toThrow('Selected generation model rejects parameter resolution');
+    expect(harness.executeLinked).not.toHaveBeenCalled();
+  });
+
+  it('passes parameters accepted by the selected model profile', async () => {
+    const harness = createService(
+      { ...baseProvider, type: 'minimax' },
+      { modelName: 'MiniMax-H3' },
+    );
+    const request = {
+      prompt: 'A cat waving at the camera',
+      providerId: harness.provider.id,
+      modelId: harness.model.id,
+      aspectRatio: '16:9',
+      resolution: '768P',
+      duration: 5,
+    };
+
+    await expect(harness.service.generateVideo(request)).resolves.toMatchObject({
+      type: 'text-to-video',
+    });
+    expect(harness.executeLinked).toHaveBeenCalledWith(expect.objectContaining({ request }));
+  });
 });
 
-function createService(providerInput: Provider) {
+function createService(providerInput: Provider, options: { readonly modelName?: string } = {}) {
   const provider = { ...providerInput, id: `${providerInput.type}-provider` };
   const model: Model = {
     id: `${provider.id}-video`,
-    name: `${provider.id}-video`,
+    name: options.modelName ?? `${provider.id}-video`,
     displayName: 'Video model',
     providerId: provider.id,
     capabilities: ['image_to_video'],

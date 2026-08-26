@@ -366,6 +366,200 @@ describe('SelectionGenerationInputPanel', () => {
     );
   });
 
+  it('repairs stale video parameters and exposes only controls accepted by the model', async () => {
+    const updateGenerationRecipe = vi.fn(async (_nodeId: string, _recipe: CanvasGenerationRecipe) =>
+      snapshot(),
+    );
+    const node = generationNode({
+      kind: 'video',
+      prompt: 'A cat waving at the camera',
+      model: GENERATION_MODELS[2].binding,
+      aspectRatio: '16:9',
+      resolution: '720p',
+      duration: 5,
+      fps: 24,
+    });
+    render([node], [], [node.id], createHost(undefined, { updateGenerationRecipe }));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(updateGenerationRecipe).toHaveBeenCalledWith(
+      node.id,
+      expect.objectContaining({
+        kind: 'video',
+        resolution: '768P',
+        duration: 5,
+        aspectRatio: '16:9',
+      }),
+    );
+    const repairedRecipe = updateGenerationRecipe.mock.calls.at(-1)?.[1];
+    expect(repairedRecipe).not.toHaveProperty('fps');
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'Parameters were adjusted to match Video Model',
+    );
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="Parameters"]')?.click();
+    });
+    const parameterMenu = document.querySelector<HTMLElement>(
+      '.selection-generation-input-panel__parameter-menu',
+    );
+    expect(
+      parameterMenu?.querySelectorAll('.selection-generation-input-panel__option-group'),
+    ).toHaveLength(3);
+    expect(parameterMenu?.textContent).toContain('768P');
+    expect(parameterMenu?.textContent).toContain('2K');
+    expect(parameterMenu?.textContent).not.toContain('Frame rate');
+    expect(parameterMenu?.textContent).not.toContain('720p');
+  });
+
+  it('shows Seedance audio generation without exposing its fixed FPS as editable', async () => {
+    const updateGenerationRecipe = vi.fn(async () => snapshot());
+    const node = generationNode({
+      kind: 'video',
+      prompt: 'A quiet cinematic street',
+      model: SEEDANCE_MODEL.binding,
+      aspectRatio: 'adaptive',
+      resolution: '720p',
+      duration: 5,
+    });
+    const host = createHost(undefined, {
+      updateGenerationRecipe,
+      getAuthoringCapabilities: () => ({
+        sourceModes: [],
+        generationKinds: ['prompt', 'image', 'audio', 'video'],
+        generationModels: [SEEDANCE_MODEL],
+      }),
+    });
+    render([node], [], [node.id], host);
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="Parameters"]')?.click();
+    });
+    const parameterMenu = document.querySelector<HTMLElement>(
+      '.selection-generation-input-panel__parameter-menu',
+    );
+    expect(
+      parameterMenu?.querySelectorAll('.selection-generation-input-panel__option-group'),
+    ).toHaveLength(4);
+    expect(parameterMenu?.textContent).toContain('adaptive');
+    expect(parameterMenu?.textContent).toContain('4k');
+    expect(parameterMenu?.textContent).toContain('Generate audio');
+    expect(parameterMenu?.textContent).not.toContain('Frame rate');
+
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[aria-label="Generate audio: Enabled"]')?.click();
+    });
+    expect(updateGenerationRecipe).toHaveBeenCalledWith(
+      node.id,
+      expect.objectContaining({ generateAudio: true }),
+    );
+  });
+
+  it('conforms parameters when switching from Seedance to MiniMax H3', async () => {
+    const updateGenerationRecipe = vi.fn(async (_nodeId: string, _recipe: CanvasGenerationRecipe) =>
+      snapshot(),
+    );
+    const minimaxModel = { ...GENERATION_MODELS[2], isDefault: false };
+    const node = generationNode({
+      kind: 'video',
+      prompt: 'Switch this shot',
+      model: SEEDANCE_MODEL.binding,
+      aspectRatio: 'adaptive',
+      resolution: '4k',
+      duration: 15,
+      generateAudio: true,
+    });
+    render(
+      [node],
+      [],
+      [node.id],
+      createHost(undefined, {
+        updateGenerationRecipe,
+        getAuthoringCapabilities: () => ({
+          sourceModes: [],
+          generationKinds: ['prompt', 'image', 'audio', 'video'],
+          generationModels: [SEEDANCE_MODEL, minimaxModel],
+        }),
+      }),
+    );
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="Model"]')?.click();
+    });
+    const minimaxOption = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]'),
+    ).find((button) => button.textContent?.includes('Video Model'));
+    await act(async () => {
+      minimaxOption?.click();
+    });
+
+    const switchedRecipe = updateGenerationRecipe.mock.calls.at(-1)?.[1];
+    expect(switchedRecipe).toEqual({
+      kind: 'video',
+      prompt: 'Switch this shot',
+      model: minimaxModel.binding,
+      aspectRatio: '16:9',
+      resolution: '768P',
+      duration: 15,
+    });
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'Parameters were adjusted to match Video Model',
+    );
+  });
+
+  it('clears hidden video parameters when a custom model has no verified profile', async () => {
+    const updateGenerationRecipe = vi.fn(async () => snapshot());
+    const customModel = {
+      binding: {
+        purpose: 'video.generate' as const,
+        providerId: 'custom-provider',
+        modelId: 'custom-video',
+      },
+      label: 'Custom Video',
+      providerLabel: 'Custom Provider',
+      isDefault: true,
+    };
+    const node = generationNode({
+      kind: 'video',
+      prompt: 'A safe request',
+      model: customModel.binding,
+      resolution: '720p',
+      fps: 24,
+    });
+    render(
+      [node],
+      [],
+      [node.id],
+      createHost(undefined, {
+        updateGenerationRecipe,
+        getAuthoringCapabilities: () => ({
+          sourceModes: [],
+          generationKinds: ['prompt', 'image', 'audio', 'video'],
+          generationModels: [customModel],
+        }),
+      }),
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(updateGenerationRecipe).toHaveBeenCalledWith(node.id, {
+      kind: 'video',
+      prompt: 'A safe request',
+      model: customModel.binding,
+    });
+    expect(container.querySelector('[aria-label="Parameters"]')).toBeNull();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'no verified parameter profile',
+    );
+  });
+
   it('switches one Audio node to music mode and filters the model purpose', async () => {
     const updateGenerationRecipe = vi.fn(async (_nodeId: string, _recipe: CanvasGenerationRecipe) =>
       snapshot(),
@@ -682,6 +876,33 @@ const GENERATION_MODELS = [
     label: 'Video Model',
     providerLabel: 'Provider One',
     isDefault: true,
+    parameterProfile: {
+      kind: 'video' as const,
+      supportedParameters: ['duration', 'resolution', 'aspectRatio'] as const,
+      controls: {
+        aspectRatio: {
+          kind: 'string-enum' as const,
+          required: true,
+          values: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'],
+          defaultValue: '16:9',
+        },
+        resolution: {
+          kind: 'string-enum' as const,
+          required: true,
+          values: ['768P', '2K'],
+          defaultValue: '768P',
+        },
+        duration: {
+          kind: 'integer' as const,
+          required: true,
+          min: 4,
+          max: 15,
+          step: 1,
+          defaultValue: 5,
+        },
+      },
+      fixed: { outputCount: 1 as const },
+    },
   },
   {
     binding: {
@@ -704,3 +925,42 @@ const GENERATION_MODELS = [
     isDefault: true,
   },
 ] as const;
+
+const SEEDANCE_MODEL = {
+  binding: {
+    purpose: 'video.generate' as const,
+    providerId: 'bytedance-provider',
+    modelId: 'seedance-2',
+  },
+  label: 'Seedance 2.0',
+  providerLabel: 'ByteDance',
+  isDefault: true,
+  parameterProfile: {
+    kind: 'video' as const,
+    supportedParameters: ['duration', 'resolution', 'aspectRatio', 'generateAudio'] as const,
+    controls: {
+      aspectRatio: {
+        kind: 'string-enum' as const,
+        required: true,
+        values: ['adaptive', '16:9', '9:16', '1:1', '4:3', '3:4', '21:9'],
+        defaultValue: 'adaptive',
+      },
+      resolution: {
+        kind: 'string-enum' as const,
+        required: true,
+        values: ['480p', '720p', '1080p', '4k'],
+        defaultValue: '720p',
+      },
+      duration: {
+        kind: 'integer' as const,
+        required: true,
+        min: 4,
+        max: 15,
+        step: 1,
+        defaultValue: 5,
+      },
+      generateAudio: { kind: 'boolean' as const, required: false },
+    },
+    fixed: { outputCount: 1 as const, fps: 24 },
+  },
+} as const;

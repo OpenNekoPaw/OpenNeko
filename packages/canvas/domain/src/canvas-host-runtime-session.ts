@@ -489,13 +489,20 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
       const purpose = purposeForCanvasGenerationKind(intent.kind);
       const defaultModel = this.options
         .resolveGenerationModels?.()
-        .find((option) => option.isDefault && option.binding.purpose === purpose)?.binding;
+        .find((option) => option.isDefault && option.binding.purpose === purpose);
       const next = createCanvasGenerationNode({
         canvas: this.canvas,
         nodeId: this.requireAvailableGenerationNodeIdentity(),
         kind: intent.kind,
         position: intent.position ?? { x: 100, y: 100 },
-        ...(defaultModel ? { defaultModel } : {}),
+        ...(defaultModel
+          ? {
+              defaultModel: defaultModel.binding,
+              ...(defaultModel.parameterProfile
+                ? { parameterProfile: defaultModel.parameterProfile }
+                : {}),
+            }
+          : {}),
       });
       this.commitCanvas(next, request.commandId);
       return this.accepted(request);

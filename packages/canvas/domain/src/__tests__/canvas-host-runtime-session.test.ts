@@ -5,6 +5,7 @@ import {
   type CanvasMaterialActionDescriptor,
   type MediaCanvasNode,
 } from '@neko/canvas-domain';
+import { resolveGenerationModelParameterProfile } from '@neko/generation-domain';
 import { describe, expect, it, vi } from 'vitest';
 import {
   CanvasHostVisibleEffectError,
@@ -1186,7 +1187,9 @@ describe('CanvasHostRuntimeSession', () => {
 
     expect(result.status).toBe('accepted');
     if (result.status !== 'accepted') throw new Error('Expected Generation creation to succeed.');
-    expect(result.snapshot.canvas.nodes[0]).toMatchObject({
+    const node = result.snapshot.canvas.nodes[0];
+    if (node?.type !== 'generation') throw new Error('Expected a Generation node.');
+    expect(node).toMatchObject({
       type: 'generation',
       data: {
         recipe: {
@@ -1206,6 +1209,63 @@ describe('CanvasHostRuntimeSession', () => {
         outputs: [],
       },
     });
+  });
+
+  it('initializes a video node from the selected model parameter profile', async () => {
+    const parameterProfile = resolveGenerationModelParameterProfile({
+      providerType: 'minimax',
+      modelName: 'MiniMax-H3',
+    });
+    if (!parameterProfile) throw new Error('Expected the MiniMax H3 parameter profile.');
+    const runtime = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas: createEmptyCanvasData('Video defaults'),
+      resolveGenerationModels: () => [
+        {
+          binding: {
+            purpose: 'video.generate',
+            providerId: 'minimax-provider',
+            modelId: 'minimax-h3',
+          },
+          label: 'MiniMax H3',
+          providerLabel: 'MiniMax',
+          isDefault: true,
+          parameterProfile,
+        },
+      ],
+      effects: { generation: unusedGenerationEffects() },
+    });
+
+    const result = await runtime.executeIntent(
+      request('create-video-generation', {
+        type: 'create-generation-node',
+        kind: 'video',
+      }),
+    );
+
+    expect(result.status).toBe('accepted');
+    if (result.status !== 'accepted') throw new Error('Expected Generation creation to succeed.');
+    const node = result.snapshot.canvas.nodes[0];
+    if (node?.type !== 'generation') throw new Error('Expected a Generation node.');
+    expect(node).toMatchObject({
+      type: 'generation',
+      data: {
+        recipe: {
+          kind: 'video',
+          prompt: '',
+          model: {
+            purpose: 'video.generate',
+            providerId: 'minimax-provider',
+            modelId: 'minimax-h3',
+          },
+          aspectRatio: '16:9',
+          resolution: '768P',
+          duration: 5,
+        },
+        outputs: [],
+      },
+    });
+    expect(node.data.recipe).not.toHaveProperty('fps');
   });
 
   it('routes an exact owner action descriptor with canonical selection targets', async () => {

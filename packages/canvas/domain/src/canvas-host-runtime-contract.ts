@@ -4,6 +4,10 @@ import {
   type ContentLocator,
 } from '@neko/content-domain';
 import {
+  parseGenerationModelParameterProfile,
+  type GenerationModelParameterProfile,
+} from '@neko/generation-domain';
+import {
   isCanvasMaterialActionDescriptor,
   isCanvasMaterialActionIntent,
   isCanvasMaterialAuthoringRequest,
@@ -75,6 +79,7 @@ export interface CanvasGenerationModelOption {
   readonly label: string;
   readonly providerLabel: string;
   readonly isDefault: boolean;
+  readonly parameterProfile?: GenerationModelParameterProfile;
 }
 
 export interface CanvasHostSnapshot {
@@ -688,7 +693,12 @@ function parseCanvasHostAuthoringCapabilities(value: unknown): CanvasHostAuthori
 
 function parseCanvasGenerationModelOption(value: unknown): CanvasGenerationModelOption {
   const record = requireRecord(value, 'Canvas Host Generation model option must be an object.');
-  requireExactKeys(record, ['binding', 'label', 'providerLabel', 'isDefault']);
+  requireExactKeys(
+    record,
+    record['parameterProfile'] === undefined
+      ? ['binding', 'label', 'providerLabel', 'isDefault']
+      : ['binding', 'label', 'providerLabel', 'isDefault', 'parameterProfile'],
+  );
   const binding = requireRecord(
     record['binding'],
     'Canvas Host Generation model binding must be an object.',
@@ -718,6 +728,9 @@ function parseCanvasGenerationModelOption(value: unknown): CanvasGenerationModel
       record['isDefault'],
       'Canvas Host Generation default-model marker is required.',
     ),
+    ...(record['parameterProfile'] === undefined
+      ? {}
+      : { parameterProfile: parseGenerationModelParameterProfile(record['parameterProfile']) }),
   };
 }
 

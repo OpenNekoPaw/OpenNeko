@@ -1,4 +1,5 @@
 import {
+  conformCanvasVideoGenerationRecipeToProfile,
   createCanvasGenerationNodeData,
   purposeForCanvasGenerationRecipe,
   inferCanvasMediaType,
@@ -129,6 +130,8 @@ function GenerationInputPanel({
     modelBindingsEqual(option.binding, recipe.model),
   );
   const modelBindingUnavailable = recipe.model !== undefined && selectedModel === undefined;
+  const modelParameterProfileUnavailable =
+    recipe.kind === 'video' && selectedModel !== undefined && !selectedModel.parameterProfile;
   const selectedOutput = selectedCanvasGenerationOutput(node.data);
   const active =
     projection?.phase === 'binding' ||
@@ -207,15 +210,52 @@ function GenerationInputPanel({
     setRecipe(configuredDefaultRecipe);
     void commitRecipe(configuredDefaultRecipe).catch(reportFailure);
   }, [commitRecipe, configuredDefaultRecipe]);
+  useEffect(() => {
+    if (recipe.kind !== 'video' || !selectedModel) return;
+    const next = selectedModel.parameterProfile
+      ? conformCanvasVideoGenerationRecipeToProfile(recipe, selectedModel.parameterProfile).recipe
+      : {
+          ...createCanvasGenerationNodeData('video', selectedModel.binding).recipe,
+          prompt: recipe.prompt,
+        };
+    if (recipesEqual(recipe, next)) return;
+    setRecipe(next);
+    void commitRecipe(next)
+      .then(() => {
+        if (selectedModel.parameterProfile) {
+          setLocalDiagnostic(t('generation.parametersAdjusted', { model: selectedModel.label }));
+        }
+      })
+      .catch(reportFailure);
+  }, [commitRecipe, recipe, selectedModel]);
 
   const commitOnBlur = (): void => {
     void commitRecipe(recipe).catch(reportFailure);
   };
 
   const selectModel = (option: CanvasGenerationModelOption): void => {
-    const next = { ...recipe, model: option.binding } as CanvasGenerationRecipe;
+    const candidate: CanvasGenerationRecipe = { ...recipe, model: option.binding };
+    const result =
+      candidate.kind === 'video'
+        ? option.parameterProfile
+          ? conformCanvasVideoGenerationRecipeToProfile(candidate, option.parameterProfile)
+          : {
+              recipe: {
+                ...createCanvasGenerationNodeData('video', option.binding).recipe,
+                prompt: candidate.prompt,
+              },
+              adjustments: [],
+            }
+        : { recipe: candidate, adjustments: [] };
+    const next = result.recipe;
     setRecipe(next);
-    void commitRecipe(next).catch(reportFailure);
+    void commitRecipe(next)
+      .then(() => {
+        if (result.adjustments.length > 0) {
+          setLocalDiagnostic(t('generation.parametersAdjusted', { model: option.label }));
+        }
+      })
+      .catch(reportFailure);
   };
 
   const runOrCancel = async (): Promise<void> => {
@@ -396,6 +436,7 @@ function GenerationInputPanel({
           <span className="selection-generation-input-panel__control-divider" aria-hidden="true" />
           <KindParameters
             recipe={recipe}
+            parameterProfile={selectedModel?.parameterProfile}
             onChange={setRecipe}
             onCommit={commitRecipe}
             onFailure={reportFailure}
@@ -463,6 +504,11 @@ function GenerationInputPanel({
       {modelBindingUnavailable ? (
         <div className="selection-generation-input-panel__diagnostic" role="alert">
           {t('generation.modelUnavailable')}
+        </div>
+      ) : null}
+      {modelParameterProfileUnavailable ? (
+        <div className="selection-generation-input-panel__diagnostic" role="alert">
+          {t('generation.parameterProfileUnavailable')}
         </div>
       ) : null}
       {(localDiagnostic ?? projection?.diagnostic?.message) ? (
@@ -599,11 +645,13 @@ function AudioModeTabs({
 
 function KindParameters({
   recipe,
+  parameterProfile,
   onChange,
   onCommit,
   onFailure,
 }: {
   readonly recipe: CanvasGenerationRecipe;
+  readonly parameterProfile: CanvasGenerationModelOption['parameterProfile'];
   readonly onChange: (recipe: CanvasGenerationRecipe) => void;
   readonly onCommit: (recipe: CanvasGenerationRecipe) => Promise<void>;
   readonly onFailure: (error: unknown) => void;
@@ -613,7 +661,7 @@ function KindParameters({
     onChange(next);
     void onCommit(next).catch(onFailure);
   };
-  const content = parameterContent(recipe, apply);
+  const content = parameterContent(recipe, parameterProfile, apply);
   const summary = parameterSummary(recipe);
   if (!content) return null;
   return (
@@ -841,6 +889,7 @@ function ComposerPopover({
 
 function parameterContent(
   recipe: CanvasGenerationRecipe,
+  parameterProfile: CanvasGenerationModelOption['parameterProfile'],
   apply: (next: CanvasGenerationRecipe) => void,
 ): ReactNode {
   switch (recipe.kind) {
@@ -916,40 +965,66 @@ function parameterContent(
           />
         </div>
       );
-    case 'video':
+    case 'video': {
+      if (!parameterProfile) return null;
+      const { controls } = parameterProfile;
       return (
         <div className="selection-generation-input-panel__parameter-content">
-          <OptionGroup
-            label={t('generation.aspectRatio')}
-            value={recipe.aspectRatio}
-            options={[undefined, '16:9', '9:16', '1:1', '4:3', '3:4', '21:9']}
-            format={(value) => value ?? t('generation.auto')}
-            visualRatio
-            onSelect={(aspectRatio) => apply({ ...recipe, aspectRatio })}
-          />
-          <OptionGroup
-            label={t('generation.resolution')}
-            value={recipe.resolution}
-            options={[undefined, '480p', '720p', '1080p']}
-            format={(value) => value ?? t('generation.auto')}
-            onSelect={(resolution) => apply({ ...recipe, resolution })}
-          />
-          <OptionGroup
-            label={t('generation.duration')}
-            value={recipe.duration}
-            options={[undefined, 5, 10, 15]}
-            format={(value) => (value ? `${value}s` : t('generation.auto'))}
-            onSelect={(duration) => apply({ ...recipe, duration })}
-          />
-          <OptionGroup
-            label={t('generation.frameRate')}
-            value={recipe.fps}
-            options={[undefined, 24, 30, 60]}
-            format={(value) => (value ? `${value} fps` : t('generation.auto'))}
-            onSelect={(fps) => apply({ ...recipe, fps })}
-          />
+          {controls.aspectRatio ? (
+            <OptionGroup<string | undefined>
+              label={t('generation.aspectRatio')}
+              value={recipe.aspectRatio}
+              options={stringControlOptions(controls.aspectRatio)}
+              format={(value) => value ?? t('generation.auto')}
+              visualRatio
+              onSelect={(aspectRatio) => apply({ ...recipe, aspectRatio })}
+            />
+          ) : null}
+          {controls.resolution ? (
+            <OptionGroup<string | undefined>
+              label={t('generation.resolution')}
+              value={recipe.resolution}
+              options={stringControlOptions(controls.resolution)}
+              format={(value) => value ?? t('generation.auto')}
+              onSelect={(resolution) => apply({ ...recipe, resolution })}
+            />
+          ) : null}
+          {controls.duration ? (
+            <OptionGroup<number | undefined>
+              label={t('generation.duration')}
+              value={recipe.duration}
+              options={integerControlOptions(controls.duration)}
+              format={(value) => (value ? `${value}s` : t('generation.auto'))}
+              onSelect={(duration) => apply({ ...recipe, duration })}
+            />
+          ) : null}
+          {controls.fps ? (
+            <OptionGroup<number | undefined>
+              label={t('generation.frameRate')}
+              value={recipe.fps}
+              options={integerControlOptions(controls.fps)}
+              format={(value) => (value ? `${value} fps` : t('generation.auto'))}
+              onSelect={(fps) => apply({ ...recipe, fps })}
+            />
+          ) : null}
+          {controls.generateAudio ? (
+            <OptionGroup<boolean | undefined>
+              label={t('generation.generateAudio')}
+              value={recipe.generateAudio}
+              options={controls.generateAudio.required ? [false, true] : [undefined, false, true]}
+              format={(value) =>
+                value === undefined
+                  ? t('generation.auto')
+                  : value
+                    ? t('generation.enabled')
+                    : t('generation.disabled')
+              }
+              onSelect={(generateAudio) => apply({ ...recipe, generateAudio })}
+            />
+          ) : null}
         </div>
       );
+    }
     case 'audio':
       return (
         <div className="selection-generation-input-panel__parameter-content">
@@ -983,7 +1058,7 @@ function parameterContent(
   }
 }
 
-function OptionGroup<T extends string | number | undefined>({
+function OptionGroup<T extends string | number | boolean | undefined>({
   label,
   value,
   options,
@@ -1236,9 +1311,36 @@ export function resolveUntouchedRecipeConfiguredDefault(
   const purpose = purposeForCanvasGenerationRecipe(node.data.recipe);
   const defaultModel = models.find(
     (option) => option.isDefault && option.binding.purpose === purpose,
-  )?.binding;
+  );
   if (!defaultModel) return undefined;
-  return createCanvasGenerationNodeData(node.data.recipe.kind, defaultModel).recipe;
+  return createCanvasGenerationNodeData(
+    node.data.recipe.kind,
+    defaultModel.binding,
+    defaultModel.parameterProfile,
+  ).recipe;
+}
+
+function stringControlOptions(control: {
+  readonly required: boolean;
+  readonly values: readonly string[];
+}): readonly (string | undefined)[] {
+  return control.required ? control.values : [undefined, ...control.values];
+}
+
+function integerControlOptions(control: {
+  readonly required: boolean;
+  readonly min: number;
+  readonly max: number;
+  readonly step: number;
+  readonly suggestedValues?: readonly number[];
+}): readonly (number | undefined)[] {
+  const values =
+    control.suggestedValues ??
+    Array.from(
+      { length: Math.floor((control.max - control.min) / control.step) + 1 },
+      (_, index) => control.min + index * control.step,
+    );
+  return control.required ? values : [undefined, ...values];
 }
 
 function isUntouchedGenerationRecipe(recipe: CanvasGenerationRecipe): boolean {

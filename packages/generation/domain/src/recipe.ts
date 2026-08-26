@@ -54,6 +54,7 @@ export interface VideoGenerationRecipe extends GenerationRecipeBase<'video'> {
   readonly resolution?: string;
   readonly fps?: number;
   readonly aspectRatio?: string;
+  readonly generateAudio?: boolean;
   readonly motionStrength?: number;
   readonly cameraMovement?: string;
 }
@@ -203,6 +204,7 @@ export function isGenerationRecipe(value: unknown): value is GenerationRecipe {
         isOptionalNonEmptyString(value['resolution']) &&
         isOptionalPositiveNumber(value['fps']) &&
         isOptionalNonEmptyString(value['aspectRatio']) &&
+        (value['generateAudio'] === undefined || typeof value['generateAudio'] === 'boolean') &&
         isOptionalRange(value['motionStrength'], 0, 1) &&
         isOptionalNonEmptyString(value['cameraMovement'])
       );
@@ -271,6 +273,7 @@ export function projectGenerationRecipeRequest(
           ...(recipe.resolution === undefined ? {} : { resolution: recipe.resolution }),
           ...(recipe.fps === undefined ? {} : { fps: recipe.fps }),
           ...(recipe.aspectRatio === undefined ? {} : { aspectRatio: recipe.aspectRatio }),
+          ...(recipe.generateAudio === undefined ? {} : { generateAudio: recipe.generateAudio }),
           ...(recipe.motionStrength === undefined ? {} : { motionStrength: recipe.motionStrength }),
           ...(recipe.cameraMovement === undefined ? {} : { cameraMovement: recipe.cameraMovement }),
           ...(video
@@ -409,6 +412,7 @@ const VIDEO_RECIPE_KEYS = new Set([
   'resolution',
   'fps',
   'aspectRatio',
+  'generateAudio',
   'motionStrength',
   'cameraMovement',
 ]);

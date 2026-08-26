@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { resolveGenerationModelParameterProfile } from '@neko/generation-domain';
 
 import { projectCanvasGenerationModels } from './canvas-generation-model-catalog';
 
@@ -28,12 +29,24 @@ describe('Canvas Generation model catalog', () => {
         providerId: 'provider-1',
         capabilities: ['audio.music.generate'],
       },
+      {
+        id: 'video-model',
+        name: 'MiniMax-H3',
+        displayName: 'MiniMax H3',
+        providerId: 'provider-1',
+        capabilities: ['video.generate'],
+      },
     ];
 
     const catalog = projectCanvasGenerationModels({
       providers,
       models,
       supportsPurpose: (model, purpose) => model.capabilities.includes(purpose),
+      resolveParameterProfile: (model) =>
+        resolveGenerationModelParameterProfile({
+          providerType: 'minimax',
+          modelName: model.name,
+        }),
       getDefaultModelRef: (type) =>
         type === 'image'
           ? { providerId: 'provider-1', modelId: 'image-model' }
@@ -56,6 +69,21 @@ describe('Canvas Generation model catalog', () => {
         label: 'Image Model',
         providerLabel: 'Provider One',
         isDefault: true,
+      },
+      {
+        binding: {
+          purpose: 'video.generate',
+          providerId: 'provider-1',
+          modelId: 'video-model',
+        },
+        label: 'MiniMax H3',
+        providerLabel: 'Provider One',
+        isDefault: false,
+        parameterProfile: expect.objectContaining({
+          kind: 'video',
+          supportedParameters: ['duration', 'resolution', 'aspectRatio'],
+          fixed: { outputCount: 1 },
+        }),
       },
       {
         binding: {

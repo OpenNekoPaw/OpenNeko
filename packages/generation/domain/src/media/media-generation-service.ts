@@ -25,6 +25,10 @@ import {
   validateProviderImageRequest,
   validateProviderVideoRequest,
 } from './media-operation-capabilities';
+import {
+  resolveGenerationModelParameterProfile,
+  validateVideoGenerationParameters,
+} from '../model-parameter-profile';
 
 function hasThreeReferenceImageControls(
   request: ImageGenerationRequest | VideoGenerationRequest | AudioGenerationRequest,
@@ -151,15 +155,15 @@ export class MediaGenerationService implements MediaGenerationExecutionPort {
     if (!provider) {
       throw new Error(`Configured media provider ${routing.providerId} is unavailable.`);
     }
+    const isVideoGeneration = generationType.includes('video');
     const requiresPreciseImageCapabilities =
       generationType.includes('image') && hasThreeReferenceImageControls(request);
-    const model = requiresPreciseImageCapabilities
-      ? this.configManager.getModel(routing.modelId)
-      : undefined;
-    if (requiresPreciseImageCapabilities && !model) {
+    const requiresModel = isVideoGeneration || requiresPreciseImageCapabilities;
+    const model = requiresModel ? this.configManager.getModel(routing.modelId) : undefined;
+    if (requiresModel && !model) {
       throw new Error(`Configured media model ${routing.modelId} is unavailable.`);
     }
-    const capabilityDiagnostics = generationType.includes('video')
+    const capabilityDiagnostics = isVideoGeneration
       ? validateProviderVideoRequest(provider.type, request as VideoGenerationRequest)
       : generationType.includes('image')
         ? validateProviderImageRequest(
@@ -168,14 +172,25 @@ export class MediaGenerationService implements MediaGenerationExecutionPort {
             model?.capabilities ?? [],
           )
         : [];
-    const capabilityErrors = capabilityDiagnostics.filter(
-      (diagnostic) => diagnostic.severity === 'error',
-    );
+    const modelParameterProfile =
+      isVideoGeneration && model
+        ? resolveGenerationModelParameterProfile({
+            providerType: provider.type,
+            modelName: model.name,
+          })
+        : undefined;
+    const modelParameterDiagnostics = modelParameterProfile
+      ? validateVideoGenerationParameters(modelParameterProfile, request as VideoGenerationRequest)
+      : [];
+    const capabilityErrors = [
+      ...capabilityDiagnostics
+        .filter((diagnostic) => diagnostic.severity === 'error')
+        .map((diagnostic) => diagnostic.message),
+      ...modelParameterDiagnostics.map((diagnostic) => diagnostic.message),
+    ];
     if (capabilityErrors.length > 0) {
       throw new Error(
-        `Media provider capability negotiation failed: ${capabilityErrors
-          .map((diagnostic) => diagnostic.message)
-          .join('; ')}`,
+        `Media provider capability negotiation failed: ${capabilityErrors.join('; ')}`,
       );
     }
     if (capabilityDiagnostics.length > 0) {
