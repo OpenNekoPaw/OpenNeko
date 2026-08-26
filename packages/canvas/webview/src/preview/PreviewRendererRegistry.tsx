@@ -24,7 +24,7 @@ export interface PreviewRendererProps {
   playbackControl?: PreviewPlaybackControl;
   chrome?: 'contained' | 'full-bleed';
   audioLayout?: 'transport' | 'node-card';
-  mediaPlayback?: 'interactive' | 'passive' | 'ambient';
+  mediaPlayback?: 'interactive' | 'inline' | 'ambient';
 }
 
 export type PreviewRenderer = ComponentType<PreviewRendererProps>;

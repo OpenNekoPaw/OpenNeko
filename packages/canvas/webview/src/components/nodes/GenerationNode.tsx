@@ -106,7 +106,7 @@ export function GenerationNode({
                   surfaceKind="inline"
                   chrome="full-bleed"
                   audioLayout={recipe.kind === 'audio' ? 'node-card' : undefined}
-                  mediaPlayback={recipe.kind === 'video' ? 'passive' : undefined}
+                  mediaPlayback={recipe.kind === 'video' ? 'inline' : undefined}
                 />
                 {active ? <ActivityScan /> : null}
               </div>

@@ -883,13 +883,17 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     );
     await waitForCanvasMediaPaused(evaluate, 'canvas:functional:video', 'video', true, false);
     checkpoint('canvas-video-hover-remains-paused');
-    await setCanvasMediaPaused(evaluate, 'canvas:functional:video', 'video', false);
+    const inlineVideoToggleSelector =
+      '[data-owner-view-id="canvas:functional:video"] [data-testid="canvas-media-node"][data-media-type="video"] [data-testid="preview-video-toggle-playback"]';
+    await waitForInteractiveSelector(evaluate, inlineVideoToggleSelector);
+    await click(inlineVideoToggleSelector);
     const videoPlayback = await waitForCanvasMediaPlayback(
       evaluate,
       'canvas:functional:video',
       'video',
     );
     checkpoint('canvas-video-manual-playing', { currentTime: videoPlayback.currentTime });
+    const inlineVideoPlayingScreenshot = await screenshot('canvas-video-inline-playing');
     await hover(
       '[data-owner-view-id="canvas:functional:audio"] [data-testid="canvas-media-node"][data-media-type="audio"]',
     );
@@ -901,6 +905,10 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       videoPlayback.currentTime,
     );
     checkpoint('canvas-audio-hover-remains-paused');
+    await click(inlineVideoToggleSelector);
+    await waitForCanvasMediaPaused(evaluate, 'canvas:functional:video', 'video', true, false);
+    checkpoint('canvas-video-inline-paused');
+    const inlineVideoPausedScreenshot = await screenshot('canvas-video-inline-paused');
     await click(
       '[data-owner-view-id="canvas:functional:audio"] [data-node-presentation][data-node-id="audio-node"] [data-canvas-node-label]',
     );
@@ -1126,6 +1134,8 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       otioActions,
       otioActionsScreenshot,
       otioOpenedScreenshot,
+      inlineVideoPlayingScreenshot,
+      inlineVideoPausedScreenshot,
       locatorBackedNodes: ['video', 'audio', 'epub-document-entry-image'],
       nativeElements: ['video', 'audio', 'img'],
       storylineAdvancedTo: storylinePlayback.currentTime,
@@ -2199,6 +2209,7 @@ async function waitForCanvasRoots(evaluate) {
       const roots = [...document.querySelectorAll('[data-owner-root="canvas"]')];
       return roots.length === 2 &&
         document.querySelector('[data-owner-view-id="canvas:functional:video"] video:not([controls])') !== null &&
+        document.querySelector('[data-owner-view-id="canvas:functional:video"] [data-testid="preview-video-toggle-playback"]') !== null &&
         document.querySelector('[data-owner-view-id="canvas:functional:audio"] audio:not([controls])') !== null &&
         document.querySelector('[data-owner-view-id="canvas:functional:audio"] [data-testid="preview-lightweight-audio-waveform"]') !== null;
     })()`);
@@ -2260,18 +2271,6 @@ async function waitForCanvasMediaPaused(
   throw new Error(
     `Canvas ${mediaType} paused state did not reach ${String(expectedPaused)} before timeout.`,
   );
-}
-
-async function setCanvasMediaPaused(evaluate, viewId, mediaType, paused) {
-  await evaluate(`(() => {
-    const root = document.querySelector('[data-owner-view-id=${JSON.stringify(viewId)}]');
-    const media = root?.querySelector(${JSON.stringify(mediaType)});
-    if (!(media instanceof HTMLMediaElement)) {
-      throw new Error('Canvas ${mediaType} element is unavailable.');
-    }
-    if (${JSON.stringify(paused)}) media.pause();
-    else void media.play();
-  })()`);
 }
 
 async function waitForCanvasRootsRemoved(evaluate) {

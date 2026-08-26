@@ -26,6 +26,7 @@ describe('PreviewSurface canonical descriptor lifecycle', () => {
   });
 
   it('resolves one descriptor, renders the shared Viewer, and releases the exact lease', async () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
     const messages: unknown[] = [];
     const listeners = new Set<(message: unknown) => void>();
     const host = {
@@ -73,7 +74,7 @@ describe('PreviewSurface canonical descriptor lifecycle', () => {
     await act(async () => {
       root.render(
         <CanvasHostProvider host={host}>
-          <PreviewSurface source={source} mediaPlayback="passive" />
+          <PreviewSurface source={source} mediaPlayback="inline" />
         </CanvasHostProvider>,
       );
       await import('@neko/preview-webview/root');
@@ -93,6 +94,7 @@ describe('PreviewSurface canonical descriptor lifecycle', () => {
       'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     );
     expect(container.querySelector('video')?.controls).toBe(false);
+    expect(container.querySelector('[data-testid="preview-video-toggle-playback"]')).toBeTruthy();
 
     await act(async () => root.unmount());
     expect(
