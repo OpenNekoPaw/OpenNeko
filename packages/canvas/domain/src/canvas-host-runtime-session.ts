@@ -275,7 +275,8 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
       if (!output || !contentLocatorsEqual(output.locator, input.locator)) {
         throw new Error(`Canvas preview resource output "${input.outputId}" is stale.`);
       }
-      if (output.kind !== input.contentKind) {
+      const previewKind = output.kind === 'prompt' ? 'text' : output.kind;
+      if (previewKind !== input.contentKind) {
         throw new Error(`Canvas preview resource output "${input.outputId}" kind is stale.`);
       }
       return;

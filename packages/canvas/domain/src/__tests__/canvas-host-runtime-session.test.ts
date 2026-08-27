@@ -341,6 +341,58 @@ describe('CanvasHostRuntimeSession', () => {
     ).not.toThrow();
   });
 
+  it('authorizes a generated Prompt output through the text preview kind', () => {
+    const locator = {
+      file: { authority: 'workspace' as const, path: 'neko/generated/notes.md' },
+    };
+    const runtime = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas: {
+        ...createEmptyCanvasData('Generated text preview'),
+        nodes: [
+          {
+            id: 'generation-prompt',
+            type: 'generation',
+            position: { x: 0, y: 0 },
+            size: { width: 240, height: 180 },
+            zIndex: 1,
+            data: {
+              recipe: { kind: 'prompt', prompt: 'Write notes' },
+              outputs: [
+                {
+                  outputId: 'prompt-output',
+                  jobRef: { kind: 'generation', jobId: 'prompt-job' },
+                  locator,
+                  kind: 'prompt',
+                  recipeInputFingerprint: 'recipe-1',
+                },
+              ],
+              selectedOutputId: 'prompt-output',
+            },
+          },
+        ],
+      },
+      effects: {},
+    });
+
+    expect(() =>
+      runtime.authorizePreviewSource({
+        nodeId: 'generation-prompt',
+        outputId: 'prompt-output',
+        locator,
+        contentKind: 'text',
+      }),
+    ).not.toThrow();
+    expect(() =>
+      runtime.authorizePreviewSource({
+        nodeId: 'generation-prompt',
+        outputId: 'prompt-output',
+        locator,
+        contentKind: 'document',
+      }),
+    ).toThrow('output "prompt-output" kind is stale');
+  });
+
   it('authorizes text preview effects against the exact current File locator', async () => {
     const readTextFilePreview = vi.fn(async (input) => ({
       requestId: input.requestId,
