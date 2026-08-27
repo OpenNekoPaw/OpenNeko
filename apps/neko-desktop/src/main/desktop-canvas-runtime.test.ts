@@ -865,6 +865,7 @@ describe('DesktopCanvasRuntime', () => {
     const identity = createIdentity();
     const resolveEditText = vi.fn(async () => true);
     const editText = vi.fn(async () => undefined);
+    const previewResource = vi.fn(async () => undefined);
     const runtime = new DesktopCanvasRuntime({
       shell: {
         resolveCanvasViewGrant: vi.fn(async (): Promise<DesktopCanvasViewGrant> => ({
@@ -884,6 +885,7 @@ describe('DesktopCanvasRuntime', () => {
         logger: new ConsoleLogger('DesktopCanvasEditTextActionTest'),
       }),
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
+      previewResource,
       resolveEditText,
       editText,
     });
@@ -946,6 +948,7 @@ describe('DesktopCanvasRuntime', () => {
 
     expect(action.status).toBe('accepted');
     expect(editText).toHaveBeenCalledWith({ identity, target: expectedTarget });
+    expect(previewResource).not.toHaveBeenCalled();
     await runtime.dispose();
   });
 

@@ -470,23 +470,20 @@ describe('SelectionContextToolbar', () => {
     expect(markup).not.toContain('node:open-content-overlay');
   });
 
-  it('keeps referenced text editing and preview visible while omitting Finder operations', async () => {
+  it('uses Text Editor as the sole open action for referenced text', async () => {
     const node = fileNode('notes', 'notes/scene.md');
     const toolbar = await renderToolbar(
       [node],
       [node.id],
-      [
-        descriptor('text:edit', 'Edit text', 'handoff'),
-        descriptor('preview:open', 'Full-screen preview', 'read'),
-        descriptor('desktop:reveal', 'Reveal in Finder', 'handoff'),
-      ],
+      [descriptor('text:edit', 'Edit text', 'handoff')],
     );
 
     expect(
       Array.from(
         toolbar.container.querySelectorAll('[data-selection-action-location="primary"]'),
       ).map((element) => element.getAttribute('data-selection-action')),
-    ).toEqual(['text:edit', 'node:duplicate', 'preview:open']);
+    ).toEqual(['text:edit', 'node:duplicate']);
+    expect(toolbar.container.innerHTML).not.toContain('preview:open');
     expect(toolbar.container.innerHTML).not.toContain('desktop:reveal');
     expect(toolbar.container.querySelector('[data-selection-kind-label]')?.textContent).toBe(
       'File',
@@ -545,7 +542,7 @@ describe('SelectionContextToolbar', () => {
     expect(markup).not.toContain('cut:add-resource');
   });
 
-  it('renders immutable Prompt output actions without inventing Text Editor ownership', async () => {
+  it('renders generated Prompt output with Text Editor and without Preview', async () => {
     const node: CanvasNode = {
       id: 'generation-prompt',
       type: 'generation',
@@ -571,22 +568,19 @@ describe('SelectionContextToolbar', () => {
     const toolbar = await renderToolbar(
       [node],
       [node.id],
-      [
-        descriptor('preview:open', 'Full-screen preview', 'read'),
-        descriptor('desktop:reveal', 'Reveal in Finder', 'handoff'),
-        descriptor('media-library:copy-to-project', 'Save material', 'copy'),
-      ],
+      [descriptor('text:edit', 'Edit text', 'handoff')],
     );
 
     expect(
       Array.from(
         toolbar.container.querySelectorAll('[data-selection-action-location="primary"]'),
       ).map((element) => element.getAttribute('data-selection-action')),
-    ).toEqual(['text:edit', 'node:duplicate', 'preview:open']);
+    ).toEqual(['text:edit', 'node:duplicate']);
     expect(
       toolbar.container.querySelector<HTMLButtonElement>('[data-selection-action="text:edit"]')
         ?.disabled,
-    ).toBe(true);
+    ).toBe(false);
+    expect(toolbar.container.innerHTML).not.toContain('preview:open');
     expect(toolbar.container.innerHTML).not.toContain('desktop:reveal');
     await toolbar.dispose();
   });

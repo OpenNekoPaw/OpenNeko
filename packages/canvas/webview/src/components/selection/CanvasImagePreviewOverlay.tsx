@@ -46,7 +46,7 @@ export function resolveCanvasFullscreenPreviewRequest(
       ? node.data.outputs.find((output) => output.outputId === preferredOutputId)
       : undefined;
     const activeOutput = preferredOutput ?? selectedCanvasGenerationOutput(node.data);
-    if (!activeOutput) return undefined;
+    if (!activeOutput || activeOutput.kind === 'prompt') return undefined;
     const outputs = node.data.outputs.filter(
       (output) =>
         output.kind === activeOutput.kind && output.jobRef.jobId === activeOutput.jobRef.jobId,
@@ -310,7 +310,10 @@ function generationPreviewSource(
   node: Extract<CanvasNode, { readonly type: 'generation' }>,
   output: CanvasGenerationOutputBinding,
 ): CanvasFullscreenPreviewSource {
-  const previewKind = output.kind === 'prompt' ? 'text' : output.kind;
+  if (output.kind === 'prompt') {
+    throw new Error('Canvas generated Text opens in the Text Editor.');
+  }
+  const previewKind = output.kind;
   return {
     id: `canvas-fullscreen:generation:${node.id}:${output.outputId}`,
     outputId: output.outputId,

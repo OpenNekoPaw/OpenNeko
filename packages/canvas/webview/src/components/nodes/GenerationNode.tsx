@@ -1,4 +1,5 @@
 import {
+  CANVAS_EDIT_TEXT_ACTION_ID,
   selectedCanvasGenerationOutput,
   type CanvasGenerationOutputBinding,
   type CanvasGenerationRuntimeProjection,
@@ -55,8 +56,12 @@ export function GenerationNode({
       opaqueSurface
       className="canvas-generation-node-frame"
       onActivate={
-        selected && onFullscreenPreview
-          ? () => onFullscreenPreview(node.id, selected.outputId)
+        selected
+          ? recipe.kind === 'prompt' && host
+            ? () => void host.executeMaterialAction(CANVAS_EDIT_TEXT_ACTION_ID, [node.id], {})
+            : onFullscreenPreview
+              ? () => onFullscreenPreview(node.id, selected.outputId)
+              : undefined
           : undefined
       }
       nodeLabel={{

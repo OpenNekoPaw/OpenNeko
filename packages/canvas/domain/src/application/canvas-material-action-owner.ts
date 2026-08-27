@@ -191,8 +191,15 @@ export function createCanvasMaterialActionOwner(options: {
   }
   return {
     async resolve({ identity, targets }) {
-      const descriptors = [...baseDescriptors];
       const target = targets.length === 1 ? targets[0] : undefined;
+      const editTextAvailable =
+        target?.mediaKind === 'document' && options.resolveEditText && options.editText
+          ? await options.resolveEditText({ identity, target })
+          : false;
+      const descriptors =
+        editTextAvailable || (target?.mediaKind === 'document' && target.origin === 'generated')
+          ? []
+          : [...baseDescriptors];
       if (
         target &&
         options.reveal &&
@@ -208,12 +215,7 @@ export function createCanvasMaterialActionOwner(options: {
           effect: 'handoff',
         });
       }
-      if (
-        target?.mediaKind === 'document' &&
-        options.resolveEditText &&
-        options.editText &&
-        (await options.resolveEditText({ identity, target }))
-      ) {
+      if (target && editTextAvailable) {
         descriptors.push({
           id: CANVAS_EDIT_TEXT_ACTION_ID,
           ownerId: 'text-editor',

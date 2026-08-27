@@ -55,6 +55,9 @@ describe('canonical content node runtime boundaries', () => {
     expect(source).toContain(
       'contentLocator && onFullscreenPreview ? () => onFullscreenPreview(node.id) : undefined',
     );
+    expect(source).toContain(
+      'host.executeMaterialAction(CANVAS_EDIT_TEXT_ACTION_ID, [node.id], {})',
+    );
     expect(source).toContain('isFullscreenPreviewFile(node.data)');
     expect(source).toContain('contentLocator && onOpen');
   });

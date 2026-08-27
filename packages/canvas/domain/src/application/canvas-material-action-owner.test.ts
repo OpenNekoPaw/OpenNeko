@@ -255,7 +255,7 @@ describe('Desktop Canvas material action owner', () => {
     expect(resolveCut).not.toHaveBeenCalled();
   });
 
-  it('contributes Text Editor for admitted referenced and generated document targets', async () => {
+  it('uses Text Editor instead of Preview for admitted referenced and generated text', async () => {
     const textTarget: CanvasMaterialActionTarget = {
       nodeId: 'notes-1',
       mediaKind: 'document',
@@ -270,7 +270,8 @@ describe('Desktop Canvas material action owner', () => {
     };
     const resolveEditText = vi.fn(async () => true);
     const editText = vi.fn(async () => undefined);
-    const owner = createCanvasMaterialActionOwner({ resolveEditText, editText });
+    const preview = vi.fn(async () => undefined);
+    const owner = createCanvasMaterialActionOwner({ preview, resolveEditText, editText });
 
     const descriptors = await owner.resolve({ identity, targets: [textTarget] });
     const generatedDescriptors = await owner.resolve({
@@ -301,6 +302,7 @@ describe('Desktop Canvas material action owner', () => {
       targets: [generatedTextTarget],
     });
     expect(editText).toHaveBeenCalledWith({ identity, target: generatedTextTarget });
+    expect(preview).not.toHaveBeenCalled();
   });
 
   it('contributes Add to Cut only for audio/video and preserves the exact owner payload', async () => {

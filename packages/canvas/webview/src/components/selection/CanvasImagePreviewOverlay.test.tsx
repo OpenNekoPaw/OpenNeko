@@ -103,7 +103,7 @@ describe('CanvasFullscreenPreviewOverlay', () => {
     expect(resolveCanvasFullscreenPreviewRequest(node)).toBeUndefined();
   });
 
-  it('maps a generated Prompt output to the shared text preview renderer', () => {
+  it('does not expose generated Prompt output through the preview path', () => {
     const node: CanvasNode = {
       id: 'generation-prompt',
       type: 'generation',
@@ -125,12 +125,7 @@ describe('CanvasFullscreenPreviewOverlay', () => {
       },
     };
 
-    expect(resolveCanvasFullscreenPreviewRequest(node)).toEqual(
-      expect.objectContaining({
-        nodeId: 'generation-prompt',
-        items: [expect.objectContaining({ previewKind: 'text', role: 'text' })],
-      }),
-    );
+    expect(resolveCanvasFullscreenPreviewRequest(node)).toBeUndefined();
   });
 
   it('resolves bounded text files but rejects document containers from embedded preview', () => {

@@ -341,7 +341,7 @@ describe('CanvasHostRuntimeSession', () => {
     ).not.toThrow();
   });
 
-  it('authorizes a generated Prompt output through the text preview kind', () => {
+  it('does not authorize generated Prompt output through the preview path', () => {
     const locator = {
       file: { authority: 'workspace' as const, path: 'neko/generated/notes.md' },
     };
@@ -381,14 +381,6 @@ describe('CanvasHostRuntimeSession', () => {
         outputId: 'prompt-output',
         locator,
         contentKind: 'text',
-      }),
-    ).not.toThrow();
-    expect(() =>
-      runtime.authorizePreviewSource({
-        nodeId: 'generation-prompt',
-        outputId: 'prompt-output',
-        locator,
-        contentKind: 'document',
       }),
     ).toThrow('output "prompt-output" kind is stale');
   });

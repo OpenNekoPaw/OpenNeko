@@ -63,10 +63,11 @@ describe('GenerationNode', () => {
     expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 
-  it('opens the Canvas fullscreen preview when a generated Text node is double-clicked', async () => {
+  it('opens generated Text in the Text Editor instead of Preview when double-clicked', async () => {
     const onFullscreenPreview = vi.fn();
+    const executeMaterialAction = vi.fn(async () => snapshot());
     const node = nodeWithHistory();
-    render(node, createHost(), onFullscreenPreview);
+    render(node, createHost(undefined, { executeMaterialAction }), onFullscreenPreview);
 
     await act(async () => {
       container
@@ -74,7 +75,8 @@ describe('GenerationNode', () => {
         ?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
     });
 
-    expect(onFullscreenPreview).toHaveBeenCalledWith('generation-1', 'output-2');
+    expect(executeMaterialAction).toHaveBeenCalledWith('text:edit', ['generation-1'], {});
+    expect(onFullscreenPreview).not.toHaveBeenCalled();
   });
 
   it('presents one Job image batch side by side and selects a visible member without hiding siblings', async () => {

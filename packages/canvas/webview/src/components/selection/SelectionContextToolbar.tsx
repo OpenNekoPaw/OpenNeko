@@ -477,7 +477,7 @@ function resolveOwnerActions(
   const descriptorById = new Map(
     availableDescriptors.map((descriptor) => [descriptor.id, descriptor] as const),
   );
-  const stableIds = stableMaterialActionIds(selectedNodes);
+  const stableIds = stableMaterialActionIds(selectedNodes, descriptors);
   const unavailableReason = t('selection.capabilityUnavailable');
   const stableActions = stableIds.map((actionId) => {
     const descriptor = descriptorById.get(actionId);
@@ -533,12 +533,23 @@ function createOwnerAction(
   };
 }
 
-function stableMaterialActionIds(selectedNodes: readonly CanvasNode[]): readonly string[] {
+function stableMaterialActionIds(
+  selectedNodes: readonly CanvasNode[],
+  descriptors: readonly CanvasMaterialActionDescriptor[],
+): readonly string[] {
   if (selectedNodes.length !== 1) return [];
   const node = selectedNodes[0];
   if (!node) return [];
   if (node.type === 'markdown') return [CANVAS_PREVIEW_ACTION_ID];
+  if (node.type === 'generation' && selectedCanvasGenerationOutput(node.data)?.kind === 'prompt') {
+    return [CANVAS_EDIT_TEXT_ACTION_ID];
+  }
   const kind = materialKindForNode(node);
+  if (kind === 'document') {
+    return descriptors.some((descriptor) => descriptor.id === CANVAS_EDIT_TEXT_ACTION_ID)
+      ? [CANVAS_EDIT_TEXT_ACTION_ID]
+      : [CANVAS_PREVIEW_ACTION_ID];
+  }
   return kind ? STABLE_MATERIAL_ACTION_IDS[kind] : [];
 }
 
