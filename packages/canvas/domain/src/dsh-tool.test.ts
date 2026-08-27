@@ -25,7 +25,7 @@ describe('Canvas DSH tool contract', () => {
   });
 
   it('exposes exactly query and create-node with normalized nkc paths', () => {
-    expect(CANVAS_DSH_TOOL_NAME).toBe('openneko.canvas');
+    expect(CANVAS_DSH_TOOL_NAME).toBe('openneko_canvas');
     expect(decodeCanvasDshToolInput('query', { documentPath: 'boards/story.nkc' })).toEqual({
       operation: 'query',
       input: { documentPath: 'boards/story.nkc' },

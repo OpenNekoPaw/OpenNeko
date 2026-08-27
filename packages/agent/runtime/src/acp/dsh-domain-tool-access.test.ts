@@ -24,7 +24,7 @@ describe('DSH domain Tool effect access', () => {
         diagnostic: {
           code: 'DSH_DOMAIN_TOOL_READ_ONLY',
           message:
-            "DSH sandbox mode 'read-only' does not permit openneko.canvas operation 'create-node'.",
+            "DSH sandbox mode 'read-only' does not permit openneko_canvas operation 'create-node'.",
         },
       });
     },
@@ -37,7 +37,7 @@ function request(sandboxMode: DshAcpSandboxMode) {
     turn: 1,
     toolCallId: 'call-1',
     sandboxMode,
-    tool: 'openneko.canvas',
+    tool: 'openneko_canvas',
     operation: 'create-node',
     input: {},
   } as const;

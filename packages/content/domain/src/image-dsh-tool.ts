@@ -5,7 +5,7 @@ import {
   type WorkspaceFileContentLocator,
 } from './contracts';
 
-export const CONTENT_IMAGE_DSH_TOOL_NAME = 'openneko.read_image' as const;
+export const CONTENT_IMAGE_DSH_TOOL_NAME = 'openneko_read_image' as const;
 export const CONTENT_IMAGE_DSH_TOOL_OPERATION = 'read-chunk' as const;
 export const CONTENT_IMAGE_DSH_CHUNK_BYTES = 128 * 1024;
 

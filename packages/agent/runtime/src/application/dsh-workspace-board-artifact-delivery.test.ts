@@ -311,7 +311,7 @@ function documentTool(toolCallId: string, source: ContentLocator): DshAcpProject
     turn: 1,
     turnStartedAt: 1_000,
     status: 'completed',
-    title: 'openneko.document',
+    title: 'openneko_document',
     rawInput: { operation: 'read', source },
     rawOutput: [{ type: 'text', text: JSON.stringify({ status: 'ready', source }) }],
   };

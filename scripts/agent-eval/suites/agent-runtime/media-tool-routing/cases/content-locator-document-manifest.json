@@ -8,7 +8,7 @@
     "userBehavior": "The Agent discovers EPUB structure with one whole-document ContentLocator and manifest mode without reader-private fields.",
     "canonicalPath": [
       "visible Desktop submit",
-      "openneko.document read",
+      "openneko_document read",
       "whole-document ContentLocator",
       "manifest mode",
       "Host-authorized manifest discovery",
@@ -32,7 +32,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "调用一次 openneko.document 读取 workspace 文件 synthetic-document.epub 的 manifest：operation 为 read，source 只包含 workspace file，mode 为 manifest，maxChars 为 12000。不要添加 strategy、selector、range、next、bash、glob 或其他文档调用。成功后回复 DOCUMENT_MANIFEST_OK。"
+      "prompt": "调用一次 openneko_document 读取 workspace 文件 synthetic-document.epub 的 manifest：operation 为 read，source 只包含 workspace file，mode 为 manifest，maxChars 为 12000。不要添加 strategy、selector、range、next、bash、glob 或其他文档调用。成功后回复 DOCUMENT_MANIFEST_OK。"
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 1200000 }
   ],
@@ -51,7 +51,7 @@
     {
       "id": "document-manifest-tool",
       "kind": "tool-call",
-      "name": "openneko.document",
+      "name": "openneko_document",
       "status": "success",
       "expectedArguments": {
         "operation": "read",

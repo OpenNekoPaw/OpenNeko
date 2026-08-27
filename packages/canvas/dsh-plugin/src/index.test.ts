@@ -27,7 +27,7 @@ describe('OpenNeko Canvas DSH plugin', () => {
 
     apply(ctx as never);
     if (definition === undefined) throw new Error('Canvas DSH Tool was not registered.');
-    expect(definition.name).toBe('openneko.canvas');
+    expect(definition.name).toBe('openneko_canvas');
     expect(definition.parameters).toMatchObject({
       type: 'object',
       properties: {
@@ -54,7 +54,7 @@ describe('OpenNeko Canvas DSH plugin', () => {
     ).resolves.toEqual({ nodeId: 'node-1' });
     expect(execute).toHaveBeenCalledWith(
       {
-        tool: 'openneko.canvas',
+        tool: 'openneko_canvas',
         operation: 'query',
         input: { documentPath: 'boards/story.nkc' },
       },

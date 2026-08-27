@@ -147,13 +147,13 @@ describe('Desktop DSH product handlers', () => {
           turn: 1,
           toolCallId: 'tool:unknown',
           sandboxMode: 'read-only',
-          tool: 'openneko.unknown',
+          tool: 'openneko_unknown',
           operation: 'query',
           input: {},
         },
         new AbortController().signal,
       ),
-    ).rejects.toThrow('unsupported domain tool openneko.unknown');
+    ).rejects.toThrow('unsupported domain tool openneko_unknown');
   });
 });
 

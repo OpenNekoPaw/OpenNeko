@@ -213,7 +213,7 @@ describe('Desktop Agent assertion-driven evidence', () => {
     const assertion = {
       id: 'tool',
       kind: 'tool-call',
-      name: 'openneko.canvas',
+      name: 'openneko_canvas',
       status: 'success',
       expectedArguments: { operation: 'query' },
       resultIncludes: { documentPath: 'boards/story.nkc' },
@@ -236,7 +236,7 @@ describe('Desktop Agent assertion-driven evidence', () => {
         details: {
           toolCallId: 'tool-call-1',
           turn: 1,
-          name: 'openneko.canvas',
+          name: 'openneko_canvas',
           status: 'success',
         },
       }),

@@ -7,7 +7,7 @@ import {
 } from './domain-contracts/creative-media-operations';
 import { validateContentLocator, type ContentLocator } from '@neko/content-domain';
 
-export const GENERATION_DSH_TOOL_NAME = 'openneko.generation' as const;
+export const GENERATION_DSH_TOOL_NAME = 'openneko_generation' as const;
 export const GENERATION_DSH_TOOL_OPERATIONS = ['submit', 'submit-comfyui', 'describe'] as const;
 
 export type GenerationDshToolOperation = (typeof GENERATION_DSH_TOOL_OPERATIONS)[number];

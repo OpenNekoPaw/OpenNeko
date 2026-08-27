@@ -8,9 +8,9 @@
     "userBehavior": "An image-capable Agent reads EPUB image locators through OpenNeko Content access and reports facts visible only in the pixels.",
     "canonicalPath": [
       "visible Desktop submit",
-      "openneko.document read-images",
+      "openneko_document read-images",
       "document-entry ContentLocator",
-      "openneko.read_image",
+      "openneko_read_image",
       "Host-authorized Content bytes",
       "DSH durable attachment",
       "native multimodal continuation"
@@ -33,7 +33,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "读取工作区 synthetic-document.epub 中的两张内嵌图片并报告每张图黑色区域里的四位字符。必须先调用 openneko.document 的 read-images 获得原样 ContentLocator，再分别调用 openneko.read_image 读取图片像素；不要使用原始解压路径、不要猜测。最终只需列出两组字符。"
+      "prompt": "读取工作区 synthetic-document.epub 中的两张内嵌图片并报告每张图黑色区域里的四位字符。必须先调用 openneko_document 的 read-images 获得原样 ContentLocator，再分别调用 openneko_read_image 读取图片像素；不要使用原始解压路径、不要猜测。最终只需列出两组字符。"
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 1200000 }
   ],
@@ -52,14 +52,14 @@
     {
       "id": "document-tool",
       "kind": "tool-call",
-      "name": "openneko.document",
+      "name": "openneko_document",
       "status": "success",
       "evidenceRef": "document-image-facts"
     },
     {
       "id": "content-image-tool",
       "kind": "tool-call",
-      "name": "openneko.read_image",
+      "name": "openneko_read_image",
       "status": "success",
       "evidenceRef": "document-image-facts"
     },

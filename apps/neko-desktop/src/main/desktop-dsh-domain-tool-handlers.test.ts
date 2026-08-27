@@ -138,7 +138,7 @@ describe('Desktop DSH domain Tool handlers', () => {
           turn: 1,
           toolCallId: 'tool:image',
           sandboxMode: 'read-only',
-          tool: 'openneko.read_image',
+          tool: 'openneko_read_image',
           operation: 'read-chunk',
           input: {
             source: {
@@ -285,7 +285,7 @@ describe('Desktop DSH domain Tool handlers', () => {
           turn: 1,
           toolCallId: 'call:character',
           sandboxMode: 'read-only',
-          tool: 'openneko.character',
+          tool: 'openneko_character',
           operation: 'query',
           input: { characterProjectId: 'character:one' },
         },
@@ -331,7 +331,7 @@ describe('Desktop DSH domain Tool handlers', () => {
           turn: 1,
           toolCallId: 'call:character',
           sandboxMode: 'read-only',
-          tool: 'openneko.character',
+          tool: 'openneko_character',
           operation: 'fill-draft',
           input: {
             characterProjectId: 'character:one',
@@ -584,7 +584,7 @@ function generationRequest(): DshAcpDomainToolRequest {
     turn: 1,
     toolCallId: 'call:one',
     sandboxMode: 'workspace-write',
-    tool: 'openneko.generation',
+    tool: 'openneko_generation',
     operation: 'submit',
     input: {
       purpose: 'image.generate',
@@ -601,7 +601,7 @@ function canvasRequest(): DshAcpDomainToolRequest {
     turn: 1,
     toolCallId: 'call:canvas',
     sandboxMode: 'workspace-write',
-    tool: 'openneko.canvas',
+    tool: 'openneko_canvas',
     operation: 'query',
     input: { documentPath: 'boards/main.nkc' },
   };
@@ -613,7 +613,7 @@ function documentRequest(): DshAcpDomainToolRequest {
     turn: 1,
     toolCallId: 'call:document',
     sandboxMode: 'read-only',
-    tool: 'openneko.document',
+    tool: 'openneko_document',
     operation: 'read',
     input: { source: { file: { authority: 'workspace', path: 'notes.md' } } },
   };
@@ -625,7 +625,7 @@ function cutQueryRequest(): DshAcpDomainToolRequest {
     turn: 1,
     toolCallId: 'call:cut',
     sandboxMode: 'read-only',
-    tool: 'openneko.cut',
+    tool: 'openneko_cut',
     operation: 'query',
     input: { documentPath: 'cuts/story.otio' },
   };

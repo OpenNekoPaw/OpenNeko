@@ -391,7 +391,7 @@ function collectContentToolSources(
     const completed = readCompletedDocumentResult(event.rawOutput);
     if (contentLocatorKey(completed.source) !== contentLocatorKey(requested)) {
       throw new Error(
-        'Completed openneko.document source does not match the requested ContentLocator.',
+        'Completed openneko_document source does not match the requested ContentLocator.',
       );
     }
     locator = completed.source;
@@ -501,7 +501,7 @@ function readCompletedDocumentResult(rawOutput: unknown): {
 } {
   const projected = parseProjectedToolOutput(rawOutput, DOCUMENT_DSH_TOOL_NAME);
   if (!isRecord(projected) || !isContentLocatorValue(projected['source'])) {
-    throw new Error('Completed openneko.document output has no canonical source ContentLocator.');
+    throw new Error('Completed openneko_document output has no canonical source ContentLocator.');
   }
   return { source: projected['source'], result: projected };
 }

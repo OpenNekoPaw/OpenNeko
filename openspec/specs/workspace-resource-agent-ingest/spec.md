@@ -1,8 +1,11 @@
 # workspace-resource-agent-ingest Specification
 
 ## Purpose
+
 Define authorized Workspace resource acquisition and exact Agent context ingestion without raw-path or active-target fallback.
+
 ## Requirements
+
 ### Requirement: Agent file resources enter through one Workspace locator path
 
 The Agent Composer SHALL discover Files, linked Media and installed Assets through the existing `@`
@@ -25,7 +28,7 @@ Media Library connection, physical source path, synchronization state or a paral
 
 - **WHEN** an installed Asset has been copied into the exact Workspace after explicit selection
 - **THEN** Composer submits the resulting Workspace locator as one ACP resource link
-- **AND** no `openneko.assets` Tool or Asset context payload participates
+- **AND** no `openneko_assets` Tool or Asset context payload participates
 
 #### Scenario: Asset copy is still running
 

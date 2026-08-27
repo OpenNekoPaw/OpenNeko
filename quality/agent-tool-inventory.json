@@ -12,7 +12,7 @@
       "durableOwner": "Conversation-scoped DSH Skill package"
     },
     {
-      "tool": "openneko.world",
+      "tool": "openneko_world",
       "operations": ["query", "fill-draft"],
       "registration": "packages/world/dsh-plugin/src/index.ts",
       "schemaOwner": "packages/world/domain/src/application/world-dsh-tool.ts",
@@ -23,7 +23,7 @@
       "durableOwner": "World project authority"
     },
     {
-      "tool": "openneko.character",
+      "tool": "openneko_character",
       "operations": ["query", "fill-draft"],
       "registration": "packages/chara/dsh-plugin/src/index.ts",
       "schemaOwner": "packages/chara/domain/src/application/character-dsh-tool.ts",
@@ -34,7 +34,7 @@
       "durableOwner": "Character project authority"
     },
     {
-      "tool": "openneko.document",
+      "tool": "openneko_document",
       "operations": ["read", "continue", "read-images"],
       "registration": "packages/content/dsh-plugin/src/index.ts",
       "schemaOwner": "packages/content/domain/src/document/dsh-tool.ts",
@@ -45,7 +45,7 @@
       "durableOwner": "Content document authority"
     },
     {
-      "tool": "openneko.generation",
+      "tool": "openneko_generation",
       "operations": ["submit", "submit-comfyui", "describe"],
       "registration": "packages/generation/dsh-plugin/src/index.ts",
       "schemaOwner": "packages/generation/domain/src/dsh-tool.ts",
@@ -56,7 +56,7 @@
       "durableOwner": "GenerationJobStore"
     },
     {
-      "tool": "openneko.canvas",
+      "tool": "openneko_canvas",
       "operations": ["query", "create-node"],
       "registration": "packages/canvas/dsh-plugin/src/index.ts",
       "schemaOwner": "packages/canvas/domain/src/dsh-tool.ts",
@@ -67,7 +67,7 @@
       "durableOwner": "Canvas workspace document"
     },
     {
-      "tool": "openneko.cut",
+      "tool": "openneko_cut",
       "operations": ["query", "apply", "export-submit", "export-describe", "export-cancel"],
       "registration": "packages/cut/dsh-plugin/src/index.ts",
       "schemaOwner": "packages/cut/domain/src/dsh-tool.ts",

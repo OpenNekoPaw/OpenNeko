@@ -14,7 +14,7 @@
     "userBehavior": "Submit one invalid ComfyUI workflow through the official Generation Tool and report its API validation failure without opening a Computer Use session.",
     "canonicalPath": [
       "visible Desktop Agent composer",
-      "openneko.generation submit-comfyui operation",
+      "openneko_generation submit-comfyui operation",
       "Host-owned loopback endpoint and client identity",
       "recoverable Generation Job",
       "ComfyUI node validation diagnostic",
@@ -38,13 +38,13 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "Call openneko.generation once with operation submit-comfyui and input {\"lifecycleMode\":\"detached\",\"workflow\":{\"3\":{\"class_type\":\"OpenNekoDefinitelyMissingNode\",\"inputs\":{}}},\"outputKind\":\"image\",\"inputBindings\":[]}. Report the validation error and finish with COMFYUI_API_FAILED_NO_FALLBACK. Do not call Computer Use, raw HTTP, shell, or retry."
+      "prompt": "Call openneko_generation once with operation submit-comfyui and input {\"lifecycleMode\":\"detached\",\"workflow\":{\"3\":{\"class_type\":\"OpenNekoDefinitelyMissingNode\",\"inputs\":{}}},\"outputKind\":\"image\",\"inputBindings\":[]}. Report the validation error and finish with COMFYUI_API_FAILED_NO_FALLBACK. Do not call Computer Use, raw HTTP, shell, or retry."
     },
     {
       "id": "approve",
       "kind": "confirm",
       "afterStepId": "submit",
-      "toolName": "openneko.generation",
+      "toolName": "openneko_generation",
       "approved": true,
       "timeoutMs": 120000
     },
@@ -54,7 +54,7 @@
     {
       "id": "generation-error",
       "kind": "tool-call",
-      "name": "openneko.generation",
+      "name": "openneko_generation",
       "status": "error",
       "expectedArguments": {
         "operation": "submit-comfyui",

@@ -233,8 +233,8 @@ describe('Desktop architecture boundaries', () => {
     expect(canvasHost).toContain("type: 'cancel-generation-node'");
     for (const source of [canvasHost, canvasSurface, canvasRuntime]) {
       expect(source).not.toContain('dshSessions.prompt');
-      expect(source).not.toContain('openneko.generation');
-      expect(source).not.toContain('openneko.canvas');
+      expect(source).not.toContain('openneko_generation');
+      expect(source).not.toContain('openneko_canvas');
     }
   });
 

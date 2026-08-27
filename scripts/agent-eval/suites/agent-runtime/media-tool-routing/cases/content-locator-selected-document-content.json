@@ -8,7 +8,7 @@
     "userBehavior": "The Agent reads exact EPUB entry content using one selected ContentLocator and explicit content mode.",
     "canonicalPath": [
       "visible Desktop submit",
-      "openneko.document read",
+      "openneko_document read",
       "selected document-entry ContentLocator",
       "explicit content mode",
       "Host-authorized Content range read",
@@ -32,7 +32,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "调用一次 openneko.document：operation 为 read，source 使用 workspace 文件 synthetic-document.epub 且 selector 为 entry OEBPS/page.xhtml，mode 为 content，maxChars 为 4000。调用成功后回复 TARGETED_DOCUMENT_READ_OK；不要使用 bash、glob、原始解压路径或其他文档调用。"
+      "prompt": "调用一次 openneko_document：operation 为 read，source 使用 workspace 文件 synthetic-document.epub 且 selector 为 entry OEBPS/page.xhtml，mode 为 content，maxChars 为 4000。调用成功后回复 TARGETED_DOCUMENT_READ_OK；不要使用 bash、glob、原始解压路径或其他文档调用。"
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 1200000 }
   ],
@@ -51,7 +51,7 @@
     {
       "id": "selected-document-tool",
       "kind": "tool-call",
-      "name": "openneko.document",
+      "name": "openneko_document",
       "status": "success",
       "expectedArguments": {
         "operation": "read",

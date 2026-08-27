@@ -74,7 +74,7 @@ export function apply(ctx: Context): void {
           defineTool({
             name: CONTENT_IMAGE_DSH_TOOL_NAME,
             description:
-              'Read an image from an exact OpenNeko ContentLocator and return the image itself. Use this for document image locators returned by openneko.document; use read_image for ordinary filesystem paths. Requires the current model to accept image input.',
+              'Read an image from an exact OpenNeko ContentLocator and return the image itself. Use this for document image locators returned by openneko_document; use read_image for ordinary filesystem paths. Requires the current model to accept image input.',
             parameters: CONTENT_IMAGE_DSH_TOOL_PARAMETERS,
             output: {
               schema: {

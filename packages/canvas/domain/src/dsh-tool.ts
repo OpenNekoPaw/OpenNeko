@@ -11,7 +11,7 @@ import type {
   CanvasProjectSnapshot,
 } from './canvas-project-authoring-service';
 
-export const CANVAS_DSH_TOOL_NAME = 'openneko.canvas' as const;
+export const CANVAS_DSH_TOOL_NAME = 'openneko_canvas' as const;
 export const CANVAS_DSH_TOOL_OPERATIONS = ['query', 'create-node'] as const;
 
 export type CanvasDshToolOperation = (typeof CANVAS_DSH_TOOL_OPERATIONS)[number];

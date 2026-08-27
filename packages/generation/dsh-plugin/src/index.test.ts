@@ -27,7 +27,7 @@ describe('OpenNeko Generation DSH plugin', () => {
 
     apply(ctx as never);
     if (definition === undefined) throw new Error('Generation DSH Tool was not registered.');
-    expect(definition.name).toBe('openneko.generation');
+    expect(definition.name).toBe('openneko_generation');
     expect(definition.parameters).toMatchObject({
       type: 'object',
       properties: {
@@ -55,7 +55,7 @@ describe('OpenNeko Generation DSH plugin', () => {
     ).resolves.toEqual({ jobId: 'job-1' });
     expect(execute).toHaveBeenCalledWith(
       {
-        tool: 'openneko.generation',
+        tool: 'openneko_generation',
         operation: 'describe',
         input: { jobId: 'job-1' },
       },
@@ -83,7 +83,7 @@ describe('OpenNeko Generation DSH plugin', () => {
     ).resolves.toEqual({ jobId: 'job-1' });
     expect(execute).toHaveBeenLastCalledWith(
       {
-        tool: 'openneko.generation',
+        tool: 'openneko_generation',
         operation: 'submit',
         input: {
           purpose: 'image.generate',

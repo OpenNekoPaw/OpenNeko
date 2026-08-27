@@ -154,7 +154,7 @@ describe('DSH domain Tool handlers', () => {
       diagnostic: {
         code: 'DSH_DOMAIN_TOOL_READ_ONLY',
         message:
-          "DSH sandbox mode 'read-only' does not permit openneko.generation operation 'submit'.",
+          "DSH sandbox mode 'read-only' does not permit openneko_generation operation 'submit'.",
       },
     });
     expect(resolve).not.toHaveBeenCalled();
@@ -190,7 +190,7 @@ describe('DSH domain Tool handlers', () => {
           turn: 1,
           toolCallId: 'call:cut',
           sandboxMode: 'read-only',
-          tool: 'openneko.cut',
+          tool: 'openneko_cut',
           operation: 'query',
           input: { documentPath: 'cuts/story.otio' },
         },
@@ -246,7 +246,7 @@ function generationRequest(): DshAcpDomainToolRequest {
     turn: 1,
     toolCallId: 'call:one',
     sandboxMode: 'workspace-write',
-    tool: 'openneko.generation',
+    tool: 'openneko_generation',
     operation: 'submit',
     input: {
       purpose: 'image.generate',
@@ -263,7 +263,7 @@ function canvasRequest(): DshAcpDomainToolRequest {
     turn: 1,
     toolCallId: 'call:canvas',
     sandboxMode: 'workspace-write',
-    tool: 'openneko.canvas',
+    tool: 'openneko_canvas',
     operation: 'query',
     input: { documentPath: 'boards/main.nkc' },
   };

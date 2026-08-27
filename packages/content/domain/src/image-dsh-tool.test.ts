@@ -15,7 +15,7 @@ const source = {
 
 describe('Content image DSH contract', () => {
   it('accepts an exact document-entry locator and bounded offset', () => {
-    expect(CONTENT_IMAGE_DSH_TOOL_NAME).toBe('openneko.read_image');
+    expect(CONTENT_IMAGE_DSH_TOOL_NAME).toBe('openneko_read_image');
     expect(CONTENT_IMAGE_DSH_CHUNK_BYTES).toBeLessThan(192 * 1024);
     expect(CONTENT_IMAGE_DSH_TOOL_PARAMETERS.source.properties).toHaveProperty('selector');
     expect(decodeContentImageDshChunkRequest('read-chunk', { source, offset: 0 })).toEqual({

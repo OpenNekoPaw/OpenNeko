@@ -20,7 +20,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     await expect(
       generation.execute(
         request(
-          'openneko.generation',
+          'openneko_generation',
           'submit',
           {
             purpose: 'image.generate',
@@ -38,7 +38,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     await expect(
       canvas.execute(
         request(
-          'openneko.canvas',
+          'openneko_canvas',
           'create-node',
           { documentPath: 'boards/story.nkc', node: { type: 'markdown' } },
           'read-only',
@@ -62,7 +62,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     jobs.observeGeneration.mockReturnValue(snapshots(submitted, succeeded));
 
     const response = await adapter.execute(
-      request('openneko.generation', 'submit', {
+      request('openneko_generation', 'submit', {
         purpose: 'image.generate',
         generationType: 'text-to-image',
         lifecycleMode: 'detached',
@@ -133,7 +133,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     });
 
     const response = await adapter.execute(
-      request('openneko.generation', 'submit-comfyui', {
+      request('openneko_generation', 'submit-comfyui', {
         lifecycleMode: 'detached',
         workflow: { '3': { class_type: 'KSampler', inputs: { seed: 42 } } },
         outputKind: 'image',
@@ -165,7 +165,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     const adapter = new GenerationDshHostAdapter(jobs, undefined, { project });
     jobs.submitGeneration.mockResolvedValue(submitted);
     jobs.observeGeneration.mockReturnValue(snapshots(submitted, running, succeeded));
-    const toolRequest = request('openneko.generation', 'submit', {
+    const toolRequest = request('openneko_generation', 'submit', {
       purpose: 'image.generate',
       generationType: 'text-to-image',
       lifecycleMode: 'detached',
@@ -203,7 +203,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
 
     await expect(
       adapter.execute(
-        request('openneko.generation', 'submit', {
+        request('openneko_generation', 'submit', {
           purpose: 'image.generate',
           generationType: 'text-to-image',
           lifecycleMode: 'detached',
@@ -241,7 +241,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
 
       await expect(
         adapter.execute(
-          request('openneko.generation', 'submit', {
+          request('openneko_generation', 'submit', {
             purpose: 'image.generate',
             generationType: 'text-to-image',
             lifecycleMode: 'detached',
@@ -267,7 +267,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
 
     await expect(
       adapter.execute(
-        request('openneko.generation', 'submit', {
+        request('openneko_generation', 'submit', {
           purpose: 'image.generate',
           generationType: 'text-to-image',
           lifecycleMode: 'detached',
@@ -299,7 +299,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
 
     await expect(
       adapter.execute(
-        request('openneko.generation', 'submit', {
+        request('openneko_generation', 'submit', {
           purpose: 'image.generate',
           generationType: 'text-to-image',
           lifecycleMode: 'detached',
@@ -334,7 +334,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     });
 
     const response = adapter.execute(
-      request('openneko.generation', 'submit', {
+      request('openneko_generation', 'submit', {
         purpose: 'image.generate',
         generationType: 'text-to-image',
         lifecycleMode: 'detached',
@@ -366,7 +366,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     jobs.describeGeneration.mockResolvedValue(createGenerationSnapshot());
 
     const response = await adapter.execute(
-      request('openneko.generation', 'describe', {
+      request('openneko_generation', 'describe', {
         jobId: 'job-1',
       }),
     );
@@ -385,7 +385,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
 
     await expect(
       adapter.execute(
-        request('openneko.generation', 'submit', {
+        request('openneko_generation', 'submit', {
           purpose: '',
           generationType: 'text-to-image',
           lifecycleMode: 'detached',
@@ -396,7 +396,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
       outcome: 'failure',
       diagnostic: { code: 'GENERATION_DSH_TOOL_INVALID_INPUT' },
     });
-    await expect(adapter.execute(request('openneko.unknown', 'submit', {}))).resolves.toMatchObject(
+    await expect(adapter.execute(request('openneko_unknown', 'submit', {}))).resolves.toMatchObject(
       {
         outcome: 'failure',
         diagnostic: { code: 'GENERATION_DSH_TOOL_MISMATCH' },
@@ -416,7 +416,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     );
 
     const queryResponse = await adapter.execute(
-      request('openneko.canvas', 'query', {
+      request('openneko_canvas', 'query', {
         documentPath: 'boards/story.nkc',
       }),
     );
@@ -430,7 +430,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     });
 
     const staleResponse = await adapter.execute(
-      request('openneko.canvas', 'create-node', {
+      request('openneko_canvas', 'create-node', {
         documentPath: 'boards/story.nkc',
         node: { type: 'markdown' },
       }),
@@ -465,7 +465,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     });
 
     await adapter.execute(
-      request('openneko.canvas', 'query', {
+      request('openneko_canvas', 'query', {
         documentPath: 'boards/story.nkc',
       }),
       controller.signal,
@@ -476,7 +476,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     });
 
     await adapter.execute(
-      request('openneko.canvas', 'create-node', {
+      request('openneko_canvas', 'create-node', {
         documentPath: 'boards/story.nkc',
         node: { type: 'markdown' },
       }),

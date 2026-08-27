@@ -1,12 +1,15 @@
 # content-document Specification
 
 ## Purpose
+
 Define one authorized Agent document-reading capability using canonical Workspace content identities and native
 model content blocks.
+
 ## Requirements
+
 ### Requirement: DSH document inputs expose the canonical workspace locator
 
-The official `openneko.document` Tool metadata MUST describe `source.file.authority` as `workspace` and `source.file.path` as a workspace-relative POSIX path. A managed `neko/assets/<library>/...` path MUST use this same locator shape and MUST NOT require a media-library-specific locator.
+The official `openneko_document` Tool metadata MUST describe `source.file.authority` as `workspace` and `source.file.path` as a workspace-relative POSIX path. A managed `neko/assets/<library>/...` path MUST use this same locator shape and MUST NOT require a media-library-specific locator.
 
 #### Scenario: Model reads a linked media-library document
 
@@ -22,7 +25,7 @@ The official `openneko.document` Tool metadata MUST describe `source.file.author
 
 ### Requirement: DSH document selection uses ContentLocator only
 
-The official `openneko.document` Tool metadata and decoder MUST expose the package-owned
+The official `openneko_document` Tool metadata and decoder MUST expose the package-owned
 `ContentLocator` as the only document address. Targeted content MUST be represented by
 `source.selector`; a bare `DocumentLocator`, `range.locator`, or parallel locating object MUST NOT
 be exposed or accepted.
@@ -129,7 +132,7 @@ extraction. A selected `ContentLocator` MUST imply targeted content reading, whi
 
 ### Requirement: Model-visible document arguments are flat
 
-The official `openneko.document` Tool MUST expose `operation`, `source`, and operation-specific fields in one flat argument object. It MUST NOT expose or accept a model-visible `input` wrapper. The official DSH plugin MUST project the decoded flat arguments into the internal ACP `{ operation, input }` envelope.
+The official `openneko_document` Tool MUST expose `operation`, `source`, and operation-specific fields in one flat argument object. It MUST NOT expose or accept a model-visible `input` wrapper. The official DSH plugin MUST project the decoded flat arguments into the internal ACP `{ operation, input }` envelope.
 
 #### Scenario: Manifest read uses one argument level
 

@@ -486,7 +486,7 @@ describe('DshAcpApplicationClient', () => {
       turn: 0,
       toolCallId: 'call-generation',
       sandboxMode: 'workspace-write',
-      tool: 'openneko.generation',
+      tool: 'openneko_generation',
       operation: 'submit',
       input: {},
     });
@@ -504,7 +504,7 @@ describe('DshAcpApplicationClient', () => {
       turn: 0,
       toolCallId: 'call-content-image',
       sandboxMode: 'read-only',
-      tool: 'openneko.read_image',
+      tool: 'openneko_read_image',
       operation: 'read-chunk',
       input: {
         source: {
@@ -519,7 +519,7 @@ describe('DshAcpApplicationClient', () => {
       turn: 0,
       toolCallId: 'call-canvas',
       sandboxMode: 'read-only',
-      tool: 'openneko.canvas',
+      tool: 'openneko_canvas',
       operation: 'query',
       input: {},
     });
@@ -528,7 +528,7 @@ describe('DshAcpApplicationClient', () => {
       turn: 0,
       toolCallId: 'call-cut',
       sandboxMode: 'read-only',
-      tool: 'openneko.cut',
+      tool: 'openneko_cut',
       operation: 'query',
       input: {},
     });
@@ -570,13 +570,13 @@ describe('DshAcpApplicationClient', () => {
         turn: 0,
         toolCallId: 'call-domain-extension',
         sandboxMode: 'read-only',
-        tool: 'openneko.domain-extension',
+        tool: 'openneko_domain_extension',
         operation: 'query',
         input: {},
       }),
     ).resolves.toEqual({ outcome: 'success', result: {} });
     expect(handlers.executeDomainTool).toHaveBeenCalledWith(
-      expect.objectContaining({ tool: 'openneko.domain-extension' }),
+      expect.objectContaining({ tool: 'openneko_domain_extension' }),
       expect.any(AbortSignal),
     );
     await expect(protocolClient.extMethod?.('unknown/execute', {})).rejects.toThrow(
@@ -812,7 +812,7 @@ describe('DshAcpApplicationClient', () => {
       turn: 0,
       toolCallId: 'call-cancel',
       sandboxMode: 'workspace-write',
-      tool: 'openneko.generation',
+      tool: 'openneko_generation',
       operation: 'submit',
       input: {},
     });
@@ -849,7 +849,7 @@ describe('DshAcpApplicationClient', () => {
       turn: 0,
       toolCallId: 'call-canvas',
       sandboxMode: 'read-only',
-      tool: 'openneko.canvas',
+      tool: 'openneko_canvas',
       operation: 'query',
       input: {},
     });
@@ -884,7 +884,7 @@ describe('DshAcpApplicationClient', () => {
       turn: 0,
       toolCallId: 'call-duplicate',
       sandboxMode: 'workspace-write',
-      tool: 'openneko.generation',
+      tool: 'openneko_generation',
       operation: 'submit',
       input: {},
     });
@@ -894,7 +894,7 @@ describe('DshAcpApplicationClient', () => {
         turn: 0,
         toolCallId: 'call-duplicate',
         sandboxMode: 'workspace-write',
-        tool: 'openneko.generation',
+        tool: 'openneko_generation',
         operation: 'submit',
         input: {},
       }),
@@ -918,7 +918,7 @@ describe('DshAcpApplicationClient', () => {
         turn: 0,
         toolCallId,
         sandboxMode: 'workspace-write',
-        tool: 'openneko.generation',
+        tool: 'openneko_generation',
         operation: 'submit',
         input: {},
       });
@@ -982,7 +982,7 @@ describe('DshAcpApplicationClient', () => {
       turn: 0,
       toolCallId: 'call-connection-close',
       sandboxMode: 'workspace-write',
-      tool: 'openneko.generation',
+      tool: 'openneko_generation',
       operation: 'submit',
       input: {},
     });

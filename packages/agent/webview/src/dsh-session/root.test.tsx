@@ -494,7 +494,7 @@ describe('DshAgentView content-creation composer', () => {
               kind: 'tool',
               turn: 1,
               toolCallId: 'tool-1',
-              title: 'openneko.document',
+              title: 'openneko_document',
               status: 'completed',
               rawInput: { operation: 'read' },
               rawOutput,
@@ -519,7 +519,7 @@ describe('DshAgentView content-creation composer', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /工作进度.*1 项操作已完成/u }));
-    fireEvent.click(screen.getByRole('button', { name: /openneko\.document/u }));
+    fireEvent.click(screen.getByRole('button', { name: /openneko_document/u }));
     const output = view.container.querySelector('[data-agent-tool-payload="结果"]');
     expect(output?.className).toContain('overflow-y-auto');
     fireEvent.click(screen.getAllByRole('button', { name: '复制' })[1]!);
@@ -546,7 +546,7 @@ describe('DshAgentView content-creation composer', () => {
               kind: 'tool',
               turn: 1,
               toolCallId: 'tool-failed',
-              title: 'openneko.document',
+              title: 'openneko_document',
               status: 'failed',
               rawInput: { operation: 'read-images' },
               rawOutput: 'content-missing: Document content is unavailable.',
@@ -575,7 +575,7 @@ describe('DshAgentView content-creation composer', () => {
     fireEvent.click(screen.getByRole('button', { name: /工作进度.*1 项失败.*0\/1 项完成/u }));
     const toolCard = view.container.querySelector('[data-agent-tool-call-id="tool-failed"]');
     expect(toolCard?.className).toContain('is-danger');
-    expect(screen.getByRole('button', { name: /openneko\.document.*失败/u })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /openneko_document.*失败/u })).toBeTruthy();
   });
 
   it('presents Agent progress separately and merges duplicate Tool lifecycle events', () => {
@@ -602,7 +602,7 @@ describe('DshAgentView content-creation composer', () => {
               kind: 'tool',
               turn: 2,
               toolCallId: 'tool-read',
-              title: 'openneko.document',
+              title: 'openneko_document',
               status: 'pending',
               rawInput: { operation: 'read' },
             },
@@ -610,7 +610,7 @@ describe('DshAgentView content-creation composer', () => {
               kind: 'tool',
               turn: 2,
               toolCallId: 'tool-read',
-              title: 'openneko.document',
+              title: 'openneko_document',
               status: 'completed',
               rawOutput: { title: 'Storyboard' },
             },
@@ -618,7 +618,7 @@ describe('DshAgentView content-creation composer', () => {
               kind: 'tool',
               turn: 2,
               toolCallId: 'tool-image',
-              title: 'openneko.read_image',
+              title: 'openneko_read_image',
               status: 'in_progress',
             },
           ],
@@ -638,8 +638,8 @@ describe('DshAgentView content-creation composer', () => {
     expect(view.container.querySelectorAll('[data-agent-tool-call-id="tool-read"]')).toHaveLength(
       1,
     );
-    expect(screen.getByRole('button', { name: /openneko\.document.*已完成/u })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /openneko\.read_image.*运行中/u })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /openneko_document.*已完成/u })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /openneko_read_image.*运行中/u })).toBeTruthy();
   });
 
   it('states when an active Tool group has no model-authored progress update', () => {
@@ -657,7 +657,7 @@ describe('DshAgentView content-creation composer', () => {
               kind: 'tool',
               turn: 3,
               toolCallId: 'tool-only',
-              title: 'openneko.document',
+              title: 'openneko_document',
               status: 'in_progress',
             },
           ],
@@ -684,7 +684,7 @@ describe('DshAgentView content-creation composer', () => {
               kind: 'tool',
               turn: 4,
               toolCallId: 'tool-complete',
-              title: 'openneko.document',
+              title: 'openneko_document',
               status: 'completed',
             },
           ],
@@ -707,7 +707,7 @@ describe('DshAgentView content-creation composer', () => {
           kind: 'tool' as const,
           turn: 1,
           toolCallId: 'tool-first',
-          title: 'openneko.document',
+          title: 'openneko_document',
           status: 'completed' as const,
           rawInput: { operation: 'read' },
         },
@@ -739,7 +739,7 @@ describe('DshAgentView content-creation composer', () => {
               kind: 'tool',
               turn: 1,
               toolCallId: 'tool-second',
-              title: 'openneko.read_image',
+              title: 'openneko_read_image',
               status: 'completed',
               rawInput: { operation: 'read' },
             },

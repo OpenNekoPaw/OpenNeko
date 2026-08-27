@@ -9,9 +9,9 @@
     "canonicalPath": [
       "visible Desktop submit",
       "explicit text-only current model",
-      "openneko.document read-images",
+      "openneko_document read-images",
       "document-entry ContentLocator",
-      "openneko.read_image",
+      "openneko_read_image",
       "current model capability rejection"
     ],
     "observables": [
@@ -32,7 +32,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "先调用 openneko.document 的 read-images 读取工作区 synthetic-document.epub 的图片 ContentLocator，再调用 openneko.read_image。当前模型若不支持图像输入，不要切换 provider/model，也不要猜测像素；请明确回复“当前模型不支持图像输入”。"
+      "prompt": "先调用 openneko_document 的 read-images 读取工作区 synthetic-document.epub 的图片 ContentLocator，再调用 openneko_read_image。当前模型若不支持图像输入，不要切换 provider/model，也不要猜测像素；请明确回复“当前模型不支持图像输入”。"
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 1200000 }
   ],
@@ -51,14 +51,14 @@
     {
       "id": "document-tool",
       "kind": "tool-call",
-      "name": "openneko.document",
+      "name": "openneko_document",
       "status": "success",
       "evidenceRef": "media-tool-boundary-facts"
     },
     {
       "id": "image-tool-rejected",
       "kind": "tool-call",
-      "name": "openneko.read_image",
+      "name": "openneko_read_image",
       "status": "error",
       "evidenceRef": "media-tool-boundary-facts"
     },

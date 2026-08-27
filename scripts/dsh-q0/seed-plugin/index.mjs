@@ -10,7 +10,7 @@ export function apply(ctx) {
     () =>
       ctx.tools.register(
         defineTool({
-          name: 'openneko.q0-host-tool',
+          name: 'openneko_q0_host_tool',
           description: 'Q0-only reverse Host Tool qualification.',
           parameters: {
             operation: {
@@ -27,7 +27,7 @@ export function apply(ctx) {
           async execute(args, execution) {
             const response = await ctx.opennekoHostTools.execute(
               {
-                tool: 'openneko.q0-host-tool',
+                tool: 'openneko_q0_host_tool',
                 operation: args.operation,
                 input: { value: args.value },
               },
@@ -92,7 +92,7 @@ async function appendToolEvents(ctx, agent) {
     turn: 0,
     step: 0,
     callId,
-    name: 'openneko.q0-tool',
+    name: 'openneko_q0_tool',
     arguments: '{"fixture":true}',
   });
   agent.session.append(
@@ -124,7 +124,7 @@ async function executeHostTool(ctx, agent, suffix, operation, value, options = {
     turn: 0,
     step: 0,
     callId,
-    name: 'openneko.q0-host-tool',
+    name: 'openneko_q0_host_tool',
     arguments: JSON.stringify({ operation, value }),
   });
   const controller = new AbortController();
@@ -134,7 +134,7 @@ async function executeHostTool(ctx, agent, suffix, operation, value, options = {
   }
   const result = await ctx.tools.execute({
     callId,
-    name: 'openneko.q0-host-tool',
+    name: 'openneko_q0_host_tool',
     arguments: { operation, value },
     agent,
     signal,

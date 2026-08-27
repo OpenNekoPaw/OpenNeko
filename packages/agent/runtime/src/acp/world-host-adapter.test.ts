@@ -12,7 +12,7 @@ describe('World DSH Host adapter', () => {
         turn: 1,
         toolCallId: 'call-1',
         sandboxMode: 'read-only',
-        tool: 'openneko.world',
+        tool: 'openneko_world',
         operation: 'fill-draft',
         input: {
           worldProjectId: 'world-1',
@@ -62,7 +62,7 @@ describe('World DSH Host adapter', () => {
         turn: 1,
         toolCallId: 'call-1',
         sandboxMode: 'read-only',
-        tool: 'openneko.world',
+        tool: 'openneko_world',
         operation: 'query',
         input: { worldProjectId: 'world-1' },
       }),
@@ -79,7 +79,7 @@ describe('World DSH Host adapter', () => {
         turn: 1,
         toolCallId: 'call-1',
         sandboxMode: 'read-only',
-        tool: 'openneko.character',
+        tool: 'openneko_character',
         operation: 'query',
         input: { worldProjectId: 'world-1' },
       }),
@@ -87,7 +87,7 @@ describe('World DSH Host adapter', () => {
       outcome: 'failure',
       diagnostic: {
         code: 'WORLD_DSH_TOOL_MISMATCH',
-        message: 'Expected openneko.world, received openneko.character.',
+        message: 'Expected openneko_world, received openneko_character.',
       },
     });
     expect(query).not.toHaveBeenCalled();

@@ -378,7 +378,7 @@ describe('OpenNeko DSH ACP bridge projections', () => {
       turn: 0,
       step: 0,
       callId: CallId('call-1'),
-      name: 'openneko.canvas',
+      name: 'openneko_canvas',
       arguments: '{"node":"a"}',
     });
 
@@ -399,7 +399,7 @@ describe('OpenNeko DSH ACP bridge projections', () => {
         update: {
           sessionUpdate: 'tool_call',
           toolCallId: 'call-1',
-          title: 'openneko.canvas',
+          title: 'openneko_canvas',
           status: 'pending',
           rawInput: { node: 'a' },
         },
@@ -501,7 +501,7 @@ describe('OpenNeko DSH ACP bridge projections', () => {
       turn: 0,
       step: 0,
       callId: CallId('call-failed'),
-      name: 'openneko.canvas',
+      name: 'openneko_canvas',
       arguments: '{}',
     });
     const result = session.append(

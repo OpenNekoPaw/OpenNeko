@@ -42,7 +42,7 @@ describe('Generation DSH tool contract', () => {
   });
 
   it('exposes model-bound submit, Host-bound ComfyUI submit and describe', () => {
-    expect(GENERATION_DSH_TOOL_NAME).toBe('openneko.generation');
+    expect(GENERATION_DSH_TOOL_NAME).toBe('openneko_generation');
     expect(
       decodeGenerationDshToolInput('submit', {
         purpose: 'image.generate',

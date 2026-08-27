@@ -9,7 +9,7 @@
     "canonicalPath": [
       "public DSH Session submit",
       "DSH Session runtime",
-      "openneko.generation submit Tool call",
+      "openneko_generation submit Tool call",
       "GenerationJobCoordinator",
       "durable Generation Job store",
       "exact Generation Job observer",
@@ -25,7 +25,7 @@
         "required": true
       }
     ],
-    "expectedResult": "The single openneko.generation submit Tool call projects one canonical Generation node into the turn-selected Workspace Board, keeps the exact JobRef visible while running, and binds the canonical Workspace result locator into that same node after success without duplicates.",
+    "expectedResult": "The single openneko_generation submit Tool call projects one canonical Generation node into the turn-selected Workspace Board, keeps the exact JobRef visible while running, and binds the canonical Workspace result locator into that same node after success without duplicates.",
     "expectedFailure": "A pending Tool success, missing Job identity/result locator, missing or blocked Workspace Board projection, duplicate projection, model-authored polling, direct provider or generic Task participation, Canvas fallback, or hidden terminal Job failure fails."
   },
   "fixtureRefs": ["empty-workspace"],
@@ -52,7 +52,7 @@
     {
       "id": "generation-reaches-terminal-success",
       "kind": "tool-call",
-      "name": "openneko.generation",
+      "name": "openneko_generation",
       "status": "success",
       "resultIncludes": {
         "kind": "generation",
@@ -95,7 +95,7 @@
         },
         {
           "kind": "tool",
-          "name": "openneko.generation",
+          "name": "openneko_generation",
           "status": "success"
         }
       ],

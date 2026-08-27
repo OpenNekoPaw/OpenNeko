@@ -30,7 +30,7 @@ describe('OpenNeko Character DSH plugin', () => {
 
     apply(ctx as never);
     if (!definition) throw new Error('Character DSH Tool was not registered.');
-    expect(definition.name).toBe('openneko.character');
+    expect(definition.name).toBe('openneko_character');
     expect(definition.parameters).toMatchObject({
       properties: { operation: { enum: ['query', 'fill-draft'] } },
       required: ['operation', 'input'],
@@ -40,7 +40,7 @@ describe('OpenNeko Character DSH plugin', () => {
     ).resolves.toEqual({ characterProjectId: 'character-1', displayName: 'Mira' });
     expect(execute).toHaveBeenCalledWith(
       {
-        tool: 'openneko.character',
+        tool: 'openneko_character',
         operation: 'query',
         input: { characterProjectId: 'character-1' },
       },

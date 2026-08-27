@@ -49,9 +49,7 @@ test('rejects OpenNeko restrictions that narrow DSH Skill semantics', () => {
     ['Skill 数量最多为 4。', 'fixed Skill-count restriction'],
     ['必须选择 Artifact Profile 才能加载 Skill。', 'artifact-profile-first Skill restriction'],
   ]) {
-    assert.deepEqual(findForbiddenArchitectureClaims(claim, 'adr.md'), [
-      `adr.md: ${diagnostic}`,
-    ]);
+    assert.deepEqual(findForbiddenArchitectureClaims(claim, 'adr.md'), [`adr.md: ${diagnostic}`]);
   }
 });
 
@@ -88,11 +86,13 @@ test('rejects dual runtime, duplicate Tool or MCP, and wildcard Plugin registrat
     runtimes: ['dsh'],
     tools: [
       'CreateSkill',
-      'openneko.generation',
-      'openneko.canvas',
-      'openneko.cut',
-      'openneko.document',
-      'openneko.character',
+      'openneko_generation',
+      'openneko_canvas',
+      'openneko_cut',
+      'openneko_document',
+      'openneko_character',
+      'openneko_read_image',
+      'openneko_world',
     ],
     mcpContributions: ['official.browser'],
     plugins: [
@@ -110,8 +110,8 @@ test('rejects dual runtime, duplicate Tool or MCP, and wildcard Plugin registrat
 
   const poisoned = structuredClone(canonical);
   poisoned.runtimes.push('pi');
-  poisoned.tools.push('openneko.generation');
-  poisoned.tools.push('openneko.assets');
+  poisoned.tools.push('openneko_generation');
+  poisoned.tools.push('openneko_assets');
   poisoned.mcpContributions.push('official.browser');
   poisoned.plugins[2] = '@neko/*';
   poisoned.plugins.push('@neko/assets-dsh-plugin');
@@ -121,6 +121,14 @@ test('rejects dual runtime, duplicate Tool or MCP, and wildcard Plugin registrat
   assert.ok(findings.some((finding) => finding.includes('duplicate Tool identity')));
   assert.ok(findings.some((finding) => finding.includes('duplicate MCP contribution identity')));
   assert.ok(findings.some((finding) => finding.includes('wildcard Plugin identity')));
+
+  const invalidTransportName = structuredClone(canonical);
+  invalidTransportName.tools[1] = 'openneko.generation';
+  assert.ok(
+    validateCanonicalAgentRegistrationGraph(invalidTransportName).some((finding) =>
+      finding.includes('Tool identity openneko.generation is not provider-safe'),
+    ),
+  );
 });
 
 test('keeps third-party DSH infrastructure outside the OpenNeko Plugin identity set', () => {

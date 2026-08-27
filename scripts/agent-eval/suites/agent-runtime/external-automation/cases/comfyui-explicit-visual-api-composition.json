@@ -16,7 +16,7 @@
       "visible Desktop Agent composer",
       "explicit ComfyUI native-window selector",
       "computer-use.observe.macos visual advisory operation",
-      "separate openneko.generation submit-comfyui operation",
+      "separate openneko_generation submit-comfyui operation",
       "Host-owned loopback endpoint",
       "ComfyUI validation diagnostic",
       "terminal Tool projections"
@@ -39,7 +39,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "First call automation_cua-driver_verify_state exactly once with arguments {\"expect\":[{\"window\":{\"exists\":true}}],\"include_screenshot\":true}, timeoutMs 30000, and stepBudget 1, selecting only the qualified ComfyUI window. Then call openneko.generation exactly once with operation submit-comfyui and input {\"lifecycleMode\":\"detached\",\"workflow\":{\"3\":{\"class_type\":\"OpenNekoDefinitelyMissingNode\",\"inputs\":{}}},\"outputKind\":\"image\",\"inputBindings\":[]}. Treat the screenshot as advisory, report the API validation failure, and finish with COMFYUI_EXPLICIT_COMPOSITE_OK. Do not click Run, retry, or infer output success."
+      "prompt": "First call automation_cua-driver_verify_state exactly once with arguments {\"expect\":[{\"window\":{\"exists\":true}}],\"include_screenshot\":true}, timeoutMs 30000, and stepBudget 1, selecting only the qualified ComfyUI window. Then call openneko_generation exactly once with operation submit-comfyui and input {\"lifecycleMode\":\"detached\",\"workflow\":{\"3\":{\"class_type\":\"OpenNekoDefinitelyMissingNode\",\"inputs\":{}}},\"outputKind\":\"image\",\"inputBindings\":[]}. Treat the screenshot as advisory, report the API validation failure, and finish with COMFYUI_EXPLICIT_COMPOSITE_OK. Do not click Run, retry, or infer output success."
     },
     {
       "id": "approve-visual",
@@ -53,7 +53,7 @@
       "id": "approve-api",
       "kind": "confirm",
       "afterStepId": "approve-visual",
-      "toolName": "openneko.generation",
+      "toolName": "openneko_generation",
       "approved": true,
       "timeoutMs": 120000
     },
@@ -91,7 +91,7 @@
     {
       "id": "api-tool",
       "kind": "tool-call",
-      "name": "openneko.generation",
+      "name": "openneko_generation",
       "status": "error",
       "expectedArguments": {
         "operation": "submit-comfyui",

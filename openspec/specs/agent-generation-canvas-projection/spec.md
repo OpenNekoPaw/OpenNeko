@@ -1,8 +1,11 @@
 # agent-generation-canvas-projection Specification
 
 ## Purpose
+
 Project Agent-originated Generation Jobs into the exact Workspace Canvas through stable Job and content authority.
+
 ## Requirements
+
 ### Requirement: Agent Generation Jobs are projected when the durable JobRef is published
 
 The system SHALL immediately upsert one Generation node on the exact admitted Canvas when an Agent Generation
@@ -10,7 +13,7 @@ Tool publishes a durable Job for a Workspace Turn, before waiting for Job settle
 
 #### Scenario: Generation submission starts running
 
-- **WHEN** `openneko.generation submit` returns an authoritative non-terminal Generation Job snapshot
+- **WHEN** `openneko_generation submit` returns an authoritative non-terminal Generation Job snapshot
 - **THEN** the Host SHALL deliver that snapshot to the Canvas target admitted for the exact DSH
   Session and Turn
 - **AND** Canvas SHALL persist one Generation node identified by the exact Generation JobRef with its

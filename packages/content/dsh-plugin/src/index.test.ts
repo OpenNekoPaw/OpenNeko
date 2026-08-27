@@ -33,9 +33,9 @@ describe('OpenNeko Document DSH plugin', () => {
     };
 
     apply(ctx as never);
-    const definition = definitions.find((candidate) => candidate.name === 'openneko.document');
+    const definition = definitions.find((candidate) => candidate.name === 'openneko_document');
     if (!definition) throw new Error('Document DSH Tool was not registered.');
-    expect(definition.name).toBe('openneko.document');
+    expect(definition.name).toBe('openneko_document');
     expect(definition.parameters).toMatchObject({
       properties: {
         operation: { enum: ['read', 'continue', 'read-images'] },
@@ -53,7 +53,7 @@ describe('OpenNeko Document DSH plugin', () => {
     );
     expect(execute).toHaveBeenCalledWith(
       {
-        tool: 'openneko.document',
+        tool: 'openneko_document',
         operation: 'read',
         input: {
           source: { file: { authority: 'workspace', path: 'neko/assets/Books/book.pdf' } },
@@ -72,7 +72,7 @@ describe('OpenNeko Document DSH plugin', () => {
     );
     expect(execute).toHaveBeenLastCalledWith(
       {
-        tool: 'openneko.document',
+        tool: 'openneko_document',
         operation: 'read',
         input: { source: selectedSource, mode: 'content', maxChars: 4_000 },
       },
@@ -156,7 +156,7 @@ describe('OpenNeko Document DSH plugin', () => {
     };
 
     apply(ctx as never);
-    const definition = definitions.find((candidate) => candidate.name === 'openneko.read_image');
+    const definition = definitions.find((candidate) => candidate.name === 'openneko_read_image');
     if (!definition) throw new Error('Content image DSH Tool was not registered.');
     expect(definition.isConcurrencySafe?.({ source })).toBe(false);
     const execution = {
@@ -217,7 +217,7 @@ describe('OpenNeko Document DSH plugin', () => {
     };
 
     apply(ctx as never);
-    const definition = definitions.find((candidate) => candidate.name === 'openneko.read_image');
+    const definition = definitions.find((candidate) => candidate.name === 'openneko_read_image');
     if (!definition) throw new Error('Content image DSH Tool was not registered.');
     await expect(
       definition.execute(
@@ -302,7 +302,7 @@ describe('OpenNeko Document DSH plugin', () => {
     };
 
     apply(ctx as never);
-    const definition = definitions.find((candidate) => candidate.name === 'openneko.read_image');
+    const definition = definitions.find((candidate) => candidate.name === 'openneko_read_image');
     if (!definition) throw new Error('Content image DSH Tool was not registered.');
     const result = (await definition.execute(
       { source },
