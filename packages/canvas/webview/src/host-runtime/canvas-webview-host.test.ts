@@ -762,6 +762,83 @@ describe('createCanvasWebviewHost', () => {
     session.dispose();
   });
 
+  it('keeps concurrent material action resolutions independent', async () => {
+    const identity = {
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      windowId: 'window-1',
+      viewId: 'view-1',
+      viewInstanceId: 'view-instance-1',
+      documentId: 'neko/boards/workspace.nkc',
+      sessionId: 'session-1',
+      rendererSessionId: 'endpoint-1',
+    };
+    const descriptor: CanvasMaterialActionDescriptor = {
+      id: 'preview:open',
+      ownerId: 'preview',
+      label: 'Preview',
+      mediaKinds: ['document'],
+      origins: ['referenced', 'generated'],
+      selection: { minimum: 1, maximum: 1 },
+      effect: 'read',
+    };
+    const documentNode: FileCanvasNode = {
+      id: 'document-node',
+      type: 'file',
+      position: { x: 0, y: 0 },
+      size: { width: 320, height: 180 },
+      zIndex: 1,
+      data: {
+        path: 'generated/document.md',
+        title: 'document.md',
+        mediaType: 'text/markdown',
+        contentLocator: {
+          file: { authority: 'workspace', path: 'generated/document.md' },
+        },
+      },
+    };
+    const secondNode: FileCanvasNode = {
+      ...documentNode,
+      id: 'second-node',
+      position: { x: 360, y: 0 },
+    };
+    let releaseFirstResolution = (): void => {};
+    const firstResolutionGate = new Promise<void>((resolve) => {
+      releaseFirstResolution = resolve;
+    });
+    const session = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas: { ...DEFAULT_CANVAS_DATA, nodes: [documentNode, secondNode] },
+      effects: {},
+    });
+    const runtime: CanvasHostRuntime = {
+      identity,
+      getSnapshot: () => session.getSnapshot(),
+      async resolveMaterialActions(request) {
+        if (request.selectedNodeIds[0] === 'document-node') await firstResolutionGate;
+        return {
+          requestId: request.requestId,
+          identity: request.identity,
+          selectedNodeIds: request.selectedNodeIds,
+          descriptors: [descriptor],
+        };
+      },
+      readTextFilePreview: (request) => session.readTextFilePreview(request),
+      subscribe: (listener) => session.subscribe(listener),
+      executeIntent: (request) => session.executeIntent(request),
+    };
+    const host = createCanvasWebviewHost(runtime);
+
+    const firstResolution = host.resolveMaterialActions(['document-node']);
+    const secondResolution = host.resolveMaterialActions(['second-node']);
+
+    await expect(secondResolution).resolves.toEqual([descriptor]);
+    releaseFirstResolution();
+    await expect(firstResolution).resolves.toEqual([descriptor]);
+    host.dispose();
+    session.dispose();
+  });
+
   it.each(['delayed request', 'delayed response'] as const)(
     'keeps a content-unavailable node open when a concurrent move overlaps a %s',
     async (concurrencyResult) => {

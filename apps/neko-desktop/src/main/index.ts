@@ -1337,25 +1337,12 @@ async function startDesktop(): Promise<void> {
       if (target.locator.file.authority !== 'workspace' || target.locator.selector !== undefined) {
         throw new Error('Canvas Text Editor requires a Workspace File locator.');
       }
-      await textEditorRuntime.open({
-        identity: {
-          projectId: identity.projectId,
-          workspaceId: identity.workspaceId,
-          windowId: identity.windowId,
-          viewId: `canvas-material:${identity.viewId}`,
-          viewInstanceId: identity.viewInstanceId,
-          rendererSessionId: identity.rendererSessionId,
-        },
-        item: {
-          resourceId: `canvas-content:${identity.documentId}:${target.nodeId}`,
-          source: 'files',
-          role: 'content',
-          depth: 0,
-          kind: 'document',
-          label: path.posix.basename(target.locator.file.path),
-          locator: target.locator,
-          capabilities: ['edit-text', 'preview', 'reveal'],
-        },
+      await textEditorRuntime.openWorkspaceFile({
+        windowId: identity.windowId,
+        rendererSessionId: identity.rendererSessionId,
+        workspaceId: identity.workspaceId,
+        contentLocator: { file: target.locator.file },
+        displayLabel: path.posix.basename(target.locator.file.path),
       });
     },
     resolveCut: async ({ absolutePath, identity, target }) =>

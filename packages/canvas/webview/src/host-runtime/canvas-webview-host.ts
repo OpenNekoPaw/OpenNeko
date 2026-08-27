@@ -113,7 +113,6 @@ export function createCanvasWebviewHost(
   let commandSequence = 0;
   let materialActionRequestSequence = 0;
   let textFilePreviewRequestSequence = 0;
-  let currentMaterialActionRequestId: string | undefined;
   let initialSnapshotRequest: Promise<CanvasHostSnapshot> | undefined;
   let initialSnapshotFailure: unknown;
   let runtimeEventObserved = false;
@@ -452,7 +451,6 @@ export function createCanvasWebviewHost(
       if (selectedNodeIds.some((nodeId) => !currentNodeIds.has(nodeId))) return [];
       materialActionRequestSequence += 1;
       const requestId = `canvas-webview-material-actions:${materialActionRequestSequence}`;
-      currentMaterialActionRequestId = requestId;
       const resolution = await runtime.resolveMaterialActions(
         createCanvasMaterialActionResolutionRequest({
           requestId,
@@ -460,9 +458,6 @@ export function createCanvasWebviewHost(
           selectedNodeIds: [...selectedNodeIds],
         }),
       );
-      if (currentMaterialActionRequestId !== requestId) {
-        throw new Error('Canvas material action resolution was superseded by another request.');
-      }
       if (!areJsonValuesEqual(selectedNodeIds, resolution.selectedNodeIds)) {
         throw new Error('Canvas material action resolution returned another selection.');
       }
