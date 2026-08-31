@@ -6,13 +6,12 @@
   "caseId": "animation-production-plan",
   "scenarioContract": {
     "schema": "neko.agent-eval.scenario",
-    "evidenceRefs": [
-      "production-facts"
-    ],
+    "evidenceRefs": ["production-facts"],
     "assertionIds": [
       "skill",
       "model",
       "output",
+      "no-generic-phases",
       "no-image",
       "no-video"
     ]
@@ -39,8 +38,8 @@
       "retries"
     ],
     "quality": {
-      "kind": "hard-gates-only",
-      "reason": "No content Judge is configured; this pilot compares canonical path correctness and execution efficiency only."
+      "kind": "scenario-rubric",
+      "rubricRef": "rubrics/ai-production-plan-quality.json"
     }
   },
   "variants": [
@@ -64,9 +63,7 @@
       "role": "variant",
       "kind": "configuration",
       "description": "User-visible Plan execution mode with the same Skill, model, fixture, and no production side effects.",
-      "changes": [
-        "runtime.execution-mode"
-      ],
+      "changes": ["runtime.execution-mode"],
       "runtimeProfileId": "plan-markdown",
       "modelProfileId": "configured-default",
       "expectedConfiguration": {

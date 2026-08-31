@@ -21,8 +21,8 @@
         "required": true
       }
     ],
-    "expectedResult": "The Agent treats the three-page inspection as insufficient for whole-volume scale, delivers a bounded coverage and adaptation-volume assessment, keeps format conditional, and identifies the next source-review batch.",
-    "expectedFailure": "Missing media-production receipt, claiming complete source analysis, choosing 12 episodes at 24 minutes, or producing a complete episode table fails."
+    "expectedResult": "The Agent says first that current evidence cannot determine the adaptation format, gives only the decisive coverage evidence and material unknown, then proposes the one source-review operation that can unlock a professional content plan without expanding into a speculative treatment.",
+    "expectedFailure": "Missing media-production receipt, recommending any winning fixed format, contradicting the conclusion later, or expanding into adaptation conclusion, creative concept, episode, cinematography, art, sound, production-method, pilot, or long-form design sections fails."
   },
   "fixtureRefs": ["comic-volume-planning-workspace"],
   "runtimeProfileId": "plan-markdown",
@@ -50,7 +50,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:7fe8c0d340a0957d8507a011b19abf0cd55ca4700e8a5fc0f34adc0155cfcef0"
+        "fingerprint": "sha256:2be65ff83d654eec394107392dbf247c605d04d4d78ad38df15a80b443d40e55"
       },
       "status": "injected",
       "evidenceRef": "volume-assessment-facts"
@@ -70,10 +70,34 @@
     },
     {
       "id": "output",
-      "kind": "structured-output",
-      "format": "markdown",
-      "requiredFields": ["240", "3", "覆盖", "不足", "体量评估", "下一步"],
-      "forbiddenFields": [
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["240", "3", "覆盖", "不足", "下一步"],
+      "evidenceRef": "volume-assessment-facts"
+    },
+    {
+      "id": "no-speculative-treatment",
+      "kind": "final-answer",
+      "mode": "not-contains",
+      "text": [
+        "最适合改编",
+        "改编结论",
+        "建议开发规格",
+        "暂定结构",
+        "核心创作概念",
+        "概念样片",
+        "视觉设计",
+        "声音方向",
+        "长篇改编",
+        "进入长篇设计",
+        "第 1 集",
+        "第1集",
+        "摄影规则",
+        "美术方案",
+        "动作与节奏设计",
+        "声音设计",
+        "制作方法",
+        "先导样片",
         "12 集",
         "12集",
         "每集 24",
@@ -82,7 +106,6 @@
         "全卷分析完成",
         "完整分集表"
       ],
-      "locale": "zh-cn",
       "evidenceRef": "volume-assessment-facts"
     },
     {

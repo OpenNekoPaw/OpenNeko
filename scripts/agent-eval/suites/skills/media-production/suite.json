@@ -10,7 +10,7 @@
       "provenance": "builtin",
       "rootId": "builtin-skills",
       "relativePath": "media-production",
-      "fingerprint": "sha256:7fe8c0d340a0957d8507a011b19abf0cd55ca4700e8a5fc0f34adc0155cfcef0"
+      "fingerprint": "sha256:2be65ff83d654eec394107392dbf247c605d04d4d78ad38df15a80b443d40e55"
     }
   },
   "runtimeProfiles": [
@@ -32,7 +32,19 @@
       "configurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915"
     }
   ],
-  "judgeProfiles": [],
+  "judgeProfiles": [
+    {
+      "id": "creative-production-judge",
+      "adapter": "openai-chat-completions",
+      "providerId": "configured-judge",
+      "modelId": "gpt-5.4",
+      "endpointEnv": "NEKO_AGENT_EVAL_JUDGE_ENDPOINT",
+      "apiKeyEnv": "NEKO_AGENT_EVAL_JUDGE_API_KEY",
+      "temperature": 0,
+      "maxTokens": 2400,
+      "timeoutMs": 180000
+    }
+  ],
   "fixtures": [
     {
       "id": "creative-planning-workspace",
@@ -93,7 +105,7 @@
       "visibility": "public"
     }
   ],
-  "rubricRefs": [],
+  "rubricRefs": ["rubrics/ai-production-plan-quality.json"],
   "baselinePolicy": { "mode": "none" },
   "reportPolicy": {
     "rawRetentionDays": 14,

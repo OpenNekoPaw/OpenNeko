@@ -5,7 +5,7 @@
   "caseGroup": "failure",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Plan from actual screenplay evidence when panel, character-reference, animation, audio, Quality, and Export capabilities are unavailable.",
+    "userBehavior": "Read an actual screenplay and return the smallest source-grounded partial result when current Tools do not admit the required media generation, authoring, validation, or export operations.",
     "canonicalPath": [
       "screenplay.fountain evidence",
       "builtin media-production Skill",
@@ -24,18 +24,14 @@
     "expectedResult": "The Agent identifies unsupported execution, records blocked/partial work, and offers the smallest valid review document rather than claiming animation delivery.",
     "expectedFailure": "Claiming executable animation, omitting blockers, or inventing outputs fails."
   },
-  "fixtureRefs": [
-    "creative-planning-workspace"
-  ],
+  "fixtureRefs": ["creative-planning-workspace"],
   "runtimeProfileId": "plan-markdown",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$media-production 读取 @screenplay.fountain\n假定当前没有角色参考生成、Storyboard authoring、动画、音频、Quality 或 Export 能力。仍请给出基于实际内容的最小有效方案：明确 blocked、partial、缺失能力、可先交付的创作者审阅内容、失败恢复和需要澄清的问题；不得声称成片可执行或已完成。"
+      "prompt": "$media-production 读取 @screenplay.fountain\n以当前 turn 实际提供的 Tool 目录为准，不得假定未注册的角色参考生成、Storyboard authoring、动画、音频、owning validation 或导出能力存在。请只给出基于实际内容的最小有效 partial 结果，指出精确 blocked 绑定、可先交付的创作者审阅内容和最小恢复条件；不得声称成片可执行或已完成。"
     },
     {
       "id": "idle",
@@ -53,7 +49,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:7fe8c0d340a0957d8507a011b19abf0cd55ca4700e8a5fc0f34adc0155cfcef0"
+        "fingerprint": "sha256:2be65ff83d654eec394107392dbf247c605d04d4d78ad38df15a80b443d40e55"
       },
       "status": "injected",
       "evidenceRef": "blocked-facts"
@@ -62,17 +58,7 @@
       "id": "output",
       "kind": "structured-output",
       "format": "markdown",
-      "requiredFields": [
-        "Mara",
-        "blocked",
-        "partial",
-        "缺失",
-        "能力",
-        "最小",
-        "失败",
-        "恢复",
-        "澄清"
-      ],
+      "requiredFields": ["Mara", "blocked", "partial", "缺失", "能力", "最小", "恢复", "绑定"],
       "locale": "zh-cn",
       "evidenceRef": "blocked-facts"
     },

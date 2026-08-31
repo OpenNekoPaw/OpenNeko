@@ -16,6 +16,15 @@
 
 从已验证叙事单元和保留、删减、合并、扩写、新写、动作、对白、蒙太奇、沉默等选择建立时长。固定格式前至少公开“集数/段数 × 可用时长 = 总时长”、平均来源负载、压缩/扩写/省略假设和关键不确定性。无代表性样本时只交付覆盖与抽样计划；有样本但全局覆盖不足时只给条件体量区间；覆盖充分但格式未批准时给带开放决定的建议；格式和范围获批后才形成正式方案。
 
+### 决策与处理方案
+
+体量评估先回答当前能否选择格式。证据只保留会改变结论的部分，不另写长篇来源观察。若用户要处理方案，在边界结论后给出当前证据能支持的最小创作对象和一至三个可直接提交给当前模型能力的调用包，不得用分析报告代替它们。
+
+- 覆盖不足时，结论必须是“当前不能确定格式”，不得先宣布“最适合 4 集”、“建议电影”等胜出方案再在末尾撤回。
+- 一个局部样本只能支持局部时长或带敏感性的条件区间，不生成分集表、节拍模板或项目规格。
+- 视觉、摄影、美术、动作、声音、合成、制作方法和先导样片属于其他交付物；只有它们是用户要求的处理对象或当前可执行单元时才写，不得用来填充证据不足的体量评估。
+- 同一事实只出现一次；不重述原作的普通风格特征，只保留会改变当前决策的证据。
+
 ## English guidance
 
 Use this guide when an existing ordered source is being adapted into animation, film, episodes, an animatic, or another time-based work.
@@ -67,3 +76,5 @@ If a representative local sample exists but source-wide evidence does not, use i
 - Approved format and source range: produce the creative or production proposal at the requested depth.
 
 Keep observed facts, interpretation, estimates and creator decisions visibly distinct. A plausible estimate remains a recommendation until the creator approves it.
+
+Keep the assessment decision-sized and explain only evidence that changes the decision. If the user asks for a handling plan, follow the boundary conclusion with the smallest source-supported creative target and one to three call-ready packets for current model capabilities. Do not fill an evidence gap with an episode table, broad treatment, style guide, or production handbook.

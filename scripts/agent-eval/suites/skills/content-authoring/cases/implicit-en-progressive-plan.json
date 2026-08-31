@@ -5,23 +5,23 @@
   "caseGroup": "canonical",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Ask for a generic creative-planning direction in English without an explicit Skill gesture and receive the first useful layer from the same canonical Skill.",
+    "userBehavior": "Ask for a concise English decision memo without an explicit Skill gesture and receive the requested document without a generic production workflow.",
     "canonicalPath": [
-      "English content-planning request",
+      "English decision-memo request",
       "bilingual DSH model-facing Skill catalog",
       "implicit builtin content-authoring injection",
-      "minimum useful English response"
+      "requested concise English document"
     ],
     "observables": [
       {
         "ref": "implicit-en-routing-facts",
         "kind": "runtime-fact",
-        "description": "Exact implicit Skill receipt, configured model and a concise English result from the same canonical content-authoring identity.",
+        "description": "Exact implicit Skill receipt, configured model, and the requested concise memo without invented production phases.",
         "required": true
       }
     ],
-    "expectedResult": "The model selects content-authoring from its Chinese-first bilingual description and returns one direction, the decisive evidence limit and one next action in English.",
-    "expectedFailure": "No Skill receipt, a localized duplicate Skill identity, a Chinese response, or a complete proposal outline fails."
+    "expectedResult": "The model selects content-authoring for the requested decision memo and returns the conclusion, evidence boundary, and one next action in English.",
+    "expectedFailure": "No Skill receipt, a localized duplicate identity, a Chinese response, invented source facts, or a generic production workflow fails."
   },
   "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "markdown",
@@ -30,7 +30,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "I only have an unapproved creative concept; its scope, evidence, and deliverable format are still undecided. Use only Direction, Evidence, and Next step to give me the smallest useful planning conclusion. Do not write a complete proposal, alternatives, or detailed execution steps yet."
+      "prompt": "Turn these known facts into a concise decision memo using only Conclusion, Evidence boundary, and Next step: the animation project has only a cover screenshot, with no interior pages, reading order, or storyboard evidence; this turn must not decide a 90-second shot list. Do not add a production workflow or project phases."
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
   ],
@@ -49,7 +49,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "content-authoring",
-        "fingerprint": "sha256:700fccbf955dc206bbe1cf4c797842b5a15e1dd1d549a1051ddb49aa0d8b24ba"
+        "fingerprint": "sha256:8e978c56142492fede4b73d6f9d186b004490f702214b59265644952bed8770b"
       },
       "status": "injected",
       "evidenceRef": "implicit-en-routing-facts"
@@ -58,13 +58,15 @@
       "id": "output",
       "kind": "structured-output",
       "format": "markdown",
-      "requiredFields": ["Direction", "Evidence", "Next step"],
+      "requiredFields": ["Conclusion", "Evidence boundary", "Next step"],
       "forbiddenFields": [
         "Document outline",
         "Season structure",
         "Episode table",
         "Visual development plan",
-        "Sound and music plan"
+        "Sound and music plan",
+        "Asset preparation",
+        "Quality review"
       ],
       "locale": "en",
       "evidenceRef": "implicit-en-routing-facts"

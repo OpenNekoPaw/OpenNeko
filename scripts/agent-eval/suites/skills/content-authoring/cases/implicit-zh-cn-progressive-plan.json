@@ -5,23 +5,23 @@
   "caseGroup": "canonical",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Ask for a generic creative-planning direction in Chinese without an explicit Skill gesture and receive only the first useful layer.",
+    "userBehavior": "Ask for a concise Chinese decision memo without an explicit Skill gesture and receive the requested document without a generic production workflow.",
     "canonicalPath": [
-      "Chinese content-planning request",
+      "Chinese decision-memo request",
       "DSH model-facing Skill catalog",
       "implicit builtin content-authoring injection",
-      "minimum useful Chinese response"
+      "requested concise Chinese document"
     ],
     "observables": [
       {
         "ref": "implicit-routing-facts",
         "kind": "runtime-fact",
-        "description": "Exact implicit Skill receipt, configured model and a concise Chinese result without a precomposed document outline.",
+        "description": "Exact implicit Skill receipt, configured model, and the requested concise memo without invented production phases.",
         "required": true
       }
     ],
-    "expectedResult": "The model selects content-authoring from the native DSH catalog and returns one direction, the decisive evidence limit and one next action in Chinese.",
-    "expectedFailure": "No Skill receipt, an explicit-only loading path, an English response, or a complete multi-section proposal outline fails."
+    "expectedResult": "The model selects content-authoring for the requested decision memo and returns the conclusion, evidence boundary, and one next action in Chinese.",
+    "expectedFailure": "No Skill receipt, an English response, invented source facts, or a generic production workflow fails."
   },
   "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "markdown",
@@ -30,7 +30,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "我只有一个尚未批准的创作概念，范围、证据和交付形式都未确定。请只用“方向、依据、下一步”告诉我现在最小但有用的规划结论；不要先写完整企划书、备选方案或详细执行步骤。"
+      "prompt": "请把以下已知信息整理成一份简短决策备忘录，只用“结论、证据边界、下一步”三部分：当前动画企划只有封面截图，没有内页、阅读顺序或分镜证据；本轮不决定 90 秒镜头表。不要添加制作流程或项目阶段。"
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
   ],
@@ -49,7 +49,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "content-authoring",
-        "fingerprint": "sha256:700fccbf955dc206bbe1cf4c797842b5a15e1dd1d549a1051ddb49aa0d8b24ba"
+        "fingerprint": "sha256:8e978c56142492fede4b73d6f9d186b004490f702214b59265644952bed8770b"
       },
       "status": "injected",
       "evidenceRef": "implicit-routing-facts"
@@ -58,14 +58,16 @@
       "id": "output",
       "kind": "structured-output",
       "format": "markdown",
-      "requiredFields": ["方向", "证据", "下一步"],
+      "requiredFields": ["结论", "证据边界", "下一步"],
       "forbiddenFields": [
         "文档大纲",
         "第一季故事结构",
         "12集分集提案",
         "视觉开发方案",
         "声音与音乐方案",
-        "制作规模建议"
+        "制作规模建议",
+        "素材准备",
+        "质量审查"
       ],
       "locale": "zh-cn",
       "evidenceRef": "implicit-routing-facts"
