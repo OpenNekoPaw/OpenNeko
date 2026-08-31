@@ -126,6 +126,11 @@ export interface DshAcpProjectionToolSnapshot {
   readonly terminal: boolean;
 }
 
+export interface DshAcpProjectedTodoItem {
+  readonly content: string;
+  readonly status: 'pending' | 'in_progress' | 'completed';
+}
+
 export interface DshAcpProjectionOptions {
   readonly maxEventsPerSession?: number;
   readonly maxAssistantStreamBytes?: number;
@@ -164,6 +169,7 @@ interface SessionProjectionState {
   lastEventFrameCount: number;
   lastContextPressureSequence: number | undefined;
   contextPressure: DshAcpContextPressureProjection | undefined;
+  todos: readonly DshAcpProjectedTodoItem[];
   currentTurn: number | undefined;
   readonly turnStartedAt: Map<number, number>;
   readonly openSteps: Set<string>;
@@ -323,9 +329,25 @@ export class DshAcpProjection {
         },
         () => {
           session.currentTurn = turn;
+          session.todos = [];
           session.turnStartedAt.set(turn, notification.time);
         },
       );
+    }
+    if (notification.type === 'todo/write') {
+      const todos = readTodos(notification.data);
+      if (todos === undefined) {
+        return this.record(
+          session,
+          diagnostic(
+            session.sessionId,
+            'ACP_PROJECTION_INVALID_TODOS',
+            'DSH todo/write must contain unique concrete items with canonical statuses.',
+          ),
+        );
+      }
+      session.todos = todos;
+      return [];
     }
     if (notification.type === 'step/start' || notification.type === 'step/end') {
       const identity = readTurnStep(notification.data);
@@ -717,6 +739,7 @@ export class DshAcpProjection {
       sessionId,
       currentTurn: session.currentTurn,
       contextPressure: session.contextPressure,
+      todos: session.todos,
       events: [...session.events],
       tools: [...session.tools.values()].map((tool) => ({
         toolCallId: tool.toolCallId,
@@ -1120,6 +1143,7 @@ export class DshAcpProjection {
         lastEventFrameCount: 1,
         lastContextPressureSequence: undefined,
         contextPressure: undefined,
+        todos: [],
         currentTurn: undefined,
         turnStartedAt: new Map(),
         openSteps: new Set(),
@@ -1220,8 +1244,46 @@ export interface DshAcpProjectionSnapshot {
   readonly sessionId: string;
   readonly currentTurn: number | undefined;
   readonly contextPressure: DshAcpContextPressureProjection | undefined;
+  readonly todos: readonly DshAcpProjectedTodoItem[];
   readonly events: readonly DshAcpProjectedEvent[];
   readonly tools: readonly DshAcpProjectionToolSnapshot[];
+}
+
+function readTodos(value: unknown): readonly DshAcpProjectedTodoItem[] | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const entries = Object.entries(value);
+  if (entries.length !== 1 || entries[0]?.[0] !== 'todos' || !Array.isArray(entries[0][1])) {
+    return undefined;
+  }
+  const seen = new Set<string>();
+  const todos: DshAcpProjectedTodoItem[] = [];
+  for (const candidate of entries[0][1]) {
+    if (typeof candidate !== 'object' || candidate === null || Array.isArray(candidate)) {
+      return undefined;
+    }
+    const fields = Object.entries(candidate);
+    if (
+      fields.length !== 2 ||
+      !fields.some(([key]) => key === 'content') ||
+      !fields.some(([key]) => key === 'status')
+    ) {
+      return undefined;
+    }
+    const content = Reflect.get(candidate, 'content');
+    const status = Reflect.get(candidate, 'status');
+    if (
+      typeof content !== 'string' ||
+      content.length === 0 ||
+      content.trim() !== content ||
+      seen.has(content) ||
+      (status !== 'pending' && status !== 'in_progress' && status !== 'completed')
+    ) {
+      return undefined;
+    }
+    seen.add(content);
+    todos.push({ content, status });
+  }
+  return Object.freeze(todos);
 }
 
 function sameContextPressure(

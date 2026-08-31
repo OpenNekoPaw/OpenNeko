@@ -49,6 +49,12 @@ describe('Desktop system theme', () => {
       expect(document.documentElement.style.getPropertyValue('--neko-fg-muted')).toBe(
         theme === 'dark' ? '#9aa19c' : '#70706c',
       );
+      expect(
+        document.documentElement.style.getPropertyValue('--neko-editor-selectionBackground'),
+      ).toBe(theme === 'dark' ? '#315d4e' : '#c8ded5');
+      expect(
+        document.documentElement.style.getPropertyValue('--neko-editor-selectionForeground'),
+      ).toBe(theme === 'dark' ? '#effaf5' : '#20201f');
     },
   );
 

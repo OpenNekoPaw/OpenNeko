@@ -334,6 +334,19 @@ describe('Desktop DSH Session Host', () => {
     const prompt = vi.fn(async () => ({ stopReason: 'end_turn' as const }));
     const applyConversation = vi.fn(async () => ({ supportsImageInput: false }));
     const projection = new DshAcpProjection();
+    projection.acceptSessionEvent({
+      sessionId: identity.dshSessionId,
+      sequence: 0,
+      time: 1_100,
+      type: 'todo/write',
+      data: {
+        todos: [
+          { content: 'Inspect source evidence', status: 'completed' },
+          { content: 'Define the PV structure', status: 'in_progress' },
+        ],
+      },
+      replay: false,
+    });
     projection.acceptSessionUpdate({
       sessionId: identity.dshSessionId,
       _meta: { opennekoSequence: 1, opennekoTurn: 0 },
@@ -371,6 +384,10 @@ describe('Desktop DSH Session Host', () => {
       prompt.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
     );
     expect(result.stopReason).toBe('end_turn');
+    expect(result.projection.todos).toEqual([
+      { content: 'Inspect source evidence', status: 'completed' },
+      { content: 'Define the PV structure', status: 'in_progress' },
+    ]);
     expect(result.projection.events).toEqual([
       {
         kind: 'tool',

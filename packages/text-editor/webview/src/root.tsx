@@ -19,7 +19,7 @@ import {
 } from 'react';
 import type { TextEditorRuntimeBootstrap } from './runtime-bootstrap';
 import type { TextEditorHostRuntime } from './host-runtime';
-import type { MilkdownEditorActions } from './milkdown-rich-editor';
+import type { MilkdownEditorActions, MilkdownEditorSelectionActions } from './milkdown-rich-editor';
 import {
   isTextEditorDiagnosticCode,
   textEditorDiagnosticLabel,
@@ -80,6 +80,7 @@ export function TextEditorRoot({
   const requestOrdinal = useRef(0);
   const editorView = useRef<EditorView>();
   const richEditorActions = useRef<MilkdownEditorActions>();
+  const richEditorSelectionActions = useRef<MilkdownEditorSelectionActions>();
   const pendingSourceOffset = useRef<number>();
   const [activeEditor, setActiveEditor] = useState<'rich' | 'source'>(
     parsedSnapshot.snapshot.mode === 'rich' ? 'rich' : 'source',
@@ -95,6 +96,12 @@ export function TextEditorRoot({
   const bindRichEditorActions = useCallback((value: MilkdownEditorActions | undefined) => {
     richEditorActions.current = value;
   }, []);
+  const bindRichEditorSelectionActions = useCallback(
+    (value: MilkdownEditorSelectionActions | undefined) => {
+      richEditorSelectionActions.current = value;
+    },
+    [],
+  );
   const activateRichEditor = useCallback(() => setActiveEditor('rich'), []);
   const activateSourceEditor = useCallback(() => setActiveEditor('source'), []);
 
@@ -206,6 +213,12 @@ export function TextEditorRoot({
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
     if (event.defaultPrevented) return;
     const modifier = event.metaKey || event.ctrlKey;
+    if (modifier && !event.altKey && !event.shiftKey && event.code === 'KeyA') {
+      if (activeEditor !== 'rich' || !richEditorSelectionActions.current) return;
+      event.preventDefault();
+      richEditorSelectionActions.current.selectAll();
+      return;
+    }
     if (modifier && !event.altKey && !event.shiftKey && event.code === 'KeyS') {
       event.preventDefault();
       if (projection.dirty) void save();
@@ -366,6 +379,7 @@ export function TextEditorRoot({
                 onError={setOperationError}
                 onFocus={activateRichEditor}
                 onActions={bindRichEditorActions}
+                onSelectionActions={bindRichEditorSelectionActions}
                 onOpenSource={() => updatePresentationMode('source')}
                 onRevealSource={(offset) => {
                   const view = editorView.current;

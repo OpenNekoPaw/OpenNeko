@@ -526,6 +526,9 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
                 />
               ),
             )}
+            {props.projection && props.projection.todos.length > 0 ? (
+              <DshPlanPanel copy={copy} todos={props.projection.todos} />
+            ) : null}
             {activeTurnStart ? (
               <DshActiveTurnStatus
                 copy={copy}
@@ -1635,6 +1638,73 @@ function formatTurnDuration(copy: DshAgentCopy, durationMs: number): string {
     .replace('{seconds}', String(seconds).padStart(2, '0'));
 }
 
+function DshPlanPanel({
+  copy,
+  todos,
+}: {
+  readonly copy: DshAgentCopy;
+  readonly todos: DshSessionHostProjection['todos'];
+}): JSX.Element {
+  const [expanded, setExpanded] = useState(() => todos.some((todo) => todo.status !== 'completed'));
+  const completedCount = todos.filter((todo) => todo.status === 'completed').length;
+  const complete = completedCount === todos.length;
+  const tone = complete ? 'is-success' : 'is-info';
+  const status = copy.planProgress
+    .replace('{completed}', String(completedCount))
+    .replace('{total}', String(todos.length));
+
+  return (
+    <div className="agent-message-list-item py-0.5" data-agent-plan={tone}>
+      <div className="agent-transcript-rail">
+        <div className="agent-turn-activity ml-7">
+          <div className={`agent-inline-card ${tone}`}>
+            <button
+              aria-expanded={expanded}
+              className="agent-inline-header flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[11px] transition-colors"
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+            >
+              {complete ? (
+                <SuccessIcon className="h-3 w-3 shrink-0 text-[var(--agent-success)]" />
+              ) : (
+                <LoadingIcon className="h-3 w-3 shrink-0 text-[var(--agent-info)]" />
+              )}
+              <span className="shrink-0 font-medium text-[var(--agent-fg)]">{copy.plan}</span>
+              <span className="min-w-0 flex-1 truncate text-[10px] text-[var(--agent-fg-secondary)]">
+                {status}
+              </span>
+              <ChevronDownIcon
+                className={`h-3 w-3 shrink-0 text-[var(--agent-fg-secondary)] transition-transform ${expanded ? 'rotate-180' : ''}`}
+              />
+            </button>
+            {expanded ? (
+              <ol className="agent-plan-list border-t border-[var(--agent-divider)]">
+                {todos.map((todo, index) => (
+                  <li className="agent-plan-item" key={todo.content}>
+                    <span
+                      aria-label={copy.planStatus[todo.status]}
+                      className={`agent-plan-status is-${todo.status}`}
+                    >
+                      {todo.status === 'completed' ? (
+                        <SuccessIcon />
+                      ) : todo.status === 'in_progress' ? (
+                        <LoadingIcon />
+                      ) : (
+                        <span>{index + 1}</span>
+                      )}
+                    </span>
+                    <span className="agent-plan-content">{todo.content}</span>
+                  </li>
+                ))}
+              </ol>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DshToolActivity({
   active,
   copy,
@@ -2056,6 +2126,9 @@ interface DshAgentCopy {
   readonly output: string;
   readonly openPersistedDocument: string;
   readonly permissions: string;
+  readonly plan: string;
+  readonly planProgress: string;
+  readonly planStatus: Readonly<Record<'pending' | 'in_progress' | 'completed', string>>;
   readonly placeholder: string;
   readonly processNote: string;
   readonly processNoteUnavailable: string;
@@ -2125,6 +2198,9 @@ const EN_COPY: DshAgentCopy = {
   newConversation: 'New conversation',
   modelRequired: 'Select a configured model before sending.',
   permissions: 'Pending permissions',
+  plan: 'Creative plan',
+  planProgress: '{completed}/{total} steps completed',
+  planStatus: { pending: 'Pending', in_progress: 'In progress', completed: 'Completed' },
   placeholder: 'Ask the DSH Agent…',
   processNote: 'Progress update',
   processNoteUnavailable:
@@ -2199,6 +2275,9 @@ const ZH_COPY: DshAgentCopy = {
   newConversation: '新会话',
   modelRequired: '发送前请选择已配置的模型。',
   permissions: '待处理权限',
+  plan: '创作步骤',
+  planProgress: '{completed}/{total} 步已完成',
+  planStatus: { pending: '待处理', in_progress: '进行中', completed: '已完成' },
   placeholder: '向 DSH Agent 提问…',
   processNote: '过程说明',
   processNoteUnavailable: '模型未提供额外的过程说明；可展开查看当前工具状态。',

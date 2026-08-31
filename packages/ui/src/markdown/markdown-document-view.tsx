@@ -139,7 +139,7 @@ function renderMarkdownNode(node: MarkdownNode): ReactNode {
         >
           <table className="neko-markdown-table min-w-[40rem] w-full border-collapse text-left text-xs">
             <thead>{renderMarkdownNode(node.header)}</thead>
-            <tbody>{node.rows.map((row) => renderMarkdownNode(row))}</tbody>
+            <tbody>{renderMarkdownChildren(node.rows)}</tbody>
           </table>
         </div>
       );

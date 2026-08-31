@@ -36,6 +36,7 @@ export {
   type DshAcpProjectionOptions,
   type DshAcpProjectionSnapshot,
   type DshAcpProjectionToolSnapshot,
+  type DshAcpProjectedTodoItem,
 } from './dsh-acp-projection';
 export type {
   RequestPermissionRequest as DshAcpPermissionRequest,

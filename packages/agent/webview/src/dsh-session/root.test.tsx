@@ -29,6 +29,7 @@ describe('DshAgentView content-creation composer', () => {
       conversationId: 'conversation-character',
       dshSessionId: 'dsh-character',
       title: 'Neko',
+      todos: [],
       inbox: { nextTurn: [], nextStep: [] },
       events: [
         {
@@ -68,6 +69,7 @@ describe('DshAgentView content-creation composer', () => {
             projectedTokens: 41_100,
             contextWindow: 256_000,
           },
+          todos: [],
           inbox: { nextTurn: [], nextStep: [] },
           events: [],
         }}
@@ -92,6 +94,7 @@ describe('DshAgentView content-creation composer', () => {
           dshSessionId: 'dsh-session-1',
           title: 'Workspace planning',
           currentTurn: 2,
+          todos: [],
           inbox: {
             nextTurn: [
               {
@@ -432,6 +435,7 @@ describe('DshAgentView content-creation composer', () => {
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
           title: 'Workspace planning',
+          todos: [],
           inbox: { nextTurn: [], nextStep: [] },
           events: [
             {
@@ -488,6 +492,7 @@ describe('DshAgentView content-creation composer', () => {
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
           title: 'Workspace planning',
+          todos: [],
           inbox: { nextTurn: [], nextStep: [] },
           events: [
             {
@@ -540,6 +545,7 @@ describe('DshAgentView content-creation composer', () => {
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
           title: 'Workspace planning',
+          todos: [],
           inbox: { nextTurn: [], nextStep: [] },
           events: [
             {
@@ -587,6 +593,7 @@ describe('DshAgentView content-creation composer', () => {
           dshSessionId: 'dsh-progress',
           title: 'Storyboard review',
           currentTurn: 2,
+          todos: [],
           inbox: { nextTurn: [], nextStep: [] },
           events: [
             {
@@ -651,6 +658,7 @@ describe('DshAgentView content-creation composer', () => {
           dshSessionId: 'dsh-no-progress',
           title: 'Tool-only turn',
           currentTurn: 3,
+          todos: [],
           inbox: { nextTurn: [], nextStep: [] },
           events: [
             {
@@ -678,6 +686,7 @@ describe('DshAgentView content-creation composer', () => {
           dshSessionId: 'dsh-composing',
           title: 'Composing final answer',
           currentTurn: 4,
+          todos: [],
           inbox: { nextTurn: [], nextStep: [] },
           events: [
             {
@@ -696,11 +705,41 @@ describe('DshAgentView content-creation composer', () => {
     expect(screen.getByRole('button', { name: /工作进度.*1 项操作已完成/u })).toBeTruthy();
   });
 
+  it('shows the authoritative creative plan with concrete step status', () => {
+    const view = renderAgent(
+      <DshComposerHarness
+        onSubmit={vi.fn(async () => true)}
+        projection={{
+          conversationId: 'conversation-plan',
+          dshSessionId: 'dsh-plan',
+          title: 'PV workflow',
+          currentTurn: 4,
+          todos: [
+            { content: '核对漫画证据与创作边界', status: 'completed' },
+            { content: '确定 PV 结构与叙事节拍', status: 'in_progress' },
+            { content: '制作并验收动态分镜', status: 'pending' },
+          ],
+          inbox: { nextTurn: [], nextStep: [] },
+          events: [],
+        }}
+      />,
+    );
+
+    const plan = screen.getByRole('button', { name: /创作步骤.*1\/3 步已完成/u });
+    expect(plan.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByText('核对漫画证据与创作边界')).toBeTruthy();
+    expect(screen.getByLabelText('进行中')).toBeTruthy();
+    fireEvent.click(plan);
+    expect(screen.queryByText('制作并验收动态分镜')).toBeNull();
+    expect(view.container.querySelector('[data-agent-plan="is-info"]')).toBeTruthy();
+  });
+
   it('resets expanded Tool details when the exact Conversation or DSH Session changes', () => {
     const firstProjection = {
       conversationId: 'conversation-first',
       dshSessionId: 'dsh-first',
       title: 'First conversation',
+      todos: [],
       inbox: { nextTurn: [], nextStep: [] },
       events: [
         {
@@ -733,6 +772,7 @@ describe('DshAgentView content-creation composer', () => {
           conversationId: 'conversation-second',
           dshSessionId: 'dsh-second',
           title: 'Second conversation',
+          todos: [],
           inbox: { nextTurn: [], nextStep: [] },
           events: [
             {
@@ -892,6 +932,7 @@ describe('DshAgentView content-creation composer', () => {
           dshSessionId: 'dsh-running-model-change',
           title: 'Running model change',
           currentTurn: 1,
+          todos: [],
           inbox: { nextTurn: [], nextStep: [] },
           events: [],
         }}
@@ -1068,6 +1109,28 @@ describe('DshAgentView content-creation composer', () => {
         canvasTurnTarget: workspaceBoardTarget,
       },
     );
+  });
+
+  it('preserves native range selection, select-all, and copy shortcuts in the composer', () => {
+    renderAgent(<DshComposerHarness onSubmit={vi.fn(async () => true)} />);
+    const composer = screen.getByRole('textbox', { name: '消息' }) as HTMLTextAreaElement;
+    const value = '批量选择并复制 Agent 输入';
+
+    fireEvent.change(composer, { target: { value } });
+    composer.focus();
+    composer.setSelectionRange(2, 8);
+
+    expect(composer.selectionStart).toBe(2);
+    expect(composer.selectionEnd).toBe(8);
+    expect(fireEvent.copy(composer)).toBe(true);
+    expect(fireEvent.keyDown(composer, { key: 'a', code: 'KeyA', metaKey: true })).toBe(true);
+    expect(fireEvent.keyDown(composer, { key: 'a', code: 'KeyA', ctrlKey: true })).toBe(true);
+
+    composer.select();
+    expect(composer.selectionStart).toBe(0);
+    expect(composer.selectionEnd).toBe(value.length);
+    expect(fireEvent.keyDown(composer, { key: 'c', code: 'KeyC', metaKey: true })).toBe(true);
+    expect(fireEvent.keyDown(composer, { key: 'c', code: 'KeyC', ctrlKey: true })).toBe(true);
   });
 
   it('restores pasted image content when Host admission rejects the submission', async () => {
@@ -1536,6 +1599,7 @@ describe('DshAgentView content-creation composer', () => {
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
           title: 'Workspace planning',
+          todos: [],
           inbox: { nextTurn: [], nextStep: [] },
           currentTurn: 1,
           events: [{ kind: 'turn', turn: 1, phase: 'start', startedAt: 10_000 }],
@@ -1575,6 +1639,7 @@ describe('DshAgentView content-creation composer', () => {
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
           title: 'Workspace planning',
+          todos: [],
           inbox: { nextTurn: [], nextStep: [] },
           events: [
             { kind: 'turn', turn: 1, phase: 'start', startedAt: 10_000 },
@@ -1620,6 +1685,7 @@ describe('DshAgentView content-creation composer', () => {
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
           title: 'Workspace planning',
+          todos: [],
           inbox: { nextTurn: [], nextStep: [] },
           events: [
             { kind: 'turn', turn: 2, phase: 'start', startedAt: 1_000 },
@@ -1663,6 +1729,7 @@ describe('DshAgentView content-creation composer', () => {
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
           title: 'Workspace planning',
+          todos: [],
           inbox: { nextTurn: [], nextStep: [] },
           currentTurn: 4,
           events: [
@@ -1718,6 +1785,7 @@ describe('DshAgentView content-creation composer', () => {
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
           title: 'Workspace planning',
+          todos: [],
           inbox: { nextTurn: [], nextStep: [] },
           events: [
             { kind: 'turn', turn: 4, phase: 'start', startedAt: 1_000 },
@@ -1782,6 +1850,7 @@ describe('DshAgentView content-creation composer', () => {
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
           title: 'Workspace planning',
+          todos: [],
           inbox: { nextTurn: [], nextStep: [] },
           events: [
             {
@@ -1854,6 +1923,7 @@ describe('DshAgentView content-creation composer', () => {
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
           title: 'Workspace planning',
+          todos: [],
           inbox: { nextTurn: [], nextStep: [] },
           events: [
             {
@@ -2013,6 +2083,7 @@ function renderImageMessage(
         conversationId: 'conversation-image',
         dshSessionId: 'dsh-image',
         title: 'Image review',
+        todos: [],
         inbox: { nextTurn: [], nextStep: [] },
         events: [
           {

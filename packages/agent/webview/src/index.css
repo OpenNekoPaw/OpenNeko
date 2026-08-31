@@ -666,6 +666,11 @@ body {
   max-width: 100%;
 }
 
+.dsh-agent-view ::selection {
+  background-color: var(--neko-editor-selectionBackground, rgba(95, 99, 97, 0.32));
+  color: var(--neko-editor-selectionForeground, inherit);
+}
+
 .agent-transcript-rail {
   box-sizing: border-box;
   width: calc(100% - 24px);
@@ -971,6 +976,59 @@ body {
   flex-direction: column;
   gap: 6px;
   overflow-y: auto;
+}
+
+.agent-plan-list {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding: 9px 10px;
+  list-style: none;
+}
+
+.agent-plan-item {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 17px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  color: var(--agent-fg-secondary);
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.agent-plan-status {
+  display: grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border: 1px solid var(--agent-border);
+  border-radius: 999px;
+  color: var(--agent-fg-secondary);
+  font-size: 9px;
+  line-height: 1;
+}
+
+.agent-plan-status svg {
+  width: 12px;
+  height: 12px;
+}
+
+.agent-plan-status.is-in_progress {
+  border-color: color-mix(in srgb, var(--agent-info) 55%, transparent);
+  color: var(--agent-info);
+}
+
+.agent-plan-status.is-completed {
+  border-color: color-mix(in srgb, var(--agent-success) 55%, transparent);
+  color: var(--agent-success);
+}
+
+.agent-plan-content {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 560px) {

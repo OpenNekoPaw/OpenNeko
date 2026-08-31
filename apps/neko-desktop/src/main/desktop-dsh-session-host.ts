@@ -595,6 +595,7 @@ export class DesktopDshSessionHost {
         ? {}
         : { contextPressure: snapshot.contextPressure }),
       inbox,
+      todos: snapshot.todos,
       events: projectEvents(
         snapshot.events,
         record.context.kind === 'workspace',

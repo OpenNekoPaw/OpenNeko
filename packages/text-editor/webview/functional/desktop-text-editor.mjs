@@ -138,6 +138,15 @@ export const desktopTextEditorScenario = Object.freeze({
       })),
       screenshot: markdownOutlineRevealScreenshot,
     });
+    const { evidence: markdownRichSelection, screenshot: markdownRichSelectionScreenshot } =
+      await verifyRichSelectAllAndCopy(
+        evaluate,
+        pressKey,
+        screenshot,
+        'markdown-rich-select-all-copy',
+        ['创作笔记', '收束内容 14。'],
+      );
+    checkpoint('markdown-rich-select-all-copy', markdownRichSelection);
     await type('.neko-text-editor-rich .ProseMirror', MARKDOWN_RICH_INPUT);
     await waitForRichText(evaluate, MARKDOWN_RICH_INPUT);
     await waitForEditorDirty(evaluate);
@@ -190,6 +199,15 @@ export const desktopTextEditorScenario = Object.freeze({
         )}`,
       );
     }
+    const { evidence: markdownReadOnlySelection, screenshot: markdownReadOnlySelectionScreenshot } =
+      await verifyRichSelectAllAndCopy(
+        evaluate,
+        pressKey,
+        screenshot,
+        'markdown-read-only-rich-select-all-copy',
+        ['你好', '存在'],
+      );
+    checkpoint('markdown-read-only-rich-select-all-copy', markdownReadOnlySelection);
     const markdownIncompleteScreenshot = await screenshot(
       'markdown-incomplete-source-preview-split',
     );
@@ -522,6 +540,8 @@ export const desktopTextEditorScenario = Object.freeze({
       markdownDefault,
       markdownRichInput,
       markdownRichParagraphBreak,
+      markdownRichSelection,
+      markdownReadOnlySelection,
       markdownIncomplete,
       imeComposition,
       jsonInvalid,
@@ -539,8 +559,10 @@ export const desktopTextEditorScenario = Object.freeze({
       denseTabRow,
       screenshots: [
         markdownDefaultScreenshot,
+        markdownRichSelectionScreenshot,
         markdownRichInputScreenshot,
         markdownRichParagraphBreakScreenshot,
+        markdownReadOnlySelectionScreenshot,
         markdownIncompleteScreenshot,
         markdownScreenshot,
         cleanSessionRecoveryScreenshot,
@@ -559,6 +581,73 @@ export const desktopTextEditorScenario = Object.freeze({
     };
   },
 });
+
+async function verifyRichSelectAllAndCopy(
+  evaluate,
+  pressKey,
+  screenshot,
+  screenshotLabel,
+  expectedSnippets,
+) {
+  await evaluate(`(() => {
+    const rich = document.querySelector('.neko-text-editor-rich .ProseMirror');
+    if (!(rich instanceof HTMLElement)) throw new Error('Rich selection surface is unavailable.');
+    rich.focus();
+    return true;
+  })()`);
+  await pressKey('a', ['Meta']);
+  const selection = await evaluate(`(() => {
+    const rich = document.querySelector('.neko-text-editor-rich .ProseMirror');
+    const current = window.getSelection();
+    if (!(rich instanceof HTMLElement) || !current) {
+      throw new Error('Rich selection state is unavailable.');
+    }
+    return {
+      text: current.toString(),
+      anchorInside: current.anchorNode !== null && rich.contains(current.anchorNode),
+      focusInside: current.focusNode !== null && rich.contains(current.focusNode),
+      focused: document.activeElement === rich,
+      tabIndex: rich.tabIndex,
+      userSelect: getComputedStyle(rich).userSelect,
+    };
+  })()`);
+  if (
+    !selection.anchorInside ||
+    !selection.focusInside ||
+    !selection.focused ||
+    selection.tabIndex !== 0 ||
+    selection.userSelect !== 'text' ||
+    expectedSnippets.some((snippet) => !selection.text.includes(snippet))
+  ) {
+    throw new Error(`Rich select-all is incomplete: ${JSON.stringify(selection)}`);
+  }
+  const selectionScreenshot = await screenshot(screenshotLabel);
+
+  await pressKey('c', ['Meta']);
+  await evaluate(`(() => {
+    const receiver = document.createElement('textarea');
+    receiver.dataset.textEditorClipboardReceiver = 'true';
+    receiver.style.position = 'fixed';
+    receiver.style.opacity = '0';
+    document.body.appendChild(receiver);
+    receiver.focus();
+    return true;
+  })()`);
+  await pressKey('v', ['Meta']);
+  const copiedText = await evaluate(`(() => {
+    const receiver = document.querySelector('[data-text-editor-clipboard-receiver="true"]');
+    if (!(receiver instanceof HTMLTextAreaElement)) {
+      throw new Error('Rich clipboard receiver is unavailable.');
+    }
+    const value = receiver.value;
+    receiver.remove();
+    return value;
+  })()`);
+  if (expectedSnippets.some((snippet) => !copiedText.includes(snippet))) {
+    throw new Error(`Rich native copy is incomplete: ${JSON.stringify(copiedText)}`);
+  }
+  return { evidence: { ...selection, copiedText }, screenshot: selectionScreenshot };
+}
 
 async function openTextDocument(evaluate, label, mode) {
   await waitForResourceItem(evaluate, label);

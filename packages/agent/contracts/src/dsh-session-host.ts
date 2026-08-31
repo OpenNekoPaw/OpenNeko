@@ -64,6 +64,11 @@ export interface DshSessionTerminalArtifactReference {
   readonly contentLocator: WorkspaceFileContentLocator;
 }
 
+export interface DshSessionTodoItem {
+  readonly content: string;
+  readonly status: 'pending' | 'in_progress' | 'completed';
+}
+
 export type DshSessionHostEvent =
   | {
       readonly kind: 'message';
@@ -138,6 +143,7 @@ export interface DshSessionHostProjection {
   readonly currentTurn?: number;
   readonly contextPressure?: DshAcpContextPressureProjection;
   readonly inbox: DshAcpInboxSnapshot;
+  readonly todos: readonly DshSessionTodoItem[];
   readonly events: readonly DshSessionHostEvent[];
 }
 
@@ -1249,11 +1255,13 @@ export function parseDshSessionHostProjection(value: unknown): DshSessionHostPro
       'currentTurn',
       'contextPressure',
       'inbox',
+      'todos',
       'events',
     ],
-    ['conversationId', 'dshSessionId', 'title', 'inbox', 'events'],
+    ['conversationId', 'dshSessionId', 'title', 'inbox', 'todos', 'events'],
   );
   if (!Array.isArray(record.events)) throw new Error('DSH Session events must be an array.');
+  if (!Array.isArray(record.todos)) throw new Error('DSH Session todos must be an array.');
   return {
     conversationId: requireIdentity(record.conversationId, 'conversationId'),
     dshSessionId: requireIdentity(record.dshSessionId, 'dshSessionId'),
@@ -1265,8 +1273,28 @@ export function parseDshSessionHostProjection(value: unknown): DshSessionHostPro
       ? {}
       : { contextPressure: decodeDshAcpContextPressureProjection(record.contextPressure) }),
     inbox: decodeDshAcpInboxSnapshot(requireRecord(record.inbox, 'inbox')),
+    todos: parseTodos(record.todos),
     events: record.events.map(parseEvent),
   };
+}
+
+function parseTodos(value: readonly unknown[]): readonly DshSessionTodoItem[] {
+  const seen = new Set<string>();
+  return value.map((candidate, index) => {
+    const record = requireRecord(candidate, `DSH Session todo[${index}]`);
+    requireExactKeys(record, ['content', 'status']);
+    const content = requireIdentity(record.content, `todo[${index}].content`);
+    if (seen.has(content)) throw new Error(`DSH Session todo '${content}' is duplicated.`);
+    seen.add(content);
+    if (
+      record.status !== 'pending' &&
+      record.status !== 'in_progress' &&
+      record.status !== 'completed'
+    ) {
+      throw new Error(`DSH Session todo[${index}] status is unsupported.`);
+    }
+    return { content, status: record.status };
+  });
 }
 
 function parseEvent(value: unknown): DshSessionHostEvent {

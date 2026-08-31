@@ -526,6 +526,24 @@ describe('TextEditorRoot', () => {
     expect(rendered.container.querySelector('.ProseMirror')?.getAttribute('aria-readonly')).toBe(
       'true',
     );
+    const rich = rendered.container.querySelector<HTMLElement>('.ProseMirror');
+    if (!rich) throw new Error('Read-only Rich selection fixture requires ProseMirror.');
+    expect(rich.tabIndex).toBe(0);
+    await act(async () => {
+      rich.focus();
+      rich.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          bubbles: true,
+          cancelable: true,
+          code: 'KeyA',
+          key: 'a',
+          metaKey: true,
+        }),
+      );
+      await settle();
+    });
+    const copied = dispatchCopy(rich);
+    expect(copied.get('text/plain')).toContain('cover.png');
     expect(runtime.applyEdits).not.toHaveBeenCalled();
 
     await clickText(rendered.container, '打开源码');
@@ -1219,6 +1237,20 @@ function applyChanges(source: string, changes: readonly TextDocumentChange[]): s
     cursor = change.to;
   }
   return result + source.slice(cursor);
+}
+
+function dispatchCopy(target: HTMLElement): ReadonlyMap<string, string> {
+  const copied = new Map<string, string>();
+  const event = new Event('copy', { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'clipboardData', {
+    value: {
+      clearData: () => copied.clear(),
+      setData: (format: string, value: string) => copied.set(format, value),
+    },
+  });
+  target.dispatchEvent(event);
+  expect(event.defaultPrevented).toBe(true);
+  return copied;
 }
 
 async function replaceRichParagraphText(rich: HTMLElement, value: string): Promise<void> {

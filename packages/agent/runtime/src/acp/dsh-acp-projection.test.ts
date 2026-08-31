@@ -245,6 +245,66 @@ describe('DshAcpProjection', () => {
     });
   });
 
+  it('projects the canonical DSH todo snapshot and clears it at the next turn boundary', () => {
+    const projection = new DshAcpProjection();
+    projection.acceptSessionEvent(turnEvent('s-plan', 0, 'turn/start', 0));
+    expect(
+      projection.acceptSessionEvent({
+        sessionId: 's-plan',
+        sequence: 1,
+        time: 1_100,
+        type: 'todo/write',
+        data: {
+          todos: [
+            { content: 'Inspect source evidence', status: 'completed' },
+            { content: 'Define the PV structure', status: 'in_progress' },
+            { content: 'Validate the shot plan', status: 'pending' },
+          ],
+        },
+        replay: false,
+      }),
+    ).toEqual([]);
+    expect(projection.snapshot('s-plan').todos).toEqual([
+      { content: 'Inspect source evidence', status: 'completed' },
+      { content: 'Define the PV structure', status: 'in_progress' },
+      { content: 'Validate the shot plan', status: 'pending' },
+    ]);
+
+    projection.acceptSessionEvent(turnEvent('s-plan', 2, 'turn/end', 0));
+    expect(projection.snapshot('s-plan').todos).toHaveLength(3);
+    projection.acceptSessionEvent(turnEvent('s-plan', 3, 'turn/start', 1));
+    expect(projection.snapshot('s-plan').todos).toEqual([]);
+  });
+
+  it('rejects one invalid todo snapshot without replacing the last valid plan', () => {
+    const projection = new DshAcpProjection();
+    projection.acceptSessionEvent(turnEvent('s-plan-invalid', 0, 'turn/start', 0));
+    projection.acceptSessionEvent({
+      sessionId: 's-plan-invalid',
+      sequence: 1,
+      time: 1_100,
+      type: 'todo/write',
+      data: { todos: [{ content: 'Inspect source evidence', status: 'in_progress' }] },
+      replay: false,
+    });
+
+    expect(
+      projection.acceptSessionEvent({
+        sessionId: 's-plan-invalid',
+        sequence: 2,
+        time: 1_200,
+        type: 'todo/write',
+        data: { todos: [{ content: 'Inspect source evidence', status: 'unknown' }] },
+        replay: false,
+      }),
+    ).toEqual([
+      expect.objectContaining({ kind: 'diagnostic', code: 'ACP_PROJECTION_INVALID_TODOS' }),
+    ]);
+    expect(projection.snapshot('s-plan-invalid').todos).toEqual([
+      { content: 'Inspect source evidence', status: 'in_progress' },
+    ]);
+  });
+
   it('projects exact user command events independently from model turns and Tools', () => {
     const projection = new DshAcpProjection();
     expect(

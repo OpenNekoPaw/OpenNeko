@@ -15,6 +15,7 @@ import {
   desktopAiProviderCapabilityScenario,
 } from './desktop-ai-model-settings.mjs';
 import { desktopAgentDiagnosticPortalScenario } from './desktop-agent-diagnostic-portal.mjs';
+import { desktopAgentTextSelectionScenario } from './desktop-agent-text-selection.mjs';
 import { desktopInvalidWindowConvergenceScenario } from './desktop-invalid-window-convergence.mjs';
 import { characterManagementDialogueScenario } from './character-management-dialogue.mjs';
 import { characterWorldManagementHierarchyScenario } from './character-world-management-hierarchy.mjs';
@@ -49,6 +50,7 @@ const scenarios = new Map(
     desktopAiModelSettingsScenario,
     desktopAiProviderCapabilityScenario,
     desktopAgentDiagnosticPortalScenario,
+    desktopAgentTextSelectionScenario,
     desktopInvalidWindowConvergenceScenario,
     characterManagementDialogueScenario,
     characterWorldManagementHierarchyScenario,

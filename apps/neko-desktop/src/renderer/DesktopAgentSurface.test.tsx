@@ -41,6 +41,7 @@ const projection: DshSessionHostProjection = {
   title: 'Workspace planning',
   currentTurn: 3,
   inbox: { nextTurn: [], nextStep: [] },
+  todos: [],
   events: [
     {
       kind: 'message',
@@ -951,6 +952,7 @@ describe('DesktopAgentSurface', () => {
       dshSessionId: projection.dshSessionId,
       title: projection.title,
       inbox: { nextTurn: [], nextStep: [] },
+      todos: [],
       events: projection.events,
     });
     const { container } = render(

@@ -703,6 +703,36 @@ describe('DSH Session Host contract', () => {
     ).toThrow(/unsupported fields/u);
   });
 
+  it('decodes the exact DSH todo projection and rejects ambiguous plan items', () => {
+    expect(
+      parseDshSessionHostProjection({
+        ...projection(),
+        todos: [
+          { content: 'Inspect source evidence', status: 'completed' },
+          { content: 'Define the PV structure', status: 'in_progress' },
+        ],
+      }).todos,
+    ).toEqual([
+      { content: 'Inspect source evidence', status: 'completed' },
+      { content: 'Define the PV structure', status: 'in_progress' },
+    ]);
+    expect(() =>
+      parseDshSessionHostProjection({
+        ...projection(),
+        todos: [
+          { content: 'Inspect source evidence', status: 'pending' },
+          { content: 'Inspect source evidence', status: 'completed' },
+        ],
+      }),
+    ).toThrow(/duplicated/u);
+    expect(() =>
+      parseDshSessionHostProjection({
+        ...projection(),
+        todos: [{ content: 'Inspect source evidence', status: 'blocked' }],
+      }),
+    ).toThrow(/status is unsupported/u);
+  });
+
   it('requires canonical DSH timing on exact turn boundaries', () => {
     expect(
       parseDshSessionHostProjection({
@@ -936,6 +966,7 @@ function projection() {
     title: 'Hello',
     currentTurn: 1,
     inbox: { nextTurn: [], nextStep: [] },
+    todos: [],
     events: [
       {
         kind: 'message',
