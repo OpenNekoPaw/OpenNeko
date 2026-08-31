@@ -321,6 +321,11 @@ async function bootstrapDesktop(): Promise<void> {
 
 async function startDesktop(): Promise<void> {
   await app.whenReady();
+  if (process.platform === 'darwin' && !app.isPackaged) {
+    const dock = app.dock;
+    if (!dock) throw new Error('macOS Desktop Dock is unavailable after app readiness.');
+    dock.setIcon(path.join(app.getAppPath(), 'resources', 'app-icon.png'));
+  }
 
   const userData = app.getPath('userData');
   const homedir = resolveDesktopRuntimeHome({
