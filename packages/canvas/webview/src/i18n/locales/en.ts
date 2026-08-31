@@ -85,24 +85,16 @@ export const en = {
   'playback.storyline.nodes': '{route} story nodes',
   'playback.storyline.nodeLabel': 'Story node {index} of {count}: {label}. {state}',
   'playback.storyline.unsequencedNotice':
-    'Order undefined: {count} nodes are unordered. Define their order in the storyline.',
+    'Order undefined: {count} nodes are unconnected. Drag a right dot to set what follows.',
   'playback.storyline.unsequencedRoute': 'Unordered · {label}',
   'playback.storyline.graphRouteLabel': '{start} → {end} · {count} nodes',
-  'playback.storyline.graphDefined':
-    'Route graph defined: {count} nodes, {starts} starts, {routes} routes.',
   'playback.storyline.canvasManagedOrderNotice':
     'This order is managed by a Canvas Sequence group. Adjust that group on the Canvas.',
-  'playback.storyline.defineGraph': 'Define route graph',
-  'playback.storyline.editGraph': 'Edit route graph',
-  'playback.storyline.cancelOrder': 'Cancel',
-  'playback.storyline.saveGraph': 'Save route graph',
   'playback.storyline.pauseBeforeOrdering': 'Pause playback before adjusting the order',
-  'playback.storyline.graphEditorInstruction':
-    'Drag from a right dot to a target node; drag same-level nodes vertically to reorder branches.',
   'playback.storyline.graphTargetInstruction': '“{source}” selected. Choose its successor node.',
-  'playback.storyline.graphEditorLabel': 'Story route graph editor',
-  'playback.storyline.graphEdgesLabel': 'Editable story route connections',
-  'playback.storyline.graphEditorNodeLabel': '{label}, {role}',
+  'playback.storyline.graphLabel': 'Story route graph',
+  'playback.storyline.graphEdgesLabel': 'Story route connections',
+  'playback.storyline.graphNodeLabel': '{label}, {role}',
   'playback.storyline.graphOutputHandle': 'Drag a successor route from “{label}”',
   'playback.storyline.graphTargetCard': 'Target node “{label}”',
   'playback.storyline.branchDragHelp': 'Drag to reorder branches in this topology level',
@@ -112,7 +104,8 @@ export const en = {
   'playback.storyline.graphEdgeExists': 'These nodes already have a Sequence connection.',
   'playback.storyline.graphCycleRejected':
     'A route cannot contain a cycle. Choose another target node.',
-  'playback.storyline.graphSaveError': 'Could not save the route graph. Check its nodes and edges.',
+  'playback.storyline.graphSaveError':
+    'Could not update the route graph. Check its nodes and edges.',
   'playback.storyline.graphRoleIsolated': 'Independent start and end',
   'playback.storyline.graphRoleStart': 'Start',
   'playback.storyline.graphRoleStartBranch': 'Start and branch node',

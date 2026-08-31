@@ -528,7 +528,6 @@ function StorylinePlaybackOverlay({
   onClose,
 }: StorylinePlaybackOverlayProps) {
   const [previewRevealed, setPreviewRevealed] = useState(false);
-  const [sequenceDraft, setSequenceDraft] = useState<CanvasPlaybackSequenceGraphInput | null>(null);
   const [sequenceSourceNodeId, setSequenceSourceNodeId] = useState<string | null>(null);
   const [sequenceConnectionDrag, setSequenceConnectionDrag] =
     useState<StorylineConnectionDragState | null>(null);
@@ -543,48 +542,26 @@ function StorylinePlaybackOverlay({
   const canvasManagedSequence =
     plan?.transitions.some((transition) => !transition.sourceConnectionId) ?? false;
   const canEditSequenceGraph = storylineGraph.nodes.length > 1 && !canvasManagedSequence;
-  const beginSequenceEdit = () => {
-    if (!canEditSequenceGraph || isPlaying) return;
-    const entryNodeIds = (plan?.entryUnitIds ?? []).flatMap((unitId) => {
-      const unit = unitById.get(unitId);
-      return unit ? [unit.sourceNodeId] : [];
-    });
-    const nodeIds = Array.from(
-      new Set([...entryNodeIds, ...Array.from(unitById.values(), (unit) => unit.sourceNodeId)]),
-    );
-    const edgeByKey = new Map<string, StorylineSequenceEdge>();
-    for (const transition of plan?.transitions ?? []) {
-      if (!transition.sourceConnectionId) continue;
-      if (!transition.sourceNodeId || !transition.targetNodeId) {
-        throw new Error('Canvas sequence transition is missing its source node identities.');
-      }
-      const edge = {
-        sourceNodeId: transition.sourceNodeId,
-        targetNodeId: transition.targetNodeId,
-      };
-      edgeByKey.set(storylineSequenceEdgeKey(edge), edge);
+  const sequenceGraph = useMemo(
+    () => createStorylineSequenceGraphInput(plan, unitById),
+    [plan, unitById],
+  );
+  const commitSequenceGraph = (graph: CanvasPlaybackSequenceGraphInput): boolean => {
+    if (!canEditSequenceGraph || isPlaying) {
+      setSequenceEditorError(
+        isPlaying
+          ? t('playback.storyline.pauseBeforeOrdering')
+          : t('playback.storyline.canvasManagedOrderNotice'),
+      );
+      return false;
     }
-    setSequenceDraft({ nodeIds, edges: Array.from(edgeByKey.values()) });
-    setSequenceSourceNodeId(null);
-    setSequenceConnectionDrag(null);
-    setSequenceBranchDragNodeId(null);
-    setSequenceEditorError(undefined);
-  };
-  const cancelSequenceEdit = () => {
-    setSequenceDraft(null);
-    setSequenceSourceNodeId(null);
-    setSequenceConnectionDrag(null);
-    setSequenceBranchDragNodeId(null);
-    setSequenceEditorError(undefined);
-  };
-  const commitSequenceEdit = () => {
-    if (!sequenceDraft) return;
-    const result = onCommitSequence(sequenceDraft);
+    const result = onCommitSequence(graph);
     if (!result.ok) {
       setSequenceEditorError(t('playback.storyline.graphSaveError'));
-      return;
+      return false;
     }
-    cancelSequenceEdit();
+    setSequenceEditorError(undefined);
+    return true;
   };
 
   useEffect(() => {
@@ -592,6 +569,13 @@ function StorylinePlaybackOverlay({
       setPreviewRevealed(true);
     }
   }, [revealRequested]);
+
+  useEffect(() => {
+    if (!isPlaying) return;
+    setSequenceSourceNodeId(null);
+    setSequenceConnectionDrag(null);
+    setSequenceBranchDragNodeId(null);
+  }, [isPlaying]);
 
   return (
     <div
@@ -628,17 +612,13 @@ function StorylinePlaybackOverlay({
             onSelectUnit,
             canEditSequenceGraph,
             canvasManagedSequence,
-            sequenceEditing: sequenceDraft !== null,
-            sequenceDraft: sequenceDraft ?? { nodeIds: [], edges: [] },
+            sequenceGraph,
             sequenceSourceNodeId,
             sequenceConnectionDrag,
             sequenceBranchDragNodeId,
             sequenceEditorError,
             editingDisabled: isPlaying,
-            onBeginSequenceEdit: beginSequenceEdit,
-            onCancelSequenceEdit: cancelSequenceEdit,
-            onCommitSequenceEdit: commitSequenceEdit,
-            onSequenceDraftChange: setSequenceDraft,
+            onSequenceGraphChange: commitSequenceGraph,
             onSequenceSourceNodeChange: setSequenceSourceNodeId,
             onSequenceConnectionDragChange: setSequenceConnectionDrag,
             onSequenceBranchDragNodeChange: setSequenceBranchDragNodeId,
@@ -759,6 +739,32 @@ function renderPlaybackPreview({
   );
 }
 
+function createStorylineSequenceGraphInput(
+  plan: CanvasPlaybackPlan | null,
+  unitById: ReadonlyMap<string, CanvasPlaybackUnit>,
+): CanvasPlaybackSequenceGraphInput {
+  const entryNodeIds = (plan?.entryUnitIds ?? []).flatMap((unitId) => {
+    const unit = unitById.get(unitId);
+    return unit ? [unit.sourceNodeId] : [];
+  });
+  const nodeIds = Array.from(
+    new Set([...entryNodeIds, ...Array.from(unitById.values(), (unit) => unit.sourceNodeId)]),
+  );
+  const edgeByKey = new Map<string, StorylineSequenceEdge>();
+  for (const transition of plan?.transitions ?? []) {
+    if (!transition.sourceConnectionId) continue;
+    if (!transition.sourceNodeId || !transition.targetNodeId) {
+      throw new Error('Canvas sequence transition is missing its source node identities.');
+    }
+    const edge = {
+      sourceNodeId: transition.sourceNodeId,
+      targetNodeId: transition.targetNodeId,
+    };
+    edgeByKey.set(storylineSequenceEdgeKey(edge), edge);
+  }
+  return { nodeIds, edges: Array.from(edgeByKey.values()) };
+}
+
 function renderStorylineGraph({
   graph,
   routes,
@@ -771,17 +777,13 @@ function renderStorylineGraph({
   onSelectUnit,
   canEditSequenceGraph,
   canvasManagedSequence,
-  sequenceEditing,
-  sequenceDraft,
+  sequenceGraph,
   sequenceSourceNodeId,
   sequenceConnectionDrag,
   sequenceBranchDragNodeId,
   sequenceEditorError,
   editingDisabled,
-  onBeginSequenceEdit,
-  onCancelSequenceEdit,
-  onCommitSequenceEdit,
-  onSequenceDraftChange,
+  onSequenceGraphChange,
   onSequenceSourceNodeChange,
   onSequenceConnectionDragChange,
   onSequenceBranchDragNodeChange,
@@ -799,17 +801,13 @@ function renderStorylineGraph({
   readonly onSelectUnit: (unitId: string, routeId: string) => void;
   readonly canEditSequenceGraph: boolean;
   readonly canvasManagedSequence: boolean;
-  readonly sequenceEditing: boolean;
-  readonly sequenceDraft: CanvasPlaybackSequenceGraphInput;
+  readonly sequenceGraph: CanvasPlaybackSequenceGraphInput;
   readonly sequenceSourceNodeId: string | null;
   readonly sequenceConnectionDrag: StorylineConnectionDragState | null;
   readonly sequenceBranchDragNodeId: string | null;
   readonly sequenceEditorError?: string;
   readonly editingDisabled: boolean;
-  readonly onBeginSequenceEdit: () => void;
-  readonly onCancelSequenceEdit: () => void;
-  readonly onCommitSequenceEdit: () => void;
-  readonly onSequenceDraftChange: (draft: CanvasPlaybackSequenceGraphInput) => void;
+  readonly onSequenceGraphChange: (graph: CanvasPlaybackSequenceGraphInput) => boolean;
   readonly onSequenceSourceNodeChange: (nodeId: string | null) => void;
   readonly onSequenceConnectionDragChange: (drag: StorylineConnectionDragState | null) => void;
   readonly onSequenceBranchDragNodeChange: (nodeId: string | null) => void;
@@ -824,8 +822,15 @@ function renderStorylineGraph({
   );
   const unsequencedNodeCount = unsequencedNodeKeys.size;
   const requiresCanvasSequenceEditing = canvasManagedSequence;
-  const showOrderBar = graph.nodes.length > 1;
-  const graphTopInset = showOrderBar ? STORYLINE_ORDER_STATUS_INSET : 0;
+  const showOrderBar = Boolean(
+    sequenceEditorError ||
+    sequenceSourceNodeId ||
+    requiresCanvasSequenceEditing ||
+    unsequencedNodeCount > 0 ||
+    (editingDisabled && canEditSequenceGraph),
+  );
+  const showRouteSelector = routes.length > 1;
+  const graphTopInset = showOrderBar || showRouteSelector ? STORYLINE_ORDER_STATUS_INSET : 0;
   const graphWidth =
     STORYLINE_GRAPH_PADDING_X * 2 +
     Math.max(0, graph.columnCount - 1) * STORYLINE_COLUMN_WIDTH +
@@ -852,15 +857,11 @@ function renderStorylineGraph({
   });
   const graphVisualEdges = Array.from(graphVisualEdgeByKey.values());
   const graphSequenceEdges: StorylineSequenceEdge[] = graphVisualEdges;
-  const graphTargetNodeIds = new Set(graphSequenceEdges.map((edge) => edge.targetNodeId));
-  const graphStartCount = graph.nodes.filter(
-    (node) => !graphTargetNodeIds.has(node.sourceNodeId),
-  ).length;
   const unitBySourceNodeId = new Map(
     Array.from(unitById.values()).map((unit) => [unit.sourceNodeId, unit]),
   );
-  const sequenceGraphLayout = sequenceEditing
-    ? buildStorylineSequenceGraphLayout(sequenceDraft.nodeIds, sequenceDraft.edges, unitById)
+  const sequenceGraphLayout = canEditSequenceGraph
+    ? buildStorylineSequenceGraphLayout(sequenceGraph.nodeIds, sequenceGraph.edges, unitById)
     : null;
   const sequenceGraphNodeById = new Map(
     sequenceGraphLayout?.nodes.map((node) => [node.sourceNodeId, node]) ?? [],
@@ -872,25 +873,44 @@ function renderStorylineGraph({
     : 0;
   const sequenceGraphHeight = sequenceGraphLayout
     ? STORYLINE_GRAPH_PADDING_Y * 2 +
-      STORYLINE_ORDER_STATUS_INSET +
+      graphTopInset +
       Math.max(0, sequenceGraphLayout.laneCount - 1) * STORYLINE_LANE_HEIGHT +
       STORYLINE_NODE_HEIGHT
     : 0;
+  const selectedRouteSourceNodeIds = new Set(
+    (selectedRoute?.unitIds ?? []).flatMap((unitId) => {
+      const unit = unitById.get(unitId);
+      return unit ? [unit.sourceNodeId] : [];
+    }),
+  );
+  const selectedRouteEdgeKeys = new Set<string>();
+  const selectedRouteNodeIds = Array.from(selectedRouteSourceNodeIds);
+  for (let index = 0; index < selectedRouteNodeIds.length - 1; index += 1) {
+    const sourceNodeId = selectedRouteNodeIds[index];
+    const targetNodeId = selectedRouteNodeIds[index + 1];
+    if (sourceNodeId && targetNodeId) {
+      selectedRouteEdgeKeys.add(storylineSequenceEdgeKey({ sourceNodeId, targetNodeId }));
+    }
+  }
   const connectSequenceNodes = (sourceNodeId: string, targetNodeId: string): void => {
     const candidate = { sourceNodeId, targetNodeId };
     const candidateKey = storylineSequenceEdgeKey(candidate);
-    if (sequenceDraft.edges.some((edge) => storylineSequenceEdgeKey(edge) === candidateKey)) {
+    if (sequenceGraph.edges.some((edge) => storylineSequenceEdgeKey(edge) === candidateKey)) {
       onSequenceEditorError(t('playback.storyline.graphEdgeExists'));
       return;
     }
-    if (wouldCreateStorylineSequenceCycle(sequenceDraft.edges, candidate)) {
+    if (wouldCreateStorylineSequenceCycle(sequenceGraph.edges, candidate)) {
       onSequenceEditorError(t('playback.storyline.graphCycleRejected'));
       return;
     }
-    onSequenceDraftChange({
-      ...sequenceDraft,
-      edges: [...sequenceDraft.edges, candidate],
-    });
+    if (
+      !onSequenceGraphChange({
+        ...sequenceGraph,
+        edges: [...sequenceGraph.edges, candidate],
+      })
+    ) {
+      return;
+    }
     onSequenceSourceNodeChange(null);
     onSequenceEditorError(undefined);
   };
@@ -908,10 +928,13 @@ function renderStorylineGraph({
       onSequenceEditorError(t('playback.storyline.branchSameLevelOnly'));
       return;
     }
-    onSequenceDraftChange(
-      moveStorylineGraphNode(sequenceDraft, movedNodeId, referenceNodeId, direction),
-    );
-    onSequenceEditorError(undefined);
+    if (
+      onSequenceGraphChange(
+        moveStorylineGraphNode(sequenceGraph, movedNodeId, referenceNodeId, direction),
+      )
+    ) {
+      onSequenceEditorError(undefined);
+    }
   };
 
   return (
@@ -938,7 +961,7 @@ function renderStorylineGraph({
       })}
       onFocus={onFocus}
     >
-      {!sequenceEditing && routes.length > 1 ? (
+      {showRouteSelector ? (
         <select
           className="canvas-playback-storyline-route-selector"
           data-testid="canvas-playback-route-selector"
@@ -967,14 +990,12 @@ function renderStorylineGraph({
       {showOrderBar ? (
         <div
           className="canvas-playback-storyline-order-status"
-          data-has-route-selector={!sequenceEditing && routes.length > 1 ? 'true' : 'false'}
-          data-editing={sequenceEditing ? 'true' : 'false'}
+          data-has-route-selector={showRouteSelector ? 'true' : 'false'}
         >
           <span
             className="canvas-playback-storyline-order-message"
             role="status"
             title={resolveStorylineOrderMessage({
-              sequenceEditing,
               sequenceEditorError,
               selectedSourceLabel: sequenceSourceNodeId
                 ? formatPlaybackDisplayLabel(
@@ -983,13 +1004,11 @@ function renderStorylineGraph({
                 : undefined,
               requiresCanvasSequenceEditing,
               unsequencedNodeCount,
-              nodeCount: graph.nodes.length,
-              startCount: graphStartCount,
-              routeCount: routes.length,
+              editingDisabled,
+              canEditSequenceGraph,
             })}
           >
             {resolveStorylineOrderMessage({
-              sequenceEditing,
               sequenceEditorError,
               selectedSourceLabel: sequenceSourceNodeId
                 ? formatPlaybackDisplayLabel(
@@ -998,62 +1017,22 @@ function renderStorylineGraph({
                 : undefined,
               requiresCanvasSequenceEditing,
               unsequencedNodeCount,
-              nodeCount: graph.nodes.length,
-              startCount: graphStartCount,
-              routeCount: routes.length,
+              editingDisabled,
+              canEditSequenceGraph,
             })}
           </span>
-          <div className="canvas-playback-storyline-order-actions">
-            {sequenceEditing ? (
-              <>
-                <button
-                  type="button"
-                  data-storyline-order-action="cancel"
-                  onClick={onCancelSequenceEdit}
-                >
-                  {t('playback.storyline.cancelOrder')}
-                </button>
-                <button
-                  type="button"
-                  data-primary="true"
-                  data-storyline-order-action="save"
-                  disabled={sequenceDraft.nodeIds.length < 2}
-                  onClick={onCommitSequenceEdit}
-                >
-                  {t('playback.storyline.saveGraph')}
-                </button>
-              </>
-            ) : canEditSequenceGraph ? (
-              <button
-                type="button"
-                data-storyline-order-action="begin"
-                disabled={editingDisabled}
-                title={
-                  editingDisabled
-                    ? t('playback.storyline.pauseBeforeOrdering')
-                    : unsequencedNodeCount > 0
-                      ? t('playback.storyline.defineGraph')
-                      : t('playback.storyline.editGraph')
-                }
-                onClick={onBeginSequenceEdit}
-              >
-                {unsequencedNodeCount > 0
-                  ? t('playback.storyline.defineGraph')
-                  : t('playback.storyline.editGraph')}
-              </button>
-            ) : null}
-          </div>
         </div>
       ) : null}
 
       <div className="canvas-playback-storyline-viewport" data-canvas-wheel-owner="content">
-        {sequenceEditing && sequenceGraphLayout ? (
+        {sequenceGraphLayout ? (
           <div
-            className="canvas-playback-storyline-sequence-editor"
-            data-testid="canvas-playback-sequence-editor"
+            className="canvas-playback-storyline-graph"
+            data-testid="canvas-playback-route-graph"
             data-connection-drag-active={sequenceConnectionDrag ? 'true' : 'false'}
+            data-structure-disabled={editingDisabled ? 'true' : 'false'}
             role="group"
-            aria-label={t('playback.storyline.graphEditorLabel')}
+            aria-label={t('playback.storyline.graphLabel')}
             style={{ width: `${sequenceGraphWidth}px`, height: `${sequenceGraphHeight}px` }}
             onKeyDown={(event) => {
               if (
@@ -1076,20 +1055,28 @@ function renderStorylineGraph({
               aria-label={t('playback.storyline.graphEdgesLabel')}
             >
               <defs>
-                {sequenceDraft.edges.map((edge) => (
-                  <marker
-                    key={storylineSequenceEdgeKey(edge)}
-                    id={storylineEdgeMarkerId(`draft:${storylineSequenceEdgeKey(edge)}`)}
-                    markerWidth="8"
-                    markerHeight="6"
-                    refX="7"
-                    refY="3"
-                    orient="auto"
-                    markerUnits="userSpaceOnUse"
-                  >
-                    <path className="canvas-playback-storyline-arrow" d="M 0 0 L 8 3 L 0 6 Z" />
-                  </marker>
-                ))}
+                {sequenceGraph.edges.map((edge) => {
+                  const edgeKey = storylineSequenceEdgeKey(edge);
+                  const selected = selectedRouteEdgeKeys.has(edgeKey);
+                  return (
+                    <marker
+                      key={edgeKey}
+                      id={storylineEdgeMarkerId(`graph:${edgeKey}`)}
+                      markerWidth="8"
+                      markerHeight="6"
+                      refX="7"
+                      refY="3"
+                      orient="auto"
+                      markerUnits="userSpaceOnUse"
+                    >
+                      <path
+                        className="canvas-playback-storyline-arrow"
+                        data-selected={selected ? 'true' : 'false'}
+                        d="M 0 0 L 8 3 L 0 6 Z"
+                      />
+                    </marker>
+                  );
+                })}
                 {sequenceConnectionDrag ? (
                   <marker
                     id={storylineEdgeMarkerId('draft-preview')}
@@ -1104,7 +1091,7 @@ function renderStorylineGraph({
                   </marker>
                 ) : null}
               </defs>
-              {sequenceDraft.edges.map((edge) => {
+              {sequenceGraph.edges.map((edge) => {
                 const source = sequenceGraphNodeById.get(edge.sourceNodeId);
                 const target = sequenceGraphNodeById.get(edge.targetNodeId);
                 if (!source || !target) {
@@ -1116,7 +1103,7 @@ function renderStorylineGraph({
                   source.lane,
                   target.column,
                   target.lane,
-                  STORYLINE_ORDER_STATUS_INSET,
+                  graphTopInset,
                 );
                 const sourceLabel = formatPlaybackDisplayLabel(
                   unitBySourceNodeId.get(edge.sourceNodeId)?.label ?? edge.sourceNodeId,
@@ -1125,14 +1112,18 @@ function renderStorylineGraph({
                   unitBySourceNodeId.get(edge.targetNodeId)?.label ?? edge.targetNodeId,
                 );
                 const removeEdge = () => {
-                  onSequenceDraftChange({
-                    ...sequenceDraft,
-                    edges: sequenceDraft.edges.filter(
-                      (candidate) => storylineSequenceEdgeKey(candidate) !== edgeKey,
-                    ),
-                  });
-                  onSequenceSourceNodeChange(null);
-                  onSequenceEditorError(undefined);
+                  if (editingDisabled) return;
+                  if (
+                    onSequenceGraphChange({
+                      ...sequenceGraph,
+                      edges: sequenceGraph.edges.filter(
+                        (candidate) => storylineSequenceEdgeKey(candidate) !== edgeKey,
+                      ),
+                    })
+                  ) {
+                    onSequenceSourceNodeChange(null);
+                    onSequenceEditorError(undefined);
+                  }
                 };
                 return (
                   <g
@@ -1140,8 +1131,10 @@ function renderStorylineGraph({
                     className="canvas-playback-storyline-network-edge"
                     data-source-node-id={edge.sourceNodeId}
                     data-target-node-id={edge.targetNodeId}
+                    data-selected={selectedRouteEdgeKeys.has(edgeKey) ? 'true' : 'false'}
                     role="button"
-                    tabIndex={0}
+                    tabIndex={editingDisabled ? -1 : 0}
+                    aria-disabled={editingDisabled ? 'true' : undefined}
                     aria-label={t('playback.storyline.removeGraphEdge', {
                       source: sourceLabel,
                       target: targetLabel,
@@ -1156,7 +1149,8 @@ function renderStorylineGraph({
                     <path className="canvas-playback-storyline-network-edge-hit" d={path} />
                     <path
                       className="canvas-playback-storyline-edge"
-                      markerEnd={`url(#${storylineEdgeMarkerId(`draft:${edgeKey}`)})`}
+                      data-selected={selectedRouteEdgeKeys.has(edgeKey) ? 'true' : 'false'}
+                      markerEnd={`url(#${storylineEdgeMarkerId(`graph:${edgeKey}`)})`}
                       d={path}
                     />
                   </g>
@@ -1181,11 +1175,29 @@ function renderStorylineGraph({
               const unit = unitBySourceNodeId.get(sourceNodeId);
               if (!unit) {
                 throw new Error(
-                  `Storyline sequence editor referenced missing source node "${sourceNodeId}".`,
+                  `Storyline route graph referenced missing source node "${sourceNodeId}".`,
                 );
               }
-              const role = resolveStorylineGraphNodeRole(sourceNodeId, sequenceDraft.edges);
+              const role = resolveStorylineGraphNodeRole(sourceNodeId, sequenceGraph.edges);
               const label = formatPlaybackDisplayLabel(unit.label ?? unit.id);
+              const route =
+                (selectedRoute?.unitIds.includes(unit.id) ? selectedRoute : undefined) ??
+                routes.find((candidate) => candidate.unitIds.includes(unit.id));
+              if (!route) {
+                throw new Error(`Storyline route graph cannot resolve a route for "${unit.id}".`);
+              }
+              const unitIndex = route.unitIds.indexOf(unit.id);
+              const mediaState = resolveStorylineMediaState(unit);
+              const stateLabel = formatStorylineMediaState(mediaState);
+              const nodeDiagnostics = diagnostics.filter(
+                (diagnostic) => diagnostic.nodeId === sourceNodeId,
+              );
+              const accessibleLabel = t('playback.storyline.nodeLabel', {
+                index: unitIndex + 1,
+                count: route.unitIds.length,
+                label,
+                state: stateLabel,
+              });
               const sameColumnNodes = sequenceGraphLayout.nodes
                 .filter((node) => node.column === graphNode.column)
                 .sort((left, right) => left.lane - right.lane);
@@ -1196,10 +1208,10 @@ function renderStorylineGraph({
               const nextBranchNode = sameColumnNodes[sameColumnIndex + 1];
               const resolvePointerDrag = (event: React.PointerEvent<HTMLElement>) => {
                 const editor = event.currentTarget.closest(
-                  '[data-testid="canvas-playback-sequence-editor"]',
+                  '[data-testid="canvas-playback-route-graph"]',
                 );
                 if (!(editor instanceof HTMLElement)) {
-                  throw new Error('Storyline sequence editor is unavailable during drag.');
+                  throw new Error('Storyline route graph is unavailable during drag.');
                 }
                 const rect = editor.getBoundingClientRect();
                 const hoveredNode = document
@@ -1208,10 +1220,10 @@ function renderStorylineGraph({
                 const targetNodeId = hoveredNode?.dataset.sourceNodeId;
                 const candidate = targetNodeId ? { sourceNodeId, targetNodeId } : undefined;
                 const targetValid = candidate
-                  ? !sequenceDraft.edges.some(
+                  ? !sequenceGraph.edges.some(
                       (edge) =>
                         storylineSequenceEdgeKey(edge) === storylineSequenceEdgeKey(candidate),
-                    ) && !wouldCreateStorylineSequenceCycle(sequenceDraft.edges, candidate)
+                    ) && !wouldCreateStorylineSequenceCycle(sequenceGraph.edges, candidate)
                   : false;
                 return {
                   currentX: event.clientX - rect.left,
@@ -1227,6 +1239,15 @@ function renderStorylineGraph({
                   data-storyline-node="true"
                   data-source-node-id={sourceNodeId}
                   data-graph-role={role}
+                  data-active={unit.id === currentUnitId ? 'true' : 'false'}
+                  data-selected-route={
+                    selectedRouteSourceNodeIds.has(sourceNodeId) ? 'true' : 'false'
+                  }
+                  data-order-position={
+                    unsequencedNodeKeys.has(sourceNodeId) ? 'unsequenced' : undefined
+                  }
+                  data-media-state={mediaState}
+                  data-has-diagnostic={nodeDiagnostics.length > 0 ? 'true' : 'false'}
                   data-connection-source={sequenceSourceNodeId === sourceNodeId ? 'true' : 'false'}
                   data-drop-target={
                     sequenceConnectionDrag?.targetNodeId === sourceNodeId
@@ -1240,18 +1261,26 @@ function renderStorylineGraph({
                   }
                   data-branch-position={`${sameColumnIndex + 1}/${sameColumnNodes.length}`}
                   role="group"
-                  aria-label={t('playback.storyline.graphEditorNodeLabel', {
+                  aria-label={t('playback.storyline.graphNodeLabel', {
                     label,
                     role: formatStorylineGraphNodeRole(role),
                   })}
-                  title={
-                    sameColumnNodes.length > 1 ? t('playback.storyline.branchDragHelp') : undefined
-                  }
+                  title={[
+                    accessibleLabel,
+                    formatStorylineGraphNodeRole(role),
+                    ...(sameColumnNodes.length > 1 ? [t('playback.storyline.branchDragHelp')] : []),
+                    ...nodeDiagnostics.map((diagnostic) => diagnostic.message),
+                  ].join(' · ')}
                   style={{
                     left: `${storylineNodeX(graphNode.column)}px`,
-                    top: `${storylineNodeY(graphNode.lane, STORYLINE_ORDER_STATUS_INSET)}px`,
+                    top: `${storylineNodeY(graphNode.lane, graphTopInset)}px`,
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelectUnit(unit.id, route.id);
                   }}
                   onDragOver={(event) => {
+                    if (editingDisabled) return;
                     if (!sequenceBranchDragNodeId || sequenceBranchDragNodeId === sourceNodeId) {
                       return;
                     }
@@ -1261,6 +1290,7 @@ function renderStorylineGraph({
                     event.dataTransfer.dropEffect = 'move';
                   }}
                   onDrop={(event) => {
+                    if (editingDisabled) return;
                     event.preventDefault();
                     const movedNodeId = sequenceBranchDragNodeId;
                     onSequenceBranchDragNodeChange(null);
@@ -1275,18 +1305,18 @@ function renderStorylineGraph({
                 >
                   <span
                     className="canvas-playback-storyline-branch-drag-surface"
-                    draggable={sameColumnNodes.length > 1}
+                    draggable={!editingDisabled && sameColumnNodes.length > 1}
                     role="button"
                     tabIndex={0}
                     aria-label={t('playback.storyline.graphTargetCard', { label })}
                     onKeyDown={(event) => {
-                      if (event.key === 'ArrowUp' && previousBranchNode) {
+                      if (!editingDisabled && event.key === 'ArrowUp' && previousBranchNode) {
                         event.preventDefault();
                         event.stopPropagation();
                         moveSequenceNode(sourceNodeId, previousBranchNode.sourceNodeId, 'before');
                         return;
                       }
-                      if (event.key === 'ArrowDown' && nextBranchNode) {
+                      if (!editingDisabled && event.key === 'ArrowDown' && nextBranchNode) {
                         event.preventDefault();
                         event.stopPropagation();
                         moveSequenceNode(sourceNodeId, nextBranchNode.sourceNodeId, 'after');
@@ -1295,11 +1325,17 @@ function renderStorylineGraph({
                       if (event.key !== 'Enter' && event.key !== ' ') return;
                       event.preventDefault();
                       event.stopPropagation();
-                      if (sequenceSourceNodeId) {
+                      if (!editingDisabled && sequenceSourceNodeId) {
                         connectSequenceNodes(sequenceSourceNodeId, sourceNodeId);
+                      } else {
+                        onSelectUnit(unit.id, route.id);
                       }
                     }}
                     onDragStart={(event) => {
+                      if (editingDisabled) {
+                        event.preventDefault();
+                        return;
+                      }
                       event.dataTransfer.effectAllowed = 'move';
                       event.dataTransfer.setData('text/plain', sourceNodeId);
                       onSequenceBranchDragNodeChange(sourceNodeId);
@@ -1317,6 +1353,7 @@ function renderStorylineGraph({
                     className="canvas-playback-storyline-connection-handle canvas-playback-storyline-connection-handle--output"
                     data-storyline-output-node-id={sourceNodeId}
                     draggable={false}
+                    disabled={editingDisabled}
                     aria-pressed={sequenceSourceNodeId === sourceNodeId}
                     aria-label={t('playback.storyline.graphOutputHandle', { label })}
                     title={t('playback.storyline.graphOutputHandle', { label })}
@@ -1330,14 +1367,13 @@ function renderStorylineGraph({
                       onSequenceEditorError(undefined);
                     }}
                     onPointerDown={(event) => {
-                      if (event.button !== 0) return;
+                      if (editingDisabled || event.button !== 0) return;
                       event.preventDefault();
                       event.stopPropagation();
                       event.currentTarget.setPointerCapture(event.pointerId);
                       const originX = storylineNodeX(graphNode.column) + STORYLINE_NODE_WIDTH;
                       const originY =
-                        storylineNodeY(graphNode.lane, STORYLINE_ORDER_STATUS_INSET) +
-                        STORYLINE_NODE_HEIGHT / 2;
+                        storylineNodeY(graphNode.lane, graphTopInset) + STORYLINE_NODE_HEIGHT / 2;
                       onSequenceConnectionDragChange({
                         sourceNodeId,
                         originX,
@@ -1664,39 +1700,32 @@ function formatStorylineRouteLabel(
 }
 
 function resolveStorylineOrderMessage({
-  sequenceEditing,
   sequenceEditorError,
   selectedSourceLabel,
   requiresCanvasSequenceEditing,
   unsequencedNodeCount,
-  nodeCount,
-  startCount,
-  routeCount,
+  editingDisabled,
+  canEditSequenceGraph,
 }: {
-  readonly sequenceEditing: boolean;
   readonly sequenceEditorError?: string;
   readonly selectedSourceLabel?: string;
   readonly requiresCanvasSequenceEditing: boolean;
   readonly unsequencedNodeCount: number;
-  readonly nodeCount: number;
-  readonly startCount: number;
-  readonly routeCount: number;
+  readonly editingDisabled: boolean;
+  readonly canEditSequenceGraph: boolean;
 }): string {
   if (sequenceEditorError) return sequenceEditorError;
-  if (sequenceEditing) {
-    return selectedSourceLabel
-      ? t('playback.storyline.graphTargetInstruction', { source: selectedSourceLabel })
-      : t('playback.storyline.graphEditorInstruction');
+  if (editingDisabled && canEditSequenceGraph) {
+    return t('playback.storyline.pauseBeforeOrdering');
+  }
+  if (selectedSourceLabel) {
+    return t('playback.storyline.graphTargetInstruction', { source: selectedSourceLabel });
   }
   if (requiresCanvasSequenceEditing) return t('playback.storyline.canvasManagedOrderNotice');
   if (unsequencedNodeCount > 0) {
     return t('playback.storyline.unsequencedNotice', { count: unsequencedNodeCount });
   }
-  return t('playback.storyline.graphDefined', {
-    count: nodeCount,
-    starts: startCount,
-    routes: routeCount,
-  });
+  throw new Error('Storyline order status was rendered without a visible status condition.');
 }
 
 function storylineEdgeMarkerId(edgeId: string): string {

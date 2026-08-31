@@ -366,10 +366,10 @@ describe('Canvas creative workbench layout boundary', () => {
       /className="canvas-playback-storyline-viewport" data-canvas-wheel-owner="content"/,
     );
     expect(playbackWorkspaceSource).toMatch(/className="canvas-playback-storyline-order-status"/);
-    expect(playbackWorkspaceSource).toMatch(/data-storyline-order-action="begin"/);
-    expect(playbackWorkspaceSource).toMatch(/data-storyline-order-action="save"/);
-    expect(playbackWorkspaceSource).toMatch(/data-storyline-order-action="cancel"/);
-    expect(playbackWorkspaceSource).toMatch(/data-testid="canvas-playback-sequence-editor"/);
+    expect(playbackWorkspaceSource).not.toMatch(/data-storyline-order-action/);
+    expect(playbackWorkspaceSource).toMatch(/data-testid="canvas-playback-route-graph"/);
+    expect(playbackWorkspaceSource).toMatch(/onSequenceGraphChange: commitSequenceGraph/);
+    expect(playbackWorkspaceSource).toMatch(/const result = onCommitSequence\(graph\)/);
     expect(playbackWorkspaceSource).toMatch(/canvas-playback-storyline-network-edge/);
     expect(playbackWorkspaceSource).not.toMatch(/data-storyline-input-node-id/);
     expect(playbackWorkspaceSource).toMatch(/data-storyline-output-node-id/);
@@ -394,7 +394,7 @@ describe('Canvas creative workbench layout boundary', () => {
       /\.canvas-playback-storyline-order-message\s*\{[\s\S]*?text-overflow:\s*ellipsis;/,
     );
     expect(cssSource).toMatch(
-      /\.canvas-playback-storyline-sequence-editor\s*\{[\s\S]*?position:\s*relative;[\s\S]*?min-width:\s*100%;/,
+      /\.canvas-playback-storyline-graph\s*\{[\s\S]*?position:\s*relative;[\s\S]*?min-width:\s*100%;/,
     );
     expect(cssSource).toMatch(
       /\.canvas-playback-storyline-network-edge-hit\s*\{[\s\S]*?stroke:\s*transparent;[\s\S]*?pointer-events:\s*stroke;/,

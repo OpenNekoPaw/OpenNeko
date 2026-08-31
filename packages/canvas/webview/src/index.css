@@ -728,39 +728,6 @@ html.canvas-webview-document #root,
   white-space: nowrap;
 }
 
-.canvas-playback-storyline-order-actions {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 4px;
-}
-
-.canvas-playback-storyline-order-actions button {
-  height: 20px;
-  cursor: pointer;
-  border: 1px solid color-mix(in srgb, var(--control-border) 86%, transparent);
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--control-bg) 90%, transparent);
-  color: var(--control-fg);
-  padding: 1px 7px;
-  font-size: 10px;
-  font-weight: 600;
-}
-
-.canvas-playback-storyline-order-actions button:hover:not(:disabled) {
-  background: var(--control-hover);
-}
-
-.canvas-playback-storyline-order-actions button[data-primary='true'] {
-  border-color: color-mix(in srgb, var(--node-selected) 62%, var(--control-border));
-  background: color-mix(in srgb, var(--node-selected) 18%, var(--control-bg));
-}
-
-.canvas-playback-storyline-order-actions button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
 .canvas-playback-storyline-order-status[data-has-route-selector='true'] {
   right: calc(min(180px, 34%) + 18px);
 }
@@ -786,7 +753,7 @@ html.canvas-webview-document #root,
   min-height: 100%;
 }
 
-.canvas-playback-storyline-sequence-editor {
+.canvas-playback-storyline-graph {
   position: relative;
   min-width: 100%;
   min-height: 100%;
@@ -810,19 +777,21 @@ html.canvas-webview-document #root,
   pointer-events: stroke;
 }
 
-.canvas-playback-storyline-network-edge:hover .canvas-playback-storyline-edge,
-.canvas-playback-storyline-network-edge:focus-visible .canvas-playback-storyline-edge {
+.canvas-playback-storyline-graph:not([data-structure-disabled='true'])
+  .canvas-playback-storyline-network-edge:hover
+  .canvas-playback-storyline-edge,
+.canvas-playback-storyline-graph:not([data-structure-disabled='true'])
+  .canvas-playback-storyline-network-edge:focus-visible
+  .canvas-playback-storyline-edge {
   stroke: color-mix(in srgb, var(--danger-fg) 72%, var(--toolbar-fg-secondary));
   stroke-width: 2.5;
 }
 
-.canvas-playback-storyline-sequence-editor .canvas-playback-storyline-node {
+.canvas-playback-storyline-graph .canvas-playback-storyline-node {
   overflow: visible;
-  opacity: 1;
 }
 
-.canvas-playback-storyline-sequence-editor
-  .canvas-playback-storyline-node[data-branch-dragging='true'] {
+.canvas-playback-storyline-graph .canvas-playback-storyline-node[data-branch-dragging='true'] {
   cursor: grabbing;
   opacity: 0.48;
 }
@@ -846,8 +815,7 @@ html.canvas-webview-document #root,
   outline-offset: 3px;
 }
 
-.canvas-playback-storyline-sequence-editor
-  .canvas-playback-storyline-node[data-connection-source='true'] {
+.canvas-playback-storyline-graph .canvas-playback-storyline-node[data-connection-source='true'] {
   border-color: color-mix(in srgb, var(--node-selected) 74%, var(--control-border));
   background: color-mix(in srgb, var(--node-selected) 22%, var(--control-bg));
   box-shadow:
@@ -855,15 +823,13 @@ html.canvas-webview-document #root,
     0 4px 12px color-mix(in srgb, var(--node-selected) 18%, transparent);
 }
 
-.canvas-playback-storyline-sequence-editor
-  .canvas-playback-storyline-node[data-drop-target='valid'] {
+.canvas-playback-storyline-graph .canvas-playback-storyline-node[data-drop-target='valid'] {
   border-color: color-mix(in srgb, var(--success-fg, #4aa56a) 76%, var(--control-border));
   background: color-mix(in srgb, var(--success-fg, #4aa56a) 18%, var(--control-bg));
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--success-fg, #4aa56a) 28%, transparent);
 }
 
-.canvas-playback-storyline-sequence-editor
-  .canvas-playback-storyline-node[data-drop-target='invalid'] {
+.canvas-playback-storyline-graph .canvas-playback-storyline-node[data-drop-target='invalid'] {
   border-color: color-mix(in srgb, var(--danger-fg) 76%, var(--control-border));
   background: color-mix(in srgb, var(--danger-fg) 14%, var(--control-bg));
 }
@@ -900,6 +866,17 @@ html.canvas-webview-document #root,
 
 .canvas-playback-storyline-connection-handle--output {
   right: -9px;
+}
+
+.canvas-playback-storyline-graph[data-structure-disabled='true']
+  .canvas-playback-storyline-network-edge {
+  cursor: default;
+}
+
+.canvas-playback-storyline-graph[data-structure-disabled='true']
+  .canvas-playback-storyline-connection-handle {
+  cursor: not-allowed;
+  opacity: 0.38;
 }
 
 .canvas-playback-storyline-edge-preview {
@@ -1034,7 +1011,6 @@ html.canvas-webview-document #root,
 }
 
 .canvas-playback-storyline-route-selector:focus-visible,
-.canvas-playback-storyline-order-actions button:focus-visible,
 .canvas-playback-storyline-node:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--node-selected) 78%, transparent);
   outline-offset: 2px;

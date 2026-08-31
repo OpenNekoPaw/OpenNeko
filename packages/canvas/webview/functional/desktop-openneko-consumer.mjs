@@ -913,31 +913,25 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
         `Canvas Storyline scroll did not return to its initial position: ${JSON.stringify({ initial: storylineViewport, restored: storylineScrollRestored })}`,
       );
     }
-    await click(
-      '[data-owner-view-id="canvas:functional:video"] [data-storyline-order-action="begin"]',
-    );
     await waitForSelector(
-      '[data-owner-view-id="canvas:functional:video"] [data-testid="canvas-playback-sequence-editor"]',
+      '[data-owner-view-id="canvas:functional:video"] [data-testid="canvas-playback-route-graph"]',
     );
-    const storylineOrderEditor = await inspectCanvasStorylineOrderEditor(
-      evaluate,
-      'canvas:functional:video',
-    );
+    const storylineGraph = await inspectCanvasStorylineGraph(evaluate, 'canvas:functional:video');
     if (
-      storylineOrderEditor.nodeIds.join('|') !== 'video-node|epub-image-node' ||
-      storylineOrderEditor.graphRoles.some((role) => role !== 'isolated') ||
-      storylineOrderEditor.edgeCount !== 0 ||
-      storylineOrderEditor.inputHandleCount !== 0 ||
-      storylineOrderEditor.outputHandleCount !== 2 ||
-      storylineOrderEditor.branchOrderActionCount !== 0 ||
-      storylineOrderEditor.routeSelectorCount !== 0 ||
-      !storylineOrderEditor.instruction
+      storylineGraph.nodeIds.join('|') !== 'video-node|epub-image-node' ||
+      storylineGraph.graphRoles.some((role) => role !== 'isolated') ||
+      storylineGraph.edgeCount !== 0 ||
+      storylineGraph.inputHandleCount !== 0 ||
+      storylineGraph.outputHandleCount !== 2 ||
+      storylineGraph.modeActionCount !== 0 ||
+      storylineGraph.routeSelectorCount !== 1 ||
+      !storylineGraph.instruction
     ) {
       throw new Error(
-        `Canvas Storyline order editor is invalid: ${JSON.stringify(storylineOrderEditor)}`,
+        `Canvas Storyline unified route graph is invalid: ${JSON.stringify(storylineGraph)}`,
       );
     }
-    checkpoint('canvas-storyline-order-editor', storylineOrderEditor);
+    checkpoint('canvas-storyline-route-graph', storylineGraph);
     await drag(
       '[data-owner-view-id="canvas:functional:video"] [data-storyline-output-node-id="video-node"]',
       '[data-owner-view-id="canvas:functional:video"] [data-storyline-node="true"][data-source-node-id="epub-image-node"]',
@@ -949,7 +943,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     await waitForSelector(
       '[data-owner-view-id="canvas:functional:video"] .canvas-playback-storyline-network-edge',
     );
-    const storylineGraphConnected = await inspectCanvasStorylineOrderEditor(
+    const storylineGraphConnected = await inspectCanvasStorylineGraph(
       evaluate,
       'canvas:functional:video',
     );
@@ -963,7 +957,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       );
     }
     checkpoint('canvas-storyline-graph-connected', storylineGraphConnected);
-    const storylineOrderEditorScreenshot = await screenshot('canvas-storyline-graph-connected');
+    const storylineGraphScreenshot = await screenshot('canvas-storyline-graph-connected');
     await click(
       '[data-owner-view-id="canvas:functional:video"] .canvas-playback-storyline-network-edge',
     );
@@ -973,16 +967,6 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
         '[data-owner-view-id="canvas:functional:video"] .canvas-playback-storyline-network-edge'
       ).length === 0`,
       'Canvas Storyline graph edge was not removed.',
-    );
-    await click(
-      '[data-owner-view-id="canvas:functional:video"] [data-storyline-order-action="cancel"]',
-    );
-    await waitForCondition(
-      evaluate,
-      `document.querySelector(
-        '[data-owner-view-id="canvas:functional:video"] [data-testid="canvas-playback-sequence-editor"]'
-      ) === null`,
-      'Canvas Storyline order editor did not close after cancel.',
     );
     await waitForInteractiveSelector(
       evaluate,
@@ -1276,9 +1260,9 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       storylineScrolled,
       storylineScrollRestored,
       storylineScrolledScreenshot,
-      storylineOrderEditor,
+      storylineGraph,
       storylineGraphConnected,
-      storylineOrderEditorScreenshot,
+      storylineGraphScreenshot,
       storylineAdvancedTo: storylinePlayback.currentTime,
       videoManualStartTime: playback.videoTime,
       videoAdvancedTo: playback.videoTimeAfterPointerLeave,
@@ -1427,14 +1411,14 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
         evidence.storylineViewport.viewportTransform ||
       evidence.storylineScrollRestored.scrollLeft > evidence.storylineViewport.scrollLeft + 1 ||
       evidence.storylineScrollRestored.scrollTop > evidence.storylineViewport.scrollTop + 1 ||
-      evidence.storylineOrderEditor.nodeIds.join('|') !== 'video-node|epub-image-node' ||
-      evidence.storylineOrderEditor.graphRoles.some((role) => role !== 'isolated') ||
-      evidence.storylineOrderEditor.edgeCount !== 0 ||
-      evidence.storylineOrderEditor.inputHandleCount !== 0 ||
-      evidence.storylineOrderEditor.outputHandleCount !== 2 ||
-      evidence.storylineOrderEditor.branchOrderActionCount !== 0 ||
-      evidence.storylineOrderEditor.routeSelectorCount !== 0 ||
-      !evidence.storylineOrderEditor.instruction ||
+      evidence.storylineGraph.nodeIds.join('|') !== 'video-node|epub-image-node' ||
+      evidence.storylineGraph.graphRoles.some((role) => role !== 'isolated') ||
+      evidence.storylineGraph.edgeCount !== 0 ||
+      evidence.storylineGraph.inputHandleCount !== 0 ||
+      evidence.storylineGraph.outputHandleCount !== 2 ||
+      evidence.storylineGraph.modeActionCount !== 0 ||
+      evidence.storylineGraph.routeSelectorCount !== 1 ||
+      !evidence.storylineGraph.instruction ||
       evidence.storylineGraphConnected.graphRoles.join('|') !== 'start|end' ||
       evidence.storylineGraphConnected.edgeCount !== 1 ||
       evidence.storylineGraphConnected.selectedSourceNodeId !== null ||
@@ -2802,14 +2786,14 @@ function inspectCanvasStorylineViewport(evaluate, viewId) {
   })()`);
 }
 
-function inspectCanvasStorylineOrderEditor(evaluate, viewId) {
+function inspectCanvasStorylineGraph(evaluate, viewId) {
   return evaluate(`(() => {
     const root = document.querySelector('[data-owner-view-id=${JSON.stringify(viewId)}]');
-    const editor = root?.querySelector('[data-testid="canvas-playback-sequence-editor"]');
-    if (!(editor instanceof HTMLElement)) {
-      throw new Error('Canvas Storyline order editor is unavailable.');
+    const graph = root?.querySelector('[data-testid="canvas-playback-route-graph"]');
+    if (!(graph instanceof HTMLElement)) {
+      throw new Error('Canvas Storyline route graph is unavailable.');
     }
-    const nodes = [...editor.querySelectorAll('[data-storyline-node="true"]')];
+    const nodes = [...graph.querySelectorAll('[data-storyline-node="true"]')];
     return {
       nodeIds: nodes.map((node) => node.getAttribute('data-source-node-id')),
       graphRoles: nodes.map((node) => node.getAttribute('data-graph-role')),
@@ -2817,12 +2801,11 @@ function inspectCanvasStorylineOrderEditor(evaluate, viewId) {
         nodes.find((node) => node.getAttribute('data-connection-source') === 'true')?.getAttribute(
           'data-source-node-id',
         ) ?? null,
-      edgeCount: editor.querySelectorAll('.canvas-playback-storyline-network-edge').length,
-      inputHandleCount: editor.querySelectorAll('[data-storyline-input-node-id]').length,
-      outputHandleCount: editor.querySelectorAll('[data-storyline-output-node-id]').length,
-      branchOrderActionCount: editor.querySelectorAll(
-        '.canvas-playback-storyline-branch-order-actions button',
-      ).length,
+      edgeCount: graph.querySelectorAll('.canvas-playback-storyline-network-edge').length,
+      inputHandleCount: graph.querySelectorAll('[data-storyline-input-node-id]').length,
+      outputHandleCount: graph.querySelectorAll('[data-storyline-output-node-id]').length,
+      modeActionCount:
+        root?.querySelectorAll('[data-storyline-order-action]').length ?? 0,
       routeSelectorCount:
         root?.querySelectorAll('.canvas-playback-storyline-route-selector').length ?? 0,
       instruction:
