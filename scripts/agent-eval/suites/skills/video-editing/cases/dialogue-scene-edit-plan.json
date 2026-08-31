@@ -5,36 +5,32 @@
   "caseGroup": "canonical",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Create a timing-specific dialogue edit plan with J/L cuts and transition rationale.",
+    "userBehavior": "Request a dialogue edit without clips, timing evidence, or execution Tools and receive precise blocked bindings instead of an invented edit table.",
     "canonicalPath": [
       "builtin video-editing",
-      "timeline edit semantics",
-      "timed operations",
-      "revision validation plan"
+      "missing project evidence",
+      "current command boundary",
+      "reviewable blocked edit intent"
     ],
     "observables": [
       {
         "ref": "skill-facts",
         "kind": "runtime-fact",
-        "description": "Video-editing Host identity and operation table.",
+        "description": "Video-editing Host identity and fail-visible edit intent without fabricated clip ranges or unsupported operations.",
         "required": true
       }
     ],
-    "expectedResult": "The plan names clip ranges, edit operations, audio sync, transitions, and validation.",
-    "expectedFailure": "Missing Skill injection, timeline semantics, or false project mutation claim fails."
+    "expectedResult": "The answer states that exact clips/ranges and the current Cut schema are missing, keeps J/L-cut intent reviewable, and marks transition application unsupported until admitted by a Tool.",
+    "expectedFailure": "Invented clip identities or time ranges, assumed transition support, missing Skill injection, or false project mutation fails."
   },
-  "fixtureRefs": [
-    "empty-workspace"
-  ],
+  "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "markdown",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$video-editing 为一段 20 秒双人对白制定剪辑计划，不执行工具。输出表格，必须包含 time range、clip、operation、J/L cut、transition、audio sync、reason 和 validation。"
+      "prompt": "$video-editing 我想把一段约 20 秒双人对白剪得更连续，可以考虑 J/L cut；但本轮没有提供剪辑项目、clip identity、对白时码或当前 Cut Tool schema，也不执行工具。请输出可评审的剪辑意图，明确缺失的 clip/time range 绑定、J/L cut 意图、audio sync 检查、当前命令边界和 transition blocked 状态；不要伪造时间表。"
     },
     {
       "id": "idle",
@@ -65,14 +61,9 @@
     {
       "id": "output",
       "kind": "structured-output",
-      "format": "table",
-      "requiredFields": [
-        "time range",
-        "clip",
-        "operation",
-        "reason",
-        "validation"
-      ],
+      "format": "markdown",
+      "requiredFields": ["time range", "clip", "J/L cut", "audio sync", "transition", "blocked"],
+      "forbiddenFields": ["已修改时间线", "已添加转场"],
       "locale": "zh-cn",
       "evidenceRef": "skill-facts"
     }

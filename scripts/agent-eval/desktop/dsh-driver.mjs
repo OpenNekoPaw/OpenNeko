@@ -17,9 +17,6 @@ export function createDshDesktopAgentDriver(input) {
     async connect() {
       return evaluate({ kind: 'connect' });
     },
-    async createConversation(command = {}) {
-      return evaluate({ kind: 'create', ...command });
-    },
     async submit(command) {
       return evaluate({ kind: 'submit', ...command });
     },
@@ -249,6 +246,48 @@ export function dshDriverExpression(command) {
           ...(event.messageId === undefined ? {} : { id: event.messageId }),
         })),
     });
+    const sha256 = async (value) => {
+      const bytes = new TextEncoder().encode(value);
+      const digest = await crypto.subtle.digest('SHA-256', bytes);
+      return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+    };
+    const projectSkillReceipts = async (snapshot, configuration) => {
+      const completed = (snapshot?.events ?? []).filter(
+        (event) =>
+          event?.kind === 'tool' &&
+          event.status === 'completed' &&
+          event.title === 'skill' &&
+          typeof event.rawInput?.name === 'string',
+      );
+      const items = [];
+      for (const event of completed) {
+        const rendered = (event.rawOutput ?? []).find(
+          (block) => block?.type === 'text' && typeof block.text === 'string',
+        )?.text;
+        const instructions = rendered?.match(
+          /<skill_instructions>\\n([\\s\\S]*?)\\n<\\/skill_instructions>/u,
+        )?.[1]?.trim();
+        if (!instructions) continue;
+        const descriptor = configuration.inputCatalog?.skills?.find(
+          (skill) => skill.name === event.rawInput.name,
+        );
+        items.push({
+          name: event.rawInput.name,
+          source:
+            descriptor?.provider === 'openneko-builtin' || descriptor?.source === 'bundled'
+              ? 'builtin'
+              : descriptor?.source,
+          fingerprint: 'sha256:' + (await sha256(instructions)),
+          status: 'injected',
+          toolCallId: event.toolCallId,
+        });
+      }
+      return {
+        limit: 100,
+        items,
+        droppedCount: configuration.inputCatalog?.skillsComplete === false ? 1 : 0,
+      };
+    };
     const conversationTarget = (surface) => {
       const scope = surface.scope;
       if (scope?.kind === 'workspace' && typeof scope.projectId === 'string') {
@@ -293,28 +332,51 @@ export function dshDriverExpression(command) {
         }
         return { conversationId };
       }
-      case 'create': {
-        const current = globalThis[stateKey]?.connection ?? (await readSurface());
-        const configuration = await sessions.getComposerConfiguration(
-          current.workbenchInstanceId,
-          current.agentSurfaceId,
-        );
-        const permissionPresetId = command.permissionPresetId ?? configuration.permissionPresetId;
-        const projection = await sessions.create(
-          current.workbenchInstanceId,
-          current.agentSurfaceId,
-          text(permissionPresetId, 'permission preset'),
-          command.target ?? conversationTarget(current),
-        );
-        globalThis[stateKey] = { connection: current, conversationId: projection.conversationId };
-        return projection;
-      }
       case 'submit': {
-        const conversationId = text(command.conversationId ?? state().conversationId, 'conversation');
-        const input = command.input ?? { kind: 'message', text: text(command.prompt, 'prompt'), references: [], contextPayloads: [] };
-        const result = await sessions.submit(conversationId, input);
+        const current = state().connection;
+        const input = command.input ?? {
+          kind: 'message',
+          text: text(command.prompt, 'prompt'),
+          references: [],
+          images: [],
+          contextPayloads: command.contextPayloads ?? [],
+        };
+        let conversationId = command.conversationId ?? state().conversationId;
+        let projection;
+        let stopReason;
+        if (conversationId === undefined) {
+          const configuration = await sessions.getComposerConfiguration(
+            current.workbenchInstanceId,
+            current.agentSurfaceId,
+          );
+          const permissionPresetId = command.permissionPresetId ?? configuration.permissionPresetId;
+          projection = await sessions.create(
+            current.workbenchInstanceId,
+            current.agentSurfaceId,
+            text(permissionPresetId, 'permission preset'),
+            command.target ?? conversationTarget(current),
+            input,
+          );
+          conversationId = projection.conversationId;
+        } else {
+          conversationId = text(conversationId, 'conversation');
+          const result = await sessions.submit(conversationId, input);
+          projection = result.projection;
+          stopReason = result.stopReason;
+        }
         state().conversationId = conversationId;
-        return { ...result, projection: decorateSnapshot(result.projection), identity: { conversationId, dshSessionId: result.projection.dshSessionId, turn: latestTurn(result.projection)?.turn } };
+        return {
+          accepted: true,
+          conversationId,
+          eventOffset: 0,
+          ...(stopReason === undefined ? {} : { stopReason }),
+          projection: decorateSnapshot(projection),
+          identity: {
+            conversationId,
+            dshSessionId: projection.dshSessionId,
+            turn: latestTurn(projection)?.turn,
+          },
+        };
       }
       case 'composer-submit': {
         const conversationId = text(command.conversationId ?? state().conversationId, 'conversation');
@@ -492,7 +554,8 @@ export function dshDriverExpression(command) {
           (item) => item.id === configuration.selectedModelOptionId,
         );
         if (!selected) throw new Error('DSH Desktop Session has no effective selected model.');
-        return { status: 'facts', facts: { identity: command.identity, projection: decorateSnapshot(snapshot), configuration: { effective: { values: { modelBinding: { providerId: selected.providerId, modelId: selected.modelId } } } }, runtimePath: { controller: 'dsh-desktop-session-host', runtime: 'dsh-agent', transcript: 'dsh-session', metadata: 'openneko-conversation-catalog', projection: 'dsh-acp-projection' }, persistence: { checkpoint: 'observed', durability: 'dsh-session' }, disposal: { status: 'disposed' }, diagnostics: { items: snapshot.events.filter((event) => event.kind === 'diagnostic').map((event) => ({ severity: 'error', code: event.code, message: event.message })), droppedCount: 0 }, receipts: {} } };
+        const skills = await projectSkillReceipts(snapshot, configuration);
+        return { status: 'facts', facts: { identity: command.identity, projection: decorateSnapshot(snapshot), configuration: { effective: { values: { modelBinding: { providerId: selected.providerId, modelId: selected.modelId } } } }, runtimePath: { controller: 'dsh-desktop-session-host', runtime: 'dsh-agent', transcript: 'dsh-session', metadata: 'openneko-conversation-catalog', projection: 'dsh-acp-projection' }, persistence: { checkpoint: 'observed', durability: 'dsh-session' }, disposal: { status: 'disposed' }, diagnostics: { items: snapshot.events.filter((event) => event.kind === 'diagnostic').map((event) => ({ severity: 'error', code: event.code, message: event.message })), droppedCount: 0 }, receipts: { skills } } };
       }
       case 'permissions':
         return permissions.list(text(command.conversationId ?? state().conversationId, 'conversation'));

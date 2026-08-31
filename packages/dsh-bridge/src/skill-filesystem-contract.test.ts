@@ -272,6 +272,23 @@ describe('locked DSH filesystem Skill provider contract', () => {
     await provider.dispose();
   });
 
+  it('keeps adjacent creative Skills at distinct capability boundaries', async () => {
+    const skillRoot = resolve(import.meta.dirname, '../../skills/skills');
+    const provider = isolatedProvider(skillRoot);
+    const observation = await provider.list({ cwd: skillRoot });
+    const candidates = Array.isArray(observation) ? observation : observation.candidates;
+    const descriptions = Object.fromEntries(
+      candidates.map((candidate) => [candidate.name, candidate.description]),
+    );
+
+    expect(descriptions.image).toContain('不负责参考职责设计、候选选择、视频合成或时间线编排');
+    expect(descriptions.video).toContain('不负责裁剪变速、技术修复、时间线剪辑或导出');
+    expect(descriptions['scene-to-music']).toContain('不负责对白音效、时间线放置或最终混音');
+    expect(descriptions['script-to-timeline']).toContain('不负责媒体生成、轨道创建或时间线持久化');
+
+    await provider.dispose();
+  });
+
   it('keeps adapted creative methods on demand without importing upstream runtime authority', async () => {
     const skillRoot = resolve(import.meta.dirname, '../../skills/skills');
     const packages = [

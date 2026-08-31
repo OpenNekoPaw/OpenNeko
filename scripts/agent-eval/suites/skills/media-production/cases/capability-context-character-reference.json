@@ -5,10 +5,13 @@
   "caseGroup": "workflow",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "From an actual screenplay, inspect the current canonical Tool and Skill context, choose one approved low-risk P0 production action, execute it, and observe the durable result before proposing the next action.",
+    "userBehavior": "From an actual screenplay, compose separate creative, preparation, image-generation and candidate-selection Skills for one approved low-risk action, then observe the real result.",
     "canonicalPath": [
       "screenplay.fountain evidence",
       "builtin media-production Skill",
+      "builtin media-preparation Skill",
+      "builtin image Skill",
+      "builtin media-selection Skill",
       "immutable DSH Tool snapshot",
       "Read source Tool call",
       "terminal GenerateImage Tool call",
@@ -23,8 +26,8 @@
         "required": true
       }
     ],
-    "expectedResult": "The Agent uses current Tool and Skill context to select image generation for the approved Mara P0 reference, waits for the actual artifact, and reviews it before describing the next action.",
-    "expectedFailure": "Skipping source evidence, substituting video or text, or missing the terminal Tool result/artifact fails."
+    "expectedResult": "Media-production supplies source-grounded creative facts, media-preparation binds the image input, image performs the admitted generation call, and media-selection observes the returned artifact before the Agent describes the next action.",
+    "expectedFailure": "One Skill impersonating the whole chain, skipping source evidence, substituting video or text, selecting from prompt metadata, or missing the terminal Tool result/artifact fails."
   },
   "fixtureRefs": ["creative-planning-workspace"],
   "runtimeProfileId": "ask-markdown",
@@ -33,7 +36,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$media-production 读取 @screenplay.fountain\n\n以当前 turn 实际提供的工具和 Skill 目录为准，再从真实能力中选择一个可执行的低风险 P0 动作推进动画企划。已批准的范围仅为：根据剧本中 Mara、23:47、红伞和无头灯列车的证据，生成一张 Mara 角色视觉参考图到 generated；不得导入资产库、修改项目或改用视频。若当前图片生成不可用则明确 blocked。执行后等待真实结果，观察返回素材，再说明是否可接受以及下一步。不要预建节点图或固定工作流。"
+      "prompt": "$media-production $media-preparation $image $media-selection 读取 @screenplay.fountain\n\n按各能力边界完成一个低风险 P0 单元：media-production 只提取 Mara、23:47、红伞和无头灯列车相关的已批准创意事实；media-preparation 编译一张 Mara 角色视觉参考图所需输入；image 仅在当前 Tool schema 支持时生成到 generated；media-selection 必须观察真实返回图像后再判断。不得导入资产库、修改项目或改用视频。若任一依赖不可用则在该边界明确 blocked，不要由其他 Skill 代替。"
     },
     {
       "id": "idle",
@@ -56,7 +59,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:2be65ff83d654eec394107392dbf247c605d04d4d78ad38df15a80b443d40e55"
+        "fingerprint": "sha256:66154cb145016be232dede701e4f0d3c1468b6d8ba9e41b834d5454a11b49303"
       },
       "status": "injected",
       "evidenceRef": "capability-facts"
@@ -65,6 +68,48 @@
       "id": "model",
       "kind": "model",
       "profileId": "configured-default",
+      "evidenceRef": "capability-facts"
+    },
+    {
+      "id": "preparation-skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-preparation",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-preparation",
+        "fingerprint": "sha256:a2b95df328823598172e27c19ad61380723315b5ebb52bab6ce4ba91f92e7fa8"
+      },
+      "status": "injected",
+      "evidenceRef": "capability-facts"
+    },
+    {
+      "id": "image-skill",
+      "kind": "skill",
+      "identity": {
+        "name": "image",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "image",
+        "fingerprint": "sha256:e0c5bf2e39d3636b60d7b7071da96a8c654b7d7cd3db0b990574b4c6b0296462"
+      },
+      "status": "injected",
+      "evidenceRef": "capability-facts"
+    },
+    {
+      "id": "selection-skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-selection",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-selection",
+        "fingerprint": "sha256:1f121451b1d9c430e7a49d0d3d871070f186b1c576488da369f8a94888c19fbd"
+      },
+      "status": "injected",
       "evidenceRef": "capability-facts"
     },
     {

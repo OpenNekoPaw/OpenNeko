@@ -18,7 +18,7 @@
 
 ### 决策与处理方案
 
-体量评估先回答当前能否选择格式。证据只保留会改变结论的部分，不另写长篇来源观察。若用户要处理方案，在边界结论后给出当前证据能支持的最小创作对象和一至三个可直接提交给当前模型能力的调用包，不得用分析报告代替它们。
+体量评估先回答当前能否选择格式。证据只保留会改变结论的部分，不另写长篇来源观察。用户要创意方案时，交付当前证据支持的核心概念、主线和关键节拍；用户要生产规划或执行交接时，才把已确定创意转换为当前能力可接收的调用包。不得用分析报告代替创意方案，也不得用单个技术测试代替用户要求的创意设计。
 
 - 覆盖不足时，结论必须是“当前不能确定格式”，不得先宣布“最适合 4 集”、“建议电影”等胜出方案再在末尾撤回。
 - 一个局部样本只能支持局部时长或带敏感性的条件区间，不生成分集表、节拍模板或项目规格。
@@ -77,4 +77,4 @@ If a representative local sample exists but source-wide evidence does not, use i
 
 Keep observed facts, interpretation, estimates and creator decisions visibly distinct. A plausible estimate remains a recommendation until the creator approves it.
 
-Keep the assessment decision-sized and explain only evidence that changes the decision. If the user asks for a handling plan, follow the boundary conclusion with the smallest source-supported creative target and one to three call-ready packets for current model capabilities. Do not fill an evidence gap with an episode table, broad treatment, style guide, or production handbook.
+Keep the assessment decision-sized and explain only evidence that changes the decision. For a creative proposal, provide the source-supported concept, spine, and decisive beats. Convert approved intent into call-ready packets only for production planning or execution handoff. Do not replace a requested creative design with one technical test, and do not fill an evidence gap with an episode table or production handbook.

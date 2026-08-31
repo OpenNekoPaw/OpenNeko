@@ -5,36 +5,32 @@
   "caseGroup": "canonical",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Create a concrete dialogue/music mix plan without claiming a timeline mutation.",
+    "userBehavior": "Request a mix plan without audio measurements or a delivery specification and receive a precise evidence/capability boundary instead of invented universal parameters.",
     "canonicalPath": [
       "builtin audio-mixing",
-      "level diagnosis",
-      "ducking and loudness targets",
-      "reviewable mix plan"
+      "missing measurement diagnosis",
+      "parameter boundary",
+      "reviewable blocked handoff"
     ],
     "observables": [
       {
         "ref": "skill-facts",
         "kind": "runtime-fact",
-        "description": "Audio-mixing Host identity and structured plan output.",
+        "description": "Audio-mixing Host identity and a fail-visible handoff that does not invent level or loudness values.",
         "required": true
       }
     ],
-    "expectedResult": "The plan separates dialogue and music levels and includes ducking, loudness, and validation.",
-    "expectedFailure": "Missing Skill injection, concrete levels, or false mutation claim fails."
+    "expectedResult": "The answer binds the intended dialogue/music relationship, identifies missing measurements and platform specification, leaves parameter values undecided, and states that no audio processing capability was executed.",
+    "expectedFailure": "Invented dB/LUFS defaults, a generic mix recipe, missing Skill injection, or a false processing claim fails."
   },
-  "fixtureRefs": [
-    "empty-workspace"
-  ],
+  "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "markdown",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$audio-mixing 为一段对白加背景音乐制定混音计划，不执行工具。必须写明对白电平、音乐电平、ducking、目标 LUFS、峰值余量和验收检查。"
+      "prompt": "$audio-mixing 我想让一段对白与背景音乐清晰共存，但本轮没有提供音频、轨道、响度/峰值测量或交付平台规范，也不执行工具。请给出可评审的混音交接：区分已知意图、缺失证据、电平/ducking/LUFS/峰值参数状态和执行边界；不要伪造通用数值。"
     },
     {
       "id": "idle",
@@ -66,14 +62,8 @@
       "id": "output",
       "kind": "structured-output",
       "format": "markdown",
-      "requiredFields": [
-        "对白",
-        "音乐",
-        "ducking",
-        "LUFS",
-        "峰值",
-        "验收"
-      ],
+      "requiredFields": ["已知意图", "缺失证据", "ducking", "LUFS", "峰值", "执行边界"],
+      "forbiddenFields": ["-14 LUFS", "-18 dB", "已完成混音"],
       "locale": "zh-cn",
       "evidenceRef": "skill-facts"
     }

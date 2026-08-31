@@ -1,0 +1,100 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "creative-concept-pv-design",
+  "suiteId": "skill.media-production",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Request a concise 60-second concept PV design in the conversation from an actual screenplay, without making the media-production Skill impersonate preparation or generation capabilities.",
+    "canonicalPath": [
+      "Desktop Plan execution mode",
+      "screenplay.fountain evidence",
+      "builtin media-production Skill",
+      "creative-design request route",
+      "conversation Markdown"
+    ],
+    "observables": [
+      {
+        "ref": "creative-pv-facts",
+        "kind": "runtime-fact",
+        "description": "Exact Skill receipt, configured model, screenplay evidence, creator-useful PV design and absent production side effects.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The concise response contains one concept paragraph with no evidence inventory and at most four cross-shot invariants, followed by one six-to-eight-beat authoritative 60-second sequence. Any downstream handoff is limited to stable creative decisions, source references and continuity requirements.",
+    "expectedFailure": "Nested analysis, evidence, sound, production, technology, key-shot, acceptance or creator-question mini-sections; one row per camera action; repeated decisions; prompt packets; guessed operation or parameter names; invented story facts; an unapproved scope change; or production Tool use fails."
+  },
+  "fixtureRefs": ["creative-planning-workspace"],
+  "runtimeProfileId": "plan-markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "$media-production 读取 @screenplay.fountain\n为这个短剧本设计一支 60 秒动画概念 PV，供创作者确认创意方向。正文只保留核心概念、必要跨镜头约束和一份 6–8 个节拍的权威序列；不要输出来源分析、制作流程、模型提示词、operation 参数、验收章节或重复说明。请直接在对话中提交，不创建持久文档，不生成媒体或修改项目。"
+    },
+    {
+      "id": "idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 180000
+    }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "creative-pv-facts"
+    },
+    {
+      "id": "skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-production",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-production",
+        "fingerprint": "sha256:66154cb145016be232dede701e4f0d3c1468b6d8ba9e41b834d5454a11b49303"
+      },
+      "status": "injected",
+      "evidenceRef": "creative-pv-facts"
+    },
+    {
+      "id": "model",
+      "kind": "model",
+      "profileId": "configured-default",
+      "evidenceRef": "creative-pv-facts"
+    },
+    {
+      "id": "output",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["Mara", "23:47", "红伞", "列车"],
+      "evidenceRef": "creative-pv-facts"
+    },
+    {
+      "id": "no-image",
+      "kind": "tool-call",
+      "name": "GenerateImage",
+      "status": "absent",
+      "evidenceRef": "creative-pv-facts"
+    },
+    {
+      "id": "no-video",
+      "kind": "tool-call",
+      "name": "GenerateVideo",
+      "status": "absent",
+      "evidenceRef": "creative-pv-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "rubric": {
+    "kind": "domain-rubric",
+    "ref": "rubrics/creative-media-design-quality.json",
+    "judgeProfileId": "creative-production-judge"
+  },
+  "budget": {
+    "timeoutMs": 180000,
+    "repetitions": 1
+  }
+}

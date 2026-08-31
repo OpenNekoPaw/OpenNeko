@@ -23,13 +23,9 @@
     "expectedResult": "The brief names mood, genre/instrumentation, duration, music prompt, placement, and validation.",
     "expectedFailure": "Missing Skill injection, duration, placement, or false generation claim fails."
   },
-  "fixtureRefs": [
-    "empty-workspace"
-  ],
+  "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "markdown",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "submit",
@@ -57,7 +53,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "scene-to-music",
-        "fingerprint": "sha256:14a28b352af335a843d8ad5ed9ef2ab88bbed14f96af84c6d27492858fb38f8c"
+        "fingerprint": "sha256:c36ea8bcf19694df31e69055134f2946942acdce50b3f089f9cada45c1411e2b"
       },
       "status": "injected",
       "evidenceRef": "skill-facts"
@@ -67,6 +63,10 @@
       "kind": "structured-output",
       "format": "markdown",
       "requiredFields": [
+        "30",
+        "夜雨",
+        "废弃车站",
+        "信号灯",
         "情绪",
         "配器",
         "duration",

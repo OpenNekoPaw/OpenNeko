@@ -5,36 +5,32 @@
   "caseGroup": "canonical",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Create a parameterized color-correction and grading plan for a rainy night station shot.",
+    "userBehavior": "Request grading guidance without an image or monitoring evidence and receive a shot-bound evidence/capability boundary instead of invented parameter values.",
     "canonicalPath": [
       "builtin color-grading",
-      "technical correction",
-      "creative grade",
-      "shot-match validation"
+      "missing image evidence",
+      "correction versus grade intent",
+      "blocked execution boundary"
     ],
     "observables": [
       {
         "ref": "skill-facts",
         "kind": "runtime-fact",
-        "description": "Color-grading Host identity and parameter table.",
+        "description": "Color-grading Host identity and fail-visible guidance without fabricated image diagnosis or parameter values.",
         "required": true
       }
     ],
-    "expectedResult": "The plan separates correction from grade and names exposure, white balance, contrast, saturation, and matching checks.",
-    "expectedFailure": "Missing Skill injection, parameter values, or validation path fails."
+    "expectedResult": "The answer separates desired correction and style intent, states that exposure/white-balance/skin/matching decisions require actual images and color-management evidence, and does not claim execution.",
+    "expectedFailure": "Fabricated visual diagnosis, universal parameter values, a generic cinematic-look recipe, missing Skill injection, or false completion fails."
   },
-  "fixtureRefs": [
-    "empty-workspace"
-  ],
+  "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "markdown",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$color-grading 为夜雨车站镜头制定调色计划，不执行工具。输出参数表，必须区分校正和风格化，并覆盖 exposure、white balance、contrast、saturation、skin tone 与 shot matching。"
+      "prompt": "$color-grading 我想要夜雨车站的冷峻低调氛围，但本轮没有提供任何镜头画面、监看信号、色彩管理或匹配参考，也不执行工具。请区分风格意图、技术校正所需证据、exposure/white balance/contrast/saturation/skin tone/shot matching 的待判定状态，并明确 blocked 执行边界；不要伪造参数表。"
     },
     {
       "id": "idle",
@@ -65,13 +61,9 @@
     {
       "id": "output",
       "kind": "structured-output",
-      "format": "table",
-      "requiredFields": [
-        "参数",
-        "目标",
-        "理由",
-        "验证"
-      ],
+      "format": "markdown",
+      "requiredFields": ["风格意图", "技术校正", "所需证据", "shot matching", "blocked"],
+      "forbiddenFields": ["青橙", "已完成调色"],
       "locale": "zh-cn",
       "evidenceRef": "skill-facts"
     }

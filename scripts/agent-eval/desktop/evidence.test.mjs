@@ -62,6 +62,70 @@ describe('Desktop Agent assertion-driven evidence', () => {
     ).toThrow("process-order event 'continuation' is not supported");
   });
 
+  it('proves the final native TODO projection without reading assistant prose', () => {
+    const assertion = {
+      id: 'todo',
+      kind: 'todo-projection',
+      maxItems: 6,
+      atMostOneInProgress: true,
+      requiredStatuses: ['completed'],
+      evidenceRef: 'facts',
+    };
+    const input = dshEvidenceInput([assertion]);
+    input.projection.todos = [
+      { content: 'Review source evidence', status: 'completed' },
+      { content: 'Define the storyboard gate', status: 'completed' },
+    ];
+
+    expect(run(input)[0]).toEqual(
+      expect.objectContaining({
+        status: 'pass',
+        details: { itemCount: 2, statuses: ['completed'] },
+      }),
+    );
+
+    input.projection.todos.push({ content: 'Duplicate active item', status: 'in_progress' });
+    input.projection.todos.push({ content: 'Second active item', status: 'in_progress' });
+    expect(run(input)[0]).toEqual(
+      expect.objectContaining({ status: 'fail', message: expect.stringContaining('multiple') }),
+    );
+  });
+
+  it('requires one complete runtime-hashed Skill receipt', () => {
+    const fingerprint = `sha256:${'a'.repeat(64)}`;
+    const assertion = {
+      id: 'skill',
+      kind: 'skill',
+      identity: {
+        name: 'media-production',
+        source: 'builtin',
+        provenance: 'builtin',
+        rootId: 'builtin-skills',
+        relativePath: 'media-production',
+        fingerprint,
+      },
+      status: 'injected',
+      evidenceRef: 'facts',
+    };
+    const input = dshEvidenceInput([assertion]);
+    input.facts.receipts.skills.items = [
+      {
+        name: 'media-production',
+        source: 'builtin',
+        fingerprint,
+        status: 'injected',
+        toolCallId: 'skill-call-1',
+      },
+    ];
+
+    expect(run(input)[0]).toMatchObject({ status: 'pass' });
+    input.facts.receipts.skills.droppedCount = 1;
+    expect(run(input)[0]).toMatchObject({
+      status: 'fail',
+      message: 'Desktop Agent Skill receipt collection is incomplete.',
+    });
+  });
+
   it('proves stream and Tool order from canonical DSH projection events', () => {
     const assertion = {
       id: 'order',

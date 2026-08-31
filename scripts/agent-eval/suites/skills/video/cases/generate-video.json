@@ -52,7 +52,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "video",
-        "fingerprint": "sha256:f682ad0c1b3826ea94c2528eacaafdc350c6778b89f44de1758147c8dd83f4cf"
+        "fingerprint": "sha256:c187cef266084c95444c9ad136c6dfc5625ad28f1061e264d48c05c810914566"
       },
       "status": "injected",
       "evidenceRef": "video-facts"

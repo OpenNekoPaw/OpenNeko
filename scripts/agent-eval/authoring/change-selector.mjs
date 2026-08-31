@@ -33,6 +33,8 @@ const RULES = Object.freeze([
   rule('timeline-projection-authority', 'agent-runtime.stream-delivery', [
     'packages/agent/runtime/src/acp/dsh-acp-projection',
     'packages/agent/contracts/src/dsh-session-host',
+    'packages/agent/webview/src/dsh-session/',
+    'packages/agent/webview/src/index.css',
   ]),
   rule('tool-result-delivery', 'agent-runtime.stream-delivery', [
     'packages/content/domain/src/document/read-document-tool.ts',
@@ -53,6 +55,7 @@ const RULES = Object.freeze([
   ),
   rule('prompt-composition', 'agent-runtime.prompt-composition', [
     'packages/agent/runtime/src/prompt/',
+    'packages/dsh-bridge/src/product-system-prompt',
   ]),
   rule('skill-runtime', 'agent-runtime.skill-runtime', [
     'packages/agent/runtime/src/skill/',

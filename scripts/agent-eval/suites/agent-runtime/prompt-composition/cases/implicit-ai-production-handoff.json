@@ -1,0 +1,106 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "implicit-ai-production-handoff",
+  "suiteId": "agent-runtime.prompt-composition",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Request an AI-ready keyframe handoff in ordinary language without naming any Skill.",
+    "canonicalPath": [
+      "OpenNeko product prompt",
+      "implicit media-production selection",
+      "implicit media-preparation selection",
+      "implicit image selection",
+      "dependency-ready handoff or exact blocked binding"
+    ],
+    "observables": [
+      {
+        "ref": "implicit-handoff-facts",
+        "kind": "runtime-fact",
+        "description": "Implicit Skill receipts, screenplay evidence, and a bounded production handoff.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The Agent uses the catalog to separate the creative keyframe decision, preparation, and image operation handoff, then returns bound inputs and acceptance or the exact missing Tool binding.",
+    "expectedFailure": "Stopping at concept analysis, requiring the user to name Skills, emitting a generic workflow, inventing Tool parameters, or claiming generation success fails."
+  },
+  "fixtureRefs": ["creative-planning-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "读取 @screenplay.fountain。先把开场压缩成一个明确的关键帧决定，再准备成可交给当前 AI 图像能力的生产交接；不要执行生成，也不要让我点名能力。不要只写创意概述，只返回：镜头决定、来源绑定、生成交接、直接验收、下游用途。若 operation、参数或素材引用无法从当前 Tool schema 和真实来源绑定，保留对应字段并写精确阻塞，不得编造。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "implicit-handoff-facts" },
+    {
+      "id": "media-production-skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-production",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-production",
+        "fingerprint": "sha256:66154cb145016be232dede701e4f0d3c1468b6d8ba9e41b834d5454a11b49303"
+      },
+      "status": "injected",
+      "evidenceRef": "implicit-handoff-facts"
+    },
+    {
+      "id": "media-preparation-skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-preparation",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-preparation",
+        "fingerprint": "sha256:a2b95df328823598172e27c19ad61380723315b5ebb52bab6ce4ba91f92e7fa8"
+      },
+      "status": "injected",
+      "evidenceRef": "implicit-handoff-facts"
+    },
+    {
+      "id": "image-skill",
+      "kind": "skill",
+      "identity": {
+        "name": "image",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "image",
+        "fingerprint": "sha256:6daa91d4028b9b95cd678000ed653d31f696449735c2857115f23897d682124c"
+      },
+      "status": "injected",
+      "evidenceRef": "implicit-handoff-facts"
+    },
+    {
+      "id": "output",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["镜头决定", "来源绑定", "生成交接", "直接验收", "下游用途", "Mara", "23:47", "红伞"],
+      "evidenceRef": "implicit-handoff-facts"
+    },
+    {
+      "id": "no-false-success",
+      "kind": "final-answer",
+      "mode": "not-contains",
+      "text": ["已生成", "生成完成", "通用制作流程"],
+      "evidenceRef": "implicit-handoff-facts"
+    },
+    {
+      "id": "no-image-generation",
+      "kind": "tool-call",
+      "name": "GenerateImage",
+      "status": "absent",
+      "evidenceRef": "implicit-handoff-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

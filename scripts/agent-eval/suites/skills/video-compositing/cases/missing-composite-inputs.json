@@ -1,0 +1,69 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "missing-composite-inputs",
+  "suiteId": "skill.video-compositing",
+  "caseGroup": "failure",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Request repair of a described video defect without supplying the clip, time range, mask, or compositing operation.",
+    "canonicalPath": [
+      "builtin video-compositing Skill",
+      "bounded input check",
+      "blocked repair handoff"
+    ],
+    "observables": [
+      {
+        "ref": "composite-facts",
+        "kind": "runtime-fact",
+        "description": "Exact Skill receipt and precise missing-input diagnosis without a false repair claim.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The response binds the reported flicker defect while identifying the absent clip, time range and admitted repair operation, with no processed result.",
+    "expectedFailure": "Claiming the flicker is fixed, inventing a processed clip, or expanding into editing, grading or export fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "$video-compositing 修复竖井镜头人物边缘闪烁。本轮没有提供视频片段、问题时间范围、遮罩或合成/修复 Tool，也不执行工具。只返回：观察问题、缺失输入、处理状态、下一项动作；不得扩写剪辑、调色或导出流程，不得声称已修复。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "composite-facts" },
+    {
+      "id": "skill",
+      "kind": "skill",
+      "identity": {
+        "name": "video-compositing",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "video-compositing",
+        "fingerprint": "sha256:32f7784c78992b9a2f142e2e0dd7ecb2a0d12bac4751b4a0dd534be7e3ad467d"
+      },
+      "status": "injected",
+      "evidenceRef": "composite-facts"
+    },
+    {
+      "id": "output",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["观察问题", "缺失输入", "处理状态", "下一项动作"],
+      "evidenceRef": "composite-facts"
+    },
+    {
+      "id": "no-false-success",
+      "kind": "final-answer",
+      "mode": "not-contains",
+      "text": ["已修复", "处理后片段", "已导出"],
+      "evidenceRef": "composite-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

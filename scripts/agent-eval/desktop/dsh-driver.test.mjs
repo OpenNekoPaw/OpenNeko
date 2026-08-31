@@ -42,6 +42,37 @@ describe('canonical DSH Desktop evaluation driver', () => {
     expect(visibleActiveExpression).toContain('data-agent-model-option-id');
   });
 
+  it('materializes the first Conversation with the canonical initial Composer input', () => {
+    const expression = dshDriverExpression({ kind: 'submit', prompt: 'hello' });
+    const submitBranch = expression.slice(
+      expression.indexOf("case 'submit'"),
+      expression.indexOf("case 'composer-submit'"),
+    );
+
+    expect(submitBranch).toContain('images: []');
+    expect(submitBranch).toContain('contextPayloads: command.contextPayloads ?? []');
+    expect(submitBranch).toContain('projection = await sessions.create(');
+    expect(submitBranch).toContain(
+      'command.target ?? conversationTarget(current),\n            input,',
+    );
+    expect(submitBranch).toContain('const result = await sessions.submit(conversationId, input)');
+  });
+
+  it('projects completed Skill content as a runtime-hashed receipt', () => {
+    const expression = dshDriverExpression({
+      kind: 'facts',
+      identity: { conversationId: 'conversation-1', dshSessionId: 'session-1', turn: 1 },
+    });
+
+    expect(expression).toContain("event.title === 'skill'");
+    expect(expression).toContain(
+      '/<skill_instructions>\\n([\\s\\S]*?)\\n<\\/skill_instructions>/u',
+    );
+    expect(expression).toContain("crypto.subtle.digest('SHA-256', bytes)");
+    expect(expression).toContain("descriptor?.provider === 'openneko-builtin'");
+    expect(expression).toContain("status: 'injected'");
+  });
+
   it('drives active-session follow-up through the visible Composer and exact queue row', () => {
     const composer = dshDriverExpression({
       kind: 'composer-submit',

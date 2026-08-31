@@ -1,20 +1,13 @@
 {
   "schema": "neko.agent-eval.ablation-plan",
-  "id": "media-production-plan-mode-pilot",
+  "id": "media-creative-shot-spine-mode-pilot",
   "mode": "configuration",
   "suiteId": "skill.media-production",
-  "caseId": "animation-production-plan",
+  "caseId": "creative-shot-spine",
   "scenarioContract": {
     "schema": "neko.agent-eval.scenario",
     "evidenceRefs": ["production-facts"],
-    "assertionIds": [
-      "skill",
-      "model",
-      "output",
-      "no-generic-phases",
-      "no-image",
-      "no-video"
-    ]
+    "assertionIds": ["skill", "model", "output", "no-image", "no-video"]
   },
   "baselineVariantId": "ask-mode",
   "matrix": {
@@ -39,7 +32,7 @@
     ],
     "quality": {
       "kind": "scenario-rubric",
-      "rubricRef": "rubrics/ai-production-plan-quality.json"
+      "rubricRef": "rubrics/creative-shot-spine-quality.json"
     }
   },
   "variants": [

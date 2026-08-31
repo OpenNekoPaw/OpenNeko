@@ -1,0 +1,39 @@
+{
+  "schema": "neko.agent-eval.rubric",
+  "id": "creative-shot-spine-quality",
+  "domain": "media-production",
+  "minimumScore": 4,
+  "maximumUncertainty": 0.2,
+  "criteria": [
+    {
+      "id": "source-grounding",
+      "description": "Every proposed unit uses specific screenplay evidence and does not replace source facts with a generic story summary or invented content.",
+      "weight": 0.2,
+      "evidenceRefs": ["production-facts"]
+    },
+    {
+      "id": "causal-shot-spine",
+      "description": "The result is one compact causal shot spine whose visual, action, sound, pacing and continuity decisions are sufficient for creator review. It does not replace the creative artifact with production stages, Tool calls or a model-input packet.",
+      "weight": 0.3,
+      "evidenceRefs": ["production-facts"]
+    },
+    {
+      "id": "creative-specificity",
+      "description": "The operations make concrete visual, spatial, performance, motion, sound, or continuity decisions for the Rain Station material instead of restating production phases.",
+      "weight": 0.2,
+      "evidenceRefs": ["production-facts"]
+    },
+    {
+      "id": "capability-boundary",
+      "description": "The handoff exposes only stable source or shot references, approved creative decisions and continuity requirements. Preparation, prompts, generation, candidate selection, post-production and delivery remain owned by their corresponding capabilities.",
+      "weight": 0.15,
+      "evidenceRefs": ["production-facts"]
+    },
+    {
+      "id": "noise-control",
+      "description": "The formal creative artifact contains only approved creative intent, source bindings, the authoritative shot spine and necessary downstream requirements. Source-reading narration, Tool logs, progress reporting, internal checks, rejected reasoning and duplicated explanation remain outside the artifact.",
+      "weight": 0.15,
+      "evidenceRefs": ["production-facts"]
+    }
+  ]
+}

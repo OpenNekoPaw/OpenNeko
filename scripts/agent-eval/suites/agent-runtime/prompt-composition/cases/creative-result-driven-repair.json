@@ -1,0 +1,98 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "creative-result-driven-repair",
+  "suiteId": "agent-runtime.prompt-composition",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Route an observed candidate defect back to its owning capability without restarting accepted work or sending the rejected result to delivery.",
+    "canonicalPath": [
+      "OpenNeko product prompt",
+      "media-selection rejection",
+      "video-compositing repair handoff",
+      "media-delivery accepted-master gate"
+    ],
+    "observables": [
+      {
+        "ref": "repair-loop-facts",
+        "kind": "runtime-fact",
+        "description": "Separate Skill receipts and a bounded result-driven repair handoff.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The Agent preserves accepted identity and composition, rejects the candidate because of observed edge flicker at the specified frames, assigns only that repair to video-compositing, and leaves delivery blocked.",
+    "expectedFailure": "Restarting creative analysis or generation, changing accepted properties, treating the rejected clip as selected, expanding a full workflow, or claiming repair/export success fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "$media-selection $video-compositing $media-delivery 已观察候选 clip-C：角色身份和构图通过，但第 68–91 帧人物边缘持续闪烁，因此候选未入选。本轮没有合成修复或导出 Tool。只返回：选择决定、修复交接、必须保留、交付状态。不要重新分析创意、重新生成整段、扩写完整流程或声称修复/导出完成。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "repair-loop-facts" },
+    {
+      "id": "selection-skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-selection",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-selection",
+        "fingerprint": "sha256:1f121451b1d9c430e7a49d0d3d871070f186b1c576488da369f8a94888c19fbd"
+      },
+      "status": "injected",
+      "evidenceRef": "repair-loop-facts"
+    },
+    {
+      "id": "compositing-skill",
+      "kind": "skill",
+      "identity": {
+        "name": "video-compositing",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "video-compositing",
+        "fingerprint": "sha256:32f7784c78992b9a2f142e2e0dd7ecb2a0d12bac4751b4a0dd534be7e3ad467d"
+      },
+      "status": "injected",
+      "evidenceRef": "repair-loop-facts"
+    },
+    {
+      "id": "delivery-skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-delivery",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-delivery",
+        "fingerprint": "sha256:a85df29a3899cbf4d757ad67cd6041cd39fbc35d00bc68252bf63aed3c2191e5"
+      },
+      "status": "injected",
+      "evidenceRef": "repair-loop-facts"
+    },
+    {
+      "id": "output",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["选择决定", "修复交接", "必须保留", "交付状态", "68–91", "video-compositing"],
+      "evidenceRef": "repair-loop-facts"
+    },
+    {
+      "id": "no-false-success",
+      "kind": "final-answer",
+      "mode": "not-contains",
+      "text": ["已修复", "已导出", "重新生成整段"],
+      "evidenceRef": "repair-loop-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

@@ -48,6 +48,7 @@ describe('Agent Evaluation change-to-suite selector', () => {
       selectEvaluationCoverage([
         '.codex/skills/storyboard/SKILL.md',
         'packages/agent/runtime/src/prompt/system-prompt.ts',
+        'packages/dsh-bridge/src/product-system-prompt.ts',
         'packages/agent/runtime/src/tools/read-image-tool.ts',
         'packages/automation/node/src/index.ts',
         'packages/agent/runtime/src/runtime/capability/capability-runtime-bindings.ts',
@@ -86,6 +87,10 @@ describe('Agent Evaluation change-to-suite selector', () => {
         expect.objectContaining({
           behaviorId: 'prompt-composition',
           suiteId: 'agent-runtime.prompt-composition',
+          changedPaths: [
+            'packages/agent/runtime/src/prompt/system-prompt.ts',
+            'packages/dsh-bridge/src/product-system-prompt.ts',
+          ],
         }),
         expect.objectContaining({
           behaviorId: 'capability-tool-routing',
@@ -213,6 +218,22 @@ describe('Agent Evaluation change-to-suite selector', () => {
         suiteId: 'agent-runtime.workflow-controller',
         suiteIds: ['agent-runtime.workflow-controller'],
         changedPaths: ['apps/neko-desktop/src/renderer/DesktopAgentSurface.tsx'],
+      },
+    ]);
+  });
+
+  it('maps the native DSH plan presentation to timeline projection authority', () => {
+    const paths = [
+      'packages/agent/webview/src/dsh-session/root.tsx',
+      'packages/agent/webview/src/index.css',
+    ];
+    expect(paths.every(isAgentEvaluationRelevantPath)).toBe(true);
+    expect(selectEvaluationCoverage(paths)).toEqual([
+      {
+        behaviorId: 'timeline-projection-authority',
+        suiteId: 'agent-runtime.stream-delivery',
+        suiteIds: ['agent-runtime.stream-delivery'],
+        changedPaths: paths,
       },
     ]);
   });

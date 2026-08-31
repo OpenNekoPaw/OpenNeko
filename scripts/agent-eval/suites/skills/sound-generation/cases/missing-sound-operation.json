@@ -1,0 +1,69 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "missing-sound-operation",
+  "suiteId": "skill.sound-generation",
+  "caseGroup": "failure",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Request an ambience asset when no sound-generation operation is available.",
+    "canonicalPath": [
+      "builtin sound-generation Skill",
+      "operation availability check",
+      "blocked sound handoff"
+    ],
+    "observables": [
+      {
+        "ref": "sound-facts",
+        "kind": "runtime-fact",
+        "description": "Exact Skill receipt and a sound intent that is not misreported as generated audio.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The response preserves the approved sound event and timing, identifies the missing sound operation, and states that no audio reference exists.",
+    "expectedFailure": "A fabricated audio file, guessed provider parameters, music or mix instructions, or a generated claim fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "$sound-generation 为 00:00–00:07 的巨型竖井镜头生成低频结构摩擦与超长回声环境声。本轮没有声音生成 Tool 或已存在音频，也不执行工具。只返回：声音单元、目标时段、执行状态、恢复条件；不得扩写配乐/混音方案或声称生成完成。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "sound-facts" },
+    {
+      "id": "skill",
+      "kind": "skill",
+      "identity": {
+        "name": "sound-generation",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "sound-generation",
+        "fingerprint": "sha256:6d71e623a8fe6450ea72e3832115eaec703ba65c768a009450838be2c8526f9c"
+      },
+      "status": "injected",
+      "evidenceRef": "sound-facts"
+    },
+    {
+      "id": "output",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["声音单元", "目标时段", "执行状态", "恢复条件"],
+      "evidenceRef": "sound-facts"
+    },
+    {
+      "id": "no-false-success",
+      "kind": "final-answer",
+      "mode": "not-contains",
+      "text": ["已生成", "音频文件", "混音完成"],
+      "evidenceRef": "sound-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

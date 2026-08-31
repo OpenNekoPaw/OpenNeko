@@ -1,0 +1,45 @@
+{
+  "schema": "neko.agent-eval.rubric",
+  "id": "creative-media-design-quality",
+  "domain": "media-production",
+  "minimumScore": 4,
+  "maximumUncertainty": 0.2,
+  "criteria": [
+    {
+      "id": "request-alignment",
+      "description": "The artifact remains a concise, creator-reviewable 60-second concept PV design. It does not silently change runtime or format, expand into a source audit or production handbook, or collapse the requested design into one technical validation.",
+      "weight": 0.15,
+      "evidenceRefs": ["creative-pv-facts"]
+    },
+    {
+      "id": "source-grounded-spine",
+      "description": "One coherent concept and a causal six-to-eight-beat experience spine use specific Rain Station evidence including Mara, 23:47, the red umbrella and the unlit train without inventing story facts.",
+      "weight": 0.15,
+      "evidenceRefs": ["creative-pv-facts"]
+    },
+    {
+      "id": "creative-reference-value",
+      "description": "Visual, action, sound, text and pacing choices materially shape the beats and are specific enough for a creator, storyboard artist or generation prompt author to continue from; generic aesthetic adjectives and repeated source summary do not substitute for decisions.",
+      "weight": 0.2,
+      "evidenceRefs": ["creative-pv-facts"]
+    },
+    {
+      "id": "single-source-structure",
+      "description": "The concise artifact has only two functional blocks: one concept paragraph plus at most four true cross-shot invariants and no evidence inventory; then one authoritative six-to-eight-beat causal sequence owning timing, image, action, sound and transitions. Nested headings or bold field groups do not recreate core-analysis, source-binding, key-shot, visual, sound, production, technology, acceptance, or creator-question mini-sections.",
+      "weight": 0.3,
+      "evidenceRefs": ["creative-pv-facts"]
+    },
+    {
+      "id": "artifact-hygiene",
+      "description": "The formal document excludes source-reading narration, Tool logs, work progress, internal checks and rejected reasoning. Evidence limitations appear only where they constrain a claim or creator decision, and no section can be removed without losing creative or production value.",
+      "weight": 0.15,
+      "evidenceRefs": ["creative-pv-facts"]
+    },
+    {
+      "id": "capability-boundary",
+      "description": "Media-production exposes only the stable creative decisions, source or shot references and continuity requirements needed by a later capability. It does not append generation prompts, operation or parameter names, acceptance packets, production stages, or a cross-Skill workflow.",
+      "weight": 0.05,
+      "evidenceRefs": ["creative-pv-facts"]
+    }
+  ]
+}

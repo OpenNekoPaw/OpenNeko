@@ -2,7 +2,7 @@
   "schema": "neko.agent-eval.suite",
   "id": "skill.image",
   "owner": { "kind": "skill", "id": "image" },
-  "target": { "kind": "skill", "identity": { "name": "image", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "image", "fingerprint": "sha256:775e74907e1af076a9fc8e7c7e177421ac7e334b852258b228fe91d1de6b87dc" } },
+  "target": { "kind": "skill", "identity": { "name": "image", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "image", "fingerprint": "sha256:6daa91d4028b9b95cd678000ed653d31f696449735c2857115f23897d682124c" } },
   "runtimeProfiles": [{ "id": "canonical-default", "settings": { "executionMode": "auto" }, "configurationHash": "sha256:14bbfefd201fb00c3a3b85b137a6e6ce0badd0db63bc7bf496454b7689ee0460" }],
   "modelProfiles": [{ "id": "nekoapi-image-purpose", "selection": "explicit", "chat": { "providerId": "nekoapi-chat", "modelId": "gpt-5.6-luna" }, "purposes": { "image.generate": { "providerId": "nekoapi-media", "modelId": "gpt-image-2" } }, "configurationHash": "sha256:84106dbcf3b4b105eabd31f2b2b8705f954c486ba789f93093fc68cd23b3d4ce" }],
   "judgeProfiles": [],

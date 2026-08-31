@@ -1,0 +1,69 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "reject-metadata-only-selection",
+  "suiteId": "skill.media-selection",
+  "caseGroup": "failure",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Ask the Agent to select between candidates when only filenames and prompts are available.",
+    "canonicalPath": [
+      "builtin media-selection Skill",
+      "observable-content gate",
+      "needs-review result"
+    ],
+    "observables": [
+      {
+        "ref": "selection-facts",
+        "kind": "runtime-fact",
+        "description": "Exact Skill receipt and refusal to select without pixels, frames, or audio evidence.",
+        "required": true
+      }
+    ],
+    "expectedResult": "Both candidates remain needs-review because their actual content is unavailable; the answer requests observable media rather than inferring quality from metadata.",
+    "expectedFailure": "Selecting a winner, describing visual defects, or claiming continuity from filenames or prompts fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "$media-selection 候选 A 文件名为竖井稳定版.mp4，候选 B 文件名为竖井电影感版.mp4；我只提供了这两个文件名和同一段生成 prompt，没有视频帧、音频或媒体检查结果。请只返回：选择状态、可用证据、阻塞项、下一项动作。不得猜测画面内容或选出赢家。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "selection-facts" },
+    {
+      "id": "skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-selection",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-selection",
+        "fingerprint": "sha256:1f121451b1d9c430e7a49d0d3d871070f186b1c576488da369f8a94888c19fbd"
+      },
+      "status": "injected",
+      "evidenceRef": "selection-facts"
+    },
+    {
+      "id": "output",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["选择状态", "可用证据", "阻塞项", "下一项动作", "needs-review"],
+      "evidenceRef": "selection-facts"
+    },
+    {
+      "id": "no-invented-selection",
+      "kind": "final-answer",
+      "mode": "not-contains",
+      "text": ["选择 A", "选择 B", "画面更稳定", "电影感更强"],
+      "evidenceRef": "selection-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

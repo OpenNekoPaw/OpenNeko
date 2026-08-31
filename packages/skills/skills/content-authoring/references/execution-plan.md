@@ -2,11 +2,11 @@
 
 ## 中文指南
 
-说明目标结果、已验证当前状态、下一批可执行步骤和完成证据。步骤必须能够行动或检查，不把假想未来工作拆成庞大任务表；owner、日期、依赖、回滚和完整验证矩阵只在协作或执行风险需要时加入。三个以上重复工作项可用稳定字段表格，主要关系是先后顺序时优先编号列表。
+只在用户明确要求执行计划时使用。计划必须整理已经由领域方法定义的工作，不得用“准备素材”“生成内容”“质量检查”等阶段名称伪造可执行性。对每个近期工作项，保留已知输入或来源绑定、当前实际能力、直接产物与使用该产物的后续对象。任何一项缺失时，将其写成明确阻塞或待决策项，不称为“可执行步骤”。
 
 ## English guidance
 
-Show the target outcome, verified current state, the next executable batch of steps, and completion evidence.
+Use this guide only when the user explicitly requests an execution plan. Organize work already defined by the applicable domain method; do not manufacture executability from phase names such as prepare assets, generate content, or run quality review. Each near-term item must preserve a known input or source binding, a currently admitted capability, an immediate artifact, and the downstream object that consumes it. If one is missing, label the item as blocked or undecided rather than executable.
 
 Keep steps at a level that can be acted on or checked. Do not decompose hypothetical future work into a large task inventory. Add owners, dates, dependencies, rollback, or a full validation matrix only when coordination or execution risk requires them.
 

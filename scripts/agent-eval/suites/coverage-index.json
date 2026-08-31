@@ -41,6 +41,36 @@
     },
     {
       "kind": "builtin-skill",
+      "id": "media-preparation",
+      "disposition": "suite",
+      "suiteIds": ["skill.media-preparation"]
+    },
+    {
+      "kind": "builtin-skill",
+      "id": "media-selection",
+      "disposition": "suite",
+      "suiteIds": ["skill.media-selection"]
+    },
+    {
+      "kind": "builtin-skill",
+      "id": "sound-generation",
+      "disposition": "suite",
+      "suiteIds": ["skill.sound-generation"]
+    },
+    {
+      "kind": "builtin-skill",
+      "id": "video-compositing",
+      "disposition": "suite",
+      "suiteIds": ["skill.video-compositing"]
+    },
+    {
+      "kind": "builtin-skill",
+      "id": "media-delivery",
+      "disposition": "suite",
+      "suiteIds": ["skill.media-delivery"]
+    },
+    {
+      "kind": "builtin-skill",
       "id": "scene-to-music",
       "disposition": "suite",
       "suiteIds": ["skill.scene-to-music"]

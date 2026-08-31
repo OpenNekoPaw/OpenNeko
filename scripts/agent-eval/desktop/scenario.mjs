@@ -9,6 +9,7 @@ import { createDshDesktopAgentDriver } from './dsh-driver.mjs';
 import { executeDesktopAgentWorkflow } from './workflow.mjs';
 
 const ACTIVE_AGENT_SURFACE_SELECTOR = '[data-primary-surface="agent"]';
+const ACTIVE_AGENT_ROOT_SELECTOR = `${ACTIVE_AGENT_SURFACE_SELECTOR} .dsh-agent-view[data-agent-surface]`;
 const ACTIVE_AGENT_TEXTAREA_SELECTOR = `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-textarea`;
 const ACTIVE_AGENT_SEND_SELECTOR = `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-send`;
 const ACTIVE_AGENT_APPROVE_SELECTOR = `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-inline-card.is-warning .neko-button:not(.neko-button-secondary)`;
@@ -88,7 +89,15 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
       }
       const opened =
         startSurface === 'workspace' ? await openFixtureWorkspace(evaluate) : undefined;
-      await waitForSelector('[data-owner-root="agent"]', 30_000);
+      if (opened) {
+        await ensureWorkspaceAgentVisible({
+          evaluate,
+          click,
+          waitForSelector,
+          workbenchInstanceId: opened.projection.window.workbench.workbenchInstanceId,
+        });
+      }
+      await waitForSelector(ACTIVE_AGENT_ROOT_SELECTOR, 30_000);
       await waitForStableDesktopAgentRenderer({
         evaluate,
         waitForDesktopBridge,
@@ -98,7 +107,7 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
         evaluate,
         waitForRenderer: async () => {
           await waitForDesktopBridge(30_000);
-          await waitForSelector('[data-owner-root="agent"]', 30_000);
+          await waitForSelector(ACTIVE_AGENT_ROOT_SELECTOR, 30_000);
         },
         restartApplication,
       });
@@ -122,13 +131,8 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
         click,
         type,
       });
-      const conversation = visible ? undefined : await driver.createConversation();
-      if (conversation) {
-        checkpoint('agent-conversation-created', { conversationId: conversation.conversationId });
-      }
       const workflow = await executeDesktopAgentWorkflow({
         driver: workflowDriver,
-        conversationId: conversation?.conversationId,
         steps: executionCase.steps,
         modelProfiles: executionCase.modelProfiles,
         defaultTimeoutMs: executionCase.budget.timeoutMs,
@@ -155,9 +159,9 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
         };
       }
       if (executionCase.execution?.lifecycleChecks?.includes('composer-focus')) {
-        await click('[data-owner-root="agent"] .agent-composer-textarea');
+        await click(`${ACTIVE_AGENT_ROOT_SELECTOR} .agent-composer-textarea`);
         const focused = await evaluate(
-          `document.activeElement?.matches('[data-owner-root="agent"] .agent-composer-textarea') === true`,
+          `document.activeElement?.matches(${JSON.stringify(`${ACTIVE_AGENT_ROOT_SELECTOR} .agent-composer-textarea`)}) === true`,
         );
         if (focused !== true)
           throw new Error('Desktop Agent composer did not retain visible focus.');
@@ -196,6 +200,33 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
   });
 }
 
+export async function ensureWorkspaceAgentVisible(input) {
+  const selector = '[data-workbench-region-control="agent"]';
+  await input.waitForSelector(selector, 30_000);
+  const state = await input.evaluate(`(async () => {
+    const projection = await window.openNekoDesktop.shell.getSnapshot();
+    const control = document.querySelector(${JSON.stringify(selector)});
+    return {
+      workbenchInstanceId: projection.window.workbench.workbenchInstanceId,
+      visible: document.querySelector(${JSON.stringify(ACTIVE_AGENT_ROOT_SELECTOR)}) !== null,
+      controlAvailable: control instanceof HTMLButtonElement,
+      controlDisabled: control instanceof HTMLButtonElement ? control.disabled : null,
+      controlSelected: control?.getAttribute('aria-pressed') === 'true',
+    };
+  })()`);
+  if (state.workbenchInstanceId !== input.workbenchInstanceId) {
+    throw new Error('Desktop Agent Evaluation Workspace identity changed before Agent setup.');
+  }
+  if (state.visible) return;
+  if (!state.controlAvailable || state.controlDisabled) {
+    throw new Error(
+      `Desktop Agent Evaluation cannot expose the active Agent Surface: ${JSON.stringify(state)}`,
+    );
+  }
+  if (!state.controlSelected) await input.click(selector);
+  await input.waitForSelector(ACTIVE_AGENT_ROOT_SELECTOR, 30_000);
+}
+
 export async function waitForStableDesktopAgentRenderer(input) {
   const stabilityMs = input.stabilityMs ?? DEVELOPMENT_RENDERER_STABILITY_MS;
   const timeoutMs = input.timeoutMs ?? 30_000;
@@ -207,7 +238,7 @@ export async function waitForStableDesktopAgentRenderer(input) {
   while (now() < deadline) {
     try {
       await input.waitForDesktopBridge(Math.min(timeoutMs, 5_000));
-      await input.waitForSelector('[data-owner-root="agent"]', Math.min(timeoutMs, 5_000));
+      await input.waitForSelector(ACTIVE_AGENT_ROOT_SELECTOR, Math.min(timeoutMs, 5_000));
       const currentTimeOrigin = await input.evaluate('performance.timeOrigin');
       if (typeof currentTimeOrigin !== 'number' || !Number.isFinite(currentTimeOrigin)) {
         throw new Error('Desktop Renderer has no stable page time origin.');

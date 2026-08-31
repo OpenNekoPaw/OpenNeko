@@ -23,13 +23,9 @@
     "expectedResult": "The response contains ordered SRT entries with valid time ranges, concise text, and a validation note.",
     "expectedFailure": "Missing Skill injection, timestamps, numbering, or readable line breaks fails."
   },
-  "fixtureRefs": [
-    "empty-workspace"
-  ],
+  "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "markdown",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "submit",
@@ -68,7 +64,9 @@
       "format": "markdown",
       "requiredFields": [
         "00:00:00,000",
+        "你听见了吗",
         "00:00:03,000",
+        "别回头",
         "reading speed",
         "line break"
       ],

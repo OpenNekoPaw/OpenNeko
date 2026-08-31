@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { validateDesktopFunctionalScenario } from '../../desktop-functional/scenario-contract.mjs';
 import {
   createDesktopAgentEvaluationScenario,
+  ensureWorkspaceAgentVisible,
   readAuthorizedConfiguration,
   validateAuthorizedUserConfiguration,
   waitForStableDesktopAgentRenderer,
@@ -164,6 +165,79 @@ provider_id = "provider-1"
       }),
     ).resolves.toBeUndefined();
     expect(clock).toBe(400);
+  });
+
+  it('exposes the exact Workspace Agent region through its visible Shell control', async () => {
+    const clicks = [];
+    const waits = [];
+
+    await ensureWorkspaceAgentVisible({
+      workbenchInstanceId: 'workbench-1',
+      evaluate: async () => ({
+        workbenchInstanceId: 'workbench-1',
+        visible: false,
+        controlAvailable: true,
+        controlDisabled: false,
+        controlSelected: false,
+      }),
+      click: async (selector) => clicks.push(selector),
+      waitForSelector: async (...args) => waits.push(args),
+    });
+
+    expect(clicks).toEqual(['[data-workbench-region-control="agent"]']);
+    expect(waits).toEqual([
+      ['[data-workbench-region-control="agent"]', 30_000],
+      ['[data-primary-surface="agent"] .dsh-agent-view[data-agent-surface]', 30_000],
+    ]);
+  });
+
+  it('does not toggle an Agent region that is already visible', async () => {
+    let clicked = false;
+    const waits = [];
+
+    await ensureWorkspaceAgentVisible({
+      workbenchInstanceId: 'workbench-1',
+      evaluate: async () => ({
+        workbenchInstanceId: 'workbench-1',
+        visible: true,
+        controlAvailable: true,
+        controlDisabled: false,
+        controlSelected: true,
+      }),
+      click: async () => {
+        clicked = true;
+      },
+      waitForSelector: async (...args) => waits.push(args),
+    });
+
+    expect(clicked).toBe(false);
+    expect(waits).toEqual([['[data-workbench-region-control="agent"]', 30_000]]);
+  });
+
+  it('waits for a selected Agent region that has not mounted yet', async () => {
+    let clicked = false;
+    const waits = [];
+
+    await ensureWorkspaceAgentVisible({
+      workbenchInstanceId: 'workbench-1',
+      evaluate: async () => ({
+        workbenchInstanceId: 'workbench-1',
+        visible: false,
+        controlAvailable: true,
+        controlDisabled: false,
+        controlSelected: true,
+      }),
+      click: async () => {
+        clicked = true;
+      },
+      waitForSelector: async (...args) => waits.push(args),
+    });
+
+    expect(clicked).toBe(false);
+    expect(waits).toEqual([
+      ['[data-workbench-region-control="agent"]', 30_000],
+      ['[data-primary-surface="agent"] .dsh-agent-view[data-agent-surface]', 30_000],
+    ]);
   });
 });
 

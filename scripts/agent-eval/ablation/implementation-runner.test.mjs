@@ -17,7 +17,7 @@ function plan() {
     id: 'media-production-guidance-pilot',
     mode: 'implementation',
     suiteId: 'skill.media-production',
-    caseId: 'animation-production-plan',
+    caseId: 'creative-shot-spine',
     scenarioContract: {
       schema: 'neko.agent-eval.scenario',
       evidenceRefs: ['production-facts'],
@@ -30,7 +30,10 @@ function plan() {
       retainEverySample: true,
       correctnessDominates: true,
       metrics: [...ABLATION_METRICS],
-      quality: { kind: 'hard-gates-only', reason: 'No content Judge is configured.' },
+      quality: {
+        kind: 'scenario-rubric',
+        rubricRef: 'rubrics/creative-shot-spine-quality.json',
+      },
     },
     variants: ['base-guidance', 'without-rationale-guidance'].map((id, index) => ({
       id,
@@ -82,6 +85,7 @@ function fakeRun(selected, executableFingerprint) {
         evidenceRefs: [assertion.evidenceRef],
       })),
     },
+    judge: { overallScore: 4.5 },
   }));
   return {
     outcome: 'pass',
@@ -95,7 +99,7 @@ function fakeRun(selected, executableFingerprint) {
       iterations: { total: 4, mean: 2 },
       tools: { calls: 0, successes: 0, failures: 0 },
       retries: { count: 0 },
-      scoreDistribution: { samples: 0, passRate: 0 },
+      scoreDistribution: { samples: 2, passRate: 1, mean: 4.5, variance: 0 },
     },
   };
 }
@@ -103,7 +107,7 @@ function fakeRun(selected, executableFingerprint) {
 async function selection() {
   return selectSuiteCases(await discoverSuites(), {
     suiteId: 'skill.media-production',
-    caseId: 'animation-production-plan',
+    caseId: 'creative-shot-spine',
   })[0];
 }
 
@@ -228,7 +232,8 @@ describe('implementation ablation runner', () => {
       dryRun: true,
       planId: 'media-production-guidance-pilot',
       quality: {
-        kind: 'hard-gates-only',
+        kind: 'scenario-rubric',
+        rubricRef: 'rubrics/creative-shot-spine-quality.json',
       },
       variants: [
         { id: 'base-guidance', repetitions: 2 },

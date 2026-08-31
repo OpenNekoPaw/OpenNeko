@@ -1,0 +1,98 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "creative-capability-orchestration",
+  "suiteId": "agent-runtime.prompt-composition",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Request a minimal cross-capability handoff while explicitly activating separate creative Skills.",
+    "canonicalPath": [
+      "OpenNeko product prompt",
+      "media-production creative decision",
+      "media-preparation input preparation",
+      "media-delivery accepted-master gate"
+    ],
+    "observables": [
+      {
+        "ref": "orchestration-facts",
+        "kind": "runtime-fact",
+        "description": "Prompt composition facts and an answer that keeps capability ownership separate.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The Agent identifies media-production as the current creative owner, keeps preparation dependent on an approved shot and real references, and keeps delivery blocked until an accepted master and explicit specification exist.",
+    "expectedFailure": "One Skill impersonates the whole workflow, all stages are treated as mandatory, a plan is reported as an artifact, or generation/export is claimed without a Tool result."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "$media-production $media-preparation $media-delivery 现在只有一句创意 brief：‘旅人在无尽竖井中抬头。’没有来源素材、已批准镜头、生成结果、母版、交付规范或可执行媒体工具。请按能力 owner 只返回：当前可处理、后续依赖、精确阻塞。不要扩写固定制作流程，也不要声称已准备、已生成或已交付。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "orchestration-facts" },
+    {
+      "id": "media-production-skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-production",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-production",
+        "fingerprint": "sha256:66154cb145016be232dede701e4f0d3c1468b6d8ba9e41b834d5454a11b49303"
+      },
+      "status": "injected",
+      "evidenceRef": "orchestration-facts"
+    },
+    {
+      "id": "media-preparation-skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-preparation",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-preparation",
+        "fingerprint": "sha256:a2b95df328823598172e27c19ad61380723315b5ebb52bab6ce4ba91f92e7fa8"
+      },
+      "status": "injected",
+      "evidenceRef": "orchestration-facts"
+    },
+    {
+      "id": "media-delivery-skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-delivery",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-delivery",
+        "fingerprint": "sha256:a85df29a3899cbf4d757ad67cd6041cd39fbc35d00bc68252bf63aed3c2191e5"
+      },
+      "status": "injected",
+      "evidenceRef": "orchestration-facts"
+    },
+    {
+      "id": "output",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["当前可处理", "后续依赖", "精确阻塞"],
+      "evidenceRef": "orchestration-facts"
+    },
+    {
+      "id": "no-false-success",
+      "kind": "final-answer",
+      "mode": "not-contains",
+      "text": ["已准备完成", "已生成", "已交付"],
+      "evidenceRef": "orchestration-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

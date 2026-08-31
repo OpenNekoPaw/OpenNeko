@@ -14,6 +14,7 @@ const DESKTOP_EVIDENCE_ASSERTION_KINDS = new Set([
   'configuration-update',
   'tool-call',
   'automation-tool-result',
+  'todo-projection',
   'process-order',
   'cancellation',
   'recovery',
@@ -110,6 +111,8 @@ export function runDesktopHardGate(assertion, facts, context) {
       return assertToolCall(assertion, input);
     case 'automation-tool-result':
       return assertDesktopAutomationToolResult(assertion, input);
+    case 'todo-projection':
+      return assertTodoProjection(assertion, input.projection);
     case 'process-order':
       return assertOrderedWorkflowEvents(assertion, readDesktopWorkflowSteps(input.workflow));
     case 'cancellation':
@@ -256,8 +259,54 @@ function assertFinalAnswer(assertion, snapshot) {
   return { messageId: final?.id, length: content.length, mode: assertion.mode };
 }
 
+function assertTodoProjection(assertion, projection) {
+  if (!Array.isArray(projection?.todos)) {
+    throw new Error('Desktop Agent TODO projection is unavailable.');
+  }
+  const invalid = projection.todos.filter(
+    (todo) =>
+      !['pending', 'in_progress', 'completed', 'blocked'].includes(todo?.status) ||
+      typeof todo?.content !== 'string' ||
+      todo.content.trim().length === 0,
+  );
+  if (invalid.length > 0) {
+    throw new Error('Desktop Agent TODO projection contains an invalid item.');
+  }
+  if (projection.todos.length > assertion.maxItems) {
+    throw new Error(
+      `Desktop Agent TODO projection exceeds ${assertion.maxItems} items: ${projection.todos.length}`,
+    );
+  }
+  if (
+    assertion.atMostOneInProgress &&
+    projection.todos.filter((todo) => todo.status === 'in_progress').length > 1
+  ) {
+    throw new Error('Desktop Agent TODO projection has multiple in-progress items.');
+  }
+  const observedStatuses = new Set(projection.todos.map((todo) => todo.status));
+  const missingStatuses = (assertion.requiredStatuses ?? []).filter(
+    (status) => !observedStatuses.has(status),
+  );
+  if (missingStatuses.length > 0) {
+    throw new Error(
+      `Desktop Agent TODO projection is missing status(es): ${missingStatuses.join(', ')}`,
+    );
+  }
+  return {
+    itemCount: projection.todos.length,
+    statuses: [...observedStatuses].sort(),
+  };
+}
+
 function assertSkill(assertion, facts) {
-  const receipt = facts.receipts.skills.items.find(
+  const receipts = facts.receipts?.skills;
+  if (!Array.isArray(receipts?.items)) {
+    throw new Error('Desktop Agent Skill receipt collection is unavailable.');
+  }
+  if (receipts.droppedCount !== 0) {
+    throw new Error('Desktop Agent Skill receipt collection is incomplete.');
+  }
+  const receipt = receipts.items.find(
     (item) =>
       item.name === assertion.identity.name &&
       item.source === assertion.identity.source &&

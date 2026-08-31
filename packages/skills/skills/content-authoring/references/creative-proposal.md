@@ -2,13 +2,25 @@
 
 ## 中文指南
 
-从创作目标、一个核心概念、最小交付物和关键生成/制作步骤开始。受众、基调、视觉语言、叙事节拍、镜头、资产、变体、排期和风险只在当前请求或决策需要时展开，并区分来源事实与创作假设。
+从创作目标、一个核心概念、叙事或体验主线和关键节拍开始。视觉、动作、声音、镜头或文字只有在直接塑造这些节拍时展开；模型调用、资产、排期和风险只在用户要求生产交接或当前创作决定依赖它们时加入。创意方案不是来源分析记录，也不能被压缩成单个技术验证。
+
+正式文档只保留经过验证、可供创作者评审或继续制作的内容。来源阅读过程、工具调用、工作进度、内部检查和被否决推理留在 Agent 对话或评测证据中，不写入方案正文。
+
+每项创作决定只保留一个权威位置。节拍表、镜头表或场景表已经承载画面、动作、声音和验收时，不再增设章节复述相同信息；跨项目规则集中一次，局部规则留在对应项目。只有用户同时要求 AI 生产交接时，才在主方案后附精简、可提交的生成交接；纯创意方案不附调用包。
+
+用户要求简洁的时序概念方案时，正文默认只有两块：一段核心概念和至多四项跨镜头不变量，以及一份 6–8 个因果节拍的权威序列。若用户还要求 AI 生产交接，系统应继续调用准备与生成相关 Skill，由它们追加一个当前依赖已满足单元的紧凑调用包；不得由文档编辑 Skill 猜测 operation、参数或资产绑定。不得用三级标题或粗体字段把分析、来源、声音、视觉、技术、验收和评审问题重新扩写成小章节。
 
 不得依据 manifest、页数、目录、封面或任意小样本直接选择全局格式、时长、集数和章节映射。证据不足时，本轮应先成为来源覆盖或体量评估。代表性样本只有在样本、估算方法、不确定性和置信度可见时才支持暂定区间；固定格式还需公开总时长、平均来源负载以及扩写、压缩、省略假设。三个以上可比较项目才使用表格。
 
 ## English guidance
 
-Start with the creative goal, one core concept, the minimum deliverable, and the key generation or production steps.
+Start with the creative goal, one core concept, the narrative or experience spine, and decisive beats. Add visual, action, sound, shot, or text choices when they directly shape those beats. Include model calls, assets, schedule, or risks only when the user requests a production handoff or the current creative decision depends on them. A creative proposal is neither a source-analysis log nor a single technical validation.
+
+Keep source-reading narration, Tool calls, progress, internal checks, and rejected reasoning in conversation or Evaluation evidence. The formal proposal contains only validated content that a creator can review or continue producing.
+
+Give each creative decision one authoritative location. When a beat, shot, or scene table already owns image, action, sound, and acceptance, do not restate them in separate sections. State cross-item rules once and keep local constraints with their item. Append a compact submit-ready generation handoff only when the user also requests AI production handoff; a pure creative proposal has no call packet.
+
+For a concise time-based concept, default to two artifact blocks only: one concept paragraph plus at most four cross-shot invariants, and one authoritative six-to-eight-beat causal sequence. If the user also requests AI production handoff, system orchestration must continue into preparation and generation Skills, which append one compact call packet for a dependency-ready unit. Content Authoring must not invent its operation, parameters, or asset bindings. Do not recreate analysis, evidence, sound, visual, technology, acceptance, or review mini-sections through nested headings or bold field groups.
 
 Add audience, tone, visual language, narrative beats, shots, assets, variants, schedule, or risks only when the request or production decision needs them. Distinguish supplied source facts from creative assumptions.
 
