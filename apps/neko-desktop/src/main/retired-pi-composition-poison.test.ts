@@ -8,12 +8,12 @@ const mainRoot = import.meta.dirname;
 describe('Desktop Main retired Pi composition poison', () => {
   it('does not compose Pi catalog, credential, Skill creation, or protected auth paths', () => {
     const index = readFileSync(path.join(mainRoot, 'index.ts'), 'utf8');
-    const mediaProvider = readFileSync(
-      path.join(mainRoot, 'desktop-media-execution-provider.ts'),
+    const generationProvider = readFileSync(
+      path.join(mainRoot, 'desktop-generation-execution-provider.ts'),
       'utf8',
     );
 
-    for (const source of [index, mediaProvider]) {
+    for (const source of [index, generationProvider]) {
       expect(source).not.toContain('@neko/agent-runtime/pi');
       expect(source).not.toContain('NodePiConversationCatalogReader');
       expect(source).not.toContain('createAgentCredentialRuntime');
