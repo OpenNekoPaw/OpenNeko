@@ -2,7 +2,7 @@
 
 状态：方向性路线，不承诺发布日期
 
-更新日期：2026-08-11
+更新日期：2026-08-30
 
 本文只定义开发顺序、阶段边界和完成门禁。当前已发布/可运行事实仍以
 [`README_CN.md`](README_CN.md)、[`docs/architecture/client-targets.md`](docs/architecture/client-targets.md)
@@ -31,7 +31,15 @@ Chara 与 Interactive World 是独立实验方向，不是当前阶段的承诺�
 - 存在能够明确描述的目标用户和跨多个独立用户重复出现的任务；
 - 用户已经在真实项目中以低效方式解决该问题，而不只是表达概念兴趣；
 - 最小原型出现持续创建、再次体验、保存或分享等重复行为；
-- 能定义并验证一条使用真实 owner、模型和持久事实的最小创作—体验闭环。
+- 能定义并验证一条使用真实 owner、模型和持久事实的最小创作—体验闭环；
+- 生产 Tool scope、Skill 指导和 Agent Evaluation 使用同一条 canonical 路径，不能用仅存在于
+  fixture 或提示词中的 Assistant/global 创建路径代替真实 Desktop 行为。
+
+Chara 的最小闭环必须覆盖“精确 Project 中创建并填充草稿 → 用户确认不可变版本 → 显式同步或导入
+全局目录 → 选择精确版本进入 Dialogue/Room → 卸载并重开后继续”。World 的最小闭环必须覆盖“精确
+Project 中创建并填充草稿 → 用户确认不可变版本 → 显式同步或导入全局目录 → 以精确版本启动确定性
+Run → Save/branch → 重开”。如果 Story、Gameplay、Agent Play、实时生成或外部引擎尚无真实 producer、
+consumer 和可验证 action contract，它们不得被计入 World 能力完成度。
 
 实验未晋级时，CharacterProject/Version、Character room/Play、WorldProject、WorldExperience、
 Run/Save/Branch 在 Development 中可继续验证；Release 必须隐藏产品入口，并让直接 Scene 调用保持
@@ -81,9 +89,9 @@ fail-visible unavailable。领域代码与用户数据继续保留。多角色 P
 | Cut                              | 接入完整 Cut Root、OTIO、预览、音频、代理和 ExportJob；不恢复 Engine/client                                                                  |
 | Preview / Media                  | 接入文档、图片、音视频和标准 3D 只读预览，使用 `@neko/media`、Node/FFmpeg 和安全 Range/PCM transport                                         |
 | Generation / Quality             | 接入 GenerationJob、candidate/review、质量检查和明确失败诊断                                                                                 |
-| Chara / Entity                   | 只保留现有角色内核、证据和 representation binding，并允许有界实验；未晋级的 CharacterProject/Version 明确标为 unavailable                    |
+| Chara / Entity                   | Development 只验证精确 Project 草稿填充、版本/目录和 Dialogue/Room 有界闭环；Release 保持 unavailable，Agent 不直接创建全局角色              |
 | Tools / Diagnostics              | 接入日志、诊断、能力状态和可恢复错误，不增加运行时控制台式产品表面                                                                           |
-| Interactive World                | 只允许边界设计、合成 fixture 和最小原型验证；用户证据晋级前保持 unavailable，不得用 Canvas/Preview 空壳冒充                                  |
+| Interactive World                | Development 只验证精确 Project 草稿填充、版本/目录与确定性 Foundation Runtime；Release 保持 unavailable，不得把它表述为完整 World Experience |
 
 ### 建议实施切片
 
@@ -104,6 +112,8 @@ client 或 DTO。
 - `apps/neko-desktop` 通过 main/preload/renderer build、typecheck、package 和安全测试。
 - Home → Content Project → Agent/Media Library/Canvas/Cut/Preview → Generation/Export 至少
   有一条使用真实 workspace 和真实 owning service 的完整路径。
+- 仅有 Agent 计划、transcript 或文本回答不算创作闭环；至少一条 provider-backed 路径必须持久化可检查
+  产物，由精确 Project 中的 Canvas/Cut/Preview 消费，并在导出及重开后仍能通过同一 owner identity 找回。
 - Project Tab、Conversation、Run、Tool Call、Job、Window 和 View identity 不混用；快速
   切换/关闭、跨窗口订阅、自动保存、renderer reload 和 StrictMode 不产生重复执行或错写。
 - 缺失 Character/World 能力返回 unavailable diagnostic，不创建空项目或 no-op success。

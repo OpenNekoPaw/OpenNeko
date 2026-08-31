@@ -2,7 +2,7 @@
 
 Status: directional roadmap; no release dates are promised.
 
-Updated: 2026-08-11
+Updated: 2026-08-30
 
 This roadmap defines delivery order and qualification gates. Current product facts remain defined by
 [`README.md`](README.md), [`docs/architecture/client-targets.md`](docs/architecture/client-targets.md),
@@ -36,7 +36,16 @@ direction can become a core navigation, release capability, or current product c
 - a concrete audience and repeated job appear across independent users;
 - users already solve that job inefficiently in real projects rather than merely expressing interest;
 - a minimum prototype produces repeated creation, return experience, save, or sharing behavior; and
-- a smallest creation-to-experience loop works through real owners, models, and durable facts.
+- a smallest creation-to-experience loop works through real owners, models, and durable facts; and
+- production Tool scope, Skill guidance, and Agent Evaluation exercise the same canonical path rather
+  than substituting an Assistant/global creation path that exists only in fixtures or prompts.
+
+The minimum Chara loop is exact-Project draft creation and filling, user-confirmed immutable version,
+explicit global synchronization or import, exact-version Dialogue/Room, and reopen/continue behavior.
+The minimum World loop is exact-Project draft creation and filling, user-confirmed immutable version,
+explicit global synchronization or import, an exact-version deterministic Run, Save/branch, and reopen.
+Story, Gameplay, Agent Play, realtime generation, or external engines do not count toward World
+completion until they have real producers, consumers, and verifiable action contracts.
 
 Before promotion, Character projects/rooms/Play and World projects/Experiences/Runs/Saves/branches
 may remain available for Development validation, while Release builds hide their product entries and
@@ -56,6 +65,12 @@ Tabs, Content Project, Context Dock, and Activity/Attention. Integrate real publ
 Assets/Content/Media Library, Canvas, Cut, Preview/Media, Generation/Quality, Chara/Entity, and
 Tools/Diagnostics.
 
+Development may validate Chara through exact-Project draft filling, version/catalog management, and
+bounded Dialogue/Room flows. It may validate World through exact-Project draft filling,
+version/catalog management, and the deterministic Foundation Runtime. Release keeps both unavailable;
+the Agent does not directly create global Character/World records, and the Foundation Runtime is not a
+complete World Experience.
+
 Product-functional implementation progress, blockers, and verification evidence belong to the
 applicable OpenSpec changes. Non-functional work records evidence in its commit, PR, or delivery
 note; dated status documents remain snapshots rather than task trackers. This roadmap does not
@@ -65,6 +80,9 @@ The phase is complete only when:
 
 - a real Home → Content Project → Agent/Media Library/Canvas/Cut/Preview → Generation/Export path
   works without mocks or no-op success;
+- Agent plans, transcripts, or text-only answers do not complete that path: at least one
+  provider-backed workflow persists an inspectable artifact, lets exact-Project Canvas/Cut/Preview
+  consume it, and resolves it through the same owner identity after export and reopen;
 - Host snapshots, owner-keyed Renderer replicas, Window/View stores, sequence/revision/CAS, and stale
   response rejection pass lifecycle and race tests;
 - Desktop imports public host-neutral package entries rather than VS Code Extension internals;

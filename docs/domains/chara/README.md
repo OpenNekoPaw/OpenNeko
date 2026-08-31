@@ -6,7 +6,7 @@ OpenNeko Agent application 拥有 Conversation catalog/binding，DSH Session 继
 
 ## 管理、创作与互动入口
 
-角色管理是 Window 级单例导航场景：Main 显示全局角色目录，Secondary Main 显示当前版本和历史版本。它不挂载工作区编辑器，也不拥有 Agent runtime。助手模式调用 `character-creator` 时直接创建全局角色及首个不可变版本；创作模式绑定精确 Project 时创建该工作区内的可编辑角色。
+角色管理是 Window 级单例导航场景：Main 显示全局角色目录，Secondary Main 显示当前版本和历史版本。它不挂载工作区编辑器，也不拥有 Agent runtime。Agent 角色 Tool 只在绑定精确 Project 和既有 fresh CharacterProject 时查询或填充草稿；Assistant Conversation 不直接创建全局角色。全局首版必须由 Chara global catalog service 的显式 command 提交；工作区同步和 `.neko-character` 导入是与现有 Desktop authority 对齐的入口。
 
 完整编辑属于 Project Creative Workspace 中的 Chara capability。新可编辑角色从首次 durable commit 起就属于一个精确 Project；不存在 standalone 草稿、隐藏默认 Project 或 active/recent Project fallback。工作区角色可以同步为新的全局角色，或为已关联全局角色追加不可变版本。Character Interaction 是独立 Conversation/Room runtime，只消费用户选择的精确全局版本。
 

@@ -39,7 +39,7 @@ Available generation and understanding features depend on your configured APIs, 
 
 - **Alpha**: currently intended for source-based previews and product validation; interfaces and project formats may change.
 - **Platform**: Apple Silicon macOS only; distributed DMGs are not Developer ID signed or Apple notarized.
-- **Product focus**: Release builds focus on Agent, Project, content, assets, and media creation. Chara/World remain visible only in Development; Release hides their entries while preserving code and user data.
+- **Product focus**: Release builds focus on Agent, Project, content, assets, and media creation. Chara/World provide only bounded, exact-Project experiments in Development; Release hides their entries while preserving code and user data, and does not offer a global Assistant Creator or complete World Experience.
 - **In development**: the complete end-to-end workflow, stable release channel, and professional-tool integrations.
 
 ## Start From Source

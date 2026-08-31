@@ -63,10 +63,11 @@ UI selection、Timeline、context cache、transcript summary、模型输出和 a
 ## 创建、管理与 Project Entity 关联
 
 手动输入、提示词、文件 evidence、普通 Asset representation 和 confirmed Entity context 都是同一个
-fresh CharacterProject 创建操作的 seed。Project-bound 快速创建可以跳过 Studio，但必须通过同一个原子 owner
-command 写入精确 Project Workspace；Assistant-bound 快速创建直接提交 GlobalCharacter 和首个不可变
-CharacterVersion，不创建隐藏 Project 或工作区对象。Studio 只继续编辑工作区 definition、representation、
-voice、storyline 与版本图，不拥有第二套角色类型、格式或保存路径。
+fresh CharacterProject 创建操作的 seed。Project-bound 快速创作可以跳过 Studio UI，但 Agent Tool 必须绑定
+精确 Project 和既有 fresh CharacterProject，并且只通过同一个 owner service 查询或填充草稿；它不创建
+全局角色，也不发布不可变版本。GlobalCharacter 首版必须由 Chara global catalog service 的显式
+`create global`、工作区同步或 `.neko-character` 导入 command 提交。Studio 只继续编辑工作区
+definition、representation、voice、storyline 与版本图，不拥有第二套角色类型、格式或保存路径。
 
 `.neko-character` 是独立的 untrusted ZIP 导入导出 workflow，只传输一个选定的不可变版本和必要资源；
 它不是 Character Creator seed、实时 repository 或 Workspace。导入固定提交全局目录，不创建工作区对象、
