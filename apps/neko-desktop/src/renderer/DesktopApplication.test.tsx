@@ -3198,6 +3198,8 @@ function installBridge({
         getSnapshot: vi.fn(async (conversationId: string) => ({
           conversationId,
           dshSessionId: `dsh:${conversationId}`,
+          todos: [],
+          inbox: { nextTurn: [], nextStep: [] },
           events: [],
         })),
         submit: vi.fn(),

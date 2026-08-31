@@ -300,6 +300,10 @@ describe('DshAcpApplicationClient', () => {
         prompt: [{ type: 'text', text: 'next' }],
         displayContent: [{ type: 'text', text: 'next' }],
         contextText: 'workspace context',
+        configuration: {
+          model: '["openai","gpt-5",8192]',
+          permissionPresetId: 'workspace-write',
+        },
       }),
     ).resolves.toEqual({ nextTurn: [], nextStep: [] });
     expect(fixture.connection.extMethod).toHaveBeenCalledWith('openneko/session/inbox/enqueue', {
@@ -307,6 +311,10 @@ describe('DshAcpApplicationClient', () => {
       prompt: [{ type: 'text', text: 'next' }],
       displayContent: [{ type: 'text', text: 'next' }],
       contextText: 'workspace context',
+      configuration: {
+        model: '["openai","gpt-5",8192]',
+        permissionPresetId: 'workspace-write',
+      },
     });
   });
 
