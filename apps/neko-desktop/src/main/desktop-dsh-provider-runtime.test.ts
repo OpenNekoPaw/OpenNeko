@@ -4,6 +4,8 @@ import type { Model, Provider, ProviderCredentialReader } from '@neko/host/setti
 import {
   createDesktopDshProviderRuntimeProjection,
   OPENNEKO_DSH_MAX_REQUEST_IMAGE_BYTES,
+  OPENNEKO_DSH_REQUEST_IMAGE_MAX_BYTES,
+  OPENNEKO_DSH_REQUEST_IMAGE_PIXEL_BUDGET,
 } from './desktop-dsh-provider-runtime';
 
 describe('Desktop DSH provider runtime projection', () => {
@@ -70,8 +72,12 @@ describe('Desktop DSH provider runtime projection', () => {
     expect(serializedPatch).toContain('"baseURL":"https://gateway.example.test/v1"');
     expect(serializedPatch).toContain('"id":"gpt-5.6-luna"');
     expect(serializedPatch).toContain('"deepseek-chat"');
-    expect(serializedPatch.match(/"maxRequestImageBytes":12582912/gu)).toHaveLength(2);
-    expect(OPENNEKO_DSH_MAX_REQUEST_IMAGE_BYTES).toBe(12 * 1024 * 1024);
+    expect(serializedPatch.match(/"requestImagePixelBudget":4194304/gu)).toHaveLength(2);
+    expect(serializedPatch.match(/"requestImageMaxBytes":1048576/gu)).toHaveLength(2);
+    expect(serializedPatch.match(/"maxRequestImageBytes":6291456/gu)).toHaveLength(2);
+    expect(OPENNEKO_DSH_REQUEST_IMAGE_PIXEL_BUDGET).toBe(2048 * 2048);
+    expect(OPENNEKO_DSH_REQUEST_IMAGE_MAX_BYTES).toBe(1024 * 1024);
+    expect(OPENNEKO_DSH_MAX_REQUEST_IMAGE_BYTES).toBe(6 * 1024 * 1024);
     expect(serializedPatch).not.toContain('secret');
     expect(projection.diagnostics).toEqual([]);
   });

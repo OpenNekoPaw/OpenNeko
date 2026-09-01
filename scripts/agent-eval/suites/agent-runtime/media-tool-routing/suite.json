@@ -5,7 +5,7 @@
   "target": {
     "kind": "capability",
     "id": "media-tool-routing",
-    "contractHash": "sha256:bc7266a46abdced8a681733f606e5fd8fa29d72aeef1cd6a23ee748974653304"
+    "contractHash": "sha256:e3bfc63d1f46307c7ae8cd36b095840d5326ab41f40e529834b1eb415ed0c0d6"
   },
   "runtimeProfiles": [
     {

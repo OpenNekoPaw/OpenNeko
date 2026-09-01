@@ -312,6 +312,61 @@ describe('Desktop Agent assertion-driven evidence', () => {
     );
   });
 
+  it('matches separate assertions to same-name Tool calls by their exact arguments', () => {
+    const assertions = [
+      {
+        id: 'overview',
+        kind: 'tool-call',
+        name: 'openneko_read_image',
+        status: 'success',
+        expectedArguments: { detail: 'overview' },
+        evidenceRef: 'facts',
+      },
+      {
+        id: 'original',
+        kind: 'tool-call',
+        name: 'openneko_read_image',
+        status: 'success',
+        expectedArguments: { detail: 'original' },
+        evidenceRef: 'facts',
+      },
+    ];
+    const input = dshEvidenceInput(assertions);
+    input.projection.events.push(
+      dshToolEvent({
+        toolCallId: 'overview-call',
+        title: 'openneko_read_image',
+        status: 'completed',
+        rawInput: {
+          source: { file: { authority: 'workspace', path: 'story.epub' } },
+          detail: 'overview',
+        },
+        result: { detail: 'overview' },
+      }),
+      dshToolEvent({
+        toolCallId: 'original-call',
+        title: 'openneko_read_image',
+        status: 'completed',
+        rawInput: {
+          source: { file: { authority: 'workspace', path: 'story.epub' } },
+          detail: 'original',
+        },
+        result: { detail: 'original' },
+      }),
+    );
+
+    expect(run(input)).toEqual([
+      expect.objectContaining({
+        status: 'pass',
+        details: expect.objectContaining({ toolCallId: 'overview-call' }),
+      }),
+      expect.objectContaining({
+        status: 'pass',
+        details: expect.objectContaining({ toolCallId: 'original-call' }),
+      }),
+    ]);
+  });
+
   it('rejects retired Pi Tool projection as a successful Tool assertion path', () => {
     const assertion = {
       id: 'tool',

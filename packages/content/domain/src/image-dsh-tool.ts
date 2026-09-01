@@ -8,6 +8,9 @@ import {
 export const CONTENT_IMAGE_DSH_TOOL_NAME = 'openneko_read_image' as const;
 export const CONTENT_IMAGE_DSH_TOOL_OPERATION = 'read-chunk' as const;
 export const CONTENT_IMAGE_DSH_CHUNK_BYTES = 128 * 1024;
+export const CONTENT_IMAGE_DSH_DETAILS = ['overview', 'original'] as const;
+
+export type ContentImageDshDetail = (typeof CONTENT_IMAGE_DSH_DETAILS)[number];
 
 export const CONTENT_IMAGE_DSH_SOURCE_SCHEMA = {
   type: 'object',
@@ -41,11 +44,22 @@ export const CONTENT_IMAGE_DSH_TOOL_PARAMETERS = {
     ...CONTENT_IMAGE_DSH_SOURCE_SCHEMA,
     required: true,
   },
+  detail: {
+    type: 'string',
+    enum: CONTENT_IMAGE_DSH_DETAILS,
+    description:
+      'Use overview for initial visual screening and original only for selected images that need close inspection. Defaults to original.',
+  },
 } as const;
 
 export type ContentImageDshSource = WorkspaceFileContentLocator & {
   readonly selector?: ContentEntrySelector;
 };
+
+export interface ContentImageDshToolInput {
+  readonly source: ContentImageDshSource;
+  readonly detail: ContentImageDshDetail;
+}
 
 export interface ContentImageDshChunkRequest {
   readonly source: ContentImageDshSource;
@@ -68,6 +82,18 @@ export function decodeContentImageDshToolSource(value: unknown): ContentImageDsh
     throw new Error('source selector must identify an image entry.');
   }
   return value as ContentImageDshSource;
+}
+
+export function decodeContentImageDshToolInput(value: unknown): ContentImageDshToolInput {
+  const record = requireRecord(value, 'Content image arguments');
+  const keys = Object.keys(record);
+  if (keys.some((key) => key !== 'source' && key !== 'detail')) {
+    throw new Error('Content image arguments may contain only source and detail.');
+  }
+  return {
+    source: decodeContentImageDshToolSource(record.source),
+    detail: decodeContentImageDshDetail(record.detail),
+  };
 }
 
 export function decodeContentImageDshChunkRequest(
@@ -117,6 +143,19 @@ function requireExactRecord(
     throw new Error(`${field} must contain exactly ${keys.join(', ')}.`);
   }
   return record;
+}
+
+function requireRecord(value: unknown, field: string): Record<string, unknown> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${field} must be an object.`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function decodeContentImageDshDetail(value: unknown): ContentImageDshDetail {
+  if (value === undefined) return 'original';
+  if (value === 'overview' || value === 'original') return value;
+  throw new Error(`detail must be one of ${CONTENT_IMAGE_DSH_DETAILS.join(', ')}.`);
 }
 
 function requireNonNegativeInteger(value: unknown, field: string): number {

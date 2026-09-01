@@ -485,22 +485,26 @@ function assertToolCall(assertion, input) {
     return { name: assertion.name, status: 'absent' };
   }
   const expectedStatus = assertion.status === 'success' ? 'completed' : 'failed';
-  const toolCall = projected.find(
+  const terminal = projected.filter(
     (item) => item.status === expectedStatus && item.rawOutput !== undefined,
   );
-  if (!toolCall) {
+  if (terminal.length === 0) {
     throw new Error(`Desktop Agent Tool call ${assertion.name} did not reach ${assertion.status}.`);
   }
-  if (
-    assertion.expectedArguments !== undefined &&
-    !containsExpectedValue(toolCall.rawInput, assertion.expectedArguments)
-  ) {
+  const argumentMatches = terminal.filter(
+    (item) =>
+      assertion.expectedArguments === undefined ||
+      containsExpectedValue(item.rawInput, assertion.expectedArguments),
+  );
+  if (argumentMatches.length === 0) {
     throw new Error(`Desktop Agent Tool call ${assertion.name} arguments did not match.`);
   }
-  if (
-    assertion.resultIncludes !== undefined &&
-    !containsExpectedValue(readDshToolJsonResult(toolCall), assertion.resultIncludes)
-  ) {
+  const toolCall = argumentMatches.find(
+    (item) =>
+      assertion.resultIncludes === undefined ||
+      containsExpectedValue(readDshToolJsonResult(item), assertion.resultIncludes),
+  );
+  if (!toolCall) {
     throw new Error(`Desktop Agent Tool call ${assertion.name} result did not match.`);
   }
   return {

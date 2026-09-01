@@ -13,8 +13,9 @@ import {
   CONTENT_IMAGE_DSH_TOOL_PARAMETERS,
   contentLocatorsEqual,
   decodeContentImageDshChunk,
-  decodeContentImageDshToolSource,
+  decodeContentImageDshToolInput,
   type ContentImageDshChunk,
+  type ContentImageDshDetail,
   type ContentLocator,
 } from '@neko/content-domain';
 import {
@@ -28,6 +29,7 @@ import sharp from 'sharp';
 
 export const name = 'openneko-content-tools';
 export const inject = ['opennekoHostTools', 'tools'];
+const CONTENT_IMAGE_OVERVIEW_MAX_DIMENSION = 768;
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -74,7 +76,7 @@ export function apply(ctx: Context): void {
           defineTool({
             name: CONTENT_IMAGE_DSH_TOOL_NAME,
             description:
-              'Read an image from an exact OpenNeko ContentLocator and return the image itself. Use this for document image locators returned by openneko_document; use read_image for ordinary filesystem paths. Requires the current model to accept image input.',
+              'Read an image from an exact OpenNeko ContentLocator and return the image itself. Use detail="overview" for initial visual screening and detail="original" only for selected images that need close inspection. Use this for document image locators returned by openneko_document; use read_image for ordinary filesystem paths. Requires the current model to accept image input.',
             parameters: CONTENT_IMAGE_DSH_TOOL_PARAMETERS,
             output: {
               schema: {
@@ -82,6 +84,11 @@ export function apply(ctx: Context): void {
                 additionalProperties: false,
                 properties: {
                   source: { ...CONTENT_IMAGE_DSH_TOOL_PARAMETERS.source, required: true },
+                  detail: {
+                    type: 'string',
+                    enum: ['overview', 'original'],
+                    required: true,
+                  },
                   image: {
                     type: 'object',
                     additionalProperties: false,
@@ -116,7 +123,7 @@ export function apply(ctx: Context): void {
             // exclusive so a batch of images cannot exhaust the per-Session Host queue.
             isConcurrencySafe: () => false,
             async execute(args, execution) {
-              const source = decodeContentImageDshToolSource(args.source);
+              const { source, detail } = decodeContentImageDshToolInput(args);
               await assertImageCapableRoute(imageCtx, execution, source);
               const attachments = imageCtx.attachments;
               const loaded = await loadContentImage(source, execution, async (offset) => {
@@ -145,6 +152,7 @@ export function apply(ctx: Context): void {
               const attachmentImage = await prepareContentImageAttachment(
                 loaded,
                 attachments.imageLimits,
+                detail,
               );
               if (attachmentImage.bytes.byteLength > byteCap) {
                 throw new Error(
@@ -158,6 +166,7 @@ export function apply(ctx: Context): void {
               });
               return {
                 source,
+                detail,
                 image: {
                   attachmentId: ref.attachmentId,
                   mediaType: ref.mediaType,
@@ -181,6 +190,7 @@ async function prepareContentImageAttachment(
     readonly mimeType: ContentImageDshChunk['mimeType'];
   },
   limits: ImageAttachmentLimits,
+  detail: ContentImageDshDetail,
 ): Promise<{
   readonly bytes: Uint8Array;
   readonly mimeType: ContentImageDshChunk['mimeType'];
@@ -196,15 +206,19 @@ async function prepareContentImageAttachment(
       `Content image exceeds the active DSH decoded-size limit of ${limits.maxImagePixels} pixels.`,
     );
   }
-  if (Math.max(sourceDimensions.width, sourceDimensions.height) <= limits.maxImageDimension) {
+  const maxDimension =
+    detail === 'overview'
+      ? Math.min(CONTENT_IMAGE_OVERVIEW_MAX_DIMENSION, limits.maxImageDimension)
+      : limits.maxImageDimension;
+  if (Math.max(sourceDimensions.width, sourceDimensions.height) <= maxDimension) {
     return image;
   }
 
   const resized = await sharp(image.bytes, { limitInputPixels: limits.maxImagePixels })
     .rotate()
     .resize({
-      width: limits.maxImageDimension,
-      height: limits.maxImageDimension,
+      width: maxDimension,
+      height: maxDimension,
       fit: 'inside',
       withoutEnlargement: true,
     })
@@ -216,7 +230,7 @@ async function prepareContentImageAttachment(
   }
   const boundedDimensions = requireRasterDimensions(boundedMetadata, 'Content image payload');
   if (
-    Math.max(boundedDimensions.width, boundedDimensions.height) > limits.maxImageDimension ||
+    Math.max(boundedDimensions.width, boundedDimensions.height) > maxDimension ||
     boundedDimensions.width * boundedDimensions.height > limits.maxImagePixels
   ) {
     throw new Error('Content image payload exceeds the active DSH limits.');

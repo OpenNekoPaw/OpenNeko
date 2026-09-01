@@ -142,4 +142,25 @@ describe('OpenNeko DSH product system prompt', () => {
       /PV structure|shot list|story beat fields|model-call packet/u,
     );
   });
+
+  it('keeps visual inspection bounded and decision-driven', () => {
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'name the decision that the next visual evidence must support',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'Inspect at most four selected images in one model reasoning batch',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'inspect selected images as low-resolution overviews first',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'Read original detail only for the smaller set chosen to confirm',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'form and retain one concise evidence-to-decision conclusion',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'Do not reread an image or another image serving the same evidence role',
+    );
+  });
 });

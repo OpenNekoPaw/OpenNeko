@@ -191,7 +191,8 @@ describe('OpenNeko Document DSH plugin', () => {
         },
       },
     ]);
-  });
+    expect(result).toMatchObject({ source, detail: 'original' });
+  }, 10_000);
 
   it('rejects a text-only current model before reading Content bytes', async () => {
     const definitions: Array<{
@@ -241,7 +242,7 @@ describe('OpenNeko Document DSH plugin', () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it('fits a dimension-only oversized EPUB cover into the active attachment limit', async () => {
+  it('uses a bounded overview before preserving the selected original detail', async () => {
     const definitions: Array<{
       readonly name: string;
       readonly execute: (args: unknown, execution: unknown) => Promise<unknown>;
@@ -304,25 +305,40 @@ describe('OpenNeko Document DSH plugin', () => {
     apply(ctx as never);
     const definition = definitions.find((candidate) => candidate.name === 'openneko_read_image');
     if (!definition) throw new Error('Content image DSH Tool was not registered.');
-    const result = (await definition.execute(
-      { source },
-      {
-        signal: new AbortController().signal,
-        agent: {
-          options: { provider: 'provider', model: 'vision-model' },
-          session: { requestHeader: () => undefined },
-        },
+    const execution = {
+      signal: new AbortController().signal,
+      agent: {
+        options: { provider: 'provider', model: 'vision-model' },
+        session: { requestHeader: () => undefined },
       },
-    )) as {
+    };
+    const overview = (await definition.execute({ source, detail: 'overview' }, execution)) as {
       readonly source: unknown;
+      readonly detail: string;
+      readonly image: { readonly width: number; readonly height: number };
+    };
+    const original = (await definition.execute({ source, detail: 'original' }, execution)) as {
+      readonly source: unknown;
+      readonly detail: string;
       readonly image: { readonly width: number; readonly height: number };
     };
 
-    expect(result.source).toEqual(source);
-    expect(result.image).toMatchObject({ width: 1399, height: 2000 });
-    const saved = attachments.saveImage.mock.calls[0]?.[0];
-    const savedMetadata = await sharp(saved?.data).metadata();
-    expect(savedMetadata).toMatchObject({ format: 'jpeg', width: 1399, height: 2000 });
+    expect(overview).toMatchObject({
+      source,
+      detail: 'overview',
+      image: { width: 537, height: 768 },
+    });
+    expect(original).toMatchObject({
+      source,
+      detail: 'original',
+      image: { width: 1399, height: 2000 },
+    });
+    const overviewSaved = attachments.saveImage.mock.calls[0]?.[0];
+    const overviewMetadata = await sharp(overviewSaved?.data).metadata();
+    expect(overviewMetadata).toMatchObject({ format: 'jpeg', width: 537, height: 768 });
+    const originalSaved = attachments.saveImage.mock.calls[1]?.[0];
+    const originalMetadata = await sharp(originalSaved?.data).metadata();
+    expect(originalMetadata).toMatchObject({ format: 'jpeg', width: 1399, height: 2000 });
     expect(sourceBytes).toEqual(originalSourceBytes);
   });
 

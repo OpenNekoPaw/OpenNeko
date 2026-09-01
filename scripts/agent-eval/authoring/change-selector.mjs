@@ -71,6 +71,8 @@ const RULES = Object.freeze([
   rule('capability-tool-routing', 'agent-runtime.media-tool-routing', [
     'packages/agent/runtime/src/tools/',
     'packages/agent/runtime/src/runtime/capability/capability-runtime-bindings.ts',
+    'packages/content/domain/src/image-dsh-tool',
+    'packages/content/dsh-plugin/',
   ]),
   rule('provider-model-routing', 'agent-runtime.model-binding', [
     'packages/agent/runtime/src/provider/',
@@ -79,6 +81,7 @@ const RULES = Object.freeze([
     'packages/host/src/ai-model-settings',
     'packages/ai/sdk/src/',
     'packages/generation/domain/src/provider-capabilities',
+    'apps/neko-desktop/src/main/desktop-dsh-provider-runtime',
     'apps/neko-desktop/src/main/desktop-dsh-provider-capability-projection',
     'apps/neko-desktop/src/renderer/DesktopSettingsSurface',
   ]),

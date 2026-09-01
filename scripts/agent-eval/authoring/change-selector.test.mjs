@@ -50,6 +50,8 @@ describe('Agent Evaluation change-to-suite selector', () => {
         'packages/agent/runtime/src/prompt/system-prompt.ts',
         'packages/dsh-bridge/src/product-system-prompt.ts',
         'packages/agent/runtime/src/tools/read-image-tool.ts',
+        'packages/content/domain/src/image-dsh-tool.ts',
+        'packages/content/dsh-plugin/src/index.ts',
         'packages/automation/node/src/index.ts',
         'packages/agent/runtime/src/runtime/capability/capability-runtime-bindings.ts',
         'packages/host/src/settings/config-manager.ts',
@@ -100,6 +102,10 @@ describe('Agent Evaluation change-to-suite selector', () => {
         expect.objectContaining({
           behaviorId: 'capability-tool-routing',
           suiteId: 'agent-runtime.media-tool-routing',
+          changedPaths: expect.arrayContaining([
+            'packages/content/domain/src/image-dsh-tool.ts',
+            'packages/content/dsh-plugin/src/index.ts',
+          ]),
         }),
         expect.objectContaining({
           behaviorId: 'provider-model-routing',
@@ -194,6 +200,19 @@ describe('Agent Evaluation change-to-suite selector', () => {
         },
       ]),
     );
+  });
+
+  it('maps the Desktop DSH provider request projection to model binding coverage', () => {
+    const path = 'apps/neko-desktop/src/main/desktop-dsh-provider-runtime.ts';
+    expect(isAgentEvaluationRelevantPath(path)).toBe(true);
+    expect(selectEvaluationCoverage([path])).toEqual([
+      {
+        behaviorId: 'provider-model-routing',
+        suiteId: 'agent-runtime.model-binding',
+        suiteIds: ['agent-runtime.model-binding', 'agent-runtime.media-tool-routing'],
+        changedPaths: [path],
+      },
+    ]);
   });
 
   it('maps Desktop DSH projection consumers to existing workflow and stream suites', () => {
