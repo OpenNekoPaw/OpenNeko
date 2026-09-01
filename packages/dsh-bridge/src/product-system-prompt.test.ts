@@ -67,6 +67,14 @@ describe('OpenNeko DSH product system prompt', () => {
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
       'An execution request ends only at an observed and validated result',
     );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('In a Workspace or Canvas creative context');
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('defaults to AI-production-handoff');
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'Treat the request as creative-design-only when the user explicitly limits it',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'Design or adaptation wording alone never authorizes generation',
+    );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
       'discover and load the next applicable Skill from the current catalog and continue',
     );
@@ -83,7 +91,10 @@ describe('OpenNeko DSH product system prompt', () => {
       'Use capability roles as internal handoff contracts, not as headings that must appear in the answer',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'become accepted only when the user already specified them or the creator confirms them',
+      'only user-specified or creator-confirmed decisions become accepted and executable',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'one reversible, explicitly provisional review packet',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
       'generation returns observable candidates and generation records, not accepted assets',

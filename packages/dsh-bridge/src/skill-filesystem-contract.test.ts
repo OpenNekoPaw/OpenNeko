@@ -283,6 +283,8 @@ describe('locked DSH filesystem Skill provider contract', () => {
 
     expect(descriptions.image).toContain('不负责参考职责设计、候选选择、视频合成或时间线编排');
     expect(descriptions.video).toContain('不负责裁剪变速、技术修复、时间线剪辑或导出');
+    expect(descriptions['media-preparation']).toContain('非执行的暂定生产单元');
+    expect(descriptions['media-preparation']).toContain('不执行生成、候选筛选或后期');
     expect(descriptions['scene-to-music']).toContain('不负责对白音效、时间线放置或最终混音');
     expect(descriptions['script-to-timeline']).toContain('不负责媒体生成、轨道创建或时间线持久化');
 

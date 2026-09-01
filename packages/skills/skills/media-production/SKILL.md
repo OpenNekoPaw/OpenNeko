@@ -30,27 +30,27 @@ description: '基于故事、剧本、分镜或视觉来源完成改编判断、
 
 - Agent 对话只保留简短进度、决定性依据、真实阻塞和需要创作者确认的选择。
 - 生成的文档或项目产物只保留已验证的创作决定、可使用内容、必要来源绑定和适用的执行交接；不写读取过程、工具日志、工作进度、内部检查或被否决的分析。
-- 用户明确要求分析、研究或审计报告时，分析才是正式产物，但仍只保留支持结论所需的证据。
+- 用户明确要求把分析、研究或审计本身作为交付物时，分析才进入正式产物；“分析素材并设计作品”表示分析是内部证据工作，不构成分析报告请求。
 
 交付前在内部删除任何不改变创意内容、模型输入、验收、下游使用或创作者决定的段落。不要在文档中解释这项删除规则，也不要给每条内容标注“消费者”。
 
 时序媒体创意方案使用一份权威节拍或镜头序列承载时间、画面、动作、声音与转场。镜头内容已经在序列中成立时，不再拆出“来源分析”“关键镜头”“视觉系统”“声音设计”逐项复述；跨镜头不变量只集中写一次，镜头特有约束留在对应镜头。来源证据只作为紧邻决定的绑定或末尾一句边界说明，不单列分析章节，除非用户明确要求分析报告。
 
-对于用户要求“简洁方案”的时序概念设计，默认正文只保留两块：① 一段核心概念、体验主线和至多四项真正约束后续镜头的不变量，不列来源依据清单；② 一份权威节拍序列，60–90 秒概念片默认用 6–8 个因果节拍，不把每个摄影动作拆成独立镜头行。不得通过三级标题或粗体字段把分析、声音、制作、技术、关键镜头、验收、来源或评审问题重新扩写成小章节；未阻塞下一步的开放选择放在对话摘要，不进入正文。
+时序概念设计默认正文只保留两块：① 一段核心概念、体验主线和至多四项真正约束后续镜头的不变量，不列来源依据清单；② 一份权威节拍序列，60–90 秒概念片默认用 6–8 个因果节拍，不把每个摄影动作拆成独立镜头行。只有用户明确要求详细分析报告或完整制作规格时才扩展；不得通过三级标题或粗体字段把分析、声音、制作、技术、关键镜头、验收、来源或评审问题重新扩写成小章节。未阻塞下一步的开放选择放在对话摘要，不进入正文。
 
-当用户还要求 AI 制作时，本能力只返回下游必须消费的镜头决定、来源引用与连续性要求。系统推理应继续选择素材预处理、图像、视频、声音、后期或交付 Skill；不要在本 Skill 内代写它们的 prompt、operation、参数、验收或流程。
+当系统把请求判定为 AI 生产交接或执行时，本能力只返回下游必须消费的镜头决定、来源引用与连续性要求，并把本次结果视为中间依赖；不得以“概念方案已完成”或“等待确认”结束整个请求。系统推理应继续选择素材预处理、图像、视频、声音、后期或交付 Skill；不要在本 Skill 内代写它们的 prompt、operation、参数、验收或流程。
 
 ## English guidance
 
 Use this capability for source-grounded adaptation judgment, media concepts, and shot spines. It owns creative decisions and source boundaries, not cross-Skill orchestration.
 
-Keep collaboration and the durable artifact separate. Conversation updates may state concise progress, decisive rationale, blockers, and creator decisions. A generated document contains validated creative content and applicable handoff data, not source-review narration, Tool logs, progress, internal checks, or rejected reasoning. Analysis belongs in the document only when the user explicitly requests an analysis, research, or audit artifact.
+Keep collaboration and the durable artifact separate. Conversation updates may state concise progress, decisive rationale, blockers, and creator decisions. A generated document contains validated creative content and applicable handoff data, not source-review narration, Tool logs, progress, internal checks, or rejected reasoning. Analysis belongs in the document only when the user explicitly requests analysis, research, or audit as the deliverable; “analyze the source and design the work” keeps analysis as internal evidence work.
 
 For time-based creative proposals, keep one authoritative beat or shot sequence for timing, image, action, sound, and transitions. Do not restate the same decisions in separate source-analysis, key-shot, visual-system, or sound-design sections. State cross-shot invariants once and keep shot-specific constraints with their shot. Bind evidence next to the decision it supports or reduce the evidence boundary to one closing sentence unless the user requested an analysis artifact.
 
-When the user asks for a concise time-based concept, default to two blocks: one concept paragraph plus at most four true cross-shot invariants and no evidence inventory; then one authoritative causal beat sequence, normally six to eight beats for a 60–90 second concept. Do not recreate analysis, sound, production, technology, key-shot, acceptance, source-binding, or creator-question mini-sections through nested headings or bold field groups.
+For a time-based concept, default to two blocks: one concept paragraph plus at most four true cross-shot invariants and no evidence inventory; then one authoritative causal beat sequence, normally six to eight beats for a 60–90 second concept. Expand only when the user explicitly requests a detailed analysis report or full production specification. Do not recreate analysis, sound, production, technology, key-shot, acceptance, source-binding, or creator-question mini-sections through nested headings or bold field groups.
 
-When AI production is also requested, expose only the creative decisions, stable source or shot references, and continuity requirements that the next capability must consume. System reasoning composes preparation, generation, selection, post-production, and delivery Skills; this Skill does not write their prompts, operations, parameters, acceptance packets, or workflow.
+When the system classifies the request as an AI-production handoff or execution request, expose only the creative decisions, stable source or shot references, and continuity requirements that the next capability must consume, and treat this result as an intermediate dependency rather than the completed turn. System reasoning composes preparation, generation, selection, post-production, and delivery Skills; this Skill does not write their prompts, operations, parameters, acceptance packets, or workflow.
 
 ## Evidence and creator review
 

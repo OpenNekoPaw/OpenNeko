@@ -31,7 +31,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$media-production 读取 @screenplay.fountain\n为这个短剧本设计一支 60 秒动画概念 PV，供创作者确认创意方向。正文只保留核心概念、必要跨镜头约束和一份 6–8 个节拍的权威序列；不要输出来源分析、制作流程、模型提示词、operation 参数、验收章节或重复说明。请直接在对话中提交，不创建持久文档，不生成媒体或修改项目。"
+      "prompt": "$media-production 读取 @screenplay.fountain\n只需要一份供创作者确认方向的 60 秒动画概念 PV。不要准备模型输入，不要生成媒体或修改项目。"
     },
     {
       "id": "idle",
@@ -54,7 +54,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:66154cb145016be232dede701e4f0d3c1468b6d8ba9e41b834d5454a11b49303"
+        "fingerprint": "sha256:c407fcdaec3328f416e21295c17301e5d456ff4337536d47d776ad70e111192c"
       },
       "status": "injected",
       "evidenceRef": "creative-pv-facts"
