@@ -1645,7 +1645,11 @@ function DshPlanPanel({
   readonly copy: DshAgentCopy;
   readonly todos: DshSessionHostProjection['todos'];
 }): JSX.Element {
-  const [expanded, setExpanded] = useState(() => todos.some((todo) => todo.status !== 'completed'));
+  const hasIncomplete = todos.some((todo) => todo.status !== 'completed');
+  const [expanded, setExpanded] = useState(hasIncomplete);
+  useEffect(() => {
+    if (!hasIncomplete) setExpanded(false);
+  }, [hasIncomplete]);
   const completedCount = todos.filter((todo) => todo.status === 'completed').length;
   const complete = completedCount === todos.length;
   const tone = complete ? 'is-success' : 'is-info';
@@ -1796,6 +1800,7 @@ function DshToolEvent({
 }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
   const expandable = event.rawInput !== undefined || event.rawOutput !== undefined;
+  const title = projectToolEventTitle(event);
   const tone =
     event.status === 'failed'
       ? 'is-danger'
@@ -1823,7 +1828,7 @@ function DshToolEvent({
       >
         {icon}
         <span className="min-w-0 max-w-[70%] truncate font-medium text-[var(--agent-fg)]">
-          {event.title ?? event.toolCallId}
+          {title}
         </span>
         <span className="flex-1 truncate font-mono text-[10px] text-[var(--agent-fg-secondary)]">
           {copy.toolStatus[event.status]}
@@ -1850,6 +1855,19 @@ function DshToolEvent({
       </div>
     </div>
   );
+}
+
+function projectToolEventTitle(event: ToolEvent): string {
+  const title = event.title ?? event.toolCallId;
+  if (title !== 'skill' || !isToolInputRecord(event.rawInput)) return title;
+  const skillName = event.rawInput['name'];
+  return typeof skillName === 'string' && skillName.trim().length > 0
+    ? `skill · ${skillName.trim()}`
+    : title;
+}
+
+function isToolInputRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function DshCommandEvent({

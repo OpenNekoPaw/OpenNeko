@@ -649,6 +649,34 @@ describe('DshAgentView content-creation composer', () => {
     expect(screen.getByRole('button', { name: /openneko_read_image.*运行中/u })).toBeTruthy();
   });
 
+  it('shows the selected Skill name instead of an anonymous Skill Tool label', () => {
+    renderAgent(
+      <DshComposerHarness
+        onSubmit={vi.fn(async () => true)}
+        projection={{
+          conversationId: 'conversation-skill-label',
+          dshSessionId: 'dsh-skill-label',
+          title: 'Skill selection',
+          todos: [],
+          inbox: { nextTurn: [], nextStep: [] },
+          events: [
+            {
+              kind: 'tool',
+              turn: 1,
+              toolCallId: 'tool-skill',
+              title: 'skill',
+              status: 'completed',
+              rawInput: { name: 'media-production' },
+            },
+          ],
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /工作进度.*1 项操作已完成/u }));
+    expect(screen.getByRole('button', { name: /skill · media-production.*已完成/u })).toBeTruthy();
+  });
+
   it('states when an active Tool group has no model-authored progress update', () => {
     renderAgent(
       <DshComposerHarness
@@ -732,6 +760,58 @@ describe('DshAgentView content-creation composer', () => {
     fireEvent.click(plan);
     expect(screen.queryByText('制作并验收动态分镜')).toBeNull();
     expect(view.container.querySelector('[data-agent-plan="is-info"]')).toBeTruthy();
+  });
+
+  it('collapses a previously active creative plan when every step completes', async () => {
+    const onSubmit = vi.fn(async () => true);
+    const projection = {
+      conversationId: 'conversation-plan-collapse',
+      dshSessionId: 'dsh-plan-collapse',
+      title: 'PV workflow',
+      currentTurn: 4,
+      inbox: { nextTurn: [], nextStep: [] },
+      events: [],
+    };
+    const view = renderAgent(
+      <DshComposerHarness
+        onSubmit={onSubmit}
+        projection={{
+          ...projection,
+          todos: [
+            { content: '核对素材', status: 'completed' },
+            { content: '整理镜头', status: 'in_progress' },
+          ],
+        }}
+      />,
+    );
+
+    expect(
+      screen
+        .getByRole('button', { name: /创作步骤.*1\/2 步已完成/u })
+        .getAttribute('aria-expanded'),
+    ).toBe('true');
+    rerenderAgent(
+      view,
+      <DshComposerHarness
+        onSubmit={onSubmit}
+        projection={{
+          ...projection,
+          todos: [
+            { content: '核对素材', status: 'completed' },
+            { content: '整理镜头', status: 'completed' },
+          ],
+        }}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(
+        screen
+          .getByRole('button', { name: /创作步骤.*2\/2 步已完成/u })
+          .getAttribute('aria-expanded'),
+      ).toBe('false'),
+    );
+    expect(screen.queryByText('整理镜头')).toBeNull();
   });
 
   it('resets expanded Tool details when the exact Conversation or DSH Session changes', () => {
