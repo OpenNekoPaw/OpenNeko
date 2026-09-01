@@ -147,6 +147,15 @@ export const desktopTextEditorScenario = Object.freeze({
         ['创作笔记', '收束内容 14。'],
       );
     checkpoint('markdown-rich-select-all-copy', markdownRichSelection);
+    const { evidence: markdownRichContextMenu, screenshot: markdownRichContextMenuScreenshot } =
+      await verifyRichContextMenu(
+        evaluate,
+        pressKey,
+        screenshot,
+        'markdown-rich-context-menu-copy',
+        ['创作笔记', '收束内容 14。'],
+      );
+    checkpoint('markdown-rich-context-menu-copy', markdownRichContextMenu);
     await type('.neko-text-editor-rich .ProseMirror', MARKDOWN_RICH_INPUT);
     await waitForRichText(evaluate, MARKDOWN_RICH_INPUT);
     await waitForEditorDirty(evaluate);
@@ -541,6 +550,7 @@ export const desktopTextEditorScenario = Object.freeze({
       markdownRichInput,
       markdownRichParagraphBreak,
       markdownRichSelection,
+      markdownRichContextMenu,
       markdownReadOnlySelection,
       markdownIncomplete,
       imeComposition,
@@ -560,6 +570,7 @@ export const desktopTextEditorScenario = Object.freeze({
       screenshots: [
         markdownDefaultScreenshot,
         markdownRichSelectionScreenshot,
+        markdownRichContextMenuScreenshot,
         markdownRichInputScreenshot,
         markdownRichParagraphBreakScreenshot,
         markdownReadOnlySelectionScreenshot,
@@ -609,6 +620,8 @@ async function verifyRichSelectAllAndCopy(
       focused: document.activeElement === rich,
       tabIndex: rich.tabIndex,
       userSelect: getComputedStyle(rich).userSelect,
+      selectionBackground: getComputedStyle(rich, '::selection').backgroundColor,
+      selectionForeground: getComputedStyle(rich, '::selection').color,
     };
   })()`);
   if (
@@ -617,6 +630,9 @@ async function verifyRichSelectAllAndCopy(
     !selection.focused ||
     selection.tabIndex !== 0 ||
     selection.userSelect !== 'text' ||
+    selection.selectionBackground === '' ||
+    selection.selectionBackground === 'rgba(0, 0, 0, 0)' ||
+    selection.selectionForeground === '' ||
     expectedSnippets.some((snippet) => !selection.text.includes(snippet))
   ) {
     throw new Error(`Rich select-all is incomplete: ${JSON.stringify(selection)}`);
@@ -647,6 +663,98 @@ async function verifyRichSelectAllAndCopy(
     throw new Error(`Rich native copy is incomplete: ${JSON.stringify(copiedText)}`);
   }
   return { evidence: { ...selection, copiedText }, screenshot: selectionScreenshot };
+}
+
+async function verifyRichContextMenu(
+  evaluate,
+  pressKey,
+  screenshot,
+  screenshotLabel,
+  expectedSnippets,
+) {
+  await evaluate(`(() => {
+    const rich = document.querySelector('.neko-text-editor-rich .ProseMirror');
+    if (!(rich instanceof HTMLElement)) throw new Error('Rich context menu surface is unavailable.');
+    rich.focus();
+    return true;
+  })()`);
+  await pressKey('a', ['Meta']);
+  await evaluate(`(() => {
+    const rich = document.querySelector('.neko-text-editor-rich .ProseMirror');
+    if (!(rich instanceof HTMLElement)) throw new Error('Rich context menu surface is unavailable.');
+    rich.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 620,
+      clientY: 360,
+    }));
+    return true;
+  })()`);
+  await waitForCondition(
+    evaluate,
+    `document.querySelector('.neko-text-editor-edit-menu[role="menu"]') !== null`,
+    'Text Editor context menu did not open.',
+  );
+  const menu = await evaluate(`(() => {
+    const surface = document.querySelector('.neko-text-editor-edit-menu');
+    if (!(surface instanceof HTMLElement)) throw new Error('Text Editor context menu is unavailable.');
+    return {
+      role: surface.getAttribute('role'),
+      labels: [...surface.querySelectorAll('button')].map((button) => button.textContent?.trim() ?? ''),
+      disabled: [...surface.querySelectorAll('button')].filter((button) => button.disabled)
+        .map((button) => button.textContent?.trim() ?? ''),
+      iconCount: surface.querySelectorAll('.neko-menu-item-icon').length,
+      background: getComputedStyle(surface).backgroundColor,
+      borderColor: getComputedStyle(surface).borderColor,
+      boxShadow: getComputedStyle(surface).boxShadow,
+      left: surface.getBoundingClientRect().left,
+      top: surface.getBoundingClientRect().top,
+    };
+  })()`);
+  if (
+    menu.role !== 'menu' ||
+    !menu.labels.some((label) => /cut|剪切/iu.test(label)) ||
+    !menu.labels.some((label) => /copy|复制/iu.test(label)) ||
+    !menu.labels.some((label) => /paste|粘贴/iu.test(label)) ||
+    !menu.labels.some((label) => /select all|全选/iu.test(label)) ||
+    menu.iconCount !== 6 ||
+    menu.background === 'rgba(0, 0, 0, 0)' ||
+    menu.borderColor === 'rgba(0, 0, 0, 0)' ||
+    menu.boxShadow === 'none' ||
+    menu.disabled.some((label) => /cut|copy|paste|剪切|复制|粘贴/iu.test(label))
+  ) {
+    throw new Error(`Text Editor context menu is incomplete: ${JSON.stringify(menu)}`);
+  }
+  const menuScreenshot = await screenshot(screenshotLabel);
+  await evaluate(`(() => {
+    const copy = [...document.querySelectorAll('.neko-text-editor-edit-menu button')]
+      .find((button) => /copy|复制/iu.test(button.textContent ?? ''));
+    if (!(copy instanceof HTMLButtonElement)) throw new Error('Text Editor Copy action is unavailable.');
+    copy.click();
+    return true;
+  })()`);
+  await evaluate(`new Promise((resolve) => window.setTimeout(resolve, 50))`);
+  await evaluate(`(() => {
+    const receiver = document.createElement('textarea');
+    receiver.dataset.textEditorContextClipboardReceiver = 'true';
+    receiver.style.position = 'fixed';
+    receiver.style.opacity = '0';
+    document.body.appendChild(receiver);
+    receiver.focus();
+    return true;
+  })()`);
+  await pressKey('v', ['Meta']);
+  const copiedText = await evaluate(`(() => {
+    const receiver = document.querySelector('[data-text-editor-context-clipboard-receiver="true"]');
+    if (!(receiver instanceof HTMLTextAreaElement)) throw new Error('Context menu clipboard receiver is unavailable.');
+    const value = receiver.value;
+    receiver.remove();
+    return value;
+  })()`);
+  if (expectedSnippets.some((snippet) => !copiedText.includes(snippet))) {
+    throw new Error(`Text Editor context menu copy is incomplete: ${JSON.stringify(copiedText)}`);
+  }
+  return { evidence: { ...menu, copiedText }, screenshot: menuScreenshot };
 }
 
 async function openTextDocument(evaluate, label, mode) {

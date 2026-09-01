@@ -60,6 +60,45 @@ afterEach(() => {
 });
 
 describe('TextEditorRoot', () => {
+  it('opens an editor-scoped context menu and routes clipboard commands through the Host', async () => {
+    const runtime = createRuntime(textProjection('markdown', '# Draft\n'));
+    const rendered = await renderEditor(runtime, 'zh-cn');
+    const view = editorView(rendered.container);
+    view.dispatch({ selection: { anchor: 0, head: 7 } });
+
+    await act(async () => {
+      view.contentDOM.dispatchEvent(
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 120,
+          clientY: 80,
+        }),
+      );
+      await settle();
+    });
+
+    const menu = document.querySelector<HTMLElement>('.neko-text-editor-edit-menu');
+    expect(menu?.getAttribute('role')).toBe('menu');
+    expect(menu?.textContent).toContain('剪切');
+    expect(menu?.textContent).toContain('复制');
+    expect(menu?.textContent).toContain('粘贴');
+    expect(menu?.querySelectorAll('.neko-menu-item-icon')).toHaveLength(6);
+    expect(menu?.querySelector('.codicon-clippy')).not.toBeNull();
+    expect(menu?.querySelector('.codicon-selection')).not.toBeNull();
+    const copy = [...(menu?.querySelectorAll('button') ?? [])].find((button) =>
+      button.textContent?.includes('复制'),
+    );
+    if (!copy) throw new Error('Text Editor context menu requires a Copy action.');
+    await act(async () => {
+      copy.click();
+      await settle();
+    });
+    expect(runtime.executeClipboardCommand).toHaveBeenCalledWith('copy');
+    expect(document.querySelector('.neko-text-editor-edit-menu')).toBeNull();
+    await unmount(rendered.root);
+  });
+
   it('keeps one CodeMirror instance while accepted edits, undo and redo use revisioned commands', async () => {
     const runtime = createRuntime(textProjection('markdown', '# Draft\n'));
     const rendered = await renderEditor(runtime);
@@ -546,6 +585,26 @@ describe('TextEditorRoot', () => {
     expect(copied.get('text/plain')).toContain('cover.png');
     expect(runtime.applyEdits).not.toHaveBeenCalled();
 
+    await act(async () => {
+      rich.dispatchEvent(
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 100,
+          clientY: 90,
+        }),
+      );
+      await settle();
+    });
+    const menuButtons = [
+      ...document.querySelectorAll<HTMLButtonElement>('.neko-text-editor-edit-menu button'),
+    ];
+    expect(menuButtons.find((button) => button.textContent?.includes('剪切'))?.disabled).toBe(true);
+    expect(menuButtons.find((button) => button.textContent?.includes('复制'))?.disabled).toBe(
+      false,
+    );
+    expect(menuButtons.find((button) => button.textContent?.includes('粘贴'))?.disabled).toBe(true);
+
     await clickText(rendered.container, '打开源码');
     expect(editorView(rendered.container).state.doc.toString()).toBe(source);
     await unmount(rendered.root);
@@ -998,7 +1057,9 @@ function createRuntime(initial: TextDocumentProjection) {
     }),
   );
   const releaseMarkdownMedia = vi.fn(async (_request: ReleaseTextEditorMarkdownMediaRequest) => {});
+  const executeClipboardCommand = vi.fn(async () => {});
   return {
+    executeClipboardCommand,
     project: vi.fn(async () => current),
     applyEdits,
     formatJson,
@@ -1023,6 +1084,7 @@ function createRuntime(initial: TextDocumentProjection) {
     searchMarkdownReferences: typeof searchMarkdownReferences;
     prepareMarkdownMedia: typeof prepareMarkdownMedia;
     releaseMarkdownMedia: typeof releaseMarkdownMedia;
+    executeClipboardCommand: typeof executeClipboardCommand;
     emit(projection: TextDocumentProjection): void;
   };
 }
