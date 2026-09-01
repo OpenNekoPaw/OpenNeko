@@ -14,6 +14,7 @@ description: '基于故事、剧本、分镜或视觉来源完成改编判断、
 3. 只决定叙事、视觉、动作、声音与节奏如何服务当前媒体目标；参考素材准备、模型提示词、生成、候选选择、后期和交付分别由对应 Skill 处理。
 4. 只有改编目标、故事/角色变化、核心风格、主要技术、成本风险、修改范围和交付边界等实质选择才要求创作者确认。
 5. 向下游提供已确认的创意决定、稳定来源/镜头引用和必须保持的连续性，不输出跨 Skill 制作流程。
+6. 读取前先在内部确定当前创意单元必须证明的决定；每项决定获得直接来源证据后立即停止取样。不得为了显得完整而继续扩大全卷覆盖、重复读取相同职责的页面，或把未使用的发现写进产物。
 
 ## 请求路由与输出表面
 
@@ -55,9 +56,10 @@ When the system classifies the request as an AI-production handoff or execution 
 ## Evidence and creator review
 
 1. Read the actual source and existing project state before planning. Separate observed facts, Agent interpretation, creator decisions, and proposed actions. Never treat a filename, prompt, thumbnail, or old plan as content evidence.
-2. Reuse current Storyboards, character references, approved documents and validated creative decisions when they remain valid.
-3. Ask the creator to approve only material choices: adaptation target and omissions, story or character changes, core visual style, primary image/video/audio technique, cost or risk ceiling, mutation scope, and delivery boundary. Keep unresolved choices visible only when they affect the current artifact or next action.
-4. A simple low-risk operation may proceed without creating planning files. For complex work, an optional `brief.md` may capture source evidence, interpretation, alternatives, creator decisions, and approval scope; it remains ordinary reviewable Markdown, not runtime state.
+2. Define the minimum decisions that the current creative unit must support before expanding source inspection. Stop once every included decision has direct evidence. Do not keep sampling for background, apparent completeness, or whole-source coverage; narrow an unsupported claim or return the precise missing evidence instead.
+3. Reuse current Storyboards, character references, approved documents and validated creative decisions when they remain valid.
+4. Ask the creator to approve only material choices: adaptation target and omissions, story or character changes, core visual style, primary image/video/audio technique, cost or risk ceiling, mutation scope, and delivery boundary. Keep unresolved choices visible only when they affect the current artifact or next action.
+5. A simple low-risk operation may proceed without creating planning files. For complex work, an optional `brief.md` may capture source evidence, interpretation, alternatives, creator decisions, and approval scope; it remains ordinary reviewable Markdown, not runtime state.
 
 Ground each source in its own evidence: comics use actual page, panel, reading-order, dialogue, and character appearance evidence; screenplays use scene headings, action, dialogue, location, and timing intent; novels use chapter or scene boundaries, point of view, narration, dialogue, and adaptation omissions; illustrations use visible composition, subjects, layers when available, palette, and spatial relationships. Existing Storyboards and projects use their current revision, owned shots or timeline state, referenced assets, and validation evidence. When those existing facts already satisfy a work unit, mark it skipped or reused rather than rebuilding it.
 

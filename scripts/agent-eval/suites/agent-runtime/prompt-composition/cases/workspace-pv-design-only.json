@@ -20,8 +20,8 @@
         "required": true
       }
     ],
-    "expectedResult": "The Agent returns only a concise concept and authoritative beat sequence grounded in the screenplay, without a model-input handoff or generation.",
-    "expectedFailure": "Preparing model inputs, emitting a generation handoff, executing media Tools, or expanding into a source-analysis report fails."
+    "expectedResult": "The Agent returns only a concise concept and authoritative beat sequence grounded in the screenplay, without creating a task plan, model-input handoff, or generation.",
+    "expectedFailure": "Creating a task plan for the bounded design turn, preparing model inputs, emitting a generation handoff, executing media Tools, or expanding into a source-analysis report fails."
   },
   "fixtureRefs": ["creative-planning-workspace"],
   "runtimeProfileId": "markdown",
@@ -45,7 +45,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:c407fcdaec3328f416e21295c17301e5d456ff4337536d47d776ad70e111192c"
+        "fingerprint": "sha256:914cb17c7e9c5674130558e16551442cd87bfbac1d68c038df4c586953c2e8ad"
       },
       "status": "injected",
       "evidenceRef": "workspace-pv-design-facts"
@@ -62,6 +62,13 @@
       "kind": "final-answer",
       "mode": "not-contains",
       "text": ["生成交接", "可提交输入", "模型提示词", "operation 参数"],
+      "evidenceRef": "workspace-pv-design-facts"
+    },
+    {
+      "id": "no-task-plan",
+      "kind": "tool-call",
+      "name": "todo_write",
+      "status": "absent",
       "evidenceRef": "workspace-pv-design-facts"
     },
     {

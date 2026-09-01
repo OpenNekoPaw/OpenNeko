@@ -25,6 +25,10 @@ describe('OpenNeko DSH product system prompt', () => {
       'Planning is coordination state, not the requested deliverable',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'one provisional non-executing handoff form one creative turn',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('do not by themselves justify a task plan');
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
       'bind it to current evidence, an admitted capability, an observable result',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toContain('action, output, and completion check');
@@ -38,6 +42,7 @@ describe('OpenNeko DSH product system prompt', () => {
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toMatch(
       /creative proposal fields|analysis report fields|project proposal fields/u,
     );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('which successful evidence replaced it');
   });
 
   it('requests concise evidence-based progress without exposing chain-of-thought', () => {

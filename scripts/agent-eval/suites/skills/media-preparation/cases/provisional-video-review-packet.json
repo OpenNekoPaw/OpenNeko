@@ -21,8 +21,8 @@
         "required": true
       }
     ],
-    "expectedResult": "The response returns one source-bound provisional clip prompt, names the unconfirmed creative decision and direct acceptance checks, and does not claim accepted, ready, authorized, or generated state.",
-    "expectedFailure": "Falling back to concept analysis, inventing asset references or Tool parameters, omitting the unresolved decision, marking the packet ready, or executing generation fails."
+    "expectedResult": "The response returns one source-bound provisional clip prompt, names the unconfirmed creative decision, direct acceptance checks, and the exact Tool-schema blocker without creating a task plan or claiming accepted, ready, authorized, or generated state.",
+    "expectedFailure": "Creating a task plan, falling back to concept analysis, inventing asset references, operation names, reference roles, or Tool parameters, omitting the unresolved decision or schema blocker, marking the packet ready, or executing generation fails."
   },
   "fixtureRefs": ["creative-planning-workspace"],
   "runtimeProfileId": "markdown",
@@ -50,7 +50,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-preparation",
-        "fingerprint": "sha256:a4cac2dcda4fbd89d5a091bee98fe0f33324fbf8e2a10e9551ae3154707e5b49"
+        "fingerprint": "sha256:56bedee45dab5a7f7c68fb7139b5f9a71f00c7565ff4843191ba85fe8505812a"
       },
       "status": "injected",
       "evidenceRef": "provisional-preparation-facts"
@@ -64,7 +64,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "video",
-        "fingerprint": "sha256:c187cef266084c95444c9ad136c6dfc5625ad28f1061e264d48c05c810914566"
+        "fingerprint": "sha256:b083288a955ec8ec87979418a51aea7608e8a374c870efe645f4e8f1e321772d"
       },
       "status": "injected",
       "evidenceRef": "provisional-preparation-facts"
@@ -80,14 +80,40 @@
       "id": "output",
       "kind": "final-answer",
       "mode": "contains",
-      "text": ["Mara", "23:47", "红伞", "列车", "暂定", "提示词", "待确认", "验收"],
+      "text": [
+        "Mara",
+        "23:47",
+        "红伞",
+        "列车",
+        "暂定",
+        "候选",
+        "提示词",
+        "待确认",
+        "验收",
+        "Tool schema"
+      ],
       "evidenceRef": "provisional-preparation-facts"
     },
     {
       "id": "no-false-success",
       "kind": "final-answer",
       "mode": "not-contains",
-      "text": ["准备状态：ready", "已授权执行", "已生成", "生成完成"],
+      "text": [
+        "准备状态：ready",
+        "已授权执行",
+        "已生成",
+        "生成完成",
+        "建议调用参数",
+        "generationType",
+        "image-to-video"
+      ],
+      "evidenceRef": "provisional-preparation-facts"
+    },
+    {
+      "id": "no-task-plan",
+      "kind": "tool-call",
+      "name": "todo_write",
+      "status": "absent",
       "evidenceRef": "provisional-preparation-facts"
     },
     {

@@ -21,8 +21,8 @@
         "required": true
       }
     ],
-    "expectedResult": "The Agent keeps the PV concept concise, then continues through media preparation and video guidance to return one source-bound provisional clip input with direct acceptance checks and any exact unconfirmed decision. It does not execute generation.",
-    "expectedFailure": "Stopping at a concept proposal, expanding into a source-analysis report, requiring the user to name Skills, printing a generic production workflow, inventing Tool parameters, or generating media fails."
+    "expectedResult": "The Agent keeps the PV concept concise without creating a task plan, then continues through media preparation and video guidance to return one source-bound provisional clip input with direct acceptance checks and the exact unconfirmed schema or input binding. It does not execute generation.",
+    "expectedFailure": "Creating a task plan for the bounded design turn, stopping at a concept proposal, expanding into a source-analysis report, requiring the user to name Skills, printing a generic production workflow, treating an unprepared source as a first frame, inventing Tool parameters, or generating media fails."
   },
   "fixtureRefs": ["creative-planning-workspace"],
   "runtimeProfileId": "markdown",
@@ -50,7 +50,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:c407fcdaec3328f416e21295c17301e5d456ff4337536d47d776ad70e111192c"
+        "fingerprint": "sha256:914cb17c7e9c5674130558e16551442cd87bfbac1d68c038df4c586953c2e8ad"
       },
       "status": "injected",
       "evidenceRef": "workspace-pv-handoff-facts"
@@ -64,7 +64,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-preparation",
-        "fingerprint": "sha256:a4cac2dcda4fbd89d5a091bee98fe0f33324fbf8e2a10e9551ae3154707e5b49"
+        "fingerprint": "sha256:56bedee45dab5a7f7c68fb7139b5f9a71f00c7565ff4843191ba85fe8505812a"
       },
       "status": "injected",
       "evidenceRef": "workspace-pv-handoff-facts"
@@ -78,7 +78,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "video",
-        "fingerprint": "sha256:c187cef266084c95444c9ad136c6dfc5625ad28f1061e264d48c05c810914566"
+        "fingerprint": "sha256:b083288a955ec8ec87979418a51aea7608e8a374c870efe645f4e8f1e321772d"
       },
       "status": "injected",
       "evidenceRef": "workspace-pv-handoff-facts"
@@ -87,14 +87,29 @@
       "id": "output",
       "kind": "final-answer",
       "mode": "contains",
-      "text": ["Mara", "23:47", "红伞", "列车", "提示词", "验收"],
+      "text": ["Mara", "23:47", "红伞", "列车", "候选", "提示词", "验收", "Tool schema"],
       "evidenceRef": "workspace-pv-handoff-facts"
     },
     {
       "id": "no-false-success",
       "kind": "final-answer",
       "mode": "not-contains",
-      "text": ["已生成", "生成完成", "全卷分析完成", "完整制作流程"],
+      "text": [
+        "已生成",
+        "生成完成",
+        "全卷分析完成",
+        "完整制作流程",
+        "建议调用参数",
+        "generationType",
+        "image-to-video"
+      ],
+      "evidenceRef": "workspace-pv-handoff-facts"
+    },
+    {
+      "id": "no-task-plan",
+      "kind": "tool-call",
+      "name": "todo_write",
+      "status": "absent",
       "evidenceRef": "workspace-pv-handoff-facts"
     },
     {

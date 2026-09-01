@@ -291,6 +291,30 @@ describe('locked DSH filesystem Skill provider contract', () => {
     await provider.dispose();
   });
 
+  it('keeps creative handoffs bounded by source evidence and admitted media inputs', async () => {
+    const skillRoot = resolve(import.meta.dirname, '../../skills/skills');
+    const provider = isolatedProvider(skillRoot);
+    const observation = await provider.list({ cwd: skillRoot });
+    const candidates = Array.isArray(observation) ? observation : observation.candidates;
+    const definitions = new Map<string, string>();
+
+    for (const skillName of ['media-production', 'media-preparation', 'video']) {
+      const candidate = candidates.find((item) => item.name === skillName);
+      if (candidate === undefined) throw new Error(`Builtin ${skillName} Skill was not found.`);
+      const definition = await provider.get(candidate, { cwd: skillRoot });
+      if (definition === undefined) throw new Error(`Builtin ${skillName} Skill did not load.`);
+      definitions.set(skillName, definition.content);
+    }
+
+    expect(definitions.get('media-production')).toContain('每项决定获得直接来源证据后立即停止取样');
+    expect(definitions.get('media-preparation')).toContain('不能冒充已准备首帧');
+    expect(definitions.get('media-preparation')).toContain('验收不得放宽上游创意合同');
+    expect(definitions.get('media-preparation')).toContain('不得使用看似可调用的 operation 名');
+    expect(definitions.get('video')).toContain('图像驱动视频必须绑定一个实际首帧');
+
+    await provider.dispose();
+  });
+
   it('keeps adapted creative methods on demand without importing upstream runtime authority', async () => {
     const skillRoot = resolve(import.meta.dirname, '../../skills/skills');
     const packages = [
