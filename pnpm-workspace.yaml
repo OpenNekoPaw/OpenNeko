@@ -13,7 +13,7 @@ publicHoistPattern:
 overrides:
   '@electron/node-gyp': https://codeload.github.com/electron/node-gyp/tar.gz/06b29aafb7708acef8b3669835c8a7857ebc92d2
   adm-zip: ^0.6.0
-  '@vitejs/plugin-react': 4.3.4
+  '@vitejs/plugin-react': 5.1.4
   '@vitest/coverage-v8': 4.1.2
   d3-array: ^3.2.4
   d3-shape: ^3.2.0
@@ -23,7 +23,7 @@ overrides:
   d3-color: ^3.1.0
   d3-format: ^3.1.0
   d3-path: ^3.1.0
-  vite: 6.4.2
+  vite: 7.3.6
   vite-plugin-static-copy: 4.0.1
   vitest: 4.1.2
 
@@ -31,10 +31,6 @@ packageExtensions:
   '@electron-forge/plugin-fuses@7.11.2':
     peerDependencies:
       '@electron/fuses': ^1.0.0 || ^2.0.0
-
-patchedDependencies:
-  # Remove after Vite bundles the fix from https://github.com/rollup/plugins/pull/1876.
-  vite@6.4.2: patches/vite@6.4.2.patch
 
 ignoredBuiltDependencies:
   - esbuild
