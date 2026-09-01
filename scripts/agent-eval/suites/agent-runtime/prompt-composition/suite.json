@@ -15,7 +15,9 @@
     { "id": "base-and-skill-fragments", "file": "cases/base-and-skill-fragments.json", "group": "canonical", "visibility": "public" },
     { "id": "creative-capability-orchestration", "file": "cases/creative-capability-orchestration.json", "group": "regression", "visibility": "public" },
     { "id": "implicit-ai-production-handoff", "file": "cases/implicit-ai-production-handoff.json", "group": "regression", "visibility": "public" },
+    { "id": "workspace-pv-production-handoff", "file": "cases/workspace-pv-production-handoff.json", "group": "regression", "visibility": "public" },
     { "id": "creative-result-driven-repair", "file": "cases/creative-result-driven-repair.json", "group": "regression", "visibility": "public" },
+    { "id": "workspace-pv-design-only", "file": "cases/workspace-pv-design-only.json", "group": "boundary", "visibility": "public" },
     { "id": "agents-md-environment-fragment", "file": "cases/agents-md-environment-fragment.json", "group": "boundary", "visibility": "public" }
   ],
   "rubricRefs": [],

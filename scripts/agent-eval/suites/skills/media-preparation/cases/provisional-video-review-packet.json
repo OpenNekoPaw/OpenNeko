@@ -1,0 +1,103 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "provisional-video-review-packet",
+  "suiteId": "skill.media-preparation",
+  "caseGroup": "canonical",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Prepare one reversible, explicitly provisional video review packet from a real source and an unapproved low-risk shot proposal without executing generation.",
+    "canonicalPath": [
+      "screenplay source read",
+      "builtin media-preparation Skill",
+      "builtin video Skill",
+      "provisional source-bound clip input",
+      "no generation side effect"
+    ],
+    "observables": [
+      {
+        "ref": "provisional-preparation-facts",
+        "kind": "runtime-fact",
+        "description": "Exact Skill receipts, source evidence, provisional input packet, direct acceptance, and absent media generation.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The response returns one source-bound provisional clip prompt, names the unconfirmed creative decision and direct acceptance checks, and does not claim accepted, ready, authorized, or generated state.",
+    "expectedFailure": "Falling back to concept analysis, inventing asset references or Tool parameters, omitting the unresolved decision, marking the packet ready, or executing generation fails."
+  },
+  "fixtureRefs": ["creative-planning-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "$media-preparation $video 读取 @screenplay.fountain\n开场镜头尚未最终批准：Mara 在 23:47 的雨夜站台撑红伞，远处无头灯列车出现。把它准备成一个暂定的单镜头视频生成评审包，不执行生成；保留真实来源绑定，写出候选提示词、待确认决定、直接验收和下游能力。只有当前 Tool schema 暴露时才写 operation 或参数，否则给出精确阻塞。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "provisional-preparation-facts"
+    },
+    {
+      "id": "media-preparation-skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-preparation",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-preparation",
+        "fingerprint": "sha256:a4cac2dcda4fbd89d5a091bee98fe0f33324fbf8e2a10e9551ae3154707e5b49"
+      },
+      "status": "injected",
+      "evidenceRef": "provisional-preparation-facts"
+    },
+    {
+      "id": "video-skill",
+      "kind": "skill",
+      "identity": {
+        "name": "video",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "video",
+        "fingerprint": "sha256:c187cef266084c95444c9ad136c6dfc5625ad28f1061e264d48c05c810914566"
+      },
+      "status": "injected",
+      "evidenceRef": "provisional-preparation-facts"
+    },
+    {
+      "id": "read",
+      "kind": "tool-call",
+      "name": "Read",
+      "status": "success",
+      "evidenceRef": "provisional-preparation-facts"
+    },
+    {
+      "id": "output",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["Mara", "23:47", "红伞", "列车", "暂定", "提示词", "待确认", "验收"],
+      "evidenceRef": "provisional-preparation-facts"
+    },
+    {
+      "id": "no-false-success",
+      "kind": "final-answer",
+      "mode": "not-contains",
+      "text": ["准备状态：ready", "已授权执行", "已生成", "生成完成"],
+      "evidenceRef": "provisional-preparation-facts"
+    },
+    {
+      "id": "no-video-generation",
+      "kind": "tool-call",
+      "name": "GenerateVideo",
+      "status": "absent",
+      "evidenceRef": "provisional-preparation-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

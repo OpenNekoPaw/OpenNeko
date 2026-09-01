@@ -1,0 +1,117 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "workspace-pv-production-handoff",
+  "suiteId": "agent-runtime.prompt-composition",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "In a creative Workspace, ask in ordinary Chinese to analyze source material and design an animated concept PV without naming Skills or explicitly requesting model preparation.",
+    "canonicalPath": [
+      "OpenNeko product prompt Workspace stopping-point classification",
+      "implicit media-production selection",
+      "implicit media-preparation selection",
+      "implicit video selection",
+      "concise creative artifact plus one provisional video production handoff"
+    ],
+    "observables": [
+      {
+        "ref": "workspace-pv-handoff-facts",
+        "kind": "runtime-fact",
+        "description": "Exact Skill receipts, screenplay evidence, bounded provisional video handoff, and absent generation side effects.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The Agent keeps the PV concept concise, then continues through media preparation and video guidance to return one source-bound provisional clip input with direct acceptance checks and any exact unconfirmed decision. It does not execute generation.",
+    "expectedFailure": "Stopping at a concept proposal, expanding into a source-analysis report, requiring the user to name Skills, printing a generic production workflow, inventing Tool parameters, or generating media fails."
+  },
+  "fixtureRefs": ["creative-planning-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "读取 @screenplay.fountain。分析这个故事，设计一支 60 秒动画化概念 PV 方案。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 240000 }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "workspace-pv-handoff-facts"
+    },
+    {
+      "id": "media-production-skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-production",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-production",
+        "fingerprint": "sha256:c407fcdaec3328f416e21295c17301e5d456ff4337536d47d776ad70e111192c"
+      },
+      "status": "injected",
+      "evidenceRef": "workspace-pv-handoff-facts"
+    },
+    {
+      "id": "media-preparation-skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-preparation",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-preparation",
+        "fingerprint": "sha256:a4cac2dcda4fbd89d5a091bee98fe0f33324fbf8e2a10e9551ae3154707e5b49"
+      },
+      "status": "injected",
+      "evidenceRef": "workspace-pv-handoff-facts"
+    },
+    {
+      "id": "video-skill",
+      "kind": "skill",
+      "identity": {
+        "name": "video",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "video",
+        "fingerprint": "sha256:c187cef266084c95444c9ad136c6dfc5625ad28f1061e264d48c05c810914566"
+      },
+      "status": "injected",
+      "evidenceRef": "workspace-pv-handoff-facts"
+    },
+    {
+      "id": "output",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["Mara", "23:47", "红伞", "列车", "提示词", "验收"],
+      "evidenceRef": "workspace-pv-handoff-facts"
+    },
+    {
+      "id": "no-false-success",
+      "kind": "final-answer",
+      "mode": "not-contains",
+      "text": ["已生成", "生成完成", "全卷分析完成", "完整制作流程"],
+      "evidenceRef": "workspace-pv-handoff-facts"
+    },
+    {
+      "id": "no-image-generation",
+      "kind": "tool-call",
+      "name": "GenerateImage",
+      "status": "absent",
+      "evidenceRef": "workspace-pv-handoff-facts"
+    },
+    {
+      "id": "no-video-generation",
+      "kind": "tool-call",
+      "name": "GenerateVideo",
+      "status": "absent",
+      "evidenceRef": "workspace-pv-handoff-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 240000, "repetitions": 1 }
+}
