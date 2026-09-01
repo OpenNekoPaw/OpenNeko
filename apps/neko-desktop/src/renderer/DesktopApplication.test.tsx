@@ -47,6 +47,11 @@ import type {
   OpenNekoDesktopProjectPortabilityBridge,
 } from '@neko/assets-domain/contracts';
 import type { RoomView } from '@neko/chara-domain/contracts';
+import {
+  createCanvasWorkspaceContextCatalog,
+  createCanvasWorkspaceContextCatalogOption,
+  createDefaultCanvasWorkspaceTarget,
+} from '@neko/canvas-domain';
 import type { DesktopLifecycleEvent } from '../shared/bridge-contract';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -3105,6 +3110,22 @@ function installBridge({
   characterAvatarReleaseSurface = vi.fn(),
   characterRoomGetSnapshot = vi.fn(async (roomRunId: string) => roomWorkbenchView(roomRunId)),
   characterRoomSubscribe = vi.fn(() => () => undefined),
+  canvasReadWorkspaceIndexCatalog = vi.fn(async (request) => ({
+    requestId: request.requestId,
+    catalog: createCanvasWorkspaceContextCatalog({
+      workspaceId: request.workspaceId,
+      options: [
+        createCanvasWorkspaceContextCatalogOption({
+          target: createDefaultCanvasWorkspaceTarget(request.workspaceId),
+          label: 'workspace.nkc',
+        }),
+      ],
+    }),
+  })),
+  canvasOpenWorkspaceDocument = vi.fn(async (request) => ({
+    requestId: request.requestId,
+    status: 'opened' as const,
+  })),
   lifecycleSubscribe = vi.fn(() => () => undefined),
 }: {
   readonly getSnapshot?: () => Promise<DesktopShellProjection>;
@@ -3134,6 +3155,8 @@ function installBridge({
   readonly characterAvatarReleaseSurface?: typeof window.openNekoDesktop.characterAvatar.releaseSurface;
   readonly characterRoomGetSnapshot?: (roomRunId: string) => Promise<RoomView>;
   readonly characterRoomSubscribe?: typeof window.openNekoDesktop.characterRoomWorkbench.subscribe;
+  readonly canvasReadWorkspaceIndexCatalog?: typeof window.openNekoDesktop.canvas.readWorkspaceIndexCatalog;
+  readonly canvasOpenWorkspaceDocument?: typeof window.openNekoDesktop.canvas.openWorkspaceDocument;
   readonly lifecycleSubscribe?: (listener: (event: DesktopLifecycleEvent) => void) => () => void;
 }): void {
   Object.defineProperty(window, 'openNekoDesktop', {
@@ -3245,6 +3268,8 @@ function installBridge({
         subscribe: vi.fn(() => () => undefined),
       },
       canvas: {
+        readWorkspaceIndexCatalog: canvasReadWorkspaceIndexCatalog,
+        openWorkspaceDocument: canvasOpenWorkspaceDocument,
         subscribeWorkspaceIndex: vi.fn(() => () => undefined),
       },
       projectPortability,

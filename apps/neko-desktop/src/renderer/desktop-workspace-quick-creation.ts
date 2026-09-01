@@ -44,7 +44,7 @@ export async function executeDesktopWorkspaceQuickCreation(
   input: DesktopWorkspaceQuickCreationInput,
   ports: DesktopWorkspaceQuickCreationPorts,
 ): Promise<DesktopWorkspaceQuickCreationOutcome> {
-  const targetWorkbench = activateWorkspaceQuickCreateMainGroup(input.workbench, input.mainGroupId);
+  const targetWorkbench = activateWorkspaceMainGroup(input.workbench, input.mainGroupId);
   if (targetWorkbench !== input.workbench) {
     await ports.updateWorkbench(input.workbenchInstanceId, targetWorkbench);
   }
@@ -70,12 +70,12 @@ export async function executeDesktopWorkspaceQuickCreation(
   };
 }
 
-export function activateWorkspaceQuickCreateMainGroup(
+export function activateWorkspaceMainGroup(
   workbench: DesktopWorkbenchLayoutProjection,
   mainGroupId: string,
 ): DesktopWorkbenchLayoutProjection {
   if (!workbench.main.groups.some((group) => group.groupId === mainGroupId)) {
-    throw new Error(`Workspace quick creation Main Group '${mainGroupId}' is unavailable.`);
+    throw new Error(`Workspace Main Group '${mainGroupId}' is unavailable.`);
   }
   if (workbench.main.activeGroupId === mainGroupId) return workbench;
   return {

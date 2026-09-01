@@ -85,6 +85,11 @@ import {
   type WorkspaceQuickCreateSubmission,
 } from './WorkspaceQuickCreateControl';
 import { executeDesktopWorkspaceQuickCreation } from './desktop-workspace-quick-creation';
+import {
+  WorkspaceEmptyMainSuggestions,
+  type WorkspaceMainSuggestion,
+} from './WorkspaceEmptyMainSuggestions';
+import { executeDesktopWorkspaceQuickOpen } from './desktop-workspace-quick-open';
 import { createDesktopResourceBrowserIdentity } from '../shared/resource-browser-bridge-contract';
 import type { ResourceBrowserIdentity } from '@neko/assets-domain/resource-browser/contract';
 import {
@@ -272,6 +277,15 @@ interface ShellActions {
     readonly workbench: DesktopWorkbenchLayoutProjection;
     readonly mainGroupId: string;
     readonly submission: WorkspaceQuickCreateSubmission;
+  }) => Promise<void>;
+  readonly onOpenWorkspaceMainSuggestion: (input: {
+    readonly projectId: string;
+    readonly workspaceId: string;
+    readonly workspaceGrantId: string;
+    readonly workbenchInstanceId: string;
+    readonly workbench: DesktopWorkbenchLayoutProjection;
+    readonly mainGroupId: string;
+    readonly suggestion: WorkspaceMainSuggestion;
   }) => Promise<void>;
   readonly onCreateCutDraft: (workbenchInstanceId: string) => void;
   readonly onCloseCutView: (workbenchInstanceId: string, view: DesktopWorkbenchViewRef) => void;
@@ -701,6 +715,37 @@ function DesktopApplicationContent(): JSX.Element {
         { rethrow: true },
       );
       if (retainedDiagnostic) setDiagnostic(retainedDiagnostic);
+    },
+    onOpenWorkspaceMainSuggestion: async (input) => {
+      if (projection.window.workbench.workbenchInstanceId !== input.workbenchInstanceId) {
+        throw new Error(`Desktop Workbench '${input.workbenchInstanceId}' is unavailable.`);
+      }
+      await runMutation(
+        'workbench',
+        () =>
+          executeDesktopWorkspaceQuickOpen(
+            {
+              requestId: `workspace-quick-open:${globalThis.crypto.randomUUID()}`,
+              projectId: input.projectId,
+              workspaceId: input.workspaceId,
+              workspaceGrantId: input.workspaceGrantId,
+              workbenchInstanceId: input.workbenchInstanceId,
+              workbench: input.workbench,
+              mainGroupId: input.mainGroupId,
+              suggestion: input.suggestion,
+            },
+            {
+              updateWorkbench: (workbenchInstanceId, workbench) =>
+                window.openNekoDesktop.workbench.update(workbenchInstanceId, workbench),
+              readCanvasCatalog: (request) =>
+                window.openNekoDesktop.canvas.readWorkspaceIndexCatalog(request),
+              openCanvasDocument: (request) =>
+                window.openNekoDesktop.canvas.openWorkspaceDocument(request),
+              getShellSnapshot: () => window.openNekoDesktop.shell.getSnapshot(),
+            },
+          ),
+        { rethrow: true },
+      );
     },
     onCreateCutDraft: (workbenchInstanceId) => {
       void runMutation('workbench', async () => {
@@ -1196,6 +1241,7 @@ export function DesktopShellView({
     onArchiveProjectConversations: () => undefined,
     onUpdateWorkbench: () => undefined,
     onQuickCreateWorkspaceContent: async () => undefined,
+    onOpenWorkspaceMainSuggestion: async () => undefined,
     onCreateCutDraft: () => undefined,
     onCloseCutView: () => undefined,
     onCloseWorkbenchView: () => undefined,
@@ -3697,6 +3743,8 @@ function MainViewGroupSurface({
     );
   const activeView = views.find((view) => view.viewId === group.activeViewId);
   const requestedTarget = activeView ? projectAuthoringItemForView(activeView, project) : undefined;
+  const authoringWorkspaceId = authoringAuthority?.workspaceId;
+  const authoringWorkspaceGrantId = authoringAuthority?.workspaceGrantId;
   const quickCreate = useCallback(
     (submission: WorkspaceQuickCreateSubmission) =>
       actions.onQuickCreateWorkspaceContent({
@@ -3707,6 +3755,43 @@ function MainViewGroupSurface({
         submission,
       }),
     [actions, group.groupId, resourceBrowserIdentity, workbench, workbenchInstanceId],
+  );
+  const loadWorkspaceCanvases = useCallback(() => {
+    if (!authoringWorkspaceId || !authoringWorkspaceGrantId) {
+      throw new Error('Workspace Main Canvas suggestions require Workspace authority.');
+    }
+    return window.openNekoDesktop.canvas
+      .readWorkspaceIndexCatalog({
+        requestId: `workspace-main-suggestions:${globalThis.crypto.randomUUID()}`,
+        workspaceId: authoringWorkspaceId,
+        workspaceGrantId: authoringWorkspaceGrantId,
+      })
+      .then((result) => result.catalog);
+  }, [authoringWorkspaceGrantId, authoringWorkspaceId]);
+  const openWorkspaceSuggestion = useCallback(
+    (suggestion: WorkspaceMainSuggestion) => {
+      if (!authoringWorkspaceId || !authoringWorkspaceGrantId) {
+        throw new Error('Workspace Main Canvas opening requires Workspace authority.');
+      }
+      return actions.onOpenWorkspaceMainSuggestion({
+        projectId: project.projectId,
+        workspaceId: authoringWorkspaceId,
+        workspaceGrantId: authoringWorkspaceGrantId,
+        workbenchInstanceId,
+        workbench,
+        mainGroupId: group.groupId,
+        suggestion,
+      });
+    },
+    [
+      actions,
+      authoringWorkspaceGrantId,
+      authoringWorkspaceId,
+      group.groupId,
+      project.projectId,
+      workbench,
+      workbenchInstanceId,
+    ],
   );
   if (activeView && requestedTarget) {
     targetViews.current.set(requestedTarget.identity, activeView);
@@ -3810,8 +3895,16 @@ function MainViewGroupSurface({
       {!visible || views.length === 0 ? (
         <EmptyMainSurface
           action={
-            visible ? (
-              <WorkspaceQuickCreateControl onCreate={quickCreate} variant="empty" />
+            visible && authoringWorkspaceId ? (
+              <WorkspaceEmptyMainSuggestions
+                key={authoringWorkspaceId}
+                createControl={
+                  <WorkspaceQuickCreateControl onCreate={quickCreate} variant="empty" />
+                }
+                loadWorkspaceCanvases={loadWorkspaceCanvases}
+                onOpen={openWorkspaceSuggestion}
+                workspaceId={authoringWorkspaceId}
+              />
             ) : undefined
           }
         />

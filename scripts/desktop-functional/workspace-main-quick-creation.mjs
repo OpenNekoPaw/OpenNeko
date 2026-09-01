@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, stat } from 'node:fs/promises';
+import { access, copyFile, mkdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { openFixtureWorkspace } from './desktop-operations.mjs';
 
@@ -6,6 +6,96 @@ const MAIN_SLOT = '[data-workbench-slot="main"]';
 const SECONDARY_MAIN_SLOT = '[data-workbench-slot="secondaryMain"]';
 const MENU = '.workspace-quick-create-popover__menu';
 const FORM = '.workspace-quick-create-popover__form';
+
+export const workspaceMainEmptySuggestionsScenario = Object.freeze({
+  id: 'workspace-main-empty-suggestions',
+  owner: '@neko/app-desktop',
+  async prepare({ fixtureHome, repositoryRoot }) {
+    const workspacePath = join(fixtureHome, 'workspace');
+    await mkdir(workspacePath, { recursive: true });
+    await copyFile(
+      join(
+        repositoryRoot,
+        'scripts',
+        'agent-eval',
+        'shared-fixtures',
+        'canvas-authoring-workspace',
+        'boards',
+        'story.nkc',
+      ),
+      join(workspacePath, 'Existing Canvas.nkc'),
+    );
+    return { workspacePath };
+  },
+  async run({ checkpoint, click, evaluate, screenshot, waitForSelector }) {
+    await openFixtureWorkspace(evaluate);
+    await waitForSelector('.desktop-scene-workbench--workspace');
+    await waitForSelector('[data-workspace-canvas-context="true"] select');
+    if (
+      await evaluate(
+        `document.querySelector('${MAIN_SLOT} .neko-workbench-editor-tab__close') !== null`,
+      )
+    ) {
+      await click(`${MAIN_SLOT} .neko-workbench-editor-tab__close`);
+    }
+
+    await waitForSelector(`${MAIN_SLOT} [data-workspace-suggestion="default-canvas"]`);
+    await waitForSelector(`${MAIN_SLOT} [data-workspace-suggestion="canvas-document"]`);
+    const suggestions = await inspectWorkspaceSuggestions(evaluate);
+    if (
+      suggestions.workspaceId.length === 0 ||
+      JSON.stringify(suggestions.labels) !==
+        JSON.stringify(['workspace.nkc', 'Existing Canvas.nkc']) ||
+      suggestions.defaultCanvasCount !== 1
+    ) {
+      throw new Error(
+        `Empty Main Canvas suggestions are not Workspace-local: ${JSON.stringify(suggestions)}`,
+      );
+    }
+    const agentCanvasIndex = await inspectAgentCanvasIndex(evaluate);
+    if (
+      agentCanvasIndex?.selectedId !== 'neko/boards/workspace.nkc' ||
+      agentCanvasIndex.selectedLabel !== 'workspace.nkc' ||
+      !agentCanvasIndex.options.some((option) => option.label === 'Existing Canvas.nkc')
+    ) {
+      throw new Error(
+        `Agent Canvas context does not share the Workspace index: ${JSON.stringify(agentCanvasIndex)}`,
+      );
+    }
+    checkpoint('workspace-local-empty-main-suggestions', { suggestions, agentCanvasIndex });
+    const emptyScreenshot = await screenshot('workspace-main-empty-suggestions');
+
+    await click(`${MAIN_SLOT} [data-workspace-suggestion="default-canvas"]`);
+    await waitForSelector(`${MAIN_SLOT} [data-owner-root="canvas"]`);
+    await waitForCondition(
+      evaluate,
+      `Array.from(document.querySelectorAll('${MAIN_SLOT} .neko-workbench-editor-tab__label')).some((label) => label.textContent?.trim() === 'workspace.nkc')`,
+      'Default Workspace Canvas suggestion did not open workspace.nkc.',
+    );
+    const defaultScreenshot = await screenshot('workspace-main-empty-default-opened');
+
+    await click(`${MAIN_SLOT} .neko-workbench-editor-tab__close`);
+    await waitForSelector(`${MAIN_SLOT} [data-workspace-suggestion="canvas-document"]`);
+    await click(`${MAIN_SLOT} [data-workspace-suggestion="canvas-document"]`);
+    await waitForSelector(`${MAIN_SLOT} [data-owner-root="canvas"]`);
+    await waitForCondition(
+      evaluate,
+      `Array.from(document.querySelectorAll('${MAIN_SLOT} .neko-workbench-editor-tab__label')).some((label) => label.textContent?.trim() === 'Existing Canvas.nkc')`,
+      'Indexed Workspace Canvas suggestion did not open its exact document.',
+    );
+    const indexedScreenshot = await screenshot('workspace-main-empty-indexed-opened');
+    checkpoint('workspace-local-canvas-suggestions-opened', {
+      workspaceId: suggestions.workspaceId,
+      opened: ['workspace.nkc', 'Existing Canvas.nkc'],
+    });
+
+    return {
+      suggestions,
+      agentCanvasIndex,
+      screenshots: [emptyScreenshot, defaultScreenshot, indexedScreenshot],
+    };
+  },
+});
 
 export const workspaceMainQuickCreationScenario = Object.freeze({
   id: 'workspace-main-quick-creation',
@@ -29,12 +119,60 @@ export const workspaceMainQuickCreationScenario = Object.freeze({
   }) {
     await openFixtureWorkspace(evaluate);
     await waitForSelector('.desktop-scene-workbench--workspace');
+    const defaultCanvasWasInitiallyOpen = await evaluate(
+      `document.querySelector('${MAIN_SLOT} .neko-workbench-editor-tab__close') !== null`,
+    );
+    if (defaultCanvasWasInitiallyOpen) {
+      await click(`${MAIN_SLOT} .neko-workbench-editor-tab__close`);
+    }
     await waitForSelector(`${MAIN_SLOT} [data-workspace-quick-create-trigger="empty"]`);
+    await waitForSelector('[data-workspace-canvas-context="true"] select');
+
+    const defaultAgentCanvasIndex = await inspectAgentCanvasIndex(evaluate);
+    if (
+      defaultAgentCanvasIndex?.selectedId !== 'neko/boards/workspace.nkc' ||
+      defaultAgentCanvasIndex.selectedLabel !== 'workspace.nkc'
+    ) {
+      throw new Error(
+        `Agent Canvas index did not expose the default Canvas file name: ${JSON.stringify(defaultAgentCanvasIndex)}`,
+      );
+    }
+    checkpoint('agent-default-canvas-file-name', defaultAgentCanvasIndex);
+    const defaultCanvasScreenshot = await screenshot('workspace-canvas-default-file-name');
 
     const emptyState = await inspectQuickCreationState(evaluate, MAIN_SLOT);
     assertQuickCreationState(emptyState, { empty: true });
+    const workspaceSuggestions = await inspectWorkspaceSuggestions(evaluate);
+    if (
+      workspaceSuggestions.workspaceId.length === 0 ||
+      workspaceSuggestions.labels[0] !== 'workspace.nkc' ||
+      workspaceSuggestions.defaultCanvasCount !== 1
+    ) {
+      throw new Error(
+        `Empty Main did not expose the Workspace-local default Canvas: ${JSON.stringify(workspaceSuggestions)}`,
+      );
+    }
     const emptyScreenshot = await screenshot('workspace-main-quick-create-empty');
-    checkpoint('empty-main-entry', emptyState);
+    checkpoint('empty-main-entry', {
+      ...emptyState,
+      workspaceSuggestions,
+      defaultCanvasWasInitiallyOpen,
+    });
+
+    await click(`${MAIN_SLOT} [data-workspace-suggestion="default-canvas"]`);
+    await waitForSelector(`${MAIN_SLOT} [data-owner-root="canvas"]`);
+    await waitForCondition(
+      evaluate,
+      `Array.from(document.querySelectorAll('${MAIN_SLOT} .neko-workbench-editor-tab__label')).some((label) => label.textContent?.trim() === 'workspace.nkc')`,
+      'Workspace Main default Canvas suggestion did not open workspace.nkc.',
+    );
+    const openedDefaultScreenshot = await screenshot('workspace-main-default-canvas-opened');
+    checkpoint('workspace-local-default-canvas-opened', {
+      workspaceId: workspaceSuggestions.workspaceId,
+      label: 'workspace.nkc',
+    });
+    await click(`${MAIN_SLOT} .neko-workbench-editor-tab__close`);
+    await waitForSelector(`${MAIN_SLOT} [data-workspace-suggestion="default-canvas"]`);
 
     await openQuickCreate(
       click,
@@ -51,7 +189,7 @@ export const workspaceMainQuickCreationScenario = Object.freeze({
       evaluate,
       type,
       waitForSelector,
-      trigger: `${MAIN_SLOT} [data-workspace-quick-create-trigger="tab"]`,
+      trigger: `${MAIN_SLOT} [data-workspace-quick-create-trigger="empty"]`,
       kind: 'file',
       name: 'quick-notes.md',
     });
@@ -62,7 +200,7 @@ export const workspaceMainQuickCreationScenario = Object.freeze({
       evaluate,
       type,
       waitForSelector,
-      trigger: `${MAIN_SLOT} [data-workspace-quick-create-trigger="tab"]`,
+      trigger: `${MAIN_SLOT} [data-workspace-quick-create-trigger="empty"]`,
       kind: 'directory',
       name: 'Quick References',
     });
@@ -75,7 +213,7 @@ export const workspaceMainQuickCreationScenario = Object.freeze({
       evaluate,
       type,
       waitForSelector,
-      trigger: `${MAIN_SLOT} [data-workspace-quick-create-trigger="tab"]`,
+      trigger: `${MAIN_SLOT} [data-workspace-quick-create-trigger="empty"]`,
       kind: 'canvas',
       name: 'Quick Board',
       extension: '.nkc',
@@ -95,32 +233,26 @@ export const workspaceMainQuickCreationScenario = Object.freeze({
     }
     await waitForCondition(
       evaluate,
-      `Array.from(document.querySelectorAll('[data-workspace-canvas-context="true"] select option')).some((option) => option.textContent?.trim() === 'Quick Board')`,
+      `Array.from(document.querySelectorAll('[data-workspace-canvas-context="true"] select option')).some((option) => option.textContent?.trim() === 'Quick Board.nkc')`,
       'Agent Canvas index did not refresh after Canvas creation.',
     );
-    const agentCanvasIndex = await evaluate(`(() => {
-      const select = document.querySelector('[data-workspace-canvas-context="true"] select');
-      if (!(select instanceof HTMLSelectElement)) return null;
-      return {
-        selectedId: select.value,
-        options: Array.from(select.options).map((option) => ({
-          id: option.value,
-          label: option.textContent?.trim() ?? '',
-        })),
-      };
-    })()`);
+    const agentCanvasIndex = await inspectAgentCanvasIndex(evaluate);
     if (
-      agentCanvasIndex?.selectedId !== 'workspace-board' ||
-      !agentCanvasIndex.options.some((option) => option.label === 'Quick Board')
+      agentCanvasIndex?.selectedId !== 'neko/boards/workspace.nkc' ||
+      agentCanvasIndex.selectedLabel !== 'workspace.nkc' ||
+      !agentCanvasIndex.options.some((option) => option.label === 'Quick Board.nkc')
     ) {
       throw new Error(
-        `Agent Canvas index did not preserve Board while adding the new Canvas: ${JSON.stringify(agentCanvasIndex)}`,
+        `Agent Canvas index did not preserve the default Canvas while adding the new Canvas: ${JSON.stringify(agentCanvasIndex)}`,
       );
     }
     checkpoint('agent-canvas-index-refreshed', agentCanvasIndex);
-    await click('[data-workspace-canvas-context="true"] select');
-    await pressKey('ArrowDown');
-    await pressKey('Enter');
+    await evaluate(`(() => {
+      const select = document.querySelector('[data-workspace-canvas-context="true"] select');
+      if (!(select instanceof HTMLSelectElement)) throw new Error('Agent Canvas index is unavailable.');
+      select.value = 'Quick Board.nkc';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    })()`);
     await waitForCondition(
       evaluate,
       `document.querySelector('[data-workspace-canvas-context="true"] select')?.value === 'Quick Board.nkc'`,
@@ -264,10 +396,13 @@ export const workspaceMainQuickCreationScenario = Object.freeze({
       conflict,
       splitState,
       narrowState,
+      defaultAgentCanvasIndex,
       agentCanvasIndex,
       reopenedCanvasIndex,
       screenshots: [
+        defaultCanvasScreenshot,
         emptyScreenshot,
+        openedDefaultScreenshot,
         emptyMenuScreenshot,
         selectedCanvasScreenshot,
         reopenedCanvasScreenshot,
@@ -330,6 +465,34 @@ async function inspectQuickCreationState(evaluate, slot) {
       emptyTriggers: root?.querySelectorAll('[data-workspace-quick-create-trigger="empty"]').length ?? 0,
       tabLabels: [...(root?.querySelectorAll('.neko-workbench-editor-tab__label') ?? [])]
         .map((label) => label.textContent?.trim() ?? ''),
+    };
+  })()`);
+}
+
+async function inspectWorkspaceSuggestions(evaluate) {
+  return evaluate(`(() => {
+    const root = document.querySelector('${MAIN_SLOT} [data-workspace-suggestions]');
+    if (!(root instanceof HTMLElement)) return { workspaceId: '', labels: [], defaultCanvasCount: 0 };
+    return {
+      workspaceId: root.getAttribute('data-workspace-suggestions') ?? '',
+      labels: [...root.querySelectorAll('.workspace-empty-main-suggestions__copy strong')]
+        .map((label) => label.textContent?.trim() ?? ''),
+      defaultCanvasCount: root.querySelectorAll('[data-workspace-suggestion="default-canvas"]').length,
+    };
+  })()`);
+}
+
+async function inspectAgentCanvasIndex(evaluate) {
+  return evaluate(`(() => {
+    const select = document.querySelector('[data-workspace-canvas-context="true"] select');
+    if (!(select instanceof HTMLSelectElement)) return null;
+    return {
+      selectedId: select.value,
+      selectedLabel: select.selectedOptions[0]?.textContent?.trim() ?? '',
+      options: Array.from(select.options).map((option) => ({
+        id: option.value,
+        label: option.textContent?.trim() ?? '',
+      })),
     };
   })()`);
 }

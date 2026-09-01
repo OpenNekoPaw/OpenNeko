@@ -6,7 +6,7 @@ import {
 } from '@neko/assets-domain/resource-browser/contract';
 import { createDefaultDesktopWorkbenchLayout } from '@neko/host/desktop-workbench-contract';
 import {
-  activateWorkspaceQuickCreateMainGroup,
+  activateWorkspaceMainGroup,
   createWorkspaceQuickCreationRequest,
   executeDesktopWorkspaceQuickCreation,
   type DesktopWorkspaceQuickCreationPorts,
@@ -147,10 +147,7 @@ describe('Desktop Workspace quick creation', () => {
 
   it('rejects a stale Main Group before Resources participates', () => {
     expect(() =>
-      activateWorkspaceQuickCreateMainGroup(
-        createDefaultDesktopWorkbenchLayout('window-1'),
-        'main:missing',
-      ),
+      activateWorkspaceMainGroup(createDefaultDesktopWorkbenchLayout('window-1'), 'main:missing'),
     ).toThrow("Main Group 'main:missing' is unavailable");
   });
 

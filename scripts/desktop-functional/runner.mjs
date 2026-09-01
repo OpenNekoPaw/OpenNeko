@@ -457,7 +457,7 @@ async function waitForSelector(cdp, selector, timeoutMs = 30_000) {
         .map((element) => element.getAttribute('data-owner-root')),
       alerts: [...document.querySelectorAll('[role="alert"]')]
         .map((element) => element.textContent?.trim()).filter(Boolean),
-      text: document.body.innerText.slice(0, 600),
+      text: document.body?.innerText.slice(0, 600) ?? '',
       url: document.URL,
       readyState: document.readyState,
       html: document.documentElement.outerHTML.slice(0, 600),
@@ -488,7 +488,7 @@ async function waitForDesktopBridge(cdp, timeoutMs) {
       readyState: document.readyState,
       alert: document.querySelector('[role="alert"]')?.textContent?.trim(),
       hasDesktopBridge: typeof window.openNekoDesktop !== 'undefined',
-      body: document.body.innerText.slice(0, 600),
+      body: document.body?.innerText.slice(0, 600) ?? '',
     })`,
   );
   throw new Error(

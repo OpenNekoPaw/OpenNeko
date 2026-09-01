@@ -23,7 +23,10 @@ import { domainManagementWorkbenchScenario } from './domain-management-workbench
 import { extensionManagementLifecycleScenario } from './extension-management-lifecycle.mjs';
 import { noActiveProjectCatalogsScenario } from './no-active-project-catalogs.mjs';
 import { projectContentScenario } from './project-content.mjs';
-import { workspaceMainQuickCreationScenario } from './workspace-main-quick-creation.mjs';
+import {
+  workspaceMainEmptySuggestionsScenario,
+  workspaceMainQuickCreationScenario,
+} from './workspace-main-quick-creation.mjs';
 import {
   developmentCreativeCapabilityVisibilityScenario,
   releaseCreativeCapabilityVisibilityScenario,
@@ -68,6 +71,7 @@ const scenarios = new Map(
     workspaceFileCreationScenario,
     workspaceRetiredStorageIsolationScenario,
     projectContentScenario,
+    workspaceMainEmptySuggestionsScenario,
     workspaceMainQuickCreationScenario,
     developmentCreativeCapabilityVisibilityScenario,
     releaseCreativeCapabilityVisibilityScenario,

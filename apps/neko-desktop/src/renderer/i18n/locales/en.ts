@@ -471,6 +471,11 @@ export const en = {
   'workspace.mainTabs.emptyDetail':
     'Open a Canvas, Preview, Cut, or Resource management view to continue.',
   'workspace.mainTabs.close': 'Close {name}',
+  'workspace.emptySuggestions.title': 'Quick open',
+  'workspace.emptySuggestions.defaultCanvas': 'Default Canvas',
+  'workspace.emptySuggestions.canvas': 'Workspace Canvas',
+  'workspace.emptySuggestions.open': 'Open {name}',
+  'workspace.emptySuggestions.loading': 'Finding Canvases in this workspace…',
   'workspace.quickCreate.open': 'Create content',
   'workspace.quickCreate.targetRoot': 'Workspace root',
   'workspace.quickCreate.name': 'Name',

@@ -500,6 +500,9 @@ describe('Desktop scene Workbench', () => {
     expect(mainGroupSource).toContain('variant="tab"');
     expect(mainGroupSource).toContain('variant="empty"');
     expect(mainGroupSource).toContain('<EmptyMainSurface');
+    expect(mainGroupSource).toContain('<WorkspaceEmptyMainSuggestions');
+    expect(mainGroupSource).toContain('loadWorkspaceCanvases={loadWorkspaceCanvases}');
+    expect(mainGroupSource).toContain('workspaceId={authoringWorkspaceId}');
     expect(mainGroupSource.indexOf('variant="tab"')).toBeGreaterThan(
       mainGroupSource.indexOf('<WorkbenchEditorTabs'),
     );
@@ -510,6 +513,7 @@ describe('Desktop scene Workbench', () => {
     expect(mainGroupSource).not.toContain('contextActionsRef={setContextActionsTarget}');
     expect(standaloneEmptySource).toContain('<EmptyMainSurface />');
     expect(standaloneEmptySource).not.toContain('WorkspaceQuickCreateControl');
+    expect(standaloneEmptySource).not.toContain('WorkspaceEmptyMainSuggestions');
   });
 
   it('selects Workspace region controls only while their exact layout regions are visible', () => {
