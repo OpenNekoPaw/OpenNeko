@@ -1,6 +1,6 @@
 ---
 name: 'media-production'
-description: '基于故事、剧本、分镜或视觉来源完成改编判断、媒体创意与镜头主线设计；不负责参考素材预处理、生成、后期或交付编排。 Design source-grounded adaptation decisions, media concepts, and shot spines without owning reference preparation, generation, post-production, or delivery orchestration.'
+description: '基于故事、剧本、分镜或视觉来源完成改编判断、媒体创意、镜头主线与制作规格设计；不负责参考素材预处理、生成、后期执行或交付编排。 Design source-grounded adaptation decisions, media concepts, shot spines, and production specifications without owning reference preparation, generation, finishing execution, or delivery orchestration.'
 ---
 
 # Media Production
@@ -22,6 +22,7 @@ description: '基于故事、剧本、分镜或视觉来源完成改编判断、
 
 - **创意设计**：交付可供创作者评审的核心概念、叙事或体验主线、关键节拍，以及真正决定画面、动作、声音或剪辑的选择。后续模型调用由对应生成能力根据这些决定编译。
 - **镜头主线**：交付场景或镜头的因果节拍、视听决定、连续性要求与来源绑定。
+- **完整制作规格**：交付一份权威主文档，覆盖创作合同、必要的人物/场景连续性、逐生产单元的镜头设计与输入需求，以及适用的后期/交付合同；按需读取 [时序媒体制作规格指南](references/time-based-production-specification.md)。不把分析、预处理、生成和后期拆成重复文档。
 - **生产决策**：只确定会改变创意方向的格式、范围、主要技法和取舍，不编写其他 Skill 的执行参数。
 - **评估**：只给会改变决定的结论、证据边界、关键未知项和下一项证据动作。
 
@@ -39,6 +40,8 @@ description: '基于故事、剧本、分镜或视觉来源完成改编判断、
 
 时序概念设计默认正文只保留两块：① 一段核心概念、体验主线和至多四项真正约束后续镜头的不变量，不列来源依据清单；② 一份权威节拍序列，60–90 秒概念片默认用 6–8 个因果节拍，不把每个摄影动作拆成独立镜头行。只有用户明确要求详细分析报告或完整制作规格时才扩展；不得通过三级标题或粗体字段把分析、声音、制作、技术、关键镜头、验收、来源或评审问题重新扩写成小章节。未阻塞下一步的开放选择放在对话摘要，不进入正文。
 
+完整制作规格不是概念方案的重复扩写。使用一份主文档，集中保存全片创作合同、会跨镜头复用的人物/场景连续性、一份同时承载剧情作用、画面动作、摄影声音、输入需求、生产方式与直接验收的权威镜头表，以及只出现一次的后期与交付合同。分析过程不进入正文；没有后续消费者的背景信息不写。实际素材、任务状态、候选结果、失败记录和导出回执仍由 owning capability 保存，不复制成文档章节。
+
 当系统把请求判定为 AI 生产交接或执行时，本能力只返回下游必须消费的镜头决定、来源引用与连续性要求，并把本次结果视为中间依赖；不得以“概念方案已完成”或“等待确认”结束整个请求。系统推理应继续选择素材预处理、图像、视频、声音、后期或交付 Skill；不要在本 Skill 内代写它们的 prompt、operation、参数、验收或流程。
 
 ## English guidance
@@ -51,7 +54,9 @@ For time-based creative proposals, keep one authoritative beat or shot sequence 
 
 For a time-based concept, default to two blocks: one concept paragraph plus at most four true cross-shot invariants and no evidence inventory; then one authoritative causal beat sequence, normally six to eight beats for a 60–90 second concept. Expand only when the user explicitly requests a detailed analysis report or full production specification. Do not recreate analysis, sound, production, technology, key-shot, acceptance, source-binding, or creator-question mini-sections through nested headings or bold field groups.
 
-When the system classifies the request as an AI-production handoff or execution request, expose only the creative decisions, stable source or shot references, and continuity requirements that the next capability must consume, and treat this result as an intermediate dependency rather than the completed turn. System reasoning composes preparation, generation, selection, post-production, and delivery Skills; this Skill does not write their prompts, operations, parameters, acceptance packets, or workflow.
+For a complete production specification, read [the time-based production specification guide](references/time-based-production-specification.md). Use one master document for the creative contract, reusable character/scene continuity, one authoritative production-unit table, and applicable finishing/delivery contracts. Do not split analysis, preparation, generation, and post-production into parallel explanatory documents. Keep actual assets, runtime state, candidates, failures, and receipts in their owning structured objects.
+
+When the system classifies the request as an AI production handoff or execution request, expose only the creative decisions, stable source or shot references, and continuity requirements that the next capability must consume, and treat this result as an intermediate dependency rather than the completed turn. System reasoning composes preparation, generation, selection, post-production, and delivery Skills; this Skill does not write their prompts, operations, parameters, acceptance packets, or workflow.
 
 ## Evidence and creator review
 

@@ -67,13 +67,21 @@ describe('OpenNeko DSH product system prompt', () => {
       'Classify the requested stopping point before composing work',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'An AI-production-handoff request ends only at a dependency-ready packet',
+      'A standalone AI-production-handoff request ends at the smallest dependency-ready packet',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'when production design and handoff are both requested, append that packet to the same specification',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'A production-design request ends at one authoritative reusable specification',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
       'An execution request ends only at an observed and validated result',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('In a Workspace or Canvas creative context');
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('defaults to AI-production-handoff');
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'defaults to production-design plus one bounded AI-production handoff',
+    );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
       'Treat the request as creative-design-only when the user explicitly limits it',
     );
@@ -106,6 +114,10 @@ describe('OpenNeko DSH product system prompt', () => {
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
       'Mark a complete packet as submit-ready and not executed',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('complete current Tool invocation envelope');
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'Distinguish a Tool operation such as submit from a media-request operation',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
       'generation returns observable candidates and generation records, not accepted assets',
@@ -143,6 +155,12 @@ describe('OpenNeko DSH product system prompt', () => {
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
       'analysis, research, audit, or process record',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'Compose one durable production specification across capability owners',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'Do not create separate analysis, preparation, generation, post-production, or delivery documents',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toMatch(
       /PV structure|shot list|story beat fields|model-call packet/u,

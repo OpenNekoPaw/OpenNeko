@@ -1,0 +1,115 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "time-based-production-specification",
+  "suiteId": "skill.media-production",
+  "caseGroup": "canonical",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Request one complete time-based production-design specification from an actual screenplay while explicitly excluding model calls and execution.",
+    "canonicalPath": [
+      "Desktop Plan execution mode",
+      "screenplay.fountain evidence",
+      "builtin media-production Skill",
+      "time-based production specification guidance",
+      "one creator-reviewable master document"
+    ],
+    "observables": [
+      {
+        "ref": "production-specification-facts",
+        "kind": "runtime-fact",
+        "description": "Exact Skill receipt, screenplay evidence, one production specification with creative, continuity, unit and finishing contracts, and absent generation side effects.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The Agent returns one concise master specification containing a creative contract, only recurring character/scene continuity, one authoritative shot table whose rows own story function, image/action, camera/sound, input requirements, production method and direct acceptance, and one cross-shot finishing/delivery contract. It does not write source-analysis narration, per-stage documents, runtime status, call packets, or generic workflow steps.",
+    "expectedFailure": "Stopping at a concept paragraph and beat list, omitting character/scene continuity or finishing design, duplicating decisions across sections, splitting the result into analysis/preparation/generation/post documents, inventing Tool calls, or executing production fails."
+  },
+  "fixtureRefs": ["creative-planning-workspace"],
+  "runtimeProfileId": "plan-markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "$media-production 读取 @screenplay.fountain。为这支 60 秒动画 PV 设计一份完整但简洁的制作规格，必须是一份主文档，包含创作合同、必要的人物与场景连续性、权威镜头表以及后期与交付合同。镜头表需要同时承载剧情作用、画面动作、摄影声音、输入需求、生产方式和直接验收。不要写来源分析过程，不要拆成多份阶段文档，不要准备模型调用或执行生成。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "production-specification-facts"
+    },
+    {
+      "id": "skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-production",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-production",
+        "fingerprint": "sha256:142e97c87a0d168838197c0d74444e86b9fa86d9e869bbd53a5cc08f0f4f02c4"
+      },
+      "status": "injected",
+      "evidenceRef": "production-specification-facts"
+    },
+    {
+      "id": "output",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": [
+        "Mara",
+        "23:47",
+        "红伞",
+        "列车",
+        "创作合同",
+        "人物与场景连续性",
+        "权威镜头表",
+        "剧情作用",
+        "输入需求",
+        "生产方式",
+        "直接验收",
+        "后期与交付合同"
+      ],
+      "evidenceRef": "production-specification-facts"
+    },
+    {
+      "id": "no-stage-documents-or-call-packet",
+      "kind": "final-answer",
+      "mode": "not-contains",
+      "text": [
+        "文档一",
+        "文档二",
+        "来源分析报告",
+        "openneko_generation",
+        "generationType",
+        "已生成",
+        "生成完成"
+      ],
+      "evidenceRef": "production-specification-facts"
+    },
+    {
+      "id": "no-image-generation",
+      "kind": "tool-call",
+      "name": "GenerateImage",
+      "status": "absent",
+      "evidenceRef": "production-specification-facts"
+    },
+    {
+      "id": "no-video-generation",
+      "kind": "tool-call",
+      "name": "GenerateVideo",
+      "status": "absent",
+      "evidenceRef": "production-specification-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "rubric": {
+    "kind": "domain-rubric",
+    "ref": "rubrics/time-based-production-specification-quality.json",
+    "judgeProfileId": "creative-production-judge"
+  },
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

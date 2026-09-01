@@ -11,18 +11,18 @@
       "implicit media-production selection",
       "implicit media-preparation selection",
       "implicit video selection",
-      "concise creative artifact plus one submit-ready video unit"
+      "one master production specification plus one submit-ready video unit"
     ],
     "observables": [
       {
         "ref": "workspace-pv-handoff-facts",
         "kind": "runtime-fact",
-        "description": "Exact Skill receipts, screenplay and illustration evidence, a clean creative artifact, a submit-ready video packet, and absent generation side effects.",
+        "description": "Exact Skill receipts, screenplay and illustration evidence, one master production specification, a complete schema-bound video packet, and absent generation side effects.",
         "required": true
       }
     ],
-    "expectedResult": "The Agent keeps the durable PV artifact concise, continues through media preparation and video guidance, and appends one source-bound submit-ready/not-executed video packet using the current Tool schema. It does not append a provisional candidate packet or execute generation.",
-    "expectedFailure": "Creating a task plan for the bounded design turn, stopping without a production handoff, expanding into a source-analysis report, requiring the user to name Skills, printing a generic production workflow, appending a provisional candidate prompt, omitting real input binding, inventing Tool parameters, or generating media fails."
+    "expectedResult": "The Agent returns one concise master PV production specification containing the creative contract, recurring character/scene continuity, one authoritative shot table with input requirements, production method and direct acceptance, one complete source-bound submit-ready/not-executed video Tool envelope, and one finishing/delivery contract. It does not create per-stage documents or execute generation.",
+    "expectedFailure": "Creating a task plan for the bounded design turn, stopping at concept beats, omitting character/scene continuity or post-production design, expanding into a source-analysis report, splitting stages into separate documents, requiring the user to name Skills, appending a provisional prompt, returning only an inner media operation instead of the full Tool envelope, omitting real input binding, inventing Tool parameters, or generating media fails."
   },
   "fixtureRefs": ["creative-planning-workspace"],
   "runtimeProfileId": "markdown",
@@ -50,7 +50,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:914cb17c7e9c5674130558e16551442cd87bfbac1d68c038df4c586953c2e8ad"
+        "fingerprint": "sha256:142e97c87a0d168838197c0d74444e86b9fa86d9e869bbd53a5cc08f0f4f02c4"
       },
       "status": "injected",
       "evidenceRef": "workspace-pv-handoff-facts"
@@ -64,7 +64,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-preparation",
-        "fingerprint": "sha256:32877f32c017bd2aa59f2b3d15c3e44bfa0c4b92eaeed9c4ca637cc162c53a32"
+        "fingerprint": "sha256:49e5e47bc638396fc9b9123d8878e6f183409acc0d0de54005da8b1ed536fe3d"
       },
       "status": "injected",
       "evidenceRef": "workspace-pv-handoff-facts"
@@ -92,12 +92,25 @@
         "23:47",
         "红伞",
         "列车",
+        "创作合同",
+        "人物与场景连续性",
+        "权威镜头表",
+        "输入需求",
+        "生产方式",
+        "后期与交付合同",
+        "生产交接",
         "station-illustration.svg",
         "可提交",
         "未执行",
         "openneko_generation",
         "submit",
+        "purpose",
+        "lifecycleMode",
+        "generationType",
         "image-to-video",
+        "request",
+        "operation",
+        "first-frame",
         "验收"
       ],
       "evidenceRef": "workspace-pv-handoff-facts"
@@ -117,7 +130,10 @@
         "候选",
         "候选提示词",
         "待确认决定",
-        "建议调用参数"
+        "建议调用参数",
+        "文档一",
+        "文档二",
+        "来源分析报告"
       ],
       "evidenceRef": "workspace-pv-handoff-facts"
     },

@@ -248,10 +248,13 @@ describe('locked DSH filesystem Skill provider contract', () => {
     await provider.dispose();
   });
 
-  it('keeps adaptation-scale guidance as an on-demand media-production resource', async () => {
+  it('keeps detailed media-production guidance as on-demand resources', async () => {
     const skillRoot = resolve(import.meta.dirname, '../../skills/skills');
     const mediaRoot = join(skillRoot, 'media-production');
-    const guidePath = 'references/adaptation-feasibility.md';
+    const guidePaths = [
+      'references/adaptation-feasibility.md',
+      'references/time-based-production-specification.md',
+    ];
     const provider = isolatedProvider(skillRoot);
     const observation = await provider.list({ cwd: skillRoot });
     const candidates = Array.isArray(observation) ? observation : observation.candidates;
@@ -261,13 +264,15 @@ describe('locked DSH filesystem Skill provider contract', () => {
     const definition = await provider.get(candidate, { cwd: skillRoot });
     if (definition === undefined) throw new Error('Builtin media-production Skill did not load.');
 
-    const guide = await readFile(join(mediaRoot, ...guidePath.split('/')), 'utf8');
     expect(definition).toMatchObject({
       name: 'media-production',
       resourceBase: { kind: 'directory', path: mediaRoot },
     });
-    expect(definition.content).toContain(`](${guidePath})`);
-    expect(definition.content).not.toContain(guide);
+    for (const guidePath of guidePaths) {
+      const guide = await readFile(join(mediaRoot, ...guidePath.split('/')), 'utf8');
+      expect(definition.content).toContain(`](${guidePath})`);
+      expect(definition.content).not.toContain(guide);
+    }
     expect(renderSkillContent(definition)).toContain('Load referenced resources only as needed.');
     await provider.dispose();
   });
@@ -307,9 +312,11 @@ describe('locked DSH filesystem Skill provider contract', () => {
     }
 
     expect(definitions.get('media-production')).toContain('每项决定获得直接来源证据后立即停止取样');
+    expect(definitions.get('media-production')).toContain('完整制作规格不是概念方案的重复扩写');
     expect(definitions.get('media-preparation')).toContain('不能冒充已准备首帧');
     expect(definitions.get('media-preparation')).toContain('验收不得放宽上游创意合同');
     expect(definitions.get('media-preparation')).toContain('不要生成候选调用包');
+    expect(definitions.get('media-preparation')).toContain('完整 Tool 调用封装');
     expect(definitions.get('video')).toContain('图像驱动视频必须绑定一个实际首帧');
     expect(definitions.get('video')).toContain('不交付看似可提交的候选调用包');
 
