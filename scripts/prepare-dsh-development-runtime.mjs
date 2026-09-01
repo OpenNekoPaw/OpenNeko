@@ -19,7 +19,7 @@ import { assertDshRuntimeDirectory, fingerprintDirectory } from './dsh-runtime-c
 
 const TARGET = 'darwin-arm64';
 const NODE_RELEASE = '24.18.0';
-const DSH_RELEASE = '0.1.0-rc.8';
+const DSH_RELEASE = '0.1.1-rc.2';
 const repositoryRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const developmentInputRoot = resolve(
   fileURLToPath(new URL('./dsh-development-runtime/', import.meta.url)),

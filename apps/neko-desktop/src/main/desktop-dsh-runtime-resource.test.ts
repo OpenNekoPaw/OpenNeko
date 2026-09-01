@@ -138,7 +138,7 @@ function createFixtureRuntime(root: string): {
           executable: { file: 'payload/bin/node', sha256: sha256(files.node) },
         },
         dsh: {
-          release: '0.1.0-rc.8',
+          release: '0.1.1-rc.2',
           entrypoint: {
             file: 'payload/lib/node_modules/@deepseek-ai/dsh/lib/bin.js',
             sha256: sha256(files.dsh),

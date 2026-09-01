@@ -117,8 +117,8 @@ describe('Desktop development DSH runtime builder', () => {
   it('pins the relocatable Node and DSH inputs without workspace or range dependencies', async () => {
     const manifest = JSON.parse(await readFile(join(inputRoot, 'package.json'), 'utf8'));
     assert.equal(manifest.dependencies['node-bin-darwin-arm64'], '24.18.0');
-    assert.equal(manifest.dependencies['@deepseek-ai/dsh'], '0.1.0-rc.8');
-    assert.equal(manifest.dependencies['@deepseek-ai/dsh-base'], '0.1.0-rc.8');
+    assert.equal(manifest.dependencies['@deepseek-ai/dsh'], '0.1.1-rc.2');
+    assert.equal(manifest.dependencies['@deepseek-ai/dsh-base'], '0.1.1-rc.2');
     for (const dependency of Object.values(manifest.dependencies)) {
       assert.doesNotMatch(dependency, /^(?:workspace:|[~^])/u);
     }

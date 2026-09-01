@@ -2,10 +2,11 @@ import { readFile } from 'node:fs/promises'
 
 const expectedVersions = Object.freeze({
   '@agentclientprotocol/sdk': '0.25.1',
-  '@deepseek-ai/dsh': '0.1.0-rc.8',
-  '@deepseek-ai/dsh-base': '0.1.0-rc.8',
-  '@deepseek-ai/dsh-headless': '0.1.0-rc.8',
-  '@deepseek-ai/dsh-llm': '0.1.0-rc.8',
+  '@deepseek-ai/dsh': '0.1.1-rc.2',
+  '@deepseek-ai/dsh-base': '0.1.1-rc.2',
+  '@deepseek-ai/dsh-headless': '0.1.1-rc.2',
+  '@deepseek-ai/dsh-llm': '0.1.1-rc.2',
+  '@deepseek-ai/dsh-tools': '0.1.1-rc.2',
 })
 
 export async function assertExactPackageVersions(resolvePackageJson) {

@@ -917,7 +917,7 @@ async function qualify() {
     process.stdout.write(
       `${JSON.stringify({
         qualified: true,
-        dsh: '0.1.0-rc.8',
+        dsh: '0.1.1-rc.2',
         acp: '0.25.1',
         protocolVersion: third.initializeResponse.protocolVersion,
         sessionId: 'redacted',

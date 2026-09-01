@@ -11,7 +11,7 @@ import {
 import { isAbsolute, join, relative, sep } from 'node:path';
 
 const SUPPORTED_TARGET = 'darwin-arm64';
-const DSH_RELEASE = '0.1.0-rc.8';
+const DSH_RELEASE = '0.1.1-rc.2';
 
 export function stagePackagedDshRuntime(stageRoot, target, runtimeSourceRoot) {
   if (!runtimeSourceRoot) {
