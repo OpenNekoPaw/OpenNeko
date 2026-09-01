@@ -6,11 +6,11 @@
 
 正式文档只保留经过验证、可供创作者评审或继续制作的内容。来源阅读过程、工具调用、工作进度、内部检查和被否决推理留在 Agent 对话或评测证据中，不写入方案正文。
 
-每项创作决定只保留一个权威位置。节拍表、镜头表或场景表已经承载画面、动作、声音和验收时，不再增设章节复述相同信息；跨项目规则集中一次，局部规则留在对应项目。只有用户同时要求 AI 生产交接时，才在主方案后附精简、可提交的生成交接；纯创意方案不附调用包。
+每项创作决定只保留一个权威位置。节拍表、镜头表或场景表已经承载画面、动作、声音和验收时，不再增设章节复述相同信息；跨项目规则集中一次，局部规则留在对应项目。只有用户同时要求 AI 生产交接时，才在主方案后附精简、可提交的语义化交接；纯创意方案不附生成交接。
 
-用户要求简洁的时序概念方案时，正文默认只有两块：一段核心概念和至多四项跨镜头不变量，以及一份 6–8 个因果节拍的权威序列。若用户还要求 AI 生产交接，系统应继续调用准备与生成相关 Skill，由它们追加一个当前依赖已满足单元的紧凑调用包；不得由文档编辑 Skill 猜测 operation、参数或资产绑定。不得用三级标题或粗体字段把分析、来源、声音、视觉、技术、验收和评审问题重新扩写成小章节。
+用户要求简洁的时序概念方案时，正文默认只有两块：一段核心概念和至多四项跨镜头不变量，以及一份 6–8 个因果节拍的权威序列。若用户还要求 AI 生产交接，系统应继续调用准备与生成相关 Skill，由它们追加一个当前依赖已满足单元的语义化交接：素材职责、可直接使用的提示词或操作意图、预期产物、验收和下游用途。完整调用封装保留在真实 Tool 调用或 owning capability 的结构化对象中；不得由文档编辑 Skill 猜测或打印 operation、参数、locator 或运行时 ID。不得用三级标题或粗体字段把分析、来源、声音、视觉、技术、验收和评审问题重新扩写成小章节。
 
-用户要求完整制作设计时，仍只生成一份主规格，不按能力阶段拆成多份解释文档。主规格由对应媒体能力提供创作合同、必要的连续性、权威生产单元表和后期/交付合同；准备与生成能力只追加依赖已满足单元的完整可提交调用包。实际素材、候选、任务状态、失败历史、项目修订和导出回执属于 owning capability 的结构化对象，不复制成文档正文。
+用户要求完整制作设计时，仍只生成一份主规格，不按能力阶段拆成多份解释文档。主规格由对应媒体能力提供创作合同、必要的连续性、权威生产单元表和后期/交付合同；准备与生成能力只追加依赖已满足单元的语义化生产交接。实际素材、完整调用、候选、任务状态、失败历史、项目修订和导出回执属于 owning capability 的结构化对象，不复制成文档正文。
 
 不得依据 manifest、页数、目录、封面或任意小样本直接选择全局格式、时长、集数和章节映射。证据不足时，本轮应先成为来源覆盖或体量评估。代表性样本只有在样本、估算方法、不确定性和置信度可见时才支持暂定区间；固定格式还需公开总时长、平均来源负载以及扩写、压缩、省略假设。三个以上可比较项目才使用表格。
 
@@ -20,11 +20,11 @@ Start with the creative goal, one core concept, the narrative or experience spin
 
 Keep source-reading narration, Tool calls, progress, internal checks, and rejected reasoning in conversation or Evaluation evidence. The formal proposal contains only validated content that a creator can review or continue producing.
 
-Give each creative decision one authoritative location. When a beat, shot, or scene table already owns image, action, sound, and acceptance, do not restate them in separate sections. State cross-item rules once and keep local constraints with their item. Append a compact submit-ready generation handoff only when the user also requests AI production handoff; a pure creative proposal has no call packet.
+Give each creative decision one authoritative location. When a beat, shot, or scene table already owns image, action, sound, and acceptance, do not restate them in separate sections. State cross-item rules once and keep local constraints with their item. Append a compact creator-facing semantic handoff only when the user also requests AI production handoff; a pure creative proposal has no generation handoff.
 
-For a concise time-based concept, default to two artifact blocks only: one concept paragraph plus at most four cross-shot invariants, and one authoritative six-to-eight-beat causal sequence. If the user also requests AI production handoff, system orchestration must continue into preparation and generation Skills, which append one compact call packet for a dependency-ready unit. Content Authoring must not invent its operation, parameters, or asset bindings. Do not recreate analysis, evidence, sound, visual, technology, acceptance, or review mini-sections through nested headings or bold field groups.
+For a concise time-based concept, default to two artifact blocks only: one concept paragraph plus at most four cross-shot invariants, and one authoritative six-to-eight-beat causal sequence. If the user also requests AI production handoff, system orchestration must continue into preparation and generation Skills, which append one semantic handoff for a dependency-ready unit: asset roles, directly usable prompt or operation intent, expected result, acceptance, and downstream use. Keep the complete invocation in the actual Tool call or owning structured object; Content Authoring must not invent or print operations, parameters, locators, or runtime IDs. Do not recreate analysis, evidence, sound, visual, technology, acceptance, or review mini-sections through nested headings or bold field groups.
 
-For complete production design, still create one master specification rather than separate explanatory documents per capability stage. The owning media capabilities provide the creative contract, necessary continuity, authoritative production-unit table, and finishing/delivery contract; preparation and generation capabilities append only complete submit-ready packets for units whose dependencies are satisfied. Actual assets, candidates, runtime state, failure history, project revisions, and export receipts remain structured objects owned by their capabilities rather than copied into the document.
+For complete production design, still create one master specification rather than separate explanatory documents per capability stage. The owning media capabilities provide the creative contract, necessary continuity, authoritative production-unit table, and finishing/delivery contract; preparation and generation capabilities append only semantic production handoffs for units whose dependencies are satisfied. Actual assets, complete invocations, candidates, runtime state, failure history, project revisions, and export receipts remain structured objects owned by their capabilities rather than copied into the document.
 
 Add audience, tone, visual language, narrative beats, shots, assets, variants, schedule, or risks only when the request or production decision needs them. Distinguish supplied source facts from creative assumptions.
 

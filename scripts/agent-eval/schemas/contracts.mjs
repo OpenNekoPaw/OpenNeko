@@ -628,7 +628,7 @@ const ASSERTION_SCHEMA = s.union([
   s.object(
     {
       ...ASSERTION_COMMON,
-      kind: s.literal('workspace-board-projection'),
+      kind: s.literal('canvas-artifact-projection'),
       status: s.enum(['projected', 'noop']),
       targetKind: s.literal('workspace'),
       minNodeIds: s.integer({ min: 1 }),
@@ -1058,7 +1058,7 @@ const DEFAULT_EXECUTION_SUPPORT = Object.freeze({
     'markdown-path',
     'artifact',
     'content-locator-handoff',
-    'workspace-board-projection',
+    'canvas-artifact-projection',
   ]),
   artifactCheckKinds: new Set([
     'file',

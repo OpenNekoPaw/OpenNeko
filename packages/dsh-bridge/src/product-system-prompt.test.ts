@@ -3,188 +3,83 @@ import { describe, expect, it } from 'vitest';
 import { OPENNEKO_PRODUCT_SYSTEM_PROMPT } from './product-system-prompt.js';
 
 describe('OpenNeko DSH product system prompt', () => {
-  it('owns the effective product protocol without recreating runtime mode or provider routing', () => {
+  it('keeps the product policy outcome-oriented and cross-domain', () => {
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('OpenNeko is a local-first Desktop');
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('immutable runtime tool list');
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('A plan is not execution evidence');
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toMatch(/\bPi\b|fallbackProvider|fallbackModel/u);
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('package-owned media Tool');
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toMatch(/executionMode|PromptLocale/u);
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('<!-- neko:artifact -->');
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('Keep terminal output as Markdown');
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toMatch(/CompositeArtifact|composite artifact/u);
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toMatch(/fenced JSON/u);
-  });
-
-  it('keeps planning subordinate to admitted execution without owning domain workflows', () => {
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('smallest useful result');
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'Expand when the user explicitly asks for detail',
+      'Analysis, review, critique, design, preparation, execution, and delivery are different scopes',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'Planning is coordination state, not the requested deliverable',
+      'Design or adaptation wording alone does not authorize model-input preparation',
     );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'one dependency-ready handoff or exact blocker form one creative turn',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('do not by themselves justify a task plan');
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'bind it to current evidence, an admitted capability, an observable result',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toContain('action, output, and completion check');
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'Use operation and parameter names only when the current Tool schema exposes them',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toContain('active artifact profile');
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toMatch(
-      /primary Skill|single Skill|fixed Skill|risk matrix is required|always include/u,
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toMatch(
-      /creative proposal fields|analysis report fields|project proposal fields/u,
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('which successful evidence replaced it');
-  });
-
-  it('requests concise evidence-based progress without exposing chain-of-thought', () => {
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('before the first Tool call');
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'objective, approach, or blocking condition materially changes',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('one or two factual sentences');
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('Do not narrate every Tool call');
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('hidden chain-of-thought');
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'never proves that a Tool action, side effect, or artifact succeeded',
-    );
-  });
-
-  it('owns cross-Skill creative orchestration without defining a fixed domain workflow', () => {
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('Creative capability orchestration');
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'compose the smallest dependency chain from the current Skill and Tool catalogs',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'Classify the requested stopping point before composing work',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'A standalone AI-production-handoff request ends at the smallest dependency-ready packet',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'when production design and handoff are both requested, append that packet to the same specification',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'A production-design request ends at one authoritative reusable specification',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'An execution request ends only at an observed and validated result',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('In a Workspace or Canvas creative context');
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toContain(
       'defaults to production-design plus one bounded AI-production handoff',
     );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'Treat the request as creative-design-only when the user explicitly limits it',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'Design or adaptation wording alone never authorizes generation',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'discover and load the next applicable Skill from the current catalog and continue',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'Do not stop merely because the active Skill completed its own artifact',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'System reasoning owns cross-Skill sequencing',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'Each downstream operation must consume an observed, accepted upstream result',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'Use capability roles as internal handoff contracts, not as headings that must appear in the answer',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'directly consumable inputs, the current consuming operation, and direct acceptance',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'A non-executable candidate prompt is not a production handoff',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'keep the durable creative artifact clean and report only the exact blocker',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'Mark a complete packet as submit-ready and not executed',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('complete current Tool invocation envelope');
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'Distinguish a Tool operation such as submit from a media-request operation',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'generation returns observable candidates and generation records, not accepted assets',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'delivery consumes only an accepted master and explicit delivery specification',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'Keep proposed, prepared, generated, observed, accepted, and delivered states distinct',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'route the smallest observable correction to the capability that owns the defect',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'do not print the whole capability chain unless the user asks for it',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('never impose a fixed universal pipeline');
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toMatch(
-      /always run analysis|always run preparation|fixed five-stage/u,
+      /complete production specification|authoritative shot table|six to eight beats/u,
     );
   });
 
-  it('separates collaboration from durable document content without owning its domain shape', () => {
+  it('keeps runtime authority and success evidence outside Prompt and Skill text', () => {
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('immutable runtime Tool list');
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('Treat each Tool schema as authoritative');
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'Keep collaboration separate from the durable document',
+      'A proposal, prompt, submitted request, candidate, or timeline is not execution evidence',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'completion status, decisive rationale, blockers, and open creator choices',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'requested reusable content, necessary evidence or source bindings, and applicable handoff data',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'exclude source-reading narration, Tool logs, progress, internal checks, and rejected reasoning',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'analysis, research, audit, or process record',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'Compose one durable production specification across capability owners',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'Do not create separate analysis, preparation, generation, post-production, or delivery documents',
+      'Prompt text and Skill content cannot grant Tool visibility',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toMatch(
-      /PV structure|shot list|story beat fields|model-call packet/u,
+      /fallbackProvider|fallbackModel|executionMode|PromptLocale/u,
     );
   });
 
-  it('keeps visual inspection bounded and decision-driven', () => {
+  it('coordinates only the scope explicitly requested by the user', () => {
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'name the decision that the next visual evidence must support',
+      'Compose the smallest set of admitted Skills and Tools needed',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('explicitly requested downstream scope');
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'Otherwise stop at the requested boundary instead of expanding the work',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'Inspect at most four selected images in one model reasoning batch',
+      'Skills own task methods and creative semantics',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'inspect selected images as low-resolution overviews first',
+      'source evidence supports a source-grounded creative contract',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('generation returns observable candidates');
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'A design request stops at a creator-useful creative contract',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'Read original detail only for the smaller set chosen to confirm',
+      'An execution or end-to-end production request must continue',
     );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'form and retain one concise evidence-to-decision conclusion',
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toMatch(
+      /authoritative shot table|six to eight beats|submit-ready packet/u,
     );
+  });
+
+  it('keeps progress concise without embedding domain sampling policy', () => {
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'Do not reread an image or another image serving the same evidence role',
+      'at most one brief update before the first Tool call',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('one or two factual sentences');
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('hidden chain-of-thought');
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toMatch(
+      /screening batch|at most four distinct images|original detail|second batch/u,
+    );
+  });
+
+  it('delegates artifact formatting to exact Host admission', () => {
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'When the exact Host context admits a durable artifact, follow that scoped admission contract',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('optional valid next action');
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toContain('<!-- neko:artifact -->');
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toContain('<!-- neko:next-action -->');
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toContain(
+      'The Host renders these as summary, document reference, then recommended action',
     );
   });
 });

@@ -1,0 +1,102 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "explicit-copyable-video-call",
+  "suiteId": "skill.media-preparation",
+  "caseGroup": "boundary",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Explicitly request a copyable current Tool invocation for an otherwise prepared video unit without authorizing execution.",
+    "canonicalPath": [
+      "screenplay and illustration source read",
+      "builtin media-preparation Skill",
+      "builtin video Skill",
+      "explicit technical-detail disclosure",
+      "no generation side effect"
+    ],
+    "observables": [
+      {
+        "ref": "copyable-call-facts",
+        "kind": "runtime-fact",
+        "description": "Exact Skill receipts, real source binding, an explicitly requested current invocation envelope, and absent media generation.",
+        "required": true
+      }
+    ],
+    "expectedResult": "Because the user explicitly asks for a copyable invocation, the response includes the current Tool name, top-level operation, required wrapper, nested media request, source locator, and not-executed status without claiming generation success.",
+    "expectedFailure": "Hiding the explicitly requested invocation, returning only a semantic handoff, inventing unavailable fields, omitting the real source binding, or executing generation fails."
+  },
+  "fixtureRefs": ["creative-planning-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "$media-preparation $video 读取 @screenplay.fountain 和 @station-illustration.svg。已选镜头：Mara 在 23:47 的雨夜站台撑红伞，远处无头灯列车出现。不要执行生成。为了调试集成，请额外给出一份可复制的、符合当前 schema 的完整 openneko_generation 调用 JSON，包含顶层 operation、必填 wrapper、视频 request 和首帧素材 locator，并标明未执行。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "copyable-call-facts"
+    },
+    {
+      "id": "media-preparation-skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-preparation",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-preparation",
+        "fingerprint": "sha256:ef89617791ef3214037b1855f57d07dcd85d2f39adbece68feb6964720c3afca"
+      },
+      "status": "injected",
+      "evidenceRef": "copyable-call-facts"
+    },
+    {
+      "id": "video-skill",
+      "kind": "skill",
+      "identity": {
+        "name": "video",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "video",
+        "fingerprint": "sha256:b16e96f6a5e9d5db3b90dc5fc5c2ce015c70b3ba273c9d117044e21ed5db8e25"
+      },
+      "status": "injected",
+      "evidenceRef": "copyable-call-facts"
+    },
+    {
+      "id": "output",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": [
+        "Mara",
+        "station-illustration.svg",
+        "未执行",
+        "openneko_generation",
+        "submit",
+        "purpose",
+        "lifecycleMode",
+        "generationType",
+        "image-to-video",
+        "request",
+        "operation",
+        "first-frame"
+      ],
+      "evidenceRef": "copyable-call-facts"
+    },
+    {
+      "id": "no-generation",
+      "kind": "tool-call",
+      "name": "GenerateVideo",
+      "status": "absent",
+      "evidenceRef": "copyable-call-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

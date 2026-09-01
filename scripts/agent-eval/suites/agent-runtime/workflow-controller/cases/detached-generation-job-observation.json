@@ -14,19 +14,19 @@
       "durable Generation Job store",
       "exact Generation Job observer",
       "exact turn Canvas admission",
-      "incremental Workspace Board Job projection",
+      "incremental Canvas Job projection",
       "terminal result locator projection"
     ],
     "observables": [
       {
         "ref": "detached-generation-facts",
         "kind": "runtime-fact",
-        "description": "One official Generation Tool call; exact Generation Job identity; owning coordinator and observer; exact-turn Workspace Board Job/result projection; terminal result locator or explicit failure; and forbidden polling/fallback facts.",
+        "description": "One official Generation Tool call; exact Generation Job identity; owning coordinator and observer; exact-turn Canvas Job/result projection; terminal result locator or explicit failure; and forbidden polling/fallback facts.",
         "required": true
       }
     ],
-    "expectedResult": "The single openneko_generation submit Tool call projects one canonical Generation node into the turn-selected Workspace Board, keeps the exact JobRef visible while running, and binds the canonical Workspace result locator into that same node after success without duplicates.",
-    "expectedFailure": "A pending Tool success, missing Job identity/result locator, missing or blocked Workspace Board projection, duplicate projection, model-authored polling, direct provider or generic Task participation, Canvas fallback, or hidden terminal Job failure fails."
+    "expectedResult": "The single openneko_generation submit Tool call projects one canonical Generation node into the turn-selected Canvas, keeps the exact JobRef visible while running, and binds the canonical Workspace result locator into that same node after success without duplicates.",
+    "expectedFailure": "A pending Tool success, missing Job identity/result locator, missing or blocked Canvas projection, duplicate projection, model-authored polling, direct provider or generic Task participation, Canvas fallback, or hidden terminal Job failure fails."
   },
   "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
@@ -75,8 +75,8 @@
       "evidenceRef": "detached-generation-facts"
     },
     {
-      "id": "generation-job-workspace-board",
-      "kind": "workspace-board-projection",
+      "id": "generation-job-canvas-delivery",
+      "kind": "canvas-artifact-projection",
       "status": "projected",
       "targetKind": "workspace",
       "minNodeIds": 1,

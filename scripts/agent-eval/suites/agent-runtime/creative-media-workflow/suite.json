@@ -74,8 +74,8 @@
       "visibility": "public"
     },
     {
-      "id": "generated-output-workspace-board",
-      "file": "cases/generated-output-workspace-board.json",
+      "id": "generated-output-canvas-delivery",
+      "file": "cases/generated-output-canvas-delivery.json",
       "group": "workflow",
       "visibility": "public"
     },

@@ -87,8 +87,8 @@ function runGate(assertion, facts, context) {
       return assertArtifact(assertion, facts);
     case 'content-locator-handoff':
       return assertContentLocatorHandoff(assertion, facts);
-    case 'workspace-board-projection':
-      return assertWorkspaceBoardProjection(assertion, facts);
+    case 'canvas-artifact-projection':
+      return assertCanvasArtifactProjection(assertion, facts);
     default:
       throw new Error(`unsupported hard-gate evaluator: ${assertion.kind}`);
   }
@@ -615,20 +615,20 @@ function isPortableWorkspacePath(value) {
   );
 }
 
-function assertWorkspaceBoardProjection(assertion, facts) {
-  assertCompleteEvidence(facts, ['workspaceBoardProjections']);
-  const projection = arrayOrEmpty(facts?.workspaceBoardProjections).find(
+function assertCanvasArtifactProjection(assertion, facts) {
+  assertCompleteEvidence(facts, ['canvasArtifactProjections']);
+  const projection = arrayOrEmpty(facts?.canvasArtifactProjections).find(
     (candidate) =>
       candidate?.status === assertion.status && candidate?.targetKind === assertion.targetKind,
   );
   if (!projection) {
     throw new Error(
-      `Workspace Board projection ${assertion.status}/${assertion.targetKind} was not observed`,
+      `Canvas projection ${assertion.status}/${assertion.targetKind} was not observed`,
     );
   }
   if (arrayOrEmpty(projection.nodeIds).length < assertion.minNodeIds) {
     throw new Error(
-      `Workspace Board projection has ${arrayOrEmpty(projection.nodeIds).length} node id(s); expected at least ${assertion.minNodeIds}`,
+      `Canvas projection has ${arrayOrEmpty(projection.nodeIds).length} node id(s); expected at least ${assertion.minNodeIds}`,
     );
   }
   if (
@@ -636,15 +636,15 @@ function assertWorkspaceBoardProjection(assertion, facts) {
     arrayOrEmpty(projection.connectionIds).length < assertion.minConnectionIds
   ) {
     throw new Error(
-      `Workspace Board projection has ${arrayOrEmpty(projection.connectionIds).length} connection id(s); expected at least ${assertion.minConnectionIds}`,
+      `Canvas projection has ${arrayOrEmpty(projection.connectionIds).length} connection id(s); expected at least ${assertion.minConnectionIds}`,
     );
   }
   if (assertion.sourceFingerprintRequired && !projection.sourceFingerprint) {
-    throw new Error('Workspace Board projection has no source fingerprint evidence');
+    throw new Error('Canvas projection has no source fingerprint evidence');
   }
   if (assertion.diagnosticsEmpty && arrayOrEmpty(projection.diagnosticCodes).length > 0) {
     throw new Error(
-      `Workspace Board projection diagnostics observed: ${projection.diagnosticCodes.join(', ')}`,
+      `Canvas projection diagnostics observed: ${projection.diagnosticCodes.join(', ')}`,
     );
   }
   return {

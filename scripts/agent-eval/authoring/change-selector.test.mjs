@@ -48,6 +48,7 @@ describe('Agent Evaluation change-to-suite selector', () => {
       selectEvaluationCoverage([
         '.codex/skills/storyboard/SKILL.md',
         'packages/agent/runtime/src/prompt/system-prompt.ts',
+        'packages/agent/runtime/src/application/dsh-conversation-turn-context.ts',
         'packages/dsh-bridge/src/product-system-prompt.ts',
         'packages/agent/runtime/src/tools/read-image-tool.ts',
         'packages/content/domain/src/image-dsh-tool.ts',
@@ -70,8 +71,8 @@ describe('Agent Evaluation change-to-suite selector', () => {
         'packages/agent/runtime/src/acp/dsh-acp-projection.ts',
         'packages/agent/contracts/src/dsh-session-host.ts',
         'apps/neko-desktop/src/main/desktop-dsh-session-host.ts',
-        'packages/agent/runtime/src/application/dsh-workspace-board-artifact-delivery.ts',
-        'apps/neko-desktop/src/main/desktop-dsh-workspace-board-delivery.ts',
+        'packages/agent/runtime/src/application/dsh-canvas-artifact-delivery.ts',
+        'apps/neko-desktop/src/main/desktop-dsh-canvas-artifact-delivery.ts',
         'packages/agent/runtime/src/input/message-resource-projector.ts',
         'packages/host/src/ai-model-settings-service.ts',
         'packages/generation/domain/src/provider-capabilities.ts',
@@ -91,6 +92,7 @@ describe('Agent Evaluation change-to-suite selector', () => {
           suiteId: 'agent-runtime.prompt-composition',
           changedPaths: [
             'packages/agent/runtime/src/prompt/system-prompt.ts',
+            'packages/agent/runtime/src/application/dsh-conversation-turn-context.ts',
             'packages/dsh-bridge/src/product-system-prompt.ts',
           ],
         }),
@@ -137,7 +139,7 @@ describe('Agent Evaluation change-to-suite selector', () => {
           suiteIds: ['agent-runtime.creative-media-workflow'],
         }),
         expect.objectContaining({
-          behaviorId: 'workspace-board-delivery',
+          behaviorId: 'canvas-artifact-delivery',
           suiteId: 'agent-runtime.workflow-controller',
           suiteIds: ['agent-runtime.creative-media-workflow', 'agent-runtime.workflow-controller'],
         }),

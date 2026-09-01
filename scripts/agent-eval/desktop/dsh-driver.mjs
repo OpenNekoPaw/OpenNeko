@@ -238,7 +238,7 @@ export function dshDriverExpression(command) {
           role: event.role,
           content:
             event.role === 'assistant'
-              ? event.text
+              ? [event.text, event.recommendedNextActionMarkdown].filter(Boolean).join('\n\n')
               : (event.content ?? [])
                   .filter((block) => block?.type === 'text')
                   .map((block) => block.text)

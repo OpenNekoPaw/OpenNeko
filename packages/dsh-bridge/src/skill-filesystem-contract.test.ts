@@ -290,6 +290,7 @@ describe('locked DSH filesystem Skill provider contract', () => {
     expect(descriptions.video).toContain('不负责裁剪变速、技术修复、时间线剪辑或导出');
     expect(descriptions['media-preparation']).toContain('可直接提交');
     expect(descriptions['media-preparation']).toContain('不执行生成、候选筛选或后期');
+    expect(descriptions['content-authoring']).toContain('不因结果使用 Markdown 就自动参与');
     expect(descriptions['scene-to-music']).toContain('不负责对白音效、时间线放置或最终混音');
     expect(descriptions['script-to-timeline']).toContain('不负责媒体生成、轨道创建或时间线持久化');
 
@@ -313,10 +314,16 @@ describe('locked DSH filesystem Skill provider contract', () => {
 
     expect(definitions.get('media-production')).toContain('每项决定获得直接来源证据后立即停止取样');
     expect(definitions.get('media-production')).toContain('完整制作规格不是概念方案的重复扩写');
+    expect(definitions.get('media-production')).toContain('最小完整结构');
+    expect(definitions.get('media-production')).toContain('来源特有的核心命题');
     expect(definitions.get('media-preparation')).toContain('不能冒充已准备首帧');
     expect(definitions.get('media-preparation')).toContain('验收不得放宽上游创意合同');
     expect(definitions.get('media-preparation')).toContain('不要生成候选调用包');
-    expect(definitions.get('media-preparation')).toContain('完整 Tool 调用封装');
+    expect(definitions.get('media-preparation')).toContain(
+      '内部必须按当前 schema 编译完整 Tool 调用封装',
+    );
+    expect(definitions.get('media-preparation')).toContain('默认面向创作者的交接');
+    expect(definitions.get('media-preparation')).toContain('不打印 Tool 名、字段名');
     expect(definitions.get('video')).toContain('图像驱动视频必须绑定一个实际首帧');
     expect(definitions.get('video')).toContain('不交付看似可提交的候选调用包');
 

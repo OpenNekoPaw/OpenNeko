@@ -5,24 +5,24 @@
   "caseGroup": "regression",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "In a creative Workspace, ask in ordinary Chinese to analyze source material and design an animated concept PV without naming Skills or explicitly requesting model preparation.",
+    "userBehavior": "In a creative Workspace, explicitly request one complete PV production specification and one submit-ready AI video handoff without executing generation.",
     "canonicalPath": [
-      "OpenNeko product prompt Workspace stopping-point classification",
+      "OpenNeko product prompt explicit production-and-handoff classification",
       "implicit media-production selection",
       "implicit media-preparation selection",
       "implicit video selection",
-      "one master production specification plus one submit-ready video unit"
+      "one master production specification plus one creator-facing submit-ready video handoff"
     ],
     "observables": [
       {
         "ref": "workspace-pv-handoff-facts",
         "kind": "runtime-fact",
-        "description": "Exact Skill receipts, screenplay and illustration evidence, one master production specification, a complete schema-bound video packet, and absent generation side effects.",
+        "description": "Exact Skill receipts, screenplay and illustration evidence, one master production specification, a schema-bound semantic video handoff, and absent generation side effects.",
         "required": true
       }
     ],
-    "expectedResult": "The Agent returns one concise master PV production specification containing the creative contract, recurring character/scene continuity, one authoritative shot table with input requirements, production method and direct acceptance, one complete source-bound submit-ready/not-executed video Tool envelope, and one finishing/delivery contract. It does not create per-stage documents or execute generation.",
-    "expectedFailure": "Creating a task plan for the bounded design turn, stopping at concept beats, omitting character/scene continuity or post-production design, expanding into a source-analysis report, splitting stages into separate documents, requiring the user to name Skills, appending a provisional prompt, returning only an inner media operation instead of the full Tool envelope, omitting real input binding, inventing Tool parameters, or generating media fails."
+    "expectedResult": "The Agent returns one concise master PV production specification containing the creative contract, recurring character/scene continuity, one authoritative shot table with input requirements, production method and direct acceptance, one source-bound submit-ready/not-executed semantic video handoff, and one finishing/delivery contract. The handoff remains executable without printing Tool schema or invocation JSON. It does not create per-stage documents or execute generation.",
+    "expectedFailure": "Creating a task plan for the bounded design turn, stopping at concept beats, omitting character/scene continuity or post-production design, expanding into a source-analysis report, splitting stages into separate documents, requiring the user to name Skills, appending a provisional prompt, omitting real input binding, inventing Tool parameters, printing runtime invocation details, or generating media fails."
   },
   "fixtureRefs": ["creative-planning-workspace"],
   "runtimeProfileId": "markdown",
@@ -31,7 +31,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "读取 @screenplay.fountain 和 @station-illustration.svg。分析这个故事，设计一支 60 秒动画化概念 PV 方案。"
+      "prompt": "读取 @screenplay.fountain 和 @station-illustration.svg。为这个故事编写一份完整的 60 秒动画概念 PV 主制作规格，包含人物与场景连续性、权威镜头表以及后期与交付合同；再把其中一个关键镜头准备成可交给当前 AI 视频能力直接提交但不执行的生产交接。"
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 240000 }
   ],
@@ -50,7 +50,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:142e97c87a0d168838197c0d74444e86b9fa86d9e869bbd53a5cc08f0f4f02c4"
+        "fingerprint": "sha256:e177f718a55f7899fcc794112ac669022ae65045ab3670d2d9bcd3afc7970241"
       },
       "status": "injected",
       "evidenceRef": "workspace-pv-handoff-facts"
@@ -64,7 +64,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-preparation",
-        "fingerprint": "sha256:49e5e47bc638396fc9b9123d8878e6f183409acc0d0de54005da8b1ed536fe3d"
+        "fingerprint": "sha256:ef89617791ef3214037b1855f57d07dcd85d2f39adbece68feb6964720c3afca"
       },
       "status": "injected",
       "evidenceRef": "workspace-pv-handoff-facts"
@@ -102,15 +102,10 @@
         "station-illustration.svg",
         "可提交",
         "未执行",
-        "openneko_generation",
-        "submit",
-        "purpose",
-        "lifecycleMode",
-        "generationType",
-        "image-to-video",
-        "request",
-        "operation",
-        "first-frame",
+        "素材职责",
+        "提示词",
+        "预期产物",
+        "下游用途",
         "验收"
       ],
       "evidenceRef": "workspace-pv-handoff-facts"
@@ -133,7 +128,15 @@
         "建议调用参数",
         "文档一",
         "文档二",
-        "来源分析报告"
+        "来源分析报告",
+        "openneko_generation",
+        "lifecycleMode",
+        "generationType",
+        "first-frame",
+        "\"request\"",
+        "\"operation\"",
+        "\"locator\"",
+        "jobId"
       ],
       "evidenceRef": "workspace-pv-handoff-facts"
     },

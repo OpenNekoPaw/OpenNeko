@@ -1,24 +1,24 @@
 {
   "schema": "neko.agent-eval.scenario",
-  "id": "generated-output-workspace-board",
+  "id": "generated-output-canvas-delivery",
   "suiteId": "agent-runtime.creative-media-workflow",
   "caseGroup": "workflow",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Generate one image and observe it as a durable workspace file, a stable generated-output ContentLocator, and an ordinary node on the canonical Workspace Board.",
+    "userBehavior": "Generate one image and observe it as a durable workspace file, a stable generated-output ContentLocator, and an ordinary node on the canonical Canvas.",
     "canonicalPath": [
       "Desktop App session owner",
       "terminal GenerateImage Tool call",
       "neko/generated/image workspace file",
       "generated-output ContentLocator",
-      "Node Workspace Board projection",
+      "Node Canvas projection",
       "neko/boards/workspace.nkc"
     ],
     "observables": [
       {
         "ref": "workflow-facts",
         "kind": "runtime-fact",
-        "description": "Terminal Tool result, generated-output ContentLocator identity/revision/digest/path, Workspace Board projection, and terminal idle facts from the canonical Desktop owner.",
+        "description": "Terminal Tool result, generated-output ContentLocator identity/revision/digest/path, Canvas projection, and terminal idle facts from the canonical Desktop owner.",
         "required": true
       },
       {
@@ -28,21 +28,17 @@
         "required": true
       }
     ],
-    "expectedResult": "The GenerateImage Tool materializes a file under neko/generated/image, publishes a valid generated-output ContentLocator, and projects an ordinary locator-backed node into the Workspace Board.",
-    "expectedFailure": "Missing file, invalid resource identity, blocked or missing Workspace Board projection, incomplete facts, Asset participation, multi-Board routing, runtime draft participation, or non-idle delivery fails visibly."
+    "expectedResult": "The GenerateImage Tool materializes a file under neko/generated/image, publishes a valid generated-output ContentLocator, and projects an ordinary locator-backed node into the Canvas.",
+    "expectedFailure": "Missing file, invalid resource identity, blocked or missing Canvas projection, incomplete facts, Asset participation, multi-Canvas routing, runtime draft participation, or non-idle delivery fails visibly."
   },
-  "fixtureRefs": [
-    "empty-workspace"
-  ],
+  "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$image Generate one image of a small red paper kite resting on a clean white studio table. Wait for the real result, report the delivered generated-output ContentLocator, and keep the result attached to this conversation and its current Workspace Board."
+      "prompt": "$image Generate one image of a small red paper kite resting on a clean white studio table. Wait for the real result, report the delivered generated-output ContentLocator, and keep the result attached to this conversation and its current Canvas."
     },
     {
       "id": "idle",
@@ -74,8 +70,8 @@
       "evidenceRef": "workflow-facts"
     },
     {
-      "id": "workspace-board",
-      "kind": "workspace-board-projection",
+      "id": "canvas-delivery",
+      "kind": "canvas-artifact-projection",
       "status": "projected",
       "targetKind": "workspace",
       "minNodeIds": 1,
@@ -86,10 +82,7 @@
     {
       "id": "terminal",
       "kind": "terminal-idle",
-      "concerns": [
-        "turnIdle",
-        "continuationQueueIdle"
-      ],
+      "concerns": ["turnIdle", "continuationQueueIdle"],
       "evidenceRef": "workflow-facts"
     }
   ],

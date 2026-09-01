@@ -5,11 +5,11 @@
   "caseGroup": "boundary",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Explicitly limit a Workspace PV request to concept review and forbid model-input preparation or generation.",
+    "userBehavior": "In a creative Workspace, ask in ordinary language to analyze source material and design a concept PV without requesting production preparation or execution.",
     "canonicalPath": [
-      "OpenNeko product prompt explicit design-only classification",
-      "implicit media-production selection",
-      "concise creator-reviewable concept artifact",
+      "OpenNeko product prompt requested-stopping-point classification",
+      "implicit media-production selection without document-formatting duplication",
+      "source-specific creator-reviewable creative contract",
       "no production side effect"
     ],
     "observables": [
@@ -20,8 +20,8 @@
         "required": true
       }
     ],
-    "expectedResult": "The Agent returns only a concise concept and authoritative beat sequence grounded in the screenplay, without creating a task plan, model-input handoff, or generation.",
-    "expectedFailure": "Creating a task plan for the bounded design turn, preparing model inputs, emitting a generation handoff, executing media Tools, or expanding into a source-analysis report fails."
+    "expectedResult": "The Agent treats ordinary analyze-and-design wording as creative design and returns a concise but complete creative contract grounded in the screenplay: Mara's relationship to the three-years-late train, her decision at the platform edge, the backward announcement, silhouette and displaced umbrella form a causal experience carried by an authoritative beat sequence. It does not create a task plan, model-input handoff, or generation.",
+    "expectedFailure": "A generic rain-station mood reel, omission of the story-specific hook or character action, loading an extra document-formatting method solely because the result is Markdown, creating a task plan, preparing model inputs, emitting a generation handoff, executing media Tools, or expanding into a source-analysis report fails."
   },
   "fixtureRefs": ["creative-planning-workspace"],
   "runtimeProfileId": "markdown",
@@ -30,7 +30,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "读取 @screenplay.fountain。只需要一份供创作者讨论的 60 秒动画概念 PV，不要准备模型输入，不要生成或修改项目。"
+      "prompt": "读取 @screenplay.fountain。分析这个故事，设计一支供创作者讨论的 60 秒动画概念 PV 方案。"
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
   ],
@@ -45,7 +45,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:142e97c87a0d168838197c0d74444e86b9fa86d9e869bbd53a5cc08f0f4f02c4"
+        "fingerprint": "sha256:e177f718a55f7899fcc794112ac669022ae65045ab3670d2d9bcd3afc7970241"
       },
       "status": "injected",
       "evidenceRef": "workspace-pv-design-facts"
@@ -54,7 +54,7 @@
       "id": "output",
       "kind": "final-answer",
       "mode": "contains",
-      "text": ["Mara", "23:47", "红伞", "列车"],
+      "text": ["Mara", "23:47", "三年", "红伞", "列车"],
       "evidenceRef": "workspace-pv-design-facts"
     },
     {

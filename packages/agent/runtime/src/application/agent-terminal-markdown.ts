@@ -1,4 +1,5 @@
 export const AGENT_TERMINAL_ARTIFACT_MARKER = '<!-- neko:artifact -->';
+export const AGENT_TERMINAL_NEXT_ACTION_MARKER = '<!-- neko:next-action -->';
 export const DEFAULT_AGENT_DOCUMENT_PROFILE_ID = 'reviewable-markdown';
 
 export type DocumentProfileId = string;
@@ -10,6 +11,8 @@ export interface AgentTerminalArtifactAdmission {
 export interface AgentTerminalResult {
   /** Always present and projected as the final conversational reply. */
   readonly summaryMarkdown: string;
+  /** A single creator-facing action rendered after the admitted document reference. */
+  readonly recommendedNextActionMarkdown?: string;
   /** Present only for an explicitly admitted long-term Markdown document. */
   readonly artifact?: {
     readonly kind: 'reviewable-markdown';
@@ -25,7 +28,11 @@ export type AgentTerminalMarkdownDiagnosticCode =
   | 'AGENT_TERMINAL_SUMMARY_MISSING'
   | 'AGENT_TERMINAL_ARTIFACT_MISSING'
   | 'AGENT_TERMINAL_ARTIFACT_TITLE_MISSING'
-  | 'AGENT_TERMINAL_ARTIFACT_PROFILE_INVALID';
+  | 'AGENT_TERMINAL_ARTIFACT_PROFILE_INVALID'
+  | 'AGENT_TERMINAL_NEXT_ACTION_WITHOUT_ARTIFACT'
+  | 'AGENT_TERMINAL_NEXT_ACTION_MARKER_REPEATED'
+  | 'AGENT_TERMINAL_NEXT_ACTION_ORDER_INVALID'
+  | 'AGENT_TERMINAL_NEXT_ACTION_MISSING';
 
 export class AgentTerminalMarkdownContractError extends Error {
   override readonly name = 'AgentTerminalMarkdownContractError';
@@ -57,8 +64,17 @@ export function parseAgentTerminalMarkdown(
   admission?: AgentTerminalArtifactAdmission,
 ): AgentTerminalResult {
   const markdown = value.trim();
-  const markerLines = findArtifactMarkerLines(markdown);
-  if (markerLines.length === 0) return { summaryMarkdown: markdown };
+  const artifactMarkerLines = findMarkerLines(markdown, AGENT_TERMINAL_ARTIFACT_MARKER);
+  const nextActionMarkerLines = findMarkerLines(markdown, AGENT_TERMINAL_NEXT_ACTION_MARKER);
+  if (artifactMarkerLines.length === 0) {
+    if (nextActionMarkerLines.length > 0) {
+      throw new AgentTerminalMarkdownContractError(
+        'AGENT_TERMINAL_NEXT_ACTION_WITHOUT_ARTIFACT',
+        'Agent terminal Markdown cannot declare a next action without an artifact.',
+      );
+    }
+    return { summaryMarkdown: markdown };
+  }
   if (admission === undefined) {
     throw new AgentTerminalMarkdownContractError(
       'AGENT_TERMINAL_ARTIFACT_NOT_ADMITTED',
@@ -66,27 +82,54 @@ export function parseAgentTerminalMarkdown(
     );
   }
   createAgentTerminalArtifactAdmission(admission.profile);
-  if (markerLines.length !== 1) {
+  if (artifactMarkerLines.length !== 1) {
     throw new AgentTerminalMarkdownContractError(
       'AGENT_TERMINAL_ARTIFACT_MARKER_REPEATED',
       'Agent terminal Markdown must contain exactly one artifact marker.',
     );
   }
+  if (nextActionMarkerLines.length > 1) {
+    throw new AgentTerminalMarkdownContractError(
+      'AGENT_TERMINAL_NEXT_ACTION_MARKER_REPEATED',
+      'Agent terminal Markdown must contain at most one next-action marker.',
+    );
+  }
 
   const lines = markdown.split(/\r?\n/u);
-  const markerLine = markerLines[0];
-  if (markerLine === undefined) {
+  const artifactMarkerLine = artifactMarkerLines[0];
+  if (artifactMarkerLine === undefined) {
     throw new Error('Agent terminal artifact marker identity is unavailable.');
   }
-  const summaryMarkdown = lines.slice(0, markerLine).join('\n').trim();
+  const nextActionMarkerLine = nextActionMarkerLines[0];
+  if (nextActionMarkerLine !== undefined && nextActionMarkerLine >= artifactMarkerLine) {
+    throw new AgentTerminalMarkdownContractError(
+      'AGENT_TERMINAL_NEXT_ACTION_ORDER_INVALID',
+      'Agent terminal next action must appear between the summary and artifact marker.',
+    );
+  }
+  const summaryEndLine = nextActionMarkerLine ?? artifactMarkerLine;
+  const summaryMarkdown = lines.slice(0, summaryEndLine).join('\n').trim();
   if (summaryMarkdown.length === 0) {
     throw new AgentTerminalMarkdownContractError(
       'AGENT_TERMINAL_SUMMARY_MISSING',
       'Agent terminal artifact requires a conversational summary before the marker.',
     );
   }
+  const recommendedNextActionMarkdown =
+    nextActionMarkerLine === undefined
+      ? undefined
+      : lines
+          .slice(nextActionMarkerLine + 1, artifactMarkerLine)
+          .join('\n')
+          .trim();
+  if (recommendedNextActionMarkdown !== undefined && recommendedNextActionMarkdown.length === 0) {
+    throw new AgentTerminalMarkdownContractError(
+      'AGENT_TERMINAL_NEXT_ACTION_MISSING',
+      'Agent terminal next-action marker must be followed by one action.',
+    );
+  }
   const artifactMarkdown = lines
-    .slice(markerLine + 1)
+    .slice(artifactMarkerLine + 1)
     .join('\n')
     .trim();
   if (artifactMarkdown.length === 0) {
@@ -107,6 +150,7 @@ export function parseAgentTerminalMarkdown(
   }
   return {
     summaryMarkdown,
+    ...(recommendedNextActionMarkdown === undefined ? {} : { recommendedNextActionMarkdown }),
     artifact: {
       kind: 'reviewable-markdown',
       title: title.slice(0, 160),
@@ -116,7 +160,7 @@ export function parseAgentTerminalMarkdown(
   };
 }
 
-function findArtifactMarkerLines(markdown: string): readonly number[] {
+function findMarkerLines(markdown: string, marker: string): readonly number[] {
   const markerLines: number[] = [];
   let fence: { readonly character: '`' | '~'; readonly length: number } | undefined;
   const lines = markdown.split(/\r?\n/u);
@@ -135,7 +179,7 @@ function findArtifactMarkerLines(markdown: string): readonly number[] {
       };
       continue;
     }
-    if (line.trim() === AGENT_TERMINAL_ARTIFACT_MARKER) markerLines.push(index);
+    if (line.trim() === marker) markerLines.push(index);
   }
   return markerLines;
 }

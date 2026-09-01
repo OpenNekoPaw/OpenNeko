@@ -192,7 +192,7 @@ function m2Facts() {
       diagnostics: [],
     },
   ];
-  facts.workspaceBoardProjections = [
+  facts.canvasArtifactProjections = [
     {
       status: 'projected',
       targetKind: 'workspace',
@@ -208,7 +208,7 @@ function m2Facts() {
     continuations: { limit: 512, droppedCount: 0 },
     promptComposition: { limit: 256, droppedCount: 0 },
     artifacts: { limit: 512, droppedCount: 0 },
-    workspaceBoardProjections: { limit: 128, droppedCount: 0 },
+    canvasArtifactProjections: { limit: 128, droppedCount: 0 },
   });
   return facts;
 }
@@ -508,30 +508,30 @@ describe('M2 typed path hard gates', () => {
     expect(result).toMatchObject({ status: 'pass' });
   });
 
-  it('proves a generated output reached the canonical Workspace Board projection', () => {
+  it('proves a generated output reached the canonical Canvas projection', () => {
     const assertion = {
-      id: 'workspace-board',
-      kind: 'workspace-board-projection',
+      id: 'canvas-delivery',
+      kind: 'canvas-artifact-projection',
       status: 'projected',
       targetKind: 'workspace',
       minNodeIds: 2,
       minConnectionIds: 1,
       sourceFingerprintRequired: true,
       diagnosticsEmpty: true,
-      evidenceRef: 'workspace-board-facts',
+      evidenceRef: 'canvas-delivery-facts',
     };
 
     expect(evaluateHardGates([assertion], m2Facts())[0]).toMatchObject({ status: 'pass' });
 
     const incomplete = m2Facts();
-    incomplete.evidenceCompleteness.workspaceBoardProjections.droppedCount = 1;
+    incomplete.evidenceCompleteness.canvasArtifactProjections.droppedCount = 1;
     expect(evaluateHardGates([assertion], incomplete)[0]).toMatchObject({
       status: 'fail',
-      message: expect.stringContaining('evidence for workspaceBoardProjections is incomplete'),
+      message: expect.stringContaining('evidence for canvasArtifactProjections is incomplete'),
     });
 
     const missingSourceFingerprint = m2Facts();
-    delete missingSourceFingerprint.workspaceBoardProjections[0].sourceFingerprint;
+    delete missingSourceFingerprint.canvasArtifactProjections[0].sourceFingerprint;
     expect(evaluateHardGates([assertion], missingSourceFingerprint)[0]).toMatchObject({
       status: 'fail',
       message: expect.stringContaining('no source fingerprint evidence'),

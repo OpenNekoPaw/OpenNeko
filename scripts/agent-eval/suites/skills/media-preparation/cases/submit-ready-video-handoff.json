@@ -10,19 +10,19 @@
       "screenplay and illustration source read",
       "builtin media-preparation Skill",
       "builtin video Skill",
-      "exact submit-ready video request",
+      "creator-facing submit-ready video handoff",
       "no generation side effect"
     ],
     "observables": [
       {
         "ref": "ready-preparation-facts",
         "kind": "runtime-fact",
-        "description": "Exact Skill receipts, source evidence, a schema-bound video request, direct acceptance, and absent media generation.",
+        "description": "Exact Skill receipts, source evidence, a schema-bound semantic video handoff, direct acceptance, and absent media generation.",
         "required": true
       }
     ],
-    "expectedResult": "The response binds the selected Mara shot and station illustration, then returns a submit-ready/not-executed openneko_generation request with the exact current submit and image-to-video fields, direct acceptance, and downstream use. It does not return a provisional candidate packet or execute generation.",
-    "expectedFailure": "Falling back to concept analysis, emitting a provisional or candidate generation packet, omitting the real image binding, inventing operation names or parameters, keeping the packet blocked despite available dependencies, creating a task plan, or executing generation fails."
+    "expectedResult": "The response binds the selected Mara shot and station illustration, then returns a submit-ready/not-executed creator-facing handoff with the asset role, directly usable video prompt or operation intent, expected result, direct acceptance, and downstream use. It remains internally schema-bound without printing Tool names, wrapper fields, raw locators, runtime IDs, parameter tables, or invocation JSON.",
+    "expectedFailure": "Falling back to concept analysis, emitting a provisional or candidate generation packet, omitting the real image binding, inventing operation names or parameters, keeping the packet blocked despite available dependencies, printing runtime invocation details, creating a task plan, or executing generation fails."
   },
   "fixtureRefs": ["creative-planning-workspace"],
   "runtimeProfileId": "markdown",
@@ -31,7 +31,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$media-preparation $video 读取 @screenplay.fountain 和 @station-illustration.svg。已选镜头：Mara 在 23:47 的雨夜站台撑红伞，远处无头灯列车出现。把现有插画作为首帧，准备一个可直接提交给当前视频生成能力的单镜头输入包，但不要执行生成。只返回来源绑定、准备状态、精确调用输入、直接验收和下游用途；不得写暂定或候选参数。"
+      "prompt": "$media-preparation $video 读取 @screenplay.fountain 和 @station-illustration.svg。已选镜头：Mara 在 23:47 的雨夜站台撑红伞，远处无头灯列车出现。把现有插画作为首帧，准备一个可直接提交给当前视频生成能力的单镜头输入包，但不要执行生成。只返回来源绑定及素材职责、准备状态、可直接使用的视频提示词或操作意图、预期产物、直接验收和下游用途；不要展示工具名、schema 字段、原始 locator、运行时 ID、参数表或调用 JSON。"
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
   ],
@@ -50,7 +50,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-preparation",
-        "fingerprint": "sha256:49e5e47bc638396fc9b9123d8878e6f183409acc0d0de54005da8b1ed536fe3d"
+        "fingerprint": "sha256:ef89617791ef3214037b1855f57d07dcd85d2f39adbece68feb6964720c3afca"
       },
       "status": "injected",
       "evidenceRef": "ready-preparation-facts"
@@ -89,10 +89,9 @@
         "来源绑定",
         "可提交",
         "未执行",
-        "openneko_generation",
-        "submit",
-        "image-to-video",
-        "first-frame",
+        "素材职责",
+        "提示词",
+        "预期产物",
         "直接验收",
         "下游用途"
       ],
@@ -111,7 +110,14 @@
         "阻塞",
         "已授权执行",
         "已生成",
-        "生成完成"
+        "生成完成",
+        "openneko_generation",
+        "generationType",
+        "first-frame",
+        "\"request\"",
+        "\"operation\"",
+        "\"locator\"",
+        "jobId"
       ],
       "evidenceRef": "ready-preparation-facts"
     },

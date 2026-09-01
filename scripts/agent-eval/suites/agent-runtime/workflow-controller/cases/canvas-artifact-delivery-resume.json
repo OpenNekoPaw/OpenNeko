@@ -1,11 +1,11 @@
 {
   "schema": "neko.agent-eval.scenario",
-  "id": "workspace-board-delivery-resume",
+  "id": "canvas-artifact-delivery-resume",
   "suiteId": "agent-runtime.workflow-controller",
   "caseGroup": "failure",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Terminate the first Desktop Host after a valid Workspace Board delivery is queued, then let a second Host resume it.",
+    "userBehavior": "Terminate the first Desktop Host after a valid Canvas delivery is queued, then let a second Host resume it.",
     "canonicalPath": [
       "Host A enqueue",
       "Host A termination",
@@ -24,18 +24,14 @@
     "expectedResult": "Host B resumes the same delivery identity, applies exactly one Canvas batch, and reaches terminal idle.",
     "expectedFailure": "Changed identity, stale commit success, duplicate content node, missing receipt, or non-idle recovery fails."
   },
-  "fixtureRefs": [
-    "empty-workspace"
-  ],
+  "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "queue",
       "kind": "submit",
-      "prompt": "Create one named reviewable Markdown analysis artifact and wait until the Workspace Board delivery is queued."
+      "prompt": "Create one named reviewable Markdown analysis artifact and wait until the Canvas delivery is queued."
     },
     {
       "id": "first-idle",
@@ -69,7 +65,7 @@
     },
     {
       "id": "single-effect",
-      "kind": "workspace-board-projection",
+      "kind": "canvas-artifact-projection",
       "status": "projected",
       "targetKind": "workspace",
       "minNodeIds": 1,
@@ -80,10 +76,7 @@
     {
       "id": "terminal",
       "kind": "terminal-idle",
-      "concerns": [
-        "turnIdle",
-        "continuationQueueIdle"
-      ],
+      "concerns": ["turnIdle", "continuationQueueIdle"],
       "evidenceRef": "recovery-facts"
     }
   ],

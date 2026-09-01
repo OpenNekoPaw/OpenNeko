@@ -18,7 +18,7 @@
       "second terminal GenerateImage Tool call",
       "neko/generated workspace output",
       "stable unpromoted generated-output ContentLocator",
-      "Workspace Board projection"
+      "Canvas projection"
     ],
     "observables": [
       {
@@ -28,7 +28,7 @@
         "required": true
       }
     ],
-    "expectedResult": "The second turn is generated from the first assistant review, completes a second terminal GenerateImage Tool call, retains generated-output identity, and projects outputs to the Workspace Board without Asset lookup/import.",
+    "expectedResult": "The second turn is generated from the first assistant review, completes a second terminal GenerateImage Tool call, retains generated-output identity, and projects outputs to the Canvas without Asset lookup/import.",
     "expectedFailure": "Missing first review, static feedback, fewer than two terminal GenerateImage Tool results, pre-promotion Asset participation, multi-Board or runtime-draft routing, active-Canvas fallback, or incomplete idle fails."
   },
   "fixtureRefs": ["empty-workspace"],
@@ -38,7 +38,7 @@
     {
       "id": "round-one",
       "kind": "submit",
-      "prompt": "我批准以下低风险制作范围：生成一张猫玩红球的图片，保留为 neko/generated 下的 generated-output 并由默认 Workspace Board 展示；不要查询或导入资产库，不要选择其他画布或创建 runtime draft。执行生成，更新近期 TODO，等待真实结果，并评审构图、动作和明显问题。"
+      "prompt": "我批准以下低风险制作范围：生成一张猫玩红球的图片，保留为 neko/generated 下的 generated-output 并由默认 Canvas 展示；不要查询或导入资产库，不要选择其他画布或创建 runtime draft。执行生成，更新近期 TODO，等待真实结果，并评审构图、动作和明显问题。"
     },
     {
       "id": "round-one-idle",
@@ -112,8 +112,8 @@
       "evidenceRef": "workflow-facts"
     },
     {
-      "id": "workspace-board",
-      "kind": "workspace-board-projection",
+      "id": "canvas-delivery",
+      "kind": "canvas-artifact-projection",
       "status": "projected",
       "targetKind": "workspace",
       "minNodeIds": 2,

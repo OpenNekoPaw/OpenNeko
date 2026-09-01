@@ -21,8 +21,8 @@
         "required": true
       }
     ],
-    "expectedResult": "The Agent uses the catalog to separate the creative keyframe decision, preparation, and image operation handoff, then returns a submit-ready bound packet or the exact missing Tool binding without fabricating a provisional call packet.",
-    "expectedFailure": "Stopping at concept analysis, requiring the user to name Skills, emitting a generic workflow, inventing Tool parameters, returning a candidate call packet when blocked, or claiming generation success fails."
+    "expectedResult": "The Agent uses the catalog to separate the creative keyframe decision, preparation, and image operation handoff, then returns a creator-facing submit-ready bound packet or the exact missing Tool binding without fabricating a provisional call packet or printing runtime invocation details.",
+    "expectedFailure": "Stopping at concept analysis, requiring the user to name Skills, emitting a generic workflow, inventing Tool parameters, printing Tool schema or invocation JSON, returning a candidate call packet when blocked, or claiming generation success fails."
   },
   "fixtureRefs": ["creative-planning-workspace"],
   "runtimeProfileId": "markdown",
@@ -31,7 +31,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "读取 @screenplay.fountain。先把开场压缩成一个明确的关键帧决定，再准备成可交给当前 AI 图像能力的生产交接；不要执行生成，也不要让我点名能力。不要只写创意概述，只返回：镜头决定、来源绑定、生成交接、直接验收、下游用途。若 operation、参数或素材引用无法从当前 Tool schema 和真实来源绑定，保留对应字段并写精确阻塞，不得编造。"
+      "prompt": "读取 @screenplay.fountain。先把开场压缩成一个明确的关键帧决定，再准备成可交给当前 AI 图像能力的生产交接；不要执行生成，也不要让我点名能力。不要只写创意概述，只返回：镜头决定、来源绑定、生成交接、直接验收、下游用途。若能力或素材引用无法从当前 Tool schema 和真实来源绑定，写精确阻塞，不得编造；不要展示工具名、schema 字段、原始 locator、运行时 ID、参数表或调用 JSON。"
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
   ],
@@ -46,7 +46,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:142e97c87a0d168838197c0d74444e86b9fa86d9e869bbd53a5cc08f0f4f02c4"
+        "fingerprint": "sha256:e177f718a55f7899fcc794112ac669022ae65045ab3670d2d9bcd3afc7970241"
       },
       "status": "injected",
       "evidenceRef": "implicit-handoff-facts"
@@ -60,7 +60,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-preparation",
-        "fingerprint": "sha256:49e5e47bc638396fc9b9123d8878e6f183409acc0d0de54005da8b1ed536fe3d"
+        "fingerprint": "sha256:ef89617791ef3214037b1855f57d07dcd85d2f39adbece68feb6964720c3afca"
       },
       "status": "injected",
       "evidenceRef": "implicit-handoff-facts"
@@ -90,7 +90,18 @@
       "id": "no-false-success",
       "kind": "final-answer",
       "mode": "not-contains",
-      "text": ["已生成", "生成完成", "通用制作流程", "候选输入", "建议调用参数"],
+      "text": [
+        "已生成",
+        "生成完成",
+        "通用制作流程",
+        "候选输入",
+        "建议调用参数",
+        "openneko_generation",
+        "generationType",
+        "\"request\"",
+        "\"locator\"",
+        "jobId"
+      ],
       "evidenceRef": "implicit-handoff-facts"
     },
     {

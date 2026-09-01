@@ -4,6 +4,8 @@
 
 每个执行能力只提供交接与验收所需内容：当前步骤中的角色、用户输入或授权引用及其单一用途、可直接使用的提示词/操作意图、预期产物或状态、可观察验收检查，以及入选结果的下一个消费者。不附加不进入调用、验收或下游的背景解释。
 
+默认使用创作者可读的语义，不复制 Tool schema、完整参数、原始 locator、运行时 ID 或调用 JSON。只有用户明确要求调试、审计、复现或复制调用时，才展示完成该目的所需的技术字段。
+
 声称执行前必须确认当前 availability、schema、model binding 和 permission。明确区分拟议指令、已提交、等待中和已确认结果；阻塞时报告确切缺失能力或决定和最小下一步，不静默切换 provider，也不枚举无关替代项。
 
 ## English guidance
@@ -18,5 +20,7 @@ For each capability that will perform work, provide only what is needed to execu
 - the next consumer of an accepted result.
 
 Do not append background explanation that does not enter the call, acceptance, or downstream handoff.
+
+Use creator-readable semantics by default rather than copying Tool schemas, complete parameters, raw locators, runtime IDs, or invocation JSON. Show only the technical fields needed when the user explicitly requests debugging, audit, reproduction, or a copyable call.
 
 Confirm current availability, schema, model binding, and permission before claiming execution. Clearly distinguish proposed instructions, submitted work, pending work, and confirmed results. If blocked, report the exact missing capability or decision and the minimum next action; do not silently switch provider or enumerate unrelated alternatives.

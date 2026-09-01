@@ -10,7 +10,7 @@
       "provenance": "builtin",
       "rootId": "builtin-skills",
       "relativePath": "media-preparation",
-      "fingerprint": "sha256:49e5e47bc638396fc9b9123d8878e6f183409acc0d0de54005da8b1ed536fe3d"
+      "fingerprint": "sha256:ef89617791ef3214037b1855f57d07dcd85d2f39adbece68feb6964720c3afca"
     }
   },
   "runtimeProfiles": [
@@ -55,6 +55,12 @@
       "id": "missing-reference-preparation-inputs",
       "file": "cases/missing-reference-preparation-inputs.json",
       "group": "failure",
+      "visibility": "public"
+    },
+    {
+      "id": "explicit-copyable-video-call",
+      "file": "cases/explicit-copyable-video-call.json",
+      "group": "boundary",
       "visibility": "public"
     }
   ],

@@ -44,9 +44,9 @@ const RULES = Object.freeze([
     'packages/agent/runtime/src/runtime/turn/multimodal-context-packet',
     'apps/neko-desktop/src/main/desktop-dsh-session-host',
   ]),
-  rule('workspace-board-delivery', 'agent-runtime.workflow-controller', [
-    'packages/agent/runtime/src/application/dsh-workspace-board-artifact-delivery',
-    'apps/neko-desktop/src/main/desktop-dsh-workspace-board-delivery',
+  rule('canvas-artifact-delivery', 'agent-runtime.workflow-controller', [
+    'packages/agent/runtime/src/application/dsh-canvas-artifact-delivery',
+    'apps/neko-desktop/src/main/desktop-dsh-canvas-artifact-delivery',
   ]),
   regexRule(
     'portable-skill-content',
@@ -55,6 +55,7 @@ const RULES = Object.freeze([
   ),
   rule('prompt-composition', 'agent-runtime.prompt-composition', [
     'packages/agent/runtime/src/prompt/',
+    'packages/agent/runtime/src/application/dsh-conversation-turn-context',
     'packages/dsh-bridge/src/product-system-prompt',
   ]),
   rule('skill-runtime', 'agent-runtime.skill-runtime', [

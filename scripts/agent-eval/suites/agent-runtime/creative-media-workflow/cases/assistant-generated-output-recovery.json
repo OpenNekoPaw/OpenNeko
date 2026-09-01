@@ -12,7 +12,7 @@
       "terminal GenerateImage Tool call",
       "Assistant Generation owner",
       "generated-output ContentLocator",
-      "Assistant conversation-only artifact retention without Workspace Board delivery",
+      "Assistant conversation-only artifact retention without Canvas delivery",
       "Desktop application restart",
       "DSH Conversation transcript and artifact projection restore"
     ],
@@ -20,11 +20,11 @@
       {
         "ref": "assistant-generation-facts",
         "kind": "runtime-fact",
-        "description": "Assistant binding, exact provider/model Tool result, generated-output artifact identity, absence of Workspace Board delivery and diagnostics, application restart receipt, restored transcript and terminal continuation facts from the canonical Desktop owner.",
+        "description": "Assistant binding, exact provider/model Tool result, generated-output artifact identity, absence of Canvas delivery and diagnostics, application restart receipt, restored transcript and terminal continuation facts from the canonical Desktop owner.",
         "required": true
       }
     ],
-    "expectedResult": "One Entry Draft becomes an Assistant conversation, GenerateImage succeeds with a generated-output ContentLocator without Workspace Board delivery or diagnostics, and application restart restores the same conversation and artifact context before continuation.",
+    "expectedResult": "One Entry Draft becomes an Assistant conversation, GenerateImage succeeds with a generated-output ContentLocator without Canvas delivery or diagnostics, and application restart restores the same conversation and artifact context before continuation.",
     "expectedFailure": "A Project Workspace or Board path, missing Tool/Job/artifact identity, changed Assistant or Conversation identity, empty restored history, regenerated fallback output, runtime error or non-idle continuation fails visibly. Assistant user-root file containment remains a deterministic Node-owner gate because the current Evaluation artifact checker is fixture-Workspace scoped."
   },
   "fixtureRefs": ["empty-workspace"],

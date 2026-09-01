@@ -615,7 +615,7 @@ function isBoundaryCanonicalizerSurface(lowerFile, lowerLine) {
       'project-authoring/index.ts',
       'packages/local-metadata/src/storage.ts',
       'nkc/validator.ts',
-      'canvas-workspace-board.ts',
+      'canvas-workspace-delivery.ts',
       'canvasdurableresourceidentity.ts',
       'content-access-runtime.ts',
       'resource-cache-service.ts',

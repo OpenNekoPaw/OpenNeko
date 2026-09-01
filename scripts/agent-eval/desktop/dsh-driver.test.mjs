@@ -12,6 +12,7 @@ describe('canonical DSH Desktop evaluation driver', () => {
     expect(expression).not.toContain('agentLaunch');
     expect(expression).not.toContain('automation');
     expect(expression).toContain('DSH Desktop Session has no effective selected model.');
+    expect(expression).toContain('event.recommendedNextActionMarkdown');
   });
 
   it('selects an advertised model for the declared exact DSH Conversation turn state', () => {

@@ -81,8 +81,8 @@
       "visibility": "public"
     },
     {
-      "id": "workspace-board-delivery-resume",
-      "file": "cases/workspace-board-delivery-resume.json",
+      "id": "canvas-artifact-delivery-resume",
+      "file": "cases/canvas-artifact-delivery-resume.json",
       "group": "failure",
       "visibility": "public"
     },
