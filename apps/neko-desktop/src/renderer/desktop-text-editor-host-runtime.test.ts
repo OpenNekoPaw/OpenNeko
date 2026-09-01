@@ -30,6 +30,7 @@ describe('Desktop Text Editor renderer host runtime', () => {
     const bridge = {
       textEditor: {
         execute,
+        executeClipboardCommand: vi.fn(async (request) => ({ ...request, status: 'executed' })),
         subscribe: vi.fn(() => () => undefined),
       },
     } satisfies OpenNekoDesktopTextEditorBridge;
@@ -45,9 +46,14 @@ describe('Desktop Text Editor renderer host runtime', () => {
       expectedEditSequence: 0,
       changes: [{ from: 0, to: 0, insert: '# ' }],
     });
+    await runtime.executeClipboardCommand('copy');
 
     expect(execute.mock.calls[0]?.[0].identity).toEqual(originalIdentity);
     expect(execute.mock.calls[1]?.[0].identity).toEqual(restoredIdentity);
+    expect(bridge.textEditor.executeClipboardCommand).toHaveBeenCalledWith({
+      identity: restoredIdentity,
+      command: 'copy',
+    });
     expect(() =>
       runtime.applyEdits({
         identity: projection(originalIdentity.sessionId).identity,
@@ -58,7 +64,6 @@ describe('Desktop Text Editor renderer host runtime', () => {
       }),
     ).toThrow('command session identity is stale');
   });
-
 });
 
 function projection(sessionId: string): TextDocumentProjection {

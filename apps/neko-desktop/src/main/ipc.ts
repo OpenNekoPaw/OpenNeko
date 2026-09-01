@@ -345,6 +345,24 @@ export function registerDesktopIpc(
     }),
   );
   ipcMain.handle(
+    TEXT_EDITOR_HOST_CHANNELS.clipboardExecute,
+    (event: IpcMainInvokeEvent, payload: unknown) => {
+      const request = appHost.authorizeTextEditorClipboardCommand(requireSender(event), payload);
+      switch (request.command) {
+        case 'cut':
+          event.sender.cut();
+          break;
+        case 'copy':
+          event.sender.copy();
+          break;
+        case 'paste':
+          event.sender.paste();
+          break;
+      }
+      return { ...request, status: 'executed' as const };
+    },
+  );
+  ipcMain.handle(
     DESKTOP_CANVAS_CHANNELS.snapshotGet,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.getCanvasSnapshot(requireSender(event), payload, (canvasEvent) => {
@@ -513,6 +531,7 @@ export function registerDesktopIpc(
       DESKTOP_PREVIEW_CHANNELS.snapshotGet,
       DESKTOP_PREVIEW_CHANNELS.requestExecute,
       TEXT_EDITOR_HOST_CHANNELS.execute,
+      TEXT_EDITOR_HOST_CHANNELS.clipboardExecute,
       DESKTOP_CANVAS_CHANNELS.snapshotGet,
       DESKTOP_CANVAS_CHANNELS.materialActionsResolve,
       DESKTOP_CANVAS_CHANNELS.textFilePreviewRead,

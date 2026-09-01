@@ -49,9 +49,15 @@ describe('Desktop Text Editor recovery preload bridge', () => {
   it('accepts only projection recovery and rebinds events to the new exact session', async () => {
     const restoredIdentity = { ...originalIdentity, sessionId: 'text-document:new' };
     electron.invoke.mockImplementation(
-      async (channel: string, request: { readonly requestId: string }) => {
+      async (
+        channel: string,
+        request: { readonly requestId?: string; readonly command?: string },
+      ) => {
+        if (channel === TEXT_EDITOR_HOST_CHANNELS.clipboardExecute) {
+          return { identity: restoredIdentity, command: request.command, status: 'executed' };
+        }
         return {
-          requestId: request.requestId,
+          requestId: request.requestId ?? 'missing-request',
           identity: restoredIdentity,
           status: 'ready',
           projection: projection(restoredIdentity.sessionId),
@@ -82,6 +88,17 @@ describe('Desktop Text Editor recovery preload bridge', () => {
     };
     electron.listeners.get(TEXT_EDITOR_HOST_CHANNELS.projectionEvent)?.({}, event);
     expect(listener).toHaveBeenCalledWith(event);
+
+    await expect(
+      bridge.textEditor.executeClipboardCommand({ identity: restoredIdentity, command: 'copy' }),
+    ).resolves.toEqual({ identity: restoredIdentity, command: 'copy', status: 'executed' });
+    expect(electron.invoke).toHaveBeenCalledWith(TEXT_EDITOR_HOST_CHANNELS.clipboardExecute, {
+      identity: restoredIdentity,
+      command: 'copy',
+    });
+    await expect(
+      bridge.textEditor.executeClipboardCommand({ identity: originalIdentity, command: 'copy' }),
+    ).rejects.toThrow('requires a current session');
 
     await expect(
       bridge.textEditor.execute({

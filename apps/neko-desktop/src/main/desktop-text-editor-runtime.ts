@@ -17,7 +17,9 @@ import {
   TextDocumentError,
   TextDocumentSession,
   parseTextEditorHostRequest,
+  parseTextEditorClipboardCommandRequest,
   sameTextEditorRuntimeIdentity,
+  type TextEditorClipboardCommandRequest,
   type TextEditorMarkdownReferenceCatalog,
   type TextEditorHostResult,
   type TextEditorProjectionEvent,
@@ -331,6 +333,20 @@ export class DesktopTextEditorRuntime {
         diagnostic: error.diagnostic,
       };
     }
+  }
+
+  authorizeClipboardCommand(windowId: string, value: unknown): TextEditorClipboardCommandRequest {
+    this.requireActive();
+    const request = parseTextEditorClipboardCommandRequest(value);
+    const binding = this.bindings.get(request.identity.sessionId);
+    if (
+      !binding ||
+      binding.runtimeIdentity.windowId !== windowId ||
+      !sameTextEditorRuntimeIdentity(binding.runtimeIdentity, request.identity)
+    ) {
+      throw new Error('Desktop Text Editor clipboard command has no current owner-bound session.');
+    }
+    return request;
   }
 
   async subscribe(

@@ -37,12 +37,29 @@ export const TEXT_EDITOR_HOST_ROUTES = {
 
 export const TEXT_EDITOR_HOST_CHANNELS = {
   execute: 'openneko:text-editor:execute',
+  clipboardExecute: 'openneko:text-editor:clipboard:execute',
   projectionEvent: 'openneko:text-editor:projection:event',
 } as const;
+
+export const TEXT_EDITOR_CLIPBOARD_COMMANDS = ['cut', 'copy', 'paste'] as const;
+
+export type TextEditorClipboardCommand = (typeof TEXT_EDITOR_CLIPBOARD_COMMANDS)[number];
+
+export interface TextEditorClipboardCommandRequest {
+  readonly identity: TextEditorRuntimeIdentity;
+  readonly command: TextEditorClipboardCommand;
+}
+
+export interface TextEditorClipboardCommandResult extends TextEditorClipboardCommandRequest {
+  readonly status: 'executed';
+}
 
 export interface OpenNekoDesktopTextEditorBridge {
   readonly textEditor: {
     execute(request: TextEditorHostRequest): Promise<TextEditorHostResult>;
+    executeClipboardCommand(
+      request: TextEditorClipboardCommandRequest,
+    ): Promise<TextEditorClipboardCommandResult>;
     subscribe(
       identity: TextEditorRuntimeIdentity,
       listener: (event: TextEditorProjectionEvent) => void,
@@ -350,6 +367,32 @@ export function parseTextEditorProjectionEvent(value: unknown): TextEditorProjec
   return { sequence, identity, projection };
 }
 
+export function parseTextEditorClipboardCommandRequest(
+  value: unknown,
+): TextEditorClipboardCommandRequest {
+  const record = requireRecord(value, 'Text Editor clipboard command must be an object.');
+  requireExactKeys(record, ['identity', 'command']);
+  return {
+    identity: parseTextEditorRuntimeIdentity(record['identity']),
+    command: requireClipboardCommand(record['command']),
+  };
+}
+
+export function parseTextEditorClipboardCommandResult(
+  value: unknown,
+): TextEditorClipboardCommandResult {
+  const record = requireRecord(value, 'Text Editor clipboard result must be an object.');
+  requireExactKeys(record, ['identity', 'command', 'status']);
+  if (record['status'] !== 'executed') {
+    throw invalid('Text Editor clipboard result status is invalid.');
+  }
+  return {
+    identity: parseTextEditorRuntimeIdentity(record['identity']),
+    command: requireClipboardCommand(record['command']),
+    status: record['status'],
+  };
+}
+
 function requireProjectionOwner(
   identity: TextEditorRuntimeIdentity,
   projection: TextDocumentProjection,
@@ -548,6 +591,11 @@ function requireRoute(value: unknown): TextEditorHostRoute {
       return value;
   }
   throw invalid('Text Editor Host route is invalid.');
+}
+
+function requireClipboardCommand(value: unknown): TextEditorClipboardCommand {
+  if (value === 'cut' || value === 'copy' || value === 'paste') return value;
+  throw invalid('Text Editor clipboard command is invalid.');
 }
 
 function requireMediaOwner(

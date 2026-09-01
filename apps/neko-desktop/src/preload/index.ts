@@ -101,6 +101,8 @@ import type { PreviewRuntimeIdentity } from '@neko/preview-domain';
 import {
   TEXT_EDITOR_HOST_CHANNELS,
   TEXT_EDITOR_HOST_ROUTES,
+  parseTextEditorClipboardCommandRequest,
+  parseTextEditorClipboardCommandResult,
   parseTextEditorHostRequest,
   parseTextEditorHostResult,
   parseTextEditorProjectionEvent,
@@ -1642,6 +1644,26 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
   textEditor: {
+    async executeClipboardCommand(value) {
+      const request = parseTextEditorClipboardCommandRequest(value);
+      const key = textEditorIdentityKey(request.identity);
+      const identity = currentTextEditorIdentities.get(key);
+      if (!identity || !sameTextEditorRuntimeIdentity(identity, request.identity)) {
+        throw new Error('Desktop Text Editor clipboard command requires a current session.');
+      }
+      const response: unknown = await ipcRenderer.invoke(
+        TEXT_EDITOR_HOST_CHANNELS.clipboardExecute,
+        request,
+      );
+      const result = parseTextEditorClipboardCommandResult(response);
+      if (
+        result.command !== request.command ||
+        !sameTextEditorRuntimeIdentity(result.identity, request.identity)
+      ) {
+        throw new Error('Desktop Text Editor clipboard result identity does not match.');
+      }
+      return result;
+    },
     async execute(value) {
       const request = parseTextEditorHostRequest(value);
       const response: unknown = await ipcRenderer.invoke(

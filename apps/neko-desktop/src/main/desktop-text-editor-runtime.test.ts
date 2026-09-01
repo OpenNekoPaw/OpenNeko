@@ -92,6 +92,24 @@ describe('DesktopTextEditorRuntime', () => {
       documentId: 'notes/readme.md',
       editorSessionId: opened.identity.sessionId,
     });
+    expect(
+      runtime.authorizeClipboardCommand('window-1', {
+        identity: opened.identity,
+        command: 'copy',
+      }),
+    ).toEqual({ identity: opened.identity, command: 'copy' });
+    expect(() =>
+      runtime.authorizeClipboardCommand('window-1', {
+        identity: { ...opened.identity, rendererSessionId: 'renderer-stale' },
+        command: 'copy',
+      }),
+    ).toThrow('no current owner-bound session');
+    expect(() =>
+      runtime.authorizeClipboardCommand('window-other', {
+        identity: opened.identity,
+        command: 'copy',
+      }),
+    ).toThrow('no current owner-bound session');
 
     const edited = await runtime.execute('window-1', {
       route: TEXT_EDITOR_HOST_ROUTES.editsApply,
