@@ -19,7 +19,6 @@ export interface CanvasWorkspaceIndexReadPort {
 
 export interface CanvasWorkspaceIndexServiceOptions {
   readonly read: CanvasWorkspaceIndexReadPort;
-  readonly defaultCanvasLabel?: string;
 }
 
 export interface CanvasWorkspaceIndexService {
@@ -33,8 +32,6 @@ export interface CanvasWorkspaceIndexService {
 export function createCanvasWorkspaceIndexService(
   options: CanvasWorkspaceIndexServiceOptions,
 ): CanvasWorkspaceIndexService {
-  const defaultCanvasLabel = options.defaultCanvasLabel?.trim() || 'Workspace Board';
-
   return {
     async readCatalog(workspaceId) {
       const defaultTarget = createDefaultCanvasWorkspaceTarget(workspaceId);
@@ -42,7 +39,7 @@ export function createCanvasWorkspaceIndexService(
       const identities = await options.read.listExactCanvasDocuments(workspaceId);
       const seen = new Set<string>();
       const optionsList: CanvasWorkspaceContextCatalogOption[] = [
-        { target: defaultTarget, label: defaultCanvasLabel },
+        { target: defaultTarget, label: canvasFileName(defaultTarget.canvasId) },
       ];
       for (const identity of identities) {
         if (seen.has(identity)) {

@@ -8,21 +8,21 @@ import {
   loadNkc,
   saveNkc,
   type CanvasWorkspaceProjectionRequest,
-  type CanvasWorkspaceBoardLoadedDocument,
-  type CanvasWorkspaceBoardMutationPort,
+  type CanvasWorkspaceLoadedDocument,
+  type CanvasWorkspaceMutationPort,
 } from '@neko/canvas-domain';
 import type { NekoHostPorts } from '@neko/host/ports';
 
-export interface WorkspaceBoardNodeMutationOptions {
+export interface CanvasWorkspaceNodeMutationOptions {
   readonly workspace: AssetWorkspaceResolution;
   readonly host: Pick<NekoHostPorts, 'files'>;
   readonly createIdentity?: () => string;
 }
 
-export class WorkspaceBoardNodeMutation implements CanvasWorkspaceBoardMutationPort {
+export class CanvasWorkspaceNodeMutation implements CanvasWorkspaceMutationPort {
   private readonly createIdentity: () => string;
 
-  constructor(private readonly options: WorkspaceBoardNodeMutationOptions) {
+  constructor(private readonly options: CanvasWorkspaceNodeMutationOptions) {
     this.createIdentity = options.createIdentity ?? randomUUID;
   }
 
@@ -36,29 +36,29 @@ export class WorkspaceBoardNodeMutation implements CanvasWorkspaceBoardMutationP
   async loadLatest(input: {
     readonly documentUri: string;
     readonly createIfMissing: boolean;
-  }): Promise<CanvasWorkspaceBoardLoadedDocument> {
+  }): Promise<CanvasWorkspaceLoadedDocument> {
     const documentPath = this.requireDocumentPath(input.documentUri);
     try {
       const file = await this.options.host.files.stat(documentPath);
-      if (file.type !== 'file') throw new Error('Workspace Board target is not a file.');
+      if (file.type !== 'file') throw new Error('Canvas target is not a file.');
     } catch (error) {
       if (!isMissingPathError(error) || !input.createIfMissing) throw error;
       return {
         documentUri: input.documentUri,
-        canvasData: createEmptyCanvasData(`${this.options.workspace.displayName} Board`),
+        canvasData: createEmptyCanvasData(`${this.options.workspace.displayName} Canvas`),
         exists: false,
       };
     }
     const loaded = loadNkc(await this.options.host.files.readText(documentPath));
     if (!loaded.validation.valid) {
-      throw new Error('Workspace Board document is invalid and was not modified.');
+      throw new Error('Canvas document is invalid and was not modified.');
     }
     return { documentUri: input.documentUri, canvasData: loaded.data, exists: true };
   }
 
   async saveAtomic(input: {
     readonly documentUri: string;
-    readonly canvasData: CanvasWorkspaceBoardLoadedDocument['canvasData'];
+    readonly canvasData: CanvasWorkspaceLoadedDocument['canvasData'];
     readonly assertWriter?: () => Promise<void>;
   }): Promise<void> {
     const documentPath = this.requireDocumentPath(input.documentUri);
@@ -99,18 +99,16 @@ export class WorkspaceBoardNodeMutation implements CanvasWorkspaceBoardMutationP
     try {
       candidate = fileURLToPath(documentUri);
     } catch {
-      throw new Error('Workspace Board mutation requires a local file document URI.');
+      throw new Error('Canvas mutation requires a local file document URI.');
     }
     const workspacePath = path.resolve(this.options.workspace.workspacePath);
     const resolved = path.resolve(candidate);
     const relative = path.relative(workspacePath, resolved);
     if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
-      throw new Error('Workspace Board mutation target escapes the authorized Workspace.');
+      throw new Error('Canvas mutation target escapes the authorized Workspace.');
     }
     if (relative.endsWith('.nkc') === false) {
-      throw new Error(
-        'Workspace Board mutation target must be a workspace-relative .nkc document.',
-      );
+      throw new Error('Canvas mutation target must be a workspace-relative .nkc document.');
     }
     return resolved;
   }
@@ -119,7 +117,7 @@ export class WorkspaceBoardNodeMutation implements CanvasWorkspaceBoardMutationP
 async function assertNotSymbolicLink(targetPath: string): Promise<void> {
   try {
     if ((await lstat(targetPath)).isSymbolicLink()) {
-      throw new Error('Workspace Board symbolic-link targets are read-only.');
+      throw new Error('Canvas symbolic-link targets are read-only.');
     }
   } catch (error) {
     if (isMissingPathError(error)) return;

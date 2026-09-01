@@ -57,7 +57,7 @@ import {
   createDshDomainConversationService,
   createDshConversationTurnContextResolver,
   createDshTurnCanvasTargetOwner,
-  createDshWorkspaceBoardArtifactDeliveryService,
+  createDshCanvasArtifactDeliveryService,
   projectDshConversationTitle,
   type DshDomainConversationService,
 } from '@neko/agent-runtime/application';
@@ -88,9 +88,9 @@ import {
 import { createDesktopGenerationExecutionProviderResolver } from './desktop-generation-execution-provider';
 import { createEncryptedDesktopSecretPort } from './encrypted-desktop-secret-port';
 import {
-  createDshWorkspaceBoardContentRead,
-  DesktopDshWorkspaceBoardDelivery,
-} from './desktop-dsh-workspace-board-delivery';
+  createDshCanvasArtifactContentRead,
+  DesktopDshCanvasArtifactDelivery,
+} from './desktop-dsh-canvas-artifact-delivery';
 import { closeDesktopWindows } from './window-lifecycle';
 import {
   DESKTOP_STATE_AUTHORITY_KEYS,
@@ -1440,7 +1440,7 @@ async function startDesktop(): Promise<void> {
     releasePreviewResourceProjection: (descriptorId) =>
       canvasPreviewResources.release(descriptorId),
   });
-  const dshWorkspaceBoardDelivery = new DesktopDshWorkspaceBoardDelivery({
+  const dshCanvasArtifactDelivery = new DesktopDshCanvasArtifactDelivery({
     applicationInstanceId,
     metadataStore: localMetadataStore,
     workspaceRegistry,
@@ -1448,7 +1448,7 @@ async function startDesktop(): Promise<void> {
     coordinateCanvasMutation: (target, operation) =>
       canvasRuntime.coordinateCanvasDocumentMutation(target, operation),
     createContentRead: (workspacePath) =>
-      createDshWorkspaceBoardContentRead({
+      createDshCanvasArtifactContentRead({
         workspacePath,
         documentEntryReader: {
           readEntry: (sourcePath, entryPath) =>
@@ -1672,13 +1672,13 @@ async function startDesktop(): Promise<void> {
   const agentConversationContexts = createPersistentAgentConversationContextAuthority({
     metadataStore: localMetadataStore,
   });
-  const dshWorkspaceBoardArtifactDelivery = createDshWorkspaceBoardArtifactDeliveryService({
+  const dshCanvasArtifactDeliveryService = createDshCanvasArtifactDeliveryService({
     contexts: agentConversationContexts,
-    delivery: dshWorkspaceBoardDelivery,
-    publication: dshWorkspaceBoardDelivery,
+    delivery: dshCanvasArtifactDelivery,
+    publication: dshCanvasArtifactDelivery,
     diagnostics: {
       report: (diagnostic) =>
-        logger.warn('DSH Workspace Board skipped an invalid content Tool projection.', {
+        logger.warn('DSH Canvas skipped an invalid content Tool projection.', {
           code: diagnostic.code,
           toolCallId: diagnostic.toolCallId,
           toolName: diagnostic.toolName,
@@ -2218,7 +2218,7 @@ async function startDesktop(): Promise<void> {
       models: applicationAgentConfig.getEnabledModels(),
       credentials: providerCredentials,
     });
-  const dshWorkspaceBoardDeliveryTrigger: {
+  const dshCanvasArtifactDeliveryTrigger: {
     current?: (
       dshSessionId: string,
       conversationId: string,
@@ -2302,7 +2302,7 @@ async function startDesktop(): Promise<void> {
               });
               return { status: 'blocked', diagnostic };
             }
-            return dshWorkspaceBoardDelivery.projectGenerationJob({
+            return dshCanvasArtifactDelivery.projectGenerationJob({
               workspaceId: context.binding.workspaceId,
               dshSessionId: request.sessionId,
               turn: request.turn,
@@ -2361,10 +2361,10 @@ async function startDesktop(): Promise<void> {
             notification.update.sessionUpdate === 'tool_call_update' &&
             notification.update.status === 'completed'
           ) {
-            if (dshWorkspaceBoardDeliveryTrigger.current === undefined) {
-              throw new Error('DSH Workspace Board artifact delivery is not initialized.');
+            if (dshCanvasArtifactDeliveryTrigger.current === undefined) {
+              throw new Error('DSH Canvas artifact delivery is not initialized.');
             }
-            await dshWorkspaceBoardDeliveryTrigger.current(
+            await dshCanvasArtifactDeliveryTrigger.current(
               notification.sessionId,
               binding.conversationId,
               {
@@ -2400,11 +2400,11 @@ async function startDesktop(): Promise<void> {
             if (terminal?.kind !== 'turn' || terminal.phase !== 'end') {
               throw new Error('DSH turn/end projected an invalid turn identity.');
             }
-            if (dshWorkspaceBoardDeliveryTrigger.current === undefined) {
-              throw new Error('DSH Workspace Board artifact delivery is not initialized.');
+            if (dshCanvasArtifactDeliveryTrigger.current === undefined) {
+              throw new Error('DSH Canvas artifact delivery is not initialized.');
             }
             try {
-              await dshWorkspaceBoardDeliveryTrigger.current(
+              await dshCanvasArtifactDeliveryTrigger.current(
                 notification.sessionId,
                 binding.conversationId,
                 { kind: 'completed-turn', turn: terminal.turn },
@@ -2443,11 +2443,11 @@ async function startDesktop(): Promise<void> {
   });
   dshDialogueCapabilities.current = () => dshProduct.runtime.client.readProviderCapabilities();
   dshProviderRefresh.current = () => dshProduct.runtime.deferConfigurationRefresh();
-  dshWorkspaceBoardDeliveryTrigger.current = async (dshSessionId, conversationId, trigger) => {
+  dshCanvasArtifactDeliveryTrigger.current = async (dshSessionId, conversationId, trigger) => {
     try {
       const snapshot = dshProduct.runtime.client.projection.snapshot(dshSessionId);
       if (trigger.kind === 'completed-turn') {
-        await dshWorkspaceBoardArtifactDelivery.deliverTerminal({
+        await dshCanvasArtifactDeliveryService.deliverTerminal({
           conversationId,
           dshSessionId,
           turn: trigger.turn,
@@ -2462,7 +2462,7 @@ async function startDesktop(): Promise<void> {
       if (tool?.kind !== 'tool') {
         throw new Error(`DSH Tool '${trigger.toolCallId}' has no projected turn identity.`);
       }
-      await dshWorkspaceBoardArtifactDelivery.deliverCompletedTool({
+      await dshCanvasArtifactDeliveryService.deliverCompletedTool({
         conversationId,
         dshSessionId,
         toolCallId: trigger.toolCallId,
@@ -2471,7 +2471,7 @@ async function startDesktop(): Promise<void> {
       });
     } catch (error) {
       host.diagnostics?.report({
-        code: 'dsh-workspace-board-artifact-delivery-failed',
+        code: 'dsh-canvas-artifact-delivery-failed',
         severity: 'error',
         message: error instanceof Error ? error.message : String(error),
         metadata: { dshSessionId, conversationId },
@@ -2654,7 +2654,7 @@ async function startDesktop(): Promise<void> {
     turnCanvasTargets: dshTurnCanvasTargets,
     promptContext: dshPromptContext,
     promptImages: dshPromptImages,
-    terminalArtifacts: dshWorkspaceBoardArtifactDelivery,
+    terminalArtifacts: dshCanvasArtifactDeliveryService,
     openTerminalArtifact: async ({ windowId, rendererSessionId, conversationId, reference }) => {
       const context = await agentConversationContexts.readContext(conversationId);
       if (context?.kind !== 'workspace') {

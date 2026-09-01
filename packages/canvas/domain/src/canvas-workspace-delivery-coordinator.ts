@@ -6,21 +6,21 @@ import {
   type CanvasWorkspaceProjectionDiagnostic,
   type CanvasWorkspaceProjectionRequest,
   type CanvasWorkspaceProjectionResult,
-} from './types/canvas-workspace-board';
-import { planCanvasWorkspaceBoardProjection } from './utils/canvasWorkspaceBoardProjection';
+} from './types/canvas-workspace-delivery';
+import { planCanvasArtifactProjection } from './utils/canvasArtifactProjection';
 import { type CanvasData } from './types/canvas';
 import {
-  WorkspaceBoardDeliveryLedger,
-  type WorkspaceBoardDeliveryTask,
-} from './workspace-board-delivery-ledger';
+  CanvasWorkspaceDeliveryLedger,
+  type CanvasWorkspaceDeliveryTask,
+} from './canvas-workspace-delivery-ledger';
 
-export interface CanvasWorkspaceBoardLoadedDocument {
+export interface CanvasWorkspaceLoadedDocument {
   readonly documentUri: string;
   readonly canvasData: CanvasData;
   readonly exists: boolean;
 }
 
-export interface CanvasWorkspaceBoardMutationPort {
+export interface CanvasWorkspaceMutationPort {
   coordinate<TResult>(
     target: CanvasWorkspaceProjectionRequest['target'],
     operation: () => Promise<TResult>,
@@ -28,7 +28,7 @@ export interface CanvasWorkspaceBoardMutationPort {
   loadLatest(input: {
     readonly documentUri: string;
     readonly createIfMissing: boolean;
-  }): Promise<CanvasWorkspaceBoardLoadedDocument>;
+  }): Promise<CanvasWorkspaceLoadedDocument>;
   saveAtomic(input: {
     readonly documentUri: string;
     readonly canvasData: CanvasData;
@@ -36,20 +36,20 @@ export interface CanvasWorkspaceBoardMutationPort {
   }): Promise<void>;
 }
 
-export interface WorkspaceBoardDeliveryCoordinatorOptions {
-  readonly ledger: WorkspaceBoardDeliveryLedger;
-  readonly mutation: CanvasWorkspaceBoardMutationPort;
+export interface CanvasWorkspaceDeliveryCoordinatorOptions {
+  readonly ledger: CanvasWorkspaceDeliveryLedger;
+  readonly mutation: CanvasWorkspaceMutationPort;
   readonly holderId: string;
   readonly leaseDurationMs?: number;
   readonly now?: () => number;
 }
 
-export class WorkspaceBoardDeliveryCoordinator {
+export class CanvasWorkspaceDeliveryCoordinator {
   private readonly leaseDurationMs: number;
   private retainedWriter: CanvasWorkspaceDeliveryClaim | undefined;
   private operationQueue: Promise<void> = Promise.resolve();
 
-  constructor(private readonly options: WorkspaceBoardDeliveryCoordinatorOptions) {
+  constructor(private readonly options: CanvasWorkspaceDeliveryCoordinatorOptions) {
     this.leaseDurationMs = options.leaseDurationMs ?? 15_000;
   }
 
@@ -136,7 +136,7 @@ export class WorkspaceBoardDeliveryCoordinator {
   }
 
   private async projectClaimed(
-    task: WorkspaceBoardDeliveryTask,
+    task: CanvasWorkspaceDeliveryTask,
     writer: CanvasWorkspaceDeliveryClaim,
   ): Promise<CanvasWorkspaceProjectionResult> {
     const request = task.request;
@@ -190,7 +190,7 @@ export class WorkspaceBoardDeliveryCoordinator {
     readonly connectionIds: readonly string[];
   }> {
     const loaded = await this.options.mutation.loadLatest({ documentUri, createIfMissing });
-    const plan = planCanvasWorkspaceBoardProjection(loaded.canvasData, request);
+    const plan = planCanvasArtifactProjection(loaded.canvasData, request);
     if (plan.status === 'noop') {
       return {
         status: 'noop',
@@ -221,10 +221,10 @@ function createReceipt(
   completedAt: number,
 ): CanvasWorkspaceDeliveryReceipt {
   if (result.status !== 'projected' && result.status !== 'noop') {
-    throw new Error(`Canvas Board receipt cannot be created from ${result.status}.`);
+    throw new Error(`Canvas delivery receipt cannot be created from ${result.status}.`);
   }
   if (result.writerLeaseId === undefined) {
-    throw new Error('Canvas Board receipt requires the exact writer lease identity.');
+    throw new Error('Canvas delivery receipt requires the exact writer lease identity.');
   }
   return {
     deliveryId: request.process.deliveryId,

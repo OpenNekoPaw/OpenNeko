@@ -85,6 +85,7 @@ export type DshSessionHostEvent =
       readonly messageId: string;
       readonly state: 'streaming' | 'final';
       readonly artifact?: DshSessionTerminalArtifactReference;
+      readonly recommendedNextActionMarkdown?: string;
     }
   | {
       readonly kind: 'thought';
@@ -1318,9 +1319,37 @@ function parseEvent(value: unknown): DshSessionHostEvent {
     if (record.role !== 'assistant') throw new Error('DSH Session message role is unsupported.');
     requireAllowedKeys(
       record,
-      ['kind', 'role', 'turn', 'step', 'text', 'messageId', 'state', 'artifact'],
+      [
+        'kind',
+        'role',
+        'turn',
+        'step',
+        'text',
+        'messageId',
+        'state',
+        'artifact',
+        'recommendedNextActionMarkdown',
+      ],
       ['kind', 'role', 'turn', 'step', 'text', 'messageId', 'state'],
     );
+    const state = parseAssistantOutputState(record.state);
+    const artifact =
+      record.artifact === undefined ? undefined : parseTerminalArtifactReference(record.artifact);
+    const recommendedNextActionMarkdown =
+      record.recommendedNextActionMarkdown === undefined
+        ? undefined
+        : requireIdentity(
+            record.recommendedNextActionMarkdown,
+            'event.recommendedNextActionMarkdown',
+          );
+    if (
+      recommendedNextActionMarkdown !== undefined &&
+      (artifact === undefined || state !== 'final')
+    ) {
+      throw new Error(
+        'DSH Session recommended next action requires a final assistant artifact event.',
+      );
+    }
     return {
       kind: 'message',
       role: 'assistant',
@@ -1328,10 +1357,9 @@ function parseEvent(value: unknown): DshSessionHostEvent {
       step: requireNonNegativeInteger(record.step, 'event.step'),
       text: requireIdentity(record.text, 'event.text'),
       messageId: requireIdentity(record.messageId, 'event.messageId'),
-      state: parseAssistantOutputState(record.state),
-      ...(record.artifact === undefined
-        ? {}
-        : { artifact: parseTerminalArtifactReference(record.artifact) }),
+      state,
+      ...(artifact === undefined ? {} : { artifact }),
+      ...(recommendedNextActionMarkdown === undefined ? {} : { recommendedNextActionMarkdown }),
     };
   }
   if (record.kind === 'thought') {

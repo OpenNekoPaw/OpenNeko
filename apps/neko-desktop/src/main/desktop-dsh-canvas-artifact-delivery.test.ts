@@ -3,26 +3,26 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
-import { createEmptyCanvasData, planCanvasWorkspaceBoardProjection } from '@neko/canvas-domain';
+import { createEmptyCanvasData, planCanvasArtifactProjection } from '@neko/canvas-domain';
 import { NodeAuthorizedWorkspaceWriter } from '@neko/content-domain/node';
-import type { DshWorkspaceBoardArtifactDeliveryInput } from '@neko/agent-runtime/application';
+import type { DshCanvasArtifactDeliveryInput } from '@neko/agent-runtime/application';
 import type { LocalMetadataStore } from '@neko/local-metadata';
 import { ConsoleLogger } from '@neko/shared/logger';
 import {
-  DesktopDshWorkspaceBoardDelivery,
-  createDshWorkspaceBoardContentRead,
-  createDshWorkspaceBoardProjectionRequest,
+  DesktopDshCanvasArtifactDelivery,
+  createDshCanvasArtifactContentRead,
+  createDshCanvasArtifactProjectionRequest,
   publishDshDurableMarkdownArtifact,
   resolveDshDurableMarkdownArtifact,
-  resolveDshWorkspaceBoardResourceFingerprints,
-} from './desktop-dsh-workspace-board-delivery';
+  resolveDshCanvasArtifactResourceFingerprints,
+} from './desktop-dsh-canvas-artifact-delivery';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 
-describe('Desktop DSH Workspace Board projection request', () => {
+describe('Desktop DSH Canvas projection request', () => {
   it('uses a stable completed-Tool identity and reuses the durable file node by ContentLocator', () => {
     const input = deliveryInput('tool-1');
-    const first = createDshWorkspaceBoardProjectionRequest(input, workspace());
-    const replay = createDshWorkspaceBoardProjectionRequest(input, workspace());
+    const first = createDshCanvasArtifactProjectionRequest(input, workspace());
+    const replay = createDshCanvasArtifactProjectionRequest(input, workspace());
 
     expect(first).toEqual(replay);
     expect(first.process.deliveryId).toMatch(/^dsh-tool:/u);
@@ -32,8 +32,8 @@ describe('Desktop DSH Workspace Board projection request', () => {
       provenance: { role: 'analysis' },
     });
 
-    const projected = planCanvasWorkspaceBoardProjection(createEmptyCanvasData('Workspace'), first);
-    const replayed = planCanvasWorkspaceBoardProjection(projected.canvasData, replay);
+    const projected = planCanvasArtifactProjection(createEmptyCanvasData('Workspace'), first);
+    const replayed = planCanvasArtifactProjection(projected.canvasData, replay);
     expect(projected.status).toBe('projected');
     expect(projected.canvasData.nodes).toEqual([
       expect.objectContaining({
@@ -48,8 +48,8 @@ describe('Desktop DSH Workspace Board projection request', () => {
   });
 
   it('uses distinct delivery identities for distinct Tool calls', () => {
-    const first = createDshWorkspaceBoardProjectionRequest(deliveryInput('tool-1'), workspace());
-    const second = createDshWorkspaceBoardProjectionRequest(deliveryInput('tool-2'), workspace());
+    const first = createDshCanvasArtifactProjectionRequest(deliveryInput('tool-1'), workspace());
+    const second = createDshCanvasArtifactProjectionRequest(deliveryInput('tool-2'), workspace());
 
     expect(first.process.deliveryId).not.toBe(second.process.deliveryId);
   });
@@ -63,9 +63,9 @@ describe('Desktop DSH Workspace Board projection request', () => {
         ...artifact,
         mimeType: 'text/markdown' as const,
       })),
-    } satisfies DshWorkspaceBoardArtifactDeliveryInput;
-    const terminal = createDshWorkspaceBoardProjectionRequest(terminalInput, workspace());
-    const tool = createDshWorkspaceBoardProjectionRequest(deliveryInput('tool-1'), workspace());
+    } satisfies DshCanvasArtifactDeliveryInput;
+    const terminal = createDshCanvasArtifactProjectionRequest(terminalInput, workspace());
+    const tool = createDshCanvasArtifactProjectionRequest(deliveryInput('tool-1'), workspace());
 
     expect(terminal.process.deliveryId).toMatch(/^dsh-turn:/u);
     expect(terminal.process.deliveryId).not.toBe(tool.process.deliveryId);
@@ -73,7 +73,7 @@ describe('Desktop DSH Workspace Board projection request', () => {
   });
 
   it('resolves freshness for both source and explicitly authored artifacts', async () => {
-    const resolved = await resolveDshWorkspaceBoardResourceFingerprints(deliveryInput('tool-1'), {
+    const resolved = await resolveDshCanvasArtifactResourceFingerprints(deliveryInput('tool-1'), {
       stat: async (locator) => ({
         status: 'ready',
         locator,
@@ -89,7 +89,7 @@ describe('Desktop DSH Workspace Board projection request', () => {
   });
 
   it('projects to the exact Canvas admitted for the Turn', () => {
-    const request = createDshWorkspaceBoardProjectionRequest(
+    const request = createDshCanvasArtifactProjectionRequest(
       {
         ...deliveryInput('tool-1'),
         canvasTurnTarget: {
@@ -131,7 +131,7 @@ describe('Desktop DSH Workspace Board projection request', () => {
       workspaceRoot: workspacePath,
       logger: new ConsoleLogger('DesktopDshExactCanvasDeliveryTest'),
     });
-    const contentRead = createDshWorkspaceBoardContentRead({
+    const contentRead = createDshCanvasArtifactContentRead({
       workspacePath,
       documentEntryReader: {
         readEntry: async () => {
@@ -139,7 +139,7 @@ describe('Desktop DSH Workspace Board projection request', () => {
         },
       },
     });
-    const delivery = new DesktopDshWorkspaceBoardDelivery({
+    const delivery = new DesktopDshCanvasArtifactDelivery({
       applicationInstanceId: 'app-1',
       metadataStore,
       workspaceRegistry: {
@@ -180,10 +180,10 @@ describe('Desktop DSH Workspace Board projection request', () => {
   });
 
   it('resolves document-entry ContentLocators through the canonical entry reader', async () => {
-    const workspacePath = await mkdtemp(join(tmpdir(), 'openneko-dsh-board-entry-'));
+    const workspacePath = await mkdtemp(join(tmpdir(), 'openneko-dsh-canvas-entry-'));
     const sourcePath = join(workspacePath, 'book.epub');
     await writeFile(sourcePath, 'container');
-    const reader = createDshWorkspaceBoardContentRead({
+    const reader = createDshCanvasArtifactContentRead({
       workspacePath,
       documentEntryReader: {
         readEntry: async (actualSourcePath, entryPath) => {
@@ -208,7 +208,7 @@ describe('Desktop DSH Workspace Board projection request', () => {
 
   it('publishes Markdown once and preserves user edits when the record is delivered again', async () => {
     const workspacePath = await mkdtemp(join(tmpdir(), 'openneko-dsh-markdown-'));
-    const read = createDshWorkspaceBoardContentRead({
+    const read = createDshCanvasArtifactContentRead({
       workspacePath,
       documentEntryReader: {
         readEntry: async () => {
@@ -252,7 +252,7 @@ describe('Desktop DSH Workspace Board projection request', () => {
 
   it('keeps a durable Markdown reference available after the user edits the file', async () => {
     const workspacePath = await mkdtemp(join(tmpdir(), 'openneko-dsh-markdown-resolve-'));
-    const read = createDshWorkspaceBoardContentRead({
+    const read = createDshCanvasArtifactContentRead({
       workspacePath,
       documentEntryReader: {
         readEntry: async () => {
@@ -301,7 +301,7 @@ function workspace(): AssetWorkspaceResolution {
   };
 }
 
-function deliveryInput(toolCallId: string): DshWorkspaceBoardArtifactDeliveryInput {
+function deliveryInput(toolCallId: string): DshCanvasArtifactDeliveryInput {
   return {
     workspaceId: 'workspace-1',
     conversationId: 'conversation-1',

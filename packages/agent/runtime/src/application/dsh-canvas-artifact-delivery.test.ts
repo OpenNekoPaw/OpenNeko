@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ContentLocator } from '@neko/content-domain';
 import type { DshAcpProjectedEvent } from '../acp/dsh-acp-projection';
 import {
-  collectDshWorkspaceBoardCompletedToolArtifacts,
-  createDshWorkspaceBoardArtifactDeliveryService,
-} from './dsh-workspace-board-artifact-delivery';
+  collectDshCanvasArtifactCompletedToolArtifacts,
+  createDshCanvasArtifactDeliveryService,
+} from './dsh-canvas-artifact-delivery';
 
-describe('DSH Workspace Board completed Tool artifact collection', () => {
+describe('DSH Canvas completed Tool artifact collection', () => {
   it('projects a stable parent document beside an exact content selector', () => {
     const source = {
       file: { authority: 'workspace' as const, path: 'books/blame.epub' },
@@ -35,9 +35,29 @@ describe('DSH Workspace Board completed Tool artifact collection', () => {
       ]),
     );
   });
+
+  it('projects the validated document input when model-facing output is truncated text', () => {
+    const source = {
+      file: { authority: 'workspace' as const, path: 'books/blame.epub' },
+      selector: { kind: 'entry' as const, path: 'OPS/chapter.xhtml' },
+    };
+    const event = documentTool('document-truncated', source);
+    const collection = collect({
+      ...event,
+      rawOutput: [{ type: 'text', text: '{"source":{"file": [truncated]' }],
+    });
+
+    expect(collection.diagnostics).toEqual([]);
+    expect(collection.batch?.artifacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ contentLocator: { file: source.file } }),
+        expect.objectContaining({ contentLocator: source }),
+      ]),
+    );
+  });
 });
 
-describe('DSH Workspace Board terminal Markdown delivery', () => {
+describe('DSH Canvas terminal Markdown delivery', () => {
   it('publishes one explicit document and delivers only its file reference', async () => {
     const publication = vi.fn(async (input) => ({
       contentLocator: input.contentLocator,
@@ -47,7 +67,7 @@ describe('DSH Workspace Board terminal Markdown delivery', () => {
       contentLocator: input.contentLocator,
     }));
     const delivery = vi.fn(async () => ({ status: 'accepted' as const }));
-    const service = createDshWorkspaceBoardArtifactDeliveryService({
+    const service = createDshCanvasArtifactDeliveryService({
       contexts: {
         readContext: async () => ({
           kind: 'workspace' as const,
@@ -66,7 +86,7 @@ describe('DSH Workspace Board terminal Markdown delivery', () => {
         dshSessionId: 'dsh-1',
         turn: 1,
         events: terminalEvents(
-          'Saved the durable plan.\n\n<!-- neko:artifact -->\n\n# Animation Plan\n\n## Scope\n\nReviewable content.',
+          'Saved the durable plan.\n\n<!-- neko:next-action -->\n\nGenerate the opening shot.\n\n<!-- neko:artifact -->\n\n# Animation Plan\n\n## Scope\n\nReviewable content.',
         ),
         canvasTurnTarget: {
           workspaceId: 'workspace-1',
@@ -109,7 +129,7 @@ describe('DSH Workspace Board terminal Markdown delivery', () => {
     const publication = vi.fn();
     const resolution = vi.fn();
     const delivery = vi.fn();
-    const service = createDshWorkspaceBoardArtifactDeliveryService({
+    const service = createDshCanvasArtifactDeliveryService({
       contexts: {
         readContext: async () => ({
           kind: 'workspace' as const,
@@ -145,7 +165,7 @@ describe('DSH Workspace Board terminal Markdown delivery', () => {
     const resolution = vi.fn(async (input) => ({
       contentLocator: input.contentLocator,
     }));
-    const service = createDshWorkspaceBoardArtifactDeliveryService({
+    const service = createDshCanvasArtifactDeliveryService({
       contexts: {
         readContext: async () => ({
           kind: 'workspace' as const,
@@ -195,7 +215,7 @@ describe('DSH Workspace Board terminal Markdown delivery', () => {
   });
 
   it('rejects a resolver that substitutes another Workspace file', async () => {
-    const service = createDshWorkspaceBoardArtifactDeliveryService({
+    const service = createDshCanvasArtifactDeliveryService({
       contexts: {
         readContext: async () => ({
           kind: 'workspace' as const,
@@ -294,7 +314,7 @@ function createWorkspaceTerminalDeliveryService(
   publication: ReturnType<typeof vi.fn>,
   delivery: ReturnType<typeof vi.fn>,
 ) {
-  return createDshWorkspaceBoardArtifactDeliveryService({
+  return createDshCanvasArtifactDeliveryService({
     contexts: {
       readContext: async () => ({
         kind: 'workspace' as const,
@@ -309,7 +329,7 @@ function createWorkspaceTerminalDeliveryService(
 }
 
 function collect(event: DshAcpProjectedEvent) {
-  return collectDshWorkspaceBoardCompletedToolArtifacts({
+  return collectDshCanvasArtifactCompletedToolArtifacts({
     events: [event],
     toolCallId: event.kind === 'tool' ? event.toolCallId : 'missing',
   });

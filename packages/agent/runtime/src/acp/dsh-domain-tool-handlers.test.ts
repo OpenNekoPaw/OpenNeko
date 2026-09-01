@@ -53,7 +53,7 @@ describe('DSH domain Tool handlers', () => {
       status: 'blocked' as const,
       diagnostic: {
         code: 'dsh-generation-canvas-context-unsupported',
-        message: 'Authoring context has no automatic Workspace Board projection.',
+        message: 'Authoring context has no automatic Canvas projection.',
       },
     }));
     const handlers = createDshDomainToolHandlers({

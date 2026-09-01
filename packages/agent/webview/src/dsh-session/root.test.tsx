@@ -13,7 +13,7 @@ import {
   DshComposerPresentationSnapshotProvider,
 } from './presentation-snapshot';
 
-const workspaceBoardTarget = {
+const defaultCanvasTarget = {
   workspaceId: 'workspace-1',
   canvasId: 'neko/boards/workspace.nkc',
 };
@@ -149,7 +149,7 @@ describe('DshAgentView content-creation composer', () => {
           invocations: [{ skillName: 'story-review' }, { skillName: 'scene-plan' }],
           displayText: '$story-review $scene-plan chapter-1',
           promptText: 'chapter-1',
-          canvasTurnTarget: workspaceBoardTarget,
+          canvasTurnTarget: defaultCanvasTarget,
         },
       ),
     );
@@ -208,7 +208,7 @@ describe('DshAgentView content-creation composer', () => {
           ],
           images: [],
           contextPayloads: [],
-          canvasTurnTarget: workspaceBoardTarget,
+          canvasTurnTarget: defaultCanvasTarget,
         },
       ),
     );
@@ -290,7 +290,7 @@ describe('DshAgentView content-creation composer', () => {
           ],
           images: [],
           contextPayloads: [],
-          canvasTurnTarget: workspaceBoardTarget,
+          canvasTurnTarget: defaultCanvasTarget,
         },
       ),
     );
@@ -919,11 +919,11 @@ describe('DshAgentView content-creation composer', () => {
             workspaceLabel: '短片项目',
             canvas: {
               workspaceId: 'workspace-1',
-              defaultTarget: workspaceBoardTarget,
+              defaultTarget: defaultCanvasTarget,
               options: [
                 {
-                  target: workspaceBoardTarget,
-                  label: '画板',
+                  target: defaultCanvasTarget,
+                  label: 'workspace.nkc',
                 },
                 {
                   target: {
@@ -961,7 +961,7 @@ describe('DshAgentView content-creation composer', () => {
 
     expect(screen.getByText('开始创作')).toBeTruthy();
     expect(screen.getByText('短片项目')).toBeTruthy();
-    expect(screen.getByText('工作区画板')).toBeTruthy();
+    expect(screen.getByText('workspace.nkc')).toBeTruthy();
     expect(screen.getByPlaceholderText('描述你想要完成的内容...')).toBeTruthy();
     expect(view.container.querySelector('[data-workspace-canvas-context="true"]')).toBeTruthy();
     expect((screen.getByRole('button', { name: '添加附件' }) as HTMLButtonElement).disabled).toBe(
@@ -1110,7 +1110,7 @@ describe('DshAgentView content-creation composer', () => {
 
   it('resets a stale local Canvas selection to the catalog default', async () => {
     const scopeKey = JSON.stringify(['conversation', 'conversation-1', 'workspace-1']);
-    let serialized: string | null = JSON.stringify({ [scopeKey]: 'workspace-board' });
+    let serialized: string | null = JSON.stringify({ [scopeKey]: 'removed-canvas-target' });
     const storage = {
       getItem: () => serialized,
       setItem: (_key: string, value: string) => {
@@ -1215,7 +1215,7 @@ describe('DshAgentView content-creation composer', () => {
           },
         ],
         contextPayloads: [],
-        canvasTurnTarget: workspaceBoardTarget,
+        canvasTurnTarget: defaultCanvasTarget,
       },
     );
   });
@@ -1970,6 +1970,7 @@ describe('DshAgentView content-creation composer', () => {
               text: '已完成故事规划。',
               messageId: 'assistant-final',
               state: 'final',
+              recommendedNextActionMarkdown: '生成首个测试镜头。',
               artifact: {
                 kind: 'reviewable-markdown',
                 title: '《BLAME！》动画化企划方案与具体操作步骤',
@@ -2018,6 +2019,13 @@ describe('DshAgentView content-creation composer', () => {
       '《BLAME！》动画化企划方案与具体操作步骤\nneko/generated/file/story-plan.md',
     );
     expect(reference?.textContent).not.toContain('neko/generated/file');
+    const nextAction = view.container.querySelector('[data-agent-terminal-next-action="true"]');
+    expect(nextAction?.textContent).toContain('推荐操作');
+    expect(nextAction?.textContent).toContain('生成首个测试镜头。');
+    expect(
+      (reference?.compareDocumentPosition(nextAction as Node) ?? 0) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     fireEvent.click(link);
     expect(onOpenTerminalArtifact).toHaveBeenCalledWith('assistant-final');
   });
@@ -2317,11 +2325,11 @@ function DshComposerHarness({
           workspaceLabel: 'Workspace One',
           canvas: {
             workspaceId: 'workspace-1',
-            defaultTarget: workspaceBoardTarget,
+            defaultTarget: defaultCanvasTarget,
             options: [
               {
-                target: workspaceBoardTarget,
-                label: 'Board',
+                target: defaultCanvasTarget,
+                label: 'workspace.nkc',
               },
             ],
             diagnostics: [],
@@ -2405,9 +2413,9 @@ function WorkspaceCanvasSelectionHarness({
           workspaceLabel: 'Workspace One',
           canvas: {
             workspaceId: 'workspace-1',
-            defaultTarget: workspaceBoardTarget,
+            defaultTarget: defaultCanvasTarget,
             options: [
-              { target: workspaceBoardTarget, label: 'Workspace Board' },
+              { target: defaultCanvasTarget, label: 'workspace.nkc' },
               {
                 target: {
                   workspaceId: 'workspace-1',

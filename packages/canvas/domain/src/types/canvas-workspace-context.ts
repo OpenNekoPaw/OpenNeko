@@ -5,7 +5,7 @@ import {
   type CanvasBoardSummary,
 } from './canvas-creative-scope';
 import { normalizeWorkspaceContentPath } from '@neko/content-domain';
-import { CANVAS_DEFAULT_DOCUMENT_PATH } from './canvas-workspace-board';
+import { CANVAS_DEFAULT_DOCUMENT_PATH } from './canvas-workspace-delivery';
 
 /**
  * Composer-facing Canvas turn target.
@@ -302,7 +302,7 @@ function parseCanvasWorkspaceTurnSummary(value: unknown): CanvasWorkspaceTurnSum
 
 function parseCanvasBoardIndexEntry(value: unknown): CanvasBoardIndexEntry {
   if (!isRecord(value)) {
-    throw new Error('Canvas Board index entry must be an object.');
+    throw new Error('Canvas index entry must be an object.');
   }
   requireAllowedKeys(
     value,
@@ -321,14 +321,14 @@ function parseCanvasBoardIndexEntry(value: unknown): CanvasBoardIndexEntry {
       'updatedAt',
     ],
     ['name', 'scopeKind', 'relatedBoardCount'],
-    'Canvas Board index entry',
+    'Canvas index entry',
   );
   const scopeKind = parseScopeKind(value['scopeKind']);
   return {
     ...(value['canvasId'] === undefined
       ? {}
       : { canvasId: requireIdentity(value['canvasId'], 'Canvas id') }),
-    name: requireIdentity(value['name'], 'Canvas Board index name'),
+    name: requireIdentity(value['name'], 'Canvas index name'),
     scopeKind,
     ...(value['workId'] === undefined ? {} : { workId: requireIdentity(value['workId'], 'Work') }),
     ...(value['title'] === undefined ? {} : { title: requireIdentity(value['title'], 'Title') }),
@@ -353,7 +353,7 @@ function parseCanvasBoardIndexEntry(value: unknown): CanvasBoardIndexEntry {
       : { nodeTypeSummary: parseNodeTypeSummary(value['nodeTypeSummary']) }),
     ...(value['updatedAt'] === undefined
       ? {}
-      : { updatedAt: requireIdentity(value['updatedAt'], 'Canvas Board updatedAt') }),
+      : { updatedAt: requireIdentity(value['updatedAt'], 'Canvas updatedAt') }),
   };
 }
 

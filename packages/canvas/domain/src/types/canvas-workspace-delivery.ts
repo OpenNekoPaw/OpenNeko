@@ -143,24 +143,20 @@ export function createSafeCanvasWorkspaceProjectionDiagnostic(
   code: CanvasWorkspaceProjectionDiagnosticCode,
 ): CanvasWorkspaceProjectionDiagnostic {
   const messages: Readonly<Record<CanvasWorkspaceProjectionDiagnosticCode, string>> = {
-    'workspace-required': 'Workspace Board delivery requires one resolved workspace.',
-    'invalid-canvas-target': 'Workspace Board delivery target is invalid.',
-    'invalid-canvas-extension': 'The Canvas extension cannot accept Workspace Board delivery.',
-    'missing-projection-identity': 'Workspace Board delivery identity is incomplete.',
-    'duplicate-artifact-identity': 'Workspace Board delivery contains duplicate artifact identity.',
-    'invalid-artifact-relation':
-      'Workspace Board delivery contains an invalid creative-content relation.',
-    'unsupported-projection-kind':
-      'Workspace Board delivery contains an unsupported artifact kind.',
-    'invalid-content-locator':
-      'Workspace Board delivery contains an invalid durable content locator.',
-    'runtime-value-forbidden': 'Workspace Board delivery contains a forbidden runtime-only value.',
-    'delivery-ledger-unavailable': 'Workspace Board delivery state is unavailable.',
-    'delivery-claim-conflict': 'Workspace Board delivery is queued behind another writer.',
-    'stale-writer': 'Workspace Board writer ownership changed before the delivery completed.',
-    'projection-conflict': 'Workspace Board has user changes that cannot be overwritten safely.',
-    'projection-write-failed':
-      'Workspace Board could not be updated; durable artifacts remain available.',
+    'workspace-required': 'Canvas delivery requires one resolved workspace.',
+    'invalid-canvas-target': 'Canvas delivery target is invalid.',
+    'invalid-canvas-extension': 'The Canvas extension cannot accept Canvas delivery.',
+    'missing-projection-identity': 'Canvas delivery identity is incomplete.',
+    'duplicate-artifact-identity': 'Canvas delivery contains duplicate artifact identity.',
+    'invalid-artifact-relation': 'Canvas delivery contains an invalid creative-content relation.',
+    'unsupported-projection-kind': 'Canvas delivery contains an unsupported artifact kind.',
+    'invalid-content-locator': 'Canvas delivery contains an invalid durable content locator.',
+    'runtime-value-forbidden': 'Canvas delivery contains a forbidden runtime-only value.',
+    'delivery-ledger-unavailable': 'Canvas delivery state is unavailable.',
+    'delivery-claim-conflict': 'Canvas delivery is queued behind another writer.',
+    'stale-writer': 'Canvas writer ownership changed before the delivery completed.',
+    'projection-conflict': 'Canvas has user changes that cannot be overwritten safely.',
+    'projection-write-failed': 'Canvas could not be updated; durable artifacts remain available.',
   };
   return { code, severity: 'error', message: messages[code] };
 }
@@ -773,7 +769,7 @@ export function validateCanvasWorkspaceProjectionRequest(
 ): readonly CanvasWorkspaceProjectionDiagnostic[] {
   const diagnostics: CanvasWorkspaceProjectionDiagnostic[] = [];
   if (!isRecord(request)) {
-    return [diagnostic('workspace-required', 'Canvas Workspace Board delivery must be an object.')];
+    return [diagnostic('workspace-required', 'Canvas delivery must be an object.')];
   }
   if (!isRecord(request.target)) {
     diagnostics.push(
@@ -910,7 +906,7 @@ export function validateCanvasWorkspaceProjectionRequest(
     diagnostics.push(
       diagnostic(
         'invalid-artifact-relation',
-        'Generation Job snapshots require an isolated Workspace Board delivery batch.',
+        'Generation Job snapshots require an isolated Canvas delivery batch.',
         ['artifacts'],
       ),
     );

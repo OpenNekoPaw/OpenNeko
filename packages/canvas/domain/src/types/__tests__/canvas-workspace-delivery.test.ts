@@ -10,7 +10,7 @@ import {
   type CanvasWorkspaceMarkdownProjectionArtifact,
   type CanvasWorkspaceResourceProjectionArtifact,
   type CanvasWorkspaceProjectionRequest,
-} from '../canvas-workspace-board';
+} from '../canvas-workspace-delivery';
 import type { GeneratedImage } from '@neko/generation-domain';
 import { createGeneratedAssetRevisionRef } from '@neko/generation-domain';
 import type { WorkspaceFileContentLocator } from '@neko/content-domain';
@@ -25,8 +25,8 @@ const sourceLocator = {
   },
 };
 
-describe('Canvas Workspace Board delivery contract', () => {
-  it('derives one canonical Workspace Board URI', () => {
+describe('Canvas delivery contract', () => {
+  it('derives one canonical Canvas URI', () => {
     expect(CANVAS_DEFAULT_DOCUMENT_PATH).toBe('neko/boards/workspace.nkc');
     expect(resolveDefaultCanvasDocumentUri('file:///workspace/project/')).toBe(
       'file:///workspace/project/neko/boards/workspace.nkc',

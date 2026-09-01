@@ -2490,8 +2490,8 @@ describe('DesktopCanvasRuntime', () => {
     expect((await runtime.getSnapshot('window-1', first)).canvas.name).toBe('First');
   });
 
-  it('projects committed Workspace Board mutations into the clean open session and blocks dirty sessions', async () => {
-    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-board-live-'));
+  it('projects committed Canvas mutations into the clean open session and blocks dirty sessions', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-live-'));
     roots.push(workspacePath);
     const identity = createIdentity();
     const documentPath = path.join(workspacePath, identity.documentId);
@@ -2690,8 +2690,8 @@ describe('DesktopCanvasRuntime', () => {
     await runtime.dispose();
   });
 
-  it('rejects a stale Canvas save that omits authoritative Board nodes without removal evidence', async () => {
-    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-board-save-'));
+  it('rejects a stale Canvas save that omits authoritative nodes without removal evidence', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-save-'));
     roots.push(workspacePath);
     const identity = createIdentity();
     const documentPath = path.join(workspacePath, identity.documentId);
@@ -2740,8 +2740,8 @@ describe('DesktopCanvasRuntime', () => {
     const staleSave = await runtime.executeIntent(
       'window-1',
       createCanvasHostIntentRequest({
-        requestId: 'stale-board-save',
-        commandId: 'stale-board-save',
+        requestId: 'stale-canvas-save',
+        commandId: 'stale-canvas-save',
         identity,
         intent: { type: 'save' },
       }),
@@ -2760,8 +2760,8 @@ describe('DesktopCanvasRuntime', () => {
     await runtime.executeIntent(
       'window-1',
       createCanvasHostIntentRequest({
-        requestId: 'explicit-board-removal-evidence',
-        commandId: 'explicit-board-removal-evidence',
+        requestId: 'explicit-canvas-removal-evidence',
+        commandId: 'explicit-canvas-removal-evidence',
         identity,
         intent: {
           type: 'replace-document',
@@ -2773,8 +2773,8 @@ describe('DesktopCanvasRuntime', () => {
     const explicitRemoval = await runtime.executeIntent(
       'window-1',
       createCanvasHostIntentRequest({
-        requestId: 'explicit-board-removal',
-        commandId: 'explicit-board-removal',
+        requestId: 'explicit-canvas-removal',
+        commandId: 'explicit-canvas-removal',
         identity,
         intent: { type: 'save' },
       }),
@@ -2784,8 +2784,8 @@ describe('DesktopCanvasRuntime', () => {
     await runtime.dispose();
   });
 
-  it('resolves a Workspace grant before entering the Board mutation queue', async () => {
-    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-board-open-'));
+  it('resolves a Workspace grant before entering the Canvas mutation queue', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-open-'));
     roots.push(workspacePath);
     const identity = createIdentity();
     const resolveCanvasViewGrant = vi.fn(async (): Promise<DesktopCanvasViewGrant> => {
@@ -2809,7 +2809,7 @@ describe('DesktopCanvasRuntime', () => {
         homedir: workspacePath,
         nekoHome: path.join(workspacePath, '.neko-home'),
         workspaceRoot: workspacePath,
-        logger: new ConsoleLogger('DesktopCanvasBoardOpenTest'),
+        logger: new ConsoleLogger('DesktopCanvasOpenTest'),
       }),
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
     });

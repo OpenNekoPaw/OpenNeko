@@ -5,25 +5,25 @@ import {
   type CanvasWorkspaceMarkdownProjectionArtifact,
   type CanvasWorkspaceResourceProjectionArtifact,
   type CanvasWorkspaceProjectionRequest,
-} from '../../types/canvas-workspace-board';
+} from '../../types/canvas-workspace-delivery';
 import type { GenerationJobSnapshot } from '@neko/generation-domain/job';
 import type { CanvasNode } from '../../types/canvas';
 import type { ContentLocator, WorkspaceFileContentLocator } from '@neko/content-domain';
 import { createEmptyCanvasData } from '../canvasHeadlessAuthoring';
-import { planCanvasWorkspaceBoardProjection } from '../canvasWorkspaceBoardProjection';
+import { planCanvasArtifactProjection } from '../canvasArtifactProjection';
 
 const sourceLocator: ContentLocator = {
   file: { authority: 'workspace', path: 'neko/assets/References/source-image.png' },
 };
 const generatedLocator = generatedOutputLocator('shot-1');
 
-describe('planCanvasWorkspaceBoardProjection', () => {
+describe('planCanvasArtifactProjection', () => {
   it('updates one Generation node and binds committed result locators only after success', () => {
-    const pending = planCanvasWorkspaceBoardProjection(
+    const pending = planCanvasArtifactProjection(
       createEmptyCanvasData('Workspace'),
       generationRequest(generationSnapshot({ phase: 'pending' })),
     );
-    const running = planCanvasWorkspaceBoardProjection(
+    const running = planCanvasArtifactProjection(
       pending.canvasData,
       generationRequest(
         generationSnapshot({
@@ -41,8 +41,8 @@ describe('planCanvasWorkspaceBoardProjection', () => {
         resultLocators: [generationResultLocator('generation-result')],
       }),
     );
-    const succeeded = planCanvasWorkspaceBoardProjection(running.canvasData, succeededRequest);
-    const replay = planCanvasWorkspaceBoardProjection(succeeded.canvasData, succeededRequest);
+    const succeeded = planCanvasArtifactProjection(running.canvasData, succeededRequest);
+    const replay = planCanvasArtifactProjection(succeeded.canvasData, succeededRequest);
 
     expect(pending.canvasData.nodes).toHaveLength(1);
     expect(running.canvasData.nodes).toHaveLength(1);
@@ -92,7 +92,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
   });
 
   it('projects a flat creative-content graph with explicit source relations', () => {
-    const plan = planCanvasWorkspaceBoardProjection(createEmptyCanvasData('Workspace'), request());
+    const plan = planCanvasArtifactProjection(createEmptyCanvasData('Workspace'), request());
 
     expect(plan.status).toBe('projected');
     expect(plan.canvasData.nodes).toHaveLength(3);
@@ -125,11 +125,11 @@ describe('planCanvasWorkspaceBoardProjection', () => {
       generatedOutputArtifact('delivery:generated-batch', index + 1),
     );
 
-    const first = planCanvasWorkspaceBoardProjection(
+    const first = planCanvasArtifactProjection(
       createEmptyCanvasData('Workspace'),
       request({ deliveryId: 'delivery:generated-batch', artifacts }),
     );
-    const second = planCanvasWorkspaceBoardProjection(
+    const second = planCanvasArtifactProjection(
       createEmptyCanvasData('Workspace'),
       request({ deliveryId: 'delivery:generated-batch', artifacts }),
     );
@@ -170,7 +170,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     let canvasData = createEmptyCanvasData('Workspace');
     for (let index = 1; index <= 5; index += 1) {
       const deliveryId = `delivery:single-${index}`;
-      canvasData = planCanvasWorkspaceBoardProjection(
+      canvasData = planCanvasArtifactProjection(
         canvasData,
         request({
           deliveryId,
@@ -197,7 +197,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     const artifacts = Array.from({ length: 6 }, (_, index) =>
       generatedOutputArtifact('delivery:six-generated', index + 1),
     );
-    const plan = planCanvasWorkspaceBoardProjection(
+    const plan = planCanvasArtifactProjection(
       createEmptyCanvasData('Workspace'),
       request({ deliveryId: 'delivery:six-generated', artifacts }),
     );
@@ -233,7 +233,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
         'source',
       ),
     } satisfies CanvasWorkspaceProjectionArtifact;
-    const plan = planCanvasWorkspaceBoardProjection(
+    const plan = planCanvasArtifactProjection(
       createEmptyCanvasData('Workspace'),
       request({ deliveryId, artifacts: [textReference, markdownArtifact(deliveryId)] }),
     );
@@ -249,7 +249,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
       generatedOutputArtifact('delivery:generated-edit', 1),
       generatedOutputArtifact('delivery:generated-edit', 2),
     ];
-    const first = planCanvasWorkspaceBoardProjection(
+    const first = planCanvasArtifactProjection(
       createEmptyCanvasData('Workspace'),
       request({ deliveryId: 'delivery:generated-edit', artifacts }),
     );
@@ -272,7 +272,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
       }),
     };
 
-    const replay = planCanvasWorkspaceBoardProjection(
+    const replay = planCanvasArtifactProjection(
       edited,
       request({ deliveryId: 'delivery:generated-edit', artifacts }),
     );
@@ -296,7 +296,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
       },
     } satisfies CanvasWorkspaceProjectionArtifact;
 
-    const plan = planCanvasWorkspaceBoardProjection(
+    const plan = planCanvasArtifactProjection(
       createEmptyCanvasData('Workspace'),
       request({ deliveryId: 'delivery:portrait-image', artifacts: [portraitImage] }),
     );
@@ -315,7 +315,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
       intrinsicDimensions: { width: 900, height: 1600 },
     } satisfies CanvasWorkspaceProjectionArtifact;
 
-    const plan = planCanvasWorkspaceBoardProjection(
+    const plan = planCanvasArtifactProjection(
       createEmptyCanvasData('Workspace'),
       request({ deliveryId: 'delivery:referenced-portrait', artifacts: [image] }),
     );
@@ -331,7 +331,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
       ...outputArtifact('delivery:image-first'),
       intrinsicDimensions: { width: 900, height: 1600 },
     } satisfies CanvasWorkspaceProjectionArtifact;
-    const first = planCanvasWorkspaceBoardProjection(
+    const first = planCanvasArtifactProjection(
       createEmptyCanvasData('Workspace'),
       request({ deliveryId: 'delivery:image-first', artifacts: [firstImage] }),
     );
@@ -348,7 +348,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
       intrinsicDimensions: { width: 900, height: 1600 },
     } satisfies CanvasWorkspaceProjectionArtifact;
 
-    const replay = planCanvasWorkspaceBoardProjection(
+    const replay = planCanvasArtifactProjection(
       edited,
       request({ deliveryId: 'delivery:image-replay', artifacts: [replayImage] }),
     );
@@ -358,7 +358,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
   });
 
   it('deduplicates stable resource fingerprints across deliveries and preserves creator layout', () => {
-    const first = planCanvasWorkspaceBoardProjection(
+    const first = planCanvasArtifactProjection(
       createEmptyCanvasData('Workspace'),
       request({ artifacts: [sourceArtifact('delivery:batch-1')] }),
     );
@@ -387,7 +387,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     } satisfies CanvasWorkspaceProjectionArtifact;
     const output = outputArtifact('delivery:batch-2', ['source-copy']);
 
-    const second = planCanvasWorkspaceBoardProjection(
+    const second = planCanvasArtifactProjection(
       edited,
       request({ deliveryId: 'delivery:batch-2', artifacts: [duplicateSource, output] }),
     );
@@ -424,7 +424,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
       provenance: { ...hashedSource.provenance, role: 'output' as const },
     } satisfies CanvasWorkspaceProjectionArtifact;
 
-    const plan = planCanvasWorkspaceBoardProjection(
+    const plan = planCanvasArtifactProjection(
       createEmptyCanvasData('Workspace'),
       request({ artifacts: [weak, hashed] }),
     );
@@ -447,7 +447,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
       portablePath,
       contentFingerprint: portablePath,
     });
-    const first = planCanvasWorkspaceBoardProjection(
+    const first = planCanvasArtifactProjection(
       createEmptyCanvasData('Workspace'),
       request({ artifacts: [weak] }),
     );
@@ -466,7 +466,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
       provenance: { ...hashedSource.provenance, deliveryId: 'delivery:batch-2' },
     } satisfies CanvasWorkspaceProjectionArtifact;
 
-    const second = planCanvasWorkspaceBoardProjection(
+    const second = planCanvasArtifactProjection(
       moved,
       request({ deliveryId: 'delivery:batch-2', artifacts: [hashed] }),
     );
@@ -500,7 +500,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
         deliveryId: 'delivery:batch-3',
       },
     } satisfies CanvasWorkspaceProjectionArtifact;
-    const third = planCanvasWorkspaceBoardProjection(
+    const third = planCanvasArtifactProjection(
       second.canvasData,
       request({ deliveryId: 'delivery:batch-3', artifacts: [changed] }),
     );
@@ -517,7 +517,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
   });
 
   it('treats an equivalent repeated content graph as a noop', () => {
-    const first = planCanvasWorkspaceBoardProjection(createEmptyCanvasData('Workspace'), request());
+    const first = planCanvasArtifactProjection(createEmptyCanvasData('Workspace'), request());
     const replay = request({
       deliveryId: 'delivery:batch-2',
       artifacts: [
@@ -556,7 +556,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
       ],
     });
 
-    const second = planCanvasWorkspaceBoardProjection(first.canvasData, replay);
+    const second = planCanvasArtifactProjection(first.canvasData, replay);
 
     expect(second.status).toBe('noop');
     expect(second.canvasData).toBe(first.canvasData);
@@ -565,7 +565,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
   });
 
   it('refreshes provenance without creating a distinct content node', () => {
-    const first = planCanvasWorkspaceBoardProjection(
+    const first = planCanvasArtifactProjection(
       createEmptyCanvasData('Workspace'),
       request({ artifacts: [outputArtifact('delivery:batch-1')] }),
     );
@@ -581,7 +581,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
       ),
     } satisfies CanvasWorkspaceProjectionArtifact;
 
-    const second = planCanvasWorkspaceBoardProjection(
+    const second = planCanvasArtifactProjection(
       first.canvasData,
       request({ deliveryId: 'delivery:batch-2', artifacts: [changed] }),
     );
@@ -596,7 +596,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
 
   it('fails atomically when a canonical content identity is occupied by unrelated data', () => {
     const initial = createEmptyCanvasData('Workspace');
-    const expected = planCanvasWorkspaceBoardProjection(
+    const expected = planCanvasArtifactProjection(
       initial,
       request({ artifacts: [outputArtifact('delivery:batch-1')] }),
     );
@@ -616,7 +616,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     };
 
     expect(() =>
-      planCanvasWorkspaceBoardProjection(
+      planCanvasArtifactProjection(
         conflictingCanvas,
         request({ artifacts: [outputArtifact('delivery:batch-1')] }),
       ),

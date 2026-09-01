@@ -65,11 +65,11 @@ export function projectGenerationSnapshotToCanvas(
 }
 
 /**
- * Projects an Agent-owned Generation Job into an already-authorized Workspace Board target.
- * Exact target admission is owned by the Workspace Board delivery boundary, so this projection
+ * Projects an Agent-owned Generation Job into an already-authorized Canvas target.
+ * Exact target admission is owned by the Canvas delivery boundary, so this projection
  * deliberately has no active Canvas identity fallback.
  */
-export function projectGenerationSnapshotToWorkspaceBoard(
+export function projectGenerationSnapshotToCanvasDelivery(
   input: CanvasWorkspaceGenerationProjectionInput,
 ): CanvasData {
   return projectGenerationSnapshot(input.canvas, input.snapshot);

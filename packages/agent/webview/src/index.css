@@ -1887,7 +1887,7 @@ body {
   pointer-events: none;
 }
 
-.agent-workspace-canvas-board-default,
+.agent-workspace-canvas-default,
 .agent-workspace-canvas-diagnostic {
   min-width: 0;
   overflow: hidden;
@@ -2600,6 +2600,25 @@ body {
   color: var(--agent-fg-secondary);
   cursor: default;
   opacity: 0.72;
+}
+
+.agent-terminal-next-action {
+  display: grid;
+  gap: 2px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--agent-fg) 9%, transparent);
+}
+
+.agent-terminal-next-action__label {
+  color: var(--agent-fg-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.agent-terminal-next-action > .markdown-content > :first-child,
+.agent-terminal-next-action > .markdown-content > :last-child {
+  margin-block: 0;
 }
 
 .agent-user-prompt-primary {

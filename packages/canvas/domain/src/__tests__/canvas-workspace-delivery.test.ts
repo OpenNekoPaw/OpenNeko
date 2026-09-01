@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { resolveGlobalStorageLayout } from '@neko/local-metadata';
 import {
   createEmptyCanvasData,
-  planCanvasWorkspaceBoardProjection,
+  planCanvasArtifactProjection,
   type CanvasData,
   type CanvasWorkspaceProjectionRequest,
 } from '@neko/canvas-domain';
@@ -16,13 +16,13 @@ import {
   initializeCoreLocalMetadataTables,
 } from '@neko/local-metadata/sqlite';
 import {
-  WorkspaceBoardDeliveryCoordinator,
-  WorkspaceBoardDeliveryLedger,
-  type CanvasWorkspaceBoardLoadedDocument,
-  type CanvasWorkspaceBoardMutationPort,
+  CanvasWorkspaceDeliveryCoordinator,
+  CanvasWorkspaceDeliveryLedger,
+  type CanvasWorkspaceLoadedDocument,
+  type CanvasWorkspaceMutationPort,
 } from '../index';
 
-const WORKSPACE_ID = 'workspace-board-domain-test';
+const WORKSPACE_ID = 'canvas-delivery-domain-test';
 const stores: LocalMetadataStore[] = [];
 const directories: string[] = [];
 let identitySequence = 0;
@@ -36,7 +36,7 @@ afterEach(async () => {
   );
 });
 
-describe('Workspace Board delivery coordinator', () => {
+describe('Canvas delivery coordinator', () => {
   it('applies the same delivery once and returns its receipt on replay', async () => {
     const store = await createStore();
     const mutation = new MemoryMutationPort();
@@ -78,12 +78,12 @@ describe('Workspace Board delivery coordinator', () => {
   it('keeps a delivery pending when Host document coordination is unavailable', async () => {
     const store = await createStore();
     const mutation = new MemoryMutationPort();
-    const ledger = new WorkspaceBoardDeliveryLedger({
+    const ledger = new CanvasWorkspaceDeliveryLedger({
       metadataStore: store,
       workspaceId: WORKSPACE_ID,
       createIdentity,
     });
-    const coordinator = new WorkspaceBoardDeliveryCoordinator({
+    const coordinator = new CanvasWorkspaceDeliveryCoordinator({
       ledger,
       mutation,
       holderId: 'host-a',
@@ -206,7 +206,7 @@ describe('Workspace Board delivery coordinator', () => {
   it('rejects a stale lease identity after takeover', async () => {
     let now = 1_000;
     const store = await createStore();
-    const ledger = new WorkspaceBoardDeliveryLedger({
+    const ledger = new CanvasWorkspaceDeliveryLedger({
       metadataStore: store,
       workspaceId: WORKSPACE_ID,
       createIdentity,
@@ -224,7 +224,7 @@ describe('Workspace Board delivery coordinator', () => {
     const store = await createStore();
     const mutation = new MemoryMutationPort();
     let now = 1_000;
-    const ledger = new WorkspaceBoardDeliveryLedger({
+    const ledger = new CanvasWorkspaceDeliveryLedger({
       metadataStore: store,
       workspaceId: WORKSPACE_ID,
       createIdentity,
@@ -240,7 +240,7 @@ describe('Workspace Board delivery coordinator', () => {
       documentUri: 'file:///workspace/project/neko/boards/workspace.nkc',
       createIfMissing: true,
     });
-    const plan = planCanvasWorkspaceBoardProjection(loaded.canvasData, request);
+    const plan = planCanvasArtifactProjection(loaded.canvasData, request);
     await mutation.saveAtomic({
       documentUri: loaded.documentUri,
       canvasData: plan.canvasData,
@@ -279,7 +279,7 @@ describe('Workspace Board delivery coordinator', () => {
     const store = await createStore();
     const request = delivery('delivery:occupied');
     const mutation = new MemoryMutationPort();
-    const projected = planCanvasWorkspaceBoardProjection(mutation.canvasData, request);
+    const projected = planCanvasArtifactProjection(mutation.canvasData, request);
     const occupiedId = projected.nodeIds.at(-1);
     if (!occupiedId) throw new Error('Projection test requires a child node identity.');
     mutation.canvasData = {
@@ -306,7 +306,7 @@ describe('Workspace Board delivery coordinator', () => {
   });
 });
 
-class MemoryMutationPort implements CanvasWorkspaceBoardMutationPort {
+class MemoryMutationPort implements CanvasWorkspaceMutationPort {
   canvasData = createEmptyCanvasData('Workspace');
   saveCount = 0;
   saveAttempts = 0;
@@ -331,7 +331,7 @@ class MemoryMutationPort implements CanvasWorkspaceBoardMutationPort {
   async loadLatest(input: {
     readonly documentUri: string;
     readonly createIfMissing: boolean;
-  }): Promise<CanvasWorkspaceBoardLoadedDocument> {
+  }): Promise<CanvasWorkspaceLoadedDocument> {
     this.loadRequests.push(input);
     if (!input.createIfMissing && this.rejectMissingWithoutCreate) {
       throw new Error('Canvas target does not exist.');
@@ -361,9 +361,9 @@ function createCoordinator(
   mutation: MemoryMutationPort,
   holderId: string,
   now?: () => number,
-): WorkspaceBoardDeliveryCoordinator {
-  return new WorkspaceBoardDeliveryCoordinator({
-    ledger: new WorkspaceBoardDeliveryLedger({
+): CanvasWorkspaceDeliveryCoordinator {
+  return new CanvasWorkspaceDeliveryCoordinator({
+    ledger: new CanvasWorkspaceDeliveryLedger({
       metadataStore: store,
       workspaceId: WORKSPACE_ID,
       createIdentity,

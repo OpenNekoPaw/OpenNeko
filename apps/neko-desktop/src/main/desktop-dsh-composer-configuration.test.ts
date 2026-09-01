@@ -783,7 +783,7 @@ function canvasIndex() {
         options: [
           {
             target: createDefaultCanvasWorkspaceTarget(workspaceId),
-            label: 'Workspace Board',
+            label: 'workspace.nkc',
           },
           {
             target: createCanvasWorkspaceTarget(workspaceId, 'neko/boards/story.nkc'),

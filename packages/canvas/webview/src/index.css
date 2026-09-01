@@ -662,7 +662,7 @@ html.canvas-webview-document #root,
   color: var(--toolbar-fg-secondary);
 }
 
-.canvas-board-navigation-bar {
+.canvas-navigation-bar {
   top: 12px;
 }
 

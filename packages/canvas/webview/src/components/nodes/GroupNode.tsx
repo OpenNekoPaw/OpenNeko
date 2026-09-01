@@ -193,7 +193,7 @@ function resolveGroupLabelPresentation(node: GroupCanvasNode): GroupLabelPresent
   const authoredLabel = node.data.label?.trim();
   if (node.id === CANVAS_WORKSPACE_INBOX_NODE_ID) {
     if (!authoredLabel || authoredLabel === 'Inbox') {
-      return { label: t('workspaceBoard.inbox'), derived: true };
+      return { label: t('canvasDelivery.inbox'), derived: true };
     }
     return { label: authoredLabel, derived: false };
   }
@@ -205,7 +205,7 @@ function resolveGroupLabelPresentation(node: GroupCanvasNode): GroupLabelPresent
       : { label: t('node.group'), derived: false };
   }
   if (provenance['kind'] === 'generated-batch' && !authoredLabel) {
-    return { label: t('workspaceBoard.generatedBatch'), derived: true };
+    return { label: t('canvasDelivery.generatedBatch'), derived: true };
   }
 
   const taskId = readNonEmptyString(provenance['taskId']);
@@ -218,9 +218,9 @@ function resolveGroupLabelPresentation(node: GroupCanvasNode): GroupLabelPresent
   if (authoredLabel && authoredLabel !== previousDefaultLabel) {
     return { label: authoredLabel, derived: false };
   }
-  if (taskId) return { label: t('workspaceBoard.task', { id: taskId }), derived: true };
-  if (runId) return { label: t('workspaceBoard.run', { id: runId }), derived: true };
-  return { label: t('workspaceBoard.processing'), derived: true };
+  if (taskId) return { label: t('canvasDelivery.task', { id: taskId }), derived: true };
+  if (runId) return { label: t('canvasDelivery.run', { id: runId }), derived: true };
+  return { label: t('canvasDelivery.processing'), derived: true };
 }
 
 function readNonEmptyString(value: unknown): string | undefined {

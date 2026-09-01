@@ -94,7 +94,7 @@ const generationPermission: DshPermissionHostProjection = {
   ],
 };
 
-const workspaceBoardTarget = {
+const defaultCanvasTarget = {
   workspaceId: 'workspace-1',
   canvasId: 'neko/boards/workspace.nkc',
 };
@@ -143,11 +143,11 @@ const composerConfiguration: DshComposerConfigurationProjection = {
     workspaceLabel: 'My Film',
     canvas: {
       workspaceId: 'workspace-1',
-      defaultTarget: workspaceBoardTarget,
+      defaultTarget: defaultCanvasTarget,
       options: [
         {
-          target: workspaceBoardTarget,
-          label: 'Board',
+          target: defaultCanvasTarget,
+          label: 'workspace.nkc',
         },
       ],
       diagnostics: [],
@@ -474,7 +474,7 @@ describe('DesktopAgentSurface', () => {
         references: [],
         images: [],
         contextPayloads: [],
-        canvasTurnTarget: workspaceBoardTarget,
+        canvasTurnTarget: defaultCanvasTarget,
       }),
     );
 
@@ -539,7 +539,7 @@ describe('DesktopAgentSurface', () => {
       references: [],
       images: [],
       contextPayloads: [],
-      canvasTurnTarget: workspaceBoardTarget,
+      canvasTurnTarget: defaultCanvasTarget,
     });
 
     await act(async () =>
@@ -728,7 +728,7 @@ describe('DesktopAgentSurface', () => {
       'Preserve this draft',
     );
     expect(await screen.findByText('My Film')).toBeTruthy();
-    expect(screen.getByRole('option', { name: 'Workspace Board' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'workspace.nkc' })).toBeTruthy();
     expect(view.container.querySelector('[data-workspace-canvas-context="true"]')).toBeTruthy();
     expect(dshSessions.getComposerConfiguration).toHaveBeenNthCalledWith(
       2,
@@ -964,7 +964,7 @@ describe('DesktopAgentSurface', () => {
       />,
     );
     expect(await screen.findByText('My Film')).toBeTruthy();
-    expect(screen.getByRole('option', { name: 'Workspace Board' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'workspace.nkc' })).toBeTruthy();
     expect(container.querySelector('[data-workspace-canvas-context="true"]')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Configure models' }));
@@ -1041,7 +1041,7 @@ describe('DesktopAgentSurface', () => {
           references: [],
           images: [],
           contextPayloads: [],
-          canvasTurnTarget: workspaceBoardTarget,
+          canvasTurnTarget: defaultCanvasTarget,
         },
       ),
     );
@@ -1099,7 +1099,7 @@ describe('DesktopAgentSurface', () => {
           references: [],
           images: [],
           contextPayloads: [],
-          canvasTurnTarget: workspaceBoardTarget,
+          canvasTurnTarget: defaultCanvasTarget,
         },
       ),
     );

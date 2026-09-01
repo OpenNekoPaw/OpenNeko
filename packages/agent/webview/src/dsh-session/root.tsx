@@ -992,10 +992,7 @@ function DshComposer({
                     defaultTarget: canvasCatalog.defaultTarget,
                     options: canvasCatalog.options.map((option) => ({
                       id: option.target.canvasId,
-                      label:
-                        option.target.canvasId === canvasCatalog.defaultTarget.canvasId
-                          ? t('chat.input.workspaceCanvas.board')
-                          : option.label,
+                      label: option.label,
                       target: option.target,
                       ...(option.summary === undefined ? {} : { summary: option.summary }),
                       ...(option.disabled === undefined ? {} : { disabled: option.disabled }),
@@ -1455,6 +1452,12 @@ function DshSessionEvent({
                           onOpen={onOpenTerminalArtifact}
                         />
                       )}
+                      {event.recommendedNextActionMarkdown === undefined ? null : (
+                        <RecommendedNextAction
+                          copy={copy}
+                          markdown={event.recommendedNextActionMarkdown}
+                        />
+                      )}
                     </div>
                   </div>
                 )}
@@ -1535,6 +1538,21 @@ function TerminalArtifactReference({
         </span>
         <span className="agent-terminal-artifact-title">{artifact.title}</span>
       </button>
+    </div>
+  );
+}
+
+function RecommendedNextAction({
+  copy,
+  markdown,
+}: {
+  readonly copy: DshAgentCopy;
+  readonly markdown: string;
+}): JSX.Element {
+  return (
+    <div className="agent-terminal-next-action" data-agent-terminal-next-action="true">
+      <span className="agent-terminal-next-action__label">{copy.recommendedNextAction}</span>
+      <MarkdownDocumentView className="markdown-content" value={markdown} />
     </div>
   );
 }
@@ -2143,7 +2161,6 @@ interface DshAgentCopy {
   readonly copyPayloadFailed: string;
   readonly attach: string;
   readonly attachmentsUnavailable: string;
-  readonly board: string;
   readonly chooseCharacter: string;
   readonly chooseProject: string;
   readonly chooseWorld: string;
@@ -2176,6 +2193,7 @@ interface DshAgentCopy {
   readonly placeholder: string;
   readonly processNote: string;
   readonly processNoteUnavailable: string;
+  readonly recommendedNextAction: string;
   readonly restartRuntime: string;
   readonly restartingRuntime: string;
   readonly runtimeUnavailableTitle: string;
@@ -2215,7 +2233,6 @@ const EN_COPY: DshAgentCopy = {
   attach: 'Add context',
   attachmentsUnavailable:
     'Attachments are unavailable until the authorized resource picker is connected.',
-  board: 'Board',
   chooseCharacter: 'Choose character',
   chooseProject: 'Choose project',
   chooseWorld: 'Choose world',
@@ -2249,6 +2266,7 @@ const EN_COPY: DshAgentCopy = {
   processNote: 'Progress update',
   processNoteUnavailable:
     'The model provided no additional progress update. Expand this section to inspect the current Tool status.',
+  recommendedNextAction: 'Recommended next action',
   restartRuntime: 'Restart DSH',
   restartingRuntime: 'Restarting DSH runtime…',
   runtimeUnavailableTitle: 'DSH runtime unavailable',
@@ -2292,7 +2310,6 @@ const ZH_COPY: DshAgentCopy = {
   copyPayloadFailed: '复制失败',
   attach: '添加上下文',
   attachmentsUnavailable: '授权资源选择器接入前，附件上下文暂不可用。',
-  board: '画板',
   chooseCharacter: '选择角色',
   chooseProject: '选择项目',
   chooseWorld: '选择世界',
@@ -2325,6 +2342,7 @@ const ZH_COPY: DshAgentCopy = {
   placeholder: '向 DSH Agent 提问…',
   processNote: '过程说明',
   processNoteUnavailable: '模型未提供额外的过程说明；可展开查看当前工具状态。',
+  recommendedNextAction: '推荐操作',
   restartRuntime: '重启 DSH',
   restartingRuntime: '正在重启 DSH 运行时…',
   runtimeUnavailableTitle: 'DSH 运行时不可用',

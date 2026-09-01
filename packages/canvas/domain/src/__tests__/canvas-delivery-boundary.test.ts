@@ -23,13 +23,13 @@ function readTypeScriptTree(relativePath: string): string {
     .join('\n');
 }
 
-describe('Canvas Board package boundaries', () => {
+describe('Canvas delivery package boundaries', () => {
   it('keeps durable delivery in the host-neutral Canvas domain', () => {
-    const coordinator = read('packages/canvas/domain/src/workspace-board-delivery-coordinator.ts');
-    const ledger = read('packages/canvas/domain/src/workspace-board-delivery-ledger.ts');
+    const coordinator = read('packages/canvas/domain/src/canvas-workspace-delivery-coordinator.ts');
+    const ledger = read('packages/canvas/domain/src/canvas-workspace-delivery-ledger.ts');
 
-    expect(coordinator).toContain('export class WorkspaceBoardDeliveryCoordinator');
-    expect(ledger).toContain('export class WorkspaceBoardDeliveryLedger');
+    expect(coordinator).toContain('export class CanvasWorkspaceDeliveryCoordinator');
+    expect(ledger).toContain('export class CanvasWorkspaceDeliveryLedger');
     expect(`${coordinator}\n${ledger}`).not.toMatch(/from ['"]@neko(?:-agent|\/agent)/);
     expect(`${coordinator}\n${ledger}`).not.toMatch(/from ['"](?:electron|react|vscode)['"]/);
   });
@@ -37,8 +37,8 @@ describe('Canvas Board package boundaries', () => {
   it('keeps Desktop renderer outside delivery lifecycle ownership', () => {
     const renderer = readTypeScriptTree('apps/neko-desktop/src/renderer');
 
-    expect(renderer).not.toContain('WorkspaceBoardDeliveryLedger');
-    expect(renderer).not.toContain('WorkspaceBoardDeliveryCoordinator');
+    expect(renderer).not.toContain('CanvasWorkspaceDeliveryLedger');
+    expect(renderer).not.toContain('CanvasWorkspaceDeliveryCoordinator');
   });
 
   it('removes the inter-extension Canvas API surface', () => {

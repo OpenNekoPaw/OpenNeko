@@ -3,9 +3,9 @@ import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import type {
-  DshWorkspaceBoardArtifactDeliveryInput,
-  DshWorkspaceBoardArtifactDeliveryOutcome,
-  DshWorkspaceBoardArtifactDeliveryPort,
+  DshCanvasArtifactDeliveryInput,
+  DshCanvasArtifactDeliveryOutcome,
+  DshCanvasArtifactDeliveryPort,
   DshDurableMarkdownArtifactPublicationPort,
 } from '@neko/agent-runtime/application';
 import type { CanvasWorkspaceTurnTarget } from '@neko/canvas-domain';
@@ -19,21 +19,21 @@ import {
   type NodeDocumentEntryReader,
 } from '@neko/content-domain/node';
 import {
-  WorkspaceBoardDeliveryCoordinator,
-  WorkspaceBoardDeliveryLedger,
+  CanvasWorkspaceDeliveryCoordinator,
+  CanvasWorkspaceDeliveryLedger,
   createGenerationJobWorkspaceDeliveryRequest,
   type CanvasWorkspaceProjectionArtifact,
   type CanvasWorkspaceProjectionRequest,
   type CanvasWorkspaceProjectionResult,
 } from '@neko/canvas-domain';
 import type { GenerationJobSnapshot } from '@neko/generation-domain/job';
-import { WorkspaceBoardNodeMutation } from '@neko/canvas-node';
+import { CanvasWorkspaceNodeMutation } from '@neko/canvas-node';
 import type { NekoHostPorts } from '@neko/host/ports';
 import type { LocalMetadataStore } from '@neko/local-metadata';
 import { hashStableValue } from '@neko/shared';
 import type { DesktopWorkspaceRegistry } from './desktop-workspace-registry';
 
-export interface DesktopDshWorkspaceBoardDeliveryOptions {
+export interface DesktopDshCanvasArtifactDeliveryOptions {
   readonly applicationInstanceId: string;
   readonly metadataStore: LocalMetadataStore;
   readonly workspaceRegistry: Pick<DesktopWorkspaceRegistry, 'restore'>;
@@ -47,13 +47,13 @@ export interface DesktopDshWorkspaceBoardDeliveryOptions {
   readonly createIdentity?: () => string;
 }
 
-interface WorkspaceBoardBinding {
+interface CanvasDeliveryBinding {
   readonly workspacePath: string;
-  readonly ledger: WorkspaceBoardDeliveryLedger;
-  readonly coordinator: WorkspaceBoardDeliveryCoordinator;
+  readonly ledger: CanvasWorkspaceDeliveryLedger;
+  readonly coordinator: CanvasWorkspaceDeliveryCoordinator;
 }
 
-export interface DesktopDshGenerationWorkspaceBoardProjectionInput {
+export interface DesktopDshGenerationCanvasProjectionInput {
   readonly workspaceId: string;
   readonly dshSessionId: string;
   readonly turn: number;
@@ -62,7 +62,7 @@ export interface DesktopDshGenerationWorkspaceBoardProjectionInput {
   readonly snapshot: GenerationJobSnapshot;
 }
 
-export function createDshWorkspaceBoardContentRead(input: {
+export function createDshCanvasArtifactContentRead(input: {
   readonly workspacePath: string;
   readonly documentEntryReader: NodeDocumentEntryReader;
 }): ContentReadService {
@@ -72,25 +72,23 @@ export function createDshWorkspaceBoardContentRead(input: {
   });
 }
 
-export class DesktopDshWorkspaceBoardDelivery
-  implements DshWorkspaceBoardArtifactDeliveryPort, DshDurableMarkdownArtifactPublicationPort
+export class DesktopDshCanvasArtifactDelivery
+  implements DshCanvasArtifactDeliveryPort, DshDurableMarkdownArtifactPublicationPort
 {
-  private readonly bindings = new Map<string, WorkspaceBoardBinding>();
+  private readonly bindings = new Map<string, CanvasDeliveryBinding>();
   private readonly createIdentity: () => string;
 
-  constructor(private readonly options: DesktopDshWorkspaceBoardDeliveryOptions) {
+  constructor(private readonly options: DesktopDshCanvasArtifactDeliveryOptions) {
     this.createIdentity = options.createIdentity ?? randomUUID;
   }
 
-  async deliver(
-    input: DshWorkspaceBoardArtifactDeliveryInput,
-  ): Promise<DshWorkspaceBoardArtifactDeliveryOutcome> {
+  async deliver(input: DshCanvasArtifactDeliveryInput): Promise<DshCanvasArtifactDeliveryOutcome> {
     try {
       const workspace = await this.restoreExactWorkspace(input.workspaceId);
-      const deliveryId = createDshWorkspaceBoardProjectionRequest(input, workspace).process
+      const deliveryId = createDshCanvasArtifactProjectionRequest(input, workspace).process
         .deliveryId;
       const results = await this.enqueueProjection(workspace, deliveryId, async () =>
-        createDshWorkspaceBoardProjectionRequest(
+        createDshCanvasArtifactProjectionRequest(
           await this.resolveResourceFingerprints(input, workspace),
           workspace,
         ),
@@ -103,17 +101,17 @@ export class DesktopDshWorkspaceBoardDelivery
       return blocked ? this.blockedOutcome(workspace.workspaceId, blocked) : { status: 'accepted' };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const code = message.startsWith('workspace-board-open-session-dirty:')
-        ? 'workspace-board-open-session-dirty'
-        : 'desktop-dsh-workspace-board-delivery-failed';
+      const code = message.startsWith('canvas-delivery-open-session-dirty:')
+        ? 'canvas-delivery-open-session-dirty'
+        : 'desktop-dsh-canvas-artifact-delivery-failed';
       this.reportBlocked(input.workspaceId, code, message);
       return { status: 'blocked', diagnostic: { code, message } };
     }
   }
 
   async projectGenerationJob(
-    input: DesktopDshGenerationWorkspaceBoardProjectionInput,
-  ): Promise<DshWorkspaceBoardArtifactDeliveryOutcome> {
+    input: DesktopDshGenerationCanvasProjectionInput,
+  ): Promise<DshCanvasArtifactDeliveryOutcome> {
     try {
       const workspace = await this.restoreExactWorkspace(input.workspaceId);
       const projectionTarget = resolveProjectionTarget(input, workspace);
@@ -136,9 +134,9 @@ export class DesktopDshWorkspaceBoardDelivery
       return blocked ? this.blockedOutcome(workspace.workspaceId, blocked) : { status: 'accepted' };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const code = message.startsWith('workspace-board-open-session-dirty:')
-        ? 'workspace-board-open-session-dirty'
-        : 'desktop-dsh-generation-workspace-board-projection-failed';
+      const code = message.startsWith('canvas-delivery-open-session-dirty:')
+        ? 'canvas-delivery-open-session-dirty'
+        : 'desktop-dsh-generation-canvas-artifact-projection-failed';
       this.reportBlocked(input.workspaceId, code, message);
       return { status: 'blocked', diagnostic: { code, message } };
     }
@@ -165,11 +163,11 @@ export class DesktopDshWorkspaceBoardDelivery
   }
 
   private async resolveResourceFingerprints(
-    input: DshWorkspaceBoardArtifactDeliveryInput,
+    input: DshCanvasArtifactDeliveryInput,
     workspace: AssetWorkspaceResolution,
-  ): Promise<DshWorkspaceBoardArtifactDeliveryInput> {
+  ): Promise<DshCanvasArtifactDeliveryInput> {
     const contentRead = this.options.createContentRead(workspace.workspacePath);
-    return resolveDshWorkspaceBoardResourceFingerprints(input, contentRead);
+    return resolveDshCanvasArtifactResourceFingerprints(input, contentRead);
   }
 
   private async enqueueProjection(
@@ -195,26 +193,26 @@ export class DesktopDshWorkspaceBoardDelivery
     const workspace = await this.options.workspaceRegistry.restore(workspaceId);
     if (workspace.workspaceId !== workspaceId) {
       throw new Error(
-        `Workspace Board delivery resolved '${workspace.workspaceId}' instead of '${workspaceId}'.`,
+        `Canvas delivery resolved '${workspace.workspaceId}' instead of '${workspaceId}'.`,
       );
     }
     return workspace;
   }
 
-  private bindingFor(workspace: AssetWorkspaceResolution): WorkspaceBoardBinding {
+  private bindingFor(workspace: AssetWorkspaceResolution): CanvasDeliveryBinding {
     const existing = this.bindings.get(workspace.workspaceId);
     if (existing?.workspacePath === workspace.workspacePath) return existing;
-    const ledger = new WorkspaceBoardDeliveryLedger({
+    const ledger = new CanvasWorkspaceDeliveryLedger({
       metadataStore: this.options.metadataStore,
       workspaceId: workspace.workspaceId,
       createIdentity: this.createIdentity,
     });
-    const nodeMutation = new WorkspaceBoardNodeMutation({
+    const nodeMutation = new CanvasWorkspaceNodeMutation({
       workspace,
       host: this.options.host,
       createIdentity: this.createIdentity,
     });
-    const coordinator = new WorkspaceBoardDeliveryCoordinator({
+    const coordinator = new CanvasWorkspaceDeliveryCoordinator({
       ledger,
       mutation: {
         coordinate: (target, operation) =>
@@ -239,10 +237,10 @@ export class DesktopDshWorkspaceBoardDelivery
   private blockedOutcome(
     workspaceId: string,
     result: CanvasWorkspaceProjectionResult,
-  ): DshWorkspaceBoardArtifactDeliveryOutcome {
+  ): DshCanvasArtifactDeliveryOutcome {
     const diagnostic = result.diagnostics[0];
-    const code = diagnostic?.code ?? `workspace-board-${result.status}`;
-    const message = diagnostic?.message ?? `Workspace Board delivery ended as ${result.status}.`;
+    const code = diagnostic?.code ?? `canvas-delivery-${result.status}`;
+    const message = diagnostic?.message ?? `Canvas delivery ended as ${result.status}.`;
     this.reportBlocked(workspaceId, code, message);
     return { status: 'blocked', diagnostic: { code, message } };
   }
@@ -312,15 +310,15 @@ export async function resolveDshDurableMarkdownArtifact(
   return { contentLocator: input.contentLocator };
 }
 
-export async function resolveDshWorkspaceBoardResourceFingerprints(
-  input: DshWorkspaceBoardArtifactDeliveryInput,
+export async function resolveDshCanvasArtifactResourceFingerprints(
+  input: DshCanvasArtifactDeliveryInput,
   contentRead: Pick<ContentReadService, 'stat'>,
-): Promise<DshWorkspaceBoardArtifactDeliveryInput> {
+): Promise<DshCanvasArtifactDeliveryInput> {
   const artifacts = await Promise.all(
     input.artifacts.map(async (artifact) => {
       const source = await contentRead.stat(artifact.contentLocator);
       if (source.status === 'unavailable') {
-        throw new Error(`DSH Workspace Board source is unavailable: ${source.diagnostic.code}.`);
+        throw new Error(`DSH Canvas source is unavailable: ${source.diagnostic.code}.`);
       }
       return {
         ...artifact,
@@ -331,12 +329,12 @@ export async function resolveDshWorkspaceBoardResourceFingerprints(
   return { ...input, artifacts };
 }
 
-export function createDshWorkspaceBoardProjectionRequest(
-  input: DshWorkspaceBoardArtifactDeliveryInput,
+export function createDshCanvasArtifactProjectionRequest(
+  input: DshCanvasArtifactDeliveryInput,
   workspace: AssetWorkspaceResolution,
 ): CanvasWorkspaceProjectionRequest {
   if (input.artifacts.length === 0) {
-    throw new Error('DSH Workspace Board delivery requires at least one artifact.');
+    throw new Error('DSH Canvas delivery requires at least one artifact.');
   }
   const identity = {
     workspaceId: input.workspaceId,

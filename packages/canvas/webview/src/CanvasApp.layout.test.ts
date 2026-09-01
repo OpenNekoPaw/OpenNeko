@@ -270,7 +270,7 @@ describe('Canvas creative workbench layout boundary', () => {
   });
 
   it('does not duplicate the document title as a canvas scope chip', () => {
-    expect(appSource).toMatch(/function CanvasBoardNavigationBar/);
+    expect(appSource).toMatch(/function RelatedCanvasNavigationBar/);
     expect(appSource).toMatch(/if \(relatedBoards\.length === 0\) return null/);
     expect(appSource).not.toMatch(/CanvasScopeNavigationBar/);
     expect(appSource).not.toMatch(/SCOPE_LABELS/);

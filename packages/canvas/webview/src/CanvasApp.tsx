@@ -1023,7 +1023,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
                 onDrop={handleDrop}
               >
                 {canvasData && canOpenBoardRef && (
-                  <CanvasBoardNavigationBar
+                  <RelatedCanvasNavigationBar
                     canvasData={canvasData}
                     onOpenBoardRef={handleCanvasBoardRefOpen}
                   />
@@ -1215,7 +1215,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   );
 }
 
-function CanvasBoardNavigationBar({
+function RelatedCanvasNavigationBar({
   canvasData,
   onOpenBoardRef,
 }: {
@@ -1234,7 +1234,7 @@ function CanvasBoardNavigationBar({
   if (relatedBoards.length === 0) return null;
 
   return (
-    <div className="canvas-board-navigation-bar pointer-events-none absolute left-3 right-3 z-20 flex min-w-0 flex-wrap items-center gap-2">
+    <div className="canvas-navigation-bar pointer-events-none absolute left-3 right-3 z-20 flex min-w-0 flex-wrap items-center gap-2">
       {relatedBoards.slice(0, 6).map((board, index) => {
         const boardDiagnostics = validateCanvasBoardRef(board.ref);
         const disabled = boardDiagnostics.some((diagnostic) => diagnostic.severity === 'error');
@@ -1258,12 +1258,12 @@ function CanvasBoardNavigationBar({
         );
       })}
 
-      {diagnostics.length > 0 && <CanvasBoardDiagnostics diagnostics={diagnostics} />}
+      {diagnostics.length > 0 && <RelatedCanvasDiagnostics diagnostics={diagnostics} />}
     </div>
   );
 }
 
-function CanvasBoardDiagnostics({
+function RelatedCanvasDiagnostics({
   diagnostics,
 }: {
   diagnostics: readonly CanvasBoardNavigationDiagnostic[];

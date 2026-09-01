@@ -17,7 +17,7 @@ const identity = {
   dshSessionId: 'dsh-session-1',
 };
 
-const workspaceBoardTarget = {
+const defaultCanvasTarget = {
   workspaceId: 'workspace-1',
   canvasId: 'neko/boards/workspace.nkc',
 };
@@ -493,11 +493,11 @@ describe('Desktop DSH Session Host', () => {
         request('submit', {
           input: {
             kind: 'message',
-            text: 'Analyze the Board',
+            text: 'Analyze the Canvas',
             references: [],
             images: [],
             contextPayloads: [],
-            canvasTurnTarget: workspaceBoardTarget,
+            canvasTurnTarget: defaultCanvasTarget,
           },
         }),
       ),
@@ -1197,7 +1197,7 @@ describe('Desktop DSH Session Host', () => {
     ]);
   });
 
-  it('projects only the conversational summary from an admitted final Markdown artifact', async () => {
+  it('projects the summary, artifact and recommended next action separately', async () => {
     const projection = new DshAcpProjection();
     projection.acceptSessionEvent({
       sessionId: identity.dshSessionId,
@@ -1230,7 +1230,7 @@ describe('Desktop DSH Session Host', () => {
         messageId: 'assistant-artifact',
         content: {
           type: 'text',
-          text: 'Saved the plan.\n\n<!-- neko:artifact -->\n\n# Durable Plan\n\nFull body.',
+          text: 'Saved the plan.\n\n<!-- neko:next-action -->\n\nGenerate the opening shot.\n\n<!-- neko:artifact -->\n\n# Durable Plan\n\nFull body.',
         },
       },
     });
@@ -1269,6 +1269,7 @@ describe('Desktop DSH Session Host', () => {
         role: 'assistant',
         text: 'Saved the plan.',
         state: 'final',
+        recommendedNextActionMarkdown: 'Generate the opening shot.',
         artifact: {
           kind: 'reviewable-markdown',
           title: 'Durable Plan',
@@ -1286,6 +1287,7 @@ describe('Desktop DSH Session Host', () => {
       }),
     );
     expect(JSON.stringify(result.projection.events)).not.toContain('Full body.');
+    expect(JSON.stringify(result.projection.events)).not.toContain('neko:next-action');
   });
 
   it('opens only the exact persisted terminal artifact selected by message identity', async () => {

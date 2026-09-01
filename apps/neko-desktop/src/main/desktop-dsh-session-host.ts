@@ -28,7 +28,7 @@ import type {
   ConversationDshSessionBoundClient,
   DshConversationCatalogStore,
   DshTurnCanvasTargetOwner,
-  DshWorkspaceBoardArtifactDeliveryService,
+  DshCanvasArtifactDeliveryService,
 } from '@neko/agent-runtime/application';
 import {
   AgentTerminalMarkdownContractError,
@@ -155,10 +155,7 @@ export class DesktopDshSessionHost {
           readonly modelSupportsImageInput: boolean;
         }): Promise<readonly AgentPromptImage[]>;
       };
-      readonly terminalArtifacts: Pick<
-        DshWorkspaceBoardArtifactDeliveryService,
-        'resolveTerminalArtifact'
-      >;
+      readonly terminalArtifacts: Pick<DshCanvasArtifactDeliveryService, 'resolveTerminalArtifact'>;
       readonly openTerminalArtifact: (input: {
         readonly windowId: string;
         readonly rendererSessionId: string;
@@ -663,6 +660,7 @@ function projectEvents(
           const value = projectEvent(
             { ...event, text: terminal.summaryMarkdown },
             terminalArtifacts.get(event.messageId),
+            terminal.recommendedNextActionMarkdown,
           );
           if (value !== undefined) projected.push(value);
           const artifactDiagnostic = terminalArtifactDiagnostics.get(event.messageId);
@@ -725,6 +723,7 @@ function projectEvents(
 function projectEvent(
   event: DshAcpProjectedEvent,
   artifact?: DshSessionTerminalArtifactReference,
+  recommendedNextActionMarkdown?: string,
 ): DshSessionHostEvent | undefined {
   switch (event.kind) {
     case 'message':
@@ -742,6 +741,7 @@ function projectEvent(
         messageId: event.messageId,
         state: event.state,
         ...(artifact === undefined ? {} : { artifact }),
+        ...(recommendedNextActionMarkdown === undefined ? {} : { recommendedNextActionMarkdown }),
       };
     case 'thought':
       return {

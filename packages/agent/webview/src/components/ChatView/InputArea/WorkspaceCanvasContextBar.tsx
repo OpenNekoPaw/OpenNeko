@@ -23,7 +23,7 @@ export function WorkspaceCanvasContextBar({
   const selectedOption = canvas?.options.find((option) => option.id === canvas.selectedId);
   const selectedLabel =
     canvas === undefined
-      ? t('chat.input.workspaceCanvas.board')
+      ? t('chat.input.workspaceCanvas.unavailable')
       : (selectedOption?.label ?? t('chat.input.workspaceCanvas.unavailable'));
 
   return (
@@ -69,7 +69,7 @@ export function WorkspaceCanvasContextBar({
           </span>
         </span>
       ) : showCanvasIndex ? (
-        <span className="agent-workspace-canvas-board-default">{selectedLabel}</span>
+        <span className="agent-workspace-canvas-default">{selectedLabel}</span>
       ) : null}
       {canvas?.diagnostic ? (
         <span className="agent-workspace-canvas-diagnostic" role="alert">

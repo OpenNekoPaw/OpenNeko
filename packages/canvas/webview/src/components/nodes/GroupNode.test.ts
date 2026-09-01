@@ -48,7 +48,7 @@ describe('GroupNode', () => {
     expect(markup).not.toContain('data-group-review-surface');
   });
 
-  it('localizes canonical Workspace Board labels while preserving authored names', () => {
+  it('localizes canonical Canvas labels while preserving authored names', () => {
     setLocale('zh-cn');
     const inbox = createGroup('workspace-inbox', { label: 'Inbox' });
     const task = createGroup('workspace-process-task-1', {

@@ -7,20 +7,25 @@ import {
   type CanvasWorkspaceDeliveryState,
   type CanvasWorkspaceProjectionDiagnostic,
   type CanvasWorkspaceProjectionRequest,
-} from './types/canvas-workspace-board';
+} from './types/canvas-workspace-delivery';
 import type { LocalMetadataStore } from '@neko/local-metadata';
 
+// These bytes are durable delivery identities; queued and recoverable work depends on them.
 const DELIVERY_TASK_PREFIX = 'system:canvas-board-delivery:';
 const WRITER_TASK_PREFIX = 'system:canvas-board-writer:';
+const WRITER_TASK_ID_PREFIX = 'canvas-board-writer:';
+const DELIVERY_PAYLOAD_KIND = 'canvas-workspace-board-delivery';
+const RECEIPT_PAYLOAD_KIND = 'canvas-workspace-board-receipt';
+const WRITER_PAYLOAD_KIND = 'canvas-workspace-board-writer';
 
-export interface WorkspaceBoardDeliveryLedgerOptions {
+export interface CanvasWorkspaceDeliveryLedgerOptions {
   readonly metadataStore: LocalMetadataStore;
   readonly workspaceId: string;
   readonly createIdentity: () => string;
   readonly now?: () => number;
 }
 
-export interface WorkspaceBoardDeliveryTask {
+export interface CanvasWorkspaceDeliveryTask {
   readonly request: CanvasWorkspaceProjectionRequest;
   readonly state: Exclude<CanvasWorkspaceDeliveryState, 'projected' | 'noop'>;
   readonly attempt: number;
@@ -28,25 +33,25 @@ export interface WorkspaceBoardDeliveryTask {
   readonly diagnostics: readonly CanvasWorkspaceProjectionDiagnostic[];
 }
 
-interface DeliveryTaskPayload extends WorkspaceBoardDeliveryTask {
-  readonly kind: 'canvas-workspace-board-delivery';
+interface DeliveryTaskPayload extends CanvasWorkspaceDeliveryTask {
+  readonly kind: typeof DELIVERY_PAYLOAD_KIND;
   readonly requestDigest: string;
 }
 
 interface DeliveryReceiptPayload {
-  readonly kind: 'canvas-workspace-board-receipt';
+  readonly kind: typeof RECEIPT_PAYLOAD_KIND;
   readonly receipt: CanvasWorkspaceDeliveryReceipt;
 }
 
 interface WriterPayload {
-  readonly kind: 'canvas-workspace-board-writer';
+  readonly kind: typeof WRITER_PAYLOAD_KIND;
   readonly claim: CanvasWorkspaceDeliveryClaim;
 }
 
-export class WorkspaceBoardDeliveryLedger {
-  constructor(private readonly options: WorkspaceBoardDeliveryLedgerOptions) {}
+export class CanvasWorkspaceDeliveryLedger {
+  constructor(private readonly options: CanvasWorkspaceDeliveryLedgerOptions) {}
 
-  async enqueue(request: CanvasWorkspaceProjectionRequest): Promise<WorkspaceBoardDeliveryTask> {
+  async enqueue(request: CanvasWorkspaceProjectionRequest): Promise<CanvasWorkspaceDeliveryTask> {
     this.assertWorkspace(request);
     const diagnostics = validateCanvasWorkspaceProjectionRequest(request);
     if (diagnostics.length > 0) {
@@ -54,7 +59,7 @@ export class WorkspaceBoardDeliveryLedger {
     }
     const taskKey = deliveryTaskKey(request.process.deliveryId);
     return this.options.metadataStore.transaction(
-      { mode: 'state-write', ownership: 'state', operation: 'enqueue-canvas-board-delivery' },
+      { mode: 'state-write', ownership: 'state', operation: 'enqueue-canvas-delivery' },
       async ({ repositories }) => {
         const existing = await repositories.tasks.get(this.options.workspaceId, taskKey);
         if (existing) {
@@ -74,7 +79,7 @@ export class WorkspaceBoardDeliveryLedger {
         }
         const now = this.now();
         const payload: DeliveryTaskPayload = {
-          kind: 'canvas-workspace-board-delivery',
+          kind: DELIVERY_PAYLOAD_KIND,
           request,
           requestDigest: hashStableValue(request),
           state: 'queued',
@@ -102,7 +107,7 @@ export class WorkspaceBoardDeliveryLedger {
     );
   }
 
-  async listPending(): Promise<readonly WorkspaceBoardDeliveryTask[]> {
+  async listPending(): Promise<readonly CanvasWorkspaceDeliveryTask[]> {
     const records = await this.options.metadataStore.repositories.tasks.list({
       workspaceId: this.options.workspaceId,
       statuses: ['queued', 'claimed', 'blocked', 'conflict'],
@@ -129,7 +134,7 @@ export class WorkspaceBoardDeliveryLedger {
   }): Promise<CanvasWorkspaceDeliveryClaim | undefined> {
     const now = this.now();
     return this.options.metadataStore.transaction(
-      { mode: 'state-write', ownership: 'state', operation: 'claim-canvas-board-writer' },
+      { mode: 'state-write', ownership: 'state', operation: 'claim-canvas-writer' },
       async ({ repositories }) => {
         const taskKey = writerTaskKey(this.options.workspaceId);
         const existing = await repositories.tasks.get(this.options.workspaceId, taskKey);
@@ -144,18 +149,18 @@ export class WorkspaceBoardDeliveryLedger {
               ? previous.leaseId
               : requireNonEmptyIdentity(
                   this.options.createIdentity(),
-                  'Canvas Board writer lease identity',
+                  'Canvas delivery writer lease identity',
                 ),
           expiresAt: now + input.leaseDurationMs,
         };
         const payload: WriterPayload = {
-          kind: 'canvas-workspace-board-writer',
+          kind: WRITER_PAYLOAD_KIND,
           claim,
         };
         await repositories.tasks.upsert({
           workspaceId: this.options.workspaceId,
           taskKey,
-          taskId: `canvas-board-writer:${this.options.workspaceId}`,
+          taskId: `${WRITER_TASK_ID_PREFIX}${this.options.workspaceId}`,
           status: 'claimed',
           payload,
           createdAt: existing?.createdAt ?? now,
@@ -168,7 +173,7 @@ export class WorkspaceBoardDeliveryLedger {
 
   async releaseWriter(claim: CanvasWorkspaceDeliveryClaim): Promise<void> {
     await this.options.metadataStore.transaction(
-      { mode: 'state-write', ownership: 'state', operation: 'release-canvas-board-writer' },
+      { mode: 'state-write', ownership: 'state', operation: 'release-canvas-writer' },
       async ({ repositories }) => {
         await this.assertCurrentWriter(repositories, claim, false);
         await repositories.tasks.delete(
@@ -181,7 +186,7 @@ export class WorkspaceBoardDeliveryLedger {
 
   async assertWriter(claim: CanvasWorkspaceDeliveryClaim): Promise<void> {
     await this.options.metadataStore.transaction(
-      { mode: 'read', ownership: 'state', operation: 'assert-canvas-board-writer' },
+      { mode: 'read', ownership: 'state', operation: 'assert-canvas-writer' },
       async ({ repositories }) => this.assertCurrentWriter(repositories, claim),
     );
   }
@@ -189,10 +194,10 @@ export class WorkspaceBoardDeliveryLedger {
   async claimDelivery(
     deliveryId: string,
     writer: CanvasWorkspaceDeliveryClaim,
-  ): Promise<WorkspaceBoardDeliveryTask | undefined> {
+  ): Promise<CanvasWorkspaceDeliveryTask | undefined> {
     const now = this.now();
     return this.options.metadataStore.transaction(
-      { mode: 'state-write', ownership: 'state', operation: 'claim-canvas-board-delivery' },
+      { mode: 'state-write', ownership: 'state', operation: 'claim-canvas-delivery' },
       async ({ repositories }) => {
         await this.assertCurrentWriter(repositories, writer);
         const taskKey = deliveryTaskKey(deliveryId);
@@ -238,12 +243,12 @@ export class WorkspaceBoardDeliveryLedger {
   ): Promise<void> {
     const now = this.now();
     await this.options.metadataStore.transaction(
-      { mode: 'state-write', ownership: 'state', operation: 'complete-canvas-board-delivery' },
+      { mode: 'state-write', ownership: 'state', operation: 'complete-canvas-delivery' },
       async ({ repositories }) => {
         await this.assertCurrentWriter(repositories, writer);
         const taskKey = deliveryTaskKey(receipt.deliveryId);
         const record = await repositories.tasks.get(this.options.workspaceId, taskKey);
-        if (!record) throw new Error(`Canvas Board delivery ${receipt.deliveryId} is missing.`);
+        if (!record) throw new Error(`Canvas delivery ${receipt.deliveryId} is missing.`);
         const existingReceipt = parseReceiptPayload(record.payload);
         if (existingReceipt) {
           if (hashStableValue(existingReceipt.receipt) !== hashStableValue(receipt)) {
@@ -256,7 +261,7 @@ export class WorkspaceBoardDeliveryLedger {
         const current = parseDeliveryPayload(record.payload);
         assertDeliveryClaim(current, writer);
         const payload: DeliveryReceiptPayload = {
-          kind: 'canvas-workspace-board-receipt',
+          kind: RECEIPT_PAYLOAD_KIND,
           receipt,
         };
         await repositories.tasks.upsert({
@@ -278,7 +283,7 @@ export class WorkspaceBoardDeliveryLedger {
   }): Promise<void> {
     const now = this.now();
     await this.options.metadataStore.transaction(
-      { mode: 'state-write', ownership: 'state', operation: 'fail-canvas-board-delivery' },
+      { mode: 'state-write', ownership: 'state', operation: 'fail-canvas-delivery' },
       async ({ repositories }) => {
         await this.assertCurrentWriter(repositories, input.writer);
         const taskKey = deliveryTaskKey(input.deliveryId);
@@ -312,7 +317,7 @@ export class WorkspaceBoardDeliveryLedger {
   async retry(deliveryId: string): Promise<void> {
     const now = this.now();
     await this.options.metadataStore.transaction(
-      { mode: 'state-write', ownership: 'state', operation: 'retry-canvas-board-delivery' },
+      { mode: 'state-write', ownership: 'state', operation: 'retry-canvas-delivery' },
       async ({ repositories }) => {
         const taskKey = deliveryTaskKey(deliveryId);
         const record = await repositories.tasks.get(this.options.workspaceId, taskKey);
@@ -339,7 +344,7 @@ export class WorkspaceBoardDeliveryLedger {
   async discard(deliveryId: string): Promise<void> {
     const now = this.now();
     await this.options.metadataStore.transaction(
-      { mode: 'state-write', ownership: 'state', operation: 'discard-canvas-board-delivery' },
+      { mode: 'state-write', ownership: 'state', operation: 'discard-canvas-delivery' },
       async ({ repositories }) => {
         const taskKey = deliveryTaskKey(deliveryId);
         const record = await repositories.tasks.get(this.options.workspaceId, taskKey);
@@ -359,7 +364,7 @@ export class WorkspaceBoardDeliveryLedger {
   private assertWorkspace(request: CanvasWorkspaceProjectionRequest): void {
     if (request.target.workspaceId !== this.options.workspaceId) {
       throw new Error(
-        `Canvas Board delivery workspace ${request.target.workspaceId} does not match ${this.options.workspaceId}.`,
+        `Canvas delivery workspace ${request.target.workspaceId} does not match ${this.options.workspaceId}.`,
       );
     }
   }
@@ -373,14 +378,14 @@ export class WorkspaceBoardDeliveryLedger {
       this.options.workspaceId,
       writerTaskKey(this.options.workspaceId),
     );
-    if (!writer) throw new Error('stale-writer: Canvas Board writer lease is missing.');
+    if (!writer) throw new Error('stale-writer: Canvas delivery writer lease is missing.');
     const current = parseWriterPayload(writer.payload).claim;
     if (
       current.holderId !== claim.holderId ||
       current.leaseId !== claim.leaseId ||
       (requireUnexpired && current.expiresAt <= this.now())
     ) {
-      throw new Error('stale-writer: Canvas Board writer lease is stale.');
+      throw new Error('stale-writer: Canvas delivery writer lease is stale.');
     }
   }
 
@@ -397,7 +402,7 @@ function writerTaskKey(workspaceId: string): string {
   return `${WRITER_TASK_PREFIX}${workspaceId}`;
 }
 
-function toDeliveryTask(payload: DeliveryTaskPayload): WorkspaceBoardDeliveryTask {
+function toDeliveryTask(payload: DeliveryTaskPayload): CanvasWorkspaceDeliveryTask {
   return {
     request: payload.request,
     state: payload.state,
@@ -408,8 +413,8 @@ function toDeliveryTask(payload: DeliveryTaskPayload): WorkspaceBoardDeliveryTas
 }
 
 function parseDeliveryPayload(value: unknown): DeliveryTaskPayload {
-  if (!isRecord(value) || value['kind'] !== 'canvas-workspace-board-delivery') {
-    throw new Error('Canvas Board delivery payload has an invalid kind.');
+  if (!isRecord(value) || value['kind'] !== DELIVERY_PAYLOAD_KIND) {
+    throw new Error('Canvas delivery payload has an invalid kind.');
   }
   const request = value['request'];
   const state = value['state'];
@@ -425,7 +430,7 @@ function parseDeliveryPayload(value: unknown): DeliveryTaskPayload {
     !Array.isArray(diagnostics) ||
     !diagnostics.every(isProjectionDiagnostic)
   ) {
-    throw new Error('Canvas Board delivery payload violates its contract.');
+    throw new Error('Canvas delivery payload violates its contract.');
   }
   const requestDiagnostics = validateCanvasWorkspaceProjectionRequest(request);
   if (requestDiagnostics.length > 0) {
@@ -435,10 +440,10 @@ function parseDeliveryPayload(value: unknown): DeliveryTaskPayload {
   }
   const claim = value['claim'];
   if (claim !== undefined && !isDeliveryClaim(claim)) {
-    throw new Error('Canvas Board delivery claim violates its contract.');
+    throw new Error('Canvas delivery claim violates its contract.');
   }
   return {
-    kind: 'canvas-workspace-board-delivery',
+    kind: DELIVERY_PAYLOAD_KIND,
     request,
     requestDigest: value['requestDigest'],
     state,
@@ -449,13 +454,13 @@ function parseDeliveryPayload(value: unknown): DeliveryTaskPayload {
 }
 
 function parseReceiptPayload(value: unknown): DeliveryReceiptPayload | undefined {
-  if (!isRecord(value) || value['kind'] !== 'canvas-workspace-board-receipt') return undefined;
+  if (!isRecord(value) || value['kind'] !== RECEIPT_PAYLOAD_KIND) return undefined;
   const receipt = value['receipt'];
   if (!isDeliveryReceipt(receipt)) {
-    throw new Error('Canvas Board delivery receipt violates its contract.');
+    throw new Error('Canvas delivery receipt violates its contract.');
   }
   return {
-    kind: 'canvas-workspace-board-receipt',
+    kind: RECEIPT_PAYLOAD_KIND,
     receipt,
   };
 }
@@ -463,27 +468,27 @@ function parseReceiptPayload(value: unknown): DeliveryReceiptPayload | undefined
 function parseWriterPayload(value: unknown): WriterPayload {
   if (
     !isRecord(value) ||
-    value['kind'] !== 'canvas-workspace-board-writer' ||
+    value['kind'] !== WRITER_PAYLOAD_KIND ||
     !isDeliveryClaim(value['claim'])
   ) {
-    throw new Error('Canvas Board writer payload violates its contract.');
+    throw new Error('Canvas delivery writer payload violates its contract.');
   }
   return {
-    kind: 'canvas-workspace-board-writer',
+    kind: WRITER_PAYLOAD_KIND,
     claim: value['claim'],
   };
 }
 
 function assertDeliveryClaim(
-  task: WorkspaceBoardDeliveryTask,
+  task: CanvasWorkspaceDeliveryTask,
   writer: CanvasWorkspaceDeliveryClaim,
 ): void {
   if (task.claim?.holderId !== writer.holderId || task.claim.leaseId !== writer.leaseId) {
-    throw new Error('stale-writer: Canvas Board delivery claim is stale.');
+    throw new Error('stale-writer: Canvas delivery claim is stale.');
   }
 }
 
-function isActiveDeliveryState(value: unknown): value is WorkspaceBoardDeliveryTask['state'] {
+function isActiveDeliveryState(value: unknown): value is CanvasWorkspaceDeliveryTask['state'] {
   return (
     value === 'queued' ||
     value === 'claimed' ||

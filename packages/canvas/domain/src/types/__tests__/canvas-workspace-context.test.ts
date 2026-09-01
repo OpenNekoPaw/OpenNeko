@@ -47,7 +47,7 @@ describe('Canvas workspace context contract', () => {
       options: [
         {
           target: createDefaultCanvasWorkspaceTarget('workspace-1'),
-          label: 'Workspace Board',
+          label: 'workspace.nkc',
         },
         {
           target: createCanvasWorkspaceTarget('workspace-1', 'neko/boards/canvas-1.nkc'),
@@ -74,7 +74,7 @@ describe('Canvas workspace context contract', () => {
         options: [
           {
             target: createDefaultCanvasWorkspaceTarget('workspace-1'),
-            label: 'Workspace Board',
+            label: 'workspace.nkc',
             disabled: true,
           },
         ],
@@ -86,8 +86,8 @@ describe('Canvas workspace context contract', () => {
         options: [
           {
             target: createDefaultCanvasWorkspaceTarget('workspace-1'),
-            label: 'Workspace Board',
-            index: { name: 'Workspace Board', scopeKind: 'unknown', relatedBoardCount: 0 },
+            label: 'workspace.nkc',
+            index: { name: 'workspace.nkc', scopeKind: 'unknown', relatedBoardCount: 0 },
           },
         ],
       }),
@@ -101,7 +101,7 @@ describe('Canvas workspace context contract', () => {
         options: [
           {
             target: createDefaultCanvasWorkspaceTarget('workspace-1'),
-            label: 'Workspace Board',
+            label: 'workspace.nkc',
           },
           {
             target: createCanvasWorkspaceTarget('workspace-2', 'neko/boards/canvas-2.nkc'),

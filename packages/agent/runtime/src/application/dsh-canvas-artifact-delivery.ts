@@ -7,7 +7,6 @@ import {
   CONTENT_IMAGE_DSH_TOOL_NAME,
   contentLocatorKey,
   decodeContentImageDshToolSource,
-  isContentLocator,
   type ContentLocator,
 } from '@neko/content-domain';
 import { hashStableValue } from '@neko/shared';
@@ -20,9 +19,9 @@ import {
   parseAgentTerminalMarkdown,
 } from './agent-terminal-markdown';
 
-export type DshWorkspaceBoardArtifact = DshWorkspaceBoardResourceArtifact;
+export type DshCanvasArtifact = DshCanvasArtifactResourceArtifact;
 
-type DshWorkspaceBoardResourceArtifact = {
+type DshCanvasArtifactResourceArtifact = {
   readonly kind: 'file-reference' | 'image';
   readonly artifactId: string;
   readonly contentFingerprint: string;
@@ -34,25 +33,25 @@ type DshWorkspaceBoardResourceArtifact = {
   readonly contentLocator: ContentLocator;
 };
 
-export interface DshWorkspaceBoardArtifactBatch {
+export interface DshCanvasArtifactBatch {
   readonly turn: number;
   readonly createdAt: number;
-  readonly artifacts: readonly DshWorkspaceBoardResourceArtifact[];
+  readonly artifacts: readonly DshCanvasArtifactResourceArtifact[];
 }
 
-export interface DshWorkspaceBoardArtifactCollectionDiagnostic {
-  readonly code: 'DSH_WORKSPACE_BOARD_CONTENT_TOOL_PROJECTION_INVALID';
+export interface DshCanvasArtifactCollectionDiagnostic {
+  readonly code: 'DSH_CANVAS_ARTIFACT_CONTENT_TOOL_PROJECTION_INVALID';
   readonly toolCallId: string;
   readonly toolName: string;
   readonly message: string;
 }
 
-export interface DshWorkspaceBoardArtifactCollection {
-  readonly batch?: DshWorkspaceBoardArtifactBatch;
-  readonly diagnostics: readonly DshWorkspaceBoardArtifactCollectionDiagnostic[];
+export interface DshCanvasArtifactCollection {
+  readonly batch?: DshCanvasArtifactBatch;
+  readonly diagnostics: readonly DshCanvasArtifactCollectionDiagnostic[];
 }
 
-export interface DshWorkspaceBoardArtifactDeliveryInput {
+export interface DshCanvasArtifactDeliveryInput {
   readonly workspaceId: string;
   readonly conversationId: string;
   readonly dshSessionId: string;
@@ -62,23 +61,21 @@ export interface DshWorkspaceBoardArtifactDeliveryInput {
   readonly delivery:
     | { readonly kind: 'completed-tool'; readonly toolCallId: string }
     | { readonly kind: 'completed-turn' };
-  readonly artifacts: readonly DshWorkspaceBoardArtifact[];
+  readonly artifacts: readonly DshCanvasArtifact[];
 }
 
-export type DshWorkspaceBoardArtifactDeliveryOutcome =
+export type DshCanvasArtifactDeliveryOutcome =
   | { readonly status: 'accepted' }
   | {
       readonly status: 'blocked';
       readonly diagnostic: { readonly code: string; readonly message: string };
     };
 
-export interface DshWorkspaceBoardArtifactDeliveryPort {
-  deliver(
-    input: DshWorkspaceBoardArtifactDeliveryInput,
-  ): Promise<DshWorkspaceBoardArtifactDeliveryOutcome>;
+export interface DshCanvasArtifactDeliveryPort {
+  deliver(input: DshCanvasArtifactDeliveryInput): Promise<DshCanvasArtifactDeliveryOutcome>;
 }
 
-export interface DshWorkspaceBoardCompletedToolDeliveryInput {
+export interface DshCanvasArtifactCompletedToolDeliveryInput {
   readonly conversationId: string;
   readonly dshSessionId: string;
   readonly toolCallId: string;
@@ -86,7 +83,7 @@ export interface DshWorkspaceBoardCompletedToolDeliveryInput {
   readonly canvasTurnTarget?: CanvasWorkspaceTurnTarget;
 }
 
-export interface DshWorkspaceBoardTerminalDeliveryInput {
+export interface DshCanvasArtifactTerminalDeliveryInput {
   readonly conversationId: string;
   readonly dshSessionId: string;
   readonly turn: number;
@@ -113,13 +110,13 @@ export interface DshTerminalMarkdownArtifactReference {
   readonly contentLocator: ContentLocator;
 }
 
-export interface DshWorkspaceBoardArtifactDeliveryService {
+export interface DshCanvasArtifactDeliveryService {
   deliverCompletedTool(
-    input: DshWorkspaceBoardCompletedToolDeliveryInput,
-  ): Promise<DshWorkspaceBoardArtifactDeliveryOutcome | undefined>;
+    input: DshCanvasArtifactCompletedToolDeliveryInput,
+  ): Promise<DshCanvasArtifactDeliveryOutcome | undefined>;
   deliverTerminal(
-    input: DshWorkspaceBoardTerminalDeliveryInput,
-  ): Promise<DshWorkspaceBoardArtifactDeliveryOutcome | undefined>;
+    input: DshCanvasArtifactTerminalDeliveryInput,
+  ): Promise<DshCanvasArtifactDeliveryOutcome | undefined>;
   resolveTerminalArtifact(input: {
     readonly conversationId: string;
     readonly dshSessionId: string;
@@ -129,21 +126,21 @@ export interface DshWorkspaceBoardArtifactDeliveryService {
 }
 
 /** Owns completed content-Tool source projection and explicit terminal document delivery. */
-export function createDshWorkspaceBoardArtifactDeliveryService(options: {
+export function createDshCanvasArtifactDeliveryService(options: {
   readonly contexts: {
     readContext(conversationId: string): Promise<AgentConversationContext | undefined>;
   };
-  readonly delivery: DshWorkspaceBoardArtifactDeliveryPort;
+  readonly delivery: DshCanvasArtifactDeliveryPort;
   readonly publication: DshDurableMarkdownArtifactPublicationPort;
   readonly diagnostics: {
-    report(diagnostic: DshWorkspaceBoardArtifactCollectionDiagnostic): void;
+    report(diagnostic: DshCanvasArtifactCollectionDiagnostic): void;
   };
-}): DshWorkspaceBoardArtifactDeliveryService {
+}): DshCanvasArtifactDeliveryService {
   return Object.freeze({
-    async deliverCompletedTool(input: DshWorkspaceBoardCompletedToolDeliveryInput) {
+    async deliverCompletedTool(input: DshCanvasArtifactCompletedToolDeliveryInput) {
       const context = await options.contexts.readContext(input.conversationId);
       if (context?.kind !== 'workspace') return undefined;
-      const collection = collectDshWorkspaceBoardCompletedToolArtifacts({
+      const collection = collectDshCanvasArtifactCompletedToolArtifacts({
         events: input.events,
         toolCallId: input.toolCallId,
       });
@@ -162,7 +159,7 @@ export function createDshWorkspaceBoardArtifactDeliveryService(options: {
         artifacts: batch.artifacts,
       });
     },
-    async deliverTerminal(input: DshWorkspaceBoardTerminalDeliveryInput) {
+    async deliverTerminal(input: DshCanvasArtifactTerminalDeliveryInput) {
       const context = await options.contexts.readContext(input.conversationId);
       if (context?.kind !== 'workspace') return undefined;
       const terminal = input.events.find(
@@ -211,7 +208,7 @@ export function createDshWorkspaceBoardArtifactDeliveryService(options: {
       });
     },
     async resolveTerminalArtifact(
-      input: Parameters<DshWorkspaceBoardArtifactDeliveryService['resolveTerminalArtifact']>[0],
+      input: Parameters<DshCanvasArtifactDeliveryService['resolveTerminalArtifact']>[0],
     ) {
       const context = await options.contexts.readContext(input.conversationId);
       if (context?.kind !== 'workspace') return undefined;
@@ -305,11 +302,11 @@ function sha256Digest(value: string): string {
 }
 
 /** Collects source artifacts for one exact completed Tool call. */
-export function collectDshWorkspaceBoardCompletedToolArtifacts(input: {
+export function collectDshCanvasArtifactCompletedToolArtifacts(input: {
   readonly events: readonly DshAcpProjectedEvent[];
   readonly toolCallId: string;
-}): DshWorkspaceBoardArtifactCollection {
-  const diagnostics: DshWorkspaceBoardArtifactCollectionDiagnostic[] = [];
+}): DshCanvasArtifactCollection {
+  const diagnostics: DshCanvasArtifactCollectionDiagnostic[] = [];
   const event = [...input.events]
     .reverse()
     .find((candidate) => candidate.kind === 'tool' && candidate.toolCallId === input.toolCallId);
@@ -384,27 +381,10 @@ function isReviewableTurnEnd(reason: string | undefined): boolean {
 
 function collectContentToolSources(
   event: Extract<DshAcpProjectedEvent, { readonly kind: 'tool' }>,
-): readonly DshWorkspaceBoardResourceArtifact[] {
+): readonly DshCanvasArtifactResourceArtifact[] {
   let locator: ContentLocator;
   if (event.title === DOCUMENT_DSH_TOOL_NAME) {
-    const requested = decodeDocumentDshToolArgs(event.rawInput).input.source;
-    const completed = readCompletedDocumentResult(event.rawOutput);
-    if (contentLocatorKey(completed.source) !== contentLocatorKey(requested)) {
-      throw new Error(
-        'Completed openneko_document source does not match the requested ContentLocator.',
-      );
-    }
-    locator = completed.source;
-    const imageLocators = readImageOnlyReplacementLocators(completed.result, locator);
-    if (imageLocators.length > 0) {
-      const parent = createSourceArtifact({ file: locator.file }, 'file-reference');
-      return [
-        parent,
-        ...imageLocators.map((imageLocator) =>
-          createSourceArtifact(imageLocator, 'image', [parent.artifactId]),
-        ),
-      ];
-    }
+    locator = decodeDocumentDshToolArgs(event.rawInput).input.source;
     return createLocatedSourceArtifacts(locator, 'file-reference');
   } else if (event.title === CONTENT_IMAGE_DSH_TOOL_NAME) {
     const rawInput = requireRecord(event.rawInput, `${CONTENT_IMAGE_DSH_TOOL_NAME} input`);
@@ -418,16 +398,16 @@ function collectContentToolSources(
 function createLocatedSourceArtifacts(
   locator: ContentLocator,
   kind: 'file-reference' | 'image',
-): readonly DshWorkspaceBoardResourceArtifact[] {
+): readonly DshCanvasArtifactResourceArtifact[] {
   if (locator.selector === undefined) return [createSourceArtifact(locator, kind)];
   const parent = createSourceArtifact({ file: locator.file }, 'file-reference');
   return [parent, createSourceArtifact(locator, kind, [parent.artifactId])];
 }
 
 function deduplicateResources(
-  artifacts: readonly DshWorkspaceBoardResourceArtifact[],
-): readonly DshWorkspaceBoardResourceArtifact[] {
-  const sources = new Map<string, DshWorkspaceBoardResourceArtifact>();
+  artifacts: readonly DshCanvasArtifactResourceArtifact[],
+): readonly DshCanvasArtifactResourceArtifact[] {
+  const sources = new Map<string, DshCanvasArtifactResourceArtifact>();
   for (const artifact of artifacts) {
     const identity = contentLocatorKey(artifact.contentLocator);
     const existing = sources.get(identity);
@@ -457,9 +437,9 @@ function isSupportedContentTool(
 function contentToolDiagnostic(
   event: Extract<DshAcpProjectedEvent, { readonly kind: 'tool' }> & { readonly title: string },
   error: unknown,
-): DshWorkspaceBoardArtifactCollectionDiagnostic {
+): DshCanvasArtifactCollectionDiagnostic {
   return {
-    code: 'DSH_WORKSPACE_BOARD_CONTENT_TOOL_PROJECTION_INVALID',
+    code: 'DSH_CANVAS_ARTIFACT_CONTENT_TOOL_PROJECTION_INVALID',
     toolCallId: event.toolCallId,
     toolName: event.title,
     message: error instanceof Error ? error.message : String(error),
@@ -470,7 +450,7 @@ function createSourceArtifact(
   locator: ContentLocator,
   kind: 'file-reference' | 'image',
   sourceArtifactIds: readonly string[] = [],
-): DshWorkspaceBoardResourceArtifact {
+): DshCanvasArtifactResourceArtifact {
   return createResourceArtifact(locator, kind, 'source', sourceArtifactIds);
 }
 
@@ -479,7 +459,7 @@ function createResourceArtifact(
   kind: 'file-reference' | 'image',
   role: 'source' | 'analysis',
   sourceArtifactIds: readonly string[] = [],
-): DshWorkspaceBoardResourceArtifact {
+): DshCanvasArtifactResourceArtifact {
   const locatorKey = contentLocatorKey(locator);
   const locatorHash = hashStableValue(locatorKey);
   const sourceId = `content:${locatorHash}`;
@@ -493,56 +473,6 @@ function createResourceArtifact(
     ...(sourceArtifactIds.length > 0 ? { sourceArtifactIds } : {}),
     contentLocator: locator,
   };
-}
-
-function readCompletedDocumentResult(rawOutput: unknown): {
-  readonly source: ContentLocator;
-  readonly result: Record<string, unknown>;
-} {
-  const projected = parseProjectedToolOutput(rawOutput, DOCUMENT_DSH_TOOL_NAME);
-  if (!isRecord(projected) || !isContentLocatorValue(projected['source'])) {
-    throw new Error('Completed openneko_document output has no canonical source ContentLocator.');
-  }
-  return { source: projected['source'], result: projected };
-}
-
-function readImageOnlyReplacementLocators(
-  result: Record<string, unknown>,
-  source: ContentLocator,
-): readonly ContentLocator[] {
-  if (source.selector?.kind !== 'entry') return [];
-  const excerpt = result['excerpt'];
-  if (!isRecord(excerpt) || excerpt['contentKind'] !== 'image') return [];
-  const imageInfo = result['imageInfo'];
-  if (!Array.isArray(imageInfo)) return [];
-  return imageInfo.flatMap((entry) => {
-    if (!isRecord(entry) || !isContentLocatorValue(entry['contentLocator'])) return [];
-    const image = entry['contentLocator'];
-    if (contentLocatorKey({ file: image.file }) !== contentLocatorKey({ file: source.file })) {
-      return [];
-    }
-    return [image];
-  });
-}
-
-function parseProjectedToolOutput(value: unknown, toolName: string): unknown {
-  if (Array.isArray(value)) {
-    const text = value.find(
-      (item): item is { readonly type: 'text'; readonly text: string } =>
-        isRecord(item) && item['type'] === 'text' && typeof item['text'] === 'string',
-    )?.text;
-    if (text === undefined) return undefined;
-    try {
-      return JSON.parse(text) as unknown;
-    } catch {
-      throw new Error(`Completed ${toolName} output is not valid JSON.`);
-    }
-  }
-  return value;
-}
-
-function isContentLocatorValue(value: unknown): value is ContentLocator {
-  return isContentLocator(value);
 }
 
 function contentTitle(locator: ContentLocator): string {

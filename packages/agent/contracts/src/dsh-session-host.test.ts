@@ -374,7 +374,7 @@ describe('DSH Session Host contract', () => {
                   workspaceId: 'workspace-1',
                   canvasId: 'neko/boards/workspace.nkc',
                 },
-                label: 'Workspace Board',
+                label: 'workspace.nkc',
               },
               {
                 target: {
@@ -424,7 +424,7 @@ describe('DSH Session Host contract', () => {
                   workspaceId: 'workspace-2',
                   canvasId: 'neko/boards/workspace.nkc',
                 },
-                label: 'Workspace Board',
+                label: 'workspace.nkc',
               },
             ],
             diagnostics: [],
@@ -842,6 +842,7 @@ describe('DSH Session Host contract', () => {
             text: '已完成故事规划。',
             messageId: 'assistant-final',
             state: 'final',
+            recommendedNextActionMarkdown: '生成首个测试镜头。',
             artifact: {
               kind: 'reviewable-markdown',
               title: '故事规划',
@@ -859,6 +860,7 @@ describe('DSH Session Host contract', () => {
         text: '已完成故事规划。',
         messageId: 'assistant-final',
         state: 'final',
+        recommendedNextActionMarkdown: '生成首个测试镜头。',
         artifact: {
           kind: 'reviewable-markdown',
           title: '故事规划',
@@ -890,6 +892,26 @@ describe('DSH Session Host contract', () => {
         ],
       }),
     ).toThrow(/Workspace file ContentLocator/u);
+  });
+
+  it('rejects a recommended next action without a final artifact reference', () => {
+    expect(() =>
+      parseDshSessionHostProjection({
+        ...projection(),
+        events: [
+          {
+            kind: 'message',
+            role: 'assistant',
+            turn: 1,
+            step: 0,
+            text: '已完成。',
+            messageId: 'assistant-final',
+            state: 'final',
+            recommendedNextActionMarkdown: '生成首个测试镜头。',
+          },
+        ],
+      }),
+    ).toThrow(/requires a final assistant artifact event/u);
   });
 
   it('opens a terminal artifact by exact conversation and message identity only', () => {

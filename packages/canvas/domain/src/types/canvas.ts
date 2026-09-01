@@ -311,7 +311,7 @@ export interface FileCanvasNode extends CanvasNodeBase {
     /** Explicit material kind. Never inferred from the file name or extension. */
     mediaKind?: CanvasMaterialMediaKind;
     mediaType?: string;
-    /** Canonical durable content location for Workspace Board and creator-visible nodes. */
+    /** Canonical durable content location for Canvas and creator-visible nodes. */
     contentLocator?: ContentLocator;
     /** Canonical immutable Generation Job evidence for a generated-output locator. */
     generation?: CanvasGenerationEvidence;
@@ -522,7 +522,7 @@ export interface CanvasData {
   linkedProject?: string;
   /** Optional advisory creative work-unit scope for long-form and interactive production. */
   creativeScope?: CanvasCreativeScope;
-  /** Optional durable navigation refs to related Canvas boards. */
+  /** Optional durable navigation refs to related Canvas documents. */
   relatedBoards?: readonly CanvasRelatedBoardRef[];
   /** Optional Canvas playback projection metadata. */
   playback?: CanvasPlaybackMetadata;

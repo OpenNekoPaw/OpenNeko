@@ -137,7 +137,7 @@ describe('Desktop Canvas workspace index catalog contract', () => {
             options: [
               {
                 target: { workspaceId: 'ws2', canvasId: 'neko/boards/workspace.nkc' },
-                label: 'Board',
+                label: 'workspace.nkc',
               },
             ],
             diagnostics: [],

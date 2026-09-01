@@ -297,8 +297,8 @@ describe('DSH ACP extension contract', () => {
 
   it('accepts only the exact bounded Session context payload', () => {
     expect(
-      decodeDshAcpSessionContextSetRequest({ sessionId: 'session-1', text: 'Workspace Board' }),
-    ).toEqual({ sessionId: 'session-1', text: 'Workspace Board' });
+      decodeDshAcpSessionContextSetRequest({ sessionId: 'session-1', text: 'workspace.nkc' }),
+    ).toEqual({ sessionId: 'session-1', text: 'workspace.nkc' });
     expect(() =>
       decodeDshAcpSessionContextSetRequest({ sessionId: 'session-1', text: '', stale: true }),
     ).toThrow(/must contain exactly/u);

@@ -10,14 +10,14 @@ import {
   saveNkc,
 } from '@neko/canvas-domain';
 import type { NekoHostPorts } from '@neko/host/ports';
-import { WorkspaceBoardNodeMutation } from './workspace-board-node-mutation';
+import { CanvasWorkspaceNodeMutation } from './canvas-workspace-node-mutation';
 
-describe('WorkspaceBoardNodeMutation', () => {
+describe('CanvasWorkspaceNodeMutation', () => {
   let root = '';
   let externalRoot = '';
 
   beforeEach(async () => {
-    root = await fs.mkdtemp(path.join(os.tmpdir(), 'neko-workspace-board-'));
+    root = await fs.mkdtemp(path.join(os.tmpdir(), 'neko-canvas-delivery-'));
   });
 
   afterEach(async () => {
@@ -28,7 +28,7 @@ describe('WorkspaceBoardNodeMutation', () => {
     externalRoot = '';
   });
 
-  it('loads a missing canonical Board as a fresh unsaved document', async () => {
+  it('loads a missing Canvas as a fresh unsaved document', async () => {
     const mutation = createMutation(root);
     const documentUri = boardUri(root);
 
@@ -37,11 +37,11 @@ describe('WorkspaceBoardNodeMutation', () => {
     ).resolves.toMatchObject({
       documentUri,
       exists: false,
-      canvasData: { name: `${path.basename(root)} Board` },
+      canvasData: { name: `${path.basename(root)} Canvas` },
     });
   });
 
-  it('atomically saves and reloads the canonical Board', async () => {
+  it('atomically saves and reloads the Canvas', async () => {
     const mutation = createMutation(root);
     const documentUri = boardUri(root);
     const canvasData = createEmptyCanvasData('Agent Results');
@@ -55,7 +55,7 @@ describe('WorkspaceBoardNodeMutation', () => {
     });
   });
 
-  it('rejects an invalid existing Board without overwriting it', async () => {
+  it('rejects an invalid existing Canvas without overwriting it', async () => {
     const documentPath = boardPath(root);
     await fs.mkdir(path.dirname(documentPath), { recursive: true });
     await fs.writeFile(documentPath, '{invalid', 'utf8');
@@ -97,8 +97,8 @@ describe('WorkspaceBoardNodeMutation', () => {
     ).rejects.toThrow(/escapes the authorized Workspace/u);
   });
 
-  it('loads a Board through a directory symlink but keeps the linked directory read-only', async () => {
-    externalRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'neko-workspace-board-external-'));
+  it('loads a Canvas through a directory symlink but keeps the linked directory read-only', async () => {
+    externalRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'neko-canvas-delivery-external-'));
     const externalDocumentPath = boardPath(externalRoot);
     const original = createEmptyCanvasData('Linked directory');
     await fs.mkdir(path.dirname(externalDocumentPath), { recursive: true });
@@ -118,8 +118,8 @@ describe('WorkspaceBoardNodeMutation', () => {
     expect(loadNkc(await fs.readFile(externalDocumentPath, 'utf8')).data).toEqual(original);
   });
 
-  it('loads a Board through a file symlink but keeps the linked file read-only', async () => {
-    externalRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'neko-workspace-board-external-'));
+  it('loads a Canvas through a file symlink but keeps the linked file read-only', async () => {
+    externalRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'neko-canvas-delivery-external-'));
     const externalDocumentPath = path.join(externalRoot, 'workspace.nkc');
     const documentPath = boardPath(root);
     const original = createEmptyCanvasData('Linked file');
@@ -166,8 +166,8 @@ describe('WorkspaceBoardNodeMutation', () => {
   });
 });
 
-function createMutation(workspacePath: string): WorkspaceBoardNodeMutation {
-  return new WorkspaceBoardNodeMutation({
+function createMutation(workspacePath: string): CanvasWorkspaceNodeMutation {
+  return new CanvasWorkspaceNodeMutation({
     workspace: {
       workspaceId: 'workspace-1',
       workspacePath,

@@ -14,17 +14,14 @@ describe('Canvas workspace index service', () => {
       listExactCanvasDocuments: vi.fn(async () => []),
       readExactCanvasSummary: vi.fn(async () => ({ canvasId: 'x', name: 'X' })),
     };
-    const service = createCanvasWorkspaceIndexService({
-      read,
-      defaultCanvasLabel: 'Workspace Board',
-    });
+    const service = createCanvasWorkspaceIndexService({ read });
 
     const catalog = await service.readCatalog('workspace-1');
 
     expect(catalog.defaultTarget).toEqual(createDefaultCanvasWorkspaceTarget('workspace-1'));
     expect(catalog.options[0]).toEqual({
       target: createDefaultCanvasWorkspaceTarget('workspace-1'),
-      label: 'Workspace Board',
+      label: 'workspace.nkc',
     });
     expect(read.listExactCanvasDocuments).toHaveBeenCalledWith('workspace-1');
     expect(read.readExactCanvasSummary).not.toHaveBeenCalled();

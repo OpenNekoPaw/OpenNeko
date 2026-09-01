@@ -3,7 +3,7 @@ import {
   type CanvasWorkspaceArtifactRole,
   type CanvasWorkspaceProjectionArtifact,
   type CanvasWorkspaceProjectionRequest,
-} from '../types/canvas-workspace-board';
+} from '../types/canvas-workspace-delivery';
 import type {
   CanvasConnection,
   CanvasData,
@@ -24,9 +24,9 @@ import {
   resolveCanvasImageNodeSize,
   resolveCanvasNodeDefaultSize,
 } from '../canvas-node-sizing';
-import { projectGenerationSnapshotToWorkspaceBoard } from '../canvas-generation-projection';
+import { projectGenerationSnapshotToCanvasDelivery } from '../canvas-generation-projection';
 
-/** Existing Board inbox identity retained for rendering; new projections never create it. */
+/** Existing inbox node identity retained for rendering; new projections never create it. */
 export const CANVAS_WORKSPACE_INBOX_NODE_ID = 'workspace-inbox' as const;
 
 const CONTENT_ORIGIN = { x: 40, y: 40 } as const;
@@ -39,7 +39,7 @@ const GROUP_PADDING = 16;
 const GROUP_HEADER = 40;
 const GROUP_GAP = 12;
 
-export interface CanvasWorkspaceBoardProjectionPlan {
+export interface CanvasArtifactProjectionPlan {
   readonly status: 'projected' | 'noop';
   readonly canvasData: CanvasData;
   readonly nodeIds: readonly string[];
@@ -59,10 +59,10 @@ interface GeneratedBatchGroupPlan {
   readonly columns: number;
 }
 
-export function planCanvasWorkspaceBoardProjection(
+export function planCanvasArtifactProjection(
   canvasData: CanvasData,
   request: CanvasWorkspaceProjectionRequest,
-): CanvasWorkspaceBoardProjectionPlan {
+): CanvasArtifactProjectionPlan {
   const diagnostics = validateCanvasWorkspaceProjectionRequest(request);
   if (diagnostics.length > 0) {
     throw new Error(diagnostics.map((entry) => `${entry.code}: ${entry.message}`).join('; '));
@@ -75,7 +75,7 @@ export function planCanvasWorkspaceBoardProjection(
         'invalid-artifact-relation: Generation Job snapshots require an isolated delivery batch.',
       );
     }
-    const nextCanvasData = projectGenerationSnapshotToWorkspaceBoard({
+    const nextCanvasData = projectGenerationSnapshotToCanvasDelivery({
       canvas: canvasData,
       snapshot: generationJob.snapshot,
     });
@@ -211,7 +211,7 @@ export function planCanvasWorkspaceBoardProjection(
           topLevelLayoutNodes,
         );
     if (!position) {
-      throw new Error(`Workspace Board batch layout is missing a position for ${id}.`);
+      throw new Error(`Canvas batch layout is missing a position for ${id}.`);
     }
     const node = createArtifactNode(
       artifact,
@@ -262,7 +262,7 @@ export function planCanvasWorkspaceBoardProjection(
   }
 
   const nextCanvasData = applyCanvasHeadlessAuthoringOperations(canvasData, operations);
-  assertNoRuntimeResourceIdentity(nextCanvasData, 'workspaceBoard');
+  assertNoRuntimeResourceIdentity(nextCanvasData, 'canvasDelivery');
   return {
     status: 'projected',
     canvasData: nextCanvasData,
@@ -534,7 +534,7 @@ function createPreferredPosition(
     };
   }
   const lane = roleLanes.get(role);
-  if (lane === undefined) throw new Error(`Unsupported Workspace Board artifact role: ${role}`);
+  if (lane === undefined) throw new Error(`Unsupported Canvas artifact role: ${role}`);
   return { x: CONTENT_ORIGIN.x + lane * CONTENT_LANE_WIDTH, y: CONTENT_ORIGIN.y };
 }
 

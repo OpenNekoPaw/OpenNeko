@@ -2504,7 +2504,7 @@ describe('DesktopShellService', () => {
     expect(fixture.registry.resolve).toHaveBeenCalledTimes(3);
   });
 
-  it('opens the canonical Workspace Board when a Project has no stored Main View', async () => {
+  it('opens the canonical default Canvas when a Project has no stored Main View', async () => {
     const fixture = createFixture();
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
@@ -2537,7 +2537,7 @@ describe('DesktopShellService', () => {
     });
   });
 
-  it('replaces a special-target-only Project presentation with the canonical Workspace Board', async () => {
+  it('replaces a special-target-only Project presentation with the canonical default Canvas', async () => {
     const fixture = createFixture();
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
@@ -3415,7 +3415,7 @@ describe('DesktopShellService', () => {
     );
   });
 
-  it('drops a persisted temporary Preview View and restores the Workspace Board', async () => {
+  it('drops a persisted temporary Preview View and restores the default Canvas', async () => {
     const file = createMemoryFile();
     const first = createFixture(file);
     const windowId = await first.service.claimWindowId();

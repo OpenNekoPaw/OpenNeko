@@ -13,16 +13,16 @@ export * from './nkc/index';
 export * from './project-file-io/index';
 
 export {
-  WorkspaceBoardDeliveryLedger,
-  type WorkspaceBoardDeliveryLedgerOptions,
-  type WorkspaceBoardDeliveryTask,
-} from './workspace-board-delivery-ledger';
+  CanvasWorkspaceDeliveryLedger,
+  type CanvasWorkspaceDeliveryLedgerOptions,
+  type CanvasWorkspaceDeliveryTask,
+} from './canvas-workspace-delivery-ledger';
 export {
-  WorkspaceBoardDeliveryCoordinator,
-  type CanvasWorkspaceBoardLoadedDocument,
-  type CanvasWorkspaceBoardMutationPort,
-  type WorkspaceBoardDeliveryCoordinatorOptions,
-} from './workspace-board-delivery-coordinator';
+  CanvasWorkspaceDeliveryCoordinator,
+  type CanvasWorkspaceLoadedDocument,
+  type CanvasWorkspaceMutationPort,
+  type CanvasWorkspaceDeliveryCoordinatorOptions,
+} from './canvas-workspace-delivery-coordinator';
 export type {
   CanvasBatchOperation,
   CanvasEditOperation,
@@ -128,7 +128,7 @@ export {
 export {
   isCanvasGenerationProjectionSnapshot,
   projectGenerationSnapshotToCanvas,
-  projectGenerationSnapshotToWorkspaceBoard,
+  projectGenerationSnapshotToCanvasDelivery,
   type CanvasGenerationProjectionInput,
   type CanvasGenerationProjectionSnapshot,
   type CanvasWorkspaceGenerationProjectionInput,

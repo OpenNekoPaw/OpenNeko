@@ -502,11 +502,11 @@ describe('Desktop architecture boundaries', () => {
     expect(appHost).not.toContain("case 'asset.remove':");
   });
 
-  it('keeps Workspace Board delivery and candidate acceptance out of renderer ownership', () => {
+  it('keeps Canvas delivery and candidate acceptance out of renderer ownership', () => {
     const rendererRoot = path.join(sourceRoot, 'renderer');
     const forbiddenOwnerTokens = [
-      'WorkspaceBoardDeliveryLedger',
-      'WorkspaceBoardDeliveryCoordinator',
+      'CanvasWorkspaceDeliveryLedger',
+      'CanvasWorkspaceDeliveryCoordinator',
       'candidateAcceptanceStore',
       'deliveryLedger',
       'acceptCandidateLocally',
