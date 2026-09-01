@@ -1,0 +1,135 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "submit-ready-video-handoff",
+  "suiteId": "skill.media-preparation",
+  "caseGroup": "canonical",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Prepare one selected source-bound video unit through the current Tool schema without executing generation.",
+    "canonicalPath": [
+      "screenplay and illustration source read",
+      "builtin media-preparation Skill",
+      "builtin video Skill",
+      "exact submit-ready video request",
+      "no generation side effect"
+    ],
+    "observables": [
+      {
+        "ref": "ready-preparation-facts",
+        "kind": "runtime-fact",
+        "description": "Exact Skill receipts, source evidence, a schema-bound video request, direct acceptance, and absent media generation.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The response binds the selected Mara shot and station illustration, then returns a submit-ready/not-executed openneko_generation request with the exact current submit and image-to-video fields, direct acceptance, and downstream use. It does not return a provisional candidate packet or execute generation.",
+    "expectedFailure": "Falling back to concept analysis, emitting a provisional or candidate generation packet, omitting the real image binding, inventing operation names or parameters, keeping the packet blocked despite available dependencies, creating a task plan, or executing generation fails."
+  },
+  "fixtureRefs": ["creative-planning-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "$media-preparation $video 读取 @screenplay.fountain 和 @station-illustration.svg。已选镜头：Mara 在 23:47 的雨夜站台撑红伞，远处无头灯列车出现。把现有插画作为首帧，准备一个可直接提交给当前视频生成能力的单镜头输入包，但不要执行生成。只返回来源绑定、准备状态、精确调用输入、直接验收和下游用途；不得写暂定或候选参数。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "ready-preparation-facts"
+    },
+    {
+      "id": "media-preparation-skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-preparation",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-preparation",
+        "fingerprint": "sha256:32877f32c017bd2aa59f2b3d15c3e44bfa0c4b92eaeed9c4ca637cc162c53a32"
+      },
+      "status": "injected",
+      "evidenceRef": "ready-preparation-facts"
+    },
+    {
+      "id": "video-skill",
+      "kind": "skill",
+      "identity": {
+        "name": "video",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "video",
+        "fingerprint": "sha256:b16e96f6a5e9d5db3b90dc5fc5c2ce015c70b3ba273c9d117044e21ed5db8e25"
+      },
+      "status": "injected",
+      "evidenceRef": "ready-preparation-facts"
+    },
+    {
+      "id": "read",
+      "kind": "tool-call",
+      "name": "Read",
+      "status": "success",
+      "evidenceRef": "ready-preparation-facts"
+    },
+    {
+      "id": "output",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": [
+        "Mara",
+        "23:47",
+        "红伞",
+        "列车",
+        "station-illustration.svg",
+        "来源绑定",
+        "可提交",
+        "未执行",
+        "openneko_generation",
+        "submit",
+        "image-to-video",
+        "first-frame",
+        "直接验收",
+        "下游用途"
+      ],
+      "evidenceRef": "ready-preparation-facts"
+    },
+    {
+      "id": "no-pseudo-packet",
+      "kind": "final-answer",
+      "mode": "not-contains",
+      "text": [
+        "暂定",
+        "Provisional",
+        "候选",
+        "待确认",
+        "建议调用参数",
+        "阻塞",
+        "已授权执行",
+        "已生成",
+        "生成完成"
+      ],
+      "evidenceRef": "ready-preparation-facts"
+    },
+    {
+      "id": "no-task-plan",
+      "kind": "tool-call",
+      "name": "todo_write",
+      "status": "absent",
+      "evidenceRef": "ready-preparation-facts"
+    },
+    {
+      "id": "no-video-generation",
+      "kind": "tool-call",
+      "name": "GenerateVideo",
+      "status": "absent",
+      "evidenceRef": "ready-preparation-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

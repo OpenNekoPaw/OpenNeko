@@ -14,7 +14,7 @@ description: '根据提示词、图像、关键帧或参考视频生成或生成
 3. 执行前核对 adapter 支持和限制，不假设尾帧控制、风格转换或延展一定可用。
 4. 不支持的语义返回可见 diagnostic；只有 runtime 确认结果后才声称片段已生成或转换。
 5. 单片段提示词交接按需读取 [references/single-clip-prompt.md](references/single-clip-prompt.md)，实际参数和引用绑定始终以当前 Tool schema 为准。
-6. Tool schema 不可见时，只能交付候选提示词和精确能力阻塞，不得把“图生视频”等能力描述写成 operation 名或参数。图像驱动视频必须绑定一个实际首帧；只有 schema 明确支持时，才能再绑定风格、角色或尾帧等额外参考。
+6. 对生产交接，Tool schema 不可见时返回精确能力阻塞，不交付看似可提交的候选调用包、operation 或参数。用户明确只要求编写模型中立提示词时，可以交付创意提示词，但必须说明它不是可执行调用。图像驱动视频必须绑定一个实际首帧；只有 schema 明确支持时，才能再绑定风格、角色或尾帧等额外参考。
 
 ## English guidance
 
@@ -28,6 +28,6 @@ Create or generatively transform a single video clip from a prompt, image, keyfr
 4. Return visible degraded or unsupported diagnostics when the requested semantics cannot be honored.
 5. Claim a generated or transformed clip only from a confirmed runtime capability result. Before confirmation, report only planned, submitted, pending, blocked, or failed state.
 6. Validate the returned clip structurally and technically at operation scope. Broader visual consistency and final-cut approval require evidence from the owning validator.
-7. When the current Tool schema is unavailable, return only a candidate prompt and the exact capability blocker; do not present capability labels such as image-to-video as callable operation names or parameters. Image-driven video requires one actual first-frame input, with style, identity, or end-frame references added only when the schema explicitly admits those roles.
+7. For a production handoff, when the current Tool schema is unavailable, return the exact capability blocker without a candidate call packet, operation, or parameter table. An explicit request for model-neutral prompt writing may still return a creative prompt, clearly marked as non-executable. Do not present capability labels such as image-to-video as callable operation names or parameters. Image-driven video requires one actual first-frame input, with style, identity, or end-frame references added only when the schema explicitly admits those roles.
 
 For a directly usable single-clip generation or transformation prompt, read [references/single-clip-prompt.md](references/single-clip-prompt.md). Use the current capability and Tool schema for actual model parameters, reference bindings and execution.

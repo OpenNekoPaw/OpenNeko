@@ -25,7 +25,7 @@ describe('OpenNeko DSH product system prompt', () => {
       'Planning is coordination state, not the requested deliverable',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'one provisional non-executing handoff form one creative turn',
+      'one dependency-ready handoff or exact blocker form one creative turn',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('do not by themselves justify a task plan');
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
@@ -96,10 +96,16 @@ describe('OpenNeko DSH product system prompt', () => {
       'Use capability roles as internal handoff contracts, not as headings that must appear in the answer',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'only user-specified or creator-confirmed decisions become accepted and executable',
+      'directly consumable inputs, the current consuming operation, and direct acceptance',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'one reversible, explicitly provisional review packet',
+      'A non-executable candidate prompt is not a production handoff',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'keep the durable creative artifact clean and report only the exact blocker',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'Mark a complete packet as submit-ready and not executed',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
       'generation returns observable candidates and generation records, not accepted assets',
