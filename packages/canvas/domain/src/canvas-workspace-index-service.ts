@@ -1,7 +1,7 @@
 import {
-  createCanvasWorkspaceBoardTarget,
+  createDefaultCanvasWorkspaceTarget,
   createCanvasWorkspaceContextCatalog,
-  createExactCanvasTarget,
+  createCanvasWorkspaceTarget,
   type CanvasWorkspaceContextCatalog,
   type CanvasWorkspaceContextCatalogOption,
   type CanvasWorkspaceTurnContext,
@@ -19,7 +19,7 @@ export interface CanvasWorkspaceIndexReadPort {
 
 export interface CanvasWorkspaceIndexServiceOptions {
   readonly read: CanvasWorkspaceIndexReadPort;
-  readonly boardLabel?: string;
+  readonly defaultCanvasLabel?: string;
 }
 
 export interface CanvasWorkspaceIndexService {
@@ -33,16 +33,16 @@ export interface CanvasWorkspaceIndexService {
 export function createCanvasWorkspaceIndexService(
   options: CanvasWorkspaceIndexServiceOptions,
 ): CanvasWorkspaceIndexService {
-  const boardLabel = options.boardLabel?.trim() || 'Workspace Board';
+  const defaultCanvasLabel = options.defaultCanvasLabel?.trim() || 'Workspace Board';
 
   return {
     async readCatalog(workspaceId) {
-      const boardTarget = createCanvasWorkspaceBoardTarget(workspaceId);
+      const defaultTarget = createDefaultCanvasWorkspaceTarget(workspaceId);
       const diagnostics: string[] = [];
       const identities = await options.read.listExactCanvasDocuments(workspaceId);
       const seen = new Set<string>();
       const optionsList: CanvasWorkspaceContextCatalogOption[] = [
-        { target: boardTarget, label: boardLabel },
+        { target: defaultTarget, label: defaultCanvasLabel },
       ];
       for (const identity of identities) {
         if (seen.has(identity)) {
@@ -58,13 +58,13 @@ export function createCanvasWorkspaceIndexService(
             );
           }
           optionsList.push({
-            target: createExactCanvasTarget(workspaceId, identity),
+            target: createCanvasWorkspaceTarget(workspaceId, identity),
             label: canvasFileName(identity),
             summary,
           });
         } catch (error) {
           optionsList.push({
-            target: createExactCanvasTarget(workspaceId, identity),
+            target: createCanvasWorkspaceTarget(workspaceId, identity),
             label: identity,
             disabled: true,
             diagnostic: describeError(error),
@@ -82,12 +82,12 @@ export function createCanvasWorkspaceIndexService(
       if (target.workspaceId !== workspaceId) {
         throw new Error('Canvas workspace target does not match the requested Workspace.');
       }
-      if (target.kind === 'workspace-board') {
+      if (target.canvasId === createDefaultCanvasWorkspaceTarget(workspaceId).canvasId) {
         return Object.freeze({ target });
       }
       const summary = await options.read.readExactCanvasSummary(workspaceId, target.canvasId);
       if (summary.canvasId !== target.canvasId) {
-        throw new Error('Canvas summary does not match the exact Canvas target.');
+        throw new Error('Canvas summary does not match its target.');
       }
       return Object.freeze({ target, summary });
     },

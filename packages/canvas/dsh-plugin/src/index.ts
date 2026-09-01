@@ -18,7 +18,8 @@ export function apply(ctx: Context): void {
       ctx.tools.register(
         defineTool({
           name: CANVAS_DSH_TOOL_NAME,
-          description: 'Query and create nodes in an OpenNeko Canvas document.',
+          description:
+            'Query bounded semantic context or apply one validated semantic mutation in an OpenNeko Canvas document.',
           parameters: CANVAS_DSH_TOOL_PARAMETERS,
           output: {
             schema: { type: 'json' },

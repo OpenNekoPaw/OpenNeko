@@ -397,4 +397,54 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
       ),
     ).toThrow(/no writable binding in headless mode/);
   });
+
+  it('updates a generation selection only to an existing output identity', () => {
+    const canvas: CanvasData = {
+      ...emptyCanvas(),
+      nodes: [
+        {
+          id: 'generation-1',
+          type: 'generation',
+          position: { x: 0, y: 0 },
+          size: { width: 320, height: 180 },
+          zIndex: 1,
+          data: {
+            recipe: {
+              kind: 'prompt',
+              prompt: 'Draft a scene',
+              model: {
+                purpose: 'canvas.prompt',
+                providerId: 'provider-1',
+                modelId: 'model-1',
+              },
+            },
+            outputs: [
+              {
+                outputId: 'output-1',
+                jobRef: { kind: 'generation', jobId: 'job-1' },
+                locator: {
+                  file: { authority: 'workspace', path: 'neko/generated/prompt/output-1.md' },
+                },
+                kind: 'prompt',
+                recipeInputFingerprint: 'sha256:recipe-1',
+              },
+            ],
+          },
+        },
+      ],
+    };
+
+    expect(
+      planCanvasBlockUpdate(
+        { canvasData: canvas },
+        { nodeId: 'generation-1', path: '/selectedOutputId', value: 'output-1' },
+      ).result,
+    ).toMatchObject({ changed: true, data: { selectedOutputId: 'output-1' } });
+    expect(() =>
+      planCanvasBlockUpdate(
+        { canvasData: canvas },
+        { nodeId: 'generation-1', path: '/selectedOutputId', value: 'missing-output' },
+      ),
+    ).toThrow(/requires canonical node data/u);
+  });
 });

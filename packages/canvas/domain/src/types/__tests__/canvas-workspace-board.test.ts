@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CANVAS_WORKSPACE_BOARD_PATH,
+  CANVAS_DEFAULT_DOCUMENT_PATH,
   createGeneratedAssetsWorkspaceDeliveryRequest,
-  resolveCanvasWorkspaceBoardDocumentUri,
+  resolveCanvasDocumentUri,
+  resolveDefaultCanvasDocumentUri,
   validateCanvasWorkspaceProjectionRequest,
   validateCanvasWorkspaceProjectionResult,
   type CanvasWorkspaceProjectionArtifact,
@@ -26,9 +27,12 @@ const sourceLocator = {
 
 describe('Canvas Workspace Board delivery contract', () => {
   it('derives one canonical Workspace Board URI', () => {
-    expect(CANVAS_WORKSPACE_BOARD_PATH).toBe('neko/boards/workspace.nkc');
-    expect(resolveCanvasWorkspaceBoardDocumentUri('file:///workspace/project/')).toBe(
+    expect(CANVAS_DEFAULT_DOCUMENT_PATH).toBe('neko/boards/workspace.nkc');
+    expect(resolveDefaultCanvasDocumentUri('file:///workspace/project/')).toBe(
       'file:///workspace/project/neko/boards/workspace.nkc',
+    );
+    expect(resolveCanvasDocumentUri('file:///workspace/project/', 'boards/Act #1.nkc')).toBe(
+      'file:///workspace/project/boards/Act%20%231.nkc',
     );
   });
 
@@ -36,7 +40,10 @@ describe('Canvas Workspace Board delivery contract', () => {
     expect(validateCanvasWorkspaceProjectionRequest(request())).toEqual([]);
     expect(
       validateCanvasWorkspaceProjectionRequest(
-        request({ documentUri: 'file:///workspace/project/design/concept.nkc' }),
+        request({
+          canvasId: 'design/concept.nkc',
+          documentUri: 'file:///workspace/project/design/concept.nkc',
+        }),
       ),
     ).toEqual([]);
   });
@@ -191,12 +198,19 @@ describe('Canvas Workspace Board delivery contract', () => {
     const delivery = createGeneratedAssetsWorkspaceDeliveryRequest([generatedImage()], {
       workspaceId: 'workspace-1',
       workspaceUri: 'file:///workspace/project/',
+      canvasId: 'neko/boards/workspace.nkc',
+      documentUri: 'file:///workspace/project/neko/boards/workspace.nkc',
       sourceHost: 'desktop',
       jobRef: { kind: 'generation', jobId: 'operation-1' },
     });
 
     expect(delivery).toMatchObject({
-      target: { workspaceId: 'workspace-1', workspaceUri: 'file:///workspace/project/' },
+      target: {
+        workspaceId: 'workspace-1',
+        workspaceUri: 'file:///workspace/project/',
+        canvasId: 'neko/boards/workspace.nkc',
+        documentUri: 'file:///workspace/project/neko/boards/workspace.nkc',
+      },
       process: { sourceHost: 'desktop', operationId: 'operation-1', runId: 'run-1' },
       artifacts: [
         {
@@ -267,7 +281,7 @@ describe('Canvas Workspace Board delivery contract', () => {
         validateCanvasWorkspaceProjectionResult({
           status,
           target: {
-            kind: 'workspace',
+            canvasId: 'neko/boards/workspace.nkc',
             documentUri: 'file:///workspace/project/neko/boards/workspace.nkc',
           },
           diagnostics: [],
@@ -280,6 +294,7 @@ describe('Canvas Workspace Board delivery contract', () => {
 function request(
   input: {
     readonly workspaceId?: string;
+    readonly canvasId?: string;
     readonly documentUri?: string;
     readonly artifacts?: readonly CanvasWorkspaceProjectionArtifact[];
   } = {},
@@ -288,7 +303,8 @@ function request(
     target: {
       workspaceId: input.workspaceId ?? 'workspace-1',
       workspaceUri: 'file:///workspace/project/',
-      ...(input.documentUri ? { documentUri: input.documentUri } : {}),
+      canvasId: input.canvasId ?? 'neko/boards/workspace.nkc',
+      documentUri: input.documentUri ?? 'file:///workspace/project/neko/boards/workspace.nkc',
     },
     process: {
       deliveryId: 'delivery:material-analysis:1',

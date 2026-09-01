@@ -14,8 +14,8 @@ import {
 } from './presentation-snapshot';
 
 const workspaceBoardTarget = {
-  kind: 'workspace-board' as const,
   workspaceId: 'workspace-1',
+  canvasId: 'neko/boards/workspace.nkc',
 };
 
 afterEach(() => {
@@ -919,15 +919,14 @@ describe('DshAgentView content-creation composer', () => {
             workspaceLabel: '短片项目',
             canvas: {
               workspaceId: 'workspace-1',
-              defaultTarget: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+              defaultTarget: workspaceBoardTarget,
               options: [
                 {
-                  target: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+                  target: workspaceBoardTarget,
                   label: '画板',
                 },
                 {
                   target: {
-                    kind: 'exact-canvas',
                     workspaceId: 'workspace-1',
                     canvasId: 'neko/boards/story.nkc',
                   },
@@ -991,7 +990,6 @@ describe('DshAgentView content-creation composer', () => {
         images: [],
         contextPayloads: [],
         canvasTurnTarget: {
-          kind: 'exact-canvas',
           workspaceId: 'workspace-1',
           canvasId: 'neko/boards/story.nkc',
         },
@@ -1060,7 +1058,6 @@ describe('DshAgentView content-creation composer', () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(onSubmit.mock.calls[0]?.[1]).toMatchObject({
       canvasTurnTarget: {
-        kind: 'exact-canvas',
         workspaceId: 'workspace-1',
         canvasId: 'neko/boards/story.nkc',
       },
@@ -1105,10 +1102,42 @@ describe('DshAgentView content-creation composer', () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(onSubmit.mock.calls[0]?.[1]).toMatchObject({
       canvasTurnTarget: {
-        kind: 'exact-canvas',
         workspaceId: 'workspace-1',
         canvasId: 'neko/boards/story.nkc',
       },
+    });
+  });
+
+  it('resets a stale local Canvas selection to the catalog default', async () => {
+    const scopeKey = JSON.stringify(['conversation', 'conversation-1', 'workspace-1']);
+    let serialized: string | null = JSON.stringify({ [scopeKey]: 'workspace-board' });
+    const storage = {
+      getItem: () => serialized,
+      setItem: (_key: string, value: string) => {
+        serialized = value;
+      },
+    };
+
+    render(
+      <DshComposerPresentationSnapshotProvider
+        store={createDshComposerSessionPresentationSnapshotStore(storage)}
+      >
+        <I18nProvider service={new I18nService('zh-cn')}>
+          <WorkspaceCanvasSelectionHarness
+            conversationId="conversation-1"
+            onSubmit={vi.fn(async () => true)}
+          />
+        </I18nProvider>
+      </DshComposerPresentationSnapshotProvider>,
+    );
+
+    expect((screen.getByRole('combobox', { name: '画布索引' }) as HTMLSelectElement).value).toBe(
+      'neko/boards/workspace.nkc',
+    );
+    await waitFor(() => {
+      expect(JSON.parse(serialized ?? '{}')).toEqual({
+        [scopeKey]: 'neko/boards/workspace.nkc',
+      });
     });
   });
 
@@ -1139,7 +1168,7 @@ describe('DshAgentView content-creation composer', () => {
     );
     view.rerender(scene('conversation-sibling'));
     expect((screen.getByRole('combobox', { name: '画布索引' }) as HTMLSelectElement).value).toBe(
-      'workspace-board',
+      'neko/boards/workspace.nkc',
     );
     view.rerender(scene('conversation-new'));
     expect((screen.getByRole('combobox', { name: '画布索引' }) as HTMLSelectElement).value).toBe(
@@ -2288,10 +2317,10 @@ function DshComposerHarness({
           workspaceLabel: 'Workspace One',
           canvas: {
             workspaceId: 'workspace-1',
-            defaultTarget: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+            defaultTarget: workspaceBoardTarget,
             options: [
               {
-                target: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+                target: workspaceBoardTarget,
                 label: 'Board',
               },
             ],
@@ -2381,7 +2410,6 @@ function WorkspaceCanvasSelectionHarness({
               { target: workspaceBoardTarget, label: 'Workspace Board' },
               {
                 target: {
-                  kind: 'exact-canvas',
                   workspaceId: 'workspace-1',
                   canvasId: 'neko/boards/story.nkc',
                 },

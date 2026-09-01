@@ -13,6 +13,10 @@ const roots: string[] = [];
 const generationProjection = {
   projectSnapshot: vi.fn(async () => ({ status: 'accepted' as const })),
 };
+const coordinateCanvasMutation = async <TResult>(
+  _target: unknown,
+  operation: () => Promise<TResult>,
+): Promise<TResult> => operation();
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
@@ -44,6 +48,7 @@ describe('Desktop DSH domain Tool handlers', () => {
         },
       },
       workspaceGrants: { resolveAuthorizedWorkspace },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
       configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
@@ -81,6 +86,7 @@ describe('Desktop DSH domain Tool handlers', () => {
         },
       },
       workspaceGrants: { resolveAuthorizedWorkspace },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
       configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
@@ -124,6 +130,7 @@ describe('Desktop DSH domain Tool handlers', () => {
       workspaceGrants: {
         resolveAuthorizedWorkspace: vi.fn(async () => workspaceResolution(root)),
       },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
       configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
@@ -180,6 +187,7 @@ describe('Desktop DSH domain Tool handlers', () => {
         },
       },
       workspaceGrants: { resolveAuthorizedWorkspace },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs },
       generationProjection: { projectSnapshot },
       configuration: {
@@ -224,6 +232,7 @@ describe('Desktop DSH domain Tool handlers', () => {
         },
       },
       workspaceGrants: { resolveAuthorizedWorkspace },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
       configuration: {
@@ -243,6 +252,79 @@ describe('Desktop DSH domain Tool handlers', () => {
       diagnostic: { code: 'CANVAS_DSH_TOOL_INVALID_INPUT' },
     });
     expect(resolveAuthorizedWorkspace).not.toHaveBeenCalled();
+  });
+
+  it('coordinates an exact Canvas mutation before projecting the Agent-authored node', async () => {
+    const root = await createRoot();
+    await mkdir(join(root, 'boards'), { recursive: true });
+    await writeFile(
+      join(root, 'boards', 'main.nkc'),
+      JSON.stringify({
+        name: 'Main',
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        nodes: [],
+        connections: [],
+      }),
+    );
+    const coordinateTarget = vi.fn();
+    const handlers = createDesktopDshDomainToolHandlers({
+      bindings: {
+        async getByDshSessionId() {
+          return sessionBinding();
+        },
+      },
+      contexts: {
+        async readContext() {
+          return workspaceContext();
+        },
+      },
+      workspaceGrants: {
+        resolveAuthorizedWorkspace: vi.fn(async () => workspaceResolution(root)),
+      },
+      coordinateCanvasMutation: async (target, operation) => {
+        coordinateTarget(target);
+        const documentPath = join(root, 'boards', 'main.nkc');
+        const current = JSON.parse(await readFile(documentPath, 'utf8'));
+        await writeFile(documentPath, JSON.stringify({ ...current, name: 'Saved host edit' }));
+        return operation();
+      },
+      generationRuntime: { getJobs: vi.fn() },
+      generationProjection,
+      configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
+      assistant: { assistantSpaceId: 'assistant:one', root },
+    });
+
+    await expect(
+      handlers.executeCanvasTool(
+        {
+          ...canvasRequest(),
+          operation: 'apply',
+          input: {
+            documentPath: 'boards/main.nkc',
+            command: {
+              kind: 'create_node',
+              node: { type: 'markdown', content: '# Agent node' },
+            },
+          },
+        },
+        new AbortController().signal,
+      ),
+    ).resolves.toMatchObject({
+      outcome: 'success',
+      result: {
+        documentPath: 'boards/main.nkc',
+        command: 'create_node',
+        nodeType: 'markdown',
+      },
+    });
+    expect(coordinateTarget).toHaveBeenCalledWith({
+      workspaceId: 'workspace:one',
+      canvasId: 'boards/main.nkc',
+    });
+    expect(JSON.parse(await readFile(join(root, 'boards', 'main.nkc'), 'utf8'))).toMatchObject({
+      name: 'Saved host edit',
+      nodes: [expect.objectContaining({ type: 'markdown', data: { content: '# Agent node' } })],
+    });
   });
 
   it('resolves Character through the exact authoring target and Workspace grant', async () => {
@@ -271,6 +353,7 @@ describe('Desktop DSH domain Tool handlers', () => {
         },
       },
       workspaceGrants: { resolveAuthorizedWorkspace },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
       configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
@@ -317,6 +400,7 @@ describe('Desktop DSH domain Tool handlers', () => {
       bindings: { getByDshSessionId },
       contexts: { readContext },
       workspaceGrants: { resolveAuthorizedWorkspace },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
       configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
@@ -366,6 +450,7 @@ describe('Desktop DSH domain Tool handlers', () => {
         },
       },
       workspaceGrants: { resolveAuthorizedWorkspace },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
       configuration: {
@@ -409,6 +494,7 @@ describe('Desktop DSH domain Tool handlers', () => {
         },
       },
       workspaceGrants: { resolveAuthorizedWorkspace },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
       configuration: {
@@ -461,6 +547,7 @@ describe('Desktop DSH domain Tool handlers', () => {
         },
       },
       workspaceGrants: { resolveAuthorizedWorkspace },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
       configuration: {
@@ -534,6 +621,7 @@ describe('Desktop DSH domain Tool handlers', () => {
         },
       },
       workspaceGrants: { resolveAuthorizedWorkspace: vi.fn() },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
       configuration: { getApplicationConfig, getWorkspaceConfig: vi.fn() },

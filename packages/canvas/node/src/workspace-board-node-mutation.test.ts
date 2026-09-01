@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
-  CANVAS_WORKSPACE_BOARD_PATH,
+  CANVAS_DEFAULT_DOCUMENT_PATH,
   createEmptyCanvasData,
   loadNkc,
   saveNkc,
@@ -180,7 +180,7 @@ function createMutation(workspacePath: string): WorkspaceBoardNodeMutation {
 }
 
 function boardPath(workspacePath: string): string {
-  return path.join(workspacePath, ...CANVAS_WORKSPACE_BOARD_PATH.split('/'));
+  return path.join(workspacePath, ...CANVAS_DEFAULT_DOCUMENT_PATH.split('/'));
 }
 
 function boardUri(workspacePath: string): string {

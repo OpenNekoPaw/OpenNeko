@@ -2,7 +2,6 @@ import type {
   DshAcpDomainToolRequest,
   DshAcpDomainToolResponse,
 } from '@neko/agent-contracts/dsh-acp';
-import type { CanvasProjectAuthoringService } from '@neko/canvas-domain';
 import type {
   CutExportSettings,
   CutExportTaskSnapshot,
@@ -16,7 +15,7 @@ import type {
   DshDomainToolContext,
   DshDomainToolContextResolver,
 } from '../application/dsh-domain-tool-context-resolver';
-import { CanvasDshHostAdapter } from './canvas-host-adapter';
+import { CanvasDshHostAdapter, type CanvasDshAuthoringPort } from './canvas-host-adapter';
 import { CutDshHostAdapter } from './cut-host-adapter';
 import {
   GenerationDshHostAdapter,
@@ -80,7 +79,7 @@ export function createDshDomainToolHandlers(options: {
       context: DshDomainToolContext & {
         readonly binding: Extract<DshDomainToolContext['binding'], { readonly kind: 'workspace' }>;
       },
-    ): Promise<Pick<CanvasProjectAuthoringService, 'query' | 'createNode'>>;
+    ): Promise<CanvasDshAuthoringPort>;
   };
   readonly cut: {
     resolveService(

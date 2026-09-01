@@ -1,0 +1,148 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "canvas-semantic-authoring",
+  "suiteId": "agent-runtime.creative-media-workflow",
+  "caseGroup": "workflow",
+  "visibility": "public",
+  "execution": {
+    "evidenceLevel": "visible-desktop",
+    "resourceClass": "text",
+    "protected": true,
+    "lifecycleChecks": ["composer-focus", "graceful-close"],
+    "startSurface": "workspace"
+  },
+  "evidenceContract": {
+    "userBehavior": "Inspect one exact Canvas node and revise its creative brief through the minimal semantic Canvas Tool contract.",
+    "canonicalPath": [
+      "visible Desktop Agent composer",
+      "openneko_canvas query operation",
+      "bounded semantic Canvas projection",
+      "openneko_canvas apply operation",
+      "update_node command",
+      "CanvasProjectAuthoringService",
+      "boards/story.nkc"
+    ],
+    "observables": [
+      {
+        "ref": "canvas-authoring-facts",
+        "kind": "runtime-fact",
+        "description": "Canonical Canvas query and apply Tool events, minimal receipts, no raw file Tool fallback, and terminal idle state.",
+        "required": true
+      },
+      {
+        "ref": "canvas-file-facts",
+        "kind": "post-check",
+        "description": "The exact Canvas document contains the deterministic revised brief and remains valid Canvas JSON.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The Agent uses query followed by apply/update_node, receives a minimal mutation receipt, and durably revises only the selected Canvas node.",
+    "expectedFailure": "A retired operation name, raw file or shell fallback, unbounded Canvas payload, wrong document target, invalid Canvas output, or success without the exact mutation fails visibly."
+  },
+  "fixtureRefs": ["canvas-authoring-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "Use openneko_canvas to query {\"documentPath\":\"boards/story.nkc\",\"nodeIds\":[\"brief\"]}. Then call openneko_canvas with operation apply and input {\"documentPath\":\"boards/story.nkc\",\"command\":{\"kind\":\"update_node\",\"nodeId\":\"brief\",\"path\":\"/content\",\"value\":\"# Approved brief\\n\\nOne silent vertical-city shot.\"}}. Do not use Read, Write, shell, filesystem, or any retired Canvas operation. Finish with CANVAS_SEMANTIC_APPLIED."
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "canvas-authoring-facts"
+    },
+    {
+      "id": "query",
+      "kind": "tool-call",
+      "name": "openneko_canvas",
+      "status": "success",
+      "expectedArguments": {
+        "operation": "query",
+        "input": { "documentPath": "boards/story.nkc", "nodeIds": ["brief"] }
+      },
+      "resultIncludes": { "documentPath": "boards/story.nkc", "nodeCount": 1 },
+      "evidenceRef": "canvas-authoring-facts"
+    },
+    {
+      "id": "apply",
+      "kind": "tool-call",
+      "name": "openneko_canvas",
+      "status": "success",
+      "expectedArguments": {
+        "operation": "apply",
+        "input": {
+          "documentPath": "boards/story.nkc",
+          "command": {
+            "kind": "update_node",
+            "nodeId": "brief",
+            "path": "/content",
+            "value": "# Approved brief\n\nOne silent vertical-city shot."
+          }
+        }
+      },
+      "resultIncludes": {
+        "documentPath": "boards/story.nkc",
+        "command": "update_node",
+        "nodeId": "brief",
+        "nodeType": "markdown"
+      },
+      "evidenceRef": "canvas-authoring-facts"
+    },
+    {
+      "id": "no-read",
+      "kind": "tool-call",
+      "name": "Read",
+      "status": "absent",
+      "evidenceRef": "canvas-authoring-facts"
+    },
+    {
+      "id": "no-write",
+      "kind": "tool-call",
+      "name": "Write",
+      "status": "absent",
+      "evidenceRef": "canvas-authoring-facts"
+    },
+    {
+      "id": "no-shell",
+      "kind": "tool-call",
+      "name": "exec_command",
+      "status": "absent",
+      "evidenceRef": "canvas-authoring-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["CANVAS_SEMANTIC_APPLIED"],
+      "evidenceRef": "canvas-authoring-facts"
+    },
+    {
+      "id": "terminal",
+      "kind": "terminal-idle",
+      "concerns": ["turnIdle", "continuationQueueIdle"],
+      "evidenceRef": "canvas-authoring-facts"
+    },
+    {
+      "id": "lifecycle",
+      "kind": "desktop-lifecycle",
+      "checks": ["composer-focus", "graceful-close"],
+      "evidenceRef": "canvas-authoring-facts"
+    }
+  ],
+  "artifactChecks": [
+    {
+      "id": "canvas-file",
+      "kind": "file",
+      "evidenceRef": "canvas-file-facts",
+      "path": "boards/story.nkc",
+      "digest": "sha256:b9fd87813d634c9abd900de38de9ff9dc5b08b2502207634ce2ae8fb530a6627",
+      "validatorId": "canvas-json"
+    }
+  ],
+  "budget": { "timeoutMs": 300000, "repetitions": 1 }
+}

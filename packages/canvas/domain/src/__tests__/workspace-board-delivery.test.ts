@@ -48,6 +48,57 @@ describe('Workspace Board delivery coordinator', () => {
     expect(mutation.saveCount).toBe(1);
   });
 
+  it('creates only the default Canvas and rejects a missing ordinary target', async () => {
+    const store = await createStore();
+    const mutation = new MemoryMutationPort();
+    mutation.rejectMissingWithoutCreate = true;
+    const coordinator = createCoordinator(store, mutation, 'host-a');
+    const request = delivery('delivery:ordinary-missing');
+    const ordinaryRequest = {
+      ...request,
+      target: {
+        ...request.target,
+        canvasId: 'neko/boards/story.nkc',
+        documentUri: 'file:///workspace/project/neko/boards/story.nkc',
+      },
+    };
+
+    await expect(coordinator.enqueue(ordinaryRequest)).resolves.toMatchObject([
+      { status: 'blocked', diagnostics: [{ code: 'projection-write-failed' }] },
+    ]);
+    expect(mutation.loadRequests).toEqual([
+      {
+        documentUri: 'file:///workspace/project/neko/boards/story.nkc',
+        createIfMissing: false,
+      },
+    ]);
+    expect(mutation.saveCount).toBe(0);
+  });
+
+  it('keeps a delivery pending when Host document coordination is unavailable', async () => {
+    const store = await createStore();
+    const mutation = new MemoryMutationPort();
+    const ledger = new WorkspaceBoardDeliveryLedger({
+      metadataStore: store,
+      workspaceId: WORKSPACE_ID,
+      createIdentity,
+    });
+    const coordinator = new WorkspaceBoardDeliveryCoordinator({
+      ledger,
+      mutation,
+      holderId: 'host-a',
+    });
+    const request = delivery('delivery:coordination-unavailable');
+    mutation.failBeforeCoordinate = new Error('Canvas runtime is unavailable.');
+
+    await expect(coordinator.enqueue(request)).rejects.toThrow('Canvas runtime is unavailable.');
+    await expect(ledger.getReceipt(request.process.deliveryId)).resolves.toBeUndefined();
+    await expect(ledger.listPending()).resolves.toHaveLength(1);
+
+    mutation.failBeforeCoordinate = undefined;
+    await expect(coordinator.flush()).resolves.toMatchObject([{ status: 'projected' }]);
+  });
+
   it('serializes distinct concurrent deliveries without a lost update', async () => {
     const store = await createStore();
     const mutation = new MemoryMutationPort();
@@ -121,6 +172,35 @@ describe('Workspace Board delivery coordinator', () => {
     await expect(editorOwner.flush()).resolves.toMatchObject([{ status: 'projected' }]);
     expect(mutation.saveCount).toBe(1);
     await editorOwner.releaseWriterOwnership();
+  });
+
+  it('coordinates every pending delivery against its own Canvas target', async () => {
+    const store = await createStore();
+    const mutation = new MemoryMutationPort();
+    const editorOwner = createCoordinator(store, mutation, 'editor-owner');
+    const backgroundHost = createCoordinator(store, mutation, 'background-host');
+    const defaultRequest = delivery('delivery:default-pending');
+    const ordinaryRequest = {
+      ...delivery('delivery:ordinary-pending'),
+      target: {
+        ...defaultRequest.target,
+        canvasId: 'neko/boards/story.nkc',
+        documentUri: 'file:///workspace/project/neko/boards/story.nkc',
+      },
+    };
+
+    await editorOwner.acquireWriterOwnership();
+    await backgroundHost.enqueue(defaultRequest);
+    await backgroundHost.enqueue(ordinaryRequest);
+    expect(mutation.coordinateTargets).toEqual([]);
+
+    await editorOwner.releaseWriterOwnership();
+    await backgroundHost.flush();
+
+    expect(new Set(mutation.coordinateTargets)).toEqual(
+      new Set(['neko/boards/workspace.nkc', 'neko/boards/story.nkc']),
+    );
+    expect(mutation.coordinateTargets).toHaveLength(2);
   });
 
   it('rejects a stale lease identity after takeover', async () => {
@@ -231,11 +311,31 @@ class MemoryMutationPort implements CanvasWorkspaceBoardMutationPort {
   saveCount = 0;
   saveAttempts = 0;
   failBeforeSave?: Error;
+  failBeforeCoordinate?: Error;
+  rejectMissingWithoutCreate = false;
+  readonly coordinateTargets: string[] = [];
+  readonly loadRequests: Array<{
+    readonly documentUri: string;
+    readonly createIfMissing: boolean;
+  }> = [];
+
+  coordinate<TResult>(
+    target: CanvasWorkspaceProjectionRequest['target'],
+    operation: () => Promise<TResult>,
+  ): Promise<TResult> {
+    if (this.failBeforeCoordinate) return Promise.reject(this.failBeforeCoordinate);
+    this.coordinateTargets.push(target.canvasId);
+    return operation();
+  }
 
   async loadLatest(input: {
     readonly documentUri: string;
     readonly createIfMissing: boolean;
   }): Promise<CanvasWorkspaceBoardLoadedDocument> {
+    this.loadRequests.push(input);
+    if (!input.createIfMissing && this.rejectMissingWithoutCreate) {
+      throw new Error('Canvas target does not exist.');
+    }
     return {
       documentUri: input.documentUri,
       canvasData: this.canvasData,
@@ -296,7 +396,12 @@ async function createStore(): Promise<LocalMetadataStore> {
 
 function delivery(deliveryId: string): CanvasWorkspaceProjectionRequest {
   return {
-    target: { workspaceId: WORKSPACE_ID, workspaceUri: 'file:///workspace/project/' },
+    target: {
+      workspaceId: WORKSPACE_ID,
+      workspaceUri: 'file:///workspace/project/',
+      canvasId: 'neko/boards/workspace.nkc',
+      documentUri: 'file:///workspace/project/neko/boards/workspace.nkc',
+    },
     process: { deliveryId, sourceHost: 'headless', createdAt: '2026-07-15T00:00:00.000Z' },
     artifacts: [
       {
@@ -322,7 +427,12 @@ function generatedBatchDelivery(
   count: number,
 ): CanvasWorkspaceProjectionRequest {
   return {
-    target: { workspaceId: WORKSPACE_ID, workspaceUri: 'file:///workspace/project/' },
+    target: {
+      workspaceId: WORKSPACE_ID,
+      workspaceUri: 'file:///workspace/project/',
+      canvasId: 'neko/boards/workspace.nkc',
+      documentUri: 'file:///workspace/project/neko/boards/workspace.nkc',
+    },
     process: {
       deliveryId,
       sourceHost: 'headless',

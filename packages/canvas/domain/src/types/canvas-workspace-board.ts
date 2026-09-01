@@ -1,4 +1,8 @@
-import { validateContentLocator, type ContentLocator } from '@neko/content-domain';
+import {
+  normalizeWorkspaceContentPath,
+  validateContentLocator,
+  type ContentLocator,
+} from '@neko/content-domain';
 import { isHostProjectedRuntimeValue } from '@neko/content-domain';
 import type {
   GeneratedAsset,
@@ -19,7 +23,7 @@ import {
   type CanvasGenerationProjectionSnapshot,
 } from '../canvas-generation-projection';
 
-export const CANVAS_WORKSPACE_BOARD_PATH = 'neko/boards/workspace.nkc' as const;
+export const CANVAS_DEFAULT_DOCUMENT_PATH = 'neko/boards/workspace.nkc' as const;
 
 export type CanvasWorkspaceProjectionKind =
   'markdown' | 'file-reference' | 'generation-job' | GeneratedAssetMediaKind;
@@ -32,8 +36,8 @@ export interface CanvasWorkspaceProjectionTarget {
   readonly workspaceId: string;
   /** Stable local workspace URI selected by the Host session. */
   readonly workspaceUri: string;
-  /** Optional explicit ordinary Canvas document. Omit for the canonical Workspace Board. */
-  readonly documentUri?: string;
+  readonly canvasId: string;
+  readonly documentUri: string;
 }
 
 export interface CanvasWorkspaceDeliveryProcess {
@@ -108,7 +112,7 @@ export interface CanvasWorkspaceDeliveryBatch {
 }
 
 export interface CanvasWorkspaceProjectionResolvedTarget {
-  readonly kind: 'workspace' | 'explicit';
+  readonly canvasId: string;
   readonly documentUri: string;
 }
 
@@ -200,6 +204,8 @@ export interface CanvasWorkspaceDeliveryReceipt {
 export interface CreateGeneratedAssetWorkspaceDeliveryTarget {
   readonly workspaceId: string;
   readonly workspaceUri: string;
+  readonly canvasId: string;
+  readonly documentUri: string;
   readonly sourceHost: CanvasWorkspaceDeliveryHost;
   readonly jobRef: CanvasGenerationJobRef;
 }
@@ -207,7 +213,8 @@ export interface CreateGeneratedAssetWorkspaceDeliveryTarget {
 export interface CreateGenerationJobWorkspaceDeliveryTarget {
   readonly workspaceId: string;
   readonly workspaceUri: string;
-  readonly documentUri?: string;
+  readonly canvasId: string;
+  readonly documentUri: string;
   readonly sourceHost: CanvasWorkspaceDeliveryHost;
   /** Exact owning Tool operation identity; never inferred from an active Canvas. */
   readonly operationId: string;
@@ -237,7 +244,8 @@ export function createGenerationJobWorkspaceDeliveryRequest(
     target: {
       workspaceId: target.workspaceId,
       workspaceUri: target.workspaceUri,
-      ...(target.documentUri ? { documentUri: target.documentUri } : {}),
+      canvasId: target.canvasId,
+      documentUri: target.documentUri,
     },
     process: {
       deliveryId,
@@ -282,7 +290,12 @@ export function createGeneratedAssetsWorkspaceDeliveryRequest(
     target.jobRef,
   );
   return {
-    target: { workspaceId: target.workspaceId, workspaceUri: target.workspaceUri },
+    target: {
+      workspaceId: target.workspaceId,
+      workspaceUri: target.workspaceUri,
+      canvasId: target.canvasId,
+      documentUri: target.documentUri,
+    },
     ...batch,
   };
 }
@@ -672,16 +685,27 @@ type ArtifactRecord = Record<string, unknown> & {
   readonly provenance: Record<string, unknown>;
 };
 
-export function resolveCanvasWorkspaceBoardDocumentUri(workspaceUri: string): string {
+export function resolveDefaultCanvasDocumentUri(workspaceUri: string): string {
+  return resolveCanvasDocumentUri(workspaceUri, CANVAS_DEFAULT_DOCUMENT_PATH);
+}
+
+export function resolveCanvasDocumentUri(workspaceUri: string, canvasId: string): string {
   const workspaceUrl = parseLocalFileUri(workspaceUri);
   if (!workspaceUrl) {
-    throw new Error('Canvas Workspace Board requires a local file workspace URI.');
+    throw new Error('Canvas target requires a local file workspace URI.');
+  }
+  if (
+    normalizeWorkspaceContentPath(canvasId) !== canvasId ||
+    !canvasId.toLowerCase().endsWith('.nkc')
+  ) {
+    throw new Error('Canvas target requires a normalized Workspace-relative .nkc identity.');
   }
   const pathname = workspaceUrl.pathname.endsWith('/')
     ? workspaceUrl.pathname
     : `${workspaceUrl.pathname}/`;
+  const encodedCanvasId = canvasId.split('/').map(encodeURIComponent).join('/');
   return new URL(
-    CANVAS_WORKSPACE_BOARD_PATH,
+    encodedCanvasId,
     `${workspaceUrl.protocol}//${workspaceUrl.host}${pathname}`,
   ).toString();
 }
@@ -697,7 +721,8 @@ export function isCanvasWorkspaceProjectionRequest(
   if (
     typeof target['workspaceId'] !== 'string' ||
     typeof target['workspaceUri'] !== 'string' ||
-    (target['documentUri'] !== undefined && typeof target['documentUri'] !== 'string')
+    typeof target['canvasId'] !== 'string' ||
+    typeof target['documentUri'] !== 'string'
   ) {
     return false;
   }
@@ -796,23 +821,46 @@ export function validateCanvasWorkspaceProjectionRequest(
       ),
     );
   }
-  if (request.target.documentUri !== undefined) {
-    if (!parseLocalFileUri(request.target.documentUri)) {
-      diagnostics.push(
-        diagnostic(
-          'invalid-canvas-target',
-          'Explicit Canvas target must be a durable local file URI.',
-          ['target', 'documentUri'],
-        ),
-      );
-    } else if (!uriPathname(request.target.documentUri)?.toLowerCase().endsWith('.nkc')) {
-      diagnostics.push(
-        diagnostic('invalid-canvas-extension', 'Explicit Canvas target must end with .nkc.', [
-          'target',
-          'documentUri',
-        ]),
-      );
-    }
+  let expectedDocumentUri: string | undefined;
+  try {
+    expectedDocumentUri = resolveCanvasDocumentUri(
+      request.target.workspaceUri,
+      request.target.canvasId,
+    );
+  } catch (error) {
+    diagnostics.push(
+      diagnostic(
+        'invalid-canvas-target',
+        error instanceof Error ? error.message : 'Canvas target identity is invalid.',
+        ['target', 'canvasId'],
+      ),
+    );
+  }
+  if (!parseLocalFileUri(request.target.documentUri)) {
+    diagnostics.push(
+      diagnostic('invalid-canvas-target', 'Canvas target must be a durable local file URI.', [
+        'target',
+        'documentUri',
+      ]),
+    );
+  } else if (!uriPathname(request.target.documentUri)?.toLowerCase().endsWith('.nkc')) {
+    diagnostics.push(
+      diagnostic('invalid-canvas-extension', 'Canvas target must end with .nkc.', [
+        'target',
+        'documentUri',
+      ]),
+    );
+  } else if (
+    expectedDocumentUri !== undefined &&
+    request.target.documentUri !== expectedDocumentUri
+  ) {
+    diagnostics.push(
+      diagnostic(
+        'invalid-canvas-target',
+        'Canvas document URI must match its Workspace-relative identity.',
+        ['target', 'documentUri'],
+      ),
+    );
   }
 
   for (const key of ['deliveryId', 'createdAt'] as const) {

@@ -57,7 +57,7 @@
     },
     {
       "tool": "openneko_canvas",
-      "operations": ["query", "create-node"],
+      "operations": ["query", "apply"],
       "registration": "packages/canvas/dsh-plugin/src/index.ts",
       "schemaOwner": "packages/canvas/domain/src/dsh-tool.ts",
       "validator": "decodeCanvasDshToolInput",

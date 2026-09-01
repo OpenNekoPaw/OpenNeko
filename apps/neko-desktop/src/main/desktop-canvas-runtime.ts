@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
-  CANVAS_WORKSPACE_BOARD_PATH,
+  CANVAS_DEFAULT_DOCUMENT_PATH,
   CanvasHostVisibleEffectError,
   CanvasHostRuntimeSession,
   createCanvasHostPresentationSnapshotStore,
@@ -18,6 +18,7 @@ import {
   type CanvasTextFilePreviewResult,
   type CanvasGenerationApplicationPort,
   type CanvasGenerationModelOption,
+  type CanvasWorkspaceTurnTarget,
   createCanvasMaterialActionOwner,
 } from '@neko/canvas-domain';
 import type { NekoHostPorts } from '@neko/host/ports';
@@ -120,7 +121,7 @@ export interface DesktopCanvasGlobalMediaLibraryCopySelection {
 
 export class DesktopCanvasRuntime {
   private readonly sessions = new Map<string, DesktopCanvasSessionEntry>();
-  private readonly workspaceBoardOperationTails = new Map<string, Promise<void>>();
+  private readonly documentOperationTails = new Map<string, Promise<void>>();
   private readonly previewLeases = new Map<string, DesktopCanvasPreviewLeaseEntry>();
   private readonly presentationSnapshots = createCanvasHostPresentationSnapshotStore();
   private readonly materialAuthoring: CanvasMaterialAuthoringService;
@@ -335,17 +336,18 @@ export class DesktopCanvasRuntime {
     return (await this.requireSession(windowId, identity)).session.subscribe(listener);
   }
 
-  async coordinateWorkspaceBoardMutation<TResult>(
-    workspaceId: string,
+  async coordinateCanvasDocumentMutation<TResult>(
+    target: CanvasWorkspaceTurnTarget,
     operation: () => Promise<TResult>,
   ): Promise<TResult> {
-    return this.enqueueWorkspaceBoardOperation(workspaceId, async () => {
+    const documentId = canvasTargetDocumentId(target);
+    return this.enqueueDocumentOperation(target.workspaceId, documentId, async () => {
       this.requireActive();
       const entries = [...this.sessions.values()]
         .filter(
           (entry) =>
-            entry.workspace.workspaceId === workspaceId &&
-            entry.identity.documentId === CANVAS_WORKSPACE_BOARD_PATH,
+            entry.workspace.workspaceId === target.workspaceId &&
+            entry.identity.documentId === documentId,
         )
         .sort((left, right) => sessionKey(left.identity).localeCompare(sessionKey(right.identity)));
       if (entries.length === 0) return operation();
@@ -355,7 +357,7 @@ export class DesktopCanvasRuntime {
         .map((snapshot) => JSON.stringify(snapshot.canvas));
       if (new Set(dirtyDocuments).size > 1) {
         throw new CanvasHostVisibleEffectError(
-          'workspace-board-open-session-conflict: Open Workspace Board views contain divergent unsaved changes.',
+          'canvas-open-session-conflict: Open Canvas views contain divergent unsaved changes.',
         );
       }
 
@@ -366,7 +368,7 @@ export class DesktopCanvasRuntime {
         if (!entry) {
           const value = await operation();
           const first = entries[0];
-          if (!first) throw new Error('Workspace Board session coordination lost its target.');
+          if (!first) throw new Error('Canvas session coordination lost its target.');
           return {
             value,
             canvas: await this.loadDocument(first.documentPath, first.workspace.displayName),
@@ -448,16 +450,13 @@ export class DesktopCanvasRuntime {
     identity: CanvasHostRuntimeIdentity,
   ): Promise<DesktopCanvasSessionEntry> {
     this.requireActive();
-    // Grant resolution may flush pending Agent deliveries through the Workspace Board
-    // coordinator. Resolve it before entering the Board queue so that opening the
+    // Grant resolution may flush pending Agent deliveries through the Canvas
+    // coordinator. Resolve it before entering the document queue so that opening the
     // Canvas never waits on a nested mutation scheduled behind itself.
     const grant = await this.options.shell.resolveCanvasViewGrant(windowId, identity);
-    if (identity.documentId === CANVAS_WORKSPACE_BOARD_PATH) {
-      return this.enqueueWorkspaceBoardOperation(identity.workspaceId, () =>
-        this.requireSessionSerial(windowId, identity, grant),
-      );
-    }
-    return this.requireSessionSerial(windowId, identity, grant);
+    return this.enqueueDocumentOperation(identity.workspaceId, identity.documentId, () =>
+      this.requireSessionSerial(windowId, identity, grant),
+    );
   }
 
   private async requireSessionSerial(
@@ -469,7 +468,7 @@ export class DesktopCanvasRuntime {
     const existing = this.sessions.get(key);
     if (existing) return existing;
     const documentPath =
-      identity.documentId === CANVAS_WORKSPACE_BOARD_PATH
+      identity.documentId === CANVAS_DEFAULT_DOCUMENT_PATH
         ? this.options.host.paths.join(grant.workspace.workspacePath, identity.documentId)
         : await resolveWorkspaceContentLocator(grant.workspace, {
             file: { authority: 'workspace', path: identity.documentId },
@@ -861,7 +860,7 @@ export class DesktopCanvasRuntime {
       externalChangeQueue: Promise.resolve(),
       generationReattachmentScheduled: false,
     };
-    if (identity.documentId !== CANVAS_WORKSPACE_BOARD_PATH) {
+    if (identity.documentId !== CANVAS_DEFAULT_DOCUMENT_PATH) {
       const watchFile = this.options.watchFile;
       if (watchFile) {
         entry.watcher = watchFile(
@@ -925,20 +924,22 @@ export class DesktopCanvasRuntime {
     throw new Error('Canvas material has no directly resolvable Host file path.');
   }
 
-  private enqueueWorkspaceBoardOperation<TResult>(
+  private enqueueDocumentOperation<TResult>(
     workspaceId: string,
+    documentId: string,
     operation: () => Promise<TResult>,
   ): Promise<TResult> {
-    const previous = this.workspaceBoardOperationTails.get(workspaceId) ?? Promise.resolve();
+    const operationKey = JSON.stringify([workspaceId, documentId]);
+    const previous = this.documentOperationTails.get(operationKey) ?? Promise.resolve();
     const result = previous.then(operation);
     const tail = result.then(
       () => undefined,
       () => undefined,
     );
-    this.workspaceBoardOperationTails.set(workspaceId, tail);
+    this.documentOperationTails.set(operationKey, tail);
     void tail.then(() => {
-      if (this.workspaceBoardOperationTails.get(workspaceId) === tail) {
-        this.workspaceBoardOperationTails.delete(workspaceId);
+      if (this.documentOperationTails.get(operationKey) === tail) {
+        this.documentOperationTails.delete(operationKey);
       }
     });
     return result;
@@ -993,6 +994,10 @@ export class DesktopCanvasRuntime {
   private requireActive(): void {
     if (this.disposed) throw new Error('Canvas runtime is disposed.');
   }
+}
+
+function canvasTargetDocumentId(target: CanvasWorkspaceTurnTarget): string {
+  return target.canvasId;
 }
 
 function createWorkspaceReferenceRequest(input: {

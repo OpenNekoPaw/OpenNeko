@@ -238,7 +238,6 @@ describe('DSH Session Host contract', () => {
           images: [],
           contextPayloads: [],
           canvasTurnTarget: {
-            kind: 'exact-canvas',
             workspaceId: 'workspace-1',
             canvasId: 'neko/boards/story.nkc',
           },
@@ -253,7 +252,6 @@ describe('DSH Session Host contract', () => {
         images: [],
         contextPayloads: [],
         canvasTurnTarget: {
-          kind: 'exact-canvas',
           workspaceId: 'workspace-1',
           canvasId: 'neko/boards/story.nkc',
         },
@@ -366,15 +364,20 @@ describe('DSH Session Host contract', () => {
           workspaceLabel: 'Workspace One',
           canvas: {
             workspaceId: 'workspace-1',
-            defaultTarget: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+            defaultTarget: {
+              workspaceId: 'workspace-1',
+              canvasId: 'neko/boards/workspace.nkc',
+            },
             options: [
               {
-                target: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+                target: {
+                  workspaceId: 'workspace-1',
+                  canvasId: 'neko/boards/workspace.nkc',
+                },
                 label: 'Workspace Board',
               },
               {
                 target: {
-                  kind: 'exact-canvas',
                   workspaceId: 'workspace-1',
                   canvasId: 'neko/boards/story.nkc',
                 },
@@ -393,8 +396,8 @@ describe('DSH Session Host contract', () => {
       context: {
         canvas: {
           options: [
-            { target: { kind: 'workspace-board' } },
-            { target: { kind: 'exact-canvas', canvasId: 'neko/boards/story.nkc' } },
+            { target: { canvasId: 'neko/boards/workspace.nkc' } },
+            { target: { canvasId: 'neko/boards/story.nkc' } },
           ],
         },
       },
@@ -411,10 +414,16 @@ describe('DSH Session Host contract', () => {
           workspaceLabel: 'Workspace One',
           canvas: {
             workspaceId: 'workspace-2',
-            defaultTarget: { kind: 'workspace-board', workspaceId: 'workspace-2' },
+            defaultTarget: {
+              workspaceId: 'workspace-2',
+              canvasId: 'neko/boards/workspace.nkc',
+            },
             options: [
               {
-                target: { kind: 'workspace-board', workspaceId: 'workspace-2' },
+                target: {
+                  workspaceId: 'workspace-2',
+                  canvasId: 'neko/boards/workspace.nkc',
+                },
                 label: 'Workspace Board',
               },
             ],

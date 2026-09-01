@@ -75,7 +75,7 @@ const TARGETABLE_FIELD_PATHS = {
   job: ['/title', '/objective'],
   file: ['/title', '/path'],
   'canvas-embed': ['/canvasTitle', '/canvasPath'],
-  generation: ['/recipe/prompt'],
+  generation: ['/recipe/prompt', '/selectedOutputId'],
 } as const satisfies Readonly<Record<CanonicalCanvasNodeType, readonly JsonPointerPath[]>>;
 
 export function createCanvasHeadlessAuthoringIdFactory(

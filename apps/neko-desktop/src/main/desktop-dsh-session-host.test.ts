@@ -18,8 +18,8 @@ const identity = {
 };
 
 const workspaceBoardTarget = {
-  kind: 'workspace-board' as const,
   workspaceId: 'workspace-1',
+  canvasId: 'neko/boards/workspace.nkc',
 };
 
 const turnConfiguration = {
@@ -417,7 +417,6 @@ describe('Desktop DSH Session Host', () => {
       contentLocator: { file: { authority: 'workspace' as const, path: 'books/draft.epub' } },
     };
     const canvasTurnTarget = {
-      kind: 'exact-canvas' as const,
       workspaceId: 'workspace-1',
       canvasId: 'neko/boards/story.nkc',
     };
@@ -459,7 +458,6 @@ describe('Desktop DSH Session Host', () => {
     });
     const host = createHost({ prompt, turnCanvasTargets: targets });
     const canvasTurnTarget = {
-      kind: 'exact-canvas' as const,
       workspaceId: 'workspace-1',
       canvasId: 'neko/boards/story.nkc',
     };
@@ -532,7 +530,6 @@ describe('Desktop DSH Session Host', () => {
     const setSessionContext = vi.fn(async () => undefined);
     const resolve = vi.fn(async () => 'OpenNeko exact Canvas context');
     const canvasTurnTarget = {
-      kind: 'exact-canvas' as const,
       workspaceId: 'workspace-1',
       canvasId: 'neko/boards/story.nkc',
     };
@@ -637,12 +634,10 @@ describe('Desktop DSH Session Host', () => {
   it('prioritizes the exact Canvas admission before delegating inbox send-now', async () => {
     const targets = createDshTurnCanvasTargetOwner();
     const first = targets.admit(identity.dshSessionId, {
-      kind: 'exact-canvas',
       workspaceId: 'workspace-1',
       canvasId: 'boards/first.nkc',
     });
     const selected = targets.admit(identity.dshSessionId, {
-      kind: 'exact-canvas',
       workspaceId: 'workspace-1',
       canvasId: 'boards/selected.nkc',
     });
@@ -680,12 +675,10 @@ describe('Desktop DSH Session Host', () => {
   it('restores Canvas admission order when inbox send-now rejects', async () => {
     const targets = createDshTurnCanvasTargetOwner();
     const first = targets.admit(identity.dshSessionId, {
-      kind: 'exact-canvas',
       workspaceId: 'workspace-1',
       canvasId: 'boards/first.nkc',
     });
     const selected = targets.admit(identity.dshSessionId, {
-      kind: 'exact-canvas',
       workspaceId: 'workspace-1',
       canvasId: 'boards/selected.nkc',
     });

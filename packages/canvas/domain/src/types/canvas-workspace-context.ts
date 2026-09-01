@@ -4,32 +4,26 @@ import {
   type CanvasBoardIndexEntry,
   type CanvasBoardSummary,
 } from './canvas-creative-scope';
-
-export const CANVAS_WORKSPACE_BOARD_TARGET_ID = 'workspace-board' as const;
+import { normalizeWorkspaceContentPath } from '@neko/content-domain';
+import { CANVAS_DEFAULT_DOCUMENT_PATH } from './canvas-workspace-board';
 
 /**
  * Composer-facing Canvas turn target.
  *
- * The logical Workspace Board is the canonical default option; an exact Canvas is
- * an explicit user selection. This contract never reads or creates files.
+ * Every option uses one Workspace-relative Canvas identity. The default Canvas is
+ * selected by policy rather than modeled as another target kind.
  */
-export type CanvasWorkspaceTurnTarget =
-  | {
-      readonly kind: 'workspace-board';
-      readonly workspaceId: string;
-    }
-  | {
-      readonly kind: 'exact-canvas';
-      readonly workspaceId: string;
-      readonly canvasId: string;
-    };
+export interface CanvasWorkspaceTurnTarget {
+  readonly workspaceId: string;
+  readonly canvasId: string;
+}
 
 export interface CanvasWorkspaceContextCatalogOption {
   readonly target: CanvasWorkspaceTurnTarget;
   readonly label: string;
   /**
-   * Light index entry for an exact Canvas. The logical Board option is allowed to
-   * omit this; it must never trigger file access or `workspace.nkc` creation.
+   * Light index entry for a discovered Canvas. The default option may omit this;
+   * catalog projection must never create `workspace.nkc`.
    */
   readonly index?: CanvasBoardIndexEntry;
   readonly summary?: CanvasWorkspaceTurnSummary;
@@ -39,7 +33,7 @@ export interface CanvasWorkspaceContextCatalogOption {
 
 export interface CanvasWorkspaceContextCatalog {
   readonly workspaceId: string;
-  readonly defaultTarget: Extract<CanvasWorkspaceTurnTarget, { readonly kind: 'workspace-board' }>;
+  readonly defaultTarget: CanvasWorkspaceTurnTarget;
   readonly options: readonly CanvasWorkspaceContextCatalogOption[];
   readonly diagnostics: readonly string[];
 }
@@ -53,54 +47,43 @@ export interface CanvasWorkspaceTurnSummary {
 
 export interface CanvasWorkspaceTurnContext {
   readonly target: CanvasWorkspaceTurnTarget;
-  /** Light summary for an exact Canvas only; full Canvas content must be read on demand. */
+  /** Light summary for a discovered non-default Canvas; full content is read on demand. */
   readonly summary?: CanvasWorkspaceTurnSummary;
 }
 
-export function createCanvasWorkspaceBoardTarget(
-  workspaceId: string,
-): Extract<CanvasWorkspaceTurnTarget, { readonly kind: 'workspace-board' }> {
+export function createDefaultCanvasWorkspaceTarget(workspaceId: string): CanvasWorkspaceTurnTarget {
   return Object.freeze({
-    kind: 'workspace-board' as const,
     workspaceId: requireIdentity(workspaceId, 'Workspace'),
+    canvasId: CANVAS_DEFAULT_DOCUMENT_PATH,
   });
 }
 
-export function createExactCanvasTarget(
+export function createCanvasWorkspaceTarget(
   workspaceId: string,
   canvasId: string,
-): Extract<CanvasWorkspaceTurnTarget, { readonly kind: 'exact-canvas' }> {
+): CanvasWorkspaceTurnTarget {
   return Object.freeze({
-    kind: 'exact-canvas' as const,
     workspaceId: requireIdentity(workspaceId, 'Workspace'),
-    canvasId: requireIdentity(canvasId, 'Canvas'),
+    canvasId: requireCanvasId(canvasId),
   });
 }
 
 export function isCanvasWorkspaceTurnTarget(value: unknown): value is CanvasWorkspaceTurnTarget {
   if (!isRecord(value)) return false;
-  if (value['kind'] !== 'workspace-board' && value['kind'] !== 'exact-canvas') return false;
   if (!isNonEmptyString(value['workspaceId'])) return false;
-  if (value['kind'] === 'exact-canvas') return isNonEmptyString(value['canvasId']);
-  return Object.keys(value).every((key) => key === 'kind' || key === 'workspaceId');
+  if (!isCanvasId(value['canvasId'])) return false;
+  return Object.keys(value).every((key) => key === 'workspaceId' || key === 'canvasId');
 }
 
 export function parseCanvasWorkspaceTurnTarget(value: unknown): CanvasWorkspaceTurnTarget {
   if (!isRecord(value)) {
     throw new Error('Canvas workspace turn target must be an object.');
   }
-  if (value['kind'] === 'workspace-board') {
-    requireExactKeys(value, ['kind', 'workspaceId'], 'Canvas workspace Board target');
-    return createCanvasWorkspaceBoardTarget(requireIdentity(value['workspaceId'], 'Workspace'));
-  }
-  if (value['kind'] === 'exact-canvas') {
-    requireExactKeys(value, ['kind', 'workspaceId', 'canvasId'], 'Canvas exact target');
-    return createExactCanvasTarget(
-      requireIdentity(value['workspaceId'], 'Workspace'),
-      requireIdentity(value['canvasId'], 'Canvas'),
-    );
-  }
-  throw new Error(`Unknown Canvas workspace turn target '${String(value['kind'])}'.`);
+  requireExactKeys(value, ['workspaceId', 'canvasId'], 'Canvas workspace target');
+  return createCanvasWorkspaceTarget(
+    requireIdentity(value['workspaceId'], 'Workspace'),
+    requireIdentity(value['canvasId'], 'Canvas'),
+  );
 }
 
 export function createCanvasWorkspaceContextCatalog(input: {
@@ -109,19 +92,16 @@ export function createCanvasWorkspaceContextCatalog(input: {
   readonly diagnostics?: readonly string[];
 }): CanvasWorkspaceContextCatalog {
   const workspaceId = requireIdentity(input.workspaceId, 'Workspace');
-  const defaultTarget = createCanvasWorkspaceBoardTarget(workspaceId);
+  const defaultTarget = createDefaultCanvasWorkspaceTarget(workspaceId);
   const catalog: CanvasWorkspaceContextCatalog = {
     workspaceId,
     defaultTarget,
     options: input.options.map((option) => freezeCatalogOption(parseCatalogOption(option))),
     diagnostics: input.diagnostics ?? [],
   };
-  const defaultOption = catalog.options.find(
-    (option) =>
-      option.target.kind === 'workspace-board' && option.target.workspaceId === workspaceId,
-  );
+  const defaultOption = catalog.options.find((option) => sameTarget(option.target, defaultTarget));
   if (!defaultOption) {
-    throw new Error('Canvas workspace context catalog requires the logical Board option.');
+    throw new Error('Canvas workspace context catalog requires its default Canvas option.');
   }
   if (catalog.options.some((option) => option.target.workspaceId !== workspaceId)) {
     throw new Error('Canvas workspace context catalog options must match its Workspace.');
@@ -159,8 +139,8 @@ export function parseCanvasWorkspaceContextCatalog(value: unknown): CanvasWorksp
   );
   const workspaceId = requireIdentity(value['workspaceId'], 'Workspace');
   const defaultTarget = parseCanvasWorkspaceTurnTarget(value['defaultTarget']);
-  if (defaultTarget.kind !== 'workspace-board' || defaultTarget.workspaceId !== workspaceId) {
-    throw new Error('Canvas workspace context catalog default target must be its logical Board.');
+  if (!sameTarget(defaultTarget, createDefaultCanvasWorkspaceTarget(workspaceId))) {
+    throw new Error('Canvas workspace context catalog has an invalid default Canvas target.');
   }
   if (!Array.isArray(value['options'])) {
     throw new Error('Canvas workspace context catalog options must be an array.');
@@ -202,11 +182,11 @@ export function parseCanvasWorkspaceContextCatalogOption(
       ? {}
       : { diagnostic: requireIdentity(value['diagnostic'], 'Canvas option diagnostic') }),
   };
-  if (target.kind === 'workspace-board' && option.index) {
-    throw new Error('The logical Board option must not carry a file-backed index entry.');
+  if (isDefaultCanvasTarget(target) && option.index) {
+    throw new Error('The default Canvas option must not carry a file-backed index entry.');
   }
-  if (target.kind === 'workspace-board' && option.disabled === true) {
-    throw new Error('The logical Board option cannot be disabled.');
+  if (isDefaultCanvasTarget(target) && option.disabled === true) {
+    throw new Error('The default Canvas option cannot be disabled.');
   }
   return option;
 }
@@ -217,18 +197,18 @@ export function parseCanvasWorkspaceTurnContext(value: unknown): CanvasWorkspace
   }
   requireAllowedKeys(value, ['target', 'summary'], ['target'], 'Canvas workspace turn context');
   const target = parseCanvasWorkspaceTurnTarget(value['target']);
-  if (target.kind === 'workspace-board') {
+  if (isDefaultCanvasTarget(target)) {
     if (value['summary'] !== undefined) {
-      throw new Error('The logical Board turn context must not carry a Canvas summary.');
+      throw new Error('The default Canvas turn context must not carry a discovered-file summary.');
     }
     return Object.freeze({ target });
   }
   if (value['summary'] === undefined) {
-    throw new Error('Exact Canvas turn context requires its light summary.');
+    throw new Error('A non-default Canvas turn context requires its light summary.');
   }
   const summary = parseCanvasWorkspaceTurnSummary(value['summary']);
   if (summary.canvasId !== target.canvasId) {
-    throw new Error('Canvas turn summary must match the exact Canvas target.');
+    throw new Error('Canvas turn summary must match its Canvas target.');
   }
   return Object.freeze({ target, summary });
 }
@@ -273,14 +253,14 @@ function parseCatalogOption(
   input: CanvasWorkspaceContextCatalogOption,
 ): CanvasWorkspaceContextCatalogOption {
   const target = parseCanvasWorkspaceTurnTarget(input.target);
-  if (target.kind === 'workspace-board' && input.index) {
-    throw new Error('The logical Board option must not carry a file-backed index entry.');
+  if (isDefaultCanvasTarget(target) && input.index) {
+    throw new Error('The default Canvas option must not carry a file-backed index entry.');
   }
-  if (target.kind === 'workspace-board' && input.summary) {
-    throw new Error('The logical Board option must not carry a Canvas summary.');
+  if (isDefaultCanvasTarget(target) && input.summary) {
+    throw new Error('The default Canvas option must not carry a discovered-file summary.');
   }
-  if (target.kind === 'workspace-board' && input.disabled === true) {
-    throw new Error('The logical Board option cannot be disabled.');
+  if (isDefaultCanvasTarget(target) && input.disabled === true) {
+    throw new Error('The default Canvas option cannot be disabled.');
   }
   return {
     target,
@@ -418,13 +398,28 @@ function requireFiniteNonNegativeNumber(value: unknown, label: string): number {
 }
 
 function sameTarget(left: CanvasWorkspaceTurnTarget, right: CanvasWorkspaceTurnTarget): boolean {
-  return (
-    left.kind === right.kind &&
-    left.workspaceId === right.workspaceId &&
-    (left.kind === 'workspace-board'
-      ? right.kind === 'workspace-board'
-      : right.kind === 'exact-canvas' && left.canvasId === right.canvasId)
-  );
+  return left.workspaceId === right.workspaceId && left.canvasId === right.canvasId;
+}
+
+function isDefaultCanvasTarget(target: CanvasWorkspaceTurnTarget): boolean {
+  return target.canvasId === CANVAS_DEFAULT_DOCUMENT_PATH;
+}
+
+function requireCanvasId(value: unknown): string {
+  const canvasId = requireIdentity(value, 'Canvas');
+  if (!isCanvasId(canvasId)) {
+    throw new Error('Canvas identity must be a normalized Workspace-relative .nkc path.');
+  }
+  return canvasId;
+}
+
+function isCanvasId(value: unknown): value is string {
+  if (!isNonEmptyString(value)) return false;
+  try {
+    return normalizeWorkspaceContentPath(value) === value && value.toLowerCase().endsWith('.nkc');
+  } catch {
+    return false;
+  }
 }
 
 function requireIdentity(value: unknown, label: string): string {

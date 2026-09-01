@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createCanvasWorkspaceBoardTarget, createExactCanvasTarget } from '@neko/canvas-domain';
+import {
+  createDefaultCanvasWorkspaceTarget,
+  createCanvasWorkspaceTarget,
+} from '@neko/canvas-domain';
 
 import { createDshConversationTurnContextResolver } from './dsh-conversation-turn-context';
 
@@ -79,7 +82,7 @@ describe('DSH Conversation turn context', () => {
   });
   it('resolves the exact durable Workspace and canonical Board context', async () => {
     const resolveTurnContext = vi.fn(async (_workspaceId: string, target: unknown) => ({
-      target: target as ReturnType<typeof createCanvasWorkspaceBoardTarget>,
+      target: target as ReturnType<typeof createDefaultCanvasWorkspaceTarget>,
     }));
     const resolver = createDshConversationTurnContextResolver({
       contexts: {
@@ -98,13 +101,13 @@ describe('DSH Conversation turn context', () => {
     });
 
     const prompt = await resolver.resolve('conversation-1');
-    expect(prompt).toContain('Workspace Board');
+    expect(prompt).toContain('default Workspace Canvas');
     expect(prompt).toContain('Workspace reviewable Markdown admission');
     expect(prompt).toContain('reviewable-markdown');
     expect(prompt).toContain('active Skill may require a stricter creative structure');
     expect(resolveTurnContext).toHaveBeenCalledWith(
       'workspace-1',
-      createCanvasWorkspaceBoardTarget('workspace-1'),
+      createDefaultCanvasWorkspaceTarget('workspace-1'),
     );
   });
 
@@ -128,7 +131,7 @@ describe('DSH Conversation turn context', () => {
 
   it('resolves the selected exact Canvas and rejects a cross-Workspace target', async () => {
     const resolveTurnContext = vi.fn(async (_workspaceId: string, target: unknown) => ({
-      target: target as ReturnType<typeof createExactCanvasTarget>,
+      target: target as ReturnType<typeof createCanvasWorkspaceTarget>,
       summary: {
         canvasId: 'neko/boards/story.nkc',
         name: 'story.nkc',
@@ -150,7 +153,7 @@ describe('DSH Conversation turn context', () => {
       },
       canvas: { resolveTurnContext },
     });
-    const target = createExactCanvasTarget('workspace-1', 'neko/boards/story.nkc');
+    const target = createCanvasWorkspaceTarget('workspace-1', 'neko/boards/story.nkc');
 
     await expect(resolver.resolve('conversation-1', [], [], target)).resolves.toContain(
       'story.nkc',
@@ -162,7 +165,7 @@ describe('DSH Conversation turn context', () => {
         'conversation-1',
         [],
         [],
-        createExactCanvasTarget('workspace-2', 'neko/boards/other.nkc'),
+        createCanvasWorkspaceTarget('workspace-2', 'neko/boards/other.nkc'),
       ),
     ).rejects.toThrow(/does not match Conversation Workspace/u);
     expect(resolveTurnContext).toHaveBeenCalledTimes(1);

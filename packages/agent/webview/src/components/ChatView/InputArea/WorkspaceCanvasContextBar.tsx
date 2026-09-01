@@ -48,7 +48,7 @@ export function WorkspaceCanvasContextBar({
               void canvas.onSelect(event.target.value);
             }}
             onDoubleClick={() => {
-              if (selectedOption?.target.kind === 'exact-canvas') {
+              if (selectedOption !== undefined && selectedOption.disabled !== true) {
                 void canvas.onOpen?.(selectedOption.id);
               }
             }}

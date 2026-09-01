@@ -5,6 +5,8 @@ import * as path from 'node:path';
 import {
   createCanvasGenerationNode,
   createCanvasHostIntentRequest,
+  createDefaultCanvasWorkspaceTarget,
+  createCanvasWorkspaceTarget,
   type CanvasGenerationApplicationPort,
   type CanvasHostIntent,
   type CanvasHostRuntimeIdentity,
@@ -2543,27 +2545,30 @@ describe('DesktopCanvasRuntime', () => {
       }),
     );
 
-    await runtime.coordinateWorkspaceBoardMutation('workspace-1', async () => {
-      await writeFile(
-        documentPath,
-        JSON.stringify({
-          name: 'Agent delivery',
-          viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
-          nodes: [
-            {
-              id: 'agent-output',
-              type: 'media',
-              position: { x: 40, y: 60 },
-              size: { width: 240, height: 160 },
-              zIndex: 1,
-              data: { assetPath: 'output.png', mediaType: 'image' },
-            },
-          ],
-          connections: [],
-        }),
-      );
-      return undefined;
-    });
+    await runtime.coordinateCanvasDocumentMutation(
+      createDefaultCanvasWorkspaceTarget('workspace-1'),
+      async () => {
+        await writeFile(
+          documentPath,
+          JSON.stringify({
+            name: 'Agent delivery',
+            viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+            nodes: [
+              {
+                id: 'agent-output',
+                type: 'media',
+                position: { x: 40, y: 60 },
+                size: { width: 240, height: 160 },
+                zIndex: 1,
+                data: { assetPath: 'output.png', mediaType: 'image' },
+              },
+            ],
+            connections: [],
+          }),
+        );
+        return undefined;
+      },
+    );
 
     expect((await runtime.getSnapshot('window-1', identity)).canvas.name).toBe('Agent delivery');
     expect((await runtime.getSnapshot('window-1', secondIdentity)).canvas.name).toBe(
@@ -2617,13 +2622,71 @@ describe('DesktopCanvasRuntime', () => {
     );
     const mutation = vi.fn(async () => undefined);
     await expect(
-      runtime.coordinateWorkspaceBoardMutation('workspace-1', mutation),
+      runtime.coordinateCanvasDocumentMutation(
+        createDefaultCanvasWorkspaceTarget('workspace-1'),
+        mutation,
+      ),
     ).resolves.toBeUndefined();
     expect(mutation).toHaveBeenCalledOnce();
     expect(JSON.parse(await readFile(documentPath, 'utf8'))).toMatchObject({
       name: 'Unsaved user edit',
     });
     expect((await runtime.getSnapshot('window-1', identity)).canvas.name).toBe('Unsaved user edit');
+    await runtime.dispose();
+  });
+
+  it('projects an Agent mutation into the exact open Canvas without reopening it', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-exact-live-'));
+    roots.push(workspacePath);
+    const identity = { ...createIdentity(), documentId: 'blame-PV.nkc' };
+    const documentPath = path.join(workspacePath, identity.documentId);
+    await writeFile(
+      documentPath,
+      JSON.stringify({
+        name: 'BLAME PV',
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        nodes: [],
+        connections: [],
+      }),
+    );
+    const runtime = createRuntime(workspacePath, identity);
+    await runtime.getSnapshot('window-1', identity);
+    const projectionEvents: CanvasHostSnapshot[] = [];
+    await runtime.subscribe('window-1', identity, (event) => {
+      projectionEvents.push(event.snapshot);
+    });
+
+    await runtime.coordinateCanvasDocumentMutation(
+      createCanvasWorkspaceTarget(identity.workspaceId, identity.documentId),
+      async () => {
+        await writeFile(
+          documentPath,
+          JSON.stringify({
+            name: 'BLAME PV',
+            viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+            nodes: [
+              {
+                id: 'agent-output',
+                type: 'markdown',
+                position: { x: 40, y: 60 },
+                size: { width: 320, height: 180 },
+                zIndex: 1,
+                data: { content: '# Agent output' },
+              },
+            ],
+            connections: [],
+          }),
+        );
+        return undefined;
+      },
+    );
+
+    expect((await runtime.getSnapshot('window-1', identity)).canvas.nodes).toEqual([
+      expect.objectContaining({ id: 'agent-output' }),
+    ]);
+    expect(projectionEvents.at(-1)?.canvas.nodes).toEqual([
+      expect.objectContaining({ id: 'agent-output' }),
+    ]);
     await runtime.dispose();
   });
 
@@ -2726,7 +2789,10 @@ describe('DesktopCanvasRuntime', () => {
     roots.push(workspacePath);
     const identity = createIdentity();
     const resolveCanvasViewGrant = vi.fn(async (): Promise<DesktopCanvasViewGrant> => {
-      await runtime.coordinateWorkspaceBoardMutation(identity.workspaceId, async () => undefined);
+      await runtime.coordinateCanvasDocumentMutation(
+        createDefaultCanvasWorkspaceTarget(identity.workspaceId),
+        async () => undefined,
+      );
       return {
         identity,
         workspace: {

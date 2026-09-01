@@ -6,9 +6,9 @@ import type {
   ConfigManager,
 } from '@neko/host/settings';
 import {
-  createCanvasWorkspaceBoardTarget,
+  createDefaultCanvasWorkspaceTarget,
   createCanvasWorkspaceContextCatalog,
-  createExactCanvasTarget,
+  createCanvasWorkspaceTarget,
 } from '@neko/canvas-domain';
 
 import { createDesktopDshComposerConfiguration } from './desktop-dsh-composer-configuration';
@@ -103,10 +103,14 @@ describe('Desktop DSH composer configuration', () => {
         canvas: {
           workspaceId: 'workspace-1',
           options: [
-            { target: { kind: 'workspace-board', workspaceId: 'workspace-1' } },
             {
               target: {
-                kind: 'exact-canvas',
+                workspaceId: 'workspace-1',
+                canvasId: 'neko/boards/workspace.nkc',
+              },
+            },
+            {
+              target: {
                 workspaceId: 'workspace-1',
                 canvasId: 'neko/boards/story.nkc',
               },
@@ -778,11 +782,11 @@ function canvasIndex() {
         workspaceId,
         options: [
           {
-            target: createCanvasWorkspaceBoardTarget(workspaceId),
+            target: createDefaultCanvasWorkspaceTarget(workspaceId),
             label: 'Workspace Board',
           },
           {
-            target: createExactCanvasTarget(workspaceId, 'neko/boards/story.nkc'),
+            target: createCanvasWorkspaceTarget(workspaceId, 'neko/boards/story.nkc'),
             label: 'story.nkc',
             index: {
               canvasId: 'neko/boards/story.nkc',

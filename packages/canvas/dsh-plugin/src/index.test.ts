@@ -31,7 +31,7 @@ describe('OpenNeko Canvas DSH plugin', () => {
     expect(definition.parameters).toMatchObject({
       type: 'object',
       properties: {
-        operation: { enum: ['query', 'create-node'] },
+        operation: { enum: ['query', 'apply'] },
         input: {
           oneOf: [
             {
@@ -40,8 +40,8 @@ describe('OpenNeko Canvas DSH plugin', () => {
               additionalProperties: false,
             },
             {
-              title: 'create-node input',
-              required: ['documentPath', 'node'],
+              title: 'apply input',
+              required: ['documentPath', 'command'],
               additionalProperties: false,
             },
           ],

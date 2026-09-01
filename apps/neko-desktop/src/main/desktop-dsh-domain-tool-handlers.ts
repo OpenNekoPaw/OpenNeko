@@ -15,10 +15,15 @@ import {
 import {
   createDshDomainToolHandlers,
   enforceDshDomainToolEffect,
+  type CanvasDshAuthoringPort,
   type DshDomainToolHandlers,
   type GenerationDshLifecycleProjectionOutcome,
 } from '@neko/agent-runtime/acp';
-import { CanvasProjectAuthoringService } from '@neko/canvas-domain';
+import {
+  CanvasProjectAuthoringService,
+  createCanvasWorkspaceTarget,
+  type CanvasWorkspaceTurnTarget,
+} from '@neko/canvas-domain';
 import {
   createNodeHostContentReadService,
   createNodeDocumentAccessService,
@@ -61,6 +66,10 @@ export function createDesktopDshDomainToolHandlers(options: {
   readonly bindings: Pick<ConversationDshSessionBindingStore, 'getByDshSessionId'>;
   readonly contexts: Pick<AgentConversationContextAuthorityPort, 'readContext'>;
   readonly workspaceGrants: Pick<DesktopWorkspaceGrantAuthorityPort, 'resolveAuthorizedWorkspace'>;
+  readonly coordinateCanvasMutation: <TResult>(
+    target: CanvasWorkspaceTurnTarget,
+    operation: () => Promise<TResult>,
+  ) => Promise<TResult>;
   readonly generationRuntime: Pick<GenerationApplicationRuntime, 'getJobs'>;
   readonly generationProjection: DesktopDshGenerationProjectionPort;
   readonly configuration: Pick<
@@ -201,7 +210,7 @@ export function createDesktopDshDomainToolHandlers(options: {
           workspaceContext.binding.workspaceGrantId,
           workspaceContext.binding.workspaceId,
         );
-        return new CanvasProjectAuthoringService({
+        const authoring = new CanvasProjectAuthoringService({
           contentRead: createNodeHostContentReadService({
             workspaceRoot: resolution.workspace.workspacePath,
           }),
@@ -209,6 +218,53 @@ export function createDesktopDshDomainToolHandlers(options: {
             workspaceRoot: resolution.workspace.workspacePath,
           }),
         });
+        const coordinateMutation = async <TResult>(
+          input: { readonly documentPath: string; readonly signal?: AbortSignal },
+          mutate: (
+            expectedFingerprint: Awaited<ReturnType<typeof authoring.query>>['fingerprint'],
+          ) => Promise<TResult>,
+        ): Promise<TResult> =>
+          options.coordinateCanvasMutation(
+            createCanvasWorkspaceTarget(resolution.workspace.workspaceId, input.documentPath),
+            async () => {
+              const current = await authoring.query({
+                documentPath: input.documentPath,
+                ...(input.signal === undefined ? {} : { signal: input.signal }),
+              });
+              return mutate(current.fingerprint);
+            },
+          );
+        const service: CanvasDshAuthoringPort = {
+          query: authoring.query.bind(authoring),
+          createNode: (input) =>
+            coordinateMutation(input, (expectedFingerprint) =>
+              authoring.createNode({
+                documentPath: input.documentPath,
+                expectedFingerprint,
+                node: input.node,
+                ...(input.signal === undefined ? {} : { signal: input.signal }),
+              }),
+            ),
+          updateNode: (input) =>
+            coordinateMutation(input, (expectedFingerprint) =>
+              authoring.updateBlock({
+                documentPath: input.documentPath,
+                expectedFingerprint,
+                request: input.request,
+                ...(input.signal === undefined ? {} : { signal: input.signal }),
+              }),
+            ),
+          createConnection: (input) =>
+            coordinateMutation(input, (expectedFingerprint) =>
+              authoring.createConnection({
+                documentPath: input.documentPath,
+                expectedFingerprint,
+                connection: input.connection,
+                ...(input.signal === undefined ? {} : { signal: input.signal }),
+              }),
+            ),
+        };
+        return service;
       },
     },
     cut: {

@@ -73,7 +73,7 @@ export interface AgentComposerCanvasOption {
 
 export interface AgentComposerCanvasPresentation {
   readonly workspaceId: string;
-  readonly defaultTarget: Extract<CanvasWorkspaceTurnTarget, { readonly kind: 'workspace-board' }>;
+  readonly defaultTarget: CanvasWorkspaceTurnTarget;
   readonly options: readonly AgentComposerCanvasOption[];
   readonly selectedId: string;
   readonly loading: boolean;

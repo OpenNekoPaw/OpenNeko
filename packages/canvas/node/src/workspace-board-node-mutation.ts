@@ -7,6 +7,7 @@ import {
   createEmptyCanvasData,
   loadNkc,
   saveNkc,
+  type CanvasWorkspaceProjectionRequest,
   type CanvasWorkspaceBoardLoadedDocument,
   type CanvasWorkspaceBoardMutationPort,
 } from '@neko/canvas-domain';
@@ -23,6 +24,13 @@ export class WorkspaceBoardNodeMutation implements CanvasWorkspaceBoardMutationP
 
   constructor(private readonly options: WorkspaceBoardNodeMutationOptions) {
     this.createIdentity = options.createIdentity ?? randomUUID;
+  }
+
+  coordinate<TResult>(
+    _target: CanvasWorkspaceProjectionRequest['target'],
+    operation: () => Promise<TResult>,
+  ): Promise<TResult> {
+    return operation();
   }
 
   async loadLatest(input: {

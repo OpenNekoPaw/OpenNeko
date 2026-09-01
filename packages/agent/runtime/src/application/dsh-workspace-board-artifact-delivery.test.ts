@@ -68,7 +68,10 @@ describe('DSH Workspace Board terminal Markdown delivery', () => {
         events: terminalEvents(
           'Saved the durable plan.\n\n<!-- neko:artifact -->\n\n# Animation Plan\n\n## Scope\n\nReviewable content.',
         ),
-        canvasTurnTarget: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+        canvasTurnTarget: {
+          workspaceId: 'workspace-1',
+          canvasId: 'neko/boards/workspace.nkc',
+        },
       }),
     ).resolves.toEqual({ status: 'accepted' });
 
@@ -125,7 +128,10 @@ describe('DSH Workspace Board terminal Markdown delivery', () => {
         dshSessionId: 'dsh-1',
         turn: 1,
         events: terminalEvents('This is an ordinary answer.'),
-        canvasTurnTarget: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+        canvasTurnTarget: {
+          workspaceId: 'workspace-1',
+          canvasId: 'neko/boards/workspace.nkc',
+        },
       }),
     ).resolves.toBeUndefined();
     expect(publication).not.toHaveBeenCalled();
@@ -232,7 +238,10 @@ describe('DSH Workspace Board terminal Markdown delivery', () => {
         dshSessionId: 'dsh-1',
         turn: 1,
         events: terminalEvents('Summary\n\n<!-- neko:artifact -->\n\n## Missing H1'),
-        canvasTurnTarget: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+        canvasTurnTarget: {
+          workspaceId: 'workspace-1',
+          canvasId: 'neko/boards/workspace.nkc',
+        },
       }),
     ).rejects.toThrow(/must begin with one H1 title/u);
     expect(publication).not.toHaveBeenCalled();
@@ -270,7 +279,10 @@ describe('DSH Workspace Board terminal Markdown delivery', () => {
           'Summary\n\n<!-- neko:artifact -->\n\n# Incomplete Plan',
           'interrupted',
         ),
-        canvasTurnTarget: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+        canvasTurnTarget: {
+          workspaceId: 'workspace-1',
+          canvasId: 'neko/boards/workspace.nkc',
+        },
       }),
     ).resolves.toBeUndefined();
     expect(publication).not.toHaveBeenCalled();

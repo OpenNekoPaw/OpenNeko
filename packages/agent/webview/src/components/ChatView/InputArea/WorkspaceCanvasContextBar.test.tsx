@@ -62,13 +62,13 @@ describe('WorkspaceCanvasContextBar', () => {
   });
 
   it('does not claim Board when the selected Canvas id is unknown', () => {
-    const board = { kind: 'workspace-board' as const, workspaceId: 'workspace-1' };
+    const board = { workspaceId: 'workspace-1', canvasId: 'neko/boards/workspace.nkc' };
     const canvas: AgentComposerCanvasPresentation = {
       workspaceId: 'workspace-1',
       defaultTarget: board,
       selectedId: 'neko/boards/missing.nkc',
       loading: false,
-      options: [{ id: 'workspace-board', label: 'Workspace Board', target: board }],
+      options: [{ id: 'neko/boards/workspace.nkc', label: 'Workspace Board', target: board }],
       onSelect: async () => undefined,
     };
     renderBar(canvas);
@@ -79,13 +79,13 @@ describe('WorkspaceCanvasContextBar', () => {
   });
 
   it('can render only the Workspace label without Canvas index', () => {
-    const board = { kind: 'workspace-board' as const, workspaceId: 'workspace-1' };
+    const board = { workspaceId: 'workspace-1', canvasId: 'neko/boards/workspace.nkc' };
     const canvas: AgentComposerCanvasPresentation = {
       workspaceId: 'workspace-1',
       defaultTarget: board,
-      selectedId: 'workspace-board',
+      selectedId: 'neko/boards/workspace.nkc',
       loading: false,
-      options: [{ id: 'workspace-board', label: 'Workspace Board', target: board }],
+      options: [{ id: 'neko/boards/workspace.nkc', label: 'Workspace Board', target: board }],
       onSelect: async () => undefined,
     };
     render(
@@ -114,19 +114,18 @@ describe('WorkspaceCanvasContextBar', () => {
   });
 
   it('renders only Workspace label and selected Canvas index', () => {
-    const board = { kind: 'workspace-board' as const, workspaceId: 'workspace-1' };
+    const board = { workspaceId: 'workspace-1', canvasId: 'neko/boards/workspace.nkc' };
     const canvas: AgentComposerCanvasPresentation = {
       workspaceId: 'workspace-1',
       defaultTarget: board,
-      selectedId: 'workspace-board',
+      selectedId: 'neko/boards/workspace.nkc',
       loading: false,
       options: [
-        { id: 'workspace-board', label: 'Workspace Board', target: board },
+        { id: 'neko/boards/workspace.nkc', label: 'Workspace Board', target: board },
         {
           id: 'neko/boards/a.nkc',
           label: 'Story Canvas',
           target: {
-            kind: 'exact-canvas' as const,
             workspaceId: 'workspace-1',
             canvasId: 'neko/boards/a.nkc',
           },
@@ -141,15 +140,15 @@ describe('WorkspaceCanvasContextBar', () => {
     expect(screen.queryByText('workspace.nkc')).toBeNull();
     const select = document.querySelector('select');
     expect(select?.closest('.agent-workspace-canvas-select-control')).toBeTruthy();
-    expect(select?.value).toBe('workspace-board');
+    expect(select?.value).toBe('neko/boards/workspace.nkc');
     expect(select?.options).toHaveLength(2);
     expect(screen.queryByText('read')).toBeNull();
     expect(screen.queryByText('write')).toBeNull();
     expect(screen.queryByText('range')).toBeNull();
   });
 
-  it('opens only the currently selected exact Canvas on double-click', () => {
-    const board = { kind: 'workspace-board' as const, workspaceId: 'workspace-1' };
+  it('opens the currently selected Canvas on double-click', () => {
+    const board = { workspaceId: 'workspace-1', canvasId: 'neko/boards/workspace.nkc' };
     const onOpen = vi.fn(async () => undefined);
     const canvas: AgentComposerCanvasPresentation = {
       workspaceId: 'workspace-1',
@@ -157,12 +156,11 @@ describe('WorkspaceCanvasContextBar', () => {
       selectedId: 'neko/boards/story.nkc',
       loading: false,
       options: [
-        { id: 'workspace-board', label: 'Workspace Board', target: board },
+        { id: 'neko/boards/workspace.nkc', label: 'Workspace Board', target: board },
         {
           id: 'neko/boards/story.nkc',
           label: 'story.nkc',
           target: {
-            kind: 'exact-canvas',
             workspaceId: 'workspace-1',
             canvasId: 'neko/boards/story.nkc',
           },

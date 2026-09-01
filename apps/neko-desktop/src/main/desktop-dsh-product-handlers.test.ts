@@ -14,6 +14,7 @@ describe('Desktop DSH product handlers', () => {
         },
       },
       workspaceGrants: { resolveAuthorizedWorkspace: vi.fn() },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection: {
         projectSnapshot: vi.fn(async () => ({ status: 'accepted' as const })),
@@ -56,6 +57,7 @@ describe('Desktop DSH product handlers', () => {
         },
       },
       workspaceGrants: { resolveAuthorizedWorkspace: vi.fn() },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection: {
         projectSnapshot: vi.fn(async () => ({ status: 'accepted' as const })),
@@ -89,6 +91,7 @@ describe('Desktop DSH product handlers', () => {
         },
       },
       workspaceGrants: { resolveAuthorizedWorkspace: vi.fn() },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection: {
         projectSnapshot: vi.fn(async () => ({ status: 'accepted' as const })),
@@ -126,6 +129,7 @@ describe('Desktop DSH product handlers', () => {
       bindings: bindings(),
       contexts: { readContext: vi.fn() },
       workspaceGrants: { resolveAuthorizedWorkspace: vi.fn() },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection: {
         projectSnapshot: vi.fn(async () => ({ status: 'accepted' as const })),
@@ -156,6 +160,13 @@ describe('Desktop DSH product handlers', () => {
     ).rejects.toThrow('unsupported domain tool openneko_unknown');
   });
 });
+
+async function coordinateCanvasMutation<TResult>(
+  _target: unknown,
+  operation: () => Promise<TResult>,
+): Promise<TResult> {
+  return operation();
+}
 
 function bindings() {
   return {

@@ -64,9 +64,12 @@ import {
   type DshComposerCanvasSelectionScope,
 } from './presentation-snapshot';
 import { projectDshTranscriptPresentation, type ToolEvent } from './transcript-presentation';
+import { getLogger } from '../utils/logger';
 
 import '../index.css';
 import './root.css';
+
+const logger = getLogger('DshAgentView');
 
 export interface DshAgentViewProps {
   readonly agentSurfaceId: string;
@@ -661,21 +664,50 @@ function DshComposer({
   };
   const configurationDiagnostic = configurationError ?? configuration?.diagnostic;
   const canvasCatalog = configuration?.context?.canvas;
-  const canvasSelectionScope: DshComposerCanvasSelectionScope | undefined =
-    canvasCatalog === undefined
-      ? undefined
-      : {
-          agentSurfaceId,
-          workspaceId: canvasCatalog.workspaceId,
-          ...(conversationId === undefined ? {} : { conversationId }),
-        };
-  const [effectiveSelectedCanvasId, selectCanvasId] =
+  const canvasSelectionScope: DshComposerCanvasSelectionScope | undefined = useMemo(
+    () =>
+      canvasCatalog === undefined
+        ? undefined
+        : {
+            agentSurfaceId,
+            workspaceId: canvasCatalog.workspaceId,
+            ...(conversationId === undefined ? {} : { conversationId }),
+          },
+    [agentSurfaceId, canvasCatalog, conversationId],
+  );
+  const [storedSelectedCanvasId, selectCanvasId] =
     useDshComposerCanvasSelection(canvasSelectionScope);
-  const selectedCanvasOption = canvasCatalog?.options.find((option) => {
-    const optionId =
-      option.target.kind === 'workspace-board' ? 'workspace-board' : option.target.canvasId;
-    return optionId === effectiveSelectedCanvasId;
-  });
+  const storedSelectedCanvasOption = canvasCatalog?.options.find(
+    (option) => option.target.canvasId === storedSelectedCanvasId,
+  );
+  const defaultCanvasOption = canvasCatalog?.options.find(
+    (option) => option.target.canvasId === canvasCatalog.defaultTarget.canvasId,
+  );
+  const selectedCanvasOption = storedSelectedCanvasOption ?? defaultCanvasOption;
+  const effectiveSelectedCanvasId = selectedCanvasOption?.target.canvasId ?? storedSelectedCanvasId;
+  useEffect(() => {
+    if (
+      canvasSelectionScope === undefined ||
+      canvasCatalog === undefined ||
+      storedSelectedCanvasOption !== undefined ||
+      defaultCanvasOption === undefined
+    ) {
+      return;
+    }
+    logger.warn('DSH composer Canvas selection is unavailable; resetting the local snapshot.', {
+      workspaceId: canvasCatalog.workspaceId,
+      canvasId: storedSelectedCanvasId,
+      defaultCanvasId: defaultCanvasOption.target.canvasId,
+    });
+    selectCanvasId(defaultCanvasOption.target.canvasId);
+  }, [
+    canvasCatalog,
+    canvasSelectionScope,
+    defaultCanvasOption,
+    selectCanvasId,
+    storedSelectedCanvasId,
+    storedSelectedCanvasOption,
+  ]);
   const canvasSelectionDiagnostic =
     canvasCatalog === undefined ||
     (selectedCanvasOption !== undefined && selectedCanvasOption.disabled !== true)
@@ -951,20 +983,17 @@ function DshComposer({
             configurationDiagnostic
           }
           workspaceCanvas={
-            configuration?.context
+            configuration?.context && canvasCatalog
               ? {
                   workspaceLabel: configuration.context.workspaceLabel,
                   showCanvasIndex: true,
                   canvas: {
-                    workspaceId: configuration.context.canvas.workspaceId,
-                    defaultTarget: configuration.context.canvas.defaultTarget,
-                    options: configuration.context.canvas.options.map((option) => ({
-                      id:
-                        option.target.kind === 'workspace-board'
-                          ? 'workspace-board'
-                          : option.target.canvasId,
+                    workspaceId: canvasCatalog.workspaceId,
+                    defaultTarget: canvasCatalog.defaultTarget,
+                    options: canvasCatalog.options.map((option) => ({
+                      id: option.target.canvasId,
                       label:
-                        option.target.kind === 'workspace-board'
+                        option.target.canvasId === canvasCatalog.defaultTarget.canvasId
                           ? t('chat.input.workspaceCanvas.board')
                           : option.label,
                       target: option.target,
@@ -975,18 +1004,15 @@ function DshComposer({
                     selectedId: effectiveSelectedCanvasId,
                     loading: false,
                     ...(canvasSelectionDiagnostic === undefined &&
-                    configuration.context.canvas.diagnostics.length === 0
+                    canvasCatalog.diagnostics.length === 0
                       ? {}
                       : {
                           diagnostic:
-                            canvasSelectionDiagnostic ??
-                            configuration.context.canvas.diagnostics.join(' '),
+                            canvasSelectionDiagnostic ?? canvasCatalog.diagnostics.join(' '),
                         }),
                     onSelect: async (optionId) => {
-                      const option = configuration.context?.canvas.options.find((candidate) =>
-                        candidate.target.kind === 'workspace-board'
-                          ? optionId === 'workspace-board'
-                          : candidate.target.canvasId === optionId,
+                      const option = canvasCatalog.options.find(
+                        (candidate) => candidate.target.canvasId === optionId,
                       );
                       if (option === undefined || option.disabled === true) {
                         setInputDiagnostic(

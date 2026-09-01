@@ -92,6 +92,9 @@ const RULES = Object.freeze([
     'packages/world/domain/src/application/world-dsh-tool',
     'packages/world/dsh-plugin/',
     'packages/agent/runtime/src/acp/world-host-adapter',
+    'packages/canvas/domain/src/dsh-tool',
+    'packages/canvas/dsh-plugin/',
+    'packages/agent/runtime/src/acp/canvas-host-adapter',
     'packages/agent/runtime/src/acp/dsh-domain-tool-handlers',
     'packages/cut/domain/src/dsh-tool',
     'packages/cut/dsh-plugin/',
@@ -208,6 +211,8 @@ export function isAgentEvaluationRelevantPath(rawPath) {
     path.startsWith('packages/host/src/ai-model-settings') ||
     path.startsWith('packages/cut/domain/src/dsh-tool') ||
     path.startsWith('packages/cut/dsh-plugin/') ||
+    path.startsWith('packages/canvas/domain/src/dsh-tool') ||
+    path.startsWith('packages/canvas/dsh-plugin/') ||
     path.startsWith('packages/chara/domain/src/application/character-dsh-tool') ||
     path.startsWith('packages/chara/node/src/character-dsh-host-adapter') ||
     path.startsWith('packages/chara/dsh-plugin/') ||

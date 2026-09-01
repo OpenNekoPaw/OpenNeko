@@ -1,14 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { CanvasDshHostAdapter } from './canvas-host-adapter';
+import { CanvasDshHostAdapter, type CanvasDshAuthoringPort } from './canvas-host-adapter';
 import { GenerationDshHostAdapter } from './generation-host-adapter';
 import type { DshAcpDomainToolRequest } from '@neko/agent-contracts/dsh-acp';
 import type { GenerationJobSnapshot, PurposeGenerationJobPort } from '@neko/generation-domain/job';
-import {
-  CanvasProjectAuthoringError,
-  type CanvasProjectAuthoringService,
-  type CanvasProjectSnapshot,
-} from '@neko/canvas-domain';
+import { CanvasProjectAuthoringError, type CanvasProjectSnapshot } from '@neko/canvas-domain';
 
 describe('DSH Host adapters for the W2 domain Tool slice', () => {
   it('denies read-only Generation and Canvas mutations before resolving their services', async () => {
@@ -39,8 +35,11 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
       canvas.execute(
         request(
           'openneko_canvas',
-          'create-node',
-          { documentPath: 'boards/story.nkc', node: { type: 'markdown' } },
+          'apply',
+          {
+            documentPath: 'boards/story.nkc',
+            command: { kind: 'create_node', node: { type: 'markdown', content: '' } },
+          },
           'read-only',
         ),
       ),
@@ -405,7 +404,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     expect(jobs.submitGeneration).not.toHaveBeenCalled();
   });
 
-  it('keeps the Canvas fingerprint internal and rejects stale CAS mutations locally', async () => {
+  it('keeps Canvas freshness inside the owning Host port and projects mutation failures', async () => {
     const service = createCanvasService();
     const adapter = new CanvasDshHostAdapter(service);
     const snapshot = createCanvasSnapshot();
@@ -424,15 +423,30 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
       outcome: 'success',
       result: {
         documentPath: 'boards/story.nkc',
+        name: 'Story',
         nodeCount: 1,
         connectionCount: 0,
+        nodes: [
+          {
+            nodeId: 'node-1',
+            nodeType: 'markdown',
+            parentId: null,
+            title: null,
+            data: { content: '' },
+            targetableFields: ['/content', '/title'],
+          },
+        ],
+        connections: [],
+        missingNodeIds: [],
+        nodesTruncated: false,
+        connectionsTruncated: false,
       },
     });
 
     const staleResponse = await adapter.execute(
-      request('openneko_canvas', 'create-node', {
+      request('openneko_canvas', 'apply', {
         documentPath: 'boards/story.nkc',
-        node: { type: 'markdown' },
+        command: { kind: 'create_node', node: { type: 'markdown', content: '# Opening' } },
       }),
     );
     expect(staleResponse).toMatchObject({
@@ -441,8 +455,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     });
     expect(service.createNode).toHaveBeenCalledWith({
       documentPath: 'boards/story.nkc',
-      expectedFingerprint: { strategy: 'sha256', value: 'fingerprint' },
-      node: { type: 'markdown' },
+      node: { type: 'markdown', data: { content: '# Opening' } },
     });
   });
 
@@ -461,6 +474,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
         position: { x: 1, y: 2 },
         size: { width: 100, height: 50 },
         zIndex: 2,
+        data: { content: '# Opening' },
       },
     });
 
@@ -476,17 +490,76 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     });
 
     await adapter.execute(
-      request('openneko_canvas', 'create-node', {
+      request('openneko_canvas', 'apply', {
         documentPath: 'boards/story.nkc',
-        node: { type: 'markdown' },
+        command: { kind: 'create_node', node: { type: 'markdown', content: '# Opening' } },
       }),
       controller.signal,
     );
     expect(service.createNode).toHaveBeenCalledWith({
       documentPath: 'boards/story.nkc',
-      expectedFingerprint: { strategy: 'sha256', value: 'fingerprint' },
-      node: { type: 'markdown' },
+      node: { type: 'markdown', data: { content: '# Opening' } },
       signal: controller.signal,
+    });
+  });
+
+  it('routes Canvas update_node and create_connection through the exact owning port', async () => {
+    const service = createCanvasService();
+    const adapter = new CanvasDshHostAdapter(service);
+    const snapshot = createCanvasSnapshot();
+    service.updateNode.mockResolvedValue({ ...snapshot, node: snapshot.canvas.nodes[0]! });
+    service.createConnection.mockResolvedValue({
+      ...snapshot,
+      connection: {
+        id: 'connection-1',
+        sourceId: 'node-1',
+        targetId: 'node-2',
+        type: 'sequence',
+        sourceEndpoint: { nodeId: 'node-1', scope: 'node' },
+        targetEndpoint: { nodeId: 'node-2', scope: 'node' },
+      },
+    });
+
+    await expect(
+      adapter.execute(
+        request('openneko_canvas', 'apply', {
+          documentPath: 'boards/story.nkc',
+          command: {
+            kind: 'update_node',
+            nodeId: 'node-1',
+            path: '/content',
+            value: '# Revised',
+          },
+        }),
+      ),
+    ).resolves.toMatchObject({
+      outcome: 'success',
+      result: { command: 'update_node', nodeId: 'node-1' },
+    });
+    expect(service.updateNode).toHaveBeenCalledWith({
+      documentPath: 'boards/story.nkc',
+      request: { nodeId: 'node-1', path: '/content', value: '# Revised' },
+    });
+
+    await expect(
+      adapter.execute(
+        request('openneko_canvas', 'apply', {
+          documentPath: 'boards/story.nkc',
+          command: {
+            kind: 'create_connection',
+            sourceId: 'node-1',
+            targetId: 'node-2',
+            type: 'sequence',
+          },
+        }),
+      ),
+    ).resolves.toMatchObject({
+      outcome: 'success',
+      result: { command: 'create_connection', connectionId: 'connection-1' },
+    });
+    expect(service.createConnection).toHaveBeenCalledWith({
+      documentPath: 'boards/story.nkc',
+      connection: { sourceId: 'node-1', targetId: 'node-2', type: 'sequence' },
     });
   });
 
@@ -572,10 +645,12 @@ async function* snapshots(
   yield* values;
 }
 
-function createCanvasService(): Pick<CanvasProjectAuthoringService, 'query' | 'createNode'> {
+function createCanvasService(): CanvasDshAuthoringPort {
   return {
     query: vi.fn(),
     createNode: vi.fn(),
+    updateNode: vi.fn(),
+    createConnection: vi.fn(),
   } as never;
 }
 
@@ -592,6 +667,7 @@ function createCanvasSnapshot(): CanvasProjectSnapshot {
           position: { x: 0, y: 0 },
           size: { width: 100, height: 50 },
           zIndex: 1,
+          data: { content: '' },
         },
       ],
       connections: [],

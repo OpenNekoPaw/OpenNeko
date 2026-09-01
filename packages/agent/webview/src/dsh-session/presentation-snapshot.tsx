@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo, useSyncExternalStore, type ReactNode } from 'react';
+import { CANVAS_DEFAULT_DOCUMENT_PATH } from '@neko/canvas-domain';
 import { getLogger } from '../utils/logger';
 
-const WORKSPACE_BOARD_SELECTION = 'workspace-board';
 const SESSION_STORAGE_KEY = 'neko.agent.dshComposerCanvasSelections';
 const logger = getLogger('DshComposerPresentationSnapshot');
 
@@ -146,12 +146,12 @@ export function useDshComposerCanvasSelection(
     (listener) => (scope === undefined ? () => undefined : store.subscribe(scope, listener)),
     () =>
       scope === undefined
-        ? WORKSPACE_BOARD_SELECTION
-        : (store.read(scope) ?? WORKSPACE_BOARD_SELECTION),
+        ? CANVAS_DEFAULT_DOCUMENT_PATH
+        : (store.read(scope) ?? CANVAS_DEFAULT_DOCUMENT_PATH),
     () =>
       scope === undefined
-        ? WORKSPACE_BOARD_SELECTION
-        : (store.read(scope) ?? WORKSPACE_BOARD_SELECTION),
+        ? CANVAS_DEFAULT_DOCUMENT_PATH
+        : (store.read(scope) ?? CANVAS_DEFAULT_DOCUMENT_PATH),
   );
   return [
     selection,

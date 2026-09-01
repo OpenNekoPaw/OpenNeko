@@ -25,7 +25,7 @@ import {
   type CharacterDshAuthoringService,
 } from '@neko/chara-domain/application';
 import { WORLD_DSH_TOOL_NAME, type WorldDshAuthoringService } from '@neko/world-domain/application';
-import { CANVAS_DSH_TOOL_NAME } from '@neko/canvas-domain';
+import { CANVAS_DSH_TOOL_NAME, type CanvasWorkspaceTurnTarget } from '@neko/canvas-domain';
 import { CONTENT_IMAGE_DSH_TOOL_NAME } from '@neko/content-domain';
 import { DOCUMENT_DSH_TOOL_NAME } from '@neko/content-domain/document';
 import type { DesktopWorkspaceGrantAuthorityPort } from '@neko/host/desktop-workspace-grant-authority';
@@ -46,6 +46,10 @@ export function createDesktopDshProductHandlers(options: {
   readonly bindings: ConversationDshSessionBindingStore;
   readonly contexts: Pick<AgentConversationContextAuthorityPort, 'readContext'>;
   readonly workspaceGrants: Pick<DesktopWorkspaceGrantAuthorityPort, 'resolveAuthorizedWorkspace'>;
+  readonly coordinateCanvasMutation: <TResult>(
+    target: CanvasWorkspaceTurnTarget,
+    operation: () => Promise<TResult>,
+  ) => Promise<TResult>;
   readonly generationRuntime: Pick<GenerationApplicationRuntime, 'getJobs'>;
   readonly generationProjection: DesktopDshGenerationProjectionPort;
   readonly configuration: Pick<

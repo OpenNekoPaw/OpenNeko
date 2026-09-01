@@ -55,7 +55,7 @@ const projection: DshSessionHostProjection = {
       turn: 3,
       status: 'in_progress',
       title: 'Canvas create node',
-      rawInput: { operation: 'create-node', title: 'Opening' },
+      rawInput: { operation: 'apply', command: 'create_node', title: 'Opening' },
       rawOutput: { accepted: true },
     },
     {
@@ -95,8 +95,8 @@ const generationPermission: DshPermissionHostProjection = {
 };
 
 const workspaceBoardTarget = {
-  kind: 'workspace-board' as const,
   workspaceId: 'workspace-1',
+  canvasId: 'neko/boards/workspace.nkc',
 };
 
 const composerConfiguration: DshComposerConfigurationProjection = {
@@ -381,7 +381,7 @@ describe('DesktopAgentSurface', () => {
     expect(screen.getByText('Canvas create node')).toBeTruthy();
     expect(screen.getByText('Running')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Canvas create node/u }));
-    expect(screen.getByText(/"operation": "create-node"/u)).toBeTruthy();
+    expect(screen.getByText(/"operation": "apply"/u)).toBeTruthy();
     expect(screen.getByText(/"accepted": true/u)).toBeTruthy();
 
     await act(async () => sessionListener?.({ conversationId: 'conversation-other' }));
@@ -815,7 +815,6 @@ describe('DesktopAgentSurface', () => {
 
   it('refreshes only the matching Workspace Canvas catalog after creation without starting a Turn', async () => {
     const exactCanvasTarget = {
-      kind: 'exact-canvas' as const,
       workspaceId: 'workspace-1',
       canvasId: 'test.nkc',
     };

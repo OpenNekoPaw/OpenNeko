@@ -1,0 +1,29 @@
+{
+  "name": "Story",
+  "viewport": {
+    "pan": {
+      "x": 0,
+      "y": 0
+    },
+    "zoom": 1
+  },
+  "nodes": [
+    {
+      "id": "brief",
+      "type": "markdown",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "size": {
+        "width": 320,
+        "height": 180
+      },
+      "zIndex": 1,
+      "data": {
+        "content": "# Draft brief"
+      }
+    }
+  ],
+  "connections": []
+}

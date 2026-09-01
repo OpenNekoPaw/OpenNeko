@@ -57,6 +57,13 @@
       "source": "repository",
       "digest": "sha256:e0886a2114d2d964afbde9ae7fad0c7d4fdc73a2f0bf5f50d8c6ee251d79cfb8",
       "mutable": true
+    },
+    {
+      "id": "canvas-authoring-workspace",
+      "root": "shared-fixtures/canvas-authoring-workspace",
+      "source": "repository",
+      "digest": "sha256:96048f8f14b50630744ad55bf916b41d373a332be4b1f6425c2e9625a34185c7",
+      "mutable": true
     }
   ],
   "cases": [
@@ -82,6 +89,12 @@
       "id": "assistant-deepseek-current-image-generation",
       "file": "cases/assistant-deepseek-current-image-generation.json",
       "group": "regression",
+      "visibility": "public"
+    },
+    {
+      "id": "canvas-semantic-authoring",
+      "file": "cases/canvas-semantic-authoring.json",
+      "group": "workflow",
       "visibility": "public"
     }
   ],

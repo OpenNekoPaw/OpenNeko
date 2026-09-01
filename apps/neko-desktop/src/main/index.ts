@@ -1445,8 +1445,8 @@ async function startDesktop(): Promise<void> {
     metadataStore: localMetadataStore,
     workspaceRegistry,
     host,
-    coordinateCanvasMutation: (workspaceId, operation) =>
-      canvasRuntime.coordinateWorkspaceBoardMutation(workspaceId, operation),
+    coordinateCanvasMutation: (target, operation) =>
+      canvasRuntime.coordinateCanvasDocumentMutation(target, operation),
     createContentRead: (workspacePath) =>
       createDshWorkspaceBoardContentRead({
         workspacePath,
@@ -2267,6 +2267,8 @@ async function startDesktop(): Promise<void> {
         bindings,
         contexts: agentConversationContexts,
         workspaceGrants: workspaceGrantAuthority,
+        coordinateCanvasMutation: (target, operation) =>
+          canvasRuntime.coordinateCanvasDocumentMutation(target, operation),
         generationRuntime,
         generationProjection: {
           projectSnapshot: async ({ context, request, snapshot }) => {

@@ -645,7 +645,12 @@ function request(
 ): CanvasWorkspaceProjectionRequest {
   const deliveryId = input.deliveryId ?? 'delivery:batch-1';
   return {
-    target: { workspaceId: 'workspace-1', workspaceUri: 'file:///workspace/project/' },
+    target: {
+      workspaceId: 'workspace-1',
+      workspaceUri: 'file:///workspace/project/',
+      canvasId: 'neko/boards/workspace.nkc',
+      documentUri: 'file:///workspace/project/neko/boards/workspace.nkc',
+    },
     process: {
       deliveryId,
       sourceHost: 'headless',
@@ -665,6 +670,8 @@ function generationRequest(snapshot: GenerationJobSnapshot): CanvasWorkspaceProj
   return createGenerationJobWorkspaceDeliveryRequest(snapshot, {
     workspaceId: 'workspace-1',
     workspaceUri: 'file:///workspace/project/',
+    canvasId: 'neko/boards/workspace.nkc',
+    documentUri: 'file:///workspace/project/neko/boards/workspace.nkc',
     sourceHost: 'headless',
     operationId: 'dsh-session:one:turn:1:tool:generation',
   });

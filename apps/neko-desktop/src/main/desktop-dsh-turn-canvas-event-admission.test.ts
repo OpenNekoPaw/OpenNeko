@@ -6,7 +6,6 @@ describe('Desktop DSH turn Canvas event admission', () => {
   it('binds turn/start before awaiting the Conversation binding', async () => {
     const targets = createDshTurnCanvasTargetOwner();
     targets.admit('dsh-1', {
-      kind: 'exact-canvas',
       workspaceId: 'workspace-1',
       canvasId: 'neko/boards/story.nkc',
     });
@@ -23,7 +22,6 @@ describe('Desktop DSH turn Canvas event admission', () => {
     });
 
     expect(targets.read('dsh-1', 1)).toMatchObject({
-      kind: 'exact-canvas',
       canvasId: 'neko/boards/story.nkc',
     });
     resolveBinding({ conversationId: 'conversation-1' });
@@ -35,7 +33,10 @@ describe('Desktop DSH turn Canvas event admission', () => {
 
   it('releases the bound turn when its Conversation binding is unavailable', async () => {
     const targets = createDshTurnCanvasTargetOwner();
-    targets.admit('dsh-1', { kind: 'workspace-board', workspaceId: 'workspace-1' });
+    targets.admit('dsh-1', {
+      workspaceId: 'workspace-1',
+      canvasId: 'neko/boards/workspace.nkc',
+    });
 
     await expect(
       resolveDesktopDshSessionEventAdmission({

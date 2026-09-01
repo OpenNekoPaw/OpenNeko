@@ -14,7 +14,10 @@ import {
   type AuthorizedWorkspaceWriter,
   type ContentReadService,
 } from '@neko/content-domain';
-import { createNodeHostContentReadService, type NodeDocumentEntryReader } from '@neko/content-domain/node';
+import {
+  createNodeHostContentReadService,
+  type NodeDocumentEntryReader,
+} from '@neko/content-domain/node';
 import {
   WorkspaceBoardDeliveryCoordinator,
   WorkspaceBoardDeliveryLedger,
@@ -36,7 +39,7 @@ export interface DesktopDshWorkspaceBoardDeliveryOptions {
   readonly workspaceRegistry: Pick<DesktopWorkspaceRegistry, 'restore'>;
   readonly host: Pick<NekoHostPorts, 'files' | 'diagnostics'>;
   readonly coordinateCanvasMutation: <TResult>(
-    workspaceId: string,
+    target: CanvasWorkspaceTurnTarget,
     operation: () => Promise<TResult>,
   ) => Promise<TResult>;
   readonly createContentRead: (workspacePath: string) => ContentReadService;
@@ -176,15 +179,13 @@ export class DesktopDshWorkspaceBoardDelivery
   ): Promise<readonly CanvasWorkspaceProjectionResult[]> {
     const binding = this.bindingFor(workspace);
     if (await binding.ledger.getReceipt(deliveryId)) return [];
-    return this.options.coordinateCanvasMutation(workspace.workspaceId, async () => {
-      const resumed = await binding.coordinator.flush();
-      if (await binding.ledger.getReceipt(deliveryId)) return resumed;
-      const existing = (await binding.ledger.listPending()).some(
-        (task) => task.request.process.deliveryId === deliveryId,
-      );
-      if (existing) return resumed;
-      return [...resumed, ...(await binding.coordinator.enqueue(await createRequest()))];
-    });
+    const resumed = await binding.coordinator.flush();
+    if (await binding.ledger.getReceipt(deliveryId)) return resumed;
+    const existing = (await binding.ledger.listPending()).some(
+      (task) => task.request.process.deliveryId === deliveryId,
+    );
+    if (existing) return resumed;
+    return [...resumed, ...(await binding.coordinator.enqueue(await createRequest()))];
   }
 
   private async restoreExactWorkspace(workspaceId: string): Promise<AssetWorkspaceResolution> {
@@ -208,13 +209,22 @@ export class DesktopDshWorkspaceBoardDelivery
       workspaceId: workspace.workspaceId,
       createIdentity: this.createIdentity,
     });
+    const nodeMutation = new WorkspaceBoardNodeMutation({
+      workspace,
+      host: this.options.host,
+      createIdentity: this.createIdentity,
+    });
     const coordinator = new WorkspaceBoardDeliveryCoordinator({
       ledger,
-      mutation: new WorkspaceBoardNodeMutation({
-        workspace,
-        host: this.options.host,
-        createIdentity: this.createIdentity,
-      }),
+      mutation: {
+        coordinate: (target, operation) =>
+          this.options.coordinateCanvasMutation(
+            { workspaceId: target.workspaceId, canvasId: target.canvasId },
+            operation,
+          ),
+        loadLatest: nodeMutation.loadLatest.bind(nodeMutation),
+        saveAtomic: nodeMutation.saveAtomic.bind(nodeMutation),
+      },
       holderId: `${this.options.applicationInstanceId}:${workspace.workspaceId}`,
     });
     const binding = {
@@ -395,7 +405,6 @@ function resolveProjectionTarget(
     workspaceId: workspace.workspaceId,
     workspaceUri: pathToFileURL(workspace.workspacePath).href,
   };
-  if (input.canvasTurnTarget.kind === 'workspace-board') return base;
   const canvasId = input.canvasTurnTarget.canvasId;
   if (
     path.posix.isAbsolute(canvasId) ||
@@ -410,5 +419,5 @@ function resolveProjectionTarget(
   if (relative.startsWith('..') || path.isAbsolute(relative)) {
     throw new Error('Exact Canvas identity escapes the Workspace root.');
   }
-  return { ...base, documentUri: pathToFileURL(documentPath).href };
+  return { ...base, canvasId, documentUri: pathToFileURL(documentPath).href };
 }

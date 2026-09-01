@@ -6,7 +6,7 @@ export {
   type DshAcpConnection,
   type DshAcpSessionUpdateDelivery,
 } from './dsh-acp-application-client';
-export { CanvasDshHostAdapter } from './canvas-host-adapter';
+export { CanvasDshHostAdapter, type CanvasDshAuthoringPort } from './canvas-host-adapter';
 export { CutDshHostAdapter } from './cut-host-adapter';
 export {
   GenerationDshHostAdapter,

@@ -1,6 +1,6 @@
 import {
+  CANVAS_DEFAULT_DOCUMENT_PATH,
   createSafeCanvasWorkspaceProjectionDiagnostic,
-  resolveCanvasWorkspaceBoardDocumentUri,
   type CanvasWorkspaceDeliveryClaim,
   type CanvasWorkspaceDeliveryReceipt,
   type CanvasWorkspaceProjectionDiagnostic,
@@ -21,6 +21,10 @@ export interface CanvasWorkspaceBoardLoadedDocument {
 }
 
 export interface CanvasWorkspaceBoardMutationPort {
+  coordinate<TResult>(
+    target: CanvasWorkspaceProjectionRequest['target'],
+    operation: () => Promise<TResult>,
+  ): Promise<TResult>;
   loadLatest(input: {
     readonly documentUri: string;
     readonly createIfMissing: boolean;
@@ -100,12 +104,14 @@ export class WorkspaceBoardDeliveryCoordinator {
       const pending = await this.options.ledger.listPending();
       const results: CanvasWorkspaceProjectionResult[] = [];
       for (const task of pending) {
-        const claimed = await this.options.ledger.claimDelivery(
-          task.request.process.deliveryId,
-          writer,
-        );
-        if (!claimed) continue;
-        results.push(await this.projectClaimed(claimed, writer));
+        const result = await this.options.mutation.coordinate(task.request.target, async () => {
+          const claimed = await this.options.ledger.claimDelivery(
+            task.request.process.deliveryId,
+            writer,
+          );
+          return claimed ? this.projectClaimed(claimed, writer) : undefined;
+        });
+        if (result) results.push(result);
       }
       return results;
     } finally {
@@ -134,20 +140,18 @@ export class WorkspaceBoardDeliveryCoordinator {
     writer: CanvasWorkspaceDeliveryClaim,
   ): Promise<CanvasWorkspaceProjectionResult> {
     const request = task.request;
-    const explicit = request.target.documentUri;
-    const documentUri =
-      explicit ?? resolveCanvasWorkspaceBoardDocumentUri(request.target.workspaceUri);
+    const documentUri = request.target.documentUri;
     try {
       const projection = await this.projectLatest(
         request,
         documentUri,
-        explicit === undefined,
+        request.target.canvasId === CANVAS_DEFAULT_DOCUMENT_PATH,
         writer,
       );
       const result: CanvasWorkspaceProjectionResult = {
         deliveryId: request.process.deliveryId,
         status: projection.status,
-        target: { kind: explicit ? 'explicit' : 'workspace', documentUri },
+        target: { canvasId: request.target.canvasId, documentUri },
         nodeIds: projection.nodeIds,
         connectionIds: projection.connectionIds,
         artifactRoleCounts: countArtifactRoles(request),

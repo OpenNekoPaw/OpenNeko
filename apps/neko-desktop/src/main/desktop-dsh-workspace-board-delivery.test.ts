@@ -1,18 +1,22 @@
-import { describe, expect, it } from 'vitest';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { describe, expect, it, vi } from 'vitest';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { createEmptyCanvasData, planCanvasWorkspaceBoardProjection } from '@neko/canvas-domain';
 import { NodeAuthorizedWorkspaceWriter } from '@neko/content-domain/node';
 import type { DshWorkspaceBoardArtifactDeliveryInput } from '@neko/agent-runtime/application';
+import type { LocalMetadataStore } from '@neko/local-metadata';
+import { ConsoleLogger } from '@neko/shared/logger';
 import {
+  DesktopDshWorkspaceBoardDelivery,
   createDshWorkspaceBoardContentRead,
   createDshWorkspaceBoardProjectionRequest,
   publishDshDurableMarkdownArtifact,
   resolveDshDurableMarkdownArtifact,
   resolveDshWorkspaceBoardResourceFingerprints,
 } from './desktop-dsh-workspace-board-delivery';
+import { createElectronNekoHostPorts } from './electron-host-ports';
 
 describe('Desktop DSH Workspace Board projection request', () => {
   it('uses a stable completed-Tool identity and reuses the durable file node by ContentLocator', () => {
@@ -89,7 +93,6 @@ describe('Desktop DSH Workspace Board projection request', () => {
       {
         ...deliveryInput('tool-1'),
         canvasTurnTarget: {
-          kind: 'exact-canvas',
           workspaceId: 'workspace-1',
           canvasId: 'neko/boards/story.nkc',
         },
@@ -98,6 +101,82 @@ describe('Desktop DSH Workspace Board projection request', () => {
     );
 
     expect(request.target.documentUri).toBe('file:///tmp/openneko-workspace/neko/boards/story.nkc');
+  });
+
+  it('coordinates delivery against the exact Canvas target admitted for the Turn', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'openneko-dsh-exact-canvas-delivery-'));
+    const workspacePath = join(home, 'workspace');
+    const canvasPath = join(workspacePath, 'neko', 'boards', 'story.nkc');
+    await mkdir(join(workspacePath, 'notes'), { recursive: true });
+    await mkdir(join(workspacePath, 'neko', 'boards'), { recursive: true });
+    await writeFile(join(workspacePath, 'notes', 'analysis.md'), '# Analysis');
+    await writeFile(
+      canvasPath,
+      JSON.stringify({
+        name: 'Story',
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        nodes: [],
+        connections: [],
+      }),
+    );
+    const metadataStore = createInMemoryMetadataStore();
+    const target = {
+      workspaceId: 'workspace-1',
+      canvasId: 'neko/boards/story.nkc',
+    };
+    const coordinateTarget = vi.fn();
+    const host = createElectronNekoHostPorts({
+      homedir: home,
+      nekoHome: join(home, '.neko'),
+      workspaceRoot: workspacePath,
+      logger: new ConsoleLogger('DesktopDshExactCanvasDeliveryTest'),
+    });
+    const contentRead = createDshWorkspaceBoardContentRead({
+      workspacePath,
+      documentEntryReader: {
+        readEntry: async () => {
+          throw new Error('Unexpected document entry read.');
+        },
+      },
+    });
+    const delivery = new DesktopDshWorkspaceBoardDelivery({
+      applicationInstanceId: 'app-1',
+      metadataStore,
+      workspaceRegistry: {
+        restore: vi.fn(async () => ({
+          workspaceId: 'workspace-1',
+          workspacePath,
+          displayName: 'Workspace',
+          locator: { kind: 'relative' as const, value: 'workspace' },
+        })),
+      },
+      host,
+      coordinateCanvasMutation: async (actualTarget, operation) => {
+        coordinateTarget(actualTarget);
+        return operation();
+      },
+      createContentRead: () => contentRead,
+      createContentWriter: () =>
+        new NodeAuthorizedWorkspaceWriter({ workspaceRoot: workspacePath }),
+      createIdentity: () => 'identity-1',
+    });
+
+    try {
+      await expect(
+        delivery.deliver({ ...deliveryInput('tool-1'), canvasTurnTarget: target }),
+      ).resolves.toEqual({ status: 'accepted' });
+      expect(coordinateTarget).toHaveBeenCalledWith(target);
+      expect(JSON.parse(await readFile(canvasPath, 'utf8')).nodes).toEqual([
+        expect.objectContaining({
+          type: 'file',
+          data: expect.objectContaining({
+            contentLocator: { file: { authority: 'workspace', path: 'notes/analysis.md' } },
+          }),
+        }),
+      ]);
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
   });
 
   it('resolves document-entry ContentLocators through the canonical entry reader', async () => {
@@ -229,7 +308,10 @@ function deliveryInput(toolCallId: string): DshWorkspaceBoardArtifactDeliveryInp
     dshSessionId: 'dsh-1',
     turn: 1,
     createdAt: 1_000,
-    canvasTurnTarget: { kind: 'workspace-board' as const, workspaceId: 'workspace-1' },
+    canvasTurnTarget: {
+      workspaceId: 'workspace-1',
+      canvasId: 'neko/boards/workspace.nkc',
+    },
     delivery: { kind: 'completed-tool' as const, toolCallId },
     artifacts: [
       {
@@ -245,4 +327,42 @@ function deliveryInput(toolCallId: string): DshWorkspaceBoardArtifactDeliveryInp
       },
     ],
   };
+}
+
+function createInMemoryMetadataStore(): LocalMetadataStore {
+  const records = new Map<string, Record<string, unknown>>();
+  const repositories = {
+    tasks: {
+      async get(workspaceId: string, taskKey: string) {
+        return records.get(JSON.stringify([workspaceId, taskKey]));
+      },
+      async list(input: { readonly workspaceId: string; readonly statuses?: readonly string[] }) {
+        return [...records.values()].filter(
+          (record) =>
+            record['workspaceId'] === input.workspaceId &&
+            (!input.statuses || input.statuses.includes(String(record['status']))),
+        );
+      },
+      async upsert(record: Record<string, unknown>) {
+        records.set(
+          JSON.stringify([record['workspaceId'], record['taskKey']]),
+          structuredClone(record),
+        );
+      },
+      async delete(workspaceId: string, taskKey: string) {
+        records.delete(JSON.stringify([workspaceId, taskKey]));
+      },
+    },
+    taskCheckpoints: {
+      upsert: async () => undefined,
+      delete: async () => undefined,
+    },
+  };
+  return {
+    repositories,
+    transaction: async (
+      _options: unknown,
+      operation: (context: { readonly repositories: typeof repositories }) => Promise<unknown>,
+    ) => operation({ repositories }),
+  } as never;
 }
