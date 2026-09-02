@@ -207,7 +207,7 @@
   font-family: inherit;
   font-size: 16px;
   font-weight: 400;
-  line-height: 1.78;
+  line-height: 1.72;
   user-select: text;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -223,10 +223,10 @@
 .neko-text-editor-milkdown-mount h4,
 .neko-text-editor-milkdown-mount h5,
 .neko-text-editor-milkdown-mount h6 {
-  margin: 1.75em 0 0.65em;
+  margin: 1.45em 0 0.55em;
   color: var(--neko-editor-foreground, #202124);
   font-weight: 650;
-  line-height: 1.28;
+  line-height: 1.26;
   letter-spacing: -0.012em;
   text-wrap: balance;
 }
@@ -245,14 +245,13 @@
   font-size: 1.2rem;
 }
 
-.neko-text-editor-milkdown-mount p,
-.neko-text-editor-milkdown-mount ul,
-.neko-text-editor-milkdown-mount ol {
-  margin: 0.8em 0;
+.neko-text-editor-milkdown-mount p {
+  margin: 0.68em 0;
 }
 
 .neko-text-editor-milkdown-mount ul,
 .neko-text-editor-milkdown-mount ol {
+  margin: 0.68em 0;
   padding-inline-start: 1.75em;
 }
 
@@ -272,6 +271,14 @@
   padding-inline-start: 0.2em;
 }
 
+.neko-text-editor-milkdown-mount li + li {
+  margin-top: 0.46em;
+}
+
+.neko-text-editor-milkdown-mount li > p:only-child {
+  margin: 0;
+}
+
 .neko-text-editor-milkdown-mount strong {
   font-weight: 650;
 }
@@ -283,7 +290,7 @@
 
 .neko-text-editor-milkdown-mount li[data-item-type='task']::before {
   position: absolute;
-  top: 1.16em;
+  top: 0.41em;
   left: -1.4em;
   width: 0.9em;
   height: 0.9em;
@@ -300,7 +307,7 @@
 
 .neko-text-editor-milkdown-mount li[data-item-type='task'][data-checked='true']::after {
   position: absolute;
-  top: 1.3em;
+  top: 0.55em;
   left: -1.08em;
   width: 0.24em;
   height: 0.48em;

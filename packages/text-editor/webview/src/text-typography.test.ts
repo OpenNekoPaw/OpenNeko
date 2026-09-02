@@ -25,4 +25,19 @@ describe('Text Editor typography', () => {
     );
     expect(styles).toMatch(/\.neko-text-editor-milkdown-mount strong\s*\{[^}]*font-weight: 650;/u);
   });
+
+  it('uses a compact vertical rhythm without stacking paragraph margins in list items', () => {
+    expect(styles).toMatch(
+      /\.neko-text-editor-milkdown-mount \.ProseMirror\s*\{[\s\S]*?line-height: 1\.72;/u,
+    );
+    expect(styles).toMatch(
+      /\.neko-text-editor-milkdown-mount li \+ li\s*\{[^}]*margin-top: 0\.46em;/u,
+    );
+    expect(styles).toMatch(
+      /\.neko-text-editor-milkdown-mount li > p:only-child\s*\{[^}]*margin: 0;/u,
+    );
+    expect(styles).toMatch(
+      /\.neko-text-editor-milkdown-mount li\[data-item-type='task'\]::before\s*\{[\s\S]*?top: 0\.41em;/u,
+    );
+  });
 });
