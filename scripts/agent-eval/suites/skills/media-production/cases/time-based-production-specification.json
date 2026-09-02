@@ -21,8 +21,8 @@
         "required": true
       }
     ],
-    "expectedResult": "The Agent returns one concise master specification containing a creative contract, only recurring character/scene continuity, one authoritative shot table whose rows own story function, image/action, camera/sound, input requirements, production method and direct acceptance, and one cross-shot finishing/delivery contract. It does not write source-analysis narration, per-stage documents, runtime status, call packets, or generic workflow steps.",
-    "expectedFailure": "Stopping at a concept paragraph and beat list, omitting character/scene continuity or finishing design, duplicating decisions across sections, splitting the result into analysis/preparation/generation/post documents, inventing Tool calls, or executing production fails."
+    "expectedResult": "The Agent returns one concise master specification containing a source-to-decision map, plot/character/scene/style/sound baseline, exact preparation assets, one authoritative shot table whose rows own bound inputs, semantic generation intent, expected asset, direct acceptance and repair boundary, and one finishing/work/delivery contract. It does not write reading narration, per-stage documents, runtime status, raw call packets, or generic workflow steps.",
+    "expectedFailure": "Stopping at a concept paragraph and beat list, omitting any production stage or plot/character/scene/style/sound decision, duplicating decisions across sections, splitting the result into separate stage documents, inventing Tool calls, or executing production fails."
   },
   "fixtureRefs": ["creative-planning-workspace"],
   "runtimeProfileId": "plan-markdown",
@@ -31,7 +31,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$media-production 读取 @screenplay.fountain。为这支 60 秒动画 PV 设计一份完整但简洁的制作规格，必须是一份主文档，包含创作合同、必要的人物与场景连续性、权威镜头表以及后期与交付合同。镜头表需要同时承载剧情作用、画面动作、摄影声音、输入需求、生产方式和直接验收。不要写来源分析过程，不要拆成多份阶段文档，不要准备模型调用或执行生成。"
+      "prompt": "$media-production 读取 @screenplay.fountain。为这支 60 秒动画 PV 设计一份完整但简洁的 AI 制作规格，必须是一份主文档，覆盖来源决策、剧情、人物、场景、风格、声音、预处理资产、逐镜头生成设计、后期、成片与交付。不要写读取过程，不要拆成多份阶段文档，不要执行模型调用、剪辑或导出。"
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
   ],
@@ -50,7 +50,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:41c50e6f4bddd3b9f7779dfc1f040ce97c2c3476c5bf69851470237beefcf46a"
+        "fingerprint": "sha256:a23366a40f5ea8c83c4b7b6099a7d420b49f1c8b9c591691f381a67aeaae40f2"
       },
       "status": "injected",
       "evidenceRef": "production-specification-facts"
@@ -64,14 +64,20 @@
         "23:47",
         "红伞",
         "列车",
-        "创作合同",
-        "人物与场景连续性",
-        "权威镜头表",
+        "来源决策",
+        "剧情",
+        "人物",
+        "场景",
+        "风格",
+        "声音",
+        "预处理",
+        "生成",
         "剧情作用",
-        "输入需求",
-        "生产方式",
+        "绑定输入",
+        "预期素材",
         "直接验收",
-        "后期与交付合同"
+        "后期",
+        "交付"
       ],
       "evidenceRef": "production-specification-facts"
     },

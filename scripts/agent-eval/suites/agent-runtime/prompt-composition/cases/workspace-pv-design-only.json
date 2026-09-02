@@ -10,6 +10,7 @@
       "OpenNeko product prompt requested-stopping-point classification",
       "implicit media-production selection without document-formatting duplication",
       "source-specific creator-reviewable creative contract",
+      "compact end-to-end roadmap and one next action",
       "no production side effect"
     ],
     "observables": [
@@ -20,8 +21,8 @@
         "required": true
       }
     ],
-    "expectedResult": "The Agent treats ordinary analyze-and-design wording as creative design and returns a concise but complete creative contract grounded in the screenplay: Mara's relationship to the three-years-late train, her decision at the platform edge, the backward announcement, silhouette and displaced umbrella form a causal experience carried by an authoritative beat sequence. It does not create a task plan, model-input handoff, or generation.",
-    "expectedFailure": "A generic rain-station mood reel, omission of the story-specific hook or character action, loading an extra document-formatting method solely because the result is Markdown, creating a task plan, preparing model inputs, emitting a generation handoff, executing media Tools, or expanding into a source-analysis report fails."
+    "expectedResult": "The Agent treats ordinary analyze-and-design wording as creative design and returns a concise but complete creative contract grounded in the screenplay: Mara's relationship to the three-years-late train, her decision at the platform edge, the backward announcement, silhouette and displaced umbrella form a causal experience carried by an authoritative beat sequence. It also keeps a compact route through later production stages and one next action without creating a task plan, model-input handoff, or generation.",
+    "expectedFailure": "A generic rain-station mood reel, omission of the story-specific hook, character action or overall route, loading an extra document-formatting method solely because the result is Markdown, creating a task plan, preparing model inputs, emitting a generation handoff, offering multiple next actions, executing media Tools, or expanding into a source-analysis report fails."
   },
   "fixtureRefs": ["creative-planning-workspace"],
   "runtimeProfileId": "markdown",
@@ -30,7 +31,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "读取 @screenplay.fountain。分析这个故事，设计一支供创作者讨论的 60 秒动画概念 PV 方案。"
+      "prompt": "读取 @screenplay.fountain。分析这个故事，只需要一份供创作者讨论方向的 60 秒动画概念 PV 创意，不要制作规格。"
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
   ],
@@ -45,7 +46,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:41c50e6f4bddd3b9f7779dfc1f040ce97c2c3476c5bf69851470237beefcf46a"
+        "fingerprint": "sha256:a23366a40f5ea8c83c4b7b6099a7d420b49f1c8b9c591691f381a67aeaae40f2"
       },
       "status": "injected",
       "evidenceRef": "workspace-pv-design-facts"
@@ -62,6 +63,13 @@
       "kind": "final-answer",
       "mode": "not-contains",
       "text": ["生成交接", "可提交输入", "模型提示词", "operation 参数"],
+      "evidenceRef": "workspace-pv-design-facts"
+    },
+    {
+      "id": "compact-roadmap",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["整体路线", "素材预处理", "逐镜生成", "选片", "剪辑", "交付", "下一步"],
       "evidenceRef": "workspace-pv-design-facts"
     },
     {

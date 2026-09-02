@@ -304,7 +304,13 @@ describe('locked DSH filesystem Skill provider contract', () => {
     const candidates = Array.isArray(observation) ? observation : observation.candidates;
     const definitions = new Map<string, string>();
 
-    for (const skillName of ['media-production', 'media-preparation', 'video']) {
+    for (const skillName of [
+      'media-production',
+      'media-preparation',
+      'media-selection',
+      'storyboard',
+      'video',
+    ]) {
       const candidate = candidates.find((item) => item.name === skillName);
       if (candidate === undefined) throw new Error(`Builtin ${skillName} Skill was not found.`);
       const definition = await provider.get(candidate, { cwd: skillRoot });
@@ -312,18 +318,30 @@ describe('locked DSH filesystem Skill provider contract', () => {
       definitions.set(skillName, definition.content);
     }
 
-    expect(definitions.get('media-production')).toContain('每项决定获得直接来源证据后立即停止取样');
-    expect(definitions.get('media-production')).toContain('完整制作规格不是概念方案的重复扩写');
-    expect(definitions.get('media-production')).toContain('最小完整结构');
-    expect(definitions.get('media-production')).toContain('来源特有的核心命题');
-    expect(definitions.get('media-production')).toContain('前段建立、中段发展/升级、后段后果/方向');
-    expect(definitions.get('media-production')).toContain('四张是单批推理上限');
-    expect(definitions.get('media-production')).toContain('内部覆盖验收');
-    expect(definitions.get('media-production')).toContain('不计为有效覆盖');
+    expect(definitions.get('media-production')).toContain('先保持全局方向，再把当前步骤做深');
+    expect(definitions.get('media-production')).toContain('素材分析与创意设计');
+    expect(definitions.get('media-production')).toContain(
+      '每阶段只记录目标产物、输入依赖和完成条件',
+    );
+    expect(definitions.get('media-production')).toContain('当前创意阶段必须按作品需要落实');
+    expect(definitions.get('media-production')).toContain('剧情/人物/场景/风格/声音');
+    expect(definitions.get('media-production')).toContain('默认不展开预处理提示词');
+    expect(definitions.get('media-production')).toContain('仅在用户明确要求');
+    expect(definitions.get('media-production')).toContain('前、中、后各一批低清联系表');
+    expect(definitions.get('media-production')).toContain('每批最多四张不同页面');
+    expect(definitions.get('media-production')).toContain('高清默认只读取一张最终入选页');
+    expect(definitions.get('media-production')).toContain('读取与视觉检查是瞬态证据');
     expect(definitions.get('media-production')).toContain('缩小为开篇、局部场景或已选序列概念');
-    expect(definitions.get('media-production')).toContain('PV 创作重组');
+    expect(definitions.get('media-production')).toContain('不创建审批对象、gate、预算授权');
+    expect(definitions.get('media-production')).toContain('只推荐一个能推进整体路线的下一操作');
+    expect(definitions.get('storyboard')).toContain('可直接更新的 Markdown 场景/镜头表');
+    expect(definitions.get('storyboard')).toContain(
+      'they are document labels, not a new domain model or workflow state',
+    );
+    expect(definitions.get('media-selection')).toContain('建议本身不等于用户批准或项目写入');
     expect(definitions.get('media-preparation')).toContain('不能冒充已准备首帧');
     expect(definitions.get('media-preparation')).toContain('验收不得放宽上游创意合同');
+    expect(definitions.get('media-preparation')).toContain('不要求预算估算或预算授权');
     expect(definitions.get('media-preparation')).toContain('不要生成候选调用包');
     expect(definitions.get('media-preparation')).toContain(
       '内部必须按当前 schema 编译完整 Tool 调用封装',

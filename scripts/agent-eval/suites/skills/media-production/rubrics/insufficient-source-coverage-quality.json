@@ -6,7 +6,7 @@
   "maximumUncertainty": 0.2,
   "criteria": [
     {
-      "id": "pre-artifact-gate",
+      "id": "pre-artifact-scope-check",
       "description": "The coverage decision occurs before creative artifact generation. The response does not produce a volume-level or whole-work plan and then weaken it with a disclaimer; any document-like result is titled and scoped only as a local selected-page observation.",
       "weight": 0.3,
       "evidenceRefs": ["volume-assessment-facts"]
@@ -25,7 +25,7 @@
     },
     {
       "id": "precise-next-operation",
-      "description": "The response gives one concise next source-review operation that would unlock a volume-level decision, without turning the deliverable into a long workflow, page-by-page audit or generic production checklist.",
+      "description": "The response gives one concise, bounded next source-review operation that would unlock a volume-level decision. It names the decision each early, middle, late or continuous-sequence batch must settle and does not turn the request into exhaustive reading, a page-by-page audit or a generic production checklist.",
       "weight": 0.15,
       "evidenceRefs": ["volume-assessment-facts"]
     },

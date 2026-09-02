@@ -22,7 +22,7 @@
       }
     ],
     "expectedResult": "The concise response is a source-specific creative contract: it preserves the late train, Mara's objective and decision, the backward announcement, child-sized silhouette and displaced red umbrella as a causal dramatic progression; it defines the audience experience and only the character, setting, audiovisual and continuity decisions needed to continue into storyboard work; and it carries timing, image, action, sound and transitions in one authoritative 60-second sequence. Any downstream handoff is limited to stable creative decisions, source references and continuity requirements.",
-    "expectedFailure": "A generic rain-station mood reel that could fit another story; omission of Mara's dramatic objective, the source-specific supernatural escalation or its consequence; repeated analysis or decorative sections; one row per camera action; prompt packets; guessed operation or parameter names; invented story facts; an unapproved scope change; or production Tool use fails."
+    "expectedFailure": "A generic rain-station mood reel that could fit another story; omission of Mara's dramatic objective, the source-specific supernatural escalation or its consequence; repeated analysis or decorative sections; one row per camera action; prompt packets; guessed operation or parameter names; invented story facts; a user-unspecified scope change; or production Tool use fails."
   },
   "fixtureRefs": ["creative-planning-workspace"],
   "runtimeProfileId": "plan-markdown",
@@ -54,7 +54,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:41c50e6f4bddd3b9f7779dfc1f040ce97c2c3476c5bf69851470237beefcf46a"
+        "fingerprint": "sha256:a23366a40f5ea8c83c4b7b6099a7d420b49f1c8b9c591691f381a67aeaae40f2"
       },
       "status": "injected",
       "evidenceRef": "creative-pv-facts"

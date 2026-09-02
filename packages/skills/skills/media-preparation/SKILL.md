@@ -9,7 +9,7 @@ description: '把已选镜头决定和真实素材准备成可直接提交给图
 
 为一个已选场景或镜头准备下游生成所需的真实输入。交付只有两种状态：`可提交／未执行`，或存在精确依赖缺口的 `阻塞`。
 
-1. 从用户已指定或上游创意能力已选定的内容中只取一个最小生产单元。时长、比例、运动强度等不会改变故事、角色、交付边界、成本上限或外部状态的可逆默认值可以明确写出并继续；实质创意选择缺失时阻塞。
+1. 从用户已指定或当前创作方案选定的内容中只取一个最小生产单元。时长、比例、运动强度等不会改变故事、角色、交付边界或外部状态的可逆默认值可以明确写出并继续；实质创意选择缺失时阻塞。没有可靠价格能力时，不要求预算估算或预算授权。
 2. 绑定精确来源、镜头目标和下游生成能力，并读取对应生成 Skill 与当前 Tool schema。operation、字段名、引用角色和限制只能来自当前 schema。
 3. 检查实际素材内容与授权状态，按需完成裁切、去字、蒙版、背景清理、比例统一、关键帧或参考图准备；只有当前能力真实支持时才执行。视频首帧必须是下游可直接消费的单帧素材；带分格、对白、页边或无关画面的漫画原页只能作为来源，不能冒充已准备首帧。无法完成所需预处理时返回缺失的精确操作。
 4. 每个参考只承担一个职责：身份、当前状态、空间/构图、风格、运动或声音。写清必须继承与必须忽略的内容。
@@ -19,7 +19,7 @@ description: '把已选镜头决定和真实素材准备成可直接提交给图
 
 ## English guidance
 
-Prepare real, authorized inputs for one selected scene or shot. The only handoff states are `submit-ready / not executed` and `blocked` with an exact missing dependency. Safe, reversible defaults may be stated and compiled when they do not change story, character, delivery boundary, cost ceiling, or external state; a missing material creative decision blocks the packet.
+Prepare real, authorized inputs for one selected scene or shot. The only handoff states are `submit-ready / not executed` and `blocked` with an exact missing dependency. Safe, reversible defaults may be stated and compiled when they do not change story, character, delivery boundary, or external state; a missing material creative decision blocks the packet. Do not require budget estimates or budget authorization when no reliable pricing capability exists.
 
 Bind the exact source, shot intent, downstream Skill, and current Tool schema. Operation names, fields, reference roles, and limits must come from that schema. A video first frame must be a directly consumable single-frame asset; a comic page containing panels, dialogue, borders, or unrelated imagery remains source material until an admitted crop, cleanup, or composite operation prepares it. Assign each reference one role—identity, current state, composition, style, motion, or sound—and state what to inherit and ignore. Perform crop, cleanup, masking, normalization, keyframe, or reference creation only through admitted operations. Keep image, video, and sound inputs distinct.
 

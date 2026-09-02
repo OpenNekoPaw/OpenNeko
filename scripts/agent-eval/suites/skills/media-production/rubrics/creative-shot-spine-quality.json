@@ -25,13 +25,13 @@
     },
     {
       "id": "capability-boundary",
-      "description": "The handoff exposes only stable source or shot references, approved creative decisions and continuity requirements. Preparation, prompts, generation, candidate selection, post-production and delivery remain owned by their corresponding capabilities.",
+      "description": "The handoff exposes only stable source or shot references, current creator decisions and continuity requirements. Preparation, prompts, generation, candidate selection, post-production and delivery remain owned by their corresponding capabilities.",
       "weight": 0.15,
       "evidenceRefs": ["production-facts"]
     },
     {
       "id": "noise-control",
-      "description": "The formal creative artifact contains only approved creative intent, source bindings, the authoritative shot spine and necessary downstream requirements. Source-reading narration, Tool logs, progress reporting, internal checks, rejected reasoning and duplicated explanation remain outside the artifact.",
+      "description": "The formal creative artifact contains only current creative intent, source bindings, the authoritative shot spine and necessary downstream requirements. Source-reading narration, Tool logs, progress reporting, internal checks, rejected reasoning and duplicated explanation remain outside the artifact.",
       "weight": 0.15,
       "evidenceRefs": ["production-facts"]
     }

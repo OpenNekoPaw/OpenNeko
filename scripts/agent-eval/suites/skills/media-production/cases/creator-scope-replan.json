@@ -5,24 +5,24 @@
   "caseGroup": "workflow",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Revise a creator-review plan after a material style, technique, cost, and delivery change without executing production side effects.",
+    "userBehavior": "Revise the current creator-reviewed plan after a material style, technique, and delivery change without creating approval state or executing production side effects.",
     "canonicalPath": [
       "Desktop Plan execution mode",
       "current screenplay and plan.md",
       "creator feedback turn",
-      "revised approval scope",
+      "revised current artifact and roadmap",
       "ordinary Markdown content"
     ],
     "observables": [
       {
         "ref": "replan-facts",
         "kind": "runtime-fact",
-        "description": "Two canonical turns, updated approval content, and no production Tool call.",
+        "description": "Two canonical turns, updated creative content and roadmap, and no production Tool call.",
         "required": true
       }
     ],
-    "expectedResult": "The final review marks the requested generative-video and 4K delivery change as material and requires renewed creator approval.",
-    "expectedFailure": "Executing media, treating the old approval as valid, or omitting the changed scope fails."
+    "expectedResult": "The final review updates the current artifact for generative video, realistic horror and 4K delivery, identifies how the change affects the compact roadmap, and recommends one next action without creating approval objects.",
+    "expectedFailure": "Executing media, retaining contradictory old decisions, creating approval or budget state, offering multiple next steps, or omitting the changed scope fails."
   },
   "fixtureRefs": ["creative-planning-workspace"],
   "runtimeProfileId": "plan-markdown",
@@ -31,7 +31,7 @@
     {
       "id": "initial",
       "kind": "submit",
-      "prompt": "$media-production 读取 @screenplay.fountain 和 @plan.md\n先给出二维分层动画、1080p、低成本交付的创作者审批摘要，不执行任何生成或项目修改。"
+      "prompt": "$media-production 读取 @screenplay.fountain 和 @plan.md\n先整理当前二维分层动画、1080p 方案及其整体制作路线，不执行任何生成或项目修改。"
     },
     {
       "id": "initial-idle",
@@ -41,7 +41,7 @@
     {
       "id": "material-change",
       "kind": "submit",
-      "prompt": "创作者现在要求改为生成式视频，核心风格改成写实恐怖，预算提高到高档，并交付 4K 电影母版。基于当前文件修订审批范围，明确旧审批摘要失效并需要重新审批；不要执行副作用。"
+      "prompt": "改为生成式视频，核心风格改成写实恐怖，并交付 4K 电影母版。直接修订当前方案与整体路线，删除冲突的旧决定，只推荐一个下一步；不要创建审批或预算状态，不要执行副作用。"
     },
     {
       "id": "final-idle",
@@ -59,7 +59,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:41c50e6f4bddd3b9f7779dfc1f040ce97c2c3476c5bf69851470237beefcf46a"
+        "fingerprint": "sha256:a23366a40f5ea8c83c4b7b6099a7d420b49f1c8b9c591691f381a67aeaae40f2"
       },
       "status": "injected",
       "evidenceRef": "replan-facts"
@@ -68,7 +68,8 @@
       "id": "output",
       "kind": "structured-output",
       "format": "markdown",
-      "requiredFields": ["生成式视频", "写实恐怖", "高", "4K", "旧审批", "重新审批", "交付"],
+      "requiredFields": ["生成式视频", "写实恐怖", "4K", "整体路线", "下一步", "交付"],
+      "forbiddenFields": ["审批记录", "重新审批", "预算授权"],
       "locale": "zh-cn",
       "evidenceRef": "replan-facts"
     },

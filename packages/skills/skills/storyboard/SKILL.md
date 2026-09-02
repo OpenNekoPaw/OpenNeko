@@ -7,7 +7,7 @@ description: '将提示词、文本、剧本、文档、漫画、图像序列或
 
 ## 中文方法
 
-把提示词、文本、剧本、文档、漫画、有序图像序列或现有分镜修订解释为可评审的视觉规划。默认使用最小可评审 Markdown；只有创作者明确要求专业结构化创作时，才生成并验证 canonical `scenes[] -> shots[]`。
+把提示词、文本、剧本、文档、漫画、有序图像序列或现有分镜修订解释为可评审的视觉规划。普通创作默认使用一份可直接更新的 Markdown 场景/镜头表；只有创作者明确要求专业结构化创作时，才生成并验证 canonical `scenes[] -> shots[]`。
 
 1. 保留来源顺序、场景边界、对白语境、视觉证据和稳定来源引用；证据不足的镜头、时长、对白或画面主张必须标为不确定或 diagnostic。
 2. 图像提示词属于 shot，视频提示词属于 scene；视觉说明、机位笔记和状态不能替代可执行生成提示词。
@@ -17,12 +17,12 @@ description: '将提示词、文本、剧本、文档、漫画、图像序列或
 
 ## English guidance
 
-Interpret a prompt, prose, script, document, comic, ordered image sequence, or existing storyboard revision as reviewable visual planning. Keep exploratory planning flexible; materialize the canonical structured Storyboard only when the creator explicitly requests professional structured authoring.
+Interpret a prompt, prose, script, document, comic, ordered image sequence, or existing storyboard revision as reviewable visual planning. Use one updateable Markdown scene/shot table for ordinary creator review; materialize the canonical structured Storyboard only when the creator explicitly requests professional structured authoring.
 
 ## Method
 
 1. Identify the source profile and preserve source order, scene boundaries, dialogue context, and visual evidence appropriate to that profile.
-2. For unspecified exploration, analysis, planning, alternatives, or a first draft, produce ordinary Markdown. Preserve useful narrative, visual, action, camera, dialogue, sound, duration, reference, source-trace, and uncertainty content without requiring fixed columns, complete production fields, or stable scene/shot identities.
+2. For an ordinary multi-shot plan or revision, produce one authoritative Markdown table. Use short local row labels such as `SC01` and `SH01` only to make later edits and generated-result links unambiguous; they are document labels, not a new domain model or workflow state. Preserve useful narrative, visual, action, camera, dialogue, sound, duration, reference, source-trace, and uncertainty content without requiring complete production fields.
 3. For explicit professional structured creation or revision, produce stable scene and shot identities, visual intent, narrative context, camera and duration guidance, source trace, and a revision identity, then validate the canonical structure before mutation.
 4. Use stable source references for source and reference media. Temporary processing details are never Storyboard truth.
 5. Invalid, unsupported, or weakly evidenced source claims must remain explicit uncertainties or visible diagnostics. Do not invent production facts merely to fill a table.
@@ -30,7 +30,7 @@ Interpret a prompt, prose, script, document, comic, ordered image sequence, or e
 
 ## Markdown planning and structured invariants
 
-- Exploratory Markdown may use headings, prose, lists, or a table. Choose the smallest structure that helps review, and retain source-specific columns when useful. Missing duration, voice, media binding, or production identity is an uncertainty, not a reason to invent values or reject a useful draft.
+- A multi-shot Markdown draft uses one table with only the columns the current work needs. Keep the same row labels and update the existing row when the creator revises a shot or a later capability returns a result; do not append a parallel table or turn review status into a second workflow model. A single-shot answer may remain prose. Missing duration, voice, media binding, or production identity is an uncertainty, not a reason to invent values or reject a useful draft.
 - Preserve distinct narrative, visual, action, camera, dialogue, sound, duration, reference, image-generation, and video-generation meaning when present. Neither generation prompt is mandatory for an exploratory plan.
 
 - After explicit structured authoring, the canonical artifact is nested `scenes[] -> shots[]`: a scene owns its ordered shots, and a scene cell in a review table never replaces the scene record. Shot media references remain shot facts.

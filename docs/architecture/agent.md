@@ -152,6 +152,11 @@ System Prompt 只负责通用行为、安全、工具发现与失败处理。领
 owning capability/Tool contract 注入；Skill 只负责方法论和创作语义。Prompt/Skill 不得补偿 runtime、Tool、
 provider、permission 或 artifact owner 的缺陷。
 
+多阶段内容创作先从当前 Workspace 事实形成一条简洁整体路线，只记录必要阶段的目标产物、输入依赖和
+完成条件；当前由创作者评审的阶段承担详细设计，后续阶段不得提前扩写为未经验证的制作说明。当前产物
+完成后只推荐一个与实际状态相符的下一操作；用户直接继续或修改当前内容，不建立跨领域审批对象、独立审核关卡、
+预算状态或全局生产状态机。Canvas、Generation、Cut 与 Content 仍分别拥有各自事实和副作用。
+
 领域输出格式、创作表、Canvas/Cut plan 与 profile 规则不得进入默认 Prompt。Skill 可以描述领域流程和
 公开工具方法，但不能声明执行成功；只读 validator 负责明确 profile 的 correctness，未注册规则不得被
 视为已验证。领域 rubric、证据、判定、repair 与 apply 均由 owning package 负责；没有真实跨领域消费者时

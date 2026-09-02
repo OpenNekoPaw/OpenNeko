@@ -10,9 +10,9 @@
 
 ### 建立代表性局部样本
 
-优先选择完整章节或场景序列；差异较大时分层抽取前/中/后段或对白、动作、氛围型范围。任何被选作 PV 叙事主线、角色转折或动作高潮的事件，都必须读取足以确认起因、行动顺序和后果的连续局部序列，不能由一张动作页补写前因后果。视觉读取每批最多处理四张真正有决策价值的页面，先用低清总览筛选，再对入选页面读取高清；这是上下文与推理批次限制，不是整卷最多只能看四页。记录来源边界、有效正文、场景与节拍、对白/旁白负载、动作/停留/转场时间、删并扩写、重构时长区间、置信度和其他章节可能不同的原因。20–30 页约 5–6 分钟只能是本作品样本支持的校准点，不是通用公式。
+优先选择完整章节或场景序列；差异较大时分层抽取前/中/后段或对白、动作、氛围型范围。任何被选作 PV 叙事主线、角色转折或动作高潮的事件，都必须读取足以确认起因、行动顺序和后果的连续局部序列，不能由一张动作页补写前因后果。视觉读取每批最多处理四张真正有决策价值的页面，先把整批合成一个低清联系表总览，再只对入选页面读取单图高清；这是上下文与推理批次限制，不是整卷最多只能看四页。记录来源边界、有效正文、场景与节拍、对白/旁白负载、动作/停留/转场时间、删并扩写、重构时长区间、置信度和其他章节可能不同的原因。20–30 页约 5–6 分钟只能是本作品样本支持的校准点，不是通用公式。
 
-当来源和授权读取能力都可用时，应在当前请求中执行这些必要抽样并形成结论；只有页面不可访问、能力缺失或剩余范围超出用户授权时，才把抽样计划作为阻塞后的下一动作。完成抽样后，正式创作文档只保留被证据改变的创意决定与必要边界，不输出逐批读取日志。
+当来源和授权读取能力都可用时，应在当前请求中执行有界抽样并形成结论。卷级首轮限于一次结构读取、前/中/后各一批低清候选和一批连续序列确认；复用已返回的定位和画面，每批都必须支持、改变或否决一个不同决定。首轮后仍不足就缩小产物范围，不能用持续追加读取换取更宽的标题；只有一个会实质改变方案的已命名未知项才允许增加一批。只有页面不可访问、能力缺失或剩余范围超出用户授权时，才把抽样计划作为阻塞后的下一动作。检查结果保持瞬态，不因被读取就写入 Canvas 或素材库。完成抽样后，正式创作文档只保留被证据改变的创意决定与必要边界，不输出逐批读取日志。
 
 ### 覆盖验收
 
@@ -24,7 +24,7 @@
 
 ### 估算与文档选择
 
-从已验证叙事单元和保留、删减、合并、扩写、新写、动作、对白、蒙太奇、沉默等选择建立时长。固定格式前至少公开“集数/段数 × 可用时长 = 总时长”、平均来源负载、压缩/扩写/省略假设和关键不确定性。无代表性样本时只交付覆盖与抽样计划；有样本但全局覆盖不足时只给条件体量区间；覆盖充分但格式未批准时给带开放决定的建议；格式和范围获批后才形成正式方案。
+从已验证叙事单元和保留、删减、合并、扩写、新写、动作、对白、蒙太奇、沉默等选择建立时长。固定格式前至少公开“集数/段数 × 可用时长 = 总时长”、平均来源负载、压缩/扩写/省略假设和关键不确定性。无代表性样本时只交付覆盖与抽样计划；有样本但全局覆盖不足时只给条件体量区间；覆盖充分但格式未确认时给带开放决定的建议；创作者确认格式和范围后才形成正式方案。
 
 ### 决策与处理方案
 
@@ -53,7 +53,7 @@ A source manifest proves inventory, not narrative coverage. A few arbitrary page
 
 ## Build a representative local sample
 
-Prefer a bounded complete narrative unit, such as one chapter or scene sequence. If units vary materially, sample contrasting early, middle and late or dialogue-heavy, action-heavy and atmospheric ranges. Any event used as the PV spine, character turn, or action payoff requires a continuous local sequence sufficient to establish cause, action order, and consequence; do not invent that chain from one isolated action page. Inspect no more than four decision-bearing images in one reasoning batch, using low-resolution overview selection before original-detail confirmation. This is a per-batch context limit, not a four-page limit for the entire work. For each sample record:
+Prefer a bounded complete narrative unit, such as one chapter or scene sequence. If units vary materially, sample contrasting early, middle and late or dialogue-heavy, action-heavy and atmospheric ranges. Any event used as the PV spine, character turn, or action payoff requires a continuous local sequence sufficient to establish cause, action order, and consequence; do not invent that chain from one isolated action page. Inspect no more than four decision-bearing images in one reasoning batch, combining that batch into one low-resolution contact-sheet overview before single-image original-detail confirmation. This is a per-batch context limit, not a four-page limit for the entire work. For each sample record:
 
 - source range and story-bearing page or scene count;
 - scenes and ordered narrative beats;
@@ -65,9 +65,9 @@ Prefer a bounded complete narrative unit, such as one chapter or scene sequence.
 
 A 20–30 page chapter may plausibly reconstruct to about 5–6 minutes for a particular work. Use that only when the sampled beats support it, and label it as a work-specific calibration point rather than a general conversion rate.
 
-When the source and authorized reading capabilities are available, execute the necessary sampling batches in the current request and form the supported decision. Return a sampling plan as the next action only when the pages are inaccessible, the capability is unavailable, or the remaining review exceeds the user's authorized scope. Keep batch logs and unused observations out of the final creative artifact.
+When the source and authorized reading capabilities are available, execute a bounded first pass: one structural read, one overview batch for each early, middle and late region, and one continuous-sequence confirmation batch. When `openneko_read_images` is present in the current Tool catalog, use it for each one-to-four-image contact-sheet overview instead of issuing repeated `openneko_read_image` overview calls; use `openneko_read_image` original only for a page selected from that overview. Reuse returned locators and pixels, and require every batch to support, change or reject a distinct decision. If that pass is insufficient, narrow the artifact instead of extending inspection merely to justify a broader title. Add only one further batch for a named unresolved question that can materially change the concept. Return a sampling plan as the next action only when the pages are inaccessible, the capability is unavailable, or the remaining review exceeds the user's authorized scope. Inspected pages remain transient unless the creator selects them for a reusable reference role. Keep batch logs and unused observations out of the final creative artifact.
 
-## Pass the coverage gate
+## Verify coverage before output
 
 Before making a volume-level or source-wide claim, keep an internal ledger for each early, middle and late region: source range, continuous story-bearing unit, directly observed facts, the distinct creative decision supported or changed, and confidence or unresolved evidence. Every event selected for the PV spine also requires continuous evidence of cause, action and consequence. Coverage passes only when the final concept incorporates or explicitly rejects these findings.
 
@@ -92,9 +92,9 @@ If a representative local sample exists but source-wide evidence does not, use i
 
 - No representative sample: produce a source-coverage and sampling assessment with one next review batch.
 - Representative sample but incomplete source coverage: produce a provisional adaptation-volume range with method, confidence and sensitivity.
-- Sufficient coverage but format unapproved: produce a format recommendation with assumptions and creator decisions still open.
+- Sufficient coverage but format not creator-confirmed: produce a format recommendation with assumptions and creator decisions still open.
 - Approved format and source range: produce the creative or production proposal at the requested depth.
 
 Keep observed facts, interpretation, estimates and creator decisions visibly distinct. A plausible estimate remains a recommendation until the creator approves it.
 
-Keep the assessment decision-sized and explain only evidence that changes the decision. For a creative proposal, provide the source-supported concept, spine, and decisive beats. Convert approved intent into call-ready packets only for production planning or execution handoff. Do not replace a requested creative design with one technical test, and do not fill an evidence gap with an episode table or production handbook.
+Keep the assessment decision-sized and explain only evidence that changes the decision. For a creative proposal, provide the source-supported concept, spine, and decisive beats. Convert creator-confirmed intent into call-ready packets only for production planning or execution handoff. Do not replace a requested creative design with one technical test, and do not fill an evidence gap with an episode table or production handbook.

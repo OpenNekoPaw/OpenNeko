@@ -21,8 +21,8 @@
         "required": true
       }
     ],
-    "expectedResult": "The Agent returns one concise master PV production specification containing the creative contract, recurring character/scene continuity, one authoritative shot table with input requirements, production method and direct acceptance, one source-bound submit-ready/not-executed semantic video handoff, and one finishing/delivery contract. The handoff remains executable without printing Tool schema or invocation JSON. It does not create per-stage documents or execute generation.",
-    "expectedFailure": "Creating a task plan for the bounded design turn, stopping at concept beats, omitting character/scene continuity or post-production design, expanding into a source-analysis report, splitting stages into separate documents, requiring the user to name Skills, appending a provisional prompt, omitting real input binding, inventing Tool parameters, printing runtime invocation details, or generating media fails."
+    "expectedResult": "The Agent returns one concise master PV production specification containing a source-to-decision map, plot/character/scene/style/sound baseline, exact preparation assets, one authoritative shot table with bound inputs, production method and direct acceptance conditions, one source-bound submit-ready/not-executed semantic video handoff, and one finishing/work/delivery contract. The handoff remains executable without printing Tool schema or invocation JSON. It does not create per-stage documents or execute generation.",
+    "expectedFailure": "Creating a task plan for the bounded design turn, stopping at concept beats, omitting preparation assets, character/scene continuity or post-production design, expanding into a reading log, splitting stages into separate documents, requiring the user to name Skills, appending a provisional prompt, omitting real input binding, inventing Tool parameters, printing runtime invocation details, or generating media fails."
   },
   "fixtureRefs": ["creative-planning-workspace"],
   "runtimeProfileId": "markdown",
@@ -50,7 +50,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:41c50e6f4bddd3b9f7779dfc1f040ce97c2c3476c5bf69851470237beefcf46a"
+        "fingerprint": "sha256:a23366a40f5ea8c83c4b7b6099a7d420b49f1c8b9c591691f381a67aeaae40f2"
       },
       "status": "injected",
       "evidenceRef": "workspace-pv-handoff-facts"
@@ -64,7 +64,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-preparation",
-        "fingerprint": "sha256:ef89617791ef3214037b1855f57d07dcd85d2f39adbece68feb6964720c3afca"
+        "fingerprint": "sha256:10d23dbaeac21cca038ee88c0ed466ad4a794d4c41a810f7b3161522aa998136"
       },
       "status": "injected",
       "evidenceRef": "workspace-pv-handoff-facts"
@@ -92,12 +92,17 @@
         "23:47",
         "红伞",
         "列车",
-        "创作合同",
-        "人物与场景连续性",
+        "来源决策",
+        "人物",
+        "场景",
+        "风格",
+        "声音",
+        "预处理资产",
         "权威镜头表",
-        "输入需求",
+        "绑定输入",
         "生产方式",
-        "后期与交付合同",
+        "后期",
+        "交付",
         "生产交接",
         "station-illustration.svg",
         "可提交",

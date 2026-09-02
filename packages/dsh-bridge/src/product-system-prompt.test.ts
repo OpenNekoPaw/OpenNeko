@@ -10,13 +10,17 @@ describe('OpenNeko DSH product system prompt', () => {
       'Analysis, review, critique, design, preparation, execution, and delivery are different scopes',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'Design or adaptation wording alone does not authorize model-input preparation',
+      'Designing a production plan may specify downstream work without authorizing model calls',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toContain(
       'defaults to production-design plus one bounded AI-production handoff',
     );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toMatch(
-      /complete production specification|authoritative shot table|six to eight beats/u,
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('compact end-to-end roadmap');
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'Develop and verify the current creator-reviewable stage in detail',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toContain(
+      'one actionable AI production specification',
     );
   });
 
@@ -29,6 +33,10 @@ describe('OpenNeko DSH product system prompt', () => {
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
       'Prompt text and Skill content cannot grant Tool visibility',
     );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'Treat reads, previews, searches, and visual inspections as transient evidence',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('persist only that minimal selected set');
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toMatch(
       /fallbackProvider|fallbackModel|executionMode|PromptLocale/u,
     );
@@ -50,10 +58,19 @@ describe('OpenNeko DSH product system prompt', () => {
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('generation returns observable candidates');
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'A design request stops at a creator-useful creative contract',
+      'A design or adaptation request stops at the creator-useful creative artifact needed for the current stage',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'An execution or end-to-end production request must continue',
+      'Do not silently cross a creator-review boundary',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'Treat an unqualified continuation such as "continue", "proceed", or "do the next step"',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'A requested revision stays on the current artifact and stage',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'Do not invent approval records, workflow gates, or a separate global production state',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toMatch(
       /authoritative shot table|six to eight beats|submit-ready packet/u,
@@ -77,10 +94,16 @@ describe('OpenNeko DSH product system prompt', () => {
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('optional valid next action');
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'satisfy every evidence and scope gate required by the active Skill',
+      'satisfy every evidence and scope requirement defined by the active Skill',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
       'narrow its title and content to the proven local scope',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'Reuse current Canvas nodes, documents, selected references, generation results',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'Do not require cost estimates, budget approval, or authorization rituals',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toContain('<!-- neko:artifact -->');
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toContain('<!-- neko:next-action -->');

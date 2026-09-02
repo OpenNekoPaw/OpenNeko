@@ -21,8 +21,8 @@
         "required": true
       }
     ],
-    "expectedResult": "The Agent applies the coverage gate before artifact generation. It refuses to produce a volume-level adaptation plan from the three inspected pages, limits any persisted or conversational creative result to a clearly titled local selected-page observation, and identifies one stratified source-review operation covering story-bearing early, middle and late regions plus a continuous cause-action-consequence sequence as the exact prerequisite for a later volume-level plan.",
-    "expectedFailure": "Missing media-production receipt, generating a volume-level or whole-work concept before the gate passes, using a broad title and adding a late evidence disclaimer, recommending a fixed duration or format, treating the cover, contents page or isolated pages as narrative coverage, failing to narrow the current scope, proposing another arbitrary sample without early/middle/late decision mapping and continuous-sequence evidence, or inventing plot, objective, causality or an episode map fails."
+    "expectedResult": "The Agent verifies source coverage before artifact generation. It refuses to produce a volume-level adaptation plan from the three inspected pages, limits any persisted or conversational creative result to a clearly titled local selected-page observation, and identifies one stratified source-review operation covering story-bearing early, middle and late regions plus a continuous cause-action-consequence sequence as the exact prerequisite for a later volume-level plan.",
+    "expectedFailure": "Missing media-production receipt, generating a volume-level or whole-work concept before the coverage requirement is met, using a broad title and adding a late evidence disclaimer, recommending a fixed duration or format, treating the cover, contents page or isolated pages as narrative coverage, failing to narrow the current scope, proposing another arbitrary or exhaustive sample without a bounded early/middle/late decision map and continuous-sequence check, continuing to read merely to earn a volume-level label, or inventing plot, objective, causality or an episode map fails."
   },
   "fixtureRefs": ["comic-volume-planning-workspace"],
   "runtimeProfileId": "plan-markdown",
@@ -50,7 +50,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:41c50e6f4bddd3b9f7779dfc1f040ce97c2c3476c5bf69851470237beefcf46a"
+        "fingerprint": "sha256:a23366a40f5ea8c83c4b7b6099a7d420b49f1c8b9c591691f381a67aeaae40f2"
       },
       "status": "injected",
       "evidenceRef": "volume-assessment-facts"

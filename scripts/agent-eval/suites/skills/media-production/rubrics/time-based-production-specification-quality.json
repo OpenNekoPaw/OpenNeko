@@ -13,31 +13,31 @@
     },
     {
       "id": "creative-contract",
-      "description": "The specification establishes one coherent experience or narrative spine and only the cross-shot visual, action, sound, scope, and acceptance rules that downstream production must preserve.",
+      "description": "The specification establishes one coherent plot spine plus source-grounded character goals, scene functions, visual style, action, sound, scope, and acceptance rules that downstream production must preserve.",
       "weight": 0.15,
       "evidenceRefs": ["production-specification-facts"]
     },
     {
-      "id": "continuity-contract",
-      "description": "Recurring character and scene continuity is explicit, source-grounded, limited to generation-critical properties, and distinguishes required preservation from forbidden drift without repeating one-off shot details.",
+      "id": "preparation-contract",
+      "description": "Generation-critical character, scene and style anchors, keyframes or masks, and storyboard or animatic assets are explicit, source-grounded, have direct acceptance conditions, and are mapped to their consuming units.",
       "weight": 0.15,
       "evidenceRefs": ["production-specification-facts"]
     },
     {
       "id": "authoritative-production-units",
-      "description": "One authoritative table gives stable production-unit identity and owns timing, story function, image and action, camera and sound, real input requirements, production method, direct acceptance, and downstream use without duplicating those decisions elsewhere.",
+      "description": "One authoritative table gives stable production-unit identity and owns timing, story function, image/action/camera/sound, bound inputs, semantic generation intent, expected asset, direct acceptance, repair boundary, and downstream use without duplicating those decisions elsewhere.",
       "weight": 0.3,
       "evidenceRefs": ["production-specification-facts"]
     },
     {
       "id": "finishing-and-delivery-contract",
-      "description": "One cross-unit contract gives applicable editorial, compositing, grade, sound, title or caption, master, and delivery-result constraints. Unknown measured or platform-specific parameters remain explicit dependencies rather than invented defaults.",
+      "description": "One cross-unit contract gives applicable editorial, compositing, grade, sound, title or caption, review work, clean or stem variants, platform delivery, QC and manifest constraints. Unknown measured or platform-specific parameters remain explicit dependencies rather than invented defaults.",
       "weight": 0.15,
       "evidenceRefs": ["production-specification-facts"]
     },
     {
       "id": "capability-and-state-boundary",
-      "description": "The document contains no model call packet because execution was excluded, and it does not copy runtime status, candidate history, failures, project revisions, or export receipts into prose. Analysis remains outside the reusable specification.",
+      "description": "The document contains no raw model call packet because execution was excluded, and it does not copy runtime status, candidate history, failures, project revisions, or export receipts into prose. Source analysis appears only as a compact decision map, not reading narration.",
       "weight": 0.1,
       "evidenceRefs": ["production-specification-facts"]
     }

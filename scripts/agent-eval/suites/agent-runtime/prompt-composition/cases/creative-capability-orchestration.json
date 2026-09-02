@@ -10,7 +10,7 @@
       "OpenNeko product prompt",
       "media-production creative decision",
       "media-preparation input preparation",
-      "media-delivery accepted-master gate"
+      "media-delivery completed-master dependency"
     ],
     "observables": [
       {
@@ -20,7 +20,7 @@
         "required": true
       }
     ],
-    "expectedResult": "The Agent identifies media-production as the current creative owner, keeps preparation dependent on an approved shot and real references, and keeps delivery blocked until an accepted master and explicit specification exist.",
+    "expectedResult": "The Agent identifies media-production as the current creative owner, keeps preparation dependent on a creator-chosen shot and real references, and keeps delivery unavailable until a completed master and explicit specification exist.",
     "expectedFailure": "One Skill impersonates the whole workflow, all stages are treated as mandatory, a plan is reported as an artifact, or generation/export is claimed without a Tool result."
   },
   "fixtureRefs": ["empty-workspace"],
@@ -30,7 +30,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$media-production $media-preparation $media-delivery 现在只有一句创意 brief：‘旅人在无尽竖井中抬头。’没有来源素材、已批准镜头、生成结果、母版、交付规范或可执行媒体工具。请按能力 owner 只返回：当前可处理、后续依赖、精确阻塞。不要扩写固定制作流程，也不要声称已准备、已生成或已交付。"
+      "prompt": "$media-production $media-preparation $media-delivery 现在只有一句创意 brief：‘旅人在无尽竖井中抬头。’没有来源素材、创作者选定镜头、生成结果、母版、交付规范或可执行媒体工具。请按能力 owner 只返回：当前可处理、后续依赖、精确阻塞。不要扩写固定制作流程，也不要声称已准备、已生成或已交付。"
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
   ],
@@ -45,7 +45,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:41c50e6f4bddd3b9f7779dfc1f040ce97c2c3476c5bf69851470237beefcf46a"
+        "fingerprint": "sha256:a23366a40f5ea8c83c4b7b6099a7d420b49f1c8b9c591691f381a67aeaae40f2"
       },
       "status": "injected",
       "evidenceRef": "orchestration-facts"
@@ -59,7 +59,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-preparation",
-        "fingerprint": "sha256:ef89617791ef3214037b1855f57d07dcd85d2f39adbece68feb6964720c3afca"
+        "fingerprint": "sha256:10d23dbaeac21cca038ee88c0ed466ad4a794d4c41a810f7b3161522aa998136"
       },
       "status": "injected",
       "evidenceRef": "orchestration-facts"

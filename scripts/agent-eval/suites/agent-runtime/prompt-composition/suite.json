@@ -5,7 +5,7 @@
   "target": {
     "kind": "prompt",
     "id": "system-prompt-composition",
-    "contractHash": "sha256:d18e52b4e1a2258765ea02b053ea2efcb7272cfb3f85ee9d85c551d7ebc9a8fe"
+    "contractHash": "sha256:cc27e9f99c31f904075c6609126ff40378fbe8cb29d3910223d732e448efc0c4"
   },
   "runtimeProfiles": [
     {
@@ -80,6 +80,18 @@
       "id": "workspace-pv-design-only",
       "file": "cases/workspace-pv-design-only.json",
       "group": "boundary",
+      "visibility": "public"
+    },
+    {
+      "id": "workspace-pv-production-design",
+      "file": "cases/workspace-pv-production-design.json",
+      "group": "regression",
+      "visibility": "public"
+    },
+    {
+      "id": "workspace-creative-continue",
+      "file": "cases/workspace-creative-continue.json",
+      "group": "workflow",
       "visibility": "public"
     },
     {

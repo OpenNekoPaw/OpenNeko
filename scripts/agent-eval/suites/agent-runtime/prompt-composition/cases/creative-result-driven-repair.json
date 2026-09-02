@@ -10,7 +10,7 @@
       "OpenNeko product prompt",
       "media-selection rejection",
       "video-compositing repair handoff",
-      "media-delivery accepted-master gate"
+      "media-delivery completed-master dependency"
     ],
     "observables": [
       {
@@ -21,7 +21,7 @@
       }
     ],
     "expectedResult": "The Agent preserves accepted identity and composition, rejects the candidate because of observed edge flicker at the specified frames, assigns only that repair to video-compositing, and leaves delivery blocked.",
-    "expectedFailure": "Restarting creative analysis or generation, changing accepted properties, treating the rejected clip as selected, expanding a full workflow, or claiming repair/export success fails."
+    "expectedFailure": "Restarting creative analysis or generation, changing creator-retained properties, treating the rejected clip as selected, expanding a full workflow, or claiming repair/export success fails."
   },
   "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "markdown",
@@ -45,7 +45,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-selection",
-        "fingerprint": "sha256:1f121451b1d9c430e7a49d0d3d871070f186b1c576488da369f8a94888c19fbd"
+        "fingerprint": "sha256:df7e861dd2f30de2ccdd07c63d8c5bd20a8689f9d964934882dc3437ee102e96"
       },
       "status": "injected",
       "evidenceRef": "repair-loop-facts"
