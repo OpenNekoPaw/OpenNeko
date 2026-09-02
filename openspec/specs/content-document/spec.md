@@ -53,7 +53,7 @@ artifact.
 
 - **WHEN** an EPUB chapter or CBZ image is addressed by an `entry` selector containing its
   container-relative path
-- **THEN** the same complete ContentLocator is preserved across Tool, Host, result, and Canvas
+- **THEN** the same complete ContentLocator is preserved across Tool, Host, result, and any explicit authoring reference
 - **AND** only the Content reader converts that entry to chapter or page coordinates
 
 #### Scenario: PDF page is unambiguous
@@ -87,14 +87,6 @@ artifact.
 - **WHEN** EPUB, PDF, DOCX, or CBZ decoding requires a format-specific execution position
 - **THEN** Content converts the incoming `ContentLocator.selector` to a `DocumentReadCoordinate`
 - **AND** the coordinate is converted back to a complete ContentLocator before leaving Content
-
-#### Scenario: Canvas deduplicates exact content addresses
-
-- **WHEN** a successful turn reads the same complete ContentLocator more than once and also reads a
-  different selector in the same container
-- **THEN** Canvas receives one source artifact for the repeated locator and one for the distinct
-  selector
-- **AND** deduplication uses the complete ContentLocator rather than the container path alone
 
 ### Requirement: Content failure is a failed DSH Tool execution
 
@@ -148,9 +140,12 @@ The official `openneko_document` Tool MUST expose `operation`, `source`, and ope
 
 ### Requirement: Authorized document images use native model image context
 
-When a document result exposes an exact image ContentLocator, the Agent image reader SHALL resolve it through the
-same Conversation Workspace authorization and publish it through the DSH attachment owner as a native image block.
-It MUST NOT expose raw paths, switch provider/model, create another queue or modify the source when admission fails.
+When a document result exposes exact image ContentLocators, the Agent image readers SHALL resolve them through the
+same Conversation Workspace authorization and publish either one selected image or one bounded overview contact
+sheet through the DSH attachment owner as a native image block. They MUST NOT expose raw paths, switch
+provider/model, create another queue or modify the sources. After a successful Tool completion, Agent Runtime
+SHALL project the deduplicated source document and exact original image references to the Canvas admitted for that
+turn; the derived overview attachment MUST remain transient.
 
 #### Scenario: Model reads an EPUB image entry
 
@@ -158,14 +153,28 @@ It MUST NOT expose raw paths, switch provider/model, create another queue or mod
 - **THEN** Host reads that entry under the exact Conversation Workspace grant
 - **AND** DSH persists the admitted representation without changing the original locator or document bytes
 
+#### Scenario: Model compares bounded EPUB image entries
+
+- **WHEN** an image-capable model requests overview inspection for one to four exact supported entries
+- **THEN** Host authorizes every entry under the same exact Conversation Workspace grant
+- **AND** DSH publishes one bounded contact sheet and its complete slot locator mapping
+
 #### Scenario: Current model cannot consume images
 
 - **WHEN** the selected provider/model route does not support native image input
 - **THEN** only the current image request fails visibly
 - **AND** no alternate model, provider, source or media-analysis implementation is selected
 
+#### Scenario: Successful image read preserves exact source references
+
+- **WHEN** a single-image or batch-overview read succeeds
+- **THEN** the Tool result remains available as a DSH Tool result and native attachment
+- **AND** Agent Runtime immediately projects the deduplicated source document and exact original image references
+  to the Canvas admitted for that turn
+- **AND** the derived overview attachment is not persisted as a Canvas artifact or project fact
+
 #### Scenario: Nested wrapper is rejected
 
-- **WHEN** the Tool receives `{"operation":"read","input":{"source":...}}`
-- **THEN** the canonical document argument decoder rejects the nested wrapper before any Host call
+- **WHEN** an image Tool receives `{"operation":"read","input":{"source":...}}`
+- **THEN** the canonical image argument decoder rejects the nested wrapper before any Host call
 - **AND** the nested wrapper cannot produce a successful Tool call

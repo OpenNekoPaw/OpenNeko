@@ -120,7 +120,7 @@ no-replace 发布，再由当前 DSH catalog 观察结果；不得覆盖、合�
 
 ## 附件、媒体 Tool 与模型
 
-ACP content block 是 Desktop 到 DSH 的唯一消息输入协议。Composer 图片通过 Host 授权和 DSH attachment admission 后以 DSH 原生 image block 进入 exact Session；运行中发现的文档图片通过 `openneko_read_image` Tool 返回同一原生 image block。当前 DSH 只原生持久化 PNG、JPEG、WebP 与 GIF；音频、视频、文档和其他文件在公开 block/lifecycle 补齐前，只能由 owning media/content Tool 生成有界、带来源的文本、metadata、转写或采样表示，不把 raw path、bearer URL 或旧多模态 packet 写入 Session。
+ACP content block 是 Desktop 到 DSH 的唯一消息输入协议。Composer 图片通过 Host 授权和 DSH attachment admission 后以 DSH 原生 image block 进入 exact Session；运行中发现的文档图片先通过 `openneko_read_images` 把一至四个 exact ContentLocator 合成为单张有界联系表，仅对已选定页面通过 `openneko_read_image` 返回原始细节。成功完成的 content Tool 以已校验输入为 authority，把去重源文档和 exact 原图引用立即投影到本回合获准 Canvas；联系表附件只作为 Tool 内预览，不成为 Canvas 节点或第二事实来源。获准的持久 Markdown 仍由终态投影独立发布。DSH Session 的标准 Tool-result pruning 与 qualified compaction 管理后续模型上下文；OpenNeko 不复制图片上下文或实现第二压缩器。当前 DSH 只原生持久化 PNG、JPEG、WebP 与 GIF；音频、视频、文档和其他文件在公开 block/lifecycle 补齐前，只能由 owning media/content Tool 生成有界、带来源的文本、metadata、转写或采样表示，不把 raw path、bearer URL 或旧多模态 packet 写入 Session。
 
 当前 Agent 模型是媒体语义理解的唯一 LLM authority。附件或 Tool 结果所需模态受支持时由同一模型继续处理；不支持时只拒绝当前 submit 或 Tool call，并明确提示切换模型。产品不配置第二媒体分析模型，不隐式切换 provider/model，也不允许 Tool 用隐藏模型伪造成功。Generation 媒体模型/参数继续由 `@neko/generation-domain` owner 独立管理；未来专用 ASR/OCR/安全审核模型只能属于对应 Tool/service 的显式能力与审批边界。
 

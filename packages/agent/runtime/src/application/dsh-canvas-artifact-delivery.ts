@@ -5,8 +5,10 @@ import type { CanvasWorkspaceTurnTarget } from '@neko/canvas-domain';
 import { DOCUMENT_DSH_TOOL_NAME, decodeDocumentDshToolArgs } from '@neko/content-domain/document';
 import {
   CONTENT_IMAGE_DSH_TOOL_NAME,
+  CONTENT_IMAGES_DSH_TOOL_NAME,
   contentLocatorKey,
   decodeContentImageDshToolSource,
+  decodeContentImagesDshToolInput,
   type ContentLocator,
 } from '@neko/content-domain';
 import { hashStableValue } from '@neko/shared';
@@ -390,6 +392,10 @@ function collectContentToolSources(
     const rawInput = requireRecord(event.rawInput, `${CONTENT_IMAGE_DSH_TOOL_NAME} input`);
     locator = decodeContentImageDshToolSource(rawInput['source']);
     return createLocatedSourceArtifacts(locator, 'image');
+  } else if (event.title === CONTENT_IMAGES_DSH_TOOL_NAME) {
+    return decodeContentImagesDshToolInput(event.rawInput).sources.flatMap((source) =>
+      createLocatedSourceArtifacts(source, 'image'),
+    );
   } else {
     return [];
   }
@@ -431,7 +437,11 @@ function deduplicateResources(
 function isSupportedContentTool(
   event: Extract<DshAcpProjectedEvent, { readonly kind: 'tool' }>,
 ): event is Extract<DshAcpProjectedEvent, { readonly kind: 'tool' }> & { readonly title: string } {
-  return event.title === DOCUMENT_DSH_TOOL_NAME || event.title === CONTENT_IMAGE_DSH_TOOL_NAME;
+  return (
+    event.title === DOCUMENT_DSH_TOOL_NAME ||
+    event.title === CONTENT_IMAGE_DSH_TOOL_NAME ||
+    event.title === CONTENT_IMAGES_DSH_TOOL_NAME
+  );
 }
 
 function contentToolDiagnostic(

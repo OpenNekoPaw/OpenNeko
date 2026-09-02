@@ -55,6 +55,127 @@ describe('DSH Canvas completed Tool artifact collection', () => {
       ]),
     );
   });
+
+  it('projects every original source from an image overview without persisting the contact sheet', () => {
+    const sources = [imageLocator('image/page-1.jpg'), imageLocator('image/page-2.jpg')];
+    const collection = collect(imageOverviewTool('overview-1', sources));
+    const parent = collection.batch?.artifacts.find(
+      (artifact) => artifact.contentLocator.selector === undefined,
+    );
+
+    expect(collection.diagnostics).toEqual([]);
+    expect(collection.batch).toMatchObject({ turn: 1, createdAt: 1_000 });
+    expect(collection.batch?.artifacts).toEqual([
+      expect.objectContaining({
+        kind: 'file-reference',
+        title: 'blame.epub',
+        contentLocator: { file: sources[0]!.file },
+      }),
+      expect.objectContaining({
+        kind: 'image',
+        title: 'page-1.jpg',
+        sourceArtifactIds: [parent?.artifactId],
+        contentLocator: sources[0],
+      }),
+      expect.objectContaining({
+        kind: 'image',
+        title: 'page-2.jpg',
+        sourceArtifactIds: [parent?.artifactId],
+        contentLocator: sources[1],
+      }),
+    ]);
+  });
+
+  it('delivers an image overview as soon as its Tool event completes', async () => {
+    const publication = vi.fn();
+    const delivery = vi.fn(async () => ({ status: 'accepted' as const }));
+    const service = createDshCanvasArtifactDeliveryService({
+      contexts: {
+        readContext: async () => ({
+          kind: 'workspace' as const,
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+        }),
+      },
+      publication: { publish: publication, resolve: vi.fn() },
+      delivery: { deliver: delivery },
+      diagnostics: { report: vi.fn() },
+    });
+    const event = imageOverviewTool('overview-1', [
+      imageLocator('image/page-1.jpg'),
+      imageLocator('image/page-2.jpg'),
+    ]);
+
+    await expect(
+      service.deliverCompletedTool({
+        conversationId: 'conversation-1',
+        dshSessionId: 'dsh-1',
+        toolCallId: 'overview-1',
+        events: [event],
+        canvasTurnTarget: {
+          workspaceId: 'workspace-1',
+          canvasId: 'neko/boards/workspace.nkc',
+        },
+      }),
+    ).resolves.toEqual({ status: 'accepted' });
+
+    expect(publication).not.toHaveBeenCalled();
+    expect(delivery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        turn: 1,
+        createdAt: 1_000,
+        delivery: { kind: 'completed-tool', toolCallId: 'overview-1' },
+        artifacts: [
+          expect.objectContaining({ kind: 'file-reference', title: 'blame.epub' }),
+          expect.objectContaining({ kind: 'image', title: 'page-1.jpg' }),
+          expect.objectContaining({ kind: 'image', title: 'page-2.jpg' }),
+        ],
+      }),
+    );
+  });
+
+  it('reports malformed image overview sources without writing a partial Canvas record', async () => {
+    const delivery = vi.fn();
+    const report = vi.fn();
+    const service = createDshCanvasArtifactDeliveryService({
+      contexts: {
+        readContext: async () => ({
+          kind: 'workspace' as const,
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+        }),
+      },
+      publication: { publish: vi.fn(), resolve: vi.fn() },
+      delivery: { deliver: delivery },
+      diagnostics: { report },
+    });
+    const event = {
+      ...imageOverviewTool('overview-invalid', [imageLocator('image/page-1.jpg')]),
+      rawInput: { sources: [{ invalid: true }] },
+    };
+
+    await expect(
+      service.deliverCompletedTool({
+        conversationId: 'conversation-1',
+        dshSessionId: 'dsh-1',
+        toolCallId: 'overview-invalid',
+        events: [event],
+        canvasTurnTarget: {
+          workspaceId: 'workspace-1',
+          canvasId: 'neko/boards/workspace.nkc',
+        },
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(delivery).not.toHaveBeenCalled();
+    expect(report).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'DSH_CANVAS_ARTIFACT_CONTENT_TOOL_PROJECTION_INVALID',
+        toolCallId: 'overview-invalid',
+        toolName: 'openneko_read_images',
+      }),
+    );
+  });
 });
 
 describe('DSH Canvas terminal Markdown delivery', () => {
@@ -346,6 +467,36 @@ function documentTool(toolCallId: string, source: ContentLocator): DshAcpProject
     title: 'openneko_document',
     rawInput: { operation: 'read', source },
     rawOutput: [{ type: 'text', text: JSON.stringify({ status: 'ready', source }) }],
+  };
+}
+
+function imageOverviewTool(
+  toolCallId: string,
+  sources: readonly ContentLocator[],
+): DshAcpProjectedEvent {
+  return {
+    kind: 'tool',
+    sessionId: 'dsh-1',
+    toolCallId,
+    turn: 1,
+    turnStartedAt: 1_000,
+    status: 'completed',
+    title: 'openneko_read_images',
+    rawInput: { sources },
+    rawOutput: [
+      { type: 'text', text: 'image overview' },
+      {
+        type: 'image',
+        attachment: { attachmentId: 'contact-sheet', mediaType: 'image/jpeg' },
+      },
+    ],
+  };
+}
+
+function imageLocator(entryPath: string): ContentLocator {
+  return {
+    file: { authority: 'workspace', path: 'books/blame.epub' },
+    selector: { kind: 'entry', path: entryPath },
   };
 }
 
