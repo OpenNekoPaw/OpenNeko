@@ -1,0 +1,39 @@
+{
+  "schema": "neko.agent-eval.rubric",
+  "id": "insufficient-source-coverage-quality",
+  "domain": "media-production",
+  "minimumScore": 4,
+  "maximumUncertainty": 0.2,
+  "criteria": [
+    {
+      "id": "pre-artifact-gate",
+      "description": "The coverage decision occurs before creative artifact generation. The response does not produce a volume-level or whole-work plan and then weaken it with a disclaimer; any document-like result is titled and scoped only as a local selected-page observation.",
+      "weight": 0.3,
+      "evidenceRefs": ["volume-assessment-facts"]
+    },
+    {
+      "id": "coverage-diagnosis",
+      "description": "The Agent correctly identifies that one cover, one contents page and one interior page do not establish narrative coverage. It names story-bearing early, middle and late regions whose findings must each change a distinct creative decision, plus continuous cause-action-consequence evidence for any proposed spine event.",
+      "weight": 0.25,
+      "evidenceRefs": ["volume-assessment-facts"]
+    },
+    {
+      "id": "no-invented-creative-contract",
+      "description": "The response does not invent a protagonist objective, connected plot, duration, format, episode structure, climax or source-wide theme from the sparse evidence. A late evidence-boundary paragraph cannot rescue an otherwise unsupported treatment.",
+      "weight": 0.2,
+      "evidenceRefs": ["volume-assessment-facts"]
+    },
+    {
+      "id": "precise-next-operation",
+      "description": "The response gives one concise next source-review operation that would unlock a volume-level decision, without turning the deliverable into a long workflow, page-by-page audit or generic production checklist.",
+      "weight": 0.15,
+      "evidenceRefs": ["volume-assessment-facts"]
+    },
+    {
+      "id": "artifact-hygiene",
+      "description": "The result is concise, separates current evidence from future work, and contains no Tool log, internal ledger, generic analysis, generation prompt, model parameters or post-production instructions.",
+      "weight": 0.1,
+      "evidenceRefs": ["volume-assessment-facts"]
+    }
+  ]
+}

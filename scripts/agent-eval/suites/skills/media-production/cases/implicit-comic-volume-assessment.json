@@ -21,8 +21,8 @@
         "required": true
       }
     ],
-    "expectedResult": "The Agent says first that current evidence cannot determine the adaptation format, gives only the decisive coverage evidence and material unknown, then proposes the one source-review operation that can unlock a professional content plan without expanding into a speculative treatment.",
-    "expectedFailure": "Missing media-production receipt, recommending a winning fixed format, claiming source-wide coverage, contradicting the boundary conclusion, or inventing an episode map fails."
+    "expectedResult": "The Agent applies the coverage gate before artifact generation. It refuses to produce a volume-level adaptation plan from the three inspected pages, limits any persisted or conversational creative result to a clearly titled local selected-page observation, and identifies one stratified source-review operation covering story-bearing early, middle and late regions plus a continuous cause-action-consequence sequence as the exact prerequisite for a later volume-level plan.",
+    "expectedFailure": "Missing media-production receipt, generating a volume-level or whole-work concept before the gate passes, using a broad title and adding a late evidence disclaimer, recommending a fixed duration or format, treating the cover, contents page or isolated pages as narrative coverage, failing to narrow the current scope, proposing another arbitrary sample without early/middle/late decision mapping and continuous-sequence evidence, or inventing plot, objective, causality or an episode map fails."
   },
   "fixtureRefs": ["comic-volume-planning-workspace"],
   "runtimeProfileId": "plan-markdown",
@@ -50,7 +50,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:e177f718a55f7899fcc794112ac669022ae65045ab3670d2d9bcd3afc7970241"
+        "fingerprint": "sha256:41c50e6f4bddd3b9f7779dfc1f040ce97c2c3476c5bf69851470237beefcf46a"
       },
       "status": "injected",
       "evidenceRef": "volume-assessment-facts"
@@ -72,7 +72,7 @@
       "id": "output",
       "kind": "final-answer",
       "mode": "contains",
-      "text": ["240", "3", "覆盖", "不足", "下一步"],
+      "text": ["240", "3", "覆盖", "不足", "局部", "前段", "中段", "后段", "连续", "下一步"],
       "evidenceRef": "volume-assessment-facts"
     },
     {
@@ -81,6 +81,11 @@
       "mode": "not-contains",
       "text": [
         "最适合改编",
+        "卷一动画化方案",
+        "卷级概念 PV",
+        "权威节拍序列",
+        "75 秒",
+        "90 秒",
         "建议开发规格",
         "第 1 集",
         "第1集",
@@ -109,5 +114,10 @@
     }
   ],
   "artifactChecks": [],
+  "rubric": {
+    "kind": "domain-rubric",
+    "ref": "rubrics/insufficient-source-coverage-quality.json",
+    "judgeProfileId": "creative-production-judge"
+  },
   "budget": { "timeoutMs": 240000, "repetitions": 3 }
 }

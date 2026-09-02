@@ -66,10 +66,9 @@ describe('canonical DSH Desktop evaluation driver', () => {
     });
 
     expect(expression).toContain("event.title === 'skill'");
-    expect(expression).toContain(
-      '/<skill_instructions>\\n([\\s\\S]*?)\\n<\\/skill_instructions>/u',
-    );
+    expect(expression).toContain("rendered?.includes('<skill_instructions>\\n')");
     expect(expression).toContain("crypto.subtle.digest('SHA-256', bytes)");
+    expect(expression).toContain("fingerprint: 'sha256:' + (await sha256(rendered))");
     expect(expression).toContain("descriptor?.provider === 'openneko-builtin'");
     expect(expression).toContain("status: 'injected'");
   });

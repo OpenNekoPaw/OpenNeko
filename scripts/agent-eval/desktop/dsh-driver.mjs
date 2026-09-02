@@ -264,10 +264,7 @@ export function dshDriverExpression(command) {
         const rendered = (event.rawOutput ?? []).find(
           (block) => block?.type === 'text' && typeof block.text === 'string',
         )?.text;
-        const instructions = rendered?.match(
-          /<skill_instructions>\\n([\\s\\S]*?)\\n<\\/skill_instructions>/u,
-        )?.[1]?.trim();
-        if (!instructions) continue;
+        if (!rendered?.includes('<skill_instructions>\\n')) continue;
         const descriptor = configuration.inputCatalog?.skills?.find(
           (skill) => skill.name === event.rawInput.name,
         );
@@ -277,7 +274,7 @@ export function dshDriverExpression(command) {
             descriptor?.provider === 'openneko-builtin' || descriptor?.source === 'bundled'
               ? 'builtin'
               : descriptor?.source,
-          fingerprint: 'sha256:' + (await sha256(instructions)),
+          fingerprint: 'sha256:' + (await sha256(rendered)),
           status: 'injected',
           toolCallId: event.toolCallId,
         });

@@ -1,0 +1,106 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "stratified-volume-concept-design",
+  "suiteId": "skill.media-production",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Request a 60-second volume-level concept PV after early, middle and late story-bearing evidence and continuous causal sequences have already been established.",
+    "canonicalPath": [
+      "explicit builtin media-production Skill",
+      "stratified-volume-evidence.md source read",
+      "coverage acceptance gate",
+      "source-grounded volume-level concept design"
+    ],
+    "observables": [
+      {
+        "ref": "stratified-concept-facts",
+        "kind": "runtime-fact",
+        "description": "Exact Skill receipt, source read, configured model, stratified evidence use, source-accurate scope and absent production side effects.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The Agent uses the established early, middle and late evidence to create one causal 60-second concept: Sera carries the seed case upward before sunrise, the tower's mistaken identity and drones escalate the conflict, and her choice to open the case causes roots and sunrise to transform the ending. It distinguishes observed source facts from any proposed PV recomposition and does not fall back to another sampling plan or claim complete plot coverage.",
+    "expectedFailure": "Ignoring one of the three evidence regions, repeating only atmosphere or character appearance, replacing the causal spine with a generic tower action reel, presenting the architect announcement as confirmed identity, inventing unsupported source facts, claiming the entire plot is covered, returning another sampling plan, or invoking media generation fails."
+  },
+  "fixtureRefs": ["comic-volume-planning-workspace"],
+  "runtimeProfileId": "plan-markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "$media-production 读取 @stratified-volume-evidence.md。基于已经完成的分层覆盖，为这部漫画设计一支 60 秒卷级概念 PV；只做创意设计，不准备模型输入或生成媒体。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "stratified-concept-facts"
+    },
+    {
+      "id": "skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-production",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-production",
+        "fingerprint": "sha256:41c50e6f4bddd3b9f7779dfc1f040ce97c2c3476c5bf69851470237beefcf46a"
+      },
+      "status": "injected",
+      "evidenceRef": "stratified-concept-facts"
+    },
+    {
+      "id": "model",
+      "kind": "model",
+      "profileId": "configured-default",
+      "evidenceRef": "stratified-concept-facts"
+    },
+    {
+      "id": "read",
+      "kind": "tool-call",
+      "name": "Read",
+      "status": "success",
+      "evidenceRef": "stratified-concept-facts"
+    },
+    {
+      "id": "source-specific-output",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["Sera", "种子", "高塔", "日出"],
+      "evidenceRef": "stratified-concept-facts"
+    },
+    {
+      "id": "no-coverage-regression",
+      "kind": "final-answer",
+      "mode": "not-contains",
+      "text": ["覆盖不足", "下一批抽样", "全卷剧情完整", "生成提示词", "模型参数"],
+      "evidenceRef": "stratified-concept-facts"
+    },
+    {
+      "id": "no-image",
+      "kind": "tool-call",
+      "name": "GenerateImage",
+      "status": "absent",
+      "evidenceRef": "stratified-concept-facts"
+    },
+    {
+      "id": "no-video",
+      "kind": "tool-call",
+      "name": "GenerateVideo",
+      "status": "absent",
+      "evidenceRef": "stratified-concept-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "rubric": {
+    "kind": "domain-rubric",
+    "ref": "rubrics/stratified-source-adaptation-quality.json",
+    "judgeProfileId": "creative-production-judge"
+  },
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

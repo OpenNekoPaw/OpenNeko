@@ -1,0 +1,39 @@
+{
+  "schema": "neko.agent-eval.rubric",
+  "id": "stratified-source-adaptation-quality",
+  "domain": "media-production",
+  "minimumScore": 4,
+  "maximumUncertainty": 0.2,
+  "criteria": [
+    {
+      "id": "coverage-use",
+      "description": "The concept materially uses the early delivery objective, middle mistaken-identity and drone escalation, and late deliberate opening and city-scale consequence. Each region changes a distinct creative decision rather than appearing as an evidence list or repeated atmosphere.",
+      "weight": 0.25,
+      "evidenceRefs": ["stratified-concept-facts"]
+    },
+    {
+      "id": "causal-spine",
+      "description": "One coherent 60-second spine preserves cause, action and consequence: Sera must carry the seed case upward before sunrise, the tower contests control, and her decision to open the case creates the roots-and-sunrise payoff. The result is not a generic tower mood reel or disconnected montage.",
+      "weight": 0.25,
+      "evidenceRefs": ["stratified-concept-facts"]
+    },
+    {
+      "id": "source-and-recomposition-boundary",
+      "description": "Observed facts, supported interpretation and proposed PV recomposition remain distinguishable. The tower's architect announcement is not treated as confirmed identity, and any cross-range transition, reordered action or added system response is visibly a creative proposal rather than source fact.",
+      "weight": 0.2,
+      "evidenceRefs": ["stratified-concept-facts"]
+    },
+    {
+      "id": "scope-accuracy",
+      "description": "The response supports a volume-level concept without claiming a complete plot summary, complete character map or verified tower history. Remaining evidence limits constrain only unsupported claims and do not erase the source-backed concept.",
+      "weight": 0.15,
+      "evidenceRefs": ["stratified-concept-facts"]
+    },
+    {
+      "id": "creator-reference-value",
+      "description": "The artifact is concise and creator-reviewable, with a source-specific premise, audience experience, continuity decisions and an authoritative timed sequence. It omits sampling logs, generic workflow, generation prompts and repeated analysis.",
+      "weight": 0.15,
+      "evidenceRefs": ["stratified-concept-facts"]
+    }
+  ]
+}

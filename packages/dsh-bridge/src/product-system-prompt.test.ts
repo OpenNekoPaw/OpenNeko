@@ -76,6 +76,12 @@ describe('OpenNeko DSH product system prompt', () => {
       'When the exact Host context admits a durable artifact, follow that scoped admission contract',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('optional valid next action');
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'satisfy every evidence and scope gate required by the active Skill',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'narrow its title and content to the proven local scope',
+    );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toContain('<!-- neko:artifact -->');
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toContain('<!-- neko:next-action -->');
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toContain(

@@ -316,6 +316,12 @@ describe('locked DSH filesystem Skill provider contract', () => {
     expect(definitions.get('media-production')).toContain('完整制作规格不是概念方案的重复扩写');
     expect(definitions.get('media-production')).toContain('最小完整结构');
     expect(definitions.get('media-production')).toContain('来源特有的核心命题');
+    expect(definitions.get('media-production')).toContain('前段建立、中段发展/升级、后段后果/方向');
+    expect(definitions.get('media-production')).toContain('四张是单批推理上限');
+    expect(definitions.get('media-production')).toContain('内部覆盖验收');
+    expect(definitions.get('media-production')).toContain('不计为有效覆盖');
+    expect(definitions.get('media-production')).toContain('缩小为开篇、局部场景或已选序列概念');
+    expect(definitions.get('media-production')).toContain('PV 创作重组');
     expect(definitions.get('media-preparation')).toContain('不能冒充已准备首帧');
     expect(definitions.get('media-preparation')).toContain('验收不得放宽上游创意合同');
     expect(definitions.get('media-preparation')).toContain('不要生成候选调用包');

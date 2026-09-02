@@ -10,7 +10,7 @@
       "provenance": "builtin",
       "rootId": "builtin-skills",
       "relativePath": "media-production",
-      "fingerprint": "sha256:e177f718a55f7899fcc794112ac669022ae65045ab3670d2d9bcd3afc7970241"
+      "fingerprint": "sha256:41c50e6f4bddd3b9f7779dfc1f040ce97c2c3476c5bf69851470237beefcf46a"
     }
   },
   "runtimeProfiles": [
@@ -57,7 +57,7 @@
       "id": "comic-volume-planning-workspace",
       "root": "shared-fixtures/comic-volume-planning-workspace",
       "source": "repository",
-      "digest": "sha256:ac66807ae6c0fba1f93c8c928616f9f51641102823733fce705072ee7719873c",
+      "digest": "sha256:cfadee83b8b144313cf73d093a580c83b2294416ed94cdd5d30929d95556e1b1",
       "mutable": true
     }
   ],
@@ -99,6 +99,12 @@
       "visibility": "public"
     },
     {
+      "id": "stratified-volume-concept-design",
+      "file": "cases/stratified-volume-concept-design.json",
+      "group": "regression",
+      "visibility": "public"
+    },
+    {
       "id": "representative-chapter-duration-estimate",
       "file": "cases/representative-chapter-duration-estimate.json",
       "group": "regression",
@@ -120,6 +126,8 @@
   "rubricRefs": [
     "rubrics/creative-shot-spine-quality.json",
     "rubrics/creative-media-design-quality.json",
+    "rubrics/insufficient-source-coverage-quality.json",
+    "rubrics/stratified-source-adaptation-quality.json",
     "rubrics/time-based-production-specification-quality.json"
   ],
   "baselinePolicy": { "mode": "none" },
