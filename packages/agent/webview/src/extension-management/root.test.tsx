@@ -133,6 +133,109 @@ describe('Agent Skill/MCP extension management', () => {
     expect(document.body.textContent).not.toContain('Canonical English routing.');
   });
 
+  it('loads full Skill content on demand and keeps its fingerprint in collapsed technical details', async () => {
+    const getSkillDetail = vi.fn(async () => ({
+      id: 'dsh-skill:bundled:media-preparation',
+      name: 'media-preparation',
+      description: 'Canonical English description.',
+      whenToUse: 'Canonical English routing.',
+      source: 'bundled',
+      provider: 'filesystem',
+      userInvocable: true,
+      modelInvocable: true,
+      content: '# Media preparation\n\nPrepare an exact generation input package.',
+      fingerprint: `sha256:${'b'.repeat(64)}`,
+    }));
+    const runtime: AgentExtensionManagementRuntime = {
+      ...extensionLifecycleMethods(),
+      identity: { windowId: 'window-1' },
+      getSkillDetail,
+      getSnapshot: vi.fn(async () => ({
+        identity: { windowId: 'window-1' },
+        catalogScope: 'global' as const,
+        skills: [
+          {
+            id: 'dsh-skill:bundled:media-preparation',
+            name: 'media-preparation',
+            description: 'Canonical English description.',
+            whenToUse: 'Canonical English routing.',
+            source: 'bundled',
+            provider: 'filesystem',
+            userInvocable: true,
+            modelInvocable: true,
+            enabled: true,
+            manageable: false,
+            removable: false,
+          },
+        ],
+        mcp: [],
+        diagnostics: [],
+      })),
+      dispose: vi.fn(),
+    };
+
+    render(
+      <I18nProvider service={createI18n('zh-cn')}>
+        <AgentExtensionManagementRoot interactive runtime={runtime} />
+      </I18nProvider>,
+    );
+
+    const card = await screen.findByRole('listitem', { name: '媒体准备' });
+    expect(getSkillDetail).not.toHaveBeenCalled();
+    expect(document.body.textContent).not.toContain('Prepare an exact generation input package.');
+
+    fireEvent.click(within(card).getByRole('button'));
+
+    expect(await screen.findByText('$media-preparation')).toBeTruthy();
+    expect(await screen.findByText(/Prepare an exact generation input package/u)).toBeTruthy();
+    expect(getSkillDetail).toHaveBeenCalledOnce();
+    expect(getSkillDetail).toHaveBeenCalledWith({
+      name: 'media-preparation',
+      source: 'bundled',
+    });
+    expect(screen.getAllByText('把已选镜头与真实素材准备成可直接提交的媒体输入包。')).toHaveLength(
+      2,
+    );
+    expect(document.body.textContent).not.toContain('Canonical English routing.');
+
+    const technicalDetails = screen.getByText('技术详情').closest('details');
+    expect(technicalDetails).not.toBeNull();
+    expect(technicalDetails?.open).toBe(false);
+    fireEvent.click(screen.getByText('技术详情'));
+    expect(technicalDetails?.open).toBe(true);
+    expect(within(technicalDetails!).getByText(`sha256:${'b'.repeat(64)}`)).toBeTruthy();
+    expect(within(technicalDetails!).getByText('filesystem')).toBeTruthy();
+  });
+
+  it('keeps a Skill detail read failure local and visible', async () => {
+    const runtime = runtimeWithSkill({
+      id: 'dsh-skill:user-dsh:review',
+      name: 'review',
+      description: 'Review a draft.',
+      source: 'user-dsh',
+      provider: 'filesystem',
+      userInvocable: true,
+      modelInvocable: true,
+    });
+    vi.mocked(runtime.getSkillDetail).mockRejectedValueOnce(
+      new Error('Skill detail is no longer available.'),
+    );
+
+    render(
+      <I18nProvider service={createI18n()}>
+        <AgentExtensionManagementRoot interactive runtime={runtime} />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(
+      within(await screen.findByRole('listitem', { name: 'review' })).getByRole('button'),
+    );
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Skill detail is no longer available.',
+    );
+    expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+
   it('does not apply builtin localization to a project Skill with the same name', async () => {
     const runtime = runtimeWithSkill({
       id: 'dsh-skill:content-authoring',
@@ -371,6 +474,7 @@ describe('Agent Skill/MCP extension management', () => {
       diagnostics: [],
     };
     const runtime: AgentExtensionManagementRuntime = {
+      ...extensionLifecycleMethods(),
       identity: projection.identity,
       getSnapshot: vi.fn(async () => projection),
       addSkill: vi.fn(async () => projection),
@@ -426,6 +530,7 @@ describe('Agent Skill/MCP extension management', () => {
       diagnostics: [],
     };
     const runtime: AgentExtensionManagementRuntime = {
+      ...extensionLifecycleMethods(),
       identity: projection.identity,
       getSnapshot: vi.fn(async () => projection),
       addSkill: vi.fn(async () => projection),
@@ -500,6 +605,17 @@ function extensionLifecycleMethods() {
     throw new Error('Unexpected extension lifecycle mutation.');
   };
   return {
+    getSkillDetail: vi.fn(async (input: { readonly name: string; readonly source: string }) => ({
+      id: `dsh-skill:${input.source}:${input.name}`,
+      name: input.name,
+      description: '',
+      source: input.source,
+      provider: 'filesystem',
+      userInvocable: true,
+      modelInvocable: true,
+      content: `# ${input.name}`,
+      fingerprint: `sha256:${'a'.repeat(64)}`,
+    })),
     addSkill: vi.fn(unsupported),
     setSkillEnabled: vi.fn(unsupported),
     removeSkill: vi.fn(unsupported),

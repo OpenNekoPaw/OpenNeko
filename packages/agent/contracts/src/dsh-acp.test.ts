@@ -12,6 +12,8 @@ import {
   decodeDshAcpMcpIdentityRequest,
   decodeDshAcpMcpServerInput,
   decodeDshAcpSkillMutationRequest,
+  decodeDshAcpSkillDetailProjection,
+  decodeDshAcpSkillDetailRequest,
   decodeDshAcpInboxSnapshot,
   decodeDshAcpInboxEnqueueRequest,
   decodeDshAcpImageAttachmentReadProjection,
@@ -72,6 +74,37 @@ describe('DSH ACP extension contract', () => {
     expect(() => decodeDshAcpExtensionProjection({ ...projection, plugins: [] })).toThrow(
       /must contain exactly/u,
     );
+  });
+
+  it('decodes exact on-demand Skill detail with a canonical content fingerprint', () => {
+    expect(decodeDshAcpSkillDetailRequest({ name: 'review', source: 'user-dsh' })).toEqual({
+      name: 'review',
+      source: 'user-dsh',
+    });
+    expect(
+      decodeDshAcpSkillDetailProjection({
+        name: 'review',
+        description: 'Review drafts.',
+        source: 'user-dsh',
+        provider: 'filesystem',
+        userInvocable: true,
+        modelInvocable: true,
+        content: '# Review',
+        fingerprint: `sha256:${'a'.repeat(64)}`,
+      }),
+    ).toMatchObject({ name: 'review', content: '# Review' });
+    expect(() =>
+      decodeDshAcpSkillDetailProjection({
+        name: 'review',
+        description: 'Review drafts.',
+        source: 'user-dsh',
+        provider: 'filesystem',
+        userInvocable: true,
+        modelInvocable: true,
+        content: '# Review',
+        fingerprint: 'sha256:short',
+      }),
+    ).toThrow(/canonical SHA-256/u);
   });
 
   it('decodes exact Skill and MCP lifecycle payloads', () => {

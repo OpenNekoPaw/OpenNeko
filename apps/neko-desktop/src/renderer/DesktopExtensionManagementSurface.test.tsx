@@ -47,6 +47,9 @@ describe('DesktopExtensionManagementSurface', () => {
     };
     const extensionRuntime: AgentExtensionManagementRuntime = {
       identity: { windowId: 'window-1' },
+      getSkillDetail: vi.fn(async () => {
+        throw new Error('Unexpected Skill detail read in composition test.');
+      }),
       addSkill: vi.fn(async () => emptySnapshot),
       setSkillEnabled: vi.fn(async () => emptySnapshot),
       removeSkill: vi.fn(async () => emptySnapshot),

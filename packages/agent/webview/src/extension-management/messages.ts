@@ -28,6 +28,12 @@ const en = {
   'extension.detail.close': 'Close extension details',
   'extension.detail.identity': 'Identity',
   'extension.detail.invocation': 'Invocation',
+  'extension.detail.invocationEntry': 'Invocation entry',
+  'extension.detail.instructions': 'Skill instructions',
+  'extension.detail.loading': 'Loading Skill instructions…',
+  'extension.detail.technical': 'Technical details',
+  'extension.detail.canonicalName': 'Canonical name',
+  'extension.detail.fingerprint': 'Content fingerprint',
   'extension.detail.modelInvocable': 'Model invocable',
   'extension.detail.notModelInvocable': 'Not model invocable',
   'extension.detail.notUserInvocable': 'Not user invocable',
@@ -55,7 +61,16 @@ const en = {
     'Generate, edit, extend, enhance, compose, split, or prepare images.',
   'skill.catalog.media-production.title': 'Media production',
   'skill.catalog.media-production.summary':
-    'Guide an adaptive path from available sources to a verified deliverable.',
+    'Design source-grounded adaptation decisions, media concepts, shot spines, and production specifications.',
+  'skill.catalog.media-delivery.title': 'Media delivery',
+  'skill.catalog.media-delivery.summary':
+    'Validate and export a completed media project or master against an explicit delivery specification.',
+  'skill.catalog.media-preparation.title': 'Media preparation',
+  'skill.catalog.media-preparation.summary':
+    'Prepare selected shots and real assets as submit-ready image, video, or audio input packets.',
+  'skill.catalog.media-selection.title': 'Media selection',
+  'skill.catalog.media-selection.summary':
+    'Select or reject real media candidates against shot contracts and continuity references.',
   'skill.catalog.scene-to-music.title': 'Scene to music',
   'skill.catalog.scene-to-music.summary':
     'Plan scene-aware background music and hand off to available generation capabilities.',
@@ -74,12 +89,18 @@ const en = {
   'skill.catalog.subtitle-assistant.title': 'Subtitle assistant',
   'skill.catalog.subtitle-assistant.summary':
     'Create, edit, time, translate, import, or export subtitles and captions.',
+  'skill.catalog.sound-generation.title': 'Sound generation',
+  'skill.catalog.sound-generation.summary':
+    'Generate dialogue, narration, ambience, and sound effects from approved text and timing.',
   'skill.catalog.video.title': 'Video generation',
   'skill.catalog.video.summary':
     'Generate or transform one video clip from prompts, images, keyframes, or video references.',
   'skill.catalog.video-editing.title': 'Video editing',
   'skill.catalog.video-editing.summary':
     'Edit timelines, trim or split clips, merge media, add transitions, and adjust timing.',
+  'skill.catalog.video-compositing.title': 'Video compositing',
+  'skill.catalog.video-compositing.summary':
+    'Composite and technically finish existing clips through masks, layers, cleanup, stabilization, repair, or conforming.',
   'skill.catalog.world-creator.title': 'World creation',
   'skill.catalog.world-creator.summary':
     'Create a reviewable world from a concept or authorized source.',
@@ -112,6 +133,12 @@ const zhCn = {
   'extension.detail.close': '关闭扩展详情',
   'extension.detail.identity': '标识',
   'extension.detail.invocation': '调用方式',
+  'extension.detail.invocationEntry': '调用入口',
+  'extension.detail.instructions': 'Skill 内容',
+  'extension.detail.loading': '正在读取 Skill 内容…',
+  'extension.detail.technical': '技术详情',
+  'extension.detail.canonicalName': '规范名称',
+  'extension.detail.fingerprint': '内容指纹',
   'extension.detail.modelInvocable': '模型可调用',
   'extension.detail.notModelInvocable': '模型不可调用',
   'extension.detail.notUserInvocable': '用户不可调用',
@@ -134,7 +161,14 @@ const zhCn = {
   'skill.catalog.image.title': '图像生成与编辑',
   'skill.catalog.image.summary': '生成、编辑、扩展、增强、合成、拆分或准备图像。',
   'skill.catalog.media-production.title': '媒体制作',
-  'skill.catalog.media-production.summary': '根据现有来源规划到可验证交付物的自适应制作路径。',
+  'skill.catalog.media-production.summary':
+    '基于真实来源完成改编判断、媒体创意、镜头主线与制作规格设计。',
+  'skill.catalog.media-delivery.title': '媒体交付',
+  'skill.catalog.media-delivery.summary': '根据明确交付规范验证并导出已完成的媒体项目或母版。',
+  'skill.catalog.media-preparation.title': '媒体准备',
+  'skill.catalog.media-preparation.summary': '把已选镜头与真实素材准备成可直接提交的媒体输入包。',
+  'skill.catalog.media-selection.title': '媒体筛选',
+  'skill.catalog.media-selection.summary': '根据镜头契约与连续性参考选择或淘汰真实媒体候选。',
   'skill.catalog.scene-to-music.title': '场景配乐',
   'skill.catalog.scene-to-music.summary': '规划与场景匹配的背景音乐，并交给当前可用的生成能力。',
   'skill.catalog.script-generation.title': '剧本创作',
@@ -147,11 +181,17 @@ const zhCn = {
   'skill.catalog.storyboard.summary': '探索来源内容，并在明确需要时创建结构化分镜。',
   'skill.catalog.subtitle-assistant.title': '字幕助手',
   'skill.catalog.subtitle-assistant.summary': '创建、编辑、对时、翻译、导入或导出字幕。',
+  'skill.catalog.sound-generation.title': '声音生成',
+  'skill.catalog.sound-generation.summary':
+    '根据已确认文本、表演与时码生成对白、旁白、环境声和音效。',
   'skill.catalog.video.title': '视频生成',
   'skill.catalog.video.summary': '根据提示词、图像、关键帧或视频参考生成或转换单个视频片段。',
   'skill.catalog.video-editing.title': '视频剪辑',
   'skill.catalog.video-editing.summary':
     '编辑时间线、裁剪或拆分片段、合并媒体、添加转场并调整时序。',
+  'skill.catalog.video-compositing.title': '视频合成',
+  'skill.catalog.video-compositing.summary':
+    '通过遮罩、分层、清理、稳定、修复或规格统一处理已有片段。',
   'skill.catalog.world-creator.title': '世界观创作',
   'skill.catalog.world-creator.summary': '根据概念或已授权来源创建可评审世界观。',
 } as const satisfies MessageBundle;

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, posix, relative } from 'node:path';
 import {
@@ -32,7 +32,9 @@ import {
   isModelInvocable,
   isSkillName,
   isUserInvocable,
+  renderSkillContent,
   type SkillCatalogSnapshot,
+  type SkillDefinition,
 } from '@deepseek-ai/dsh-skill';
 import { FileSystemSkillProvider } from '@deepseek-ai/dsh-skill-filesystem';
 import type {} from '@deepseek-ai/dsh-system-prompt';
@@ -50,6 +52,7 @@ import {
   decodeDshAcpInboxEnqueueRequest,
   decodeDshAcpImageAttachmentReadRequest,
   decodeDshAcpSkillInvokeRequest,
+  decodeDshAcpSkillDetailRequest,
   decodeDshAcpMcpIdentityRequest,
   decodeDshAcpMcpServerInput,
   decodeDshAcpSkillMutationRequest,
@@ -671,6 +674,43 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
               ),
             };
           }
+          case DSH_ACP_EXTENSION_METHODS.readSkillDetail: {
+            const request = decodeDshAcpSkillDetailRequest(params);
+            if (!isSkillName(request.name)) {
+              throw RequestError.invalidParams(
+                undefined,
+                `Invalid DSH Skill name: ${request.name}`,
+              );
+            }
+            const snapshot = await readSkillCatalog(ctx, {
+              kind: 'global',
+              cwd: virtualCwd,
+            });
+            const summary = snapshot.skills.find(
+              (skill) => skill.name === request.name && skill.source === request.source,
+            );
+            if (summary !== undefined) {
+              const definition = await ctx.skills.get(request.name, { cwd: virtualCwd });
+              if (definition === undefined || definition.source !== request.source) {
+                throw RequestError.invalidParams(
+                  undefined,
+                  `DSH Skill '${request.name}' changed before its detail could be read.`,
+                );
+              }
+              return projectDshSkillDetail(definition, request.source);
+            }
+            const disabled = await extensionLifecycle.readDisabledSkill(
+              request.name,
+              request.source,
+            );
+            if (disabled === undefined) {
+              throw RequestError.invalidParams(
+                undefined,
+                `DSH Skill '${request.name}' from '${request.source}' is not available.`,
+              );
+            }
+            return projectDshSkillDetail(disabled, request.source);
+          }
           case DSH_ACP_EXTENSION_METHODS.setSkillEnabled: {
             const request = decodeDshAcpSkillMutationRequest(params);
             if (request.enabled === undefined) {
@@ -1136,6 +1176,39 @@ export class DshExtensionLifecycle {
     }
   }
 
+  async readDisabledSkill(name: string, source: string): Promise<SkillDefinition | undefined> {
+    if (source !== 'user-dsh') return undefined;
+    let root: string;
+    try {
+      root = await realpath(this.disabledSkillRoot);
+    } catch (error) {
+      if (hasNodeErrorCode(error, 'ENOENT')) return undefined;
+      throw error;
+    }
+    const context = new Context();
+    const lifecycle = new AbortController();
+    const provider = new FileSystemSkillProvider(
+      context,
+      { signal: lifecycle.signal, invalidate: () => undefined },
+      {
+        providerName: 'openneko-disabled-personal',
+        includeDefaultRoots: false,
+        customSkillDirs: [root],
+        watch: false,
+      },
+    );
+    try {
+      const observation = await provider.list({ cwd: root });
+      const candidates = Array.isArray(observation) ? observation : observation.candidates;
+      const candidate = candidates.find((skill) => skill.name === name);
+      if (candidate === undefined) return undefined;
+      return provider.get(candidate, { cwd: root });
+    } finally {
+      lifecycle.abort();
+      await provider.dispose();
+    }
+  }
+
   async setSkillEnabled(input: {
     readonly name: string;
     readonly source: string;
@@ -1534,6 +1607,21 @@ export function projectDshExtensionCatalog(
     ],
     mcp,
     diagnostics: snapshot.complete ? [] : [{ code: 'skill_catalog_incomplete', count: 1 }],
+  };
+}
+
+export function projectDshSkillDetail(definition: SkillDefinition, source: string) {
+  const effectiveContent = renderSkillContent(definition);
+  return {
+    name: definition.name,
+    description: definition.description,
+    ...(definition.whenToUse === undefined ? {} : { whenToUse: definition.whenToUse }),
+    source,
+    provider: definition.provider,
+    userInvocable: isUserInvocable(definition),
+    modelInvocable: isModelInvocable(definition),
+    content: definition.content,
+    fingerprint: `sha256:${createHash('sha256').update(effectiveContent).digest('hex')}`,
   };
 }
 

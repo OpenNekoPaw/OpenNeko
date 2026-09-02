@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -7,12 +8,14 @@ import { fileURLToPath } from 'node:url';
 import { Session, SessionId, type SessionHeader } from '@deepseek-ai/dsh-session';
 import { CallId, MessageId, createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm';
 import { Context } from '@deepseek-ai/cordis';
+import { renderSkillContent, type SkillDefinition } from '@deepseek-ai/dsh-skill';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
   listOpenNekoSessions,
   DshExtensionLifecycle,
   projectDshExtensionCatalog,
+  projectDshSkillDetail,
   projectContextPressureNotification,
   projectExtensionSessionEvent,
   projectSessionEvent,
@@ -32,6 +35,27 @@ const header = (input: Partial<SessionHeader> & Pick<SessionHeader, 'id'>): Sess
 });
 
 describe('OpenNeko DSH ACP bridge projections', () => {
+  it('projects the effective Host-injected Skill fingerprint instead of a body-only hash', () => {
+    const definition: SkillDefinition = {
+      name: 'review',
+      description: 'Review a draft.',
+      invocation: { modelInvocable: true, userInvocable: true },
+      source: 'bundled',
+      provider: 'openneko-builtin',
+      resourceBase: { kind: 'directory', path: '/skills/review' },
+      content: '# Review\n\nCheck the draft.',
+    };
+
+    const projected = projectDshSkillDetail(definition, definition.source);
+    const expected = `sha256:${createHash('sha256')
+      .update(renderSkillContent(definition))
+      .digest('hex')}`;
+    const bodyOnly = `sha256:${createHash('sha256').update(definition.content).digest('hex')}`;
+
+    expect(projected.fingerprint).toBe(expected);
+    expect(projected.fingerprint).not.toBe(bodyOnly);
+  });
+
   it('moves only personal Skills between enabled and disabled roots and deletes the selected entry', async () => {
     const root = await mkdtemp(join(tmpdir(), 'openneko-dsh-extension-test-'));
     const previousHome = process.env.DSH_HOME;
@@ -55,6 +79,42 @@ describe('OpenNeko DSH ACP bridge projections', () => {
       ).rejects.toMatchObject({
         code: 'ENOENT',
       });
+    } finally {
+      if (previousHome === undefined) delete process.env.DSH_HOME;
+      else process.env.DSH_HOME = previousHome;
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reads an exact disabled personal Skill for on-demand details', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'openneko-dsh-disabled-skill-test-'));
+    const previousHome = process.env.DSH_HOME;
+    process.env.DSH_HOME = root;
+    try {
+      const disabled = join(root, 'disabled-skills', 'review');
+      await mkdir(disabled, { recursive: true });
+      await writeFile(
+        join(disabled, 'SKILL.md'),
+        [
+          '---',
+          'name: review',
+          'description: Review a draft.',
+          '---',
+          '# Review',
+          '',
+          'Check the draft.',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      const lifecycle = new DshExtensionLifecycle({} as Context);
+
+      await expect(lifecycle.readDisabledSkill('review', 'user-dsh')).resolves.toMatchObject({
+        name: 'review',
+        description: 'Review a draft.',
+        content: '# Review\n\nCheck the draft.',
+      });
+      await expect(lifecycle.readDisabledSkill('review', 'bundled')).resolves.toBeUndefined();
     } finally {
       if (previousHome === undefined) delete process.env.DSH_HOME;
       else process.env.DSH_HOME = previousHome;

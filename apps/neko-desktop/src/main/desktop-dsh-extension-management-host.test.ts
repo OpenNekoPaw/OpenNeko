@@ -78,6 +78,33 @@ describe('DesktopDshExtensionManagementHost', () => {
     expect(runtime.client.readExtensions).toHaveBeenCalledTimes(1);
   });
 
+  it('reads exact Skill detail without refreshing or rebuilding the catalog projection', async () => {
+    const runtime = createRuntime();
+    const host = createHost(runtime);
+
+    await expect(
+      host.execute(sender, {
+        requestId: 'request-skill-detail',
+        identity: { windowId: 'window-1' },
+        route: 'skill.detail.get',
+        name: 'review',
+        source: 'bundled',
+      }),
+    ).resolves.toMatchObject({
+      route: 'skill.detail.get',
+      detail: {
+        id: 'dsh-skill:bundled:review',
+        content: '# Review',
+      },
+    });
+    expect(runtime.client.readSkillDetail).toHaveBeenCalledWith({
+      name: 'review',
+      source: 'bundled',
+    });
+    expect(runtime.client.readExtensions).not.toHaveBeenCalled();
+    expect(runtime.refreshConfiguration).not.toHaveBeenCalled();
+  });
+
   it('rejects mutation from a different sender-bound Window', async () => {
     const runtime = createRuntime();
     const host = createHost(runtime);
@@ -119,6 +146,16 @@ function createRuntime() {
         skills: [],
         mcp: [],
         diagnostics: [],
+      })),
+      readSkillDetail: vi.fn(async ({ name, source }) => ({
+        name,
+        description: 'Review drafts.',
+        source,
+        provider: 'filesystem',
+        userInvocable: true,
+        modelInvocable: true,
+        content: '# Review',
+        fingerprint: `sha256:${'c'.repeat(64)}`,
       })),
       setSkillEnabled: vi.fn(async () => undefined),
       removeSkill: vi.fn(async () => undefined),

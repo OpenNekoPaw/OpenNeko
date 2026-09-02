@@ -165,6 +165,34 @@ describe('DshAcpApplicationClient', () => {
     );
   });
 
+  it('reads one exact Skill body and fingerprint on demand', async () => {
+    const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
+    fixture.connection.extMethod = vi.fn(async () => ({
+      name: 'review',
+      description: 'Review drafts.',
+      source: 'user-dsh',
+      provider: 'filesystem',
+      userInvocable: true,
+      modelInvocable: true,
+      content: '# Review',
+      fingerprint: `sha256:${'b'.repeat(64)}`,
+    }));
+    const client = await DshAcpApplicationClient.connect({
+      transport: unusedTransport,
+      virtualCwd: '/virtual/workspace',
+      handlers: createHandlers(),
+      createConnection: fixture.createConnection,
+    });
+
+    await expect(
+      client.readSkillDetail({ name: 'review', source: 'user-dsh' }),
+    ).resolves.toMatchObject({ content: '# Review' });
+    expect(fixture.connection.extMethod).toHaveBeenCalledWith(
+      'openneko/extensions/skill/detail/read',
+      { name: 'review', source: 'user-dsh' },
+    );
+  });
+
   it('uses private extension methods for isolated staged validation and exact scoped observation', async () => {
     const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
     fixture.connection.extMethod = vi.fn(async (method) => {

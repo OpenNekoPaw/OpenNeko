@@ -18,6 +18,7 @@ export const DSH_ACP_EXTENSION_METHODS = {
   invokeSkill: 'openneko/session/skill/invoke',
   readProviderCapabilities: 'openneko/providers/capabilities/read',
   readExtensions: 'openneko/extensions/read',
+  readSkillDetail: 'openneko/extensions/skill/detail/read',
   setSkillEnabled: 'openneko/extensions/skill/enabled/set',
   removeSkill: 'openneko/extensions/skill/remove',
   addMcp: 'openneko/extensions/mcp/add',
@@ -289,6 +290,81 @@ export interface DshAcpExtensionSkill {
   readonly enabled: boolean;
   readonly manageable: boolean;
   readonly removable: boolean;
+}
+
+export interface DshAcpSkillDetailRequest {
+  readonly name: string;
+  readonly source: string;
+}
+
+export interface DshAcpSkillDetailProjection {
+  readonly name: string;
+  readonly description: string;
+  readonly whenToUse?: string;
+  readonly source: string;
+  readonly provider: string;
+  readonly userInvocable: boolean;
+  readonly modelInvocable: boolean;
+  readonly content: string;
+  readonly fingerprint: string;
+}
+
+export function decodeDshAcpSkillDetailRequest(
+  input: Record<string, unknown>,
+): DshAcpSkillDetailRequest {
+  decodeDshAcpJsonPayload(input, 'Skill detail request');
+  requireExactKeys(input, ['name', 'source'], 'Skill detail request');
+  return {
+    name: requireNonEmptyString(input.name, 'Skill detail name'),
+    source: requireNonEmptyString(input.source, 'Skill detail source'),
+  };
+}
+
+export function decodeDshAcpSkillDetailProjection(
+  input: Record<string, unknown>,
+): DshAcpSkillDetailProjection {
+  decodeDshAcpJsonPayload(input, 'Skill detail projection');
+  const keys =
+    input.whenToUse === undefined
+      ? [
+          'name',
+          'description',
+          'source',
+          'provider',
+          'userInvocable',
+          'modelInvocable',
+          'content',
+          'fingerprint',
+        ]
+      : [
+          'name',
+          'description',
+          'whenToUse',
+          'source',
+          'provider',
+          'userInvocable',
+          'modelInvocable',
+          'content',
+          'fingerprint',
+        ];
+  requireExactKeys(input, keys, 'Skill detail projection');
+  const fingerprint = requireNonEmptyString(input.fingerprint, 'Skill detail fingerprint');
+  if (!/^sha256:[a-f0-9]{64}$/u.test(fingerprint)) {
+    throw new Error('Skill detail fingerprint must be a canonical SHA-256 identity.');
+  }
+  return {
+    name: requireNonEmptyString(input.name, 'Skill detail name'),
+    description: requireString(input.description, 'Skill detail description'),
+    ...(input.whenToUse === undefined
+      ? {}
+      : { whenToUse: requireNonEmptyString(input.whenToUse, 'Skill detail whenToUse') }),
+    source: requireNonEmptyString(input.source, 'Skill detail source'),
+    provider: requireNonEmptyString(input.provider, 'Skill detail provider'),
+    userInvocable: requireBoolean(input.userInvocable, 'Skill detail userInvocable'),
+    modelInvocable: requireBoolean(input.modelInvocable, 'Skill detail modelInvocable'),
+    content: requireString(input.content, 'Skill detail content'),
+    fingerprint,
+  };
 }
 
 export interface DshAcpExtensionMcp {

@@ -35,6 +35,66 @@ export const extensionManagementLifecycleScenario = Object.freeze({
     checkpoint('extension-management-skills', skills);
     const skillScreenshot = await screenshot('extension-management-skills');
 
+    const unloadedSkillDetails = await evaluate(`(() => ({
+      contentBlocks: document.querySelectorAll('.extension-detail-overlay__skill-content').length,
+      technicalBlocks: document.querySelectorAll('.extension-detail-overlay__technical').length,
+    }))()`);
+    if (unloadedSkillDetails.contentBlocks !== 0 || unloadedSkillDetails.technicalBlocks !== 0) {
+      throw new Error(
+        `Skill details were loaded before selection: ${JSON.stringify(unloadedSkillDetails)}`,
+      );
+    }
+    await click(`${ROOT} .agent-extension-catalog-row__open`, 0);
+    await waitForSelector(
+      '[role="dialog"].agent-extension-detail-overlay .extension-detail-overlay__skill-content',
+      60_000,
+    );
+    const skillDetail = await evaluate(`(() => {
+      const dialog = document.querySelector('[role="dialog"].agent-extension-detail-overlay');
+      const invocation = dialog?.querySelector('.extension-detail-overlay__inline-code');
+      const content = dialog?.querySelector('.extension-detail-overlay__skill-content');
+      const technical = dialog?.querySelector('.extension-detail-overlay__technical');
+      const tags = dialog?.querySelectorAll('.extension-detail-overlay__tags > span');
+      return {
+        invocation: invocation?.textContent?.trim() ?? '',
+        contentLength: content?.textContent?.trim().length ?? 0,
+        technicalOpen: technical instanceof HTMLDetailsElement ? technical.open : null,
+        fingerprint: technical?.textContent?.includes('sha256:') ?? false,
+        tags: [...(tags ?? [])].map((tag) => tag.textContent?.trim() ?? ''),
+      };
+    })()`);
+    if (
+      !skillDetail.invocation.startsWith('$') ||
+      skillDetail.contentLength < 40 ||
+      skillDetail.technicalOpen !== false ||
+      !skillDetail.fingerprint ||
+      JSON.stringify(skillDetail.tags) !== JSON.stringify(['Skill'])
+    ) {
+      throw new Error(`Skill detail projection is invalid: ${JSON.stringify(skillDetail)}`);
+    }
+    checkpoint('extension-management-skill-detail', skillDetail);
+    const skillDetailScreenshot = await screenshot('extension-management-skill-detail');
+    await click(
+      '[role="dialog"].agent-extension-detail-overlay .extension-detail-overlay__technical > summary',
+    );
+    const technicalDetail = await evaluate(`(() => {
+      const technical = document.querySelector(
+        '[role="dialog"].agent-extension-detail-overlay .extension-detail-overlay__technical'
+      );
+      return {
+        open: technical instanceof HTMLDetailsElement ? technical.open : false,
+        hasFingerprint: technical?.textContent?.includes('sha256:') ?? false,
+      };
+    })()`);
+    if (!technicalDetail.open || !technicalDetail.hasFingerprint) {
+      throw new Error(`Skill technical detail is invalid: ${JSON.stringify(technicalDetail)}`);
+    }
+    checkpoint('extension-management-skill-technical-detail', technicalDetail);
+    const skillTechnicalScreenshot = await screenshot(
+      'extension-management-skill-technical-detail',
+    );
+    await pressKey('Escape');
+
     await click(`${ROOT} [data-capability-integration-tab="mcp"]`);
     await waitForSelector(`${ROOT} [data-extension-add-action="mcp"]`);
     const mcp = await inspect(evaluate, 'mcp');
@@ -76,7 +136,13 @@ export const extensionManagementLifecycleScenario = Object.freeze({
     await pressKey('Escape');
 
     return {
-      screenshots: [skillScreenshot, mcpScreenshot, professionalScreenshot],
+      screenshots: [
+        skillScreenshot,
+        skillDetailScreenshot,
+        skillTechnicalScreenshot,
+        mcpScreenshot,
+        professionalScreenshot,
+      ],
     };
   },
 });

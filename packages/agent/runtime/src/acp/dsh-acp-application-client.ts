@@ -37,6 +37,8 @@ import {
   decodeDshAcpMcpIdentityRequest,
   decodeDshAcpMcpServerInput,
   decodeDshAcpSkillMutationRequest,
+  decodeDshAcpSkillDetailProjection,
+  decodeDshAcpSkillDetailRequest,
   decodeDshAcpInboxEnqueueRequest,
   decodeDshAcpImageAttachmentReadProjection,
   decodeDshAcpImageAttachmentReadRequest,
@@ -68,6 +70,7 @@ import {
   type DshAcpMcpServerInput,
   type DshAcpArchivedSessionsProjection,
   type DshAcpSkillObservationProjection,
+  type DshAcpSkillDetailProjection,
   type DshAcpStagedSkillValidationProjection,
 } from '@neko/agent-contracts/dsh-acp';
 import type { DshSkillAuthoringLayout } from '@neko/agent-contracts/dsh-skill-authoring';
@@ -328,6 +331,17 @@ export class DshAcpApplicationClient {
   async readExtensions(): Promise<DshAcpExtensionProjection> {
     const response = await this.connection.extMethod(DSH_ACP_EXTENSION_METHODS.readExtensions, {});
     return decodeDshAcpExtensionProjection(response);
+  }
+
+  async readSkillDetail(input: {
+    readonly name: string;
+    readonly source: string;
+  }): Promise<DshAcpSkillDetailProjection> {
+    const request = decodeDshAcpSkillDetailRequest({ ...input });
+    const response = await this.connection.extMethod(DSH_ACP_EXTENSION_METHODS.readSkillDetail, {
+      ...request,
+    });
+    return decodeDshAcpSkillDetailProjection(response);
   }
 
   async readProviderCapabilities(): Promise<DshAcpProviderCapabilityProjection> {

@@ -624,6 +624,7 @@ function createClient(
     invokeSkill: async () => unsupported(),
     readProviderCapabilities: async () => unsupported(),
     readExtensions: async () => unsupported(),
+    readSkillDetail: async () => unsupported(),
     validateStagedSkill: async () => unsupported(),
     observeSkill: async () => unsupported(),
     setSkillEnabled: async () => unsupported(),
