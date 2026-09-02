@@ -19,7 +19,7 @@
         "required": true
       }
     ],
-    "expectedResult": "The response distinguishes the approved shot intent from missing source references and operation schema, marks the unit blocked, and names the minimum next input without claiming generation readiness.",
+    "expectedResult": "The response distinguishes the approved shot intent from missing resolvable source references and operation schema, marks the unit blocked, and names the minimum next input without inventing a generic reference role, a still prompt, a video-motion packet, or generation readiness.",
     "expectedFailure": "Invented asset references, guessed Tool parameters, a generic production workflow, or a false ready/generated claim fails."
   },
   "fixtureRefs": ["empty-workspace"],
@@ -44,7 +44,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-preparation",
-        "fingerprint": "sha256:10d23dbaeac21cca038ee88c0ed466ad4a794d4c41a810f7b3161522aa998136"
+        "fingerprint": "sha256:d76b7d0dad282586ce4ef81f7dd3ba7c78569f54e6963bb7f7fe53a97902eb69"
       },
       "status": "injected",
       "evidenceRef": "preparation-facts"
@@ -60,7 +60,7 @@
       "id": "no-false-success",
       "kind": "final-answer",
       "mode": "not-contains",
-      "text": ["已准备完成", "已生成", "generationType"],
+      "text": ["已准备完成", "可提交", "可执行输入单元", "已生成", "generationType"],
       "evidenceRef": "preparation-facts"
     }
   ],

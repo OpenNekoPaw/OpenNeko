@@ -21,7 +21,7 @@
         "required": true
       }
     ],
-    "expectedResult": "The first turn creates the source-specific PV concept, a compact production roadmap and exactly one next action to turn the current reviewed concept into a Markdown storyboard. The bare continuation performs that action from the existing artifact without restarting source analysis, emits an updateable scene/shot table with stable local row labels, and recommends one following preparation action.",
+    "expectedResult": "The first turn creates the source-specific PV concept, a compact production roadmap and exactly one next action to turn the current reviewed concept into a Markdown storyboard. The bare continuation performs that action from the existing artifact without restarting source analysis, preserves provisional format choices as provisional, emits an updateable scene/shot table in which each SH row is one continuous take with the real screenplay source named, and recommends one following preparation action without claiming any row is executable or submit-ready.",
     "expectedFailure": "Asking what continue means, repeating the concept or source analysis, skipping directly to generation, creating approval or workflow-state objects, replacing the Markdown table with a new structured domain model, or offering multiple next actions fails."
   },
   "fixtureRefs": ["creative-planning-workspace"],
@@ -31,7 +31,7 @@
     {
       "id": "design",
       "kind": "submit",
-      "prompt": "读取 @screenplay.fountain。设计一支 60 秒动画 PV：完成当前创意与镜头主线，保留简洁整体制作路线，并把唯一推荐下一步设为整理可更新的 Markdown 分镜表。不执行生成或剪辑。"
+      "prompt": "读取 @screenplay.fountain。设计一支动画 PV：片长 60 秒、画幅 2.39:1 都只是暂定工作基准。完成当前创意与镜头主线，保留简洁整体制作路线，并把唯一推荐下一步设为整理可更新的 Markdown 逐镜制作表。不执行生成或剪辑。"
     },
     { "id": "design-idle", "kind": "wait-for-idle", "timeoutMs": 180000 },
     { "id": "continue", "kind": "submit", "prompt": "继续" },
@@ -52,7 +52,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:a23366a40f5ea8c83c4b7b6099a7d420b49f1c8b9c591691f381a67aeaae40f2"
+        "fingerprint": "sha256:1c4d243d8ac71d944e0a22b7f4aa2bdabca3ebd8b80475775f3ad579a2b55862"
       },
       "status": "injected",
       "evidenceRef": "workspace-creative-continue-facts"
@@ -66,7 +66,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "storyboard",
-        "fingerprint": "sha256:d98f3afe34844197f6a278b016797d8e1bb574120d12295fc75eca2da88ca5b0"
+        "fingerprint": "sha256:abe11a4e523adc8c63ca4680714a393ed9185eee4d46afa6cfa6c743e9351f91"
       },
       "status": "injected",
       "evidenceRef": "workspace-creative-continue-facts"
@@ -75,14 +75,14 @@
       "id": "continued-output",
       "kind": "final-answer",
       "mode": "contains",
-      "text": ["Mara", "SC01", "SH01", "画面", "动作", "声音", "下一步"],
+      "text": ["Mara", "SC01", "SH01", "画面", "动作", "声音", "screenplay.fountain", "暂定", "下一步"],
       "evidenceRef": "workspace-creative-continue-facts"
     },
     {
       "id": "no-restart-or-generation",
       "kind": "final-answer",
       "mode": "not-contains",
-      "text": ["重新分析", "完整制作规格", "审批记录", "工作流状态", "已生成"],
+      "text": ["重新分析", "完整制作规格", "审批记录", "工作流状态", "已生成", "已确认", "可执行输入单元", "可提交"],
       "evidenceRef": "workspace-creative-continue-facts"
     },
     {

@@ -46,7 +46,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:a23366a40f5ea8c83c4b7b6099a7d420b49f1c8b9c591691f381a67aeaae40f2"
+        "fingerprint": "sha256:1c4d243d8ac71d944e0a22b7f4aa2bdabca3ebd8b80475775f3ad579a2b55862"
       },
       "status": "injected",
       "evidenceRef": "workspace-pv-design-facts"

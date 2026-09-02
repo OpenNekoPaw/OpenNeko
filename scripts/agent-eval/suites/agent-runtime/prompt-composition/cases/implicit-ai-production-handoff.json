@@ -46,7 +46,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:a23366a40f5ea8c83c4b7b6099a7d420b49f1c8b9c591691f381a67aeaae40f2"
+        "fingerprint": "sha256:1c4d243d8ac71d944e0a22b7f4aa2bdabca3ebd8b80475775f3ad579a2b55862"
       },
       "status": "injected",
       "evidenceRef": "implicit-handoff-facts"
@@ -60,7 +60,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-preparation",
-        "fingerprint": "sha256:10d23dbaeac21cca038ee88c0ed466ad4a794d4c41a810f7b3161522aa998136"
+        "fingerprint": "sha256:d76b7d0dad282586ce4ef81f7dd3ba7c78569f54e6963bb7f7fe53a97902eb69"
       },
       "status": "injected",
       "evidenceRef": "implicit-handoff-facts"

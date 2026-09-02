@@ -5,7 +5,7 @@
   "target": {
     "kind": "prompt",
     "id": "system-prompt-composition",
-    "contractHash": "sha256:cc27e9f99c31f904075c6609126ff40378fbe8cb29d3910223d732e448efc0c4"
+    "contractHash": "sha256:a6e451d0ca8e901c81e0214782f70b761a81a2a735338d47abe312d553a951e3"
   },
   "runtimeProfiles": [
     {

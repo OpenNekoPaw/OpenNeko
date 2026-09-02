@@ -20,7 +20,7 @@
         "required": true
       }
     ],
-    "expectedResult": "The Agent uses the established early, middle and late evidence to create one causal 60-second concept: Sera carries the seed case upward before sunrise, the tower's mistaken identity and drones escalate the conflict, and her choice to open the case causes roots and sunrise to transform the ending. It distinguishes observed source facts from any proposed PV recomposition and does not fall back to another sampling plan or claim complete plot coverage.",
+    "expectedResult": "The Agent uses the established early, middle and late evidence to create one causal 60-second concept: Sera carries the seed case upward before sunrise, the tower's mistaken identity and drones escalate the conflict, and her choice to open the case causes roots and sunrise to transform the ending. The durable artifact includes a compact early/middle/late source-to-decision map and labels source fact, interpretation, and creative recomposition at the beats where each is used. It does not fall back to another sampling plan or claim complete plot coverage.",
     "expectedFailure": "Ignoring one of the three evidence regions, repeating only atmosphere or character appearance, replacing the causal spine with a generic tower action reel, presenting the architect announcement as confirmed identity, inventing unsupported source facts, claiming the entire plot is covered, returning another sampling plan, or invoking media generation fails."
   },
   "fixtureRefs": ["comic-volume-planning-workspace"],
@@ -49,7 +49,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:a23366a40f5ea8c83c4b7b6099a7d420b49f1c8b9c591691f381a67aeaae40f2"
+        "fingerprint": "sha256:1c4d243d8ac71d944e0a22b7f4aa2bdabca3ebd8b80475775f3ad579a2b55862"
       },
       "status": "injected",
       "evidenceRef": "stratified-concept-facts"
@@ -71,7 +71,7 @@
       "id": "source-specific-output",
       "kind": "final-answer",
       "mode": "contains",
-      "text": ["Sera", "种子", "高塔", "日出"],
+      "text": ["Sera", "种子", "高塔", "日出", "来源", "直接观察", "创作决定", "依据性质", "创作重组"],
       "evidenceRef": "stratified-concept-facts"
     },
     {
