@@ -1,4 +1,5 @@
 import {
+  contentLocatorsEqual,
   isContentLocator,
   isWorkspaceFileContentLocator,
   type ContentEntrySelector,
@@ -6,9 +7,11 @@ import {
 } from './contracts';
 
 export const CONTENT_IMAGE_DSH_TOOL_NAME = 'openneko_read_image' as const;
+export const CONTENT_IMAGES_DSH_TOOL_NAME = 'openneko_read_images' as const;
 export const CONTENT_IMAGE_DSH_TOOL_OPERATION = 'read-chunk' as const;
 export const CONTENT_IMAGE_DSH_CHUNK_BYTES = 128 * 1024;
 export const CONTENT_IMAGE_DSH_DETAILS = ['overview', 'original'] as const;
+export const CONTENT_IMAGES_DSH_MAX_SOURCES = 4;
 
 export type ContentImageDshDetail = (typeof CONTENT_IMAGE_DSH_DETAILS)[number];
 
@@ -52,6 +55,16 @@ export const CONTENT_IMAGE_DSH_TOOL_PARAMETERS = {
   },
 } as const;
 
+export const CONTENT_IMAGES_DSH_TOOL_PARAMETERS = {
+  sources: {
+    type: 'array',
+    items: CONTENT_IMAGE_DSH_SOURCE_SCHEMA,
+    required: true,
+    description:
+      'One to four distinct image ContentLocators in comparison order. The result is one overview contact sheet; use openneko_read_image only after selecting a page for close inspection.',
+  },
+} as const;
+
 export type ContentImageDshSource = WorkspaceFileContentLocator & {
   readonly selector?: ContentEntrySelector;
 };
@@ -59,6 +72,10 @@ export type ContentImageDshSource = WorkspaceFileContentLocator & {
 export interface ContentImageDshToolInput {
   readonly source: ContentImageDshSource;
   readonly detail: ContentImageDshDetail;
+}
+
+export interface ContentImagesDshToolInput {
+  readonly sources: readonly ContentImageDshSource[];
 }
 
 export interface ContentImageDshChunkRequest {
@@ -94,6 +111,23 @@ export function decodeContentImageDshToolInput(value: unknown): ContentImageDshT
     source: decodeContentImageDshToolSource(record.source),
     detail: decodeContentImageDshDetail(record.detail),
   };
+}
+
+export function decodeContentImagesDshToolInput(value: unknown): ContentImagesDshToolInput {
+  const record = requireExactRecord(value, ['sources'], 'Content image overview arguments');
+  if (!Array.isArray(record.sources)) {
+    throw new Error('sources must be an array.');
+  }
+  if (record.sources.length < 1 || record.sources.length > CONTENT_IMAGES_DSH_MAX_SOURCES) {
+    throw new Error(`sources must contain between 1 and ${CONTENT_IMAGES_DSH_MAX_SOURCES} images.`);
+  }
+  const sources = record.sources.map(decodeContentImageDshToolSource);
+  for (let index = 0; index < sources.length; index += 1) {
+    if (sources.slice(0, index).some((source) => contentLocatorsEqual(source, sources[index]!))) {
+      throw new Error(`sources contains a duplicate ContentLocator at index ${index}.`);
+    }
+  }
+  return { sources };
 }
 
 export function decodeContentImageDshChunkRequest(

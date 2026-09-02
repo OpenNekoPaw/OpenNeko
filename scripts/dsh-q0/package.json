@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "qualify": "pnpm --dir ../../packages/dsh-bridge build && pnpm --dir ../../packages/agent/dsh-plugin build && pnpm --dir ../../packages/generation/dsh-plugin build && pnpm --dir ../../packages/canvas/dsh-plugin build && node src/qualify.mjs",
+    "qualify": "pnpm --dir ../../packages/dsh-bridge build && pnpm --dir ../../packages/agent/dsh-plugin build && pnpm --dir ../../packages/generation/dsh-plugin build && pnpm --dir ../../packages/canvas/dsh-plugin build && pnpm --dir ../../packages/content/dsh-plugin build && node src/qualify.mjs",
     "qualify:draft-input-catalog": "pnpm --dir ../../packages/dsh-bridge build && node src/qualify.mjs --draft-input-catalog-only",
     "qualify:model-transition": "pnpm --dir ../../packages/dsh-bridge build && node src/qualify.mjs --session-model-transition-only",
     "test": "node --test src/*.test.mjs"

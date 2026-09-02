@@ -92,6 +92,7 @@ test('rejects dual runtime, duplicate Tool or MCP, and wildcard Plugin registrat
       'openneko_document',
       'openneko_character',
       'openneko_read_image',
+      'openneko_read_images',
       'openneko_world',
     ],
     mcpContributions: ['official.browser'],

@@ -5,9 +5,13 @@ import {
   CONTENT_IMAGE_DSH_DETAILS,
   CONTENT_IMAGE_DSH_TOOL_NAME,
   CONTENT_IMAGE_DSH_TOOL_PARAMETERS,
+  CONTENT_IMAGES_DSH_MAX_SOURCES,
+  CONTENT_IMAGES_DSH_TOOL_NAME,
+  CONTENT_IMAGES_DSH_TOOL_PARAMETERS,
   decodeContentImageDshChunk,
   decodeContentImageDshChunkRequest,
   decodeContentImageDshToolInput,
+  decodeContentImagesDshToolInput,
 } from './image-dsh-tool';
 
 const source = {
@@ -31,6 +35,42 @@ describe('Content image DSH contract', () => {
       source,
       offset: 0,
     });
+  });
+
+  it('accepts one to four distinct overview sources and rejects unbounded shapes', () => {
+    const second = {
+      ...source,
+      selector: { kind: 'entry' as const, path: 'OPS/images/page-2.png' },
+    };
+    expect(CONTENT_IMAGES_DSH_TOOL_NAME).toBe('openneko_read_images');
+    expect(CONTENT_IMAGES_DSH_MAX_SOURCES).toBe(4);
+    expect(CONTENT_IMAGES_DSH_TOOL_PARAMETERS.sources).toMatchObject({
+      type: 'array',
+      required: true,
+    });
+    expect(decodeContentImagesDshToolInput({ sources: [source, second] })).toEqual({
+      sources: [source, second],
+    });
+    expect(() => decodeContentImagesDshToolInput({ sources: [] })).toThrow(/between 1 and 4/u);
+    expect(() => decodeContentImagesDshToolInput({ sources: [source, second, source] })).toThrow(
+      /duplicate ContentLocator at index 2/u,
+    );
+    expect(() =>
+      decodeContentImagesDshToolInput({
+        sources: [
+          source,
+          second,
+          { ...source, file: { ...source.file, path: 'other.epub' } },
+          second,
+        ],
+        detail: 'original',
+      }),
+    ).toThrow(/must contain exactly sources/u);
+    expect(() =>
+      decodeContentImagesDshToolInput({
+        sources: [source, second, source, second, source],
+      }),
+    ).toThrow(/between 1 and 4/u);
   });
 
   it('rejects raw paths, extra fields, and invalid offsets', () => {

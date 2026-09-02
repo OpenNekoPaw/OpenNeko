@@ -10,8 +10,7 @@
       "visible Desktop submit",
       "openneko_document read-images",
       "document-entry ContentLocator",
-      "openneko_read_image",
-      "overview-detail screening batch",
+      "openneko_read_images contact-sheet overview",
       "selected original-detail confirmation",
       "Host-authorized Content bytes",
       "DSH durable attachment",
@@ -35,7 +34,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "读取工作区 synthetic-document.epub 中的两张内嵌图片并报告每张图黑色区域里的四位字符。必须先调用 openneko_document 的 read-images 获得原样 ContentLocator；第一批只用 detail=overview 读取这两张图并先形成筛选结论，然后只对包含 N7Q4 的入选页面用 detail=original 复核一次。不得以 original 读取另一张图，不要使用原始解压路径、不要猜测。最终列出两组字符并回复 OVERVIEW_THEN_ORIGINAL_OK。"
+      "prompt": "读取工作区 synthetic-document.epub 中的两张内嵌图片并报告每张图黑色区域里的四位字符。必须先调用 openneko_document 的 read-images 获得原样 ContentLocator；第一批必须只调用一次 openneko_read_images，把两张图作为一张低清联系表总览并先形成筛选结论；然后只对包含 N7Q4 的入选页面调用一次 openneko_read_image detail=original 复核。不得对任何页面调用 openneko_read_image overview，不得以 original 读取另一张图，不要使用原始解压路径、不要猜测。最终列出两组字符并回复 OVERVIEW_THEN_ORIGINAL_OK。"
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 1200000 }
   ],
@@ -61,10 +60,20 @@
     {
       "id": "content-image-overview",
       "kind": "tool-call",
-      "name": "openneko_read_image",
+      "name": "openneko_read_images",
       "status": "success",
-      "expectedArguments": { "detail": "overview" },
-      "resultIncludes": { "detail": "overview" },
+      "expectedArguments": {
+        "sources": [
+          {
+            "file": { "authority": "workspace", "path": "synthetic-document.epub" },
+            "selector": { "kind": "entry", "path": "OEBPS/images/page-1.png" }
+          },
+          {
+            "file": { "authority": "workspace", "path": "synthetic-document.epub" },
+            "selector": { "kind": "entry", "path": "OEBPS/images/page-2.png" }
+          }
+        ]
+      },
       "evidenceRef": "document-image-facts"
     },
     {

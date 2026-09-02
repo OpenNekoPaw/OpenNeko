@@ -222,6 +222,7 @@ export function validateCanonicalAgentRegistrationGraph(graph) {
       'openneko_document',
       'openneko_generation',
       'openneko_read_image',
+      'openneko_read_images',
       'openneko_world',
     ],
     'Tool',
@@ -513,12 +514,13 @@ async function checkCanonicalSourceEvidence(root, findings) {
   if (
     !documentToolsSource.includes('DOCUMENT_DSH_TOOL_NAME') ||
     !documentToolsSource.includes('CONTENT_IMAGE_DSH_TOOL_NAME') ||
+    !documentToolsSource.includes('CONTENT_IMAGES_DSH_TOOL_NAME') ||
     !documentToolsSource.includes("from '@neko/content-domain/document'") ||
     !/ctx\.tools\.register\s*\(/u.test(documentToolsSource) ||
-    !/imageCtx\.tools\.register\s*\(/u.test(documentToolsSource)
+    countMatches(documentToolsSource, /imageCtx\.tools\.register\s*\(/gu) !== 2
   ) {
     findings.push(
-      'Content DSH plugin does not register exact openneko_document and openneko_read_image Tools',
+      'Content DSH plugin does not register exact openneko_document, openneko_read_image and openneko_read_images Tools',
     );
   }
   if (
@@ -554,9 +556,12 @@ async function checkCanonicalSourceEvidence(root, findings) {
         ...Array(countMatches(documentToolsSource, /ctx\.tools\.register\s*\(/gu)).fill(
           'openneko_document',
         ),
-        ...Array(countMatches(documentToolsSource, /imageCtx\.tools\.register\s*\(/gu)).fill(
-          'openneko_read_image',
-        ),
+        ...(documentToolsSource.includes('CONTENT_IMAGE_DSH_TOOL_NAME')
+          ? ['openneko_read_image']
+          : []),
+        ...(documentToolsSource.includes('CONTENT_IMAGES_DSH_TOOL_NAME')
+          ? ['openneko_read_images']
+          : []),
         ...Array(countMatches(worldToolsSource, /ctx\.tools\.register\s*\(/gu)).fill(
           'openneko_world',
         ),
