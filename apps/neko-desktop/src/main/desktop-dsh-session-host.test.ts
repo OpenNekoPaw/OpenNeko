@@ -914,6 +914,118 @@ describe('Desktop DSH Session Host', () => {
     ]);
   });
 
+  it('projects Tool result images and resolves their exact Conversation preview lazily', async () => {
+    const projection = new DshAcpProjection();
+    const attachment = {
+      attachmentId: 'attachment-tool-overview',
+      mediaType: 'image/jpeg' as const,
+      bytes: 4,
+      width: 640,
+      height: 480,
+    };
+    projection.acceptSessionUpdate({
+      sessionId: identity.dshSessionId,
+      _meta: { opennekoSequence: 0, opennekoTurn: 0 },
+      update: {
+        sessionUpdate: 'tool_call',
+        toolCallId: 'tool-read-images',
+        title: 'openneko_read_images',
+        status: 'pending',
+      },
+    });
+    projection.acceptSessionUpdate({
+      sessionId: identity.dshSessionId,
+      _meta: { opennekoSequence: 1, opennekoTurn: 0 },
+      update: {
+        sessionUpdate: 'tool_call_update',
+        toolCallId: 'tool-read-images',
+        status: 'completed',
+        content: [
+          { type: 'content', content: { type: 'text', text: 'A–D overview' } },
+          {
+            type: 'content',
+            content: {
+              type: 'resource_link',
+              name: 'openneko-image-overview.jpg',
+              uri: `openneko-dsh-attachment:${encodeURIComponent(JSON.stringify(attachment))}`,
+              mimeType: 'image/jpeg',
+            },
+          },
+        ],
+      },
+    });
+    const readImageAttachment = vi.fn(async () => ({ attachment, data: 'YWJjZA==' }));
+    let readResource: ((signal: AbortSignal) => Promise<Uint8Array>) | undefined;
+    const projectImagePreview = vi.fn(
+      (input: { readonly read: (signal: AbortSignal) => Promise<Uint8Array> }) => {
+        readResource = input.read;
+        return {
+          url: 'openneko://resource/lease-tool/image',
+          mediaType: 'image/jpeg' as const,
+          byteLength: 4,
+          width: 640,
+          height: 480,
+        };
+      },
+    );
+    const host = createHost({ projection, readImageAttachment, projectImagePreview });
+
+    const result = requireSessionResult(
+      await host.execute(
+        { webContentsId: 1, frameUrl: 'openneko://app' },
+        request('submit', {
+          input: {
+            kind: 'message',
+            text: 'continue',
+            references: [],
+            images: [],
+            contextPayloads: [],
+          },
+        }),
+      ),
+    );
+
+    expect(result.projection.events).toContainEqual({
+      kind: 'tool',
+      turn: 0,
+      toolCallId: 'tool-read-images',
+      title: 'openneko_read_images',
+      status: 'completed',
+      content: [
+        { type: 'text', text: 'A–D overview' },
+        {
+          type: 'image',
+          label: 'openneko-image-overview.jpg',
+          attachment: {
+            attachmentId: 'attachment-tool-overview',
+            mediaType: 'image/jpeg',
+            byteLength: 4,
+            width: 640,
+            height: 480,
+          },
+        },
+      ],
+    });
+
+    await host.execute(
+      { webContentsId: 1, frameUrl: 'openneko://app' },
+      {
+        requestId: 'request-tool-image-preview',
+        operation: 'image-preview',
+        windowId: 'window-1',
+        rendererSessionId: 'renderer-1',
+        conversationId: identity.conversationId,
+        attachmentId: 'attachment-tool-overview',
+      },
+    );
+    expect(readImageAttachment).not.toHaveBeenCalled();
+    await readResource?.(new AbortController().signal);
+    expect(readImageAttachment).toHaveBeenCalledWith(
+      identity.conversationId,
+      'attachment-tool-overview',
+    );
+  });
+
   it('projects only an exact Conversation image through a sender-bound lazy resource reader', async () => {
     const projection = new DshAcpProjection();
     const attachment = {
@@ -1506,6 +1618,20 @@ describe('Desktop DSH Session Host', () => {
         toolCallId: 'tool-invalid',
         title: 'Invalid detail',
         status: 'pending',
+        content: [
+          {
+            type: 'content',
+            content: { type: 'text', text: 'Valid sibling content' },
+          },
+          {
+            type: 'content',
+            content: {
+              type: 'resource_link',
+              name: 'broken.jpg',
+              uri: 'openneko-dsh-attachment:not-json',
+            },
+          },
+        ],
         rawInput: { invalid: undefined },
       },
     });
@@ -1540,12 +1666,17 @@ describe('Desktop DSH Session Host', () => {
         kind: 'diagnostic',
         code: 'ACP_TOOL_PAYLOAD_INVALID',
       }),
+      expect.objectContaining({
+        kind: 'diagnostic',
+        code: 'ACP_TOOL_CONTENT_INVALID',
+      }),
       {
         kind: 'tool',
         toolCallId: 'tool-invalid',
         turn: 0,
         status: 'pending',
         title: 'Invalid detail',
+        content: [{ type: 'text', text: 'Valid sibling content' }],
       },
     ]);
   });

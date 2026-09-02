@@ -2183,6 +2183,60 @@ describe('DshAgentView content-creation composer', () => {
     expect(screen.getByText('clipboard.png')).toBeTruthy();
     expect(screen.getByText('clipboard-2.png')).toBeTruthy();
   });
+
+  it('folds Tool result image evidence with the exact Tool input and output details', async () => {
+    const resolvePreview = vi.fn(async () => ({
+      url: 'openneko://resource/lease-tool/image',
+      mediaType: 'image/jpeg' as const,
+      byteLength: 128,
+      width: 640,
+      height: 480,
+    }));
+    const view = renderToolImage(resolvePreview);
+
+    expect(view.container.querySelector('[data-agent-tool-images]')).toBeNull();
+    expect(resolvePreview).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /工作进度.*1 项操作已完成/u }));
+
+    expect(view.container.querySelector('[data-agent-tool-images]')).toBeNull();
+    expect(resolvePreview).not.toHaveBeenCalled();
+    const toolButton = screen.getByRole('button', { name: /openneko_read_images.*已完成/u });
+    expect(toolButton.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(toolButton);
+
+    await waitFor(() => {
+      expect(
+        view.container
+          .querySelector('[data-agent-message-image="true"]')
+          ?.getAttribute('data-image-preview-status'),
+      ).toBe('ready');
+    });
+    expect(resolvePreview).toHaveBeenCalledWith('attachment-tool-overview');
+    expect(toolButton.getAttribute('aria-expanded')).toBe('true');
+    const toolCard = view.container.querySelector('[data-agent-tool-call-id="tool-read-images"]');
+    const toolDetails = toolCard?.querySelector('.agent-tool-details');
+    expect(toolDetails?.querySelector('[data-agent-tool-images="tool-read-images"]')).toBeTruthy();
+    expect(
+      view.container.querySelector(
+        '[data-agent-tool-activity] > .agent-inline-card > [data-agent-tool-images]',
+      ),
+    ).toBeNull();
+    expect(
+      view.container.querySelector('.agent-message-image-thumbnail')?.getAttribute('src'),
+    ).toBe('openneko://resource/lease-tool/image');
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '打开图片预览: openneko-image-overview.jpg' }),
+    );
+    expect(screen.getByAltText('openneko-image-overview.jpg').getAttribute('src')).toBe(
+      'openneko://resource/lease-tool/image',
+    );
+
+    fireEvent.click(toolButton);
+    expect(toolButton.getAttribute('aria-expanded')).toBe('false');
+    expect(toolCard?.querySelector('.agent-tool-details')).toBeNull();
+    expect(toolCard?.querySelector('[data-agent-tool-images]')).toBeNull();
+  });
 });
 
 function renderImageMessage(
@@ -2220,6 +2274,65 @@ function renderImageMessage(
                   height: 1,
                 },
               })),
+            ],
+          },
+        ],
+      }}
+      configuring={false}
+      draft=""
+      loading={false}
+      permissions={[]}
+      runtime={{ status: 'running' }}
+      submitting={false}
+      onCancelPermission={vi.fn()}
+      onCancelTurn={vi.fn()}
+      onDecidePermission={vi.fn()}
+      onDraftChange={vi.fn()}
+      onModelChange={vi.fn()}
+      onPermissionPresetChange={vi.fn()}
+      onResolveImageAttachmentPreview={onResolveImageAttachmentPreview}
+      onRestartRuntime={vi.fn()}
+      onSubmit={vi.fn()}
+    />,
+  );
+}
+
+function renderToolImage(
+  onResolveImageAttachmentPreview: NonNullable<
+    React.ComponentProps<typeof DshAgentView>['onResolveImageAttachmentPreview']
+  >,
+) {
+  return renderAgent(
+    <DshAgentView
+      agentSurfaceId="surface-tool-image"
+      surfaceKind="workspace"
+      conversationId="conversation-tool-image"
+      projection={{
+        conversationId: 'conversation-tool-image',
+        dshSessionId: 'dsh-tool-image',
+        title: 'Tool image review',
+        todos: [],
+        inbox: { nextTurn: [], nextStep: [] },
+        events: [
+          {
+            kind: 'tool',
+            turn: 0,
+            toolCallId: 'tool-read-images',
+            title: 'openneko_read_images',
+            status: 'completed',
+            content: [
+              { type: 'text', text: 'A–D overview' },
+              {
+                type: 'image',
+                label: 'openneko-image-overview.jpg',
+                attachment: {
+                  attachmentId: 'attachment-tool-overview',
+                  mediaType: 'image/jpeg',
+                  byteLength: 128,
+                  width: 640,
+                  height: 480,
+                },
+              },
             ],
           },
         ],

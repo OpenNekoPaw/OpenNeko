@@ -58,6 +58,19 @@ describe('DSH transcript presentation', () => {
         title: 'openneko_document',
         status: 'pending',
         rawInput: { operation: 'read' },
+        content: [
+          {
+            type: 'image',
+            label: 'overview.jpg',
+            attachment: {
+              attachmentId: 'attachment-overview',
+              mediaType: 'image/jpeg',
+              byteLength: 128,
+              width: 640,
+              height: 480,
+            },
+          },
+        ],
       },
       {
         kind: 'tool',
@@ -101,6 +114,19 @@ describe('DSH transcript presentation', () => {
           status: 'completed',
           rawInput: { operation: 'read' },
           rawOutput: { pages: 4 },
+          content: [
+            {
+              type: 'image',
+              label: 'overview.jpg',
+              attachment: {
+                attachmentId: 'attachment-overview',
+                mediaType: 'image/jpeg',
+                byteLength: 128,
+                width: 640,
+                height: 480,
+              },
+            },
+          ],
         },
         {
           kind: 'tool',

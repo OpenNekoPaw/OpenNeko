@@ -50,6 +50,14 @@ export type DshSessionUserMessageBlock =
       readonly contentLocator: ContentLocator;
     };
 
+export type DshSessionToolContentBlock =
+  | { readonly type: 'text'; readonly text: string }
+  | {
+      readonly type: 'image';
+      readonly label: string;
+      readonly attachment: DshSessionImageAttachmentIdentity;
+    };
+
 export interface DshSessionImageAttachmentIdentity {
   readonly attachmentId: string;
   readonly mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
@@ -101,6 +109,7 @@ export type DshSessionHostEvent =
       readonly turn: number;
       readonly status: 'pending' | 'in_progress' | 'completed' | 'failed';
       readonly title?: string;
+      readonly content?: readonly DshSessionToolContentBlock[];
       readonly rawInput?: DshAcpJsonValue;
       readonly rawOutput?: DshAcpJsonValue;
     }
@@ -1376,7 +1385,7 @@ function parseEvent(value: unknown): DshSessionHostEvent {
   if (record.kind === 'tool') {
     requireAllowedKeys(
       record,
-      ['kind', 'toolCallId', 'turn', 'status', 'title', 'rawInput', 'rawOutput'],
+      ['kind', 'toolCallId', 'turn', 'status', 'title', 'content', 'rawInput', 'rawOutput'],
       ['kind', 'toolCallId', 'turn', 'status'],
     );
     const status = record.status;
@@ -1396,6 +1405,7 @@ function parseEvent(value: unknown): DshSessionHostEvent {
       ...(record.title === undefined
         ? {}
         : { title: requireIdentity(record.title, 'event.title') }),
+      ...(record.content === undefined ? {} : { content: parseToolContent(record.content) }),
       ...(record.rawInput === undefined
         ? {}
         : { rawInput: decodeDshAcpJsonPayload(record.rawInput, 'event.rawInput') }),
@@ -1547,6 +1557,36 @@ function parseUserMessageContent(value: unknown): readonly DshSessionUserMessage
       };
     }
     throw new Error(`DSH Session user message block ${index} is unsupported.`);
+  });
+}
+
+function parseToolContent(value: unknown): readonly DshSessionToolContentBlock[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error('DSH Session Tool content must be a non-empty array.');
+  }
+  return value.map((block, index) => {
+    const record = requireRecord(block, `DSH Session Tool content block ${index}`);
+    if (record.type === 'text') {
+      requireExactKeys(record, ['type', 'text']);
+      return { type: 'text' as const, text: requireIdentity(record.text, 'Tool content text') };
+    }
+    if (record.type === 'image') {
+      requireExactKeys(record, ['type', 'label', 'attachment']);
+      const attachment = requireRecord(record.attachment, 'Tool image attachment');
+      requireExactKeys(attachment, ['attachmentId', 'mediaType', 'byteLength', 'width', 'height']);
+      return {
+        type: 'image' as const,
+        label: requireIdentity(record.label, 'Tool image label'),
+        attachment: {
+          attachmentId: requireIdentity(attachment.attachmentId, 'Tool image attachmentId'),
+          mediaType: parseImageAttachmentMediaType(attachment.mediaType),
+          byteLength: requirePositiveInteger(attachment.byteLength, 'Tool image byteLength'),
+          width: requirePositiveInteger(attachment.width, 'Tool image width'),
+          height: requirePositiveInteger(attachment.height, 'Tool image height'),
+        },
+      };
+    }
+    throw new Error(`DSH Session Tool content block ${index} is unsupported.`);
   });
 }
 

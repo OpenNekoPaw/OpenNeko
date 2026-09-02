@@ -510,6 +510,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
                   copy={copy}
                   hasProcessNote={item.hasProcessNote}
                   key={`tool-group:${props.conversationId}:${props.projection?.dshSessionId}:${item.turn}:${item.sourceIndex}`}
+                  onResolveImageAttachmentPreview={props.onResolveImageAttachmentPreview}
                   tools={item.tools}
                 />
               ) : item.kind === 'progress-note' ? (
@@ -1201,13 +1202,14 @@ type DshImagePreviewState =
     }
   | { readonly status: 'unavailable'; readonly diagnostic: string };
 
-function UserMessageImageAttachment({
+function DshImageAttachment({
   block,
   copy,
   onResolve,
 }: {
   readonly block: Extract<
-    import('@neko/agent-contracts/dsh-session-host').DshSessionUserMessageBlock,
+    | import('@neko/agent-contracts/dsh-session-host').DshSessionUserMessageBlock
+    | import('@neko/agent-contracts/dsh-session-host').DshSessionToolContentBlock,
     { readonly type: 'image' }
   >;
   readonly copy: DshAgentCopy;
@@ -1468,7 +1470,15 @@ function DshSessionEvent({
       </div>
     );
   }
-  if (event.kind === 'tool') return <DshToolEvent copy={copy} event={event} />;
+  if (event.kind === 'tool') {
+    return (
+      <DshToolEvent
+        copy={copy}
+        event={event}
+        onResolveImageAttachmentPreview={onResolveImageAttachmentPreview}
+      />
+    );
+  }
   if (event.kind === 'command') return <DshCommandEvent copy={copy} event={event} />;
   if (event.kind === 'turn' && event.phase === 'start') return null;
   const diagnostic = event.kind === 'diagnostic';
@@ -1587,7 +1597,7 @@ function UserMessageContent({
       {imageBlocks.length > 0 ? (
         <div className="agent-message-image-grid">
           {imageBlocks.map((block, index) => (
-            <UserMessageImageAttachment
+            <DshImageAttachment
               key={`image:${index}:${block.attachment.attachmentId}`}
               block={block}
               copy={copy}
@@ -1757,11 +1767,13 @@ function DshToolActivity({
   active,
   copy,
   hasProcessNote,
+  onResolveImageAttachmentPreview,
   tools,
 }: {
   readonly active: boolean;
   readonly copy: DshAgentCopy;
   readonly hasProcessNote: boolean;
+  readonly onResolveImageAttachmentPreview?: DshAgentViewProps['onResolveImageAttachmentPreview'];
   readonly tools: readonly ToolEvent[];
 }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
@@ -1822,6 +1834,7 @@ function DshToolActivity({
                     embedded
                     event={tool}
                     key={`${tool.turn}:${tool.toolCallId}`}
+                    onResolveImageAttachmentPreview={onResolveImageAttachmentPreview}
                   />
                 ))}
               </div>
@@ -1833,17 +1846,55 @@ function DshToolActivity({
   );
 }
 
+function DshToolImageGrid({
+  copy,
+  onResolve,
+  tool,
+}: {
+  readonly copy: DshAgentCopy;
+  readonly onResolve?: DshAgentViewProps['onResolveImageAttachmentPreview'];
+  readonly tool: ToolEvent;
+}): JSX.Element | null {
+  const images = (tool.content ?? []).filter(
+    (
+      block,
+    ): block is Extract<
+      import('@neko/agent-contracts/dsh-session-host').DshSessionToolContentBlock,
+      { readonly type: 'image' }
+    > => block.type === 'image',
+  );
+  if (images.length === 0) return null;
+  return (
+    <div
+      className="agent-message-image-grid agent-tool-image-grid"
+      data-agent-tool-images={tool.toolCallId}
+    >
+      {images.map((block, index) => (
+        <DshImageAttachment
+          block={block}
+          copy={copy}
+          key={`${block.attachment.attachmentId}:${index}`}
+          onResolve={onResolve}
+        />
+      ))}
+    </div>
+  );
+}
+
 function DshToolEvent({
   copy,
   event,
   embedded = false,
+  onResolveImageAttachmentPreview,
 }: {
   readonly copy: DshAgentCopy;
   readonly event: Extract<DshSessionHostEvent, { readonly kind: 'tool' }>;
   readonly embedded?: boolean;
+  readonly onResolveImageAttachmentPreview?: DshAgentViewProps['onResolveImageAttachmentPreview'];
 }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
-  const expandable = event.rawInput !== undefined || event.rawOutput !== undefined;
+  const hasImages = (event.content ?? []).some((block) => block.type === 'image');
+  const expandable = event.rawInput !== undefined || event.rawOutput !== undefined || hasImages;
   const title = projectToolEventTitle(event);
   const tone =
     event.status === 'failed'
@@ -1865,6 +1916,7 @@ function DshToolEvent({
   const card = (
     <div className={`agent-inline-card ${tone}`} data-agent-tool-call-id={event.toolCallId}>
       <button
+        aria-expanded={expandable ? expanded : undefined}
         className="agent-inline-header flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[11px] transition-colors"
         disabled={!expandable}
         type="button"
@@ -1884,9 +1936,10 @@ function DshToolEvent({
         ) : null}
       </button>
       {expanded ? (
-        <div className="border-t border-[var(--agent-divider)] px-3 py-2 text-[10px]">
+        <div className="agent-tool-details border-t border-[var(--agent-divider)] px-3 py-2 text-[10px]">
           <ToolPayload copy={copy} label={copy.input} value={event.rawInput} />
           <ToolPayload copy={copy} label={copy.output} value={event.rawOutput} />
+          <DshToolImageGrid copy={copy} onResolve={onResolveImageAttachmentPreview} tool={event} />
         </div>
       ) : null}
     </div>

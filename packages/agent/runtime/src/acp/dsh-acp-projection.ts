@@ -2,6 +2,7 @@ import type {
   ContentBlock as AcpContentBlock,
   RequestPermissionRequest,
   SessionNotification,
+  ToolCallContent,
 } from '@agentclientprotocol/sdk';
 import type {
   DshAcpContextPressureNotification,
@@ -22,6 +23,7 @@ export interface DshAcpProjectedToolEvent {
   readonly turnStartedAt?: number;
   readonly status: DshAcpProjectedToolStatus;
   readonly title?: string;
+  readonly content?: readonly DshAcpProjectedDisplayBlock[];
   readonly rawInput?: unknown;
   readonly rawOutput?: unknown;
 }
@@ -76,9 +78,11 @@ export interface DshAcpProjectedCommandEvent {
   readonly text?: string;
 }
 
-export type DshAcpProjectedUserMessageBlock =
+export type DshAcpProjectedDisplayBlock =
   | { readonly type: 'text'; readonly text: string }
   | { readonly type: 'resource_link'; readonly name: string; readonly uri: string };
+
+export type DshAcpProjectedUserMessageBlock = DshAcpProjectedDisplayBlock;
 
 export type DshAcpProjectedMessageEvent =
   | {
@@ -150,6 +154,7 @@ interface ToolProjectionState {
   status: DshAcpProjectedToolStatus;
   terminal: boolean;
   title: string | undefined;
+  content: readonly DshAcpProjectedDisplayBlock[] | undefined;
   rawInput: unknown;
   rawOutput: unknown;
   permissionRequest: RequestPermissionRequest | undefined;
@@ -650,6 +655,7 @@ export class DshAcpProjection {
       status: 'pending',
       terminal: false,
       title: request.toolCall.title ?? undefined,
+      content: projectToolCallContent(request.toolCall.content),
       rawInput: request.toolCall.rawInput,
       rawOutput: undefined,
       permissionRequest: request,
@@ -817,6 +823,7 @@ export class DshAcpProjection {
       status: update.status ?? 'pending',
       terminal: false,
       title: update.title,
+      content: projectToolCallContent(update.content),
       rawInput: update.rawInput,
       rawOutput: undefined,
       permissionRequest: undefined,
@@ -831,6 +838,7 @@ export class DshAcpProjection {
         ...(turnStartedAt === undefined ? {} : { turnStartedAt }),
         status: tool.status,
         title: tool.title,
+        ...(tool.content === undefined ? {} : { content: tool.content }),
         rawInput: tool.rawInput,
       },
       () => {
@@ -1084,6 +1092,8 @@ export class DshAcpProjection {
       );
     }
     const status = update.status ?? tool.status;
+    const content =
+      update.content === undefined ? tool.content : projectToolCallContent(update.content);
     const terminal = status === 'completed' || status === 'failed';
     const cancelled =
       session.cancelledTurns.has(tool.turn) ||
@@ -1119,6 +1129,7 @@ export class DshAcpProjection {
         ...(turnStartedAt === undefined ? {} : { turnStartedAt }),
         status,
         title: tool.title,
+        ...(content === undefined ? {} : { content }),
         rawInput: tool.rawInput,
         rawOutput: update.rawOutput,
       },
@@ -1126,6 +1137,7 @@ export class DshAcpProjection {
         tool.status = status;
         tool.terminal = terminal;
         if (update.title !== undefined && update.title !== null) tool.title = update.title;
+        tool.content = content;
         if (update.rawInput !== undefined) tool.rawInput = update.rawInput;
         if (update.rawOutput !== undefined) tool.rawOutput = update.rawOutput;
         session.tools.set(key, tool);
@@ -1366,6 +1378,19 @@ function projectUserMessageBlock(
       : { type: 'resource_link', name: block.name, uri: block.uri };
   }
   return undefined;
+}
+
+function projectToolCallContent(
+  content: readonly ToolCallContent[] | null | undefined,
+): readonly DshAcpProjectedDisplayBlock[] | undefined {
+  if (content === undefined) return undefined;
+  if (content === null) return [];
+  const projected = content.flatMap((item) => {
+    if (item.type !== 'content') return [];
+    const block = projectUserMessageBlock(item.content);
+    return block === undefined ? [] : [block];
+  });
+  return projected;
 }
 
 function readOpenNekoSequenceFrame(notification: SessionNotification): SequenceFrameResult {

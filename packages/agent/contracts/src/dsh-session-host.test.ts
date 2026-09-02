@@ -826,6 +826,52 @@ describe('DSH Session Host contract', () => {
     ).toThrow(/unexpected=uri/u);
   });
 
+  it('accepts bounded Tool display content and rejects malformed image identities', () => {
+    const tool = {
+      kind: 'tool' as const,
+      toolCallId: 'tool-image',
+      turn: 1,
+      status: 'completed' as const,
+      content: [
+        { type: 'text' as const, text: 'A–D overview' },
+        {
+          type: 'image' as const,
+          label: 'openneko-image-overview.jpg',
+          attachment: {
+            attachmentId: 'attachment-overview',
+            mediaType: 'image/jpeg' as const,
+            byteLength: 128,
+            width: 640,
+            height: 480,
+          },
+        },
+      ],
+    };
+
+    expect(parseDshSessionHostProjection({ ...projection(), events: [tool] }).events).toEqual([
+      tool,
+    ]);
+    expect(() =>
+      parseDshSessionHostProjection({
+        ...projection(),
+        events: [
+          {
+            ...tool,
+            content: [
+              {
+                ...tool.content[1],
+                attachment: { ...tool.content[1]!.attachment, width: 0 },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrow(/width/u);
+    expect(() =>
+      parseDshSessionHostProjection({ ...projection(), events: [{ ...tool, content: [] }] }),
+    ).toThrow(/non-empty array/u);
+  });
+
   it('keeps a terminal Markdown artifact separate from the assistant summary', () => {
     const contentLocator = {
       file: { authority: 'workspace' as const, path: 'neko/generated/file/story-plan.md' },

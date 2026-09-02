@@ -158,5 +158,8 @@ function mergeToolLifecycleEvent(existing: ToolEvent | undefined, event: ToolEve
     ...(event.rawOutput === undefined && existing?.rawOutput !== undefined
       ? { rawOutput: existing.rawOutput }
       : {}),
+    ...(event.content === undefined && existing?.content !== undefined
+      ? { content: existing.content }
+      : {}),
   };
 }

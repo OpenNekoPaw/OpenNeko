@@ -15,6 +15,7 @@ import {
   type SessionModeState,
   type SessionNotification,
   type Stream,
+  type ToolCallContent,
 } from '@agentclientprotocol/sdk';
 import { installModelSelection, type AgentHandle } from '@deepseek-ai/dsh-agent';
 import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment';
@@ -1894,6 +1895,7 @@ function projectSessionEventNotifications(
       ];
     case 'tool/result':
       const result = event.data.message.content[0];
+      const content = projectToolResultContent(result.content);
       return [
         withOpenNekoMeta(
           {
@@ -1902,6 +1904,7 @@ function projectSessionEventNotifications(
               sessionUpdate: 'tool_call_update',
               toolCallId: result.toolCallId,
               status: result.isError ? 'failed' : 'completed',
+              ...(content.length === 0 ? {} : { content }),
               rawOutput: result.content,
             },
           },
@@ -1912,6 +1915,32 @@ function projectSessionEventNotifications(
     default:
       return [];
   }
+}
+
+function projectToolResultContent(content: readonly ContentBlock[]): ToolCallContent[] {
+  const projected: ToolCallContent[] = [];
+  for (const block of content) {
+    if (block.type === 'text') {
+      projected.push({ type: 'content', content: { type: 'text', text: block.text } });
+      continue;
+    }
+    if (block.type === 'image') {
+      projected.push({
+        type: 'content',
+        content: {
+          type: 'resource_link',
+          name: block.attachment.name ?? 'image',
+          uri: serializeDshAttachmentUri({
+            type: 'image',
+            name: block.attachment.name ?? 'image',
+            ...projectImageAttachmentRef(block.attachment),
+          }),
+          mimeType: block.attachment.mediaType,
+        },
+      });
+    }
+  }
+  return projected;
 }
 
 export function projectExtensionSessionEvent(
@@ -2209,38 +2238,61 @@ function findDisplayedImageAttachment(
   attachmentId: string,
 ): ImageAttachmentRef {
   for (const event of record.handle.agent.session.events) {
-    if (event.type !== 'user/message' || event.data.source.kind !== 'user') continue;
-    const display = readOpenNekoDisplayContent(event.data.source)?.find(
-      (block) => block.type === 'image' && block.attachmentId === attachmentId,
-    );
-    if (display === undefined || display.type !== 'image') continue;
-    const image = event.data.content.find(
-      (block) => block.type === 'image' && String(block.attachment.attachmentId) === attachmentId,
-    );
-    if (image?.type !== 'image') {
-      throw RequestError.internalError(
-        undefined,
-        `Displayed image attachment '${attachmentId}' has no native DSH image block.`,
+    if (event.type === 'user/message' && event.data.source.kind === 'user') {
+      const display = readOpenNekoDisplayContent(event.data.source)?.find(
+        (block) => block.type === 'image' && block.attachmentId === attachmentId,
       );
+      if (display === undefined || display.type !== 'image') continue;
+      const image = findImageAttachment(event.data.content, attachmentId);
+      if (image === undefined) {
+        throw RequestError.internalError(
+          undefined,
+          `Displayed image attachment '${attachmentId}' has no native DSH image block.`,
+        );
+      }
+      const projected = projectImageAttachmentRef(image);
+      if (
+        projected.mediaType !== display.mediaType ||
+        projected.bytes !== display.bytes ||
+        projected.width !== display.width ||
+        projected.height !== display.height
+      ) {
+        throw RequestError.internalError(
+          undefined,
+          `Displayed image attachment '${attachmentId}' metadata does not match its DSH image block.`,
+        );
+      }
+      return image;
     }
-    const projected = projectImageAttachmentRef(image.attachment);
-    if (
-      projected.mediaType !== display.mediaType ||
-      projected.bytes !== display.bytes ||
-      projected.width !== display.width ||
-      projected.height !== display.height
-    ) {
-      throw RequestError.internalError(
-        undefined,
-        `Displayed image attachment '${attachmentId}' metadata does not match its DSH image block.`,
+    if (event.type === 'tool/result') {
+      const result = event.data.message.content[0];
+      if (result?.type !== 'tool-result') continue;
+      const image = result.content.find(
+        (block) => block.type === 'image' && String(block.attachment.attachmentId) === attachmentId,
       );
+      if (image?.type === 'image') return image.attachment;
     }
-    return image.attachment;
   }
   throw RequestError.invalidParams(
     undefined,
     `Image attachment '${attachmentId}' is not displayed by this Session.`,
   );
+}
+
+function findImageAttachment(
+  content: readonly ContentBlock[],
+  attachmentId: string,
+): ImageAttachmentRef | undefined {
+  for (const block of content) {
+    if (block.type === 'image' && String(block.attachment.attachmentId) === attachmentId) {
+      return block.attachment;
+    }
+    if (block.type === 'tool-result') {
+      const nested = findImageAttachment(block.content, attachmentId);
+      if (nested !== undefined) return nested;
+    }
+  }
+  return undefined;
 }
 
 function isImageMediaType(value: unknown): value is ImageAttachmentRef['mediaType'] {

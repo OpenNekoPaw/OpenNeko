@@ -211,7 +211,22 @@ describe('DshAcpProjection', () => {
         toolCall('s1', 'call-1', 0, 1, { status: 'pending', rawInput: { prompt: 'x' } }),
       ),
       ...projection.acceptSessionUpdate(
-        toolCallUpdate('s1', 'call-1', 0, 2, { status: 'completed', rawOutput: { ok: true } }),
+        toolCallUpdate('s1', 'call-1', 0, 2, {
+          status: 'completed',
+          content: [
+            { type: 'content', content: { type: 'text', text: 'Overview contact sheet' } },
+            {
+              type: 'content',
+              content: {
+                type: 'resource_link',
+                name: 'openneko-image-overview.jpg',
+                uri: 'openneko-dsh-attachment:encoded',
+                mimeType: 'image/jpeg',
+              },
+            },
+          ],
+          rawOutput: { ok: true },
+        }),
       ),
       ...projection.acceptSessionEvent(turnEvent('s1', 3, 'turn/end', 0, 'success')),
     ];
@@ -233,6 +248,14 @@ describe('DshAcpProjection', () => {
       turn: 0,
       turnStartedAt: 1_000,
       status: 'completed',
+      content: [
+        { type: 'text', text: 'Overview contact sheet' },
+        {
+          type: 'resource_link',
+          name: 'openneko-image-overview.jpg',
+          uri: 'openneko-dsh-attachment:encoded',
+        },
+      ],
       rawOutput: { ok: true },
     });
     expect(events[3]).toMatchObject({

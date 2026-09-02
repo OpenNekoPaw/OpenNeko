@@ -27,6 +27,7 @@ export {
   DshAcpProjection,
   type DshAcpProjectedCancelEvent,
   type DshAcpProjectedDiagnosticEvent,
+  type DshAcpProjectedDisplayBlock,
   type DshAcpProjectedEvent,
   type DshAcpProjectedMessageEvent,
   type DshAcpProjectedPermissionEvent,

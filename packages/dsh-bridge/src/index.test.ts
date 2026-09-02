@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { Session, SessionId, type SessionHeader } from '@deepseek-ai/dsh-session';
 import { CallId, MessageId, createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm';
 import { Context } from '@deepseek-ai/cordis';
+import { AttachmentId } from '@deepseek-ai/dsh-attachment';
 import { renderSkillContent, type SkillDefinition } from '@deepseek-ai/dsh-skill';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -286,6 +287,13 @@ describe('OpenNeko DSH ACP bridge projections', () => {
     expect(patch).toContain("name: '@deepseek-ai/dsh-storage-domain'");
     expect(patch).toContain("name: '@deepseek-ai/dsh-workspace'");
     expect(patch).not.toContain('session/delete');
+  });
+
+  it('keeps standard DSH context governance active', () => {
+    const patch = readPackageFile('cordis.patch.yml');
+    expect(patch).not.toMatch(/- id: compaction-basic\n {2}disabled: true/u);
+    expect(patch).not.toMatch(/- id: tool-result-pruner\n {2}disabled: true/u);
+    expect(patch).toMatch(/- id: command-compact\n {2}disabled: true/u);
   });
 
   it('projects only the real Skill catalog without exposing Plugin inventory', () => {
@@ -593,6 +601,12 @@ describe('OpenNeko DSH ACP bridge projections', () => {
           sessionUpdate: 'tool_call_update',
           toolCallId: 'call-failed',
           status: 'failed',
+          content: [
+            {
+              type: 'content',
+              content: { type: 'text', text: 'Error: rejected' },
+            },
+          ],
           rawOutput: [{ type: 'text', text: 'Error: rejected' }],
         },
         _meta: {
@@ -602,6 +616,78 @@ describe('OpenNeko DSH ACP bridge projections', () => {
         },
       },
     ]);
+  });
+
+  it('projects Tool image results through standard ACP content without inlining bytes', () => {
+    const session = Session.create(SessionId('session-tool-image'));
+    const call = session.append('tool/call', {
+      turn: 0,
+      step: 0,
+      callId: CallId('call-image'),
+      name: 'openneko_read_images',
+      arguments: '{}',
+    });
+    const attachment = {
+      attachmentId: AttachmentId('attachment-overview'),
+      mediaType: 'image/jpeg' as const,
+      bytes: 128,
+      width: 640,
+      height: 480,
+      name: 'openneko-image-overview.jpg',
+    };
+    const result = session.append(
+      'tool/result',
+      {
+        turn: 0,
+        step: 0,
+        message: {
+          id: MessageId('result-image'),
+          role: 'user',
+          content: [
+            {
+              type: 'tool-result',
+              toolCallId: CallId('call-image'),
+              content: [
+                { type: 'text', text: 'Overview contact sheet' },
+                { type: 'image', attachment },
+              ],
+            },
+          ],
+          source: { kind: 'tool', callId: CallId('call-image') },
+        },
+      },
+      { surfaceOp: 'append', sourceEventSeqs: [call.seq] },
+    );
+
+    expect(projectSessionEvent('session-tool-image', result)[0]?.update).toEqual({
+      sessionUpdate: 'tool_call_update',
+      toolCallId: 'call-image',
+      status: 'completed',
+      content: [
+        { type: 'content', content: { type: 'text', text: 'Overview contact sheet' } },
+        {
+          type: 'content',
+          content: {
+            type: 'resource_link',
+            name: 'openneko-image-overview.jpg',
+            uri: `openneko-dsh-attachment:${encodeURIComponent(
+              JSON.stringify({
+                attachmentId: 'attachment-overview',
+                mediaType: 'image/jpeg',
+                bytes: 128,
+                width: 640,
+                height: 480,
+              }),
+            )}`,
+            mimeType: 'image/jpeg',
+          },
+        },
+      ],
+      rawOutput: [
+        { type: 'text', text: 'Overview contact sheet' },
+        { type: 'image', attachment },
+      ],
+    });
   });
 
   it('projects DSH text and reasoning deltas through standard ACP chunks', () => {

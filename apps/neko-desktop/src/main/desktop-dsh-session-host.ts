@@ -15,6 +15,7 @@ import {
   type DshTerminalArtifactOpenHostResult,
   type DshSessionTerminalArtifactReference,
   type DshSessionImageAttachmentIdentity,
+  type DshSessionToolContentBlock,
 } from '@neko/agent-contracts/dsh-session-host';
 import {
   decodeDshAcpImageAttachmentRefProjection,
@@ -35,7 +36,11 @@ import {
   createAgentTerminalArtifactAdmission,
   parseAgentTerminalMarkdown,
 } from '@neko/agent-runtime/application';
-import type { DshAcpProjection, DshAcpProjectedEvent } from '@neko/agent-runtime/acp';
+import type {
+  DshAcpProjection,
+  DshAcpProjectedDisplayBlock,
+  DshAcpProjectedEvent,
+} from '@neko/agent-runtime/acp';
 import type { CanvasWorkspaceTurnTarget } from '@neko/canvas-domain';
 import {
   isWorkspaceFileContentLocator,
@@ -691,6 +696,7 @@ function projectEvents(
     }
     let rawInput;
     let rawOutput;
+    let content: DshSessionToolContentBlock[] | undefined;
     try {
       rawInput =
         event.rawInput === undefined
@@ -707,17 +713,41 @@ function projectEvents(
         message: error instanceof Error ? error.message : String(error),
       });
     }
+    if (event.content !== undefined) {
+      content = [];
+      for (const [index, block] of event.content.entries()) {
+        try {
+          const value = projectToolContentBlock(block);
+          if (value !== undefined) content.push(value);
+        } catch (error) {
+          projected.push({
+            kind: 'diagnostic',
+            code: 'ACP_TOOL_CONTENT_INVALID',
+            message: `Tool content block ${index} is invalid: ${error instanceof Error ? error.message : String(error)}`,
+          });
+        }
+      }
+    }
     projected.push({
       kind: 'tool',
       toolCallId: event.toolCallId,
       turn: event.turn,
       status: event.status,
       ...(event.title === undefined ? {} : { title: event.title }),
+      ...(content === undefined || content.length === 0 ? {} : { content }),
       ...(rawInput === undefined ? {} : { rawInput }),
       ...(rawOutput === undefined ? {} : { rawOutput }),
     });
   }
   return projected;
+}
+
+function projectToolContentBlock(
+  block: DshAcpProjectedDisplayBlock,
+): DshSessionToolContentBlock | undefined {
+  if (block.type === 'text') return block.text.length === 0 ? undefined : block;
+  const attachment = deserializeDshAttachmentResourceUri(block.uri);
+  return attachment === undefined ? undefined : { type: 'image', label: block.name, attachment };
 }
 
 function projectEvent(
@@ -864,8 +894,14 @@ function findProjectedImageAttachment(
   attachmentId: string,
 ): DshSessionImageAttachmentIdentity {
   for (const event of events) {
-    if (event.kind !== 'message' || event.role !== 'user') continue;
-    const image = event.content.find(
+    const content =
+      event.kind === 'message' && event.role === 'user'
+        ? event.content
+        : event.kind === 'tool'
+          ? event.content
+          : undefined;
+    if (content === undefined) continue;
+    const image = content.find(
       (block) => block.type === 'image' && block.attachment.attachmentId === attachmentId,
     );
     if (image?.type === 'image') return image.attachment;

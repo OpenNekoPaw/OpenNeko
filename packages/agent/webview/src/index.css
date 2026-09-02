@@ -2639,6 +2639,19 @@ body {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.agent-tool-image-grid {
+  width: min(420px, 100%);
+  margin: 8px 0 0;
+}
+
+.agent-tool-image-grid:has(> :only-child) {
+  width: min(420px, 100%);
+}
+
+.agent-tool-details > .agent-tool-image-grid:first-child {
+  margin-top: 0;
+}
+
 .agent-user-prompt-primary:empty + .agent-message-image-grid,
 .agent-user-prompt > .agent-message-image-grid:first-child {
   margin-top: 0;

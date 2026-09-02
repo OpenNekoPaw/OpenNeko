@@ -25,13 +25,7 @@
 - id: plan-mode
   disabled: true
 
-- id: compaction-basic
-  disabled: true
-
 - id: command-compact
-  disabled: true
-
-- id: tool-result-pruner
   disabled: true
 
 - id: tool-subagent-control
