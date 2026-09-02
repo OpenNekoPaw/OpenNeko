@@ -46,7 +46,14 @@ After the current stage, the Agent SHALL return one state-grounded next operatio
 
 - **WHEN** the preceding result recommends one valid next operation and the creator says “continue” without another objective
 - **THEN** the Agent performs that next operation from current Workspace facts
+- **AND** provisional creative choices remain provisional unless the creator explicitly confirms them
 - **AND** it does not restart analysis, ask what continue means or skip automatically to later stages
+
+#### Scenario: Agent reports the current result
+
+- **WHEN** the Agent has produced a design draft, prepared input, generated candidate, reviewable master or verified delivery
+- **THEN** it describes completion at that narrowest observed stage
+- **AND** it does not promote plans, recommendations, provisional choices or unbound references to a later completed state
 
 #### Scenario: Creator requests a revision
 

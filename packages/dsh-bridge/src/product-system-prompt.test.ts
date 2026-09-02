@@ -70,6 +70,15 @@ describe('OpenNeko DSH product system prompt', () => {
       'A requested revision stays on the current artifact and stage',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'does not confirm provisional creative choices, accept a candidate, or promote an artifact',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'Describe completion at the narrowest observed stage',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'Do not call a broader stage complete, executable, accepted, generated, or delivered',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
       'Do not invent approval records, workflow gates, or a separate global production state',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toMatch(
