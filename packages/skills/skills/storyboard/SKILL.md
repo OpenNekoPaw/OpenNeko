@@ -10,7 +10,7 @@ description: '将提示词、文本、剧本、文档、漫画、图像序列或
 把提示词、文本、剧本、文档、漫画、有序图像序列或现有分镜修订解释为可评审的视觉规划。普通创作默认使用一份可直接更新的 Markdown 场景/镜头表；只有创作者明确要求专业结构化创作时，才生成并验证 canonical `scenes[] -> shots[]`。
 
 1. 保留来源顺序、场景边界、对白语境、视觉证据和稳定来源引用；证据不足的镜头、时长、对白或画面主张必须标为不确定或 diagnostic。
-2. 图像提示词属于 shot，视频提示词属于 scene；视觉说明、机位笔记和状态不能替代可执行生成提示词。
+2. 静帧提示词属于单个 shot；视频运动意图属于实际被连续生成的视频单元。普通逐镜生产中二者都按 `SHxx` 分开记录；只有下游明确一次生成整个多镜场景时，才允许一个 scene 级视频提示词聚合多个 shot。视觉说明、机位笔记和状态不能替代可执行生成提示词。
 3. 漫画必须有像素、OCR 或面板边界证据才能声称面板、对白或动作。局部样本不能证明全卷情节、集数或总时长；代表性叙事单元可在公开方法和置信度时支持暂定区间。
 4. 只有真正执行生成/编辑时才填写对应 prompt；可直接使用的参考图不需要伪造编辑工作。
 5. 电影镜头、跨镜头连续性或授权参考视频迁移，仅按需读取对应 relative reference。
@@ -31,14 +31,16 @@ Interpret a prompt, prose, script, document, comic, ordered image sequence, or e
 ## Markdown planning and structured invariants
 
 - A multi-shot Markdown draft uses one table with only the columns the current work needs. Keep the same row labels and update the existing row when the creator revises a shot or a later capability returns a result; do not append a parallel table or turn review status into a second workflow model. A single-shot answer may remain prose. Missing duration, voice, media binding, or production identity is an uncertainty, not a reason to invent values or reject a useful draft.
+- In a per-shot production sheet, one `SHxx` row is one continuous observable take that can be generated, reviewed, selected, or repaired independently. It has one continuous time span, spatial axis, and camera move. An internal hard cut, montage, or switch to a distinct framing starts another `SHxx` row. If the rows have not been decomposed this way, call the artifact a beat or sequence table rather than a per-shot production sheet.
 - Preserve distinct narrative, visual, action, camera, dialogue, sound, duration, reference, image-generation, and video-generation meaning when present. Neither generation prompt is mandatory for an exploratory plan.
 
 - After explicit structured authoring, the canonical artifact is nested `scenes[] -> shots[]`: a scene owns its ordered shots, and a scene cell in a review table never replaces the scene record. Shot media references remain shot facts.
 - A structured review projection keeps distinct `scene`, `shot`, `source`, `imagePrompt`, `videoPrompt`, `duration`, and `dialogue` semantics. Never collapse image and video intent into one generic generation-prompt column.
 - `imagePrompt` is shot-level and only describes an executable image generation or edit task. Include subject/appearance, scene, composition, style/light, reference role, preserved details, ordered edit steps when applicable, and constraints.
-- `videoPrompt` is scene-level. Write at most one per scene, normally on its first shot, and aggregate the ordered shot beats, subject motion, camera transitions, environmental change, dialogue/audio or silence, total duration, reference roles, and constraints.
+- `videoPrompt` describes the unit the downstream capability will generate continuously. For ordinary per-shot generation it is shot-level and covers only that `SHxx` take: starting state, subject motion, camera motion, environmental change, duration, audio intent or silence, reference roles, and constraints. Use one scene-level aggregate prompt only when the admitted downstream operation truly consumes the whole multi-shot scene in one generation.
 - Visual description, camera notes, action summaries, review states, and diagnostics do not substitute for either prompt. Leave a prompt empty when no generation/edit operation is intended; do not fill it with status codes or analysis fragments.
 - Resource aliases must resolve unambiguously inside their declared scope. If a token matches multiple resources, emit a visible binding diagnostic and do not select or invent a source.
+- A reference is bound only when the row names a stable, resolvable Workspace resource or prepared asset and states its role. A generic label such as “城市参考” or “人物参考” without the actual resource is a requirement, not a binding; do not call the row executable or preparation-ready from it.
 
 ## Comic source profile
 
@@ -51,8 +53,8 @@ Interpret a prompt, prose, script, document, comic, ordered image sequence, or e
 ## Generation-effective prompt checks
 
 - A non-empty prompt must be executable rather than a fragment, review label, or visual-analysis note. State reference purpose and check ambiguous references, conflicting instructions, overloaded content, unassigned resources, and duration mismatch.
-- Image generation prompts cover appearance, environment, composition/camera, style/color/light, reference consistency, and constraints. Image edits additionally state what to preserve and the ordered crop/split/rotate/colorize/redraw/remove-text/inpaint/outpaint/upscale/style-normalization operations.
-- Scene video prompts cover source/reference roles, characters and emotion, ordered or time-coded action beats, camera transitions, environmental change/effects, dialogue/narration/SFX or silence, pacing, total duration, and constraints. Long scenes should use explicit beat or time segments instead of an overloaded paragraph.
+- Image generation prompts describe one static visual state: appearance, environment, composition/camera placement, style/color/light, reference consistency, and constraints. They do not contain duration, camera travel, transitions, or a sequence of changing actions. Image edits additionally state what to preserve and the ordered crop/split/rotate/colorize/redraw/remove-text/inpaint/outpaint/upscale/style-normalization operations.
+- Video prompts describe motion from a defined starting frame or state: source/reference roles, characters and emotion, subject motion, camera motion, environmental change/effects, dialogue/narration/SFX or silence, pacing, duration, and constraints. Keep ordinary per-shot video intent inside one continuous take; split hard cuts or distinct framings into separate shots.
 - When a reference image is directly usable and no image operation is intended, leave `imagePrompt` empty instead of inventing edit work.
 
 Read only the method needed for the current request:

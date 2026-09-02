@@ -332,9 +332,16 @@ describe('locked DSH filesystem Skill provider contract', () => {
     expect(definitions.get('media-production')).toContain('高清默认只读取一张最终入选页');
     expect(definitions.get('media-production')).toContain('读取与视觉检查是瞬态证据');
     expect(definitions.get('media-production')).toContain('缩小为开篇、局部场景或已选序列概念');
+    expect(definitions.get('media-production')).toContain('来源—决定映射');
+    expect(definitions.get('media-production')).toContain('对应行的“依据性质”');
     expect(definitions.get('media-production')).toContain('不创建审批对象、gate、预算授权');
     expect(definitions.get('media-production')).toContain('只推荐一个能推进整体路线的下一操作');
     expect(definitions.get('storyboard')).toContain('可直接更新的 Markdown 场景/镜头表');
+    expect(definitions.get('storyboard')).toContain(
+      'one `SHxx` row is one continuous observable take',
+    );
+    expect(definitions.get('storyboard')).toContain('A reference is bound only when the row names');
+    expect(definitions.get('storyboard')).toContain('They do not contain duration, camera travel');
     expect(definitions.get('storyboard')).toContain(
       'they are document labels, not a new domain model or workflow state',
     );
@@ -343,6 +350,9 @@ describe('locked DSH filesystem Skill provider contract', () => {
     expect(definitions.get('media-preparation')).toContain('验收不得放宽上游创意合同');
     expect(definitions.get('media-preparation')).toContain('不要求预算估算或预算授权');
     expect(definitions.get('media-preparation')).toContain('不要生成候选调用包');
+    expect(definitions.get('media-preparation')).toContain('只取一个最小连续生产单元');
+    expect(definitions.get('media-preparation')).toContain('静帧提示词只描述一个时刻');
+    expect(definitions.get('media-preparation')).toContain('不等于 `可提交／未执行`');
     expect(definitions.get('media-preparation')).toContain(
       '内部必须按当前 schema 编译完整 Tool 调用封装',
     );
