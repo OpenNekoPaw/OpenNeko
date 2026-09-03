@@ -15,6 +15,8 @@ import type { DshRuntimeHostProjection } from '@neko/agent-contracts/dsh-runtime
 import type {
   CharacterCreationHandoffIntent,
   CharacterDialogueHandoffIntent,
+  ProjectTemplateHandoffIntent,
+  WorldCreationHandoffIntent,
 } from '@neko/agent-contracts';
 import {
   DshAgentView,
@@ -34,6 +36,10 @@ export interface DesktopAgentSurfaceProps {
   readonly onCharacterCreationHandoffConsumed?: (intentId: string) => void;
   readonly characterDialogueHandoff?: CharacterDialogueHandoffIntent;
   readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
+  readonly projectTemplateHandoff?: ProjectTemplateHandoffIntent;
+  readonly onProjectTemplateHandoffConsumed?: (intentId: string) => void;
+  readonly worldCreationHandoff?: WorldCreationHandoffIntent;
+  readonly onWorldCreationHandoffConsumed?: (intentId: string) => void;
   readonly conversationFeed?: ReactNode;
   readonly messageAuthorPresentation?: {
     readonly assistant?: ReactNode;
@@ -60,8 +66,12 @@ export function DesktopAgentSurface({
   messageAuthorPresentation,
   onCharacterCreationHandoffConsumed,
   onCharacterDialogueHandoffConsumed,
+  onProjectTemplateHandoffConsumed,
+  onWorldCreationHandoffConsumed,
+  projectTemplateHandoff,
   sceneId,
   surfaceKind,
+  worldCreationHandoff,
   workbenchInstanceId,
 }: DesktopAgentSurfaceProps): JSX.Element {
   const [state, setState] = useState<DesktopAgentSurfaceState>({ kind: 'loading' });
@@ -514,6 +524,8 @@ export function DesktopAgentSurface({
       entryContext={entryContext}
       initialCharacterCreationHandoff={characterCreationHandoff}
       initialCharacterDialogueHandoff={characterDialogueHandoff}
+      initialProjectTemplateHandoff={projectTemplateHandoff}
+      initialWorldCreationHandoff={worldCreationHandoff}
       draft={draft}
       composerConfiguration={composerConfiguration}
       composerConfigurationError={composerConfigurationError}
@@ -530,6 +542,8 @@ export function DesktopAgentSurface({
       onCancelPermission={(permission) => void cancelPermission(permission)}
       onCharacterCreationHandoffConsumed={onCharacterCreationHandoffConsumed}
       onCharacterDialogueHandoffConsumed={onCharacterDialogueHandoffConsumed}
+      onProjectTemplateHandoffConsumed={onProjectTemplateHandoffConsumed}
+      onWorldCreationHandoffConsumed={onWorldCreationHandoffConsumed}
       onCancelTurn={() => void cancelTurn()}
       onDecidePermission={(permission, optionId) => void decidePermission(permission, optionId)}
       onDraftChange={(value) => {

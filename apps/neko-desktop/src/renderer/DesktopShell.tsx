@@ -118,7 +118,10 @@ import {
   type CharacterAuthoringSnapshot,
   type CharacterProductHandoff,
 } from '@neko/chara-domain/contracts';
-import type { WorldAuthoringSnapshot } from '@neko/world-domain/contracts';
+import {
+  createEmptyWorldDefinition,
+  type WorldAuthoringSnapshot,
+} from '@neko/world-domain/contracts';
 import { DesktopAssetCenterMainSurface } from './DesktopAssetCenterMainSurface';
 import { DesktopAssistantPreviewSurface } from './DesktopAssistantPreviewSurface';
 import { DesktopAssetCenterRuntime } from './desktop-asset-center-runtime';
@@ -133,9 +136,15 @@ import {
 import {
   createCharacterCreationHandoffIntent,
   createCharacterDialogueHandoffIntent,
+  createProjectTemplateHandoffIntent,
+  createWorldCreationHandoffIntent,
   type CharacterCreationEntry,
   type CharacterCreationHandoffIntent,
   type CharacterDialogueHandoffIntent,
+  type ProjectTemplateEntry,
+  type ProjectTemplateHandoffIntent,
+  type WorldCreationEntry,
+  type WorldCreationHandoffIntent,
 } from '@neko/agent-contracts';
 import type { DesktopWindowCompositionProjection } from '@neko/host/desktop-window-composition-contract';
 import { DesktopSurfaceErrorBoundary } from './DesktopSurfaceErrorBoundary';
@@ -320,6 +329,8 @@ interface ShellActions {
   }) => Promise<void>;
   readonly onCharacterProductHandoff: (handoff: CharacterProductHandoff) => void;
   readonly onStartCharacterCreation: (entry: CharacterCreationEntry) => Promise<void>;
+  readonly onStartProjectTemplate: (template: ProjectTemplateEntry) => Promise<void>;
+  readonly onStartWorldCreation: (entry: WorldCreationEntry) => Promise<void>;
   readonly onSelectEntryProjectTarget: NonNullable<
     NonNullable<DesktopAgentSurfaceProps['entryContext']>['workspace']['onSelectProject']
   >;
@@ -359,6 +370,14 @@ function DesktopApplicationContent(): JSX.Element {
   const [characterCreationHandoff, setCharacterCreationHandoff] = useState<{
     readonly draftId: string;
     readonly intent: CharacterCreationHandoffIntent;
+  }>();
+  const [projectTemplateHandoff, setProjectTemplateHandoff] = useState<{
+    readonly draftId: string;
+    readonly intent: ProjectTemplateHandoffIntent;
+  }>();
+  const [worldCreationHandoff, setWorldCreationHandoff] = useState<{
+    readonly draftId: string;
+    readonly intent: WorldCreationHandoffIntent;
   }>();
   const [characterPortableWorkflow, setCharacterPortableWorkflow] =
     useState<CharacterPortableWorkflow>();
@@ -1061,6 +1080,81 @@ function DesktopApplicationContent(): JSX.Element {
         finishPending();
       }
     },
+    onStartProjectTemplate: async (template) => {
+      const finishPending = beginPending('scene');
+      setDiagnostic(undefined);
+      try {
+        const authorization = await window.openNekoDesktop.workspaceGrants.createContentProject(
+          projection.window.windowId,
+        );
+        if (authorization.status === 'cancelled') return;
+        if (authorization.status !== 'authorized-project') {
+          throw new Error('Project template creation requires an authorized Content Project.');
+        }
+        const result = await window.openNekoDesktop.scenes.transition(
+          projection.window.windowId,
+          { kind: 'open-agent-entry' },
+          activeWorkbench.scene.sceneId,
+        );
+        if (result.status !== 'transitioned') throw new Error(result.diagnostic.message);
+        if (
+          result.scene.context.kind !== 'agent' ||
+          result.scene.context.scope.kind !== 'unbound'
+        ) {
+          throw new Error('Project template creation requires an unbound Agent Draft.');
+        }
+        setProjectTemplateHandoff({
+          draftId: result.scene.context.scope.draftId,
+          intent: createProjectTemplateHandoffIntent({
+            intentId: `project-template:${crypto.randomUUID()}`,
+            template,
+            label: authorization.grant.label,
+            binding: {
+              kind: 'authoring',
+              workspaceId: authorization.workspaceId,
+              workspaceGrantId: authorization.grant.workspaceGrantId,
+              authority: { kind: 'project', projectId: authorization.projectId },
+              target: null,
+            },
+          }),
+        });
+      } catch (error) {
+        setDiagnostic(describeError(error));
+        await refresh();
+      } finally {
+        finishPending();
+      }
+    },
+    onStartWorldCreation: async (entry) => {
+      const finishPending = beginPending('scene');
+      setDiagnostic(undefined);
+      try {
+        const result = await window.openNekoDesktop.scenes.transition(
+          projection.window.windowId,
+          { kind: 'open-agent-entry' },
+          activeWorkbench.scene.sceneId,
+        );
+        if (result.status !== 'transitioned') throw new Error(result.diagnostic.message);
+        if (
+          result.scene.context.kind !== 'agent' ||
+          result.scene.context.scope.kind !== 'unbound'
+        ) {
+          throw new Error('World creation requires an unbound Agent Draft.');
+        }
+        setWorldCreationHandoff({
+          draftId: result.scene.context.scope.draftId,
+          intent: createWorldCreationHandoffIntent({
+            intentId: `world-creation:${crypto.randomUUID()}`,
+            entry,
+          }),
+        });
+      } catch (error) {
+        setDiagnostic(describeError(error));
+        await refresh();
+      } finally {
+        finishPending();
+      }
+    },
     onSelectEntryProjectTarget: async (projectId) => {
       const result = await window.openNekoDesktop.workspaceGrants.selectProject(
         projection.window.windowId,
@@ -1089,25 +1183,54 @@ function DesktopApplicationContent(): JSX.Element {
                 targetKind: 'character-project' as const,
                 placement: { kind: 'project' as const, projectId: project.projectId },
               },
+              {
+                creationId: `${project.projectId}:world`,
+                label: project.displayName,
+                targetKind: 'world-project' as const,
+                placement: { kind: 'project' as const, projectId: project.projectId },
+              },
             ],
       ),
       diagnostics: [],
     }),
     onCreateEntryAuthoringTarget: async (context, name) => {
-      if (context.targetKind !== 'character-project') {
-        throw new Error(`Unsupported Character creation target '${context.targetKind}'.`);
-      }
       const authorization = await window.openNekoDesktop.workspaceGrants.selectProject(
         projection.window.windowId,
         context.placement.projectId,
       );
       if (authorization.status === 'cancelled') return undefined;
-      const characterProjectId = crypto.randomUUID();
       const binding = {
         workspaceId: authorization.workspaceId,
         workspaceGrantId: authorization.grant.workspaceGrantId,
         projectId: context.placement.projectId,
       };
+      if (context.targetKind === 'world-project') {
+        const worldProjectId = crypto.randomUUID();
+        const result = await window.openNekoDesktop.projectLocalAuthoring.createTarget(
+          projection.window.windowId,
+          binding,
+          {
+            kind: 'world-project',
+            worldProjectId,
+            title: name,
+            draft: createEmptyWorldDefinition(),
+          },
+        );
+        return {
+          status: result.status,
+          target: {
+            label: `${authorization.grant.label} / ${name}`,
+            context: {
+              kind: 'workspace',
+              workspaceId: authorization.workspaceId,
+              workspaceGrantId: authorization.grant.workspaceGrantId,
+            },
+            authority: { kind: 'project', projectId: context.placement.projectId },
+            target: { kind: 'world-project', worldProjectId },
+          },
+        };
+      }
+      const characterProjectId = crypto.randomUUID();
       const result = await window.openNekoDesktop.projectLocalAuthoring.createTarget(
         projection.window.windowId,
         binding,
@@ -1268,6 +1391,8 @@ function DesktopApplicationContent(): JSX.Element {
         <DesktopSceneWorkbench
           actions={actions}
           characterCreationHandoff={characterCreationHandoff}
+          projectTemplateHandoff={projectTemplateHandoff}
+          worldCreationHandoff={worldCreationHandoff}
           characterManagementReloadToken={characterManagementReloadToken}
           worldManagementReloadToken={worldManagementReloadToken}
           characterDialogueHandoff={characterDialogueHandoff}
@@ -1278,6 +1403,16 @@ function DesktopApplicationContent(): JSX.Element {
           }}
           onCharacterCreationHandoffConsumed={(intentId) => {
             setCharacterCreationHandoff((current) =>
+              current?.intent.intentId === intentId ? undefined : current,
+            );
+          }}
+          onProjectTemplateHandoffConsumed={(intentId) => {
+            setProjectTemplateHandoff((current) =>
+              current?.intent.intentId === intentId ? undefined : current,
+            );
+          }}
+          onWorldCreationHandoffConsumed={(intentId) => {
+            setWorldCreationHandoff((current) =>
               current?.intent.intentId === intentId ? undefined : current,
             );
           }}
@@ -1387,6 +1522,8 @@ export function DesktopShellView({
     onFinalizeAndStartCharacterConversation: async () => undefined,
     onCharacterProductHandoff: () => undefined,
     onStartCharacterCreation: async () => undefined,
+    onStartProjectTemplate: async () => undefined,
+    onStartWorldCreation: async () => undefined,
     onSelectEntryProjectTarget: async () => undefined,
     onLoadEntryAuthoringTargets: async () => ({
       targets: [],
@@ -1413,6 +1550,8 @@ function DesktopSceneWorkbench({
   actions,
   characterCreationHandoff,
   characterDialogueHandoff,
+  projectTemplateHandoff,
+  worldCreationHandoff,
   characterManagementReloadToken,
   worldManagementReloadToken,
   interactive = true,
@@ -1421,6 +1560,8 @@ function DesktopSceneWorkbench({
   projectPortabilityPort,
   onCharacterCreationHandoffConsumed,
   onCharacterDialogueHandoffConsumed,
+  onProjectTemplateHandoffConsumed,
+  onWorldCreationHandoffConsumed,
 }: {
   readonly actions: ShellActions;
   readonly characterCreationHandoff?: {
@@ -1431,11 +1572,21 @@ function DesktopSceneWorkbench({
     readonly draftId: string;
     readonly intent: CharacterDialogueHandoffIntent;
   };
+  readonly projectTemplateHandoff?: {
+    readonly draftId: string;
+    readonly intent: ProjectTemplateHandoffIntent;
+  };
+  readonly worldCreationHandoff?: {
+    readonly draftId: string;
+    readonly intent: WorldCreationHandoffIntent;
+  };
   readonly characterManagementReloadToken?: number;
   readonly worldManagementReloadToken?: number;
   readonly interactive?: boolean;
   readonly onCharacterCreationHandoffConsumed?: (intentId: string) => void;
   readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
+  readonly onProjectTemplateHandoffConsumed?: (intentId: string) => void;
+  readonly onWorldCreationHandoffConsumed?: (intentId: string) => void;
   readonly pending: DesktopShellPendingProjection;
   readonly projection: DesktopShellProjection;
   readonly projectPortabilityPort?: OpenNekoDesktopProjectPortabilityBridge['projectPortability'];
@@ -1715,6 +1866,20 @@ function DesktopSceneWorkbench({
             ? {
                 characterCreationHandoff: characterCreationHandoff.intent,
                 onCharacterCreationHandoffConsumed,
+              }
+            : {}),
+          ...(scene.slots.interaction.scope.kind === 'unbound' &&
+          projectTemplateHandoff?.draftId === scene.slots.interaction.scope.draftId
+            ? {
+                projectTemplateHandoff: projectTemplateHandoff.intent,
+                onProjectTemplateHandoffConsumed,
+              }
+            : {}),
+          ...(scene.slots.interaction.scope.kind === 'unbound' &&
+          worldCreationHandoff?.draftId === scene.slots.interaction.scope.draftId
+            ? {
+                worldCreationHandoff: worldCreationHandoff.intent,
+                onWorldCreationHandoffConsumed,
               }
             : {}),
           ...(scene.slots.interaction.scope.kind === 'unbound' &&
@@ -2299,7 +2464,7 @@ function DesktopWorkbenchRuntimePortals({
           interactive={interactive}
           onOpenDirectory={actions.onOpenWorkspaceDirectory}
           onOpen={actions.onSelectProject}
-          onStartFromTemplate={() => actions.onTransitionScene({ kind: 'open-agent-entry' })}
+          onStartFromTemplate={(template) => void actions.onStartProjectTemplate(template)}
           onArchiveAssociatedConversations={actions.onArchiveProjectConversations}
           onRemove={actions.onRemoveProjects}
           projects={projection.catalog.projects}
@@ -2324,9 +2489,9 @@ function DesktopWorkbenchRuntimePortals({
       ) : (
         <WorldManagementCatalogRoot
           actions={{
-            onCreate: () => actions.onTransitionScene({ kind: 'open-agent-entry' }),
+            onCreate: () => void actions.onStartWorldCreation('blank'),
             onImport: actions.onImportWorldPackage,
-            onStartFromTemplate: () => actions.onTransitionScene({ kind: 'open-agent-entry' }),
+            onStartFromTemplate: () => void actions.onStartWorldCreation('world-bible'),
           }}
           locale={locale}
           onSelect={(globalWorldId) =>
@@ -3055,6 +3220,10 @@ export function createDesktopAgentSurfaceProps(input: {
   readonly onCharacterCreationHandoffConsumed?: (intentId: string) => void;
   readonly characterDialogueHandoff?: CharacterDialogueHandoffIntent;
   readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
+  readonly projectTemplateHandoff?: ProjectTemplateHandoffIntent;
+  readonly onProjectTemplateHandoffConsumed?: (intentId: string) => void;
+  readonly worldCreationHandoff?: WorldCreationHandoffIntent;
+  readonly onWorldCreationHandoffConsumed?: (intentId: string) => void;
 }): DesktopAgentSurfaceProps {
   const { interaction } = input;
   return {
@@ -3079,6 +3248,18 @@ export function createDesktopAgentSurfaceProps(input: {
       : {
           characterDialogueHandoff: input.characterDialogueHandoff,
           onCharacterDialogueHandoffConsumed: input.onCharacterDialogueHandoffConsumed,
+        }),
+    ...(input.projectTemplateHandoff === undefined
+      ? {}
+      : {
+          projectTemplateHandoff: input.projectTemplateHandoff,
+          onProjectTemplateHandoffConsumed: input.onProjectTemplateHandoffConsumed,
+        }),
+    ...(input.worldCreationHandoff === undefined
+      ? {}
+      : {
+          worldCreationHandoff: input.worldCreationHandoff,
+          onWorldCreationHandoffConsumed: input.onWorldCreationHandoffConsumed,
         }),
     ...(interaction.scope.kind === 'unbound' || interaction.scope.conversationId === undefined
       ? {}

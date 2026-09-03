@@ -44,6 +44,7 @@ export function AuthoringTargetSelector({
   const [draftName, setDraftName] = useState('');
   const [creating, setCreating] = useState(false);
   const busy = pending || creating;
+  const creatingWorld = creationOnlyKind === 'world-project';
 
   useEffect(() => {
     if (creationOnlyKind === undefined || !presentation.loadAuthoringCatalog) return;
@@ -74,11 +75,23 @@ export function AuthoringTargetSelector({
     async (context: AgentComposerAuthoringCreationContext) => {
       const name = draftName.trim();
       if (!name) {
-        setDiagnostic(t('chat.entryAuthoring.nameRequired'));
+        setDiagnostic(
+          t(
+            creatingWorld
+              ? 'chat.entryAuthoring.worldNameRequired'
+              : 'chat.entryAuthoring.nameRequired',
+          ),
+        );
         return;
       }
       if (!presentation.onCreateAuthoringTarget) {
-        setDiagnostic(t('chat.entryAuthoring.creationUnavailable'));
+        setDiagnostic(
+          t(
+            creatingWorld
+              ? 'chat.entryAuthoring.worldCreationUnavailable'
+              : 'chat.entryAuthoring.creationUnavailable',
+          ),
+        );
         return;
       }
       setDiagnostic(undefined);
@@ -93,7 +106,7 @@ export function AuthoringTargetSelector({
         setCreating(false);
       }
     },
-    [commitTarget, draftName, presentation, t],
+    [commitTarget, creatingWorld, draftName, presentation, t],
   );
 
   const selectProject = useCallback(
@@ -119,13 +132,23 @@ export function AuthoringTargetSelector({
     return (
       <div className="agent-entry-authoring-selector agent-entry-authoring-creation">
         <div className="agent-entry-authoring-creation-header">
-          <label htmlFor="agent-entry-authoring-name">{t('chat.entryAuthoring.nameLabel')}</label>
+          <label htmlFor="agent-entry-authoring-name">
+            {t(
+              creatingWorld
+                ? 'chat.entryAuthoring.worldNameLabel'
+                : 'chat.entryAuthoring.nameLabel',
+            )}
+          </label>
           <div className="agent-entry-authoring-name-row">
             <input
               id="agent-entry-authoring-name"
               value={draftName}
               disabled={busy}
-              placeholder={t('chat.entryAuthoring.namePlaceholder')}
+              placeholder={t(
+                creatingWorld
+                  ? 'chat.entryAuthoring.worldNamePlaceholder'
+                  : 'chat.entryAuthoring.namePlaceholder',
+              )}
               onChange={(event) => {
                 setDraftName(event.target.value);
                 setDiagnostic(undefined);
@@ -147,7 +170,11 @@ export function AuthoringTargetSelector({
               key={context.creationId}
               resourceKind={creationResourceKind(context.targetKind)}
               label={context.label}
-              description={t('chat.entryAuthoring.createDescription')}
+              description={t(
+                creatingWorld
+                  ? 'chat.entryAuthoring.worldCreateDescription'
+                  : 'chat.entryAuthoring.createDescription',
+              )}
               media={creationIcon(context.targetKind)}
               disabled={busy || draftName.trim().length === 0}
               onSelect={() => void createTarget(context)}

@@ -1851,6 +1851,246 @@ describe('DshAgentView content-creation composer', () => {
     expect(onDraftChange).not.toHaveBeenCalled();
   });
 
+  it('creates and binds an exact Project-local World target from the World Bible handoff', async () => {
+    const onSubmit = vi.fn(async () => true);
+    const onDraftChange = vi.fn();
+    const onConsumed = vi.fn();
+    const creationContext = {
+      creationId: 'project-1:world',
+      label: 'Project One',
+      targetKind: 'world-project' as const,
+      placement: { kind: 'project' as const, projectId: 'project-1' },
+    };
+    const onCreateAuthoringTarget = vi.fn(async () => ({
+      status: 'created' as const,
+      target: {
+        label: 'Project One / Neko World',
+        context: {
+          kind: 'workspace' as const,
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+        },
+        authority: { kind: 'project' as const, projectId: 'project-1' },
+        target: { kind: 'world-project' as const, worldProjectId: 'world-project-1' },
+      },
+    }));
+    renderAgent(
+      <DshAgentView
+        agentSurfaceId="surface-world-creation"
+        surfaceKind="entry"
+        initialWorldCreationHandoff={{
+          kind: 'world-creation',
+          intentId: 'intent-world-bible-1',
+          entry: 'world-bible',
+        }}
+        onWorldCreationHandoffConsumed={onConsumed}
+        composerConfiguration={{
+          models: [
+            {
+              id: 'provider:model',
+              label: 'Model',
+              providerId: 'provider',
+              modelId: 'model',
+              providerLabel: 'Provider',
+              category: 'llm',
+              capabilities: ['chat'],
+            },
+          ],
+          selectedModelOptionId: 'provider:model',
+          selectedMediaModelOptionIds: {},
+          permissionPresetId: 'workspace-write',
+          permissionPresets: [
+            { id: 'workspace-write', label: 'Workspace Write', selectable: true },
+          ],
+        }}
+        entryContext={{
+          workspace: {
+            projects: [{ projectId: 'project-1', label: 'Project One' }],
+            loadAuthoringCatalog: vi.fn(async () => ({
+              targets: [],
+              creationContexts: [creationContext],
+              diagnostics: [],
+            })),
+            onCreateAuthoringTarget,
+          },
+        }}
+        configuring={false}
+        draft="Finish this World"
+        loading={false}
+        permissions={[]}
+        runtime={{ status: 'running' }}
+        submitting={false}
+        onCancelPermission={vi.fn()}
+        onCancelTurn={vi.fn()}
+        onDecidePermission={vi.fn()}
+        onDraftChange={onDraftChange}
+        onModelChange={vi.fn()}
+        onPermissionPresetChange={vi.fn()}
+        onRestartRuntime={vi.fn()}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    expect(await screen.findByLabelText('世界名称')).toBeTruthy();
+    expect(onDraftChange).toHaveBeenCalledWith('$world-creator ');
+    expect(onConsumed).toHaveBeenCalledWith('intent-world-bible-1');
+    fireEvent.change(screen.getByLabelText('世界名称'), {
+      target: { value: ' Neko World ' },
+    });
+    fireEvent.click(await screen.findByTitle('Project One'));
+    await waitFor(() =>
+      expect(onCreateAuthoringTarget).toHaveBeenCalledWith(creationContext, 'Neko World'),
+    );
+    expect(
+      await screen.findByRole('button', { name: '清除: Project One / Neko World' }),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        {
+          kind: 'authoring',
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+          authority: { kind: 'project', projectId: 'project-1' },
+          target: { kind: 'world-project', worldProjectId: 'world-project-1' },
+        },
+        {
+          kind: 'message',
+          text: 'Finish this World',
+          references: [],
+          images: [],
+          contextPayloads: [],
+        },
+      ),
+    );
+  });
+
+  it('opens blank World creation without injecting the World Creator Skill', async () => {
+    const onDraftChange = vi.fn();
+    renderAgent(
+      <DshAgentView
+        agentSurfaceId="surface-blank-world"
+        surfaceKind="entry"
+        initialWorldCreationHandoff={{
+          kind: 'world-creation',
+          intentId: 'intent-blank-world-1',
+          entry: 'blank',
+        }}
+        entryContext={{
+          workspace: {
+            projects: [],
+            loadAuthoringCatalog: vi.fn(async () => ({
+              targets: [],
+              creationContexts: [],
+              diagnostics: [],
+            })),
+          },
+        }}
+        configuring={false}
+        draft=""
+        loading={false}
+        permissions={[]}
+        runtime={{ status: 'running' }}
+        submitting={false}
+        onCancelPermission={vi.fn()}
+        onCancelTurn={vi.fn()}
+        onDecidePermission={vi.fn()}
+        onDraftChange={onDraftChange}
+        onModelChange={vi.fn()}
+        onPermissionPresetChange={vi.fn()}
+        onRestartRuntime={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByLabelText('世界名称')).toBeTruthy();
+    expect(onDraftChange).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['storyboard', '$storyboard '],
+    ['video-plan', '$media-production '],
+  ] as const)(
+    'binds the %s Project template to its newly created Project',
+    async (template, skill) => {
+      const onDraftChange = vi.fn();
+      const onConsumed = vi.fn();
+      const onSubmit = vi.fn(async () => true);
+      renderAgent(
+        <DshAgentView
+          agentSurfaceId={`surface-project-template-${template}`}
+          surfaceKind="entry"
+          initialProjectTemplateHandoff={{
+            kind: 'project-template',
+            intentId: `intent-${template}`,
+            template,
+            label: 'New Project',
+            binding: {
+              kind: 'authoring',
+              workspaceId: 'workspace-new',
+              workspaceGrantId: 'grant-new',
+              authority: { kind: 'project', projectId: 'project-new' },
+              target: null,
+            },
+          }}
+          onProjectTemplateHandoffConsumed={onConsumed}
+          composerConfiguration={{
+            models: [
+              {
+                id: 'provider:model',
+                label: 'Model',
+                providerId: 'provider',
+                modelId: 'model',
+                providerLabel: 'Provider',
+                category: 'llm',
+                capabilities: ['chat'],
+              },
+            ],
+            selectedModelOptionId: 'provider:model',
+            selectedMediaModelOptionIds: {},
+            permissionPresetId: 'workspace-write',
+            permissionPresets: [
+              { id: 'workspace-write', label: 'Workspace Write', selectable: true },
+            ],
+          }}
+          entryContext={{ workspace: { projects: [] } }}
+          configuring={false}
+          draft="Create the project"
+          loading={false}
+          permissions={[]}
+          runtime={{ status: 'running' }}
+          submitting={false}
+          onCancelPermission={vi.fn()}
+          onCancelTurn={vi.fn()}
+          onDecidePermission={vi.fn()}
+          onDraftChange={onDraftChange}
+          onModelChange={vi.fn()}
+          onPermissionPresetChange={vi.fn()}
+          onRestartRuntime={vi.fn()}
+          onSubmit={onSubmit}
+        />,
+      );
+
+      expect(await screen.findByRole('button', { name: '清除: New Project' })).toBeTruthy();
+      expect(onDraftChange).toHaveBeenCalledWith(skill);
+      expect(onConsumed).toHaveBeenCalledWith(`intent-${template}`);
+      fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
+      await waitFor(() =>
+        expect(onSubmit).toHaveBeenCalledWith(
+          {
+            kind: 'authoring',
+            workspaceId: 'workspace-new',
+            workspaceGrantId: 'grant-new',
+            authority: { kind: 'project', projectId: 'project-new' },
+            target: null,
+          },
+          expect.objectContaining({ kind: 'message', text: 'Create the project' }),
+        ),
+      );
+    },
+  );
+
   it('keeps Project Creation while omitting experimental creative context in Release', () => {
     const view = renderAgent(
       <DshAgentView

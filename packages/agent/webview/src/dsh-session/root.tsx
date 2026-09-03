@@ -17,6 +17,8 @@ import type {
   AgentContextPayload,
   CharacterCreationHandoffIntent,
   CharacterDialogueHandoffIntent,
+  ProjectTemplateHandoffIntent,
+  WorldCreationHandoffIntent,
   AgentCharacterDialogueTargetOption,
   AgentInputCatalogEntry,
   AgentWorldExperienceTargetOption,
@@ -36,8 +38,11 @@ import type {
   SelectedWorldLaunch,
 } from '../components/ChatView/InputArea/types';
 import { resolveAgentInputInvocationIntent } from '../components/ChatView/InputArea/slash-command-catalog';
-import type { AgentComposerWorkspacePresentation } from '../components/ComposerWorkspaceContext';
-import type { AgentComposerWorkspaceTarget } from '../components/ComposerWorkspaceContext';
+import type {
+  AgentComposerAuthoringCreationContext,
+  AgentComposerWorkspacePresentation,
+  AgentComposerWorkspaceTarget,
+} from '../components/ComposerWorkspaceContext';
 import { AuthoringTargetSelector } from '../components/ChatView/AuthoringTargetSelector';
 import { CharacterDialogueTargetSelector } from '../components/ChatView/CharacterDialogueTargetSelector';
 import { HomeExperienceQuickActions } from '../components/ChatView/HomeExperienceQuickActions';
@@ -80,6 +85,8 @@ export interface DshAgentViewProps {
   readonly entryContext?: DshEntryContextPresentation;
   readonly initialCharacterCreationHandoff?: CharacterCreationHandoffIntent;
   readonly initialCharacterDialogueHandoff?: CharacterDialogueHandoffIntent;
+  readonly initialProjectTemplateHandoff?: ProjectTemplateHandoffIntent;
+  readonly initialWorldCreationHandoff?: WorldCreationHandoffIntent;
   readonly composerConfiguration?: DshComposerConfigurationProjection;
   readonly composerConfigurationError?: string;
   readonly mentionItems?: readonly DshComposerMentionProjection[];
@@ -119,6 +126,8 @@ export interface DshAgentViewProps {
   readonly onOpenWrittenFile?: (toolCallId: string) => void;
   readonly onCharacterCreationHandoffConsumed?: (intentId: string) => void;
   readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
+  readonly onProjectTemplateHandoffConsumed?: (intentId: string) => void;
+  readonly onWorldCreationHandoffConsumed?: (intentId: string) => void;
   readonly onSubmit: (
     target: DshConversationCreationTarget,
     input: DshComposerSubmitInput,
@@ -165,8 +174,12 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   const {
     initialCharacterCreationHandoff,
     initialCharacterDialogueHandoff,
+    initialProjectTemplateHandoff,
+    initialWorldCreationHandoff,
     onCharacterCreationHandoffConsumed,
     onCharacterDialogueHandoffConsumed,
+    onProjectTemplateHandoffConsumed,
+    onWorldCreationHandoffConsumed,
     onDraftChange,
     surfaceKind,
   } = props;
@@ -175,7 +188,8 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   const [entryDetail, setEntryDetail] = useState<'project' | 'character' | 'world'>('character');
   const [entryDetailExpanded, setEntryDetailExpanded] = useState(true);
   const [entryWorkspaceTarget, setEntryWorkspaceTarget] = useState<AgentComposerWorkspaceTarget>();
-  const [entryCreationOnlyKind, setEntryCreationOnlyKind] = useState<'character-project'>();
+  const [entryCreationOnlyKind, setEntryCreationOnlyKind] =
+    useState<AgentComposerAuthoringCreationContext['targetKind']>();
   const [entryCharacterTargets, setEntryCharacterTargets] = useState<
     readonly AgentCharacterDialogueTargetOption[]
   >([]);
@@ -200,6 +214,8 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   const previousConversationIdRef = useRef(props.conversationId);
   const adoptedCharacterHandoffRef = useRef<string>();
   const adoptedCharacterCreationHandoffRef = useRef<string>();
+  const adoptedProjectTemplateHandoffRef = useRef<string>();
+  const adoptedWorldCreationHandoffRef = useRef<string>();
   const canvasWorkspaceId = props.composerConfiguration?.context?.canvas.workspaceId;
   const conversationTitle = props.projection?.title ?? copy.newConversation;
   const runtimeReady = props.runtime?.status === 'running';
@@ -257,6 +273,54 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
     onDraftChange,
     surfaceKind,
   ]);
+  useEffect(() => {
+    const handoff = initialWorldCreationHandoff;
+    if (
+      handoff === undefined ||
+      surfaceKind !== 'entry' ||
+      adoptedWorldCreationHandoffRef.current === handoff.intentId
+    ) {
+      return;
+    }
+    adoptedWorldCreationHandoffRef.current = handoff.intentId;
+    setEntryExperience('authoring');
+    setEntryDetail('project');
+    setEntryDetailExpanded(true);
+    setEntryWorkspaceTarget(undefined);
+    setEntryCharacterLaunches([]);
+    setEntryWorldLaunch(undefined);
+    setEntryCreationOnlyKind('world-project');
+    if (handoff.entry === 'world-bible') onDraftChange('$world-creator ');
+    onWorldCreationHandoffConsumed?.(handoff.intentId);
+  }, [initialWorldCreationHandoff, onDraftChange, onWorldCreationHandoffConsumed, surfaceKind]);
+  useEffect(() => {
+    const handoff = initialProjectTemplateHandoff;
+    if (
+      handoff === undefined ||
+      surfaceKind !== 'entry' ||
+      adoptedProjectTemplateHandoffRef.current === handoff.intentId
+    ) {
+      return;
+    }
+    adoptedProjectTemplateHandoffRef.current = handoff.intentId;
+    setEntryExperience('authoring');
+    setEntryDetail('project');
+    setEntryDetailExpanded(true);
+    setEntryWorkspaceTarget({
+      label: handoff.label,
+      context: {
+        kind: 'workspace',
+        workspaceId: handoff.binding.workspaceId,
+        workspaceGrantId: handoff.binding.workspaceGrantId,
+      },
+      authority: handoff.binding.authority,
+    });
+    setEntryCharacterLaunches([]);
+    setEntryWorldLaunch(undefined);
+    setEntryCreationOnlyKind(undefined);
+    onDraftChange(handoff.template === 'storyboard' ? '$storyboard ' : '$media-production ');
+    onProjectTemplateHandoffConsumed?.(handoff.intentId);
+  }, [initialProjectTemplateHandoff, onDraftChange, onProjectTemplateHandoffConsumed, surfaceKind]);
   useEffect(() => {
     const handoff = initialCharacterDialogueHandoff;
     if (
@@ -522,7 +586,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
                     }}
                     onChange={async (target) => {
                       setEntryWorkspaceTarget(target);
-                      if (target?.target?.kind === 'character-project') {
+                      if (target?.target !== undefined) {
                         setEntryCreationOnlyKind(undefined);
                       }
                       setEntryContextDiagnostic(undefined);
