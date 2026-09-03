@@ -7,33 +7,22 @@ import {
 } from './dsh-canvas-artifact-delivery';
 
 describe('DSH Canvas completed Tool artifact collection', () => {
-  it('projects a stable parent document beside an exact content selector', () => {
+  it('projects only the stable parent document for an exact content selector', () => {
     const source = {
       file: { authority: 'workspace' as const, path: 'books/blame.epub' },
       selector: { kind: 'entry' as const, path: 'OPS/chapter.xhtml' },
     };
     const collection = collect(documentTool('document-1', source));
-    const parent = collection.batch?.artifacts.find(
-      (artifact) => artifact.contentLocator.selector === undefined,
-    );
-
     expect(collection.diagnostics).toEqual([]);
     expect(collection.batch).toMatchObject({ turn: 1, createdAt: 1_000 });
-    expect(collection.batch?.artifacts).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          kind: 'file-reference',
-          role: 'source',
-          contentLocator: { file: source.file },
-        }),
-        expect.objectContaining({
-          kind: 'file-reference',
-          role: 'source',
-          contentLocator: source,
-          sourceArtifactIds: [parent?.artifactId],
-        }),
-      ]),
-    );
+    expect(collection.batch?.artifacts).toEqual([
+      expect.objectContaining({
+        kind: 'file-reference',
+        role: 'source',
+        title: 'blame.epub',
+        contentLocator: { file: source.file },
+      }),
+    ]);
   });
 
   it('projects the validated document input when model-facing output is truncated text', () => {
@@ -48,12 +37,12 @@ describe('DSH Canvas completed Tool artifact collection', () => {
     });
 
     expect(collection.diagnostics).toEqual([]);
-    expect(collection.batch?.artifacts).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ contentLocator: { file: source.file } }),
-        expect.objectContaining({ contentLocator: source }),
-      ]),
-    );
+    expect(collection.batch?.artifacts).toEqual([
+      expect.objectContaining({
+        title: 'blame.epub',
+        contentLocator: { file: source.file },
+      }),
+    ]);
   });
 
   it('projects every original source from an image overview without persisting the contact sheet', () => {

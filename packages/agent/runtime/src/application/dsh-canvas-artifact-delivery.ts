@@ -387,27 +387,26 @@ function collectContentToolSources(
   let locator: ContentLocator;
   if (event.title === DOCUMENT_DSH_TOOL_NAME) {
     locator = decodeDocumentDshToolArgs(event.rawInput).input.source;
-    return createLocatedSourceArtifacts(locator, 'file-reference');
+    return [createSourceArtifact({ file: locator.file }, 'file-reference')];
   } else if (event.title === CONTENT_IMAGE_DSH_TOOL_NAME) {
     const rawInput = requireRecord(event.rawInput, `${CONTENT_IMAGE_DSH_TOOL_NAME} input`);
     locator = decodeContentImageDshToolSource(rawInput['source']);
-    return createLocatedSourceArtifacts(locator, 'image');
+    return createLocatedImageSourceArtifacts(locator);
   } else if (event.title === CONTENT_IMAGES_DSH_TOOL_NAME) {
     return decodeContentImagesDshToolInput(event.rawInput).sources.flatMap((source) =>
-      createLocatedSourceArtifacts(source, 'image'),
+      createLocatedImageSourceArtifacts(source),
     );
   } else {
     return [];
   }
 }
 
-function createLocatedSourceArtifacts(
+function createLocatedImageSourceArtifacts(
   locator: ContentLocator,
-  kind: 'file-reference' | 'image',
 ): readonly DshCanvasArtifactResourceArtifact[] {
-  if (locator.selector === undefined) return [createSourceArtifact(locator, kind)];
+  if (locator.selector === undefined) return [createSourceArtifact(locator, 'image')];
   const parent = createSourceArtifact({ file: locator.file }, 'file-reference');
-  return [parent, createSourceArtifact(locator, kind, [parent.artifactId])];
+  return [parent, createSourceArtifact(locator, 'image', [parent.artifactId])];
 }
 
 function deduplicateResources(
