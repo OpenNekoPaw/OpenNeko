@@ -1383,6 +1383,15 @@ describe('DshAgentView content-creation composer', () => {
         entryContext={{
           workspace: {
             projects: [{ projectId: 'project-1', label: 'Project One' }],
+            onSelectProject: vi.fn(async () => ({
+              label: 'Project One',
+              context: {
+                kind: 'workspace' as const,
+                workspaceId: 'workspace-1',
+                workspaceGrantId: 'grant-1',
+              },
+              authority: { kind: 'project' as const, projectId: 'project-1' },
+            })),
           },
           experimentalCreative: {
             loadCharacterTargets: vi.fn(async () => ({
@@ -1476,7 +1485,13 @@ describe('DshAgentView content-creation composer', () => {
     expect(await screen.findByRole('button', { name: '清除: Project One' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
     expect(onSubmit).toHaveBeenCalledWith(
-      { kind: 'project', projectId: 'project-1' },
+      {
+        kind: 'authoring',
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'grant-1',
+        authority: { kind: 'project', projectId: 'project-1' },
+        target: null,
+      },
       { kind: 'message', text: 'Create a scene', references: [], images: [], contextPayloads: [] },
     );
   });
@@ -1661,6 +1676,179 @@ describe('DshAgentView content-creation composer', () => {
         },
       ),
     );
+  });
+
+  it('creates and binds an exact Project-local Character target from the Character Kit handoff', async () => {
+    const onSubmit = vi.fn(async () => true);
+    const onDraftChange = vi.fn();
+    const onConsumed = vi.fn();
+    const creationContext = {
+      creationId: 'project-1:character',
+      label: 'Project One',
+      targetKind: 'character-project' as const,
+      placement: { kind: 'project' as const, projectId: 'project-1' },
+    };
+    let releaseCreation = (): void => {
+      throw new Error('Character creation was not started.');
+    };
+    const creationPending = new Promise<void>((resolve) => {
+      releaseCreation = resolve;
+    });
+    const onCreateAuthoringTarget = vi.fn(async () => {
+      await creationPending;
+      return {
+        status: 'created' as const,
+        target: {
+          label: 'Project One / Neko',
+          context: {
+            kind: 'workspace' as const,
+            workspaceId: 'workspace-1',
+            workspaceGrantId: 'grant-1',
+          },
+          authority: { kind: 'project' as const, projectId: 'project-1' },
+          target: {
+            kind: 'character-project' as const,
+            characterProjectId: 'character-project-1',
+          },
+        },
+      };
+    });
+    renderAgent(
+      <DshAgentView
+        agentSurfaceId="surface-character-creation"
+        surfaceKind="entry"
+        initialCharacterCreationHandoff={{
+          kind: 'character-creation',
+          intentId: 'intent-character-kit-1',
+          entry: 'character-kit',
+        }}
+        onCharacterCreationHandoffConsumed={onConsumed}
+        composerConfiguration={{
+          models: [
+            {
+              id: 'provider:model',
+              label: 'Model',
+              providerId: 'provider',
+              modelId: 'model',
+              providerLabel: 'Provider',
+              category: 'llm',
+              capabilities: ['chat'],
+            },
+          ],
+          selectedModelOptionId: 'provider:model',
+          selectedMediaModelOptionIds: {},
+          permissionPresetId: 'workspace-write',
+          permissionPresets: [
+            { id: 'workspace-write', label: 'Workspace Write', selectable: true },
+          ],
+        }}
+        entryContext={{
+          workspace: {
+            projects: [{ projectId: 'project-1', label: 'Project One' }],
+            loadAuthoringCatalog: vi.fn(async () => ({
+              targets: [],
+              creationContexts: [creationContext],
+              diagnostics: [],
+            })),
+            onCreateAuthoringTarget,
+          },
+        }}
+        configuring={false}
+        draft="Finish this Character"
+        loading={false}
+        permissions={[]}
+        runtime={{ status: 'running' }}
+        submitting={false}
+        onCancelPermission={vi.fn()}
+        onCancelTurn={vi.fn()}
+        onDecidePermission={vi.fn()}
+        onDraftChange={onDraftChange}
+        onModelChange={vi.fn()}
+        onPermissionPresetChange={vi.fn()}
+        onRestartRuntime={vi.fn()}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    expect(await screen.findByLabelText('角色名称')).toBeTruthy();
+    expect(onDraftChange).toHaveBeenCalledWith('$character-creator ');
+    expect(onConsumed).toHaveBeenCalledWith('intent-character-kit-1');
+    fireEvent.change(screen.getByLabelText('角色名称'), { target: { value: ' Neko ' } });
+    const destination = await screen.findByTitle('Project One');
+    fireEvent.click(destination);
+    await waitFor(() =>
+      expect(onCreateAuthoringTarget).toHaveBeenCalledWith(creationContext, 'Neko'),
+    );
+    await waitFor(() => expect(destination.getAttribute('disabled')).not.toBeNull());
+    fireEvent.click(destination);
+    expect(onCreateAuthoringTarget).toHaveBeenCalledTimes(1);
+    releaseCreation();
+    expect(await screen.findByRole('button', { name: '清除: Project One / Neko' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        {
+          kind: 'authoring',
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+          authority: { kind: 'project', projectId: 'project-1' },
+          target: {
+            kind: 'character-project',
+            characterProjectId: 'character-project-1',
+          },
+        },
+        {
+          kind: 'message',
+          text: 'Finish this Character',
+          references: [],
+          images: [],
+          contextPayloads: [],
+        },
+      ),
+    );
+  });
+
+  it('opens blank Character creation without injecting the Character Creator Skill', async () => {
+    const onDraftChange = vi.fn();
+    renderAgent(
+      <DshAgentView
+        agentSurfaceId="surface-blank-character"
+        surfaceKind="entry"
+        initialCharacterCreationHandoff={{
+          kind: 'character-creation',
+          intentId: 'intent-blank-1',
+          entry: 'blank',
+        }}
+        entryContext={{
+          workspace: {
+            projects: [],
+            loadAuthoringCatalog: vi.fn(async () => ({
+              targets: [],
+              creationContexts: [],
+              diagnostics: [],
+            })),
+          },
+        }}
+        configuring={false}
+        draft=""
+        loading={false}
+        permissions={[]}
+        runtime={{ status: 'running' }}
+        submitting={false}
+        onCancelPermission={vi.fn()}
+        onCancelTurn={vi.fn()}
+        onDecidePermission={vi.fn()}
+        onDraftChange={onDraftChange}
+        onModelChange={vi.fn()}
+        onPermissionPresetChange={vi.fn()}
+        onRestartRuntime={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByLabelText('角色名称')).toBeTruthy();
+    expect(onDraftChange).not.toHaveBeenCalled();
   });
 
   it('keeps Project Creation while omitting experimental creative context in Release', () => {

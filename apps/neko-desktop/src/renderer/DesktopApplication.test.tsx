@@ -807,6 +807,98 @@ describe('DesktopApplication scene lifecycle', () => {
     },
   );
 
+  it('creates the Character Kit as one exact Project-local target before Agent submission', async () => {
+    const projectProjection = createTextEditorShellProjection();
+    const initialScene = creativeManagementScene('characters');
+    const initial = withActiveScene(projectProjection, initialScene);
+    const entryScene = createDefaultDesktopAgentScene('window-1', 'draft:character-kit');
+    const entered = withActiveScene(initial, entryScene);
+    let shellListener: ((event: DesktopShellProjectionEvent) => void) | undefined;
+    const transition = vi.fn(async () => ({
+      status: 'transitioned' as const,
+      requestId: 'character-kit-start',
+      scene: entryScene,
+    }));
+    const selectProject = vi.fn(async () => ({
+      requestId: 'select-project-1',
+      status: 'authorized-project' as const,
+      workspaceId: 'workspace-1',
+      projectId: 'project-1',
+      grant: {
+        workspaceGrantId: 'grant-1',
+        windowId: 'window-1',
+        label: 'Screenplay project',
+      },
+    }));
+    const createLocalTarget = vi.fn(async (_windowId, binding, input) => ({
+      requestId: 'create-character-1',
+      ...binding,
+      status: 'created' as const,
+      target: {
+        kind: 'character-project' as const,
+        characterProjectId:
+          input.kind === 'character-project' ? input.characterProjectId : 'unexpected-world',
+      },
+    }));
+    installBridge({
+      projection: initial,
+      transition,
+      subscribe: vi.fn((listener) => {
+        shellListener = listener;
+        return () => undefined;
+      }),
+      selectProject,
+      createLocalTarget,
+    });
+    const { container, root } = await renderApplication();
+    await waitFor(
+      () => container.querySelector('[data-character-template="character-kit"]') !== null,
+    );
+    const template = container.querySelector<HTMLButtonElement>(
+      '[data-character-template="character-kit"]',
+    );
+    if (!template) throw new Error('Desktop fixture requires the Character Kit template.');
+
+    await act(async () => template.click());
+    await waitFor(() => transition.mock.calls.length === 1);
+    await act(async () => {
+      shellListener?.({
+        applicationInstanceId: entered.applicationInstanceId,
+        windowId: entered.window.windowId,
+        rendererSessionId: entered.rendererSessionId,
+        sequence: 1,
+        projection: entered,
+      });
+    });
+
+    const name = await screen.findByLabelText('Character name');
+    const composer = screen.getByLabelText('Message') as HTMLTextAreaElement;
+    await waitFor(() => composer.value === '$character-creator ');
+    fireEvent.change(name, { target: { value: 'Neko' } });
+    fireEvent.click(await screen.findByTitle('Screenplay project'));
+
+    await waitFor(() => createLocalTarget.mock.calls.length === 1);
+    expect(selectProject).toHaveBeenCalledWith('window-1', 'project-1');
+    expect(createLocalTarget).toHaveBeenCalledWith(
+      'window-1',
+      {
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'grant-1',
+        projectId: 'project-1',
+      },
+      expect.objectContaining({
+        kind: 'character-project',
+        displayName: 'Neko',
+        sources: { evidence: [], assetRepresentations: [] },
+        entity: expect.objectContaining({ kind: 'create', name: 'Neko' }),
+      }),
+    );
+    expect(
+      await screen.findByRole('button', { name: 'Clear: Screenplay project / Neko' }),
+    ).toBeTruthy();
+    await act(async () => root.unmount());
+  });
+
   it.each([
     ['characters', '[data-character-management-action="create"]'],
     ['worlds', '[data-world-management-action="create"]'],
@@ -3127,6 +3219,8 @@ function installBridge({
     status: 'opened' as const,
   })),
   lifecycleSubscribe = vi.fn(() => () => undefined),
+  selectProject = vi.fn(),
+  createLocalTarget = vi.fn(),
 }: {
   readonly getSnapshot?: () => Promise<DesktopShellProjection>;
   readonly projection: DesktopShellProjection;
@@ -3158,6 +3252,8 @@ function installBridge({
   readonly canvasReadWorkspaceIndexCatalog?: typeof window.openNekoDesktop.canvas.readWorkspaceIndexCatalog;
   readonly canvasOpenWorkspaceDocument?: typeof window.openNekoDesktop.canvas.openWorkspaceDocument;
   readonly lifecycleSubscribe?: (listener: (event: DesktopLifecycleEvent) => void) => () => void;
+  readonly selectProject?: typeof window.openNekoDesktop.workspaceGrants.selectProject;
+  readonly createLocalTarget?: typeof window.openNekoDesktop.projectLocalAuthoring.createTarget;
 }): void {
   Object.defineProperty(window, 'openNekoDesktop', {
     configurable: true,
@@ -3172,6 +3268,11 @@ function installBridge({
       projects: { remove: removeProjects, archiveConversations: archiveProjectConversations },
       applicationSidebar: { update: updateApplicationSidebar },
       workbench: { update: updateWorkbench },
+      workspaceGrants: {
+        selectProject,
+        chooseDirectory: vi.fn(),
+      },
+      projectLocalAuthoring: { createTarget: createLocalTarget },
       assetCenter: { execute: assetCenterExecute },
       characterFoundation: {
         getConversationLaunchCatalog: vi.fn(async () => ({ targets: [], diagnostics: [] })),

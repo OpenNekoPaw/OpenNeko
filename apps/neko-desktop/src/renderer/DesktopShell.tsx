@@ -114,6 +114,7 @@ import type {
 } from '@neko/project-domain/contracts';
 import '@neko/project-webview/style.css';
 import {
+  createEmptyCharacterDefinition,
   type CharacterAuthoringSnapshot,
   type CharacterProductHandoff,
 } from '@neko/chara-domain/contracts';
@@ -130,7 +131,10 @@ import {
   DesktopApplicationNavigationButton,
 } from './DesktopApplicationSidebar';
 import {
+  createCharacterCreationHandoffIntent,
   createCharacterDialogueHandoffIntent,
+  type CharacterCreationEntry,
+  type CharacterCreationHandoffIntent,
   type CharacterDialogueHandoffIntent,
 } from '@neko/agent-contracts';
 import type { DesktopWindowCompositionProjection } from '@neko/host/desktop-window-composition-contract';
@@ -315,6 +319,16 @@ interface ShellActions {
     readonly label: string;
   }) => Promise<void>;
   readonly onCharacterProductHandoff: (handoff: CharacterProductHandoff) => void;
+  readonly onStartCharacterCreation: (entry: CharacterCreationEntry) => Promise<void>;
+  readonly onSelectEntryProjectTarget: NonNullable<
+    NonNullable<DesktopAgentSurfaceProps['entryContext']>['workspace']['onSelectProject']
+  >;
+  readonly onLoadEntryAuthoringTargets: NonNullable<
+    NonNullable<DesktopAgentSurfaceProps['entryContext']>['workspace']['loadAuthoringCatalog']
+  >;
+  readonly onCreateEntryAuthoringTarget: NonNullable<
+    NonNullable<DesktopAgentSurfaceProps['entryContext']>['workspace']['onCreateAuthoringTarget']
+  >;
   readonly onLoadEntryCharacterTargets: NonNullable<
     NonNullable<DesktopAgentSurfaceProps['entryContext']>['experimentalCreative']
   >['loadCharacterTargets'];
@@ -341,6 +355,10 @@ function DesktopApplicationContent(): JSX.Element {
   const [characterDialogueHandoff, setCharacterDialogueHandoff] = useState<{
     readonly draftId: string;
     readonly intent: CharacterDialogueHandoffIntent;
+  }>();
+  const [characterCreationHandoff, setCharacterCreationHandoff] = useState<{
+    readonly draftId: string;
+    readonly intent: CharacterCreationHandoffIntent;
   }>();
   const [characterPortableWorkflow, setCharacterPortableWorkflow] =
     useState<CharacterPortableWorkflow>();
@@ -1012,6 +1030,114 @@ function DesktopApplicationContent(): JSX.Element {
         finishPending();
       }
     },
+    onStartCharacterCreation: async (entry) => {
+      const finishPending = beginPending('scene');
+      setDiagnostic(undefined);
+      try {
+        const result = await window.openNekoDesktop.scenes.transition(
+          projection.window.windowId,
+          { kind: 'open-agent-entry' },
+          activeWorkbench.scene.sceneId,
+        );
+        if (result.status !== 'transitioned') throw new Error(result.diagnostic.message);
+        if (
+          result.scene.context.kind !== 'agent' ||
+          result.scene.context.scope.kind !== 'unbound'
+        ) {
+          throw new Error('Character creation requires an unbound Agent Draft.');
+        }
+        setCharacterCreationHandoff({
+          draftId: result.scene.context.scope.draftId,
+          intent: createCharacterCreationHandoffIntent({
+            intentId: `character-creation:${crypto.randomUUID()}`,
+            entry,
+          }),
+        });
+      } catch (error) {
+        setDiagnostic(describeError(error));
+        await refresh();
+        throw error;
+      } finally {
+        finishPending();
+      }
+    },
+    onSelectEntryProjectTarget: async (projectId) => {
+      const result = await window.openNekoDesktop.workspaceGrants.selectProject(
+        projection.window.windowId,
+        projectId,
+      );
+      if (result.status === 'cancelled') return undefined;
+      return {
+        label: result.grant.label,
+        context: {
+          kind: 'workspace' as const,
+          workspaceId: result.workspaceId,
+          workspaceGrantId: result.grant.workspaceGrantId,
+        },
+        authority: { kind: 'project' as const, projectId },
+      };
+    },
+    onLoadEntryAuthoringTargets: async () => ({
+      targets: [],
+      creationContexts: projection.catalog.projects.flatMap((project) =>
+        project.unavailable
+          ? []
+          : [
+              {
+                creationId: `${project.projectId}:character`,
+                label: project.displayName,
+                targetKind: 'character-project' as const,
+                placement: { kind: 'project' as const, projectId: project.projectId },
+              },
+            ],
+      ),
+      diagnostics: [],
+    }),
+    onCreateEntryAuthoringTarget: async (context, name) => {
+      if (context.targetKind !== 'character-project') {
+        throw new Error(`Unsupported Character creation target '${context.targetKind}'.`);
+      }
+      const authorization = await window.openNekoDesktop.workspaceGrants.selectProject(
+        projection.window.windowId,
+        context.placement.projectId,
+      );
+      if (authorization.status === 'cancelled') return undefined;
+      const characterProjectId = crypto.randomUUID();
+      const binding = {
+        workspaceId: authorization.workspaceId,
+        workspaceGrantId: authorization.grant.workspaceGrantId,
+        projectId: context.placement.projectId,
+      };
+      const result = await window.openNekoDesktop.projectLocalAuthoring.createTarget(
+        projection.window.windowId,
+        binding,
+        {
+          kind: 'character-project',
+          characterProjectId,
+          displayName: name,
+          draft: createEmptyCharacterDefinition(),
+          sources: { evidence: [], assetRepresentations: [] },
+          entity: {
+            kind: 'create',
+            entityId: `entity:${crypto.randomUUID()}`,
+            name,
+          },
+        },
+      );
+      return {
+        status: result.status,
+        target: {
+          label: `${authorization.grant.label} / ${name}`,
+          context: {
+            kind: 'workspace',
+            workspaceId: authorization.workspaceId,
+            workspaceGrantId: authorization.grant.workspaceGrantId,
+          },
+          authority: { kind: 'project', projectId: context.placement.projectId },
+          target: { kind: 'character-project', characterProjectId },
+        },
+      };
+    },
     onLoadEntryCharacterTargets: async () => {
       const catalog =
         await window.openNekoDesktop.characterFoundation.getConversationLaunchCatalog();
@@ -1141,11 +1267,17 @@ function DesktopApplicationContent(): JSX.Element {
         ) : null}
         <DesktopSceneWorkbench
           actions={actions}
+          characterCreationHandoff={characterCreationHandoff}
           characterManagementReloadToken={characterManagementReloadToken}
           worldManagementReloadToken={worldManagementReloadToken}
           characterDialogueHandoff={characterDialogueHandoff}
           onCharacterDialogueHandoffConsumed={(intentId) => {
             setCharacterDialogueHandoff((current) =>
+              current?.intent.intentId === intentId ? undefined : current,
+            );
+          }}
+          onCharacterCreationHandoffConsumed={(intentId) => {
+            setCharacterCreationHandoff((current) =>
               current?.intent.intentId === intentId ? undefined : current,
             );
           }}
@@ -1254,6 +1386,14 @@ export function DesktopShellView({
     onStartGlobalCharacterConversation: async () => undefined,
     onFinalizeAndStartCharacterConversation: async () => undefined,
     onCharacterProductHandoff: () => undefined,
+    onStartCharacterCreation: async () => undefined,
+    onSelectEntryProjectTarget: async () => undefined,
+    onLoadEntryAuthoringTargets: async () => ({
+      targets: [],
+      creationContexts: [],
+      diagnostics: [],
+    }),
+    onCreateEntryAuthoringTarget: async () => undefined,
     onLoadEntryCharacterTargets: async () => ({ targets: [], diagnostics: [] }),
     onLoadEntryWorldTargets: async () => ({ targets: [], diagnostics: [] }),
   };
@@ -1271,6 +1411,7 @@ export function DesktopShellView({
 
 function DesktopSceneWorkbench({
   actions,
+  characterCreationHandoff,
   characterDialogueHandoff,
   characterManagementReloadToken,
   worldManagementReloadToken,
@@ -1278,9 +1419,14 @@ function DesktopSceneWorkbench({
   pending,
   projection,
   projectPortabilityPort,
+  onCharacterCreationHandoffConsumed,
   onCharacterDialogueHandoffConsumed,
 }: {
   readonly actions: ShellActions;
+  readonly characterCreationHandoff?: {
+    readonly draftId: string;
+    readonly intent: CharacterCreationHandoffIntent;
+  };
   readonly characterDialogueHandoff?: {
     readonly draftId: string;
     readonly intent: CharacterDialogueHandoffIntent;
@@ -1288,6 +1434,7 @@ function DesktopSceneWorkbench({
   readonly characterManagementReloadToken?: number;
   readonly worldManagementReloadToken?: number;
   readonly interactive?: boolean;
+  readonly onCharacterCreationHandoffConsumed?: (intentId: string) => void;
   readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
   readonly pending: DesktopShellPendingProjection;
   readonly projection: DesktopShellProjection;
@@ -1564,6 +1711,13 @@ function DesktopSceneWorkbench({
           sceneId: scene.sceneId,
           interaction: scene.slots.interaction,
           ...(scene.slots.interaction.scope.kind === 'unbound' &&
+          characterCreationHandoff?.draftId === scene.slots.interaction.scope.draftId
+            ? {
+                characterCreationHandoff: characterCreationHandoff.intent,
+                onCharacterCreationHandoffConsumed,
+              }
+            : {}),
+          ...(scene.slots.interaction.scope.kind === 'unbound' &&
           characterDialogueHandoff?.draftId === scene.slots.interaction.scope.draftId
             ? {
                 characterDialogueHandoff: characterDialogueHandoff.intent,
@@ -1579,6 +1733,9 @@ function DesktopSceneWorkbench({
                       label: project.displayName,
                       ...(project.unavailable ? { disabled: true } : {}),
                     })),
+                    onSelectProject: actions.onSelectEntryProjectTarget,
+                    loadAuthoringCatalog: actions.onLoadEntryAuthoringTargets,
+                    onCreateAuthoringTarget: actions.onCreateEntryAuthoringTarget,
                   },
                   ...(experimentalCreativeCapabilitiesReady
                     ? {
@@ -2152,9 +2309,9 @@ function DesktopWorkbenchRuntimePortals({
       ) : scene.context.catalog === 'characters' ? (
         <CharacterCatalogSurface
           locale={locale}
-          onCreate={() => actions.onTransitionScene({ kind: 'open-agent-entry' })}
+          onCreate={() => void actions.onStartCharacterCreation('blank')}
           onImport={actions.onImportCharacterPackage}
-          onStartFromTemplate={() => actions.onTransitionScene({ kind: 'open-agent-entry' })}
+          onStartFromTemplate={() => void actions.onStartCharacterCreation('character-kit')}
           onSelect={(globalCharacterId) =>
             actions.onTransitionScene({
               kind: 'select-character-detail',
@@ -2894,6 +3051,8 @@ export function createDesktopAgentSurfaceProps(input: {
   readonly sceneId: string;
   readonly interaction: DesktopAgentInteractionSurfaceRef;
   readonly entryContext?: DesktopAgentSurfaceProps['entryContext'];
+  readonly characterCreationHandoff?: CharacterCreationHandoffIntent;
+  readonly onCharacterCreationHandoffConsumed?: (intentId: string) => void;
   readonly characterDialogueHandoff?: CharacterDialogueHandoffIntent;
   readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
 }): DesktopAgentSurfaceProps {
@@ -2909,6 +3068,12 @@ export function createDesktopAgentSurfaceProps(input: {
           ? 'assistant'
           : 'workspace',
     ...(input.entryContext === undefined ? {} : { entryContext: input.entryContext }),
+    ...(input.characterCreationHandoff === undefined
+      ? {}
+      : {
+          characterCreationHandoff: input.characterCreationHandoff,
+          onCharacterCreationHandoffConsumed: input.onCharacterCreationHandoffConsumed,
+        }),
     ...(input.characterDialogueHandoff === undefined
       ? {}
       : {

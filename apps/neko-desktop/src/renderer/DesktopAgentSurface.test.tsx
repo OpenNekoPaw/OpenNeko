@@ -1116,7 +1116,18 @@ describe('DesktopAgentSurface', () => {
         agentSurfaceId="surface-project-draft"
         surfaceKind="entry"
         entryContext={{
-          workspace: { projects: [{ projectId: 'project-1', label: 'Project One' }] },
+          workspace: {
+            projects: [{ projectId: 'project-1', label: 'Project One' }],
+            onSelectProject: vi.fn(async () => ({
+              label: 'Project One',
+              context: {
+                kind: 'workspace' as const,
+                workspaceId: 'workspace-1',
+                workspaceGrantId: 'grant-1',
+              },
+              authority: { kind: 'project' as const, projectId: 'project-1' },
+            })),
+          },
           experimentalCreative: {
             loadCharacterTargets: vi.fn(async () => ({ targets: [], diagnostics: [] })),
             loadWorldTargets: vi.fn(async () => ({ targets: [], diagnostics: [] })),
@@ -1132,6 +1143,7 @@ describe('DesktopAgentSurface', () => {
       container.querySelector('[data-entry-context-action="project"]') as HTMLButtonElement,
     );
     fireEvent.click(screen.getByTitle('Project One'));
+    expect(await screen.findByRole('button', { name: 'Clear: Project One' })).toBeTruthy();
     fireEvent.change(composer, { target: { value: '  create in project  ' } });
     fireEvent.click(screen.getByLabelText('Send (Enter)'));
 
@@ -1140,7 +1152,13 @@ describe('DesktopAgentSurface', () => {
         'workbench-1',
         'surface-project-draft',
         'workspace-write',
-        { kind: 'project', projectId: 'project-1' },
+        {
+          kind: 'authoring',
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+          authority: { kind: 'project', projectId: 'project-1' },
+          target: null,
+        },
         {
           kind: 'message',
           text: 'create in project',

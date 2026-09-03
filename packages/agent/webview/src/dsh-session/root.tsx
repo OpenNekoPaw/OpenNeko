@@ -15,6 +15,7 @@ import type {
 } from '@neko/agent-contracts/dsh-session-host';
 import type {
   AgentContextPayload,
+  CharacterCreationHandoffIntent,
   CharacterDialogueHandoffIntent,
   AgentCharacterDialogueTargetOption,
   AgentInputCatalogEntry,
@@ -36,8 +37,8 @@ import type {
 } from '../components/ChatView/InputArea/types';
 import { resolveAgentInputInvocationIntent } from '../components/ChatView/InputArea/slash-command-catalog';
 import type { AgentComposerWorkspacePresentation } from '../components/ComposerWorkspaceContext';
+import type { AgentComposerWorkspaceTarget } from '../components/ComposerWorkspaceContext';
 import { AuthoringTargetSelector } from '../components/ChatView/AuthoringTargetSelector';
-import type { DshEntryProjectSelection } from '../components/ChatView/AuthoringTargetSelector';
 import { CharacterDialogueTargetSelector } from '../components/ChatView/CharacterDialogueTargetSelector';
 import { HomeExperienceQuickActions } from '../components/ChatView/HomeExperienceQuickActions';
 import { WorldExperienceTargetSelector } from '../components/ChatView/WorldExperienceTargetSelector';
@@ -77,6 +78,7 @@ export interface DshAgentViewProps {
   readonly conversationId?: string;
   readonly surfaceKind: 'entry' | 'assistant' | 'workspace';
   readonly entryContext?: DshEntryContextPresentation;
+  readonly initialCharacterCreationHandoff?: CharacterCreationHandoffIntent;
   readonly initialCharacterDialogueHandoff?: CharacterDialogueHandoffIntent;
   readonly composerConfiguration?: DshComposerConfigurationProjection;
   readonly composerConfigurationError?: string;
@@ -115,6 +117,7 @@ export interface DshAgentViewProps {
     attachmentId: string,
   ) => Promise<DshImageAttachmentPreviewHostResult['preview']>;
   readonly onOpenWrittenFile?: (toolCallId: string) => void;
+  readonly onCharacterCreationHandoffConsumed?: (intentId: string) => void;
   readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
   readonly onSubmit: (
     target: DshConversationCreationTarget,
@@ -126,7 +129,13 @@ export interface DshEntryContextPresentation {
   readonly workspace: Pick<
     Extract<AgentComposerWorkspacePresentation, { readonly kind: 'entry' }>,
     'projects'
-  >;
+  > &
+    Partial<
+      Pick<
+        Extract<AgentComposerWorkspacePresentation, { readonly kind: 'entry' }>,
+        'onSelectProject' | 'loadAuthoringCatalog' | 'onCreateAuthoringTarget'
+      >
+    >;
   readonly experimentalCreative?: {
     readonly loadCharacterTargets: () => Promise<
       DshEntryTargetCatalog<AgentCharacterDialogueTargetOption>
@@ -153,13 +162,20 @@ export function DshAgentView(props: DshAgentViewProps): JSX.Element {
 
 function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   const { locale } = useTranslation();
-  const { initialCharacterDialogueHandoff, onCharacterDialogueHandoffConsumed, surfaceKind } =
-    props;
+  const {
+    initialCharacterCreationHandoff,
+    initialCharacterDialogueHandoff,
+    onCharacterCreationHandoffConsumed,
+    onCharacterDialogueHandoffConsumed,
+    onDraftChange,
+    surfaceKind,
+  } = props;
   const copy = locale === 'zh-cn' ? ZH_COPY : EN_COPY;
   const [entryExperience, setEntryExperience] = useState<'assistant' | 'authoring'>('assistant');
   const [entryDetail, setEntryDetail] = useState<'project' | 'character' | 'world'>('character');
   const [entryDetailExpanded, setEntryDetailExpanded] = useState(true);
-  const [entryWorkspaceTarget, setEntryWorkspaceTarget] = useState<DshEntryProjectSelection>();
+  const [entryWorkspaceTarget, setEntryWorkspaceTarget] = useState<AgentComposerWorkspaceTarget>();
+  const [entryCreationOnlyKind, setEntryCreationOnlyKind] = useState<'character-project'>();
   const [entryCharacterTargets, setEntryCharacterTargets] = useState<
     readonly AgentCharacterDialogueTargetOption[]
   >([]);
@@ -183,6 +199,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   const composerPresentationSnapshots = useDshComposerPresentationSnapshotStore();
   const previousConversationIdRef = useRef(props.conversationId);
   const adoptedCharacterHandoffRef = useRef<string>();
+  const adoptedCharacterCreationHandoffRef = useRef<string>();
   const canvasWorkspaceId = props.composerConfiguration?.context?.canvas.workspaceId;
   const conversationTitle = props.projection?.title ?? copy.newConversation;
   const runtimeReady = props.runtime?.status === 'running';
@@ -216,6 +233,31 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
       ? 'agent-workspace-initial-center-group'
       : 'agent-entry-center-group';
   useEffect(() => {
+    const handoff = initialCharacterCreationHandoff;
+    if (
+      handoff === undefined ||
+      surfaceKind !== 'entry' ||
+      adoptedCharacterCreationHandoffRef.current === handoff.intentId
+    ) {
+      return;
+    }
+    adoptedCharacterCreationHandoffRef.current = handoff.intentId;
+    setEntryExperience('authoring');
+    setEntryDetail('project');
+    setEntryDetailExpanded(true);
+    setEntryWorkspaceTarget(undefined);
+    setEntryCharacterLaunches([]);
+    setEntryWorldLaunch(undefined);
+    setEntryCreationOnlyKind('character-project');
+    if (handoff.entry === 'character-kit') onDraftChange('$character-creator ');
+    onCharacterCreationHandoffConsumed?.(handoff.intentId);
+  }, [
+    initialCharacterCreationHandoff,
+    onCharacterCreationHandoffConsumed,
+    onDraftChange,
+    surfaceKind,
+  ]);
+  useEffect(() => {
     const handoff = initialCharacterDialogueHandoff;
     if (
       handoff === undefined ||
@@ -231,6 +273,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
     setEntryCharacterConversationMode(handoff.binding.mode);
     setEntryWorldLaunch(undefined);
     setEntryWorkspaceTarget(undefined);
+    setEntryCreationOnlyKind(undefined);
     setEntryCharacterLaunches(
       handoff.binding.participants.map((participant, index) => ({
         globalCharacterId: participant.globalCharacterId,
@@ -417,6 +460,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
                     throw new Error(`Unsupported Entry experience '${value}'.`);
                   }
                   setEntryExperience(value);
+                  setEntryCreationOnlyKind(undefined);
                   setEntryDetail(value === 'authoring' ? 'project' : 'character');
                   setEntryDetailExpanded(true);
                   setEntryContextDiagnostic(undefined);
@@ -465,11 +509,22 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
               >
                 {entryExperience === 'authoring' ? (
                   <AuthoringTargetSelector
-                    projects={props.entryContext.workspace.projects}
+                    presentation={props.entryContext.workspace}
                     selected={entryWorkspaceTarget}
                     pending={props.submitting}
-                    onChange={(target) => {
+                    creationOnlyKind={entryCreationOnlyKind}
+                    onCancelCreation={() => {
+                      setEntryCreationOnlyKind(undefined);
+                      setEntryExperience('assistant');
+                      setEntryDetail('character');
+                      setEntryWorkspaceTarget(undefined);
+                      setEntryContextDiagnostic(undefined);
+                    }}
+                    onChange={async (target) => {
                       setEntryWorkspaceTarget(target);
+                      if (target?.target?.kind === 'character-project') {
+                        setEntryCreationOnlyKind(undefined);
+                      }
                       setEntryContextDiagnostic(undefined);
                     }}
                   />
@@ -640,7 +695,7 @@ function DshComposer({
   readonly entryExperience: 'assistant' | 'authoring';
   readonly entryContextAvailable: boolean;
   readonly experimentalCreativeContextAvailable: boolean;
-  readonly entryWorkspaceTarget?: DshEntryProjectSelection;
+  readonly entryWorkspaceTarget?: AgentComposerWorkspaceTarget;
   readonly selectedCharacterLaunches: readonly SelectedCharacterLaunch[];
   readonly entryCharacterConversationMode: 'companion' | 'narrative';
   readonly onEntryCharacterConversationModeChange: (mode: 'companion' | 'narrative') => void;
@@ -758,7 +813,13 @@ function DshComposer({
   );
   const submitTarget = (): DshConversationCreationTarget => {
     if (entryExperience === 'authoring' && entryWorkspaceTarget !== undefined) {
-      return { kind: 'project', projectId: entryWorkspaceTarget.projectId };
+      return {
+        kind: 'authoring',
+        workspaceId: entryWorkspaceTarget.context.workspaceId,
+        workspaceGrantId: entryWorkspaceTarget.context.workspaceGrantId,
+        authority: entryWorkspaceTarget.authority ?? failMissingAuthoringAuthority(),
+        target: entryWorkspaceTarget.target ?? null,
+      };
     }
     if (selectedWorldLaunch !== undefined) {
       throw new Error(
@@ -2421,6 +2482,10 @@ const ZH_COPY: DshAgentCopy = {
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function failMissingAuthoringAuthority(): never {
+  throw new Error('Agent authoring selection is missing its exact Project authority.');
 }
 
 function projectCatalogDiagnostic(diagnostics: readonly string[]): string | undefined {

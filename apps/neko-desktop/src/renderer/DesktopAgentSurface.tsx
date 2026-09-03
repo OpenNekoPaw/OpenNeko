@@ -12,7 +12,10 @@ import type {
   DshSessionHostProjection,
 } from '@neko/agent-contracts/dsh-session-host';
 import type { DshRuntimeHostProjection } from '@neko/agent-contracts/dsh-runtime-host';
-import type { CharacterDialogueHandoffIntent } from '@neko/agent-contracts';
+import type {
+  CharacterCreationHandoffIntent,
+  CharacterDialogueHandoffIntent,
+} from '@neko/agent-contracts';
 import {
   DshAgentView,
   type DshEntryContextPresentation,
@@ -27,6 +30,8 @@ export interface DesktopAgentSurfaceProps {
   readonly conversationId?: string;
   readonly surfaceKind: 'entry' | 'assistant' | 'workspace';
   readonly entryContext?: DshEntryContextPresentation;
+  readonly characterCreationHandoff?: CharacterCreationHandoffIntent;
+  readonly onCharacterCreationHandoffConsumed?: (intentId: string) => void;
   readonly characterDialogueHandoff?: CharacterDialogueHandoffIntent;
   readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
   readonly conversationFeed?: ReactNode;
@@ -47,11 +52,13 @@ type DesktopAgentSurfaceState =
 
 export function DesktopAgentSurface({
   agentSurfaceId,
+  characterCreationHandoff,
   characterDialogueHandoff,
   conversationFeed,
   conversationId,
   entryContext,
   messageAuthorPresentation,
+  onCharacterCreationHandoffConsumed,
   onCharacterDialogueHandoffConsumed,
   sceneId,
   surfaceKind,
@@ -505,6 +512,7 @@ export function DesktopAgentSurface({
       conversationId={effectiveConversationId}
       surfaceKind={surfaceKind}
       entryContext={entryContext}
+      initialCharacterCreationHandoff={characterCreationHandoff}
       initialCharacterDialogueHandoff={characterDialogueHandoff}
       draft={draft}
       composerConfiguration={composerConfiguration}
@@ -520,6 +528,7 @@ export function DesktopAgentSurface({
       runtime={runtime}
       submitting={submitting}
       onCancelPermission={(permission) => void cancelPermission(permission)}
+      onCharacterCreationHandoffConsumed={onCharacterCreationHandoffConsumed}
       onCharacterDialogueHandoffConsumed={onCharacterDialogueHandoffConsumed}
       onCancelTurn={() => void cancelTurn()}
       onDecidePermission={(permission, optionId) => void decidePermission(permission, optionId)}
