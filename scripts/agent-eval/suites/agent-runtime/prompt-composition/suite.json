@@ -95,6 +95,12 @@
       "visibility": "public"
     },
     {
+      "id": "workspace-creative-continue-after-cancel",
+      "file": "cases/workspace-creative-continue-after-cancel.json",
+      "group": "workflow",
+      "visibility": "public"
+    },
+    {
       "id": "agents-md-environment-fragment",
       "file": "cases/agents-md-environment-fragment.json",
       "group": "boundary",

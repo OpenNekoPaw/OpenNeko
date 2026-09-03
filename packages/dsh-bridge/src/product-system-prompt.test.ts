@@ -64,7 +64,25 @@ describe('OpenNeko DSH product system prompt', () => {
       'Do not silently cross a creator-review boundary',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'prepare only the earliest operation whose required inputs are currently real',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      "must not receive the current operation's success status, executable packet, or submit-ready claim",
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
       'Treat an unqualified continuation such as "continue", "proceed", or "do the next step"',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'If the immediately preceding turn ended unsuccessfully or produced no valid next action',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'resume its unresolved user objective from the last valid evidence at the same stage',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'do not infer a later stage from older Workspace artifacts or recommendations',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'If the same blocker remains, report it instead of promoting old work',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
       'A requested revision stays on the current artifact and stage',

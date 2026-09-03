@@ -49,11 +49,24 @@ After the current stage, the Agent SHALL return one state-grounded next operatio
 - **AND** provisional creative choices remain provisional unless the creator explicitly confirms them
 - **AND** it does not restart analysis, ask what continue means or skip automatically to later stages
 
+#### Scenario: Creator continues after an unsuccessful turn
+
+- **WHEN** the immediately preceding turn ended unsuccessfully or produced no valid next operation and the creator says “continue” without another objective
+- **THEN** the Agent resumes the unresolved prior objective from the last valid Workspace evidence at the same stage
+- **AND** older downstream artifacts or recommendations do not authorize a later stage
+- **AND** a remaining blocker is reported without promoting old work
+
 #### Scenario: Agent reports the current result
 
 - **WHEN** the Agent has produced a design draft, prepared input, generated candidate, reviewable master or verified delivery
 - **THEN** it describes completion at that narrowest observed stage
 - **AND** it does not promote plans, recommendations, provisional choices or unbound references to a later completed state
+
+#### Scenario: Preparation contains sequential dependent operations
+
+- **WHEN** a requested handoff requires an earlier operation's result before a later operation can be submitted
+- **THEN** the Agent prepares only the earliest operation whose required inputs currently exist
+- **AND** later-stage constraints may remain as dependency notes without receiving a shared success status, executable packet or submit-ready claim
 
 #### Scenario: Creator requests a revision
 
