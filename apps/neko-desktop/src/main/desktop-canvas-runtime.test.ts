@@ -636,6 +636,83 @@ describe('DesktopCanvasRuntime', () => {
     await runtime.dispose();
   });
 
+  it('keeps document-entry File actions local when Cut requires a direct Host path', async () => {
+    const workspacePath = await mkdtemp(
+      path.join(tmpdir(), 'openneko-canvas-document-entry-file-actions-'),
+    );
+    roots.push(workspacePath);
+    const identity = createIdentity();
+    const locator = {
+      file: { authority: 'workspace' as const, path: 'books/story.epub' },
+      selector: { kind: 'entry' as const, path: 'OPS/chapter.xhtml' },
+    };
+    await writeFixtureFile(
+      workspacePath,
+      identity.documentId,
+      JSON.stringify({
+        name: 'Document entry file actions',
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        nodes: [
+          {
+            id: 'document-entry-file',
+            type: 'file',
+            position: { x: 40, y: 60 },
+            size: { width: 240, height: 160 },
+            zIndex: 1,
+            data: {
+              path: 'OPS/chapter.xhtml',
+              title: 'Chapter',
+              mediaKind: 'document',
+              contentLocator: locator,
+            },
+          },
+        ],
+        connections: [],
+      }),
+    );
+    const resolveCut = vi.fn(async () => {
+      throw new Error('Document entry must not enter direct Cut path resolution.');
+    });
+    const runtime = new DesktopCanvasRuntime({
+      shell: {
+        resolveCanvasViewGrant: vi.fn(async (): Promise<DesktopCanvasViewGrant> => ({
+          identity,
+          workspace: {
+            workspaceId: 'workspace-1',
+            workspacePath,
+            displayName: 'Fixture',
+            locator: { kind: 'relative', value: '.' },
+          },
+        })),
+      },
+      host: createElectronNekoHostPorts({
+        homedir: workspacePath,
+        nekoHome: path.join(workspacePath, '.neko-home'),
+        workspaceRoot: workspacePath,
+        logger: new ConsoleLogger('DesktopCanvasDocumentEntryFileActionsTest'),
+      }),
+      globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
+      previewResource: vi.fn(async () => undefined),
+      resolveCut,
+      openInCut: vi.fn(async () => undefined),
+    });
+
+    const resolution = await runtime.resolveMaterialActions('window-1', {
+      requestId: 'resolve-document-entry-file-actions',
+      identity,
+      selectedNodeIds: ['document-entry-file'],
+    });
+
+    expect(resolution.descriptors).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: CANVAS_PREVIEW_ACTION_ID })]),
+    );
+    expect(resolution.descriptors).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: CANVAS_OPEN_IN_CUT_ACTION_ID })]),
+    );
+    expect(resolveCut).not.toHaveBeenCalled();
+    await runtime.dispose();
+  });
+
   it('routes an explicit project Media Library copy without mutating the Canvas source locator', async () => {
     const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-library-action-'));
     const linkedLibraryPath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-library-target-'));

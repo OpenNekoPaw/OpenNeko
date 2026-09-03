@@ -1,5 +1,6 @@
 import type {
   ModelType,
+  ProviderConfig,
   ProviderModelFamily,
   ProviderProtocolProfile,
   ProviderType,
@@ -21,6 +22,24 @@ export interface DesktopAiDialogueCapabilityReader {
 
 export interface DesktopAiGenerationCapabilityReader {
   read(): readonly DesktopAiGenerationProviderCapability[];
+}
+
+export function resolveDshDialogueProtocol(
+  provider: Pick<ProviderConfig, 'protocolProfile' | 'protocolVariant'>,
+): string | undefined {
+  if (provider.protocolProfile === 'ollama') return 'openai-completions';
+  if (provider.protocolProfile === 'openai-responses') return 'openai-responses';
+  if (provider.protocolProfile === 'anthropic') return 'anthropic-messages';
+  if (provider.protocolProfile === 'newapi' || provider.protocolProfile === 'openai-chat') {
+    if (
+      provider.protocolVariant?.authType !== undefined &&
+      provider.protocolVariant.authType !== 'bearer'
+    ) {
+      return undefined;
+    }
+    return 'openai-completions';
+  }
+  return provider.protocolProfile;
 }
 
 export class DesktopAiModelSettingsService {
@@ -351,7 +370,7 @@ export class DesktopAiModelSettingsService {
   ): Promise<DesktopAiProviderView> {
     const provider = this.config.getProvider(providerId);
     if (!provider) throw new Error(`Provider ${providerId} disappeared during projection.`);
-    const protocol = provider.protocolProfile;
+    const protocol = resolveDshDialogueProtocol(provider);
     const families = this.projectModelFamilies(provider.id);
     const capabilityDiagnostic = families.includes('dialogue')
       ? dialogueProviderDiagnostic(provider.id, protocol, capabilities)

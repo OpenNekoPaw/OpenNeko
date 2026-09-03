@@ -22,7 +22,11 @@ import {
   createCanvasMaterialActionOwner,
 } from '@neko/canvas-domain';
 import type { NekoHostPorts } from '@neko/host/ports';
-import { contentLocatorKey, type ContentLocator } from '@neko/content-domain';
+import {
+  contentLocatorKey,
+  type ContentLocator,
+  type WorkspaceFileContentLocator,
+} from '@neko/content-domain';
 import { createNodeHostContentReadService } from '@neko/content-domain/node';
 import {
   loadNkc,
@@ -495,7 +499,7 @@ export class DesktopCanvasRuntime {
             identity: requestIdentity,
             workspace: grant.workspace,
             locator,
-            ...(locator.file.authority === 'workspace' && locator.selector === undefined
+            ...(isDirectHostFileLocator(locator)
               ? {
                   absolutePath: await this.resolveContentPath(
                     requestIdentity.projectId,
@@ -533,8 +537,7 @@ export class DesktopCanvasRuntime {
       ...(this.options.host.external?.revealPath
         ? {
             resolveReveal: async ({ target }: { readonly target: CanvasMaterialActionTarget }) =>
-              target.locator.file.authority === 'workspace' &&
-              target.locator.selector === undefined,
+              isDirectHostFileLocator(target.locator),
             reveal: ({ identity: requestIdentity, target }) =>
               revealEffect(requestIdentity, target.locator),
           }
@@ -565,8 +568,11 @@ export class DesktopCanvasRuntime {
             }: {
               readonly identity: CanvasHostRuntimeIdentity;
               readonly target: CanvasMaterialActionTarget;
-            }) =>
-              resolveCut({
+            }) => {
+              if (!isDirectHostFileLocator(target.locator)) {
+                return false;
+              }
+              return resolveCut({
                 identity: requestIdentity,
                 target,
                 absolutePath: await this.resolveContentPath(
@@ -574,7 +580,8 @@ export class DesktopCanvasRuntime {
                   grant.workspace,
                   target.locator,
                 ),
-              }),
+              });
+            },
             openInCut: async ({
               identity: requestIdentity,
               target,
@@ -918,7 +925,7 @@ export class DesktopCanvasRuntime {
     workspace: DesktopCanvasViewGrant['workspace'],
     locator: ContentLocator,
   ): Promise<string> {
-    if (locator.file.authority === 'workspace' && locator.selector === undefined) {
+    if (isDirectHostFileLocator(locator)) {
       return resolveWorkspaceContentLocator(workspace, { file: locator.file });
     }
     throw new Error('Canvas material has no directly resolvable Host file path.');
@@ -994,6 +1001,12 @@ export class DesktopCanvasRuntime {
   private requireActive(): void {
     if (this.disposed) throw new Error('Canvas runtime is disposed.');
   }
+}
+
+function isDirectHostFileLocator(
+  locator: ContentLocator,
+): locator is WorkspaceFileContentLocator & { readonly selector?: undefined } {
+  return locator.file.authority === 'workspace' && locator.selector === undefined;
 }
 
 function canvasTargetDocumentId(target: CanvasWorkspaceTurnTarget): string {

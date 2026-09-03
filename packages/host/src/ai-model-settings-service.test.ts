@@ -184,6 +184,51 @@ describe('DesktopAiModelSettingsService', () => {
     expect(JSON.stringify(projection)).not.toContain('must-not-project');
   });
 
+  it('projects and persists a configured protocol through the canonical DSH protocol', async () => {
+    const { config } = createConfig();
+    const credentials = {
+      read: vi.fn(async () => undefined),
+    } as unknown as ProviderCredentialAuthority;
+    const capabilities: DesktopAiDialogueCapabilityReader = {
+      read: vi.fn(async () => ({
+        status: 'available' as const,
+        providers: [],
+        protocols: ['openai-completions'],
+        diagnostics: [],
+      })),
+    };
+
+    const projection = await createService(config, credentials, capabilities).project();
+
+    expect(projection.providers).toEqual([
+      expect.objectContaining({
+        id: 'provider-a',
+        protocol: 'openai-completions',
+      }),
+    ]);
+
+    const projected = projection.providers[0];
+    if (!projected?.protocol) throw new Error('Projected DSH protocol is missing.');
+    await createService(config, credentials, capabilities).execute({
+      requestId: 'persist-canonical-dsh-protocol',
+      operation: 'save-provider',
+      provider: {
+        id: projected.id,
+        displayName: projected.displayName,
+        type: projected.type,
+        apiUrl: projected.apiUrl,
+        connectionKind: projected.connectionKind,
+        protocol: projected.protocol,
+        supportedModelFamilies: projected.supportedModelFamilies,
+        requiresApiKey: true,
+        enabled: projected.enabled,
+      },
+    });
+    expect(config.setProvider).toHaveBeenCalledWith(
+      expect.objectContaining({ protocolProfile: 'openai-completions' }),
+    );
+  });
+
   it('writes providers and credentials through their canonical authorities', async () => {
     const { config } = createConfig();
     const credentials = {
@@ -1066,7 +1111,7 @@ describe('DesktopAiModelSettingsService', () => {
     expect(projection.providers).toEqual([
       expect.objectContaining({
         id: provider.id,
-        protocol: 'ollama',
+        protocol: 'openai-completions',
         connectionKind: 'local',
         supportedModelFamilies: ['dialogue'],
         credentialStatus: 'not-required',
