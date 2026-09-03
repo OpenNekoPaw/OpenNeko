@@ -73,7 +73,7 @@ export const desktopAiModelSettingsScenario = Object.freeze({
         'display_name = "Functional Image"',
         'provider_id = "functional-generation"',
         'type = "image"',
-        'capabilities = ["image.generate"]',
+        'capabilities = ["text_to_image"]',
         'enabled = true',
         '',
         '[default_models.llm]',
@@ -162,6 +162,71 @@ export const desktopAiModelSettingsScenario = Object.freeze({
     const catalog = await inspectProviderCatalog(evaluate);
     checkpoint('ai-model-provider-capability-groups', catalog);
     const catalogScreenshot = await screenshot('desktop-ai-model-provider-groups');
+
+    await openProvider(evaluate, 'Functional Generation');
+    await waitForSelector('.desktop-settings__editor');
+    await evaluate(`(() => {
+      const model = [...document.querySelectorAll('.desktop-settings__model-chip')].find((item) =>
+        item.textContent?.includes('Functional Image'),
+      );
+      const edit = [...model?.querySelectorAll('button') ?? []].find((button) =>
+        /编辑|Edit/u.test(button.textContent ?? ''),
+      );
+      if (!(edit instanceof HTMLButtonElement)) {
+        throw new Error('Functional image model edit action is unavailable.');
+      }
+      edit.click();
+      return true;
+    })()`);
+    await waitForSelector('.desktop-settings__model-editor');
+    const incompleteImageModelScreenshot = await screenshot(
+      'desktop-ai-model-incomplete-image-editor',
+    );
+    await evaluate(`(() => {
+      const save = document.querySelector(
+        '.desktop-settings__model-editor button.desktop-settings__action',
+      );
+      if (!(save instanceof HTMLButtonElement) || save.disabled) {
+        throw new Error('Functional image model save is unavailable.');
+      }
+      save.click();
+      return true;
+    })()`);
+    await waitForCondition(
+      evaluate,
+      `!document.querySelector('.desktop-settings__model-editor')`,
+      'Functional image model form did not close after save.',
+    );
+    const normalizedImageConfig = await readFile(prepared.configPath, 'utf8');
+    const normalizedImageModelBlock = normalizedImageConfig
+      .split('[[models]]')
+      .find((block) => block.includes('id = "functional-image"'));
+    if (
+      normalizedImageModelBlock === undefined ||
+      !normalizedImageModelBlock.includes('"text_to_image"') ||
+      !normalizedImageModelBlock.includes('"image.generate"')
+    ) {
+      throw new Error('Functional image model did not persist its required broad capability.');
+    }
+    checkpoint('incomplete-image-model-capabilities-normalized', {
+      capabilities: ['text_to_image', 'image.generate'],
+    });
+    await evaluate(`(() => {
+      const editor = document.querySelector('.desktop-settings__editor');
+      const close = [...editor?.querySelectorAll('button') ?? []].find((button) =>
+        /取消|Cancel/u.test(button.textContent ?? ''),
+      );
+      if (!(close instanceof HTMLButtonElement)) {
+        throw new Error('Functional Generation Provider close is unavailable.');
+      }
+      close.click();
+      return true;
+    })()`);
+    await waitForCondition(
+      evaluate,
+      `!document.querySelector('.desktop-settings__editor')`,
+      'Functional Generation Provider editor did not close.',
+    );
 
     await evaluate(`(() => {
       const group = document.querySelector('[data-provider-group="dialogue"]');
@@ -605,6 +670,7 @@ export const desktopAiModelSettingsScenario = Object.freeze({
       entryModelAfterDelete,
       screenshots: [
         catalogScreenshot,
+        incompleteImageModelScreenshot,
         dshCatalogScreenshot,
         generationPresetScreenshot,
         h3TemplateScreenshot,

@@ -15,6 +15,7 @@ import type {
   DesktopAiProviderView,
 } from './ai-model-settings-contract';
 import { DESKTOP_AI_CUSTOM_DIALOGUE_PROVIDER_TYPES } from './ai-model-settings-contract';
+import { requiredDesktopAiModelCapabilities } from './ai-model-provider-presets';
 
 export interface DesktopAiDialogueCapabilityReader {
   read(): Promise<Extract<DesktopAiDialogueCapabilityProjection, { readonly status: 'available' }>>;
@@ -576,14 +577,7 @@ function modelFamilyFor(type: ModelType): ProviderModelFamily {
 }
 
 function assertRequiredModelCapabilities(type: ModelType, capabilities: readonly string[]): void {
-  const required =
-    type === 'llm'
-      ? (['chat', 'llm.chat'] as const)
-      : type === 'image'
-        ? (['image.generate'] as const)
-        : type === 'video'
-          ? (['video.generate'] as const)
-          : (['audio.generate'] as const);
+  const required = requiredDesktopAiModelCapabilities(type);
   const missing = required.filter((capability) => !capabilities.includes(capability));
   if (missing.length > 0) {
     throw new Error(`Model type ${type} requires capabilities: ${missing.join(', ')}.`);

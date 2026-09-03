@@ -602,6 +602,73 @@ describe('Desktop Settings surfaces', () => {
     await act(async () => root.unmount());
   });
 
+  it('restores the required broad capability when saving an incomplete custom image model', async () => {
+    const projection = {
+      dialogueCapabilities,
+      generationCapabilities,
+      providers: [
+        {
+          id: 'newapi-media',
+          displayName: 'Custom NewAPI Media',
+          type: 'newapi' as const,
+          apiUrl: 'https://api.example.test/media',
+          connectionKind: 'gateway' as const,
+          enabled: true,
+          supportedModelFamilies: ['generation'] as const,
+          credentialStatus: 'configured' as const,
+        },
+      ],
+      models: [
+        {
+          id: 'incomplete-image',
+          providerId: 'newapi-media',
+          apiName: 'incomplete-image',
+          displayName: 'Incomplete Image',
+          type: 'image' as const,
+          capabilities: ['text_to_image'] as const,
+          enabled: true,
+        },
+      ],
+      defaults: {},
+    };
+    const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
+    const saveModel = vi.fn(async () => response);
+    const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
+      get: async () => projection,
+      saveProvider: async () => response,
+      saveModel,
+      deleteProvider: async () => response,
+      deleteModel: async () => response,
+      setDefault: async () => response,
+    };
+    const { container, root } = await renderSettings({
+      aiModelSettings,
+      initialSection: 'agent',
+    });
+    await act(async () => Promise.resolve());
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('.desktop-settings__provider-card-main')?.click(),
+    );
+    await act(async () => findButton(container, 'Edit').click());
+
+    const editor = container.querySelector<HTMLElement>('.desktop-settings__model-editor');
+    if (!editor) throw new Error('Incomplete image model fixture requires an editor.');
+    await act(async () =>
+      editor.querySelector<HTMLButtonElement>('button.desktop-settings__action')?.click(),
+    );
+
+    expect(saveModel).toHaveBeenCalledWith({
+      existingId: 'incomplete-image',
+      providerId: 'newapi-media',
+      apiName: 'incomplete-image',
+      displayName: 'Incomplete Image',
+      type: 'image',
+      capabilities: ['text_to_image', 'image.generate'],
+      enabled: true,
+    });
+    await act(async () => root.unmount());
+  });
+
   it('creates dialogue Providers from the live DSH catalog without a local preset', async () => {
     const projection = {
       dialogueCapabilities,

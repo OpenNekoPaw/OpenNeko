@@ -8,7 +8,11 @@ import type {
 } from '@neko/ai-contracts';
 import { PROVIDER_TYPES } from '@neko/ai-contracts';
 
-export { defaultDesktopAiModelCapabilities } from './ai-model-provider-presets';
+export {
+  defaultDesktopAiModelCapabilities,
+  requiredDesktopAiModelCapabilities,
+  withRequiredDesktopAiModelCapabilities,
+} from './ai-model-provider-presets';
 
 export type DesktopAiModelProtocol = string;
 

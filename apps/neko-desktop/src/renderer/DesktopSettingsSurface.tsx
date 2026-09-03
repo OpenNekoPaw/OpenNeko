@@ -15,6 +15,7 @@ import type { DesktopApplicationPreferences } from '@neko/host/application-setti
 import {
   DESKTOP_AI_CUSTOM_DIALOGUE_PROVIDER_TYPES,
   defaultDesktopAiModelCapabilities,
+  withRequiredDesktopAiModelCapabilities,
   type DesktopAiModelCapability,
   type DesktopAiModelTemplate,
   type DesktopAiModelType,
@@ -1366,13 +1367,15 @@ function ModelForm({
         : initial.displayName
       : (defaultTemplate?.displayName ?? ''),
   );
-  const [type, setType] = useState<DesktopAiModelType>(
-    initial?.type ?? defaultTemplate?.type ?? initialType,
-  );
+  const resolvedInitialType = initial?.type ?? defaultTemplate?.type ?? initialType;
+  const [type, setType] = useState<DesktopAiModelType>(resolvedInitialType);
   const [capabilities, setCapabilities] = useState<readonly DesktopAiModelCapability[]>(
-    initialTemplate?.capabilities ??
-      initial?.capabilities ??
-      defaultDesktopAiModelCapabilities(initialType),
+    withRequiredDesktopAiModelCapabilities(
+      resolvedInitialType,
+      initialTemplate?.capabilities ??
+        initial?.capabilities ??
+        defaultDesktopAiModelCapabilities(initialType),
+    ),
   );
   const [capabilityMenuOpen, setCapabilityMenuOpen] = useState(false);
   const selectedTemplate = modelTemplates.find((template) => template.id === templateId);
@@ -1399,7 +1402,7 @@ function ModelForm({
       apiName: normalizedApiName,
       displayName: displayName.trim() || normalizedApiName,
       type,
-      capabilities,
+      capabilities: withRequiredDesktopAiModelCapabilities(type, capabilities),
       enabled: true,
       ...(selectedTemplate === undefined ? {} : { templateId: selectedTemplate.id }),
     });
