@@ -742,39 +742,14 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
-  it('creates and binds the Storyboard template to one exact Content Project', async () => {
+  it('keeps Project templates visible but unavailable without opening a Workspace picker', async () => {
     const initial = withActiveScene(
       createProjection(),
       creativeManagementScene('content-projects'),
     );
-    const entryScene = createDefaultDesktopAgentScene('window-1', 'draft:template-start');
-    const entered = withActiveScene(initial, entryScene);
-    let shellListener: ((event: DesktopShellProjectionEvent) => void) | undefined;
-    const transition = vi.fn(async () => ({
-      status: 'transitioned' as const,
-      requestId: 'template-start-1',
-      scene: entryScene,
-    }));
-    const createContentProject = vi.fn(async () => ({
-      requestId: 'create-content-project-1',
-      status: 'authorized-project' as const,
-      workspaceId: 'workspace-new',
-      projectId: 'content:workspace-new',
-      grant: {
-        workspaceGrantId: 'grant-new',
-        windowId: 'window-1',
-        label: 'Storyboard project',
-      },
-    }));
-    installBridge({
-      projection: initial,
-      transition,
-      createContentProject,
-      subscribe: vi.fn((listener) => {
-        shellListener = listener;
-        return () => undefined;
-      }),
-    });
+    const transition = vi.fn();
+    const createContentProject = vi.fn();
+    installBridge({ projection: initial, transition, createContentProject });
     const { container, root } = await renderApplication();
     const storyboard = container.querySelector<HTMLButtonElement>(
       '[data-project-template-id="storyboard"]',
@@ -786,27 +761,14 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(projects?.querySelector('[data-project-template-id="character-kit"]')).toBeNull();
     expect(projects?.querySelector('.management-segmented-control')).toBeNull();
     expect(projects?.querySelector('[data-view-mode]')).toBeNull();
+    expect(storyboard.disabled).toBe(true);
+    expect(storyboard.dataset.availability).toBe('unavailable');
+    expect(storyboard.title).toBe('Project template creation is temporarily unavailable.');
+    expect(screen.getAllByText('Coming soon')).toHaveLength(2);
 
     await act(async () => storyboard.click());
-    await waitFor(() => transition.mock.calls.length === 1);
-    expect(createContentProject).toHaveBeenCalledWith('window-1');
-    expect(transition).toHaveBeenCalledWith(
-      'window-1',
-      { kind: 'open-agent-entry' },
-      creativeManagementScene('content-projects').sceneId,
-    );
-    await act(async () => {
-      shellListener?.({
-        applicationInstanceId: entered.applicationInstanceId,
-        windowId: entered.window.windowId,
-        rendererSessionId: entered.rendererSessionId,
-        sequence: 1,
-        projection: entered,
-      });
-    });
-    const composer = screen.getByLabelText('Message') as HTMLTextAreaElement;
-    await waitFor(() => composer.value === '$storyboard ');
-    expect(await screen.findByRole('button', { name: 'Clear: Storyboard project' })).toBeTruthy();
+    expect(createContentProject).not.toHaveBeenCalled();
+    expect(transition).not.toHaveBeenCalled();
     await act(async () => root.unmount());
   });
 

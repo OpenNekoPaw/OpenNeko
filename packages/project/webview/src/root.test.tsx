@@ -327,7 +327,16 @@ describe('ProjectCatalogRoot', () => {
     expect(onOpenDirectory).toHaveBeenCalledTimes(1);
     fireEvent.click(document.querySelector('[data-project-template-id="storyboard"]')!);
     fireEvent.click(document.querySelector('[data-project-template-id="video-plan"]')!);
-    expect(onStartFromTemplate.mock.calls).toEqual([['storyboard'], ['video-plan']]);
+    expect(onStartFromTemplate).not.toHaveBeenCalled();
+    expect(
+      [...document.querySelectorAll<HTMLButtonElement>('.project-template-card')].every(
+        (template) =>
+          template.disabled &&
+          template.dataset.availability === 'unavailable' &&
+          template.title === 'home.projects.templateUnavailableDescription',
+      ),
+    ).toBe(true);
+    expect(screen.getAllByText('home.projects.templateUnavailable')).toHaveLength(2);
     fireEvent.click(screen.getByRole('button', { name: 'home.projects.moreActions' }));
     expect(
       (

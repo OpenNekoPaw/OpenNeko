@@ -452,9 +452,11 @@ export function ProjectCatalogRoot({
               <button
                 type="button"
                 className="project-template-card"
+                data-availability="unavailable"
                 data-project-template-id={template.id}
-                disabled={!interactive}
+                disabled
                 key={template.id}
+                title={t('home.projects.templateUnavailableDescription')}
                 onClick={() => onStartFromTemplate(template.id)}
               >
                 <span className="project-template-card__preview" aria-hidden="true">
@@ -471,7 +473,7 @@ export function ProjectCatalogRoot({
                     <small>{template.description}</small>
                   </span>
                   <span className="project-template-card__action">
-                    {t('home.projects.startFromTemplate')}
+                    {t('home.projects.templateUnavailable')}
                   </span>
                 </span>
               </button>

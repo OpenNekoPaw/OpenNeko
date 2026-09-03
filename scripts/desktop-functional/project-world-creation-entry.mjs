@@ -28,10 +28,9 @@ export const projectWorldCreationEntryScenario = Object.freeze({
     await clickNavigation(evaluate, click, 'Projects', '项目');
     await waitForSelector(`${MAIN_SLOT} [data-project-template-id="storyboard"]`);
     await click(`${MAIN_SLOT} [data-project-template-id="storyboard"]`);
-    await waitForSelector(`${AGENT_SURFACE} .agent-entry-binding-item`);
-    const projectState = await inspectProjectTemplate(evaluate);
-    checkpoint('storyboard-project-bound', projectState);
-    const projectScreenshot = await screenshot('storyboard-project-bound');
+    const projectState = await inspectUnavailableProjectTemplates(evaluate);
+    checkpoint('project-templates-unavailable', projectState);
+    const projectScreenshot = await screenshot('project-templates-unavailable');
 
     await clickNavigation(evaluate, click, 'Worlds', '世界');
     await waitForSelector(`${MAIN_SLOT} [data-world-management-action="create"]`);
@@ -75,25 +74,29 @@ async function clickNavigation(evaluate, click, english, chinese) {
   await click(NAVIGATION_SELECTOR, index);
 }
 
-async function inspectProjectTemplate(evaluate) {
+async function inspectUnavailableProjectTemplates(evaluate) {
   const state = await evaluate(`(() => {
-    const binding = document.querySelector('${AGENT_SURFACE} .agent-entry-binding-item');
+    const templates = [...document.querySelectorAll(
+      '${MAIN_SLOT} .project-template-card[data-availability="unavailable"]'
+    )];
     return {
-      composerValue: document.querySelector('${AGENT_SURFACE} .agent-composer-textarea')?.value,
-      bindings: binding ? 1 : 0,
-      label: binding?.getAttribute('title'),
-      authoringSelected: document.querySelector(
-        '${AGENT_SURFACE} [data-segmented-value="authoring"]'
-      )?.getAttribute('aria-selected'),
+      templates: templates.length,
+      disabledTemplates: templates.filter((template) => template.disabled).length,
+      unavailableLabels: templates.filter((template) =>
+        ['Coming soon', '即将推出'].includes(
+          template.querySelector('.project-template-card__action')?.textContent?.trim()
+        )
+      ).length,
+      agentSurfaces: document.querySelectorAll('${AGENT_SURFACE}').length,
     };
   })()`);
   if (
-    state.composerValue !== '$storyboard ' ||
-    state.bindings !== 1 ||
-    !state.label ||
-    state.authoringSelected !== 'true'
+    state.templates !== 2 ||
+    state.disabledTemplates !== 2 ||
+    state.unavailableLabels !== 2 ||
+    state.agentSurfaces !== 0
   ) {
-    throw new Error(`Storyboard Project handoff is invalid: ${JSON.stringify(state)}`);
+    throw new Error(`Project template availability is invalid: ${JSON.stringify(state)}`);
   }
   return state;
 }

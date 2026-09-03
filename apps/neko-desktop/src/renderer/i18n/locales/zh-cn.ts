@@ -312,6 +312,8 @@ export const zhCN = {
   'home.projects.sort': '项目排序',
   'home.projects.fromTemplates': '从模板创建',
   'home.projects.startFromTemplate': '开始创作',
+  'home.projects.templateUnavailable': '即将推出',
+  'home.projects.templateUnavailableDescription': '项目模板创建暂不可用。',
   'home.projects.noResults': '没有匹配的项目',
   'home.projects.updated': '更新时间',
   'home.projects.created': '创建时间',

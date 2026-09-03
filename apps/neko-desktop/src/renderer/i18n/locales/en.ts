@@ -344,6 +344,9 @@ export const en = {
   'home.projects.sort': 'Project sorting',
   'home.projects.fromTemplates': 'Create from a template',
   'home.projects.startFromTemplate': 'Start creating',
+  'home.projects.templateUnavailable': 'Coming soon',
+  'home.projects.templateUnavailableDescription':
+    'Project template creation is temporarily unavailable.',
   'home.projects.noResults': 'No matching projects',
   'home.projects.updated': 'Updated',
   'home.projects.created': 'Created',
