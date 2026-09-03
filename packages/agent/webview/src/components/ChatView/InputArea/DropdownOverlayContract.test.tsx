@@ -372,6 +372,7 @@ describe('dropdown overlay presentation contract', () => {
     expect(selectedCategoryRule).toContain('box-shadow:');
     expect(selectedSectionRule).toContain('background: color-mix');
     expect(selectedSectionRule).toContain('box-shadow:');
+    expect(selectedSectionRule).not.toContain('inset 0 -2px');
     expect(selectedModelRule).toContain('background: color-mix');
     expect(selectedModelRule).toContain('box-shadow:');
   });

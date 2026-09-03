@@ -3236,9 +3236,7 @@ body {
 
 .agent-model-config-secondary-tab-selected {
   background: color-mix(in srgb, var(--agent-accent) 10%, var(--agent-overlay-bg));
-  box-shadow:
-    inset 0 -2px 0 color-mix(in srgb, var(--agent-accent) 72%, transparent),
-    0 1px 3px color-mix(in srgb, var(--agent-fg) 7%, transparent);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--agent-fg) 7%, transparent);
   color: var(--agent-accent);
 }
 
