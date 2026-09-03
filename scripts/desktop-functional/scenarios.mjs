@@ -18,6 +18,7 @@ import { desktopAgentDiagnosticPortalScenario } from './desktop-agent-diagnostic
 import { desktopAgentTextSelectionScenario } from './desktop-agent-text-selection.mjs';
 import { desktopInvalidWindowConvergenceScenario } from './desktop-invalid-window-convergence.mjs';
 import { characterManagementDialogueScenario } from './character-management-dialogue.mjs';
+import { characterCreationEntryScenario } from './character-creation-entry.mjs';
 import { characterWorldManagementHierarchyScenario } from './character-world-management-hierarchy.mjs';
 import { domainManagementWorkbenchScenario } from './domain-management-workbench.mjs';
 import { extensionManagementLifecycleScenario } from './extension-management-lifecycle.mjs';
@@ -56,6 +57,7 @@ const scenarios = new Map(
     desktopAgentTextSelectionScenario,
     desktopInvalidWindowConvergenceScenario,
     characterManagementDialogueScenario,
+    characterCreationEntryScenario,
     characterWorldManagementHierarchyScenario,
     domainManagementWorkbenchScenario,
     extensionManagementLifecycleScenario,

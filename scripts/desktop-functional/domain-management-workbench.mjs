@@ -43,8 +43,7 @@ export const domainManagementWorkbenchScenario = Object.freeze({
 
     const quickGeneration = await inspectCharacterQuickGeneration(evaluate);
     checkpoint('character-quick-generation-entry', quickGeneration);
-    await click(`${MAIN_SLOT} .character-management__creation-menu > summary`);
-    await click(`${MAIN_SLOT} .character-management__creation-menu > div button`, 0);
+    await click(`${MAIN_SLOT} [data-character-template="character-kit"]`);
     await waitForSelector(
       '[data-primary-surface="agent"] .agent-entry-authoring-creation #agent-entry-authoring-name',
     );
@@ -189,18 +188,18 @@ export const domainManagementWorkbenchScenario = Object.freeze({
 
 async function inspectCharacterQuickGeneration(evaluate) {
   const state = await evaluate(`(() => ({
-    creationMenus: document.querySelectorAll(
-      '${MAIN_SLOT} .character-management__creation-menu > summary'
+    createActions: document.querySelectorAll(
+      '${MAIN_SLOT} [data-character-management-action="create"]'
     ).length,
-    separateQuickButtons: [...document.querySelectorAll(
-      '${MAIN_SLOT} .character-management__header-actions > button'
-    )].filter((button) => ['Quick generate', '快速生成'].includes(button.textContent?.trim() ?? '')).length,
+    characterKitTemplates: document.querySelectorAll(
+      '${MAIN_SLOT} [data-character-template="character-kit"]'
+    ).length,
     agentComposers: document.querySelectorAll('[data-primary-surface="agent"] .agent-composer-textarea').length,
     characterCatalogs: document.querySelectorAll('${MAIN_SLOT} [data-character-management-catalog="true"]').length,
   }))()`);
   if (
-    state.creationMenus !== 1 ||
-    state.separateQuickButtons !== 0 ||
+    state.createActions !== 1 ||
+    state.characterKitTemplates !== 1 ||
     state.agentComposers !== 0 ||
     state.characterCatalogs !== 1
   ) {
