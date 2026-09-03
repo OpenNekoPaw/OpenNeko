@@ -1,4 +1,5 @@
 import {
+  createEmptyWorldDefinition,
   decodeWorldRecords,
   parseWorldActionIntent,
   parseWorldEvent,
@@ -74,6 +75,17 @@ function state() {
 }
 
 describe('World Foundation canonical contracts', () => {
+  it('creates the canonical fresh World definition', () => {
+    expect(createEmptyWorldDefinition()).toEqual({
+      background: '',
+      worldBook: [],
+      locations: [],
+      organizations: [],
+      rules: [],
+      initialFacts: [],
+    });
+  });
+
   it('parses reviewed WorldProject and immutable WorldVersion definitions', () => {
     const project = parseWorldProject({
       worldProjectId: 'world-project-a',

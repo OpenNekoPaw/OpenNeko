@@ -77,6 +77,17 @@ export interface WorldDefinition {
   readonly initialFacts: readonly WorldFact[];
 }
 
+export function createEmptyWorldDefinition(): WorldDefinition {
+  return {
+    background: '',
+    worldBook: [],
+    locations: [],
+    organizations: [],
+    rules: [],
+    initialFacts: [],
+  };
+}
+
 export interface WorldProject {
   readonly worldProjectId: string;
   readonly title: string;
