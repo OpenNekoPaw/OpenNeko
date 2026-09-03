@@ -19,13 +19,13 @@ import {
 import { createElectronNekoHostPorts } from './electron-host-ports';
 
 describe('Desktop DSH Canvas projection request', () => {
-  it('uses a stable completed-Tool identity and reuses the durable file node by ContentLocator', () => {
-    const input = deliveryInput('tool-1');
+  it('uses a stable completed-turn identity and reuses the durable file node by ContentLocator', () => {
+    const input = deliveryInput();
     const first = createDshCanvasArtifactProjectionRequest(input, workspace());
     const replay = createDshCanvasArtifactProjectionRequest(input, workspace());
 
     expect(first).toEqual(replay);
-    expect(first.process.deliveryId).toMatch(/^dsh-tool:/u);
+    expect(first.process.deliveryId).toMatch(/^dsh-turn:/u);
     expect(first.artifacts[0]).toMatchObject({
       kind: 'file-reference',
       contentLocator: { file: { authority: 'workspace', path: 'notes/analysis.md' } },
@@ -47,15 +47,15 @@ describe('Desktop DSH Canvas projection request', () => {
     expect(replayed.canvasData.nodes).toHaveLength(1);
   });
 
-  it('uses distinct delivery identities for distinct Tool calls', () => {
-    const first = createDshCanvasArtifactProjectionRequest(deliveryInput('tool-1'), workspace());
-    const second = createDshCanvasArtifactProjectionRequest(deliveryInput('tool-2'), workspace());
+  it('uses distinct delivery identities for distinct turns', () => {
+    const first = createDshCanvasArtifactProjectionRequest(deliveryInput(1), workspace());
+    const second = createDshCanvasArtifactProjectionRequest(deliveryInput(2), workspace());
 
     expect(first.process.deliveryId).not.toBe(second.process.deliveryId);
   });
 
-  it('uses a stable terminal identity distinct from completed Tools and preserves Markdown type', () => {
-    const base = deliveryInput('unused');
+  it('preserves the Markdown type of a terminal artifact', () => {
+    const base = deliveryInput();
     const terminalInput = {
       ...base,
       delivery: { kind: 'completed-turn' as const },
@@ -65,15 +65,48 @@ describe('Desktop DSH Canvas projection request', () => {
       })),
     } satisfies DshCanvasArtifactDeliveryInput;
     const terminal = createDshCanvasArtifactProjectionRequest(terminalInput, workspace());
-    const tool = createDshCanvasArtifactProjectionRequest(deliveryInput('tool-1'), workspace());
-
     expect(terminal.process.deliveryId).toMatch(/^dsh-turn:/u);
-    expect(terminal.process.deliveryId).not.toBe(tool.process.deliveryId);
     expect(terminal.artifacts[0]).toMatchObject({ mimeType: 'text/markdown' });
   });
 
+  it('preserves accepted evidence relations in one terminal projection', () => {
+    const base = deliveryInput();
+    const sourceId = 'content:source';
+    const request = createDshCanvasArtifactProjectionRequest(
+      {
+        ...base,
+        artifacts: [
+          {
+            kind: 'file-reference',
+            artifactId: sourceId,
+            contentFingerprint: 'locator:source',
+            role: 'source',
+            title: 'book.epub',
+            sourceId,
+            contentLocator: {
+              file: { authority: 'workspace', path: 'books/book.epub' },
+            },
+          },
+          {
+            ...base.artifacts[0]!,
+            sourceArtifactIds: [sourceId],
+          },
+        ],
+      },
+      workspace(),
+    );
+
+    expect(request.artifacts[1]).toMatchObject({
+      provenance: { sourceArtifactIds: [sourceId] },
+    });
+    const projected = planCanvasArtifactProjection(createEmptyCanvasData('Workspace'), request);
+    expect(projected.status).toBe('projected');
+    expect(projected.canvasData.nodes).toHaveLength(2);
+    expect(projected.canvasData.connections).toHaveLength(1);
+  });
+
   it('resolves freshness for both source and explicitly authored artifacts', async () => {
-    const resolved = await resolveDshCanvasArtifactResourceFingerprints(deliveryInput('tool-1'), {
+    const resolved = await resolveDshCanvasArtifactResourceFingerprints(deliveryInput(), {
       stat: async (locator) => ({
         status: 'ready',
         locator,
@@ -88,10 +121,53 @@ describe('Desktop DSH Canvas projection request', () => {
     });
   });
 
+  it('rejects an unavailable evidence member without returning a partial batch', async () => {
+    const base = deliveryInput();
+    const input: DshCanvasArtifactDeliveryInput = {
+      ...base,
+      artifacts: [
+        base.artifacts[0]!,
+        {
+          ...base.artifacts[0]!,
+          artifactId: 'content:selected-image',
+          sourceId: 'content:selected-image',
+          kind: 'image',
+          role: 'source',
+          title: 'selected.jpg',
+          contentLocator: {
+            file: { authority: 'workspace', path: 'book.epub' },
+            selector: { kind: 'entry', path: 'images/selected.jpg' },
+          },
+        },
+      ],
+    };
+
+    await expect(
+      resolveDshCanvasArtifactResourceFingerprints(input, {
+        stat: async (locator) =>
+          locator.selector === undefined
+            ? {
+                status: 'ready',
+                locator,
+                byteLength: 42,
+                fingerprint: { strategy: 'sha256', value: 'document-content' },
+              }
+            : {
+                status: 'unavailable',
+                locator,
+                diagnostic: {
+                  code: 'content-missing',
+                  message: 'Selected evidence is missing.',
+                },
+              },
+      }),
+    ).rejects.toThrow('DSH Canvas source is unavailable: content-missing');
+  });
+
   it('projects to the exact Canvas admitted for the Turn', () => {
     const request = createDshCanvasArtifactProjectionRequest(
       {
-        ...deliveryInput('tool-1'),
+        ...deliveryInput(),
         canvasTurnTarget: {
           workspaceId: 'workspace-1',
           canvasId: 'neko/boards/story.nkc',
@@ -163,7 +239,7 @@ describe('Desktop DSH Canvas projection request', () => {
 
     try {
       await expect(
-        delivery.deliver({ ...deliveryInput('tool-1'), canvasTurnTarget: target }),
+        delivery.deliver({ ...deliveryInput(), canvasTurnTarget: target }),
       ).resolves.toEqual({ status: 'accepted' });
       expect(coordinateTarget).toHaveBeenCalledWith(target);
       expect(JSON.parse(await readFile(canvasPath, 'utf8')).nodes).toEqual([
@@ -301,18 +377,18 @@ function workspace(): AssetWorkspaceResolution {
   };
 }
 
-function deliveryInput(toolCallId: string): DshCanvasArtifactDeliveryInput {
+function deliveryInput(turn = 1): DshCanvasArtifactDeliveryInput {
   return {
     workspaceId: 'workspace-1',
     conversationId: 'conversation-1',
     dshSessionId: 'dsh-1',
-    turn: 1,
+    turn,
     createdAt: 1_000,
     canvasTurnTarget: {
       workspaceId: 'workspace-1',
       canvasId: 'neko/boards/workspace.nkc',
     },
-    delivery: { kind: 'completed-tool' as const, toolCallId },
+    delivery: { kind: 'completed-turn' as const },
     artifacts: [
       {
         kind: 'file-reference' as const,
@@ -321,6 +397,7 @@ function deliveryInput(toolCallId: string): DshCanvasArtifactDeliveryInput {
         role: 'analysis' as const,
         title: 'analysis.md',
         sourceId: 'content:analysis',
+        mimeType: 'text/markdown' as const,
         contentLocator: {
           file: { authority: 'workspace' as const, path: 'notes/analysis.md' },
         },

@@ -82,19 +82,26 @@ For an admitted artifact, Agent Runtime SHALL derive one stable Workspace-relati
 
 ### Requirement: Durable document projects to the admitted Canvas target
 
-After successful publication, the product SHALL deliver exactly one locator-backed Markdown file reference to the Canvas target admitted for that turn. It SHALL NOT infer an active or recent Canvas and SHALL NOT repeat Content Tool chapter, image or source projection during terminal delivery.
+After successful publication, the product SHALL deliver one terminal evidence graph to the Canvas target admitted for that turn. The graph SHALL contain the locator-backed Markdown file, deduplicated source-document references used by the completed turn when present, and only image references explicitly selected through successful original-detail inspection. Selected images SHALL derive from their containing document and the Markdown SHALL derive from the accepted evidence. The product MUST NOT infer an active or recent Canvas, project contact sheets or overview reads, or create one delivery per Tool call.
 
-#### Scenario: Board target remains available
+#### Scenario: Board target receives accepted evidence
 
-- **WHEN** the durable Markdown file is published and the turn has an exact Canvas admission
-- **THEN** one Markdown file-reference node is projected to that Canvas
-- **AND** the node resolves through the persisted Workspace `ContentLocator`
+- **WHEN** the durable Markdown file is published, the turn has an exact Canvas admission, and the completed turn used a source document plus selected original-detail images
+- **THEN** the source document, selected images and Markdown are projected atomically to that Canvas
+- **AND** Canvas records their derived-from relations using stable artifact identities
+- **AND** overview contact sheets and unselected pages do not create nodes
+
+#### Scenario: Board target has no selected image
+
+- **WHEN** the durable Markdown file is published from a completed turn that used a source document but no original-detail image
+- **THEN** the source document and Markdown are projected to the admitted Canvas
+- **AND** no image node is invented from manifest or overview results
 
 #### Scenario: Board projection is unavailable
 
-- **WHEN** file publication succeeds but the admitted Canvas target is unavailable
+- **WHEN** file publication succeeds but the admitted Canvas target or an accepted evidence locator is unavailable
 - **THEN** the durable file remains in the Workspace
-- **AND** projection returns a visible blocked diagnostic
+- **AND** the terminal evidence projection returns a visible blocked diagnostic without a partial graph
 - **AND** no alternate Canvas is selected
 
 ### Requirement: Context and Skill refine document production without owning runtime protocol
