@@ -6,7 +6,7 @@ import type {
   ProviderModelFamily,
   ProviderSupportLevel,
 } from '@neko/ai-contracts';
-import { PROVIDER_TYPES } from '@neko/ai-contracts';
+import { MEDIA_MODEL_TYPES, MODEL_TYPES, PROVIDER_TYPES } from '@neko/ai-contracts';
 
 export {
   defaultDesktopAiModelCapabilities,
@@ -367,9 +367,9 @@ export function parseDesktopAiModelSettingsProjection(
     throw invalid('AI model settings capabilities, providers, and models must be arrays.');
   }
   const defaultsRecord = exactRecord(record['defaults'], 'AI model defaults');
-  exactKeys(defaultsRecord, ['llm', 'image', 'video', 'audio'], 'AI model defaults');
+  exactKeys(defaultsRecord, MODEL_TYPES, 'AI model defaults');
   const defaults: Partial<Record<ModelType, DesktopAiModelRef>> = {};
-  for (const type of ['llm', 'image', 'video', 'audio'] as const) {
+  for (const type of MODEL_TYPES) {
     const raw = defaultsRecord[type];
     if (raw !== undefined) defaults[type] = parseModelRef(raw);
   }
@@ -562,7 +562,7 @@ function parseGenerationCapability(
   }
   const providerType = oneOf(record['providerType'], PROVIDER_TYPES, 'providerType');
   const supportedModelTypes = record['supportedModelTypes'].map((type) =>
-    oneOf(type, ['image', 'video', 'audio'] as const, 'supportedModelType'),
+    oneOf(type, MEDIA_MODEL_TYPES, 'supportedModelType'),
   );
   assertUnique(supportedModelTypes, `Generation Provider capability ${index} model types`);
   const modelTemplates = record['modelTemplates'].map((template, templateIndex) =>
@@ -621,7 +621,7 @@ function parseModelTemplate(
     providerType: templateProviderType,
     apiName: nonEmpty(record['apiName'], `${label}.apiName`),
     displayName: nonEmpty(record['displayName'], `${label}.displayName`),
-    type: oneOf(record['type'], ['image', 'video', 'audio'] as const, `${label}.type`),
+    type: oneOf(record['type'], MEDIA_MODEL_TYPES, `${label}.type`),
     capabilities: modelCapabilities(record['capabilities']) as readonly ModelCapability[],
   };
 }
@@ -654,7 +654,7 @@ function parseModelRef(value: unknown): DesktopAiModelRef {
 }
 
 function modelType(value: unknown): ModelType {
-  return oneOf(value, ['llm', 'image', 'video', 'audio'] as const, 'modelType');
+  return oneOf(value, MODEL_TYPES, 'modelType');
 }
 
 function modelCapabilities(value: unknown): readonly string[] {

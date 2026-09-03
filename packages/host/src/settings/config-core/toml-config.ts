@@ -2,7 +2,6 @@ import type {
   ModelConfig,
   ModelRefConfig,
   ModelType,
-  PurposeDefaultModels,
   ProviderConfig,
   ProtocolVariant,
   TypeDefaultModels,
@@ -17,12 +16,10 @@ import {
   STREAM_FORMATS,
 } from '@neko/ai-contracts';
 import { parse, stringify } from 'smol-toml';
-import { isAgentModelPurpose } from '../model-purpose-registry';
 import type { ProviderDefinition, UnifiedConfig } from './types';
 
 export interface NekoTomlConfig {
   readonly default_models?: Partial<Record<ModelType, TomlModelRefConfig>>;
-  readonly default_model_purposes?: Record<string, TomlModelRefConfig>;
   readonly defaults?: TomlDefaultsConfig;
   readonly skills_dir?: string;
   readonly verbose?: boolean;
@@ -118,8 +115,7 @@ export interface TomlConfigValidationIssue {
     | 'invalidModelTokenMetadata'
     | 'invalidProviderApiKey'
     | 'unsupportedModelType'
-    | 'unsupportedDefaultModelType'
-    | 'unsupportedDefaultModelPurpose';
+    | 'unsupportedDefaultModelType';
   readonly path: string;
   readonly message: string;
 }
@@ -155,25 +151,11 @@ export function projectTomlConfig(value: unknown): TomlConfigProjection {
   const providers = decodeProviders(root['providers'], diagnostics, providerCredentials);
   const models = decodeModels(root['models'], diagnostics);
   rejectRetiredAgentConfiguration(root, diagnostics);
-  const defaultModels = decodeModelRefs(
-    root['default_models'],
-    'default_models',
-    diagnostics,
-    true,
-  );
-  const defaultModelPurposes = decodeModelRefs(
-    root['default_model_purposes'],
-    'default_model_purposes',
-    diagnostics,
-    false,
-  );
+  const defaultModels = decodeModelRefs(root['default_models'], diagnostics);
   const defaults = decodeDefaults(root['defaults'], diagnostics);
 
   const config: UnifiedConfig = {
     ...(defaultModels ? { defaultModels: tomlDefaultModelsToRuntime(defaultModels) } : {}),
-    ...(defaultModelPurposes
-      ? { defaultModelPurposes: tomlDefaultModelPurposesToRuntime(defaultModelPurposes) }
-      : {}),
     ...defaults,
     ...decodeTopLevelScalars(root, diagnostics),
     ...(Array.isArray(root['providers'])
@@ -195,11 +177,6 @@ export function unifiedConfigToToml(
   return {
     ...(config.defaultModels !== undefined
       ? { default_models: runtimeDefaultModelsToToml(config.defaultModels) }
-      : {}),
-    ...(config.defaultModelPurposes !== undefined
-      ? {
-          default_model_purposes: runtimeDefaultModelPurposesToToml(config.defaultModelPurposes),
-        }
       : {}),
     ...(config.maxTokens !== undefined || config.temperature !== undefined
       ? {
@@ -237,6 +214,14 @@ function rejectRetiredAgentConfiguration(
   root: Record<string, unknown>,
   diagnostics: TomlConfigValidationIssue[],
 ): void {
+  if (root['default_model_purposes'] !== undefined) {
+    diagnostics.push(
+      invalidField(
+        'default_model_purposes',
+        'default_model_purposes is unsupported; configure one flat binding per model type under default_models.',
+      ),
+    );
+  }
   if (root['mcp_servers'] !== undefined) {
     diagnostics.push(
       invalidField('mcp_servers', 'mcp_servers is retired; DSH owns MCP configuration.'),
@@ -456,10 +441,9 @@ function decodeModels(value: unknown, issues: TomlConfigValidationIssue[]): Toml
 
 function decodeModelRefs(
   value: unknown,
-  section: 'default_models' | 'default_model_purposes',
   issues: TomlConfigValidationIssue[],
-  restrictKeys: boolean,
 ): Record<string, TomlModelRefConfig> | undefined {
+  const section = 'default_models';
   if (value === undefined) return undefined;
   const record = readRecord(value);
   if (!record) {
@@ -469,18 +453,7 @@ function decodeModelRefs(
   const result: Record<string, TomlModelRefConfig> = {};
   for (const [key, entry] of Object.entries(record)) {
     const path = `${section}.${key}`;
-    if (
-      section === 'default_model_purposes' &&
-      !isAgentModelPurpose(tomlModelPurposeKeyToRuntime(key))
-    ) {
-      issues.push({
-        code: 'unsupportedDefaultModelPurpose',
-        path,
-        message: `${path} is not a supported model purpose.`,
-      });
-      continue;
-    }
-    if (restrictKeys && !isModelType(key)) {
+    if (!isModelType(key)) {
       issues.push({
         code: 'unsupportedDefaultModelType',
         path,
@@ -491,7 +464,7 @@ function decodeModelRefs(
     const ref = readRecord(entry);
     if (!ref) {
       issues.push({
-        code: restrictKeys ? 'unsupportedDefaultModelType' : 'unsupportedDefaultModelPurpose',
+        code: 'unsupportedDefaultModelType',
         path,
         message: `${path} must contain provider_id and model_id strings.`,
       });
@@ -506,7 +479,7 @@ function decodeModelRefs(
       modelId.trim().length === 0
     ) {
       issues.push({
-        code: restrictKeys ? 'unsupportedDefaultModelType' : 'unsupportedDefaultModelPurpose',
+        code: 'unsupportedDefaultModelType',
         path,
         message: `${path} must contain provider_id and model_id strings.`,
       });
@@ -1015,35 +988,6 @@ function runtimeDefaultModelsToToml(
   return mapRecordValues(defaults, runtimeModelRefToToml) as Partial<
     Record<ModelType, TomlModelRefConfig>
   >;
-}
-
-function tomlDefaultModelPurposesToRuntime(
-  defaults: Record<string, TomlModelRefConfig>,
-): PurposeDefaultModels {
-  const result: PurposeDefaultModels = {};
-  for (const [key, ref] of Object.entries(defaults)) {
-    result[tomlModelPurposeKeyToRuntime(key)] = tomlModelRefToRuntime(ref);
-  }
-  return result;
-}
-
-function runtimeDefaultModelPurposesToToml(
-  defaults: PurposeDefaultModels,
-): Record<string, TomlModelRefConfig> {
-  const result: Record<string, TomlModelRefConfig> = {};
-  for (const [purpose, ref] of Object.entries(defaults)) {
-    if (!ref) continue;
-    result[runtimeModelPurposeKeyToToml(purpose)] = runtimeModelRefToToml(ref);
-  }
-  return result;
-}
-
-function tomlModelPurposeKeyToRuntime(key: string): string {
-  return key.includes('.') ? key : key.split('_').join('.');
-}
-
-function runtimeModelPurposeKeyToToml(purpose: string): string {
-  return purpose.split('.').join('_');
 }
 
 function tomlModelRefToRuntime(ref: TomlModelRefConfig): ModelRefConfig {

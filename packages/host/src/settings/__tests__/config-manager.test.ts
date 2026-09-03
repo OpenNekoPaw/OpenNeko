@@ -641,52 +641,7 @@ describe('ConfigManager', () => {
       expect(() => manager.assertConfigAvailable()).not.toThrow();
     });
 
-    it('rejects unknown purpose bindings', () => {
-      const googleProvider: Provider = {
-        id: 'google',
-        name: 'google',
-        displayName: 'Google Gemini',
-        type: 'google',
-        apiUrl: 'https://generativelanguage.googleapis.com/v1beta',
-        enabled: true,
-        connectionKind: 'direct',
-        protocolProfile: 'google',
-        requiresApiKey: true,
-      };
-      const model: Model = {
-        id: 'gemini-flash',
-        name: 'gemini-2.5-flash',
-        providerId: 'google',
-        type: 'llm',
-        capabilities: ['chat', 'vision', 'vision_video'],
-        enabled: true,
-      };
-      const manager = new ConfigManager({
-        userConfigManager: createReadResultUserConfigManager({
-          status: 'ok',
-          filePath: '/tmp/neko/config.toml',
-          config: {
-            providers: [googleProvider],
-            models: [model],
-            defaultModelPurposes: {
-              'media.analysis': {
-                providerId: 'google',
-                modelId: 'gemini-flash',
-              },
-            },
-          },
-        }),
-      });
-
-      expect(manager.getConfigDiagnostic()).toMatchObject({
-        code: 'invalidDefaultModelBinding',
-        path: 'default_model_purposes.media.analysis',
-      });
-      expect(manager.getDefaultModelPurposeRef('media.analysis')).toBeUndefined();
-      expect(manager.resolveModelRefForPurpose('media.analysis')).toBeUndefined();
-    });
-
-    it('atomically persists explicit Character purpose bindings', async () => {
+    it('resolves LLM purposes through the single typed default', async () => {
       const userConfigManager = createMockUserConfigManager({
         providers: [SAMPLE_PROVIDER],
         models: [SAMPLE_MODEL],
@@ -694,25 +649,15 @@ describe('ConfigManager', () => {
       const updateScalars = vi.spyOn(userConfigManager, 'updateScalars');
       const manager = new ConfigManager({ userConfigManager });
 
-      await manager.setDefaultModelPurposeRefs({
-        'character.dialogue': {
-          providerId: SAMPLE_PROVIDER.id,
-          modelId: SAMPLE_MODEL.id,
-        },
-        'character.profile': {
-          providerId: SAMPLE_PROVIDER.id,
-          modelId: SAMPLE_MODEL.id,
-        },
+      await manager.setDefaultModelRef('llm', {
+        providerId: SAMPLE_PROVIDER.id,
+        modelId: SAMPLE_MODEL.id,
       });
 
       expect(updateScalars).toHaveBeenCalledTimes(1);
       expect(updateScalars).toHaveBeenCalledWith({
-        defaultModelPurposes: {
-          'character.dialogue': {
-            providerId: SAMPLE_PROVIDER.id,
-            modelId: SAMPLE_MODEL.id,
-          },
-          'character.profile': {
+        defaultModels: {
+          llm: {
             providerId: SAMPLE_PROVIDER.id,
             modelId: SAMPLE_MODEL.id,
           },
@@ -726,9 +671,10 @@ describe('ConfigManager', () => {
         providerId: SAMPLE_PROVIDER.id,
         modelId: SAMPLE_MODEL.id,
       });
+      expect(manager.resolveModelRefForPurpose('media.analysis')).toBeUndefined();
     });
 
-    it('matches generation purpose bindings by model type instead of capabilities', async () => {
+    it('maps audio generation while leaving unknown purposes unavailable', async () => {
       const capabilityOnlyModel: Model = {
         ...SAMPLE_MODEL,
         id: 'capability-only-audio',
@@ -739,7 +685,7 @@ describe('ConfigManager', () => {
         ...SAMPLE_MODEL,
         id: 'typed-audio',
         type: 'audio',
-        capabilities: ['chat'],
+        capabilities: ['audio.generate'],
       };
       const userConfigManager = createMockUserConfigManager({
         providers: [SAMPLE_PROVIDER],
@@ -749,83 +695,22 @@ describe('ConfigManager', () => {
       const manager = new ConfigManager({ userConfigManager });
 
       await expect(
-        manager.setDefaultModelPurposeRefs({
-          'audio.generate': {
-            providerId: SAMPLE_PROVIDER.id,
-            modelId: capabilityOnlyModel.id,
-          },
+        manager.setDefaultModelRef('audio', {
+          providerId: SAMPLE_PROVIDER.id,
+          modelId: capabilityOnlyModel.id,
         }),
-      ).rejects.toThrow(
-        `Model ${SAMPLE_PROVIDER.id}/${capabilityOnlyModel.id} does not support purpose audio.generate.`,
-      );
+      ).rejects.toThrow(`is not a audio model`);
       expect(updateScalars).not.toHaveBeenCalled();
 
-      await manager.setDefaultModelPurposeRefs({
-        'audio.generate': {
-          providerId: SAMPLE_PROVIDER.id,
-          modelId: typedAudioModel.id,
-        },
+      await manager.setDefaultModelRef('audio', {
+        providerId: SAMPLE_PROVIDER.id,
+        modelId: typedAudioModel.id,
       });
-
-      expect(updateScalars).toHaveBeenCalledTimes(1);
       expect(manager.resolveModelRefForPurpose('audio.generate')).toEqual({
         providerId: SAMPLE_PROVIDER.id,
         modelId: typedAudioModel.id,
       });
-    });
-
-    it('rejects a persisted generation purpose binding with a capability-only model', () => {
-      const localProvider: Provider = {
-        id: 'local-media',
-        name: 'local-media',
-        displayName: 'Local Media',
-        type: 'generic',
-        apiUrl: 'http://localhost:8080',
-        enabled: true,
-        connectionKind: 'local',
-        protocolProfile: 'openai-chat',
-        requiresApiKey: false,
-      };
-      const capabilityOnlyModel: Model = {
-        id: 'capability-only-audio',
-        name: 'capability-only-audio',
-        providerId: localProvider.id,
-        type: 'llm',
-        capabilities: ['audio'],
-        enabled: true,
-      };
-      const chatModel: Model = {
-        id: 'chat-model',
-        name: 'chat-model',
-        providerId: localProvider.id,
-        type: 'llm',
-        capabilities: ['chat'],
-        enabled: true,
-      };
-      const manager = new ConfigManager({
-        userConfigManager: createReadResultUserConfigManager({
-          status: 'ok',
-          filePath: '/tmp/neko/config.toml',
-          config: {
-            providers: [localProvider],
-            models: [chatModel, capabilityOnlyModel],
-            defaultModelPurposes: {
-              'audio.generate': {
-                providerId: localProvider.id,
-                modelId: capabilityOnlyModel.id,
-              },
-            },
-          },
-        }),
-      });
-
-      expect(manager.getConfigDiagnostic()).toMatchObject({
-        code: 'invalidDefaultModelBinding',
-        path: 'default_model_purposes.audio.generate',
-      });
-      expect(() => manager.resolveModelRefForPurpose('audio.generate')).toThrow(
-        `Model ${localProvider.id}/${capabilityOnlyModel.id} does not support purpose audio.generate.`,
-      );
+      expect(manager.resolveModelRefForPurpose('audio.music.generate')).toBeUndefined();
     });
 
     it('persists one typed default model without replacing sibling defaults', async () => {
@@ -884,71 +769,6 @@ describe('ConfigManager', () => {
           modelId: imageModel.id,
         }),
       ).rejects.toThrow('is not a video model');
-    });
-
-    it('preserves existing purpose bindings while adding a missing Character purpose', async () => {
-      const userConfigManager = createMockUserConfigManager(
-        {
-          providers: [SAMPLE_PROVIDER],
-          models: [SAMPLE_MODEL],
-        },
-        {
-          defaultModelPurposes: {
-            'character.profile': {
-              providerId: 'profile-provider',
-              modelId: 'profile-model',
-            },
-          },
-        },
-      );
-      const updateScalars = vi.spyOn(userConfigManager, 'updateScalars');
-      const manager = new ConfigManager({ userConfigManager });
-
-      await manager.setDefaultModelPurposeRefs({
-        'character.dialogue': {
-          providerId: SAMPLE_PROVIDER.id,
-          modelId: SAMPLE_MODEL.id,
-        },
-      });
-
-      expect(updateScalars).toHaveBeenCalledWith({
-        defaultModelPurposes: {
-          'character.profile': {
-            providerId: 'profile-provider',
-            modelId: 'profile-model',
-          },
-          'character.dialogue': {
-            providerId: SAMPLE_PROVIDER.id,
-            modelId: SAMPLE_MODEL.id,
-          },
-        },
-      });
-    });
-
-    it('rejects incompatible Character purpose bindings before persistence', async () => {
-      const incompatibleModel: Model = {
-        ...SAMPLE_MODEL,
-        id: 'image-only',
-        capabilities: ['image.generate'],
-        type: 'image',
-      };
-      const userConfigManager = createMockUserConfigManager({
-        providers: [SAMPLE_PROVIDER],
-        models: [incompatibleModel],
-      });
-      const updateScalars = vi.spyOn(userConfigManager, 'updateScalars');
-      const manager = new ConfigManager({ userConfigManager });
-
-      await expect(
-        manager.setDefaultModelPurposeRefs({
-          'character.dialogue': {
-            providerId: SAMPLE_PROVIDER.id,
-            modelId: incompatibleModel.id,
-          },
-        }),
-      ).rejects.toThrow('Model anthropic/image-only does not support purpose character.dialogue.');
-      expect(updateScalars).not.toHaveBeenCalled();
-      expect(manager.resolveModelRefForPurpose('character.dialogue')).toBeUndefined();
     });
 
     it('refreshes only through explicit reloadConfig snapshots', () => {

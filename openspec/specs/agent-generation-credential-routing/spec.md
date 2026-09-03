@@ -1,11 +1,14 @@
 # agent-generation-credential-routing Specification
 
 ## Purpose
-Keep generation credentials Host-owned while routing exact provider access into Agent generation without secret projection.
-## Requirements
-### Requirement: Agent generation purposes use the canonical credential authority
 
-Agent generation-purpose policy SHALL determine provider credential availability through the injected CredentialStore authority. A valid configuration-file credential SHALL take precedence over an interactive auth-login credential, and Provider metadata MUST remain secret-free.
+Keep generation credentials Host-owned while routing exact provider access into Agent generation without secret projection.
+
+## Requirements
+
+### Requirement: Agent generation uses typed defaults and the canonical credential authority
+
+Agent generation policy SHALL map each requested operation to one flat `default_models` type binding and determine provider credential availability through the injected CredentialStore authority. A valid configuration-file credential SHALL take precedence over an interactive auth-login credential, and Provider metadata MUST remain secret-free. Operation purposes SHALL NOT create a second default-model configuration layer.
 
 #### Scenario: Configuration file supplies the media credential
 
@@ -19,9 +22,9 @@ Agent generation-purpose policy SHALL determine provider credential availability
 - **THEN** Agent policy marks the exact image purpose available through the same CredentialStore path
 - **AND** it does not add another credential source or change provider/model identity
 
-### Requirement: Agent Launch preserves generation-purpose capabilities
+### Requirement: Agent Launch preserves generation capabilities
 
-The Desktop Agent Launch adapter SHALL preserve the exact available model identity, category and purpose capabilities from the package-owned Launch catalog when projecting Webview configuration. A configured default media selection SHALL produce the corresponding exact purpose binding on the first Draft submit.
+The Desktop Agent Launch adapter SHALL preserve the exact available model identity, category and operation capabilities from the package-owned Launch catalog when projecting Webview configuration. A configured default media selection SHALL resolve from the corresponding typed default on the first Draft submit.
 
 #### Scenario: Assistant Draft uses the configured default image model
 

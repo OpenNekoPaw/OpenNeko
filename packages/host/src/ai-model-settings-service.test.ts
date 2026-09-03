@@ -99,7 +99,7 @@ const generationCapabilityValues = [
     supportLevel: 'custom',
     requiresApiKey: true,
     allowCustomModels: true,
-    supportedModelTypes: ['image', 'video', 'audio'],
+    supportedModelTypes: ['image', 'video', 'audio', 'music'],
     modelTemplates: [],
   },
 ] as const satisfies readonly DesktopAiGenerationProviderCapability[];
@@ -1039,6 +1039,17 @@ describe('DesktopAiModelSettingsService', () => {
       modelId: 'image-a',
     });
     expect(result.executionConfigurationChanged).toBe(true);
+
+    await service.execute({
+      requestId: 'request-music-default',
+      operation: 'set-default',
+      modelType: 'music',
+      ref: { providerId: 'provider-a', modelId: 'music-a' },
+    });
+    expect(config.setDefaultModelRef).toHaveBeenLastCalledWith('music', {
+      providerId: 'provider-a',
+      modelId: 'music-a',
+    });
   });
 
   it('rejects models outside an explicitly configured Provider family', async () => {

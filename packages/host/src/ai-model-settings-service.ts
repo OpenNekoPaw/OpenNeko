@@ -5,6 +5,7 @@ import type {
   ProviderProtocolProfile,
   ProviderType,
 } from '@neko/ai-contracts';
+import { MODEL_TYPES } from '@neko/ai-contracts';
 import type { ConfigManager } from './settings/config-manager';
 import type { ProviderCredentialAuthority } from './settings/provider-credential-authority';
 import type {
@@ -77,12 +78,10 @@ export class DesktopAiModelSettingsService {
           enabled: model.enabled,
         })),
       defaults: Object.fromEntries(
-        (['llm', 'image', 'video', 'audio'] as const)
-          .map((type) => [type, this.config.getDefaultModelRef(type)] as const)
-          .filter(
-            (entry): entry is readonly [ModelType, NonNullable<(typeof entry)[1]>] =>
-              entry[1] !== undefined,
-          ),
+        MODEL_TYPES.map((type) => [type, this.config.getDefaultModelRef(type)] as const).filter(
+          (entry): entry is readonly [ModelType, NonNullable<(typeof entry)[1]>] =>
+            entry[1] !== undefined,
+        ),
       ),
     };
   }
@@ -301,7 +300,7 @@ export class DesktopAiModelSettingsService {
     if (request.operation === 'delete-model') {
       const model = this.config.getModel(request.modelId);
       if (!model) throw new Error(`Model ${request.modelId} does not exist.`);
-      for (const type of ['llm', 'image', 'video', 'audio'] as const) {
+      for (const type of MODEL_TYPES) {
         const current = this.config.getDefaultModelRef(type);
         if (current?.providerId === model.providerId && current.modelId === model.id) {
           throw new Error(

@@ -38,7 +38,6 @@ export type ConfigReadErrorCode =
   | 'invalidProviderApiKey'
   | 'unsupportedModelType'
   | 'unsupportedDefaultModelType'
-  | 'unsupportedDefaultModelPurpose'
   | 'readError';
 
 export type ConfigReadBlockingErrorCode = 'empty' | 'invalidToml' | 'readError';

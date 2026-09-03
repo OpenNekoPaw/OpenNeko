@@ -282,9 +282,9 @@ export type ModelCapability =
   | 'audio.tts'
   | 'audio.asr'
   | 'audio.music.generate'
+  | 'text_to_music'
   | 'content.safety.moderate'
   | 'local.video.probe'
-  | 'text_to_music'
   | 'workflow'
   | 'image_edit'
   | 'video_edit'
@@ -325,9 +325,9 @@ export const KNOWN_MODEL_CAPABILITIES = [
   'audio.tts',
   'audio.asr',
   'audio.music.generate',
+  'text_to_music',
   'content.safety.moderate',
   'local.video.probe',
-  'text_to_music',
   'workflow',
   'image_edit',
   'video_edit',
@@ -400,13 +400,14 @@ export interface ModelConfig {
 /**
  * Model type for classification and routing
  */
-export type ModelType = 'llm' | 'image' | 'video' | 'audio';
+export type ModelType = 'llm' | 'image' | 'video' | 'audio' | 'music';
 
 export const MODEL_TYPES = [
   'llm',
   'image',
   'video',
   'audio',
+  'music',
 ] as const satisfies readonly ModelType[];
 
 /**
@@ -418,6 +419,7 @@ export const MEDIA_MODEL_TYPES = [
   'image',
   'video',
   'audio',
+  'music',
 ] as const satisfies readonly MediaModelType[];
 
 /**
@@ -434,16 +436,6 @@ export interface ModelRefConfig {
 }
 
 export type TypeDefaultModels = Partial<Record<ModelType, ModelRefConfig>>;
-
-/**
- * Default model bindings by product purpose.
- *
- * These bindings are intentionally separate from TypeDefaultModels for
- * product-owned roles such as Canvas prompting, Character dialogue, and exact
- * media generation operations. Native media understanding is a capability of
- * the selected Agent model and is not configured through a purpose binding.
- */
-export type PurposeDefaultModels = Partial<Record<string, ModelRefConfig>>;
 
 export interface LlmParameterControlAvailability {
   readonly reasoning: boolean;

@@ -18,19 +18,18 @@ function createModel(input: Pick<Model, 'id' | 'type' | 'capabilities'> & Partia
 }
 
 describe('model-purpose-registry', () => {
-  it('matches generation purposes by explicit model type instead of capabilities', () => {
-    for (const [purpose, type] of [
-      ['image.generate', 'image'],
-      ['image.edit', 'image'],
-      ['video.generate', 'video'],
-      ['audio.generate', 'audio'],
-      ['audio.tts', 'audio'],
-      ['audio.asr', 'audio'],
-      ['audio.music.generate', 'audio'],
+  it('matches generation purposes by explicit model type and capability', () => {
+    for (const [purpose, type, capability] of [
+      ['image.generate', 'image', 'image.generate'],
+      ['image.edit', 'image', 'image.edit'],
+      ['video.generate', 'video', 'video.generate'],
+      ['audio.generate', 'audio', 'audio.generate'],
+      ['audio.tts', 'audio', 'audio.tts'],
+      ['audio.asr', 'audio', 'audio.asr'],
     ] as const) {
       expect(
         modelSupportsPurpose(
-          createModel({ id: `${type}-model`, type, capabilities: ['chat'] }),
+          createModel({ id: `${type}-model`, type, capabilities: [capability] }),
           purpose,
         ),
       ).toBe(true);
@@ -51,6 +50,12 @@ describe('model-purpose-registry', () => {
       modelSupportsPurpose(
         createModel({ id: 'chat-video', type: 'llm', capabilities: ['video.generate'] }),
         'video.generate',
+      ),
+    ).toBe(false);
+    expect(
+      modelSupportsPurpose(
+        createModel({ id: 'audio-model', type: 'audio', capabilities: ['audio.generate'] }),
+        'audio.music.generate',
       ),
     ).toBe(false);
     expect(

@@ -6,12 +6,7 @@
  * - User config: ~/.neko/config.toml
  */
 
-import type {
-  ProviderConfig,
-  ModelConfig,
-  PurposeDefaultModels,
-  TypeDefaultModels,
-} from '@neko/ai-contracts';
+import type { ProviderConfig, ModelConfig, TypeDefaultModels } from '@neko/ai-contracts';
 
 export type ProviderDefinition = Omit<ProviderConfig, 'apiKey'>;
 
@@ -35,9 +30,6 @@ export interface UnifiedConfig {
 
   /** Default models by broad model type */
   defaultModels?: TypeDefaultModels;
-
-  /** Default models for explicit product roles such as Canvas, Character, or generation. */
-  defaultModelPurposes?: PurposeDefaultModels;
 
   /** Global default max output tokens */
   maxTokens?: number;

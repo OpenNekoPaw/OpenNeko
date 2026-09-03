@@ -4,7 +4,8 @@ export function requiredDesktopAiModelCapabilities(type: ModelType): readonly Mo
   if (type === 'llm') return ['chat', 'llm.chat'];
   if (type === 'image') return ['image.generate'];
   if (type === 'video') return ['video.generate'];
-  return ['audio.generate'];
+  if (type === 'audio') return ['audio.generate'];
+  return [];
 }
 
 export function withRequiredDesktopAiModelCapabilities(
@@ -22,5 +23,6 @@ export function defaultDesktopAiModelCapabilities(type: ModelType): readonly Mod
   if (type === 'llm') return [...requiredDesktopAiModelCapabilities(type), 'streaming'];
   if (type === 'image') return ['text_to_image', ...requiredDesktopAiModelCapabilities(type)];
   if (type === 'video') return ['text_to_video', ...requiredDesktopAiModelCapabilities(type)];
-  return ['text_to_audio', ...requiredDesktopAiModelCapabilities(type)];
+  if (type === 'audio') return ['text_to_audio', ...requiredDesktopAiModelCapabilities(type)];
+  return [];
 }
