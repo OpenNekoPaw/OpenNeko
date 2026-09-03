@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { GenerationJobPort } from '../contracts';
 import { createPurposeGenerationJobPort } from '../purpose-port';
-import { resolveGenerationModelParameterProfile } from '../../model-parameter-profile';
+import { resolveVideoGenerationModelParameterProfile } from '../../model-parameter-profile';
 
 describe('createPurposeGenerationJobPort', () => {
   it('resolves one immutable binding before submitting to the canonical Job port', async () => {
@@ -61,7 +61,7 @@ describe('createPurposeGenerationJobPort', () => {
 
   it('conforms Agent video parameters to the Host-bound model profile before Job creation', async () => {
     const submitGeneration = vi.fn(async (input) => input);
-    const profile = resolveGenerationModelParameterProfile({
+    const profile = resolveVideoGenerationModelParameterProfile({
       providerType: 'minimax',
       modelName: 'MiniMax-H3',
     });

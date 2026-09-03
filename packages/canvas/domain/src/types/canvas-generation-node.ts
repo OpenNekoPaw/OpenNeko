@@ -20,6 +20,7 @@ import {
   type GenerationRecipePurpose,
   type GenerationParameterAdjustment,
   type GenerationModelParameterProfile,
+  type VideoGenerationModelParameterProfile,
   type ImageGenerationRecipe,
   type PromptGenerationRecipe,
   type VideoGenerationRecipe,
@@ -95,23 +96,24 @@ export function createCanvasGenerationNodeData(
   model?: CanvasGenerationModelBinding,
   parameterProfile?: GenerationModelParameterProfile,
 ): CanvasGenerationNodeData {
-  if (parameterProfile && kind !== 'video') {
+  if (parameterProfile && parameterProfile.kind !== kind) {
     throw new Error('Canvas Generation parameter profile does not match the node kind.');
   }
+  const recipe =
+    kind === 'video' && model
+      ? parameterProfile?.kind === 'video'
+        ? createVideoGenerationRecipeForProfile(model, parameterProfile)
+        : { kind: 'video' as const, prompt: '', model }
+      : createGenerationRecipe(kind, model);
   return {
-    recipe:
-      kind === 'video' && model
-        ? parameterProfile
-          ? createVideoGenerationRecipeForProfile(model, parameterProfile)
-          : { kind: 'video', prompt: '', model }
-        : createGenerationRecipe(kind, model),
+    recipe,
     outputs: [],
   };
 }
 
 export function conformCanvasVideoGenerationRecipeToProfile(
   recipe: CanvasVideoGenerationRecipe,
-  parameterProfile: GenerationModelParameterProfile,
+  parameterProfile: VideoGenerationModelParameterProfile,
 ): {
   readonly recipe: CanvasVideoGenerationRecipe;
   readonly adjustments: readonly GenerationParameterAdjustment[];

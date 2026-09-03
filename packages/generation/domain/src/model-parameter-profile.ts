@@ -15,14 +15,14 @@ export const VIDEO_GENERATION_PARAMETER_IDS = [
 
 export type VideoGenerationParameterId = (typeof VIDEO_GENERATION_PARAMETER_IDS)[number];
 
-export interface VideoStringEnumParameterControl {
+export interface GenerationStringEnumParameterControl {
   readonly kind: 'string-enum';
   readonly required: boolean;
   readonly values: readonly string[];
   readonly defaultValue?: string;
 }
 
-export interface VideoIntegerParameterControl {
+export interface GenerationIntegerParameterControl {
   readonly kind: 'integer';
   readonly required: boolean;
   readonly min: number;
@@ -32,7 +32,7 @@ export interface VideoIntegerParameterControl {
   readonly suggestedValues?: readonly number[];
 }
 
-export interface VideoBooleanParameterControl {
+export interface GenerationBooleanParameterControl {
   readonly kind: 'boolean';
   readonly required: boolean;
   readonly defaultValue?: boolean;
@@ -42,11 +42,11 @@ export interface VideoGenerationModelParameterProfile {
   readonly kind: 'video';
   readonly supportedParameters: readonly VideoGenerationParameterId[];
   readonly controls: {
-    readonly aspectRatio?: VideoStringEnumParameterControl;
-    readonly resolution?: VideoStringEnumParameterControl;
-    readonly duration?: VideoIntegerParameterControl;
-    readonly fps?: VideoIntegerParameterControl;
-    readonly generateAudio?: VideoBooleanParameterControl;
+    readonly aspectRatio?: GenerationStringEnumParameterControl;
+    readonly resolution?: GenerationStringEnumParameterControl;
+    readonly duration?: GenerationIntegerParameterControl;
+    readonly fps?: GenerationIntegerParameterControl;
+    readonly generateAudio?: GenerationBooleanParameterControl;
   };
   readonly fixed: {
     readonly outputCount: 1;
@@ -54,7 +54,20 @@ export interface VideoGenerationModelParameterProfile {
   };
 }
 
-export type GenerationModelParameterProfile = VideoGenerationModelParameterProfile;
+export interface ImageGenerationModelParameterProfile {
+  readonly kind: 'image';
+  readonly controls: {
+    readonly aspectRatio: GenerationStringEnumParameterControl;
+    readonly resolution: GenerationIntegerParameterControl;
+    readonly quality: GenerationStringEnumParameterControl;
+  };
+  readonly fixed: {
+    readonly outputCount: 1;
+  };
+}
+
+export type GenerationModelParameterProfile =
+  ImageGenerationModelParameterProfile | VideoGenerationModelParameterProfile;
 
 export interface GenerationParameterAdjustment {
   readonly parameter: VideoGenerationParameterId;
@@ -66,6 +79,33 @@ export interface GenerationParameterDiagnostic extends GenerationParameterAdjust
 }
 
 const ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'] as const;
+
+const GPT_IMAGE_2_ASPECT_RATIOS = [
+  '1:1',
+  '16:9',
+  '9:16',
+  '3:4',
+  '4:3',
+  '3:2',
+  '2:3',
+  '5:4',
+  '4:5',
+  '21:9',
+  '2:1',
+  '1:2',
+  '3:1',
+  '1:3',
+] as const;
+
+const GPT_IMAGE_2_PROFILE: ImageGenerationModelParameterProfile = Object.freeze({
+  kind: 'image',
+  controls: Object.freeze({
+    aspectRatio: stringEnum(true, GPT_IMAGE_2_ASPECT_RATIOS, '1:1'),
+    resolution: integerControl(true, 1024, 4096, 1024, 1024, [1024, 2048, 4096]),
+    quality: stringEnum(true, ['low', 'standard', 'hd'], 'standard'),
+  }),
+  fixed: Object.freeze({ outputCount: 1 }),
+});
 
 const MINIMAX_H3_PROFILE: VideoGenerationModelParameterProfile = Object.freeze({
   kind: 'video',
@@ -107,6 +147,25 @@ export function resolveGenerationModelParameterProfile(input: {
   readonly providerType: ProviderType;
   readonly modelName: string;
 }): GenerationModelParameterProfile | undefined {
+  return (
+    resolveImageGenerationModelParameterProfile(input) ??
+    resolveVideoGenerationModelParameterProfile(input)
+  );
+}
+
+export function resolveImageGenerationModelParameterProfile(input: {
+  readonly providerType: ProviderType;
+  readonly modelName: string;
+}): ImageGenerationModelParameterProfile | undefined {
+  return input.providerType === 'newapi' && input.modelName === 'gpt-image-2'
+    ? structuredClone(GPT_IMAGE_2_PROFILE)
+    : undefined;
+}
+
+export function resolveVideoGenerationModelParameterProfile(input: {
+  readonly providerType: ProviderType;
+  readonly modelName: string;
+}): VideoGenerationModelParameterProfile | undefined {
   if (input.providerType === 'minimax' && input.modelName === 'MiniMax-H3') {
     return structuredClone(MINIMAX_H3_PROFILE);
   }
@@ -285,6 +344,58 @@ export function parseGenerationModelParameterProfile(
   value: unknown,
 ): GenerationModelParameterProfile {
   const record = requireRecord(value, 'Generation model parameter profile must be an object.');
+  if (record['kind'] === 'image') return parseImageGenerationModelParameterProfile(record);
+  return parseVideoGenerationModelParameterProfile(record);
+}
+
+function parseImageGenerationModelParameterProfile(
+  record: Record<string, unknown>,
+): ImageGenerationModelParameterProfile {
+  requireExactKeys(record, ['kind', 'controls', 'fixed']);
+  const controlsRecord = requireRecord(
+    record['controls'],
+    'Generation image parameter controls must be an object.',
+  );
+  requireExactKeys(controlsRecord, ['aspectRatio', 'resolution', 'quality']);
+  const fixedRecord = requireRecord(
+    record['fixed'],
+    'Generation image fixed parameters must be an object.',
+  );
+  requireExactKeys(fixedRecord, ['outputCount']);
+  if (fixedRecord['outputCount'] !== 1) {
+    throw new Error('Generation image output count must be exactly one.');
+  }
+  const profile: ImageGenerationModelParameterProfile = {
+    kind: 'image',
+    controls: {
+      aspectRatio: parseStringEnumControl(controlsRecord['aspectRatio']),
+      resolution: parseIntegerControl(controlsRecord['resolution']),
+      quality: parseStringEnumControl(controlsRecord['quality']),
+    },
+    fixed: { outputCount: 1 },
+  };
+  if (profile.controls.aspectRatio.defaultValue === undefined) {
+    throw new Error('Generation image aspect-ratio control requires a default.');
+  }
+  if (profile.controls.resolution.defaultValue === undefined) {
+    throw new Error('Generation image resolution control requires a default.');
+  }
+  if (profile.controls.quality.defaultValue === undefined) {
+    throw new Error('Generation image quality control requires a default.');
+  }
+  if (
+    profile.controls.quality.values.some(
+      (value) => value !== 'low' && value !== 'standard' && value !== 'hd',
+    )
+  ) {
+    throw new Error('Generation image quality control contains an unsupported value.');
+  }
+  return profile;
+}
+
+function parseVideoGenerationModelParameterProfile(
+  record: Record<string, unknown>,
+): VideoGenerationModelParameterProfile {
   requireExactKeys(record, ['kind', 'supportedParameters', 'controls', 'fixed']);
   if (record['kind'] !== 'video') {
     throw new Error('Generation model parameter profile kind is invalid.');
@@ -391,7 +502,7 @@ function conformNumberParameter(
 function conformStringParameterWithControl<Key extends 'resolution' | 'aspectRatio'>(
   parameter: Key,
   value: string | undefined,
-  control: VideoStringEnumParameterControl | undefined,
+  control: GenerationStringEnumParameterControl | undefined,
   supported: ReadonlySet<VideoGenerationParameterId>,
   adjustments: GenerationParameterAdjustment[],
 ): Partial<Record<Key, string>> {
@@ -414,7 +525,7 @@ function conformStringParameterWithControl<Key extends 'resolution' | 'aspectRat
 function conformIntegerParameter<Key extends 'duration' | 'fps'>(
   parameter: Key,
   value: number | undefined,
-  control: VideoIntegerParameterControl | undefined,
+  control: GenerationIntegerParameterControl | undefined,
   supported: ReadonlySet<VideoGenerationParameterId>,
   adjustments: GenerationParameterAdjustment[],
 ): Partial<Record<Key, number>> {
@@ -437,7 +548,7 @@ function conformIntegerParameter<Key extends 'duration' | 'fps'>(
 function conformBooleanParameter(
   parameter: 'generateAudio',
   value: boolean | undefined,
-  control: VideoBooleanParameterControl | undefined,
+  control: GenerationBooleanParameterControl | undefined,
   supported: ReadonlySet<VideoGenerationParameterId>,
   adjustments: GenerationParameterAdjustment[],
 ): Partial<Record<'generateAudio', boolean>> {
@@ -464,7 +575,7 @@ function validatePresence(
 function validateStringEnum(
   parameter: 'resolution' | 'aspectRatio',
   value: string | undefined,
-  control: VideoStringEnumParameterControl | undefined,
+  control: GenerationStringEnumParameterControl | undefined,
   supported: ReadonlySet<VideoGenerationParameterId>,
   diagnostics: GenerationParameterDiagnostic[],
 ): void {
@@ -482,7 +593,7 @@ function validateStringEnum(
 function validateInteger(
   parameter: 'duration' | 'fps',
   value: number | undefined,
-  control: VideoIntegerParameterControl | undefined,
+  control: GenerationIntegerParameterControl | undefined,
   supported: ReadonlySet<VideoGenerationParameterId>,
   diagnostics: GenerationParameterDiagnostic[],
 ): void {
@@ -502,7 +613,7 @@ function validateInteger(
 function validateBoolean(
   parameter: 'generateAudio',
   value: boolean | undefined,
-  control: VideoBooleanParameterControl | undefined,
+  control: GenerationBooleanParameterControl | undefined,
   supported: ReadonlySet<VideoGenerationParameterId>,
   diagnostics: GenerationParameterDiagnostic[],
 ): void {
@@ -513,7 +624,10 @@ function validateBoolean(
   if (value === undefined && control?.required) diagnostics.push(missingDiagnostic(parameter));
 }
 
-function validIntegerControlValue(control: VideoIntegerParameterControl, value: number): boolean {
+function validIntegerControlValue(
+  control: GenerationIntegerParameterControl,
+  value: number,
+): boolean {
   return (
     Number.isInteger(value) &&
     value >= control.min &&
@@ -552,7 +666,7 @@ function stringEnum(
   required: boolean,
   values: readonly string[],
   defaultValue?: string,
-): VideoStringEnumParameterControl {
+): GenerationStringEnumParameterControl {
   return Object.freeze({
     kind: 'string-enum',
     required,
@@ -568,7 +682,7 @@ function integerControl(
   step: number,
   defaultValue?: number,
   suggestedValues?: readonly number[],
-): VideoIntegerParameterControl {
+): GenerationIntegerParameterControl {
   return Object.freeze({
     kind: 'integer',
     required,
@@ -582,7 +696,10 @@ function integerControl(
   });
 }
 
-function booleanControl(required: boolean, defaultValue?: boolean): VideoBooleanParameterControl {
+function booleanControl(
+  required: boolean,
+  defaultValue?: boolean,
+): GenerationBooleanParameterControl {
   return Object.freeze({
     kind: 'boolean',
     required,
@@ -590,7 +707,7 @@ function booleanControl(required: boolean, defaultValue?: boolean): VideoBoolean
   });
 }
 
-function parseStringEnumControl(value: unknown): VideoStringEnumParameterControl {
+function parseStringEnumControl(value: unknown): GenerationStringEnumParameterControl {
   const record = requireRecord(value, 'Generation string enum control must be an object.');
   requireAllowedKeys(record, ['kind', 'required', 'values', 'defaultValue']);
   if (record['kind'] !== 'string-enum' || typeof record['required'] !== 'boolean') {
@@ -612,7 +729,7 @@ function parseStringEnumControl(value: unknown): VideoStringEnumParameterControl
   };
 }
 
-function parseIntegerControl(value: unknown): VideoIntegerParameterControl {
+function parseIntegerControl(value: unknown): GenerationIntegerParameterControl {
   const record = requireRecord(value, 'Generation integer control must be an object.');
   requireAllowedKeys(record, [
     'kind',
@@ -643,7 +760,7 @@ function parseIntegerControl(value: unknown): VideoIntegerParameterControl {
     record['suggestedValues'] === undefined
       ? undefined
       : requireUniqueFiniteNumbers(record['suggestedValues'], 'Generation suggested values');
-  const control: VideoIntegerParameterControl = {
+  const control: GenerationIntegerParameterControl = {
     kind: 'integer',
     required: record['required'],
     min,
@@ -666,7 +783,7 @@ function parseIntegerControl(value: unknown): VideoIntegerParameterControl {
   return control;
 }
 
-function parseBooleanControl(value: unknown): VideoBooleanParameterControl {
+function parseBooleanControl(value: unknown): GenerationBooleanParameterControl {
   const record = requireRecord(value, 'Generation boolean control must be an object.');
   requireAllowedKeys(record, ['kind', 'required', 'defaultValue']);
   if (record['kind'] !== 'boolean' || typeof record['required'] !== 'boolean') {

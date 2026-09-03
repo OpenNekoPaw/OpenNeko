@@ -130,7 +130,9 @@ function GenerationInputPanel({
   );
   const modelBindingUnavailable = recipe.model !== undefined && selectedModel === undefined;
   const modelParameterProfileUnavailable =
-    recipe.kind === 'video' && selectedModel !== undefined && !selectedModel.parameterProfile;
+    (recipe.kind === 'image' || recipe.kind === 'video') &&
+    selectedModel !== undefined &&
+    selectedModel.parameterProfile?.kind !== recipe.kind;
   const selectedOutput = selectedCanvasGenerationOutput(node.data);
   const active =
     projection?.phase === 'binding' ||
@@ -211,17 +213,18 @@ function GenerationInputPanel({
   }, [commitRecipe, configuredDefaultRecipe]);
   useEffect(() => {
     if (recipe.kind !== 'video' || !selectedModel) return;
-    const next = selectedModel.parameterProfile
-      ? conformCanvasVideoGenerationRecipeToProfile(recipe, selectedModel.parameterProfile).recipe
-      : {
-          ...createCanvasGenerationNodeData('video', selectedModel.binding).recipe,
-          prompt: recipe.prompt,
-        };
+    const next =
+      selectedModel.parameterProfile?.kind === 'video'
+        ? conformCanvasVideoGenerationRecipeToProfile(recipe, selectedModel.parameterProfile).recipe
+        : {
+            ...createCanvasGenerationNodeData('video', selectedModel.binding).recipe,
+            prompt: recipe.prompt,
+          };
     if (recipesEqual(recipe, next)) return;
     setRecipe(next);
     void commitRecipe(next)
       .then(() => {
-        if (selectedModel.parameterProfile) {
+        if (selectedModel.parameterProfile?.kind === 'video') {
           setLocalDiagnostic(t('generation.parametersAdjusted', { model: selectedModel.label }));
         }
       })
@@ -236,7 +239,7 @@ function GenerationInputPanel({
     const candidate: CanvasGenerationRecipe = { ...recipe, model: option.binding };
     const result =
       candidate.kind === 'video'
-        ? option.parameterProfile
+        ? option.parameterProfile?.kind === 'video'
           ? conformCanvasVideoGenerationRecipeToProfile(candidate, option.parameterProfile)
           : {
               recipe: {
@@ -836,28 +839,15 @@ function parameterContent(
           />
         </div>
       );
-    case 'image':
+    case 'image': {
+      if (parameterProfile?.kind !== 'image') return null;
+      const { controls } = parameterProfile;
       return (
         <div className="selection-generation-input-panel__parameter-content">
           <OptionGroup
             label={t('generation.aspectRatio')}
             value={recipe.aspectRatio}
-            options={[
-              '1:1',
-              '16:9',
-              '9:16',
-              '3:4',
-              '4:3',
-              '3:2',
-              '2:3',
-              '5:4',
-              '4:5',
-              '21:9',
-              '2:1',
-              '1:2',
-              '3:1',
-              '1:3',
-            ]}
+            options={controls.aspectRatio.values}
             format={(value) => value ?? t('generation.auto')}
             visualRatio
             layout="ratio"
@@ -868,15 +858,15 @@ function parameterContent(
           <OptionGroup
             label={t('generation.resolution')}
             value={imageResolutionEdge(recipe)}
-            options={[1024, 2048, 4096]}
+            options={integerControlOptions(controls.resolution)}
             format={(value) => `${(value ?? 1024) / 1024}K`}
             layout="equal"
             onSelect={(edge) => apply(withImageResolution(recipe, edge))}
           />
           <OptionGroup
             label={t('generation.quality')}
-            value={recipe.quality}
-            options={[undefined, 'standard', 'hd'] as const}
+            value={imageQualityProfileValue(recipe.quality)}
+            options={controls.quality.values}
             format={(value) =>
               value === 'standard'
                 ? t('generation.qualityMedium')
@@ -885,12 +875,13 @@ function parameterContent(
                   : t('generation.qualityLow')
             }
             layout="compact"
-            onSelect={(quality) => apply({ ...recipe, quality })}
+            onSelect={(quality) => apply({ ...recipe, quality: imageQualityRecipeValue(quality) })}
           />
         </div>
       );
+    }
     case 'video': {
-      if (!parameterProfile) return null;
+      if (parameterProfile?.kind !== 'video') return null;
       const { controls } = parameterProfile;
       return (
         <div className="selection-generation-input-panel__parameter-content">
@@ -969,6 +960,20 @@ function parameterContent(
         </div>
       );
   }
+}
+
+function imageQualityProfileValue(
+  quality: Extract<CanvasGenerationRecipe, { readonly kind: 'image' }>['quality'],
+): string {
+  return quality ?? 'low';
+}
+
+function imageQualityRecipeValue(
+  quality: string,
+): Extract<CanvasGenerationRecipe, { readonly kind: 'image' }>['quality'] {
+  if (quality === 'low') return undefined;
+  if (quality === 'standard' || quality === 'hd') return quality;
+  throw new Error(`Unsupported image quality '${quality}'.`);
 }
 
 function OptionGroup<T extends string | number | boolean | undefined>({

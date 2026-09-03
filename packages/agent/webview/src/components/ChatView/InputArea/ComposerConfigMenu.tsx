@@ -23,8 +23,8 @@ import { dropdownPositionClass, useBoundedDropdownLayout } from './useDropdownDi
 import type {
   ComposerConfigCategory,
   ComposerConfigSection,
-  GenerationDuration,
   GenerationParams,
+  MediaModelParameterProfile,
 } from './types';
 
 interface ComposerConfigMenuProps {
@@ -35,15 +35,21 @@ interface ComposerConfigMenuProps {
   readonly onModelSelect: (modelId: string) => void;
   readonly mediaModelSelection: Readonly<MediaModelSelection>;
   readonly availableMediaModels: readonly ChatModelOption[];
+  readonly mediaModelParameterProfiles: Readonly<
+    Partial<Record<MediaCategory, MediaModelParameterProfile>>
+  >;
   readonly mediaModelOptOutEnabled?: boolean;
   readonly onMediaModelSelect: (category: MediaCategory, modelId: string) => void;
   readonly genParams: GenerationParams;
-  readonly onGenParamsChange: (params: Partial<GenerationParams>) => void;
+  readonly onGenParamsChange: <Category extends MediaCategory>(
+    category: Category,
+    params: Partial<GenerationParams[Category]>,
+  ) => void;
   readonly disabled?: boolean;
   readonly disabledReason?: string;
 }
 
-interface ParamOption<Value extends string = string> {
+interface ParamOption<Value extends string | number | boolean | undefined = string> {
   readonly value: Value;
   readonly label: string;
   readonly hintKey?: string;
@@ -51,46 +57,6 @@ interface ParamOption<Value extends string = string> {
 
 const CATEGORIES: readonly ComposerConfigCategory[] = ['llm', 'image', 'video', 'audio', 'music'];
 const SECTIONS: readonly ComposerConfigSection[] = ['model', 'params'];
-const RATIO_OPTIONS: readonly ParamOption<GenerationParams['ratio']>[] = [
-  { value: '16:9', label: '16:9' },
-  { value: '9:16', label: '9:16' },
-  { value: '1:1', label: '1:1' },
-  { value: '4:3', label: '4:3' },
-  { value: '3:2', label: '3:2' },
-  { value: '21:9', label: '21:9' },
-  { value: '2.39:1', label: '2.39:1' },
-];
-const IMAGE_RESOLUTION_OPTIONS: readonly ParamOption<GenerationParams['resolution']>[] = [
-  { value: '512', label: '512' },
-  { value: '720p', label: '720p' },
-  { value: '1080p', label: '1080p' },
-  { value: '2K', label: '2K' },
-  { value: '4K', label: '4K' },
-];
-const VIDEO_RESOLUTION_OPTIONS: readonly ParamOption<GenerationParams['resolution']>[] = [
-  { value: '720p', label: '720p' },
-  { value: '1080p', label: '1080p' },
-  { value: '2K', label: '2K' },
-  { value: '4K', label: '4K' },
-];
-const VIDEO_DURATION_OPTIONS: readonly ParamOption[] = [
-  { value: 'auto', label: 'AUTO', hintKey: 'chat.generation.paramHint.duration.autoVideo' },
-  { value: '5', label: '5s' },
-  { value: '8', label: '8s' },
-  { value: '12', label: '12s' },
-];
-const AUDIO_DURATION_OPTIONS: readonly ParamOption[] = [
-  { value: 'auto', label: 'AUTO', hintKey: 'chat.generation.paramHint.duration.autoAudio' },
-  { value: '3', label: '3s' },
-  { value: '8', label: '8s' },
-  { value: '15', label: '15s' },
-];
-const AUDIO_TYPE_OPTIONS = [
-  { value: 'sfx', labelKey: 'chat.generation.audioType.sfx' },
-  { value: 'ambient', labelKey: 'chat.generation.audioType.ambient' },
-  { value: 'voice', labelKey: 'chat.generation.audioType.voice' },
-] as const;
-
 export function ComposerConfigMenu({
   activeMode,
   modelCatalogStatus = 'ready',
@@ -99,6 +65,7 @@ export function ComposerConfigMenu({
   onModelSelect,
   mediaModelSelection,
   availableMediaModels,
+  mediaModelParameterProfiles,
   mediaModelOptOutEnabled = true,
   onMediaModelSelect,
   genParams,
@@ -292,8 +259,9 @@ export function ComposerConfigMenu({
             ) : (
               <MediaParameterPanel
                 category={category}
+                profile={mediaModelParameterProfiles[category]}
                 params={genParams}
-                onChange={onGenParamsChange}
+                onChange={(partial) => onGenParamsChange(category, partial)}
               />
             )}
           </div>
@@ -355,99 +323,166 @@ function MediaModelPanel({
 
 function MediaParameterPanel({
   category,
+  profile,
   params,
   onChange,
 }: {
   readonly category: MediaCategory;
+  readonly profile?: MediaModelParameterProfile;
   readonly params: GenerationParams;
-  readonly onChange: (params: Partial<GenerationParams>) => void;
+  readonly onChange: (params: Partial<GenerationParams[MediaCategory]>) => void;
 }) {
   const { t } = useTranslation();
 
-  if (category === 'image') {
+  if (category === 'image' && profile?.kind === 'image') {
+    const image = params.image;
+    const { controls } = profile;
     return (
       <>
         <ParameterGroup
           label={t('chat.generation.param.ratio')}
-          value={params.ratio}
-          options={RATIO_OPTIONS}
-          onChange={(value) => onChange({ ratio: value })}
+          value={selectedStringValue(image.aspectRatio, controls.aspectRatio)}
+          options={controls.aspectRatio.values.map(valueOption)}
+          onChange={(aspectRatio) => onChange({ aspectRatio })}
         />
         <ParameterGroup
           label={t('chat.generation.param.resolution')}
-          value={params.resolution}
-          options={IMAGE_RESOLUTION_OPTIONS}
+          value={selectedIntegerValue(image.resolution, controls.resolution)}
+          options={integerControlValues(controls.resolution).map((value) => ({
+            value,
+            label: `${value / 1024}K`,
+          }))}
           onChange={(value) => onChange({ resolution: value })}
+        />
+        <ParameterGroup
+          label={t('chat.generation.param.quality')}
+          value={selectedStringValue(image.quality, controls.quality)}
+          options={controls.quality.values.map((value) => ({
+            value,
+            label: imageQualityLabel(t, value),
+          }))}
+          onChange={(quality) => onChange({ quality })}
         />
       </>
     );
   }
 
-  if (category === 'video') {
+  if (category === 'video' && profile?.kind === 'video') {
+    const video = params.video;
+    const { controls } = profile;
     return (
       <>
-        <ParameterGroup
-          label={t('chat.generation.param.ratio')}
-          value={params.ratio}
-          options={RATIO_OPTIONS}
-          onChange={(value) => onChange({ ratio: value })}
-        />
-        <ParameterGroup
-          label={t('chat.generation.param.resolution')}
-          value={params.resolution}
-          options={VIDEO_RESOLUTION_OPTIONS}
-          onChange={(value) => onChange({ resolution: value })}
-        />
-        <ParameterGroup
-          label={t('chat.generation.param.videoDuration')}
-          value={String(params.videoDuration)}
-          options={VIDEO_DURATION_OPTIONS}
-          onChange={(value) => onChange({ videoDuration: parseDuration(value) })}
-        />
+        {controls.aspectRatio ? (
+          <ParameterGroup
+            label={t('chat.generation.param.ratio')}
+            value={selectedStringValue(video.aspectRatio, controls.aspectRatio)}
+            options={controls.aspectRatio.values.map(valueOption)}
+            onChange={(aspectRatio) => onChange({ aspectRatio })}
+          />
+        ) : null}
+        {controls.resolution ? (
+          <ParameterGroup
+            label={t('chat.generation.param.resolution')}
+            value={selectedStringValue(video.resolution, controls.resolution)}
+            options={controls.resolution.values.map(valueOption)}
+            onChange={(resolution) => onChange({ resolution })}
+          />
+        ) : null}
+        {controls.duration ? (
+          <ParameterGroup
+            label={t('chat.generation.param.videoDuration')}
+            value={selectedIntegerValue(video.duration, controls.duration)}
+            options={integerControlValues(controls.duration).map((value) => ({
+              value,
+              label: `${value}s`,
+            }))}
+            onChange={(duration) => onChange({ duration })}
+          />
+        ) : null}
+        {controls.fps ? (
+          <ParameterGroup
+            label={t('chat.generation.param.fps')}
+            value={selectedIntegerValue(video.fps, controls.fps)}
+            options={integerControlValues(controls.fps).map((value) => ({
+              value,
+              label: `${value} fps`,
+            }))}
+            onChange={(fps) => onChange({ fps })}
+          />
+        ) : null}
+        {controls.generateAudio ? (
+          <ParameterGroup
+            label={t('chat.generation.param.generateAudio')}
+            value={video.generateAudio ?? controls.generateAudio.defaultValue}
+            options={[
+              ...(controls.generateAudio.required
+                ? []
+                : [{ value: undefined, label: t('chat.generation.param.auto') } as const]),
+              { value: false, label: t('chat.generation.param.no') },
+              { value: true, label: t('chat.generation.param.yes') },
+            ]}
+            onChange={(generateAudio) => onChange({ generateAudio })}
+          />
+        ) : null}
       </>
-    );
-  }
-
-  if (category === 'music') {
-    return (
-      <ParameterGroup
-        label={t('chat.generation.param.audioDuration')}
-        value={String(params.audioDuration)}
-        options={AUDIO_DURATION_OPTIONS}
-        onChange={(value) => onChange({ audioDuration: parseDuration(value) })}
-      />
     );
   }
 
   return (
-    <>
-      <ParameterGroup
-        label={t('chat.generation.param.audioType')}
-        value={params.audioType}
-        options={AUDIO_TYPE_OPTIONS.map((option) => ({
-          value: option.value,
-          label: t(option.labelKey),
-        }))}
-        onChange={(value) => onChange({ audioType: value })}
-      />
-      <ParameterGroup
-        label={t('chat.generation.param.audioDuration')}
-        value={String(params.audioDuration)}
-        options={AUDIO_DURATION_OPTIONS}
-        onChange={(value) => onChange({ audioDuration: parseDuration(value) })}
-      />
-    </>
+    <div className="agent-model-config-empty" role="status">
+      {t('chat.generation.parameterProfileUnavailable')}
+    </div>
   );
 }
 
-function ParameterGroup<Value extends string>({
+function valueOption<Value extends string>(value: Value): ParamOption<Value> {
+  return { value, label: value };
+}
+
+function selectedStringValue(
+  value: string | undefined,
+  control: { readonly values: readonly string[]; readonly defaultValue?: string },
+): string | undefined {
+  return value !== undefined && control.values.includes(value) ? value : control.defaultValue;
+}
+
+function selectedIntegerValue(
+  value: number | undefined,
+  control: {
+    readonly min: number;
+    readonly max: number;
+    readonly step: number;
+    readonly defaultValue?: number;
+    readonly suggestedValues?: readonly number[];
+  },
+): number | undefined {
+  const values = integerControlValues(control);
+  return value !== undefined && values.includes(value) ? value : control.defaultValue;
+}
+
+function integerControlValues(control: {
+  readonly min: number;
+  readonly max: number;
+  readonly step: number;
+  readonly suggestedValues?: readonly number[];
+}): readonly number[] {
+  return (
+    control.suggestedValues ??
+    Array.from(
+      { length: Math.floor((control.max - control.min) / control.step) + 1 },
+      (_, index) => control.min + index * control.step,
+    )
+  );
+}
+
+function ParameterGroup<Value extends string | number | boolean | undefined>({
   label,
   value,
   options,
   onChange,
 }: {
   readonly label: string;
-  readonly value: Value;
+  readonly value: Value | undefined;
   readonly options: readonly ParamOption<Value>[];
   readonly onChange: (value: Value) => void;
 }) {
@@ -459,7 +494,7 @@ function ParameterGroup<Value extends string>({
       <div className="agent-generation-params-options" role="radiogroup" aria-label={label}>
         {options.map((option) => (
           <button
-            key={option.value}
+            key={String(option.value)}
             type="button"
             role="radio"
             aria-checked={option.value === value}
@@ -574,6 +609,15 @@ function isSelectableLlm(model: ChatModelOption): boolean {
   return model.category === 'llm' && isSelectable(model);
 }
 
+function imageQualityLabel(
+  t: (key: string, params?: Record<string, string | number>) => string,
+  value: string,
+): string {
+  if (value === 'standard') return t('chat.generation.param.quality.medium');
+  if (value === 'hd') return t('chat.generation.param.quality.high');
+  return t('chat.generation.param.quality.low');
+}
+
 function getCategoryLabel(
   t: (key: string, params?: Record<string, string | number>) => string,
   category: ComposerConfigCategory,
@@ -592,27 +636,30 @@ function getMediaParameterSummary(
   params: GenerationParams,
   t: (key: string, params?: Record<string, string | number>) => string,
 ): string {
-  if (mode === 'image') return `${params.ratio} · ${params.resolution}`;
+  if (mode === 'image') {
+    return [params.image.aspectRatio, formatImageResolution(params.image.resolution)]
+      .filter(Boolean)
+      .join(' · ');
+  }
   if (mode === 'video') {
-    return `${params.ratio} · ${params.resolution} · ${formatDuration(params.videoDuration)}`;
+    return [
+      params.video.aspectRatio,
+      params.video.resolution,
+      formatDuration(params.video.duration),
+    ]
+      .filter(Boolean)
+      .join(' · ');
   }
-  const audioType =
-    AUDIO_TYPE_OPTIONS.find((option) => option.value === params.audioType)?.labelKey ??
-    'chat.generation.audioType.sfx';
-  return `${t(audioType)} · ${formatDuration(params.audioDuration)}`;
+  const categoryParams = mode === 'audio' ? params.audio : params.music;
+  return formatDuration(categoryParams.duration) || t('chat.generation.param.auto');
 }
 
-function formatDuration(value: GenerationDuration): string {
-  return value === 'auto' ? 'AUTO' : `${value}s`;
+function formatDuration(value: number | undefined): string {
+  return value === undefined ? '' : `${value}s`;
 }
 
-function parseDuration(value: string): GenerationDuration {
-  if (value === 'auto') return 'auto';
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(`Invalid generation duration: ${value}`);
-  }
-  return parsed;
+function formatImageResolution(value: number | undefined): string {
+  return value === undefined ? '' : `${value / 1024}K`;
 }
 
 function findTriggerModel(input: {

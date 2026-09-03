@@ -142,6 +142,33 @@ describe('DSH Session Host contract', () => {
           providerLabel: 'NekoAPI Media',
           category: 'image',
           capabilities: ['image.generate'],
+          parameterProfile: {
+            kind: 'image',
+            controls: {
+              aspectRatio: {
+                kind: 'string-enum',
+                required: true,
+                values: ['1:1', '16:9'],
+                defaultValue: '1:1',
+              },
+              resolution: {
+                kind: 'integer',
+                required: true,
+                min: 1024,
+                max: 4096,
+                step: 1024,
+                defaultValue: 1024,
+                suggestedValues: [1024, 2048, 4096],
+              },
+              quality: {
+                kind: 'string-enum',
+                required: true,
+                values: ['low', 'standard', 'hd'],
+                defaultValue: 'standard',
+              },
+            },
+            fixed: { outputCount: 1 },
+          },
         },
       ],
       selectedModelOptionId: 'deepseek-official:deepseek-v4',
@@ -180,6 +207,14 @@ describe('DSH Session Host contract', () => {
         selectedMediaModelOptionIds: { video: 'nekoapi-media:gpt-image-2' },
       }),
     ).toThrow(/selected video model/u);
+    expect(() =>
+      parseDshComposerConfigurationProjection({
+        ...configuration,
+        models: configuration.models.map((model) =>
+          model.category === 'image' ? { ...model, category: 'video' } : model,
+        ),
+      }),
+    ).toThrow(/parameter profile must match/u);
   });
 
   it('accepts create with sender, exact Agent Surface identity, and DSH preset', () => {

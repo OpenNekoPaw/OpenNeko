@@ -25,6 +25,7 @@ import type {
   DshSessionLookupCwdPort,
 } from '@neko/agent-runtime/application';
 import type { ConfigManager } from '@neko/host/settings';
+import { resolveGenerationModelParameterProfile } from '@neko/generation-domain';
 import type { DesktopDshExecutionCatalog } from './desktop-dsh-provider-runtime';
 
 interface ComposerSurfaceScope {
@@ -42,7 +43,12 @@ interface ComposerSurfaceIdentity {
 
 type ComposerConfigManager = Pick<
   ConfigManager,
-  'getAssistantConfigState' | 'getDefaultModelRef' | 'setAssistantSettings' | 'setDefaultModelRef'
+  | 'getAssistantConfigState'
+  | 'getDefaultModelRef'
+  | 'getModel'
+  | 'getProvider'
+  | 'setAssistantSettings'
+  | 'setDefaultModelRef'
 > & {
   getEffectiveAgentWorkspaceConfigSnapshot(): Pick<
     ReturnType<ConfigManager['getEffectiveAgentWorkspaceConfigSnapshot']>,
@@ -476,7 +482,7 @@ function projectConfiguration(
         (model.category !== undefined && model.category !== 'llm') ||
         executionCatalog.resolve(model.providerId, model.modelId) !== undefined,
     )
-    .map(projectModel);
+    .map((model) => projectModel(config, model));
   const modelIds = new Set<string>();
   for (const model of models) {
     if (modelIds.has(model.id)) throw new Error(`Composer model '${model.id}' is duplicated.`);
@@ -574,15 +580,29 @@ function requireEffectiveConfiguration(
   };
 }
 
-function projectModel(model: {
-  readonly id: string;
-  readonly label: string;
-  readonly providerId: string;
-  readonly modelId: string;
-  readonly providerLabel?: string;
-  readonly category?: 'llm' | 'image' | 'video' | 'audio' | 'music';
-  readonly capabilities?: readonly string[];
-}): DshComposerModelOption {
+function projectModel(
+  config: Pick<ConfigManager, 'getModel' | 'getProvider'>,
+  model: {
+    readonly id: string;
+    readonly label: string;
+    readonly providerId: string;
+    readonly modelId: string;
+    readonly providerLabel?: string;
+    readonly category?: 'llm' | 'image' | 'video' | 'audio' | 'music';
+    readonly capabilities?: readonly string[];
+  },
+): DshComposerModelOption {
+  const configuredModel = config.getModel(model.modelId);
+  const provider = config.getProvider(model.providerId);
+  if (!configuredModel || !provider) {
+    throw new Error(
+      `Composer model '${model.providerId}/${model.modelId}' has no configured model and provider.`,
+    );
+  }
+  const parameterProfile = resolveGenerationModelParameterProfile({
+    providerType: provider.type,
+    modelName: configuredModel.name,
+  });
   return {
     id: model.id,
     label: model.label,
@@ -591,5 +611,6 @@ function projectModel(model: {
     providerLabel: model.providerLabel ?? model.providerId,
     category: model.category ?? 'llm',
     capabilities: [...(model.capabilities ?? [])],
+    ...(parameterProfile === undefined ? {} : { parameterProfile }),
   };
 }

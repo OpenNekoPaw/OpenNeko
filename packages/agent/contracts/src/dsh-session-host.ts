@@ -15,6 +15,10 @@ import {
 } from './agent-image-transport';
 import type { ModelType } from '@neko/ai-contracts';
 import {
+  parseGenerationModelParameterProfile,
+  type GenerationModelParameterProfile,
+} from '@neko/generation-domain';
+import {
   parseCanvasWorkspaceContextCatalog,
   parseCanvasWorkspaceTurnTarget,
   type CanvasWorkspaceContextCatalog,
@@ -164,6 +168,7 @@ export interface DshComposerModelOption {
   readonly providerLabel: string;
   readonly category: ModelType;
   readonly capabilities: readonly string[];
+  readonly parameterProfile?: GenerationModelParameterProfile;
 }
 
 export interface DshComposerPermissionPresetOption {
@@ -694,17 +699,31 @@ export function parseDshComposerConfigurationProjection(
   }
   const models = record.models.map((model) => {
     const candidate = requireRecord(model, 'DSH composer model option');
-    requireExactKeys(candidate, [
-      'id',
-      'label',
-      'providerId',
-      'modelId',
-      'providerLabel',
-      'category',
-      'capabilities',
-    ]);
+    requireExactKeys(
+      candidate,
+      candidate.parameterProfile === undefined
+        ? ['id', 'label', 'providerId', 'modelId', 'providerLabel', 'category', 'capabilities']
+        : [
+            'id',
+            'label',
+            'providerId',
+            'modelId',
+            'providerLabel',
+            'category',
+            'capabilities',
+            'parameterProfile',
+          ],
+    );
     if (!Array.isArray(candidate.capabilities)) {
       throw new Error('DSH composer model capabilities must be an array.');
+    }
+    const category = parseModelType(candidate.category);
+    const parameterProfile =
+      candidate.parameterProfile === undefined
+        ? undefined
+        : parseGenerationModelParameterProfile(candidate.parameterProfile);
+    if (parameterProfile !== undefined && parameterProfile.kind !== category) {
+      throw new Error('DSH composer model parameter profile must match its model category.');
     }
     return {
       id: requireIdentity(candidate.id, 'model.id'),
@@ -712,10 +731,11 @@ export function parseDshComposerConfigurationProjection(
       providerId: requireIdentity(candidate.providerId, 'model.providerId'),
       modelId: requireIdentity(candidate.modelId, 'model.modelId'),
       providerLabel: requireIdentity(candidate.providerLabel, 'model.providerLabel'),
-      category: parseModelType(candidate.category),
+      category,
       capabilities: candidate.capabilities.map((capability) =>
         requireIdentity(capability, 'model.capability'),
       ),
+      ...(parameterProfile === undefined ? {} : { parameterProfile }),
     };
   });
   const modelIds = new Set<string>();

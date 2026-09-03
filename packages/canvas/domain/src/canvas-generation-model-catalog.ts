@@ -55,7 +55,9 @@ export function projectCanvasGenerationModels<Model extends CanvasGenerationCata
           providerLabel: provider.displayName,
           isDefault:
             configuredDefault?.providerId === provider.id && configuredDefault.modelId === model.id,
-          ...(purpose === 'video.generate' && parameterProfile ? { parameterProfile } : {}),
+          ...(parameterProfileMatchesPurpose(parameterProfile, purpose)
+            ? { parameterProfile }
+            : {}),
         };
       });
     })
@@ -70,6 +72,16 @@ export function projectCanvasGenerationModels<Model extends CanvasGenerationCata
         `${right.providerLabel}\u0000${right.label}`,
       );
     });
+}
+
+function parameterProfileMatchesPurpose(
+  profile: GenerationModelParameterProfile | undefined,
+  purpose: CanvasGenerationPurpose,
+): profile is GenerationModelParameterProfile {
+  return (
+    (purpose === 'image.generate' && profile?.kind === 'image') ||
+    (purpose === 'video.generate' && profile?.kind === 'video')
+  );
 }
 
 export function canvasGenerationModelSupportsPurpose(

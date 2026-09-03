@@ -70,13 +70,12 @@ describe('Desktop DSH composer configuration', () => {
       },
     });
 
-    await expect(
-      service.project({
-        windowId: 'window-1',
-        workbenchInstanceId: 'workbench-1',
-        agentSurfaceId: 'surface-1',
-      }),
-    ).resolves.toMatchObject({
+    const projected = await service.project({
+      windowId: 'window-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'surface-1',
+    });
+    expect(projected).toMatchObject({
       selectedModelOptionId: 'deepseek-official:deepseek-v4',
       selectedMediaModelOptionIds: { image: 'nekoapi-media:gpt-image-2' },
       permissionPresetId: 'workspace-write',
@@ -86,6 +85,24 @@ describe('Desktop DSH composer configuration', () => {
         { id: 'danger-full-access', label: 'danger-full-access', selectable: true },
       ],
     });
+    expect(projected.models.find((model) => model.category === 'image')?.parameterProfile).toEqual(
+      expect.objectContaining({
+        kind: 'image',
+        controls: expect.objectContaining({
+          resolution: expect.objectContaining({ suggestedValues: [1024, 2048, 4096] }),
+          quality: expect.objectContaining({ values: ['low', 'standard', 'hd'] }),
+        }),
+      }),
+    );
+    expect(projected.models.find((model) => model.category === 'video')?.parameterProfile).toEqual(
+      expect.objectContaining({
+        kind: 'video',
+        controls: expect.objectContaining({
+          resolution: expect.objectContaining({ values: ['768P', '2K'] }),
+          duration: expect.objectContaining({ min: 4, max: 15, step: 1 }),
+        }),
+      }),
+    );
     expect(restoreWorkspace).toHaveBeenCalledWith('window-1', 'grant-1', 'workspace-1');
     expect(readConversationInputCatalog).toHaveBeenCalledWith('conversation-1');
     await expect(
@@ -883,6 +900,48 @@ function createConfig() {
   return {
     getAssistantConfigState: vi.fn(() => state),
     getDefaultModelRef: vi.fn((type: ModelType) => defaultRefs[type]),
+    getProvider: vi.fn((providerId: string) => {
+      const base = {
+        id: providerId,
+        name: providerId,
+        displayName: providerId,
+        apiUrl: 'https://provider.example.test',
+        enabled: true,
+      };
+      if (providerId === 'nekoapi-media') return { ...base, type: 'newapi' as const };
+      if (providerId === 'minimax-media') return { ...base, type: 'minimax' as const };
+      if (providerId === 'deepseek-official' || providerId === 'openai') {
+        return { ...base, type: 'openai' as const };
+      }
+      return undefined;
+    }),
+    getModel: vi.fn((modelId: string) => {
+      const models = {
+        'deepseek-v4': {
+          providerId: 'deepseek-official',
+          name: 'deepseek-v4',
+          capabilities: ['chat'],
+        },
+        'gpt-5': { providerId: 'openai', name: 'gpt-5', capabilities: ['chat'] },
+        'gpt-image-2': {
+          providerId: 'nekoapi-media',
+          name: 'gpt-image-2',
+          capabilities: ['image.generate'],
+        },
+        'minimax-h3': {
+          providerId: 'minimax-media',
+          name: 'MiniMax-H3',
+          capabilities: ['video.generate'],
+        },
+        'suno-v4': {
+          providerId: 'nekoapi-media',
+          name: 'suno-v4',
+          capabilities: ['audio.music.generate'],
+        },
+      };
+      const model = models[modelId as keyof typeof models];
+      return model === undefined ? undefined : { id: modelId, ...model, enabled: true };
+    }),
     getEffectiveAgentWorkspaceConfigSnapshot: vi.fn(() => ({})),
     setAssistantSettings: vi.fn(async (updates: Partial<AssistantSettingsSnapshot>) => {
       state = { ...state, ...updates };

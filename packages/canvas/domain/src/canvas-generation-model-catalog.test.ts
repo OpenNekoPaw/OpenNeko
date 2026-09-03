@@ -19,7 +19,7 @@ describe('Canvas Generation model catalog', () => {
     const models = [
       {
         id: 'image-model',
-        name: 'wire-image-model',
+        name: 'gpt-image-2',
         displayName: 'Image Model',
         providerId: 'provider-1',
         type: 'image' as const,
@@ -49,7 +49,7 @@ describe('Canvas Generation model catalog', () => {
       models,
       resolveParameterProfile: (model) =>
         resolveGenerationModelParameterProfile({
-          providerType: 'minimax',
+          providerType: model.type === 'image' ? 'newapi' : 'minimax',
           modelName: model.name,
         }),
       getDefaultModelRef: (type) =>
@@ -80,6 +80,17 @@ describe('Canvas Generation model catalog', () => {
         label: 'Image Model',
         providerLabel: 'Provider One',
         isDefault: true,
+        parameterProfile: expect.objectContaining({
+          kind: 'image',
+          controls: expect.objectContaining({
+            aspectRatio: expect.objectContaining({
+              values: expect.arrayContaining(['1:1', '1:3']),
+            }),
+            resolution: expect.objectContaining({ suggestedValues: [1024, 2048, 4096] }),
+            quality: expect.objectContaining({ values: ['low', 'standard', 'hd'] }),
+          }),
+          fixed: { outputCount: 1 },
+        }),
       },
       {
         binding: {

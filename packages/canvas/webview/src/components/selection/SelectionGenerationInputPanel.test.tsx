@@ -828,6 +828,48 @@ const GENERATION_MODELS = [
     label: 'Image Model',
     providerLabel: 'Provider One',
     isDefault: true,
+    parameterProfile: {
+      kind: 'image' as const,
+      controls: {
+        aspectRatio: {
+          kind: 'string-enum' as const,
+          required: true,
+          values: [
+            '1:1',
+            '16:9',
+            '9:16',
+            '3:4',
+            '4:3',
+            '3:2',
+            '2:3',
+            '5:4',
+            '4:5',
+            '21:9',
+            '2:1',
+            '1:2',
+            '3:1',
+            '1:3',
+          ],
+          defaultValue: '1:1',
+        },
+        resolution: {
+          kind: 'integer' as const,
+          required: true,
+          min: 1024,
+          max: 4096,
+          step: 1024,
+          defaultValue: 1024,
+          suggestedValues: [1024, 2048, 4096],
+        },
+        quality: {
+          kind: 'string-enum' as const,
+          required: true,
+          values: ['low', 'standard', 'hd'],
+          defaultValue: 'standard',
+        },
+      },
+      fixed: { outputCount: 1 as const },
+    },
   },
   {
     binding: {

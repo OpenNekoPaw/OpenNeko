@@ -338,6 +338,9 @@ importers:
       '@neko/content-domain':
         specifier: workspace:*
         version: link:../../content/domain
+      '@neko/generation-domain':
+        specifier: workspace:*
+        version: link:../../generation/domain
     devDependencies:
       typescript:
         specifier: 6.0.3

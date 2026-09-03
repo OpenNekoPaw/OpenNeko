@@ -313,6 +313,7 @@ export function InputArea({
     mediaModelCallCount,
     mediaModelSelection,
     availableMediaModels,
+    mediaModelParameterProfiles,
     mediaModelOptOutEnabled,
     onMediaModelSelect,
     inputCatalog,
@@ -1315,6 +1316,7 @@ export function InputArea({
                       onModelSelect={onModelSelect}
                       mediaModelSelection={mediaModelSelection}
                       availableMediaModels={availableMediaModels}
+                      mediaModelParameterProfiles={mediaModelParameterProfiles}
                       mediaModelOptOutEnabled={mediaModelOptOutEnabled}
                       onMediaModelSelect={onMediaModelSelect}
                       genParams={genParams}

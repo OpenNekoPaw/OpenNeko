@@ -33,7 +33,7 @@ import { createNodeDocumentLowLevelAccess } from '@neko/content-domain/document/
 import { join } from 'node:path';
 import { CutProjectAuthoringService } from '@neko/cut-domain';
 import type { CutExportApplicationService } from '@neko/cut-node';
-import { resolveGenerationModelParameterProfile } from '@neko/generation-domain';
+import { resolveVideoGenerationModelParameterProfile } from '@neko/generation-domain';
 import {
   createPurposeGenerationJobPort,
   type GenerationApplicationRuntime,
@@ -382,7 +382,7 @@ function purposeBindings(
           `Generation binding ${binding.providerId}/${binding.modelId} is unavailable.`,
         );
       }
-      const parameterProfile = resolveGenerationModelParameterProfile({
+      const parameterProfile = resolveVideoGenerationModelParameterProfile({
         providerType: provider.type,
         modelName: model.name,
       });

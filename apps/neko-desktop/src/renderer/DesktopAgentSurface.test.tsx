@@ -155,6 +155,34 @@ const composerConfiguration: DshComposerConfigurationProjection = {
   },
 };
 
+const imageParameterProfile = {
+  kind: 'image' as const,
+  controls: {
+    aspectRatio: {
+      kind: 'string-enum' as const,
+      required: true,
+      values: ['1:1', '16:9', '9:16', '1:3'],
+      defaultValue: '1:1',
+    },
+    resolution: {
+      kind: 'integer' as const,
+      required: true,
+      min: 1024,
+      max: 4096,
+      step: 1024,
+      defaultValue: 1024,
+      suggestedValues: [1024, 2048, 4096],
+    },
+    quality: {
+      kind: 'string-enum' as const,
+      required: true,
+      values: ['low', 'standard', 'hd'],
+      defaultValue: 'standard',
+    },
+  },
+  fixed: { outputCount: 1 as const },
+};
+
 const entryComposerConfiguration: DshComposerConfigurationProjection = {
   models: composerConfiguration.models,
   selectedModelOptionId: composerConfiguration.selectedModelOptionId,
@@ -1096,6 +1124,39 @@ describe('DesktopAgentSurface', () => {
     expect(
       (screen.getByRole('button', { name: 'Attach file' }) as HTMLButtonElement).disabled,
     ).toBe(false);
+  });
+
+  it('renders exact selected image-model parameters projected through the Desktop contract', async () => {
+    const profiledConfiguration: DshComposerConfigurationProjection = {
+      ...composerConfiguration,
+      models: composerConfiguration.models.map((model) =>
+        model.category === 'image' ? { ...model, parameterProfile: imageParameterProfile } : model,
+      ),
+      selectedMediaModelOptionIds: { image: 'nekoapi-media:gpt-image-2' },
+    };
+    dshSessions.getComposerConfiguration.mockResolvedValueOnce(profiledConfiguration);
+
+    render(
+      <DesktopAgentSurface
+        agentSurfaceId="surface-1"
+        conversationId="conversation-1"
+        sceneId="scene-1"
+        workbenchInstanceId="workbench-1"
+        surfaceKind="workspace"
+      />,
+    );
+    await screen.findByText('My Film');
+    fireEvent.click(screen.getByRole('button', { name: 'Configure models' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Image' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Parameters' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Creation configuration' });
+    expect(dialog.textContent).toContain('1K');
+    expect(dialog.textContent).toContain('2K');
+    expect(dialog.textContent).toContain('4K');
+    expect(dialog.textContent).toContain('Quality');
+    expect(dialog.textContent).not.toContain('512');
+    expect(dialog.textContent).not.toContain('720p');
   });
 
   it('submits the first Draft message atomically through create', async () => {

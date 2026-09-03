@@ -26,7 +26,7 @@ import {
   validateProviderVideoRequest,
 } from './media-operation-capabilities';
 import {
-  resolveGenerationModelParameterProfile,
+  resolveVideoGenerationModelParameterProfile,
   validateVideoGenerationParameters,
 } from '../model-parameter-profile';
 
@@ -155,7 +155,7 @@ export class MediaGenerationService implements MediaGenerationExecutionPort {
           )
         : [];
     const modelParameterProfile = isVideoGeneration
-      ? resolveGenerationModelParameterProfile({
+      ? resolveVideoGenerationModelParameterProfile({
           providerType: provider.type,
           modelName: model.name,
         })

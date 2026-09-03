@@ -7,8 +7,8 @@ import type {
   VideoGenerationRequest,
 } from '../contracts';
 import type {
-  GenerationModelParameterProfile,
   GenerationParameterAdjustment,
+  VideoGenerationModelParameterProfile,
 } from '../model-parameter-profile';
 import type {
   GenerationExecutionResult,
@@ -140,14 +140,14 @@ export interface PurposeGenerationBindingResolver {
     | {
         readonly providerId: string;
         readonly modelId: string;
-        readonly parameterProfile?: GenerationModelParameterProfile;
+        readonly parameterProfile?: VideoGenerationModelParameterProfile;
       }
     | undefined
     | Promise<
         | {
             readonly providerId: string;
             readonly modelId: string;
-            readonly parameterProfile?: GenerationModelParameterProfile;
+            readonly parameterProfile?: VideoGenerationModelParameterProfile;
           }
         | undefined
       >;

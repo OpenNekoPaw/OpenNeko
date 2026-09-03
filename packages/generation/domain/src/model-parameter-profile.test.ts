@@ -4,11 +4,46 @@ import {
   conformVideoGenerationRequestToProfile,
   createVideoGenerationRecipeForProfile,
   parseGenerationModelParameterProfile,
+  resolveImageGenerationModelParameterProfile,
   resolveGenerationModelParameterProfile,
+  resolveVideoGenerationModelParameterProfile,
   validateVideoGenerationParameters,
 } from './model-parameter-profile';
 
 describe('Generation model parameter profiles', () => {
+  it('declares the exact GPT Image 2 controls used by generation surfaces', () => {
+    const profile = resolveImageGenerationModelParameterProfile({
+      providerType: 'newapi',
+      modelName: 'gpt-image-2',
+    });
+    if (!profile) throw new Error('GPT Image 2 parameter profile is unavailable.');
+
+    expect(profile.controls.aspectRatio.values).toEqual([
+      '1:1',
+      '16:9',
+      '9:16',
+      '3:4',
+      '4:3',
+      '3:2',
+      '2:3',
+      '5:4',
+      '4:5',
+      '21:9',
+      '2:1',
+      '1:2',
+      '3:1',
+      '1:3',
+    ]);
+    expect(profile.controls.resolution.suggestedValues).toEqual([1024, 2048, 4096]);
+    expect(profile.controls.quality).toEqual({
+      kind: 'string-enum',
+      required: true,
+      values: ['low', 'standard', 'hd'],
+      defaultValue: 'standard',
+    });
+    expect(parseGenerationModelParameterProfile(structuredClone(profile))).toEqual(profile);
+  });
+
   it('declares exact MiniMax H3 defaults without an FPS control', () => {
     const profile = requireProfile('minimax', 'MiniMax-H3');
     const recipe = createVideoGenerationRecipeForProfile(modelBinding(), profile);
@@ -172,7 +207,7 @@ describe('Generation model parameter profiles', () => {
 });
 
 function requireProfile(providerType: 'minimax' | 'bytedance', modelName: string) {
-  const profile = resolveGenerationModelParameterProfile({ providerType, modelName });
+  const profile = resolveVideoGenerationModelParameterProfile({ providerType, modelName });
   if (!profile) throw new Error('Test model profile is unavailable.');
   return profile;
 }

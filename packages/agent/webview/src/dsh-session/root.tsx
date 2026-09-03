@@ -37,6 +37,7 @@ import type {
   SelectedCharacterLaunch,
   SelectedWorldLaunch,
 } from '../components/ChatView/InputArea/types';
+import { DEFAULT_GENERATION_PARAMS } from '../components/ChatView/InputArea/types';
 import { resolveAgentInputInvocationIntent } from '../components/ChatView/InputArea/slash-command-catalog';
 import type {
   AgentComposerAuthoringCreationContext,
@@ -785,14 +786,22 @@ function DshComposer({
     category: model.category,
     capabilities: model.capabilities,
   }));
-  const generationParams: GenerationParams = {
-    ratio: '16:9',
-    resolution: '1080p',
-    videoDuration: 'auto',
-    videoFps: 24,
-    audioDuration: 'auto',
-    audioType: 'sfx',
-  };
+  const [generationParams, setGenerationParams] =
+    useState<GenerationParams>(DEFAULT_GENERATION_PARAMS);
+  const mediaModelParameterProfiles = useMemo(() => {
+    const selected = configuration?.selectedMediaModelOptionIds ?? {};
+    return Object.fromEntries(
+      (['image', 'video', 'audio', 'music'] as const).flatMap((category) => {
+        const modelOptionId = selected[category];
+        const model = configuration?.models.find(
+          (candidate) => candidate.id === modelOptionId && candidate.category === category,
+        );
+        return model?.parameterProfile === undefined
+          ? []
+          : ([[category, model.parameterProfile]] as const);
+      }),
+    );
+  }, [configuration]);
   const configurationDiagnostic = configurationError ?? configuration?.diagnostic;
   const canvasCatalog = configuration?.context?.canvas;
   const canvasSelectionScope: DshComposerCanvasSelectionScope | undefined = useMemo(
@@ -1013,6 +1022,7 @@ function DshComposer({
         music: configuration?.selectedMediaModelOptionIds.music ?? 'none',
       }}
       availableMediaModels={models.filter((model) => model.category !== 'llm')}
+      mediaModelParameterProfiles={mediaModelParameterProfiles}
       mediaModelOptOutEnabled={false}
       onMediaModelSelect={onMediaModelChange ?? (() => undefined)}
       sessionMode="agent"
@@ -1041,7 +1051,12 @@ function DshComposer({
       genCategory="image"
       genParams={generationParams}
       onGenCategoryChange={() => undefined}
-      onGenParamsChange={() => undefined}
+      onGenParamsChange={(category, partial) =>
+        setGenerationParams((current) => ({
+          ...current,
+          [category]: { ...current[category], ...partial },
+        }))
+      }
     >
       <div className="dsh-composer-adapter" data-dsh-adapter="input-area">
         <InputArea
