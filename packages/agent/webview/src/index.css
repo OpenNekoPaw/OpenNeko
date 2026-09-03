@@ -3075,7 +3075,7 @@ body {
 }
 
 .agent-model-config-dialog {
-  width: min(420px, calc(100vw - 24px));
+  width: min(460px, calc(100vw - 24px));
   max-width: calc(100vw - 24px);
   max-height: min(560px, calc(100vh - 32px));
   padding: 8px;
@@ -3137,7 +3137,7 @@ body {
 
 .agent-model-config-tabs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 2px;
   padding: 3px;
   border: 1px solid var(--agent-overlay-border);
@@ -3151,14 +3151,15 @@ body {
   justify-content: center;
   min-width: 0;
   min-height: 30px;
-  gap: 4px;
-  padding: 5px 7px;
+  gap: 3px;
+  padding: 5px 6px;
   border: 1px solid transparent;
   border-radius: 6px;
   color: var(--neko-descriptionForeground);
   cursor: pointer;
   font-size: 11px;
   line-height: 16px;
+  white-space: nowrap;
 }
 
 .agent-model-config-tab:hover,

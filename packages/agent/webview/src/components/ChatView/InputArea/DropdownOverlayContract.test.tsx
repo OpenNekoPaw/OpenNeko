@@ -321,7 +321,7 @@ describe('dropdown overlay presentation contract', () => {
     expect(presetRule).toContain('min-width: var(--agent-overlay-compact-min-inline-size)');
     expect(presetRule).toContain('max-width: var(--agent-overlay-compact-max-inline-size)');
     expect(paramRule).toBeTruthy();
-    expect(paramRule).toContain('width: min(420px, calc(100vw - 24px))');
+    expect(paramRule).toContain('width: min(460px, calc(100vw - 24px))');
     expect(paramRule).toContain('max-width: calc(100vw - 24px)');
     expect(paramOptionsRule).toBeTruthy();
     expect(paramOptionsRule).toContain('flex-wrap: wrap');
@@ -349,6 +349,7 @@ describe('dropdown overlay presentation contract', () => {
   it('keeps the white model surface while distinguishing selected options', () => {
     const css = readFileSync(resolve(__dirname, '../../../index.css'), 'utf8');
     const tabsRule = css.match(/\.agent-model-config-tabs\s*\{(?<body>[^}]+)\}/)?.groups?.body;
+    const tabRule = css.match(/\.agent-model-config-tab\s*\{(?<body>[^}]+)\}/)?.groups?.body;
     const selectedCategoryRule = css.match(/\.agent-model-config-tab-selected\s*\{(?<body>[^}]+)\}/)
       ?.groups?.body;
     const selectedSectionRule = css.match(
@@ -358,6 +359,8 @@ describe('dropdown overlay presentation contract', () => {
       ?.groups?.body;
 
     expect(tabsRule).toContain('background: var(--agent-overlay-bg)');
+    expect(tabsRule).toContain('grid-template-columns: repeat(5, minmax(0, 1fr))');
+    expect(tabRule).toContain('white-space: nowrap');
     expect(selectedCategoryRule).toContain('background: color-mix');
     expect(selectedCategoryRule).toContain('box-shadow:');
     expect(selectedSectionRule).toContain('background: color-mix');

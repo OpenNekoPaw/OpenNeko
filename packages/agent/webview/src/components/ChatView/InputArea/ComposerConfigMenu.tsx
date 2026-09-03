@@ -115,7 +115,7 @@ export function ComposerConfigMenu({
   const dialogLayout = useBoundedDropdownLayout(menuRef, {
     enabled: isOpen,
     preferredDirection: 'up',
-    preferredInlineSize: 420,
+    preferredInlineSize: 460,
   });
 
   useClickOutsideSingle(menuRef, () => setIsOpen(false));
