@@ -457,7 +457,7 @@ function decodeModelRefs(
       issues.push({
         code: 'unsupportedDefaultModelType',
         path,
-        message: `Unsupported default_models key: ${key}. Use llm, image, video, or audio.`,
+        message: `Unsupported default_models key: ${key}. Use llm, image, video, audio, or music.`,
       });
       continue;
     }

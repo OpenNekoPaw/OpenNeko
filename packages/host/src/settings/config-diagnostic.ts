@@ -93,9 +93,9 @@ export function buildSafeConfigDiagnosticMessage(
     case 'invalidProviderApiKey':
       return `Provider credential field ${path ?? 'providers.api_key'} is invalid in ${filePath}. Enter a non-empty string, then reload the configuration.`;
     case 'unsupportedModelType':
-      return `Configuration file contains an unsupported model type: ${filePath}. Use llm, image, video, or audio, then open a new Agent session or tab.`;
+      return `Configuration file contains an unsupported model type: ${filePath}. Use llm, image, video, audio, or music, then open a new Agent session or tab.`;
     case 'unsupportedDefaultModelType':
-      return `Configuration file contains an unsupported default_models key: ${filePath}. Use llm, image, video, or audio, then open a new Agent session or tab.`;
+      return `Configuration file contains an unsupported default_models key: ${filePath}. Use llm, image, video, audio, or music, then open a new Agent session or tab.`;
     case 'invalidDefaultModelBinding':
       return `Configuration file contains a default model binding that references an unavailable provider/model or mismatched capability: ${filePath}. Fix the default binding, then open a new Agent session or tab.`;
     case 'readError':
