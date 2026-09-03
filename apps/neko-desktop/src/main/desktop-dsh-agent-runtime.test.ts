@@ -618,6 +618,7 @@ function createClient(
     prompt: async () => unsupported(),
     cancel: async () => unsupported(),
     setSessionContext: async () => unsupported(),
+    branchSession: async () => unsupported(),
     readPermissionPresets: async () => unsupported(),
     readInputCatalog: async () => unsupported(),
     executeCommand: async () => unsupported(),

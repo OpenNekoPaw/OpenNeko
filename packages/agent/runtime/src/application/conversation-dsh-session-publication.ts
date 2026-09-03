@@ -1,4 +1,6 @@
 import type {
+  LoadSessionRequest,
+  LoadSessionResponse,
   NewSessionRequest,
   NewSessionResponse,
   ResumeSessionRequest,
@@ -19,12 +21,24 @@ export interface ConversationDshSessionPublication {
     readonly context: AgentConversationContext;
     readonly title: string;
   }): Promise<{ readonly conversationId: string; readonly dshSessionId: string }>;
+  branch(input: {
+    readonly sourceConversationId: string;
+    readonly sourceDshSessionId: string;
+    readonly messageId: string;
+    readonly context: AgentConversationContext;
+    readonly title: string;
+  }): Promise<{ readonly conversationId: string; readonly dshSessionId: string }>;
 }
 
 export interface DshSessionCreationClient {
   createSession(input: NewSessionRequest): Promise<NewSessionResponse>;
+  loadSession(input: LoadSessionRequest): Promise<LoadSessionResponse>;
   closeSession(sessionId: string): Promise<void>;
   resumeSession(input: ResumeSessionRequest): Promise<ResumeSessionResponse>;
+  branchSession(input: {
+    readonly sessionId: string;
+    readonly messageId: string;
+  }): Promise<{ readonly sessionId: string }>;
 }
 
 export interface DshSessionLookupCwdPort {
@@ -90,6 +104,53 @@ export function createConversationDshSessionPublication(options: {
       await options.home.refresh();
       return Object.freeze({ conversationId, dshSessionId });
     },
+    async branch(input: Parameters<ConversationDshSessionPublication['branch']>[0]) {
+      const sourceConversationId = requireConversationId(input.sourceConversationId);
+      const sourceDshSessionId = requireSessionId(input.sourceDshSessionId);
+      const created = await options.client.branchSession({
+        sessionId: sourceDshSessionId,
+        messageId: requireMessageId(input.messageId),
+      });
+      const dshSessionId = requireSessionId(created.sessionId);
+      if (dshSessionId === sourceDshSessionId) {
+        throw new Error(`DSH Session branch reused source Session '${sourceDshSessionId}'.`);
+      }
+      const conversationId = createIdentity(options.conversationIdentitySeed);
+      const timestamp = now().toISOString();
+      try {
+        const cwd = requireAbsoluteCwd(await options.lookupCwd.resolve(input.context));
+        await options.catalog.reserve({
+          conversationId,
+          title: requireTitle(input.title),
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          context: input.context,
+        });
+        const result = await options.binding.bind({ conversationId, dshSessionId });
+        if (!result.ok) {
+          throw new Error(`DSH Conversation branch failed: ${result.code}: ${result.message}`);
+        }
+        await options.client.closeSession(dshSessionId);
+        options.activation.markClosed(dshSessionId);
+        await options.client.loadSession({ sessionId: dshSessionId, cwd, mcpServers: [] });
+        options.activation.markLoaded(dshSessionId);
+      } catch (error) {
+        try {
+          await options.home.refresh();
+        } catch (refreshError) {
+          throw new AggregateError(
+            [error, refreshError],
+            `DSH Conversation branch publication and Home projection refresh failed: ${conversationId}`,
+          );
+        }
+        throw new Error(
+          `DSH Conversation branch publication failed for '${sourceConversationId}' as '${conversationId}' with Session '${dshSessionId}'.`,
+          { cause: error },
+        );
+      }
+      await options.home.refresh();
+      return Object.freeze({ conversationId, dshSessionId });
+    },
   });
 }
 
@@ -106,6 +167,11 @@ function requireSessionId(value: string): string {
 
 function requireConversationId(value: string): string {
   if (value.trim().length === 0) throw new Error('Conversation identity is required.');
+  return value;
+}
+
+function requireMessageId(value: string): string {
+  if (value.trim().length === 0) throw new Error('Assistant message identity is required.');
   return value;
 }
 

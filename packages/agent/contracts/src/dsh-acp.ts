@@ -4,6 +4,7 @@ import type { DshSkillAuthoringLayout } from './dsh-skill-authoring';
 
 export const DSH_ACP_EXTENSION_METHODS = {
   setSessionContext: 'openneko/session/context/set',
+  branchSession: 'openneko/session/branch',
   archiveSession: 'openneko/session/archive',
   readArchivedSessions: 'openneko/session/archive/read',
   readPermissionPresets: 'openneko/session/permissions/read',
@@ -589,6 +590,15 @@ export interface DshAcpSessionContextSetRequest {
   readonly text: string;
 }
 
+export interface DshAcpSessionBranchRequest {
+  readonly sessionId: string;
+  readonly messageId: string;
+}
+
+export interface DshAcpSessionBranchProjection {
+  readonly sessionId: string;
+}
+
 export interface DshAcpSessionArchiveRequest {
   readonly sessionId: string;
 }
@@ -602,6 +612,25 @@ export function decodeDshAcpSessionArchiveRequest(
 ): DshAcpSessionArchiveRequest {
   decodeDshAcpJsonPayload(input, 'Session archive request');
   requireExactKeys(input, ['sessionId'], 'Session archive request');
+  return { sessionId: requireNonEmptyString(input.sessionId, 'sessionId') };
+}
+
+export function decodeDshAcpSessionBranchRequest(
+  input: Record<string, unknown>,
+): DshAcpSessionBranchRequest {
+  decodeDshAcpJsonPayload(input, 'Session branch request');
+  requireExactKeys(input, ['sessionId', 'messageId'], 'Session branch request');
+  return {
+    sessionId: requireNonEmptyString(input.sessionId, 'sessionId'),
+    messageId: requireNonEmptyString(input.messageId, 'messageId'),
+  };
+}
+
+export function decodeDshAcpSessionBranchProjection(
+  input: Record<string, unknown>,
+): DshAcpSessionBranchProjection {
+  decodeDshAcpJsonPayload(input, 'Session branch projection');
+  requireExactKeys(input, ['sessionId'], 'Session branch projection');
   return { sessionId: requireNonEmptyString(input.sessionId, 'sessionId') };
 }
 

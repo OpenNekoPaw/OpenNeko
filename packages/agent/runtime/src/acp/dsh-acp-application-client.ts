@@ -47,6 +47,8 @@ import {
   decodeDshAcpPermissionPresetProjection,
   decodeDshAcpProviderCapabilityProjection,
   decodeDshAcpSessionContextSetRequest,
+  decodeDshAcpSessionBranchProjection,
+  decodeDshAcpSessionBranchRequest,
   decodeDshAcpSessionArchiveRequest,
   decodeDshAcpSessionEventNotification,
   decodeDshAcpSkillInvokeProjection,
@@ -69,6 +71,7 @@ import {
   type DshAcpExtensionProjection,
   type DshAcpMcpServerInput,
   type DshAcpArchivedSessionsProjection,
+  type DshAcpSessionBranchProjection,
   type DshAcpSkillObservationProjection,
   type DshAcpSkillDetailProjection,
   type DshAcpStagedSkillValidationProjection,
@@ -267,6 +270,17 @@ export class DshAcpApplicationClient {
   }): Promise<void> {
     const request = decodeDshAcpSessionContextSetRequest({ ...input });
     await this.connection.extMethod(DSH_ACP_EXTENSION_METHODS.setSessionContext, { ...request });
+  }
+
+  async branchSession(input: {
+    readonly sessionId: string;
+    readonly messageId: string;
+  }): Promise<DshAcpSessionBranchProjection> {
+    const request = decodeDshAcpSessionBranchRequest({ ...input });
+    const response = await this.connection.extMethod(DSH_ACP_EXTENSION_METHODS.branchSession, {
+      ...request,
+    });
+    return decodeDshAcpSessionBranchProjection(response);
   }
 
   async archiveSession(sessionId: string): Promise<DshAcpArchivedSessionsProjection> {

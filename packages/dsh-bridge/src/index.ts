@@ -60,6 +60,7 @@ import {
   decodeDshAcpSkillObservationRequest,
   decodeDshAcpStagedSkillValidationRequest,
   decodeDshAcpSessionContextSetRequest,
+  decodeDshAcpSessionBranchRequest,
   decodeDshAcpTurnConfiguration,
   decodeDshAcpPermissionPresetProjection,
   decodeDshAcpDomainToolRequest,
@@ -83,6 +84,7 @@ import {
 } from '@neko/agent-contracts';
 import { PromptAdmission } from './prompt-admission.js';
 import { OPENNEKO_PRODUCT_SYSTEM_PROMPT } from './product-system-prompt.js';
+import { branchSeedThroughAssistantReply } from './session-branch.js';
 import {
   SessionModelConfigurationOwner,
   type DshSessionConfiguration,
@@ -616,6 +618,58 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
       async extMethod(method, params) {
         requireOpen();
         switch (method) {
+          case DSH_ACP_EXTENSION_METHODS.branchSession: {
+            const request = decodeDshAcpSessionBranchRequest(params);
+            const source = await requireReadyOwned(request.sessionId);
+            if (
+              source.handle.agent.status !== 'idle' ||
+              source.inflight !== undefined ||
+              source.commandAbort !== undefined
+            ) {
+              throw RequestError.invalidParams(
+                undefined,
+                `Session cannot branch while the Agent is running: ${request.sessionId}`,
+              );
+            }
+            let seed: readonly SessionEvent[];
+            try {
+              seed = branchSeedThroughAssistantReply(
+                source.handle.agent.session.events,
+                request.messageId,
+              );
+            } catch (error) {
+              throw RequestError.invalidParams(undefined, errorChain(error));
+            }
+            const sessionId = SessionId(randomUUID());
+            const configuration = source.runtimeContext.modelConfiguration.active();
+            const runtimeContext = createSessionRuntimeContext(configuration);
+            runtimeContext.text = source.runtimeContext.text;
+            const handle = await ctx.agents.create({
+              sessionId,
+              seed,
+              meta: {
+                ...(source.handle.agent.session.header.cwd === undefined
+                  ? {}
+                  : { cwd: source.handle.agent.session.header.cwd }),
+                parentSession: source.handle.agent.session.id,
+                seedLength: seed.length,
+                agentPreset: preset,
+              },
+              agentOptions: {},
+              setup: setupSessionRuntimeContext(ctx, preset, runtimeContext),
+            });
+            if (closed) {
+              await handle.dispose();
+              throw RequestError.internalError(
+                undefined,
+                'Connection closed during Session branch.',
+              );
+            }
+            const record = createOwnedSession(handle, runtimeContext);
+            owned.set(sessionId, record);
+            await ctx.sessions.flush(handle.agent.session);
+            return { sessionId };
+          }
           case DSH_ACP_EXTENSION_METHODS.archiveSession: {
             const request = decodeDshAcpSessionArchiveRequest(params);
             await ctx.workspaceRegistry.archiveSession(SessionId(request.sessionId));

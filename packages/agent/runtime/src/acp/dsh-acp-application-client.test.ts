@@ -276,6 +276,25 @@ describe('DshAcpApplicationClient', () => {
     );
   });
 
+  it('branches one exact Session assistant reply through the canonical extension', async () => {
+    const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
+    fixture.connection.extMethod = vi.fn(async () => ({ sessionId: 'session-branch' }));
+    const client = await DshAcpApplicationClient.connect({
+      transport: unusedTransport,
+      virtualCwd: '/virtual/workspace',
+      handlers: createHandlers(),
+      createConnection: fixture.createConnection,
+    });
+
+    await expect(
+      client.branchSession({ sessionId: 'session-1', messageId: 'assistant-1' }),
+    ).resolves.toEqual({ sessionId: 'session-branch' });
+    expect(fixture.connection.extMethod).toHaveBeenCalledWith('openneko/session/branch', {
+      sessionId: 'session-1',
+      messageId: 'assistant-1',
+    });
+  });
+
   it('reads the canonical input catalog with and without an exact Session identity', async () => {
     const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
     fixture.connection.extMethod = vi.fn(async (method) => {

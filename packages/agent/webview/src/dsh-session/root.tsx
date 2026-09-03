@@ -59,7 +59,7 @@ import {
   SuccessIcon,
   WarningIcon,
 } from '@neko/ui';
-import { FileIcon } from '@neko/ui/icons';
+import { BranchIcon, CheckIcon, CopyIcon, FileIcon } from '@neko/ui/icons';
 import { useTranslation as useUiTranslation } from '@neko/ui/i18n/react';
 import { AgentPresentationI18nProvider, useTranslation } from '../i18n/I18nContext';
 import { projectContentLocatorPath } from '../presenters/content-locator-presenter';
@@ -124,6 +124,7 @@ export interface DshAgentViewProps {
     attachmentId: string,
   ) => Promise<DshImageAttachmentPreviewHostResult['preview']>;
   readonly onOpenWrittenFile?: (toolCallId: string) => void;
+  readonly onBranchReply?: (messageId: string) => Promise<void>;
   readonly onCharacterCreationHandoffConsumed?: (intentId: string) => void;
   readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
   readonly onProjectTemplateHandoffConsumed?: (intentId: string) => void;
@@ -649,6 +650,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
                   key={eventKey(item.event, item.sourceIndex)}
                   messageAuthorPresentation={props.messageAuthorPresentation}
                   onOpenWrittenFile={props.onOpenWrittenFile}
+                  onBranchReply={props.onBranchReply}
                   onResolveImageAttachmentPreview={props.onResolveImageAttachmentPreview}
                   writtenFileReferences={
                     item.event.kind === 'message' && item.event.role === 'assistant'
@@ -1511,6 +1513,7 @@ function DshSessionEvent({
   event,
   messageAuthorPresentation,
   onOpenWrittenFile,
+  onBranchReply,
   onResolveImageAttachmentPreview,
   writtenFileReferences,
 }: {
@@ -1518,6 +1521,7 @@ function DshSessionEvent({
   readonly event: DshSessionHostEvent;
   readonly messageAuthorPresentation?: DshAgentViewProps['messageAuthorPresentation'];
   readonly onOpenWrittenFile?: DshAgentViewProps['onOpenWrittenFile'];
+  readonly onBranchReply?: DshAgentViewProps['onBranchReply'];
   readonly onResolveImageAttachmentPreview?: DshAgentViewProps['onResolveImageAttachmentPreview'];
   readonly writtenFileReferences?: readonly WrittenFileLink[];
 }): JSX.Element | null {
@@ -1590,6 +1594,14 @@ function DshSessionEvent({
                         />
                       ) : null}
                     </div>
+                    {event.state === 'final' ? (
+                      <AssistantReplyActions
+                        copy={copy}
+                        messageId={event.messageId}
+                        onBranch={onBranchReply}
+                        text={event.text}
+                      />
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -1703,7 +1715,21 @@ function UserMessageContent({
   readonly copy: DshAgentCopy;
   readonly onResolveImageAttachmentPreview?: DshAgentViewProps['onResolveImageAttachmentPreview'];
 }): JSX.Element {
-  const primaryBlocks = content.filter((block) => block.type !== 'image');
+  const nonImageBlocks = content.filter((block) => block.type !== 'image');
+  let firstTrailingReference = nonImageBlocks.length;
+  while (
+    firstTrailingReference > 0 &&
+    nonImageBlocks[firstTrailingReference - 1]?.type === 'resource'
+  ) {
+    firstTrailingReference -= 1;
+  }
+  const primaryBlocks = nonImageBlocks.slice(0, firstTrailingReference);
+  const referenceBlocks = nonImageBlocks
+    .slice(firstTrailingReference)
+    .filter(
+      (block): block is Extract<DshSessionUserMessageBlock, { readonly type: 'resource' }> =>
+        block.type === 'resource',
+    );
   const imageBlocks = content.filter(
     (block): block is Extract<DshSessionUserMessageBlock, { readonly type: 'image' }> =>
       block.type === 'image',
@@ -1716,9 +1742,24 @@ function UserMessageContent({
             block.type === 'text' ? (
               <span key={`text:${index}`}>{block.text}</span>
             ) : (
-              <UserMessageResourceToken key={`resource:${index}:${block.label}`} block={block} />
+              <UserMessageResourceToken
+                key={`resource:${index}:${block.label}`}
+                block={block}
+                variant="inline"
+              />
             ),
           )}
+        </div>
+      ) : null}
+      {referenceBlocks.length > 0 ? (
+        <div className="agent-user-prompt-references" data-agent-reference-row="true">
+          {referenceBlocks.map((block, index) => (
+            <UserMessageResourceToken
+              key={`reference:${index}:${block.label}`}
+              block={block}
+              variant="attached"
+            />
+          ))}
         </div>
       ) : null}
       {imageBlocks.length > 0 ? (
@@ -1739,11 +1780,13 @@ function UserMessageContent({
 
 function UserMessageResourceToken({
   block,
+  variant,
 }: {
   readonly block: Extract<
     DshSessionHostEvent,
     { readonly kind: 'message'; readonly role: 'user' }
   >['content'][number] & { readonly type: 'resource' };
+  readonly variant: 'attached' | 'inline';
 }): JSX.Element {
   const projection = projectPathReferenceToken({
     path: projectContentLocatorPath(block.contentLocator),
@@ -1756,9 +1799,84 @@ function UserMessageResourceToken({
       title={projection.title}
       meta={projection.meta}
       thumbnailSrc={projection.thumbnailSrc}
-      variant="attached"
-      className="agent-user-resource-token"
+      variant={variant}
+      className={variant === 'attached' ? 'agent-user-resource-token' : undefined}
     />
+  );
+}
+
+function AssistantReplyActions({
+  copy,
+  messageId,
+  onBranch,
+  text,
+}: {
+  readonly copy: DshAgentCopy;
+  readonly messageId: string;
+  readonly onBranch?: DshAgentViewProps['onBranchReply'];
+  readonly text: string;
+}): JSX.Element {
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [branchState, setBranchState] = useState<'idle' | 'pending' | 'failed'>('idle');
+  const copyLabel =
+    copyState === 'copied'
+      ? copy.copiedReply
+      : copyState === 'failed'
+        ? copy.copyReplyFailed
+        : copy.copyReply;
+  const branchLabel = branchState === 'pending' ? copy.branchingReply : copy.branchReply;
+  const copyReply = async (): Promise<void> => {
+    try {
+      if (navigator.clipboard?.writeText === undefined) {
+        throw new Error('Clipboard API is unavailable.');
+      }
+      await navigator.clipboard.writeText(text);
+      setCopyState('copied');
+    } catch {
+      setCopyState('failed');
+    }
+  };
+  const branchReply = async (): Promise<void> => {
+    if (onBranch === undefined) return;
+    setBranchState('pending');
+    try {
+      await onBranch(messageId);
+    } catch {
+      setBranchState('failed');
+    }
+  };
+  return (
+    <div className="agent-reply-action-stack">
+      <div className="agent-reply-actions" aria-label={copy.replyActions}>
+        <button
+          aria-label={copyLabel}
+          title={copyLabel}
+          type="button"
+          onClick={() => void copyReply()}
+        >
+          {copyState === 'copied' ? <CheckIcon size={15} /> : <CopyIcon size={15} />}
+        </button>
+        {onBranch === undefined ? null : (
+          <button
+            aria-label={branchLabel}
+            disabled={branchState === 'pending'}
+            title={branchLabel}
+            type="button"
+            onClick={() => void branchReply()}
+          >
+            <BranchIcon size={15} />
+          </button>
+        )}
+        <span className="sr-only" aria-live="polite">
+          {copyState === 'idle' ? '' : copyLabel}
+        </span>
+      </div>
+      {branchState === 'failed' ? (
+        <p className="agent-reply-action-error" role="alert">
+          {copy.branchReplyFailed}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -2339,6 +2457,13 @@ interface DshAgentCopy {
   readonly copiedPayload: string;
   readonly copyPayload: string;
   readonly copyPayloadFailed: string;
+  readonly copyReply: string;
+  readonly copiedReply: string;
+  readonly copyReplyFailed: string;
+  readonly branchReply: string;
+  readonly branchingReply: string;
+  readonly branchReplyFailed: string;
+  readonly replyActions: string;
   readonly attach: string;
   readonly attachmentsUnavailable: string;
   readonly chooseCharacter: string;
@@ -2409,6 +2534,13 @@ const EN_COPY: DshAgentCopy = {
   copiedPayload: 'Copied',
   copyPayload: 'Copy',
   copyPayloadFailed: 'Copy failed',
+  copyReply: 'Copy reply',
+  copiedReply: 'Reply copied',
+  copyReplyFailed: 'Copy reply failed',
+  branchReply: 'Branch conversation',
+  branchingReply: 'Branching conversation…',
+  branchReplyFailed: 'Could not branch from this reply.',
+  replyActions: 'Reply actions',
   attach: 'Add context',
   attachmentsUnavailable:
     'Attachments are unavailable until the authorized resource picker is connected.',
@@ -2486,6 +2618,13 @@ const ZH_COPY: DshAgentCopy = {
   copiedPayload: '已复制',
   copyPayload: '复制',
   copyPayloadFailed: '复制失败',
+  copyReply: '复制回复',
+  copiedReply: '已复制回复',
+  copyReplyFailed: '复制回复失败',
+  branchReply: '从此处创建分支',
+  branchingReply: '正在创建分支…',
+  branchReplyFailed: '无法从此回复创建分支。',
+  replyActions: '回复操作',
   attach: '添加上下文',
   attachmentsUnavailable: '授权资源选择器接入前，附件上下文暂不可用。',
   chooseCharacter: '选择角色',

@@ -21,6 +21,8 @@ import {
   decodeDshAcpJsonPayload,
   decodeDshAcpModelConfiguration,
   decodeDshAcpSessionContextSetRequest,
+  decodeDshAcpSessionBranchProjection,
+  decodeDshAcpSessionBranchRequest,
   decodeDshAcpSessionArchiveRequest,
   decodeDshAcpSessionEventNotification,
   decodeDshAcpSkillObservationProjection,
@@ -334,6 +336,22 @@ describe('DSH ACP extension contract', () => {
     ).toEqual({ sessionId: 'session-1', text: 'workspace.nkc' });
     expect(() =>
       decodeDshAcpSessionContextSetRequest({ sessionId: 'session-1', text: '', stale: true }),
+    ).toThrow(/must contain exactly/u);
+  });
+
+  it('accepts only an exact assistant reply branch identity and result', () => {
+    expect(
+      decodeDshAcpSessionBranchRequest({ sessionId: 'session-1', messageId: 'assistant-1' }),
+    ).toEqual({ sessionId: 'session-1', messageId: 'assistant-1' });
+    expect(decodeDshAcpSessionBranchProjection({ sessionId: 'session-branch' })).toEqual({
+      sessionId: 'session-branch',
+    });
+    expect(() =>
+      decodeDshAcpSessionBranchRequest({
+        sessionId: 'session-1',
+        messageId: 'assistant-1',
+        boundary: 7,
+      }),
     ).toThrow(/must contain exactly/u);
   });
 

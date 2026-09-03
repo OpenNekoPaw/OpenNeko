@@ -272,6 +272,10 @@ interface ShellActions {
   readonly onSelectProject: (projectId: string) => void;
   readonly onOpenWorkspaceDirectory: () => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
+  readonly onConversationBranched: (
+    conversationId: string,
+    owner: import('@neko/agent-contracts').AgentConversationOwnerRef,
+  ) => void;
   readonly onArchiveConversations: (
     conversations: readonly DesktopAgentHomeConversationSummary[],
   ) => void;
@@ -625,6 +629,11 @@ function DesktopApplicationContent(): JSX.Element {
       transitionScene({
         kind: 'restore-conversation',
         navigation: conversation.navigation,
+      }),
+    onConversationBranched: (conversationId, owner) =>
+      transitionScene({
+        kind: 'restore-conversation',
+        navigation: { conversationId, owner },
       }),
     onArchiveConversations: (conversations) => {
       if (conversations.length === 0) {
@@ -1502,6 +1511,7 @@ export function DesktopShellView({
     onSelectProject: () => undefined,
     onOpenWorkspaceDirectory: () => undefined,
     onOpenConversation: () => undefined,
+    onConversationBranched: () => undefined,
     onArchiveConversations: () => undefined,
     onDeleteUnavailableConversation: () => undefined,
     onRemoveProjects: () => undefined,
@@ -1913,6 +1923,15 @@ function DesktopSceneWorkbench({
                 },
               }
             : {}),
+          ...(scene.slots.interaction.scope.kind === 'unbound'
+            ? {}
+            : {
+                onConversationBranched: (conversationId: string) =>
+                  actions.onConversationBranched(
+                    conversationId,
+                    resolveSceneConversationOwner(scene),
+                  ),
+              }),
         })
       : undefined;
   const projectCatalogUnavailable = hasProjectCatalogDiagnostic(projection);
@@ -3224,12 +3243,16 @@ export function createDesktopAgentSurfaceProps(input: {
   readonly onProjectTemplateHandoffConsumed?: (intentId: string) => void;
   readonly worldCreationHandoff?: WorldCreationHandoffIntent;
   readonly onWorldCreationHandoffConsumed?: (intentId: string) => void;
+  readonly onConversationBranched?: DesktopAgentSurfaceProps['onConversationBranched'];
 }): DesktopAgentSurfaceProps {
   const { interaction } = input;
   return {
     agentSurfaceId: interaction.agentSurfaceId,
     workbenchInstanceId: input.workbenchInstanceId,
     sceneId: input.sceneId,
+    ...(input.onConversationBranched === undefined
+      ? {}
+      : { onConversationBranched: input.onConversationBranched }),
     surfaceKind:
       interaction.scope.kind === 'unbound'
         ? 'entry'
@@ -3265,6 +3288,23 @@ export function createDesktopAgentSurfaceProps(input: {
       ? {}
       : { conversationId: interaction.scope.conversationId }),
   };
+}
+
+function resolveSceneConversationOwner(
+  scene: DesktopWorkbenchSceneProjection,
+): import('@neko/agent-contracts').AgentConversationOwnerRef {
+  if (scene.context.kind === 'character-interaction') return scene.context.owner;
+  if (scene.context.kind !== 'agent') {
+    throw new Error('Conversation branch navigation requires an Agent Scene.');
+  }
+  const scope = scene.context.scope;
+  if (scope.kind === 'assistant') {
+    return { kind: 'assistant', assistantSpaceId: scope.assistantSpaceId };
+  }
+  if (scope.kind === 'workspace') {
+    return { kind: 'workspace', workspaceId: scope.workspaceId };
+  }
+  throw new Error('Conversation branch navigation requires a bound Agent scope.');
 }
 
 function hasProjectCatalogDiagnostic(projection: DesktopShellProjection): boolean {

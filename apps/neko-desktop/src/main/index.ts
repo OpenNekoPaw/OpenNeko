@@ -2622,6 +2622,7 @@ async function startDesktop(): Promise<void> {
     bindings: dshProduct.runtime.bindings,
     catalog: dshProduct.runtime.conversations.catalog,
     conversations: dshProduct.runtime.conversations.conversations,
+    branchConversation: (input) => dshProduct.runtime.conversations.branchConversation(input),
     turnCanvasTargets: dshTurnCanvasTargets,
     promptContext: dshPromptContext,
     promptImages: dshPromptImages,

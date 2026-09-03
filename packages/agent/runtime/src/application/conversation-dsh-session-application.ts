@@ -53,6 +53,10 @@ export interface ConversationDshSessionApplication {
   readonly archive: ConversationDshSessionArchive;
   readonly publication: ConversationDshSessionPublication;
   readonly catalog: Pick<DshConversationCatalogStore, 'get'>;
+  branchConversation(input: {
+    readonly sourceConversationId: string;
+    readonly messageId: string;
+  }): Promise<{ readonly conversationId: string; readonly dshSessionId: string }>;
 }
 
 export interface ConversationDshSessionApplicationOptions {
@@ -92,6 +96,15 @@ export function createConversationDshSessionApplication(
     bindings: options.store,
     archivedSessions: options.client,
     activity: options.activity,
+  });
+  const publication = createConversationDshSessionPublication({
+    client: options.client,
+    binding,
+    activation,
+    catalog: options.catalog,
+    home,
+    conversationIdentitySeed: options.conversationIdentitySeed,
+    lookupCwd: options.lookupCwd,
   });
   return {
     binding,
@@ -146,16 +159,22 @@ export function createConversationDshSessionApplication(
         );
       },
     }),
-    publication: createConversationDshSessionPublication({
-      client: options.client,
-      binding,
-      activation,
-      catalog: options.catalog,
-      home,
-      conversationIdentitySeed: options.conversationIdentitySeed,
-      lookupCwd: options.lookupCwd,
-    }),
+    publication,
     catalog: options.catalog,
+    async branchConversation(input) {
+      const source = await options.catalog.get(input.sourceConversationId);
+      if (source === undefined) {
+        throw new Error(`DSH Conversation branch source is missing: ${input.sourceConversationId}`);
+      }
+      const sourceDshSessionId = await activation.ensureLoaded(input.sourceConversationId);
+      return publication.branch({
+        sourceConversationId: input.sourceConversationId,
+        sourceDshSessionId,
+        messageId: input.messageId,
+        context: source.context,
+        title: source.title,
+      });
+    },
   };
 }
 

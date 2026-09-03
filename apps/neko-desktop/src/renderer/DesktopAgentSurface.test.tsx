@@ -175,6 +175,11 @@ const dshSessions = {
     stopReason: 'end_turn',
   })),
   cancel: vi.fn(async () => projection),
+  branch: vi.fn(async () => ({
+    ...projection,
+    conversationId: 'conversation-branch',
+    dshSessionId: 'dsh-session-branch',
+  })),
   sendInboxMessageNow: vi.fn(async () => projection),
   removeInboxMessage: vi.fn(async () => projection),
   getImageAttachmentPreview: vi.fn(async () => ({
@@ -242,6 +247,11 @@ beforeEach(() => {
     stopReason: 'end_turn',
   });
   dshSessions.cancel.mockResolvedValue(projection);
+  dshSessions.branch.mockResolvedValue({
+    ...projection,
+    conversationId: 'conversation-branch',
+    dshSessionId: 'dsh-session-branch',
+  });
   dshSessions.sendInboxMessageNow.mockResolvedValue(projection);
   dshSessions.removeInboxMessage.mockResolvedValue(projection);
   dshSessions.releaseImageAttachmentPreviews.mockResolvedValue(undefined);
@@ -313,6 +323,42 @@ describe('DesktopAgentSurface', () => {
       runtimeListener?.({ status: 'running', sessionConfigurationPending: true }),
     );
     expect(dshRuntime.prepareSession).toHaveBeenCalledOnce();
+  });
+
+  it('branches from the exact final assistant reply and publishes the new Conversation identity', async () => {
+    const onConversationBranched = vi.fn();
+    dshSessions.getSnapshot.mockResolvedValue({
+      ...projection,
+      currentTurn: undefined,
+      events: [
+        {
+          kind: 'message',
+          role: 'assistant',
+          turn: 2,
+          step: 0,
+          text: 'Finished',
+          messageId: 'assistant-final',
+          state: 'final',
+        },
+      ],
+    });
+    render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
+        agentSurfaceId="surface-1"
+        conversationId="conversation-1"
+        surfaceKind="workspace"
+        onConversationBranched={onConversationBranched}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Branch conversation' }));
+
+    await waitFor(() =>
+      expect(dshSessions.branch).toHaveBeenCalledWith('conversation-1', 'assistant-final'),
+    );
+    expect(onConversationBranched).toHaveBeenCalledWith('conversation-branch');
   });
 
   it('re-prepares a Draft surface when future-Session model configuration changes', async () => {

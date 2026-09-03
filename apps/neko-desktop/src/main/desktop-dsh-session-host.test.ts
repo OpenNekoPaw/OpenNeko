@@ -1773,6 +1773,31 @@ describe('Desktop DSH Session Host', () => {
       /reverse Conversation binding/u,
     );
   });
+
+  it('branches from one exact reply and returns the new Conversation projection', async () => {
+    const branchConversation = vi.fn(async () => ({ conversationId: 'conversation-branch' }));
+    const publishChanged = vi.fn();
+    const result = requireSessionResult(
+      await createHost({ branchConversation, publishChanged }).execute(
+        { webContentsId: 1, frameUrl: 'openneko://app' },
+        {
+          requestId: 'request-branch',
+          operation: 'branch',
+          windowId: 'window-1',
+          rendererSessionId: 'renderer-1',
+          conversationId: identity.conversationId,
+          messageId: 'assistant-final',
+        },
+      ),
+    );
+
+    expect(branchConversation).toHaveBeenCalledWith({
+      sourceConversationId: identity.conversationId,
+      messageId: 'assistant-final',
+    });
+    expect(result.projection.conversationId).toBe('conversation-branch');
+    expect(publishChanged).toHaveBeenCalledWith({ conversationId: 'conversation-branch' });
+  });
 });
 
 function createHost(overrides: {
@@ -1783,6 +1808,9 @@ function createHost(overrides: {
   readonly createConversation?: ConstructorParameters<
     typeof DesktopDshSessionHost
   >[0]['createConversation'];
+  readonly branchConversation?: ConstructorParameters<
+    typeof DesktopDshSessionHost
+  >[0]['branchConversation'];
   readonly domainTurns?: ConstructorParameters<typeof DesktopDshSessionHost>[0]['domainTurns'];
   readonly applyConversation?: (
     conversationId: string,
@@ -1864,6 +1892,9 @@ function createHost(overrides: {
         },
       })),
     },
+    branchConversation:
+      overrides.branchConversation ??
+      vi.fn(async () => ({ conversationId: 'conversation-branch' })),
     conversations: {
       ensureLoaded: vi.fn(async () => identity.dshSessionId),
       prompt: overrides.prompt ?? vi.fn(async () => ({ stopReason: 'end_turn' as const })),

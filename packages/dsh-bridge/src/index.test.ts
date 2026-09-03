@@ -21,6 +21,7 @@ import {
   projectExtensionSessionEvent,
   projectSessionEvent,
 } from './index';
+import { branchSeedThroughAssistantReply } from './session-branch';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -775,6 +776,32 @@ describe('OpenNeko DSH ACP bridge projections', () => {
         }),
       }),
     ]);
+  });
+
+  it('selects the completed turn boundary for one exact assistant reply branch', () => {
+    const session = Session.create(SessionId('session-branch-source'));
+    session.append('turn/start', { turn: 0 });
+    session.append('step/start', { turn: 0, step: 0 });
+    const assistant = createAssistantMessage({
+      content: [{ type: 'text', text: 'First answer.' }],
+      source: { provider: 'provider', model: 'model' },
+    });
+    session.append(
+      'assistant/message',
+      { turn: 0, step: 0, message: assistant },
+      { surfaceOp: 'append', sourceEventSeqs: [] },
+    );
+    session.append('step/end', { turn: 0, step: 0 });
+    const firstEnd = session.append('turn/end', { turn: 0, reason: { kind: 'completed' } });
+    session.append('turn/start', { turn: 1 });
+
+    const seed = branchSeedThroughAssistantReply(session.events, assistant.id);
+
+    expect(seed).toHaveLength(firstEnd.seq + 1);
+    expect(seed.at(-1)).toEqual(firstEnd);
+    expect(() => branchSeedThroughAssistantReply(session.events, 'missing')).toThrow(
+      /exactly one assistant reply/u,
+    );
   });
 
   it('marks standard ACP notifications as live or replay without inference', () => {

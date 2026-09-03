@@ -507,6 +507,23 @@ const bridge: OpenNekoDesktopBridge &
         conversationId,
       ).projection;
     },
+    async branch(conversationId, messageId) {
+      const context = requireDesktopWindowContext();
+      const request = {
+        requestId: nextRequestId('dsh-session-branch'),
+        operation: 'branch' as const,
+        windowId: context.windowId,
+        rendererSessionId: context.rendererSessionId,
+        conversationId,
+        messageId,
+      };
+      const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
+      const result = parseDshSessionHostResult(response, request.requestId);
+      if (result.projection.conversationId === conversationId) {
+        throw new Error('DSH Session branch returned the source Conversation.');
+      }
+      return result.projection;
+    },
     async sendInboxMessageNow(conversationId, messageId) {
       const context = requireDesktopWindowContext();
       const request = {

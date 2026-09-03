@@ -45,6 +45,7 @@ export interface DesktopAgentSurfaceProps {
     readonly assistant?: ReactNode;
     readonly user?: ReactNode;
   };
+  readonly onConversationBranched?: (conversationId: string) => void;
 }
 
 type DesktopAgentSurfaceState =
@@ -66,6 +67,7 @@ export function DesktopAgentSurface({
   messageAuthorPresentation,
   onCharacterCreationHandoffConsumed,
   onCharacterDialogueHandoffConsumed,
+  onConversationBranched,
   onProjectTemplateHandoffConsumed,
   onWorldCreationHandoffConsumed,
   projectTemplateHandoff,
@@ -328,6 +330,23 @@ export function DesktopAgentSurface({
     }
   };
 
+  const branchReply = async (messageId: string): Promise<void> => {
+    const sourceConversationId =
+      conversationId ?? (state.kind === 'ready' ? state.projection.conversationId : undefined);
+    if (sourceConversationId === undefined) {
+      throw new Error('DSH Conversation branch requires an active Conversation.');
+    }
+    setOperationError(undefined);
+    const projection = await window.openNekoDesktop.dshSessions.branch(
+      sourceConversationId,
+      messageId,
+    );
+    if (projection.conversationId === sourceConversationId) {
+      throw new Error('DSH Conversation branch returned the source Conversation.');
+    }
+    onConversationBranched?.(projection.conversationId);
+  };
+
   const removeQueuedMessage = async (messageId: string): Promise<void> => {
     const targetConversationId =
       conversationId ?? (state.kind === 'ready' ? state.projection.conversationId : undefined);
@@ -563,6 +582,7 @@ export function DesktopAgentSurface({
       onRestartRuntime={() => void restartRuntime()}
       onRequestMentions={(filter) => void requestMentions(filter)}
       onMaterializeAsset={materializeAsset}
+      onBranchReply={branchReply}
       onOpenWrittenFile={(toolCallId) => void openWrittenFile(toolCallId)}
       onResolveImageAttachmentPreview={resolveImageAttachmentPreview}
       onSubmit={submit}

@@ -40,6 +40,21 @@ const createRequest = {
 };
 
 describe('DSH Session Host contract', () => {
+  it('strictly accepts an exact Conversation branch request', () => {
+    const request = {
+      requestId: 'request-branch',
+      operation: 'branch',
+      windowId: 'window:one',
+      rendererSessionId: 'renderer:one',
+      conversationId: 'conversation:one',
+      messageId: 'assistant:one',
+    };
+
+    expect(parseDshSessionHostRequest(request)).toEqual(request);
+    expect(() => parseDshSessionHostRequest({ ...request, messageId: '' })).toThrow(/messageId/u);
+    expect(() => parseDshSessionHostRequest({ ...request, boundary: 12 })).toThrow(/unexpected=/u);
+  });
+
   it('strictly accepts exact inbox send-now and rejects extra or empty identity fields', () => {
     const request = {
       requestId: 'request-send-now',

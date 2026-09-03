@@ -21,6 +21,7 @@ const defaultCanvasTarget = {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
 });
 
 describe('DshAgentView content-creation composer', () => {
@@ -2502,6 +2503,22 @@ describe('DshAgentView content-creation composer', () => {
                 },
               ],
             },
+            {
+              kind: 'message',
+              role: 'user',
+              messageId: 'user-embedded-resource',
+              content: [
+                { type: 'text', text: '先读' },
+                {
+                  type: 'resource',
+                  label: '内嵌设定.md',
+                  contentLocator: {
+                    file: { authority: 'workspace', path: 'notes/setting.md' },
+                  },
+                },
+                { type: 'text', text: '再继续分析' },
+              ],
+            },
           ],
         }}
         configuring={false}
@@ -2526,14 +2543,62 @@ describe('DshAgentView content-creation composer', () => {
     const resourceToken = filename.closest('[data-agent-reference-token="true"]');
     expect(resourceToken).toBeTruthy();
     expect(resourceToken?.getAttribute('data-reference-variant')).toBe('attached');
+    expect(resourceToken?.closest('[data-agent-reference-row="true"]')).toBeTruthy();
     expect(screen.getByText('[Kmoe][BLAME!（新装版）]卷02.epub')).toBeTruthy();
     const userPrompts = view.container.querySelectorAll('.agent-user-prompt');
-    expect(userPrompts).toHaveLength(2);
+    expect(userPrompts).toHaveLength(3);
     expect(userPrompts[0]?.textContent).toContain('分析前10页');
     expect(userPrompts[0]?.textContent).toContain('[Kmoe][BLAME!（新装版）]卷01.epub');
     expect(userPrompts[1]?.textContent).toContain('[Kmoe][BLAME!（新装版）]卷02.epub');
+    const embeddedToken = screen
+      .getByText('内嵌设定.md')
+      .closest('[data-agent-reference-token="true"]');
+    expect(embeddedToken?.getAttribute('data-reference-variant')).toBe('inline');
+    expect(embeddedToken?.closest('.agent-user-prompt-primary')).toBeTruthy();
+    expect(embeddedToken?.closest('[data-agent-reference-row="true"]')).toBeNull();
     expect(view.container.textContent).not.toContain('[resource_link');
     expect(view.container.textContent).not.toContain('openneko-content:');
+  });
+
+  it('copies final reply text and branches from its exact message identity without feedback buttons', async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const onBranchReply = vi.fn(async () => undefined);
+    renderAgent(
+      <DshComposerHarness
+        onBranchReply={onBranchReply}
+        onSubmit={vi.fn(async () => true)}
+        projection={{
+          conversationId: 'conversation-actions',
+          dshSessionId: 'dsh-actions',
+          title: 'Actions',
+          todos: [],
+          inbox: { nextTurn: [], nextStep: [] },
+          events: [
+            {
+              kind: 'message',
+              role: 'assistant',
+              turn: 1,
+              step: 0,
+              text: '**最终回复**',
+              messageId: 'assistant-final',
+              state: 'final',
+            },
+          ],
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '复制回复' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('**最终回复**'));
+    expect(screen.getByRole('button', { name: '已复制回复' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '从此处创建分支' }));
+    await waitFor(() => expect(onBranchReply).toHaveBeenCalledWith('assistant-final'));
+    expect(screen.queryByRole('button', { name: /赞|踩/u })).toBeNull();
   });
 
   it('loads replayed image thumbnails lazily and opens the authorized full preview', async () => {
@@ -2802,6 +2867,7 @@ function DshComposerHarness({
   onPermissionPresetChange = vi.fn(),
   onRequestMentions = vi.fn(),
   onMaterializeAsset,
+  onBranchReply,
   onRemoveQueuedMessage,
   onSendQueuedMessageNow,
   projection,
@@ -2818,6 +2884,7 @@ function DshComposerHarness({
   >['onPermissionPresetChange'];
   readonly onRequestMentions?: (filter: string) => void;
   readonly onMaterializeAsset?: React.ComponentProps<typeof DshAgentView>['onMaterializeAsset'];
+  readonly onBranchReply?: React.ComponentProps<typeof DshAgentView>['onBranchReply'];
   readonly onRemoveQueuedMessage?: React.ComponentProps<
     typeof DshAgentView
   >['onRemoveQueuedMessage'];
@@ -2915,6 +2982,7 @@ function DshComposerHarness({
       onSendQueuedMessageNow={onSendQueuedMessageNow}
       onRequestMentions={onRequestMentions}
       onMaterializeAsset={onMaterializeAsset}
+      onBranchReply={onBranchReply}
       onRestartRuntime={vi.fn()}
       onSubmit={onSubmit}
     />

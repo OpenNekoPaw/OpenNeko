@@ -454,6 +454,10 @@ function createStableDesktopDshAgentClient(
     async setSessionContext(input) {
       return runWork((client) => client.setSessionContext(input));
     },
+    async branchSession(input) {
+      await prepareSession?.();
+      return runWork((client) => client.branchSession(input));
+    },
     async readPermissionPresets(sessionId) {
       return requireClient().readPermissionPresets(sessionId);
     },

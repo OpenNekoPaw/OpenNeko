@@ -706,6 +706,27 @@ body {
   margin-top: 0;
 }
 
+.agent-user-prompt-primary {
+  min-width: 0;
+}
+
+.agent-user-prompt-references {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: 0;
+}
+
+.agent-user-prompt-primary + .agent-user-prompt-references {
+  margin-top: 7px;
+}
+
+.agent-user-prompt-references .agent-user-resource-token {
+  margin-top: 0;
+}
+
 .agent-inline-diagnostic {
   display: grid;
   width: min(100%, 760px);
@@ -749,6 +770,50 @@ body {
   flex-direction: column;
   gap: 10px;
   color: var(--agent-fg);
+}
+
+.agent-reply-action-stack {
+  display: flex;
+  min-height: 24px;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.agent-reply-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--agent-fg-secondary);
+}
+
+.agent-reply-actions button {
+  display: inline-flex;
+  width: 26px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.agent-reply-actions button:hover:not(:disabled),
+.agent-reply-actions button:focus-visible {
+  background: var(--agent-bg-hover);
+  color: var(--agent-fg);
+}
+
+.agent-reply-actions button:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
+.agent-reply-action-error {
+  margin: 2px 0 0;
+  color: var(--neko-errorForeground, #f14c4c);
+  font-size: 12px;
 }
 
 .agent-turn-answer,

@@ -170,6 +170,10 @@ export class DesktopDshSessionHost {
         readonly conversationId: string;
         readonly completeInitialTurn?: () => Promise<void>;
       }>;
+      readonly branchConversation: (input: {
+        readonly sourceConversationId: string;
+        readonly messageId: string;
+      }) => Promise<{ readonly conversationId: string }>;
       readonly domainTurns?: {
         submit(input: {
           readonly requestId: string;
@@ -314,6 +318,17 @@ export class DesktopDshSessionHost {
         reference,
       });
       return { requestId: request.requestId, opened: true };
+    }
+    if (request.operation === 'branch') {
+      const created = await this.options.branchConversation({
+        sourceConversationId: request.conversationId,
+        messageId: request.messageId,
+      });
+      this.options.publishChanged({ conversationId: created.conversationId });
+      return {
+        requestId: request.requestId,
+        projection: await this.project(created.conversationId),
+      };
     }
     let stopReason: string | undefined;
     let conversationId: string;

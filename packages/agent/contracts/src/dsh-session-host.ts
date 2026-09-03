@@ -277,6 +277,10 @@ export type DshSessionHostRequest =
     })
   | (DshSessionHostConversationRequest & { readonly operation: 'cancel' })
   | (DshSessionHostConversationRequest & {
+      readonly operation: 'branch';
+      readonly messageId: string;
+    })
+  | (DshSessionHostConversationRequest & {
       readonly operation: 'image-preview';
       readonly attachmentId: string;
     })
@@ -388,6 +392,7 @@ export interface OpenNekoDshSessionBridge {
     getSnapshot(conversationId: string): Promise<DshSessionHostProjection>;
     submit(conversationId: string, input: DshComposerSubmitInput): Promise<DshSessionHostResult>;
     cancel(conversationId: string): Promise<DshSessionHostProjection>;
+    branch(conversationId: string, messageId: string): Promise<DshSessionHostProjection>;
     sendInboxMessageNow(
       conversationId: string,
       messageId: string,
@@ -577,7 +582,11 @@ export function parseDshSessionHostRequest(value: unknown): DshSessionHostReques
       toolCallId: requireIdentity(record.toolCallId, 'toolCallId'),
     };
   }
-  if (record.operation === 'inbox-send-now' || record.operation === 'inbox-remove') {
+  if (
+    record.operation === 'branch' ||
+    record.operation === 'inbox-send-now' ||
+    record.operation === 'inbox-remove'
+  ) {
     requireExactKeys(record, [
       'requestId',
       'operation',
