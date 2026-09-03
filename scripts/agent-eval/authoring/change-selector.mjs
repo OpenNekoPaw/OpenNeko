@@ -106,6 +106,8 @@ const RULES = Object.freeze([
   rule('launch-domain-binding', 'agent-runtime.launch-binding', [
     'packages/agent/contracts/src/agent-input-intent',
     'packages/agent/contracts/src/character-creation-handoff',
+    'packages/agent/contracts/src/project-template-handoff',
+    'packages/agent/contracts/src/world-creation-handoff',
     'packages/agent/contracts/src/agent-interaction-binding',
     'packages/agent/runtime/src/application/agent-domain-binding-service',
     'packages/agent/runtime/src/application/conversation-dsh-session-binding',

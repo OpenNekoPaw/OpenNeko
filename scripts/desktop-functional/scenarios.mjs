@@ -20,6 +20,7 @@ import { desktopInvalidWindowConvergenceScenario } from './desktop-invalid-windo
 import { characterManagementDialogueScenario } from './character-management-dialogue.mjs';
 import { characterCreationEntryScenario } from './character-creation-entry.mjs';
 import { characterWorldManagementHierarchyScenario } from './character-world-management-hierarchy.mjs';
+import { projectWorldCreationEntryScenario } from './project-world-creation-entry.mjs';
 import { domainManagementWorkbenchScenario } from './domain-management-workbench.mjs';
 import { extensionManagementLifecycleScenario } from './extension-management-lifecycle.mjs';
 import { noActiveProjectCatalogsScenario } from './no-active-project-catalogs.mjs';
@@ -59,6 +60,7 @@ const scenarios = new Map(
     characterManagementDialogueScenario,
     characterCreationEntryScenario,
     characterWorldManagementHierarchyScenario,
+    projectWorldCreationEntryScenario,
     domainManagementWorkbenchScenario,
     extensionManagementLifecycleScenario,
     desktopAgentEntryWorkspaceSkillScenario,

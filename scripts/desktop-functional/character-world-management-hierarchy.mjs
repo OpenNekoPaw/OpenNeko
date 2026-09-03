@@ -48,9 +48,13 @@ export const characterWorldManagementHierarchyScenario = Object.freeze({
     const worldNarrowScreenshot = await screenshot('world-management-hierarchy-narrow');
 
     await click(`${MAIN_SLOT} [data-world-template="world-bible"]`);
-    await waitForSelector('[data-primary-surface="agent"]');
+    await waitForSelector('[data-primary-surface="agent"] #agent-entry-authoring-name');
     const templateDestination = await inspectStartCreatingDestination(evaluate, 'world');
-    if (templateDestination.agentSurfaces !== 1 || templateDestination.managementRoots !== 0) {
+    if (
+      templateDestination.agentSurfaces !== 1 ||
+      templateDestination.managementRoots !== 0 ||
+      templateDestination.composerValue !== '$world-creator '
+    ) {
       throw new Error(
         `World template did not enter canonical Start Creating: ${JSON.stringify(templateDestination)}`,
       );
@@ -148,6 +152,9 @@ async function inspectStartCreatingDestination(evaluate, domain) {
   const state = await evaluate(`(() => ({
     agentSurfaces: document.querySelectorAll('[data-primary-surface="agent"]').length,
     managementRoots: document.querySelectorAll(${JSON.stringify(managementSelector)}).length,
+    composerValue: document.querySelector(
+      '[data-primary-surface="agent"] .agent-composer-textarea'
+    )?.value,
   }))()`);
   if (state.agentSurfaces !== 1 || state.managementRoots !== 0) {
     throw new Error(

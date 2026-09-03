@@ -243,6 +243,22 @@ describe('Agent Evaluation change-to-suite selector', () => {
     ]);
   });
 
+  it('maps management creation handoffs to launch binding coverage', () => {
+    const paths = [
+      'packages/agent/contracts/src/project-template-handoff.ts',
+      'packages/agent/contracts/src/world-creation-handoff.ts',
+    ];
+    expect(paths.every(isAgentEvaluationRelevantPath)).toBe(true);
+    expect(selectEvaluationCoverage(paths)).toEqual([
+      {
+        behaviorId: 'launch-domain-binding',
+        suiteId: 'agent-runtime.launch-binding',
+        suiteIds: ['agent-runtime.launch-binding', 'agent-runtime.skill-runtime'],
+        changedPaths: paths,
+      },
+    ]);
+  });
+
   it('maps the native DSH plan presentation to timeline projection authority', () => {
     const paths = [
       'packages/agent/webview/src/dsh-session/root.tsx',
