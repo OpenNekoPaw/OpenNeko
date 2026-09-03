@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises';
 
 import { describe, expect, it, vi } from 'vitest';
 
+import { decodeGenerationDshToolInput } from '@neko/generation-domain';
+
 import { apply } from './index';
 
 describe('OpenNeko Generation DSH plugin', () => {
@@ -13,7 +15,12 @@ describe('OpenNeko Generation DSH plugin', () => {
           readonly execute: (args: unknown, execution: unknown) => Promise<unknown>;
         }
       | undefined;
-    const execute = vi.fn(async () => ({ outcome: 'success', result: { jobId: 'job-1' } }));
+    const execute = vi.fn(
+      async (request: { readonly operation: unknown; readonly input: unknown }) => {
+        decodeGenerationDshToolInput(request.operation, request.input);
+        return { outcome: 'success' as const, result: { jobId: 'job-1' } };
+      },
+    );
     const ctx = {
       effect: (register: () => () => void) => register(),
       tools: {
@@ -105,6 +112,69 @@ describe('OpenNeko Generation DSH plugin', () => {
         {
           operation: 'submit',
           input: {
+            purpose: 'image.generate',
+            generationType: 'image-to-image',
+            lifecycleMode: 'detached',
+            request: {
+              prompt: 'Preserve the character silhouette',
+              operation: 'edit',
+              referenceImageLocator: {
+                file: { authority: 'workspace', path: 'books/volume.epub' },
+                selector: { kind: 'entry', path: 'images/page-12.jpg' },
+              },
+            },
+          },
+        },
+        {},
+      ),
+    ).resolves.toEqual({ jobId: 'job-1' });
+    expect(execute).toHaveBeenLastCalledWith(
+      {
+        tool: 'openneko_generation',
+        operation: 'submit',
+        input: {
+          purpose: 'image.generate',
+          generationType: 'image-to-image',
+          lifecycleMode: 'detached',
+          request: {
+            prompt: 'Preserve the character silhouette',
+            operation: 'edit',
+            referenceImageLocator: {
+              file: { authority: 'workspace', path: 'books/volume.epub' },
+              selector: { kind: 'entry', path: 'images/page-12.jpg' },
+            },
+          },
+        },
+      },
+      {},
+    );
+    await expect(
+      definition.execute(
+        {
+          operation: 'submit',
+          input: {
+            purpose: 'image.generate',
+            generationType: 'image-to-image',
+            lifecycleMode: 'detached',
+            request: {
+              prompt: 'Retired locator shape',
+              operation: 'edit',
+              referenceImageLocator: {
+                kind: 'document-entry',
+                file: { authority: 'workspace', path: 'books/volume.epub' },
+                selector: { kind: 'entry', path: 'images/page-12.jpg' },
+              },
+            },
+          },
+        },
+        {},
+      ),
+    ).rejects.toThrow(/input.*oneOf|oneOf|additional propert/iu);
+    await expect(
+      definition.execute(
+        {
+          operation: 'submit',
+          input: {
             prompt: 'A quiet harbor',
             negative_prompt: 'text',
             operation: 'generate',
@@ -115,7 +185,7 @@ describe('OpenNeko Generation DSH plugin', () => {
         {},
       ),
     ).rejects.toThrow(/input.*oneOf|oneOf/i);
-    expect(execute).toHaveBeenCalledTimes(2);
+    expect(execute).toHaveBeenCalledTimes(3);
   });
 
   it('uses only the public DSH ToolRuntime and Host port', async () => {

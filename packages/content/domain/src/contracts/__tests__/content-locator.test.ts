@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  CONTENT_LOCATOR_DSH_SCHEMA,
   contentLocatorKey,
   contentLocatorsEqual,
   createContentEntryLocator,
@@ -13,6 +14,23 @@ import {
 } from '../content-locator';
 
 describe('content locator contracts', () => {
+  it('publishes the canonical DSH shape without a parallel top-level identity', () => {
+    expect(CONTENT_LOCATOR_DSH_SCHEMA).toMatchObject({
+      properties: {
+        file: {
+          required: true,
+          oneOf: [
+            { properties: { authority: { const: 'workspace' } } },
+            { properties: { authority: { const: 'package' } } },
+          ],
+        },
+        selector: { oneOf: expect.any(Array) },
+      },
+      additionalProperties: false,
+    });
+    expect(CONTENT_LOCATOR_DSH_SCHEMA.properties).not.toHaveProperty('kind');
+  });
+
   it('addresses a Workspace file with one file authority and no owner lifecycle', () => {
     const locator = {
       file: { authority: 'workspace', path: 'neko/assets/Characters/portraits/alice.png' },

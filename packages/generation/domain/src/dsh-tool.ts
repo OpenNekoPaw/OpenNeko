@@ -5,26 +5,18 @@ import {
   IMAGE_OPERATION_IDS,
   VIDEO_OPERATION_IDS,
 } from './domain-contracts/creative-media-operations';
-import { validateContentLocator, type ContentLocator } from '@neko/content-domain';
+import {
+  CONTENT_LOCATOR_DSH_SCHEMA,
+  validateContentLocator,
+  type ContentLocator,
+} from '@neko/content-domain';
 
 export const GENERATION_DSH_TOOL_NAME = 'openneko_generation' as const;
 export const GENERATION_DSH_TOOL_OPERATIONS = ['submit', 'submit-comfyui', 'describe'] as const;
 
 export type GenerationDshToolOperation = (typeof GENERATION_DSH_TOOL_OPERATIONS)[number];
 
-const CONTENT_LOCATOR_SCHEMA = {
-  type: 'object',
-  description:
-    'Canonical @neko/content-domain ContentLocator supplied by product context. Its owning validator checks the kind-specific fields.',
-  properties: {
-    kind: {
-      type: 'string',
-      enum: ['workspace-file', 'document-entry', 'generated-output', 'package-resource'],
-      required: true,
-    },
-  },
-  additionalProperties: true,
-} as const;
+const CONTENT_LOCATOR_SCHEMA = CONTENT_LOCATOR_DSH_SCHEMA;
 
 const IP_ADAPTER_REFERENCE_SCHEMA = {
   type: 'object',
