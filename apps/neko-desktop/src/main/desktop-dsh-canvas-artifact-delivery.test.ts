@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { createEmptyCanvasData, planCanvasArtifactProjection } from '@neko/canvas-domain';
-import { NodeAuthorizedWorkspaceWriter } from '@neko/content-domain/node';
 import type { DshCanvasArtifactDeliveryInput } from '@neko/agent-runtime/application';
 import type { LocalMetadataStore } from '@neko/local-metadata';
 import { ConsoleLogger } from '@neko/shared/logger';
@@ -12,24 +11,22 @@ import {
   DesktopDshCanvasArtifactDelivery,
   createDshCanvasArtifactContentRead,
   createDshCanvasArtifactProjectionRequest,
-  publishDshDurableMarkdownArtifact,
-  resolveDshDurableMarkdownArtifact,
   resolveDshCanvasArtifactResourceFingerprints,
 } from './desktop-dsh-canvas-artifact-delivery';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 
 describe('Desktop DSH Canvas projection request', () => {
-  it('uses a stable completed-turn identity and reuses the durable file node by ContentLocator', () => {
+  it('uses a stable completed-Tool identity and reuses the durable file node by ContentLocator', () => {
     const input = deliveryInput();
     const first = createDshCanvasArtifactProjectionRequest(input, workspace());
     const replay = createDshCanvasArtifactProjectionRequest(input, workspace());
 
     expect(first).toEqual(replay);
-    expect(first.process.deliveryId).toMatch(/^dsh-turn:/u);
+    expect(first.process.deliveryId).toMatch(/^dsh-tool:/u);
     expect(first.artifacts[0]).toMatchObject({
       kind: 'file-reference',
       contentLocator: { file: { authority: 'workspace', path: 'notes/analysis.md' } },
-      provenance: { role: 'analysis' },
+      provenance: { role: 'source' },
     });
 
     const projected = planCanvasArtifactProjection(createEmptyCanvasData('Workspace'), first);
@@ -54,22 +51,7 @@ describe('Desktop DSH Canvas projection request', () => {
     expect(first.process.deliveryId).not.toBe(second.process.deliveryId);
   });
 
-  it('preserves the Markdown type of a terminal artifact', () => {
-    const base = deliveryInput();
-    const terminalInput = {
-      ...base,
-      delivery: { kind: 'completed-turn' as const },
-      artifacts: base.artifacts.map((artifact) => ({
-        ...artifact,
-        mimeType: 'text/markdown' as const,
-      })),
-    } satisfies DshCanvasArtifactDeliveryInput;
-    const terminal = createDshCanvasArtifactProjectionRequest(terminalInput, workspace());
-    expect(terminal.process.deliveryId).toMatch(/^dsh-turn:/u);
-    expect(terminal.artifacts[0]).toMatchObject({ mimeType: 'text/markdown' });
-  });
-
-  it('preserves accepted evidence relations in one terminal projection', () => {
+  it('preserves accepted evidence relations in one Tool projection', () => {
     const base = deliveryInput();
     const sourceId = 'content:source';
     const request = createDshCanvasArtifactProjectionRequest(
@@ -232,8 +214,6 @@ describe('Desktop DSH Canvas projection request', () => {
         return operation();
       },
       createContentRead: () => contentRead,
-      createContentWriter: () =>
-        new NodeAuthorizedWorkspaceWriter({ workspaceRoot: workspacePath }),
       createIdentity: () => 'identity-1',
     });
 
@@ -282,90 +262,6 @@ describe('Desktop DSH Canvas projection request', () => {
     });
   });
 
-  it('publishes Markdown once and preserves user edits when the record is delivered again', async () => {
-    const workspacePath = await mkdtemp(join(tmpdir(), 'openneko-dsh-markdown-'));
-    const read = createDshCanvasArtifactContentRead({
-      workspacePath,
-      documentEntryReader: {
-        readEntry: async () => {
-          throw new Error('Unexpected document entry read.');
-        },
-      },
-    });
-    const writer = new NodeAuthorizedWorkspaceWriter({ workspaceRoot: workspacePath });
-    const input = {
-      workspaceId: 'workspace-1',
-      contentLocator: {
-        file: {
-          authority: 'workspace' as const,
-          path: 'neko/generated/file/durable-analysis.md',
-        },
-      },
-      markdown: '# Durable analysis\n\nResult.',
-      contentFingerprint: 'markdown:durable',
-    };
-
-    await expect(
-      publishDshDurableMarkdownArtifact(input, { writer, content: read }),
-    ).resolves.toEqual({
-      contentLocator: input.contentLocator,
-      contentFingerprint: input.contentFingerprint,
-    });
-    await writeFile(
-      join(workspacePath, input.contentLocator.file.path),
-      '# User-edited analysis\n\nKeep this content.\n',
-    );
-    await expect(
-      publishDshDurableMarkdownArtifact(input, { writer, content: read }),
-    ).resolves.toEqual({
-      contentLocator: input.contentLocator,
-      contentFingerprint: input.contentFingerprint,
-    });
-    await expect(
-      readFile(join(workspacePath, input.contentLocator.file.path), 'utf8'),
-    ).resolves.toBe('# User-edited analysis\n\nKeep this content.\n');
-  });
-
-  it('keeps a durable Markdown reference available after the user edits the file', async () => {
-    const workspacePath = await mkdtemp(join(tmpdir(), 'openneko-dsh-markdown-resolve-'));
-    const read = createDshCanvasArtifactContentRead({
-      workspacePath,
-      documentEntryReader: {
-        readEntry: async () => {
-          throw new Error('Unexpected document entry read.');
-        },
-      },
-    });
-    const writer = new NodeAuthorizedWorkspaceWriter({ workspaceRoot: workspacePath });
-    const input = {
-      workspaceId: 'workspace-1',
-      contentLocator: {
-        file: {
-          authority: 'workspace' as const,
-          path: 'neko/generated/file/durable-analysis.md',
-        },
-      },
-      markdown: '# Durable analysis\n\nResult.',
-      contentFingerprint: 'sha256:durable',
-    };
-    const reference = {
-      workspaceId: input.workspaceId,
-      contentLocator: input.contentLocator,
-    };
-
-    await expect(resolveDshDurableMarkdownArtifact(reference, read)).resolves.toBeUndefined();
-    await publishDshDurableMarkdownArtifact(input, { writer, content: read });
-    await expect(resolveDshDurableMarkdownArtifact(reference, read)).resolves.toEqual({
-      contentLocator: input.contentLocator,
-    });
-    await writeFile(
-      join(workspacePath, input.contentLocator.file.path),
-      '# User-edited analysis\n\nThe current Workspace contents remain authoritative.\n',
-    );
-    await expect(resolveDshDurableMarkdownArtifact(reference, read)).resolves.toEqual({
-      contentLocator: input.contentLocator,
-    });
-  });
 });
 
 function workspace(): AssetWorkspaceResolution {
@@ -388,16 +284,15 @@ function deliveryInput(turn = 1): DshCanvasArtifactDeliveryInput {
       workspaceId: 'workspace-1',
       canvasId: 'neko/boards/workspace.nkc',
     },
-    delivery: { kind: 'completed-turn' as const },
+    delivery: { kind: 'completed-tool' as const, toolCallId: 'document-1' },
     artifacts: [
       {
         kind: 'file-reference' as const,
         artifactId: 'content:analysis',
         contentFingerprint: 'locator:analysis',
-        role: 'analysis' as const,
+        role: 'source' as const,
         title: 'analysis.md',
         sourceId: 'content:analysis',
-        mimeType: 'text/markdown' as const,
         contentLocator: {
           file: { authority: 'workspace' as const, path: 'notes/analysis.md' },
         },

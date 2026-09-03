@@ -55,20 +55,15 @@ output MUST NOT be treated as an original asset or silently expanded into multip
 After a successful overview or detail Tool completion, Agent Runtime SHALL use the validated Tool input as authority
 and immediately project the deduplicated source document and exact original image references to the Canvas admitted
 for that turn. The derived contact sheet and other Tool preview attachments MUST remain transient and MUST NOT become
-Canvas nodes, Assets, project facts or generated deliverables.
+Canvas nodes, Assets, project facts or generated deliverables. Final assistant output SHALL remain ordinary transcript
+Markdown and SHALL NOT trigger another Canvas delivery.
 
-#### Scenario: Read images without a terminal artifact
+#### Scenario: Read images during a Workspace turn
 
 - **WHEN** the Agent completes an overview or detail read before the turn has ended
 - **THEN** the DSH transcript records the Tool execution and attachment identity
 - **AND** the admitted Canvas immediately receives the source document and exact original image references
-- **AND** no derived contact-sheet attachment becomes a Canvas node
-
-#### Scenario: Terminal artifact follows completed image reads
-
-- **WHEN** the same Workspace turn later publishes an admitted terminal artifact
-- **THEN** terminal delivery publishes that artifact independently of the completed Tool projection
-- **AND** it does not duplicate the contact-sheet attachment or create another image authority
+- **AND** no derived contact-sheet attachment or final assistant message becomes a Canvas node
 
 ### Requirement: DSH owns active image Tool context governance
 

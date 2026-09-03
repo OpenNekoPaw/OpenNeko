@@ -177,7 +177,6 @@ const dshSessions = {
   cancel: vi.fn(async () => projection),
   sendInboxMessageNow: vi.fn(async () => projection),
   removeInboxMessage: vi.fn(async () => projection),
-  openTerminalArtifact: vi.fn(async () => undefined),
   getImageAttachmentPreview: vi.fn(async () => ({
     url: 'openneko://resource/lease-1/image',
     mediaType: 'image/png' as const,
@@ -186,6 +185,7 @@ const dshSessions = {
     height: 1,
   })),
   releaseImageAttachmentPreviews: vi.fn(async () => undefined),
+  openWrittenFile: vi.fn(async () => undefined),
   getComposerConfiguration: vi.fn(async () => composerConfiguration),
   searchComposerMentions: vi.fn(async () => []),
   selectComposerModel: vi.fn(async () => ({
@@ -244,8 +244,8 @@ beforeEach(() => {
   dshSessions.cancel.mockResolvedValue(projection);
   dshSessions.sendInboxMessageNow.mockResolvedValue(projection);
   dshSessions.removeInboxMessage.mockResolvedValue(projection);
-  dshSessions.openTerminalArtifact.mockResolvedValue(undefined);
   dshSessions.releaseImageAttachmentPreviews.mockResolvedValue(undefined);
+  dshSessions.openWrittenFile.mockResolvedValue(undefined);
   dshSessions.getComposerConfiguration.mockResolvedValue(composerConfiguration);
   dshSessions.selectComposerModel.mockResolvedValue({
     ...composerConfiguration,
@@ -388,6 +388,54 @@ describe('DesktopAgentSurface', () => {
     expect(dshSessions.getSnapshot).toHaveBeenCalledOnce();
     await act(async () => permissionListener?.({ conversationId: 'conversation-1' }));
     await waitFor(() => expect(dshSessions.getSnapshot).toHaveBeenCalledTimes(2));
+  });
+
+  it('opens a projected completed write from the Agent response link', async () => {
+    dshSessions.getSnapshot.mockResolvedValueOnce({
+      ...projection,
+      currentTurn: undefined,
+      events: [
+        {
+          kind: 'tool',
+          toolCallId: 'tool-write-document',
+          turn: 3,
+          status: 'completed',
+          title: 'write',
+          writtenFileReference: {
+            title: 'story-plan.md',
+            contentLocator: {
+              file: { authority: 'workspace', path: 'notes/story-plan.md' },
+            },
+          },
+        },
+        {
+          kind: 'message',
+          role: 'assistant',
+          turn: 3,
+          step: 0,
+          text: 'Document created.',
+          messageId: 'message-final',
+          state: 'final',
+        },
+      ],
+    });
+    render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
+        agentSurfaceId="surface-1"
+        conversationId="conversation-1"
+        surfaceKind="workspace"
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open document: story-plan.md' }));
+    await waitFor(() => {
+      expect(dshSessions.openWrittenFile).toHaveBeenCalledWith(
+        'conversation-1',
+        'tool-write-document',
+      );
+    });
   });
 
   it('coalesces stream refreshes without letting an older projection replace the latest', async () => {

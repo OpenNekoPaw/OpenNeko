@@ -10,7 +10,7 @@ import {
   parseDshSessionHostProjection,
   parseDshSessionHostRequest,
   parseDshSessionHostResult,
-  parseDshTerminalArtifactOpenHostResult,
+  parseDshWrittenFileOpenHostResult,
 } from './dsh-session-host';
 import {
   internalVersionFields,
@@ -349,6 +349,34 @@ describe('DSH Session Host contract', () => {
         'request-release',
       ),
     ).toEqual({ requestId: 'request-release', released: true });
+  });
+
+  it('strictly decodes a completed write open request and result', () => {
+    expect(
+      parseDshSessionHostRequest({
+        requestId: 'request-open-written-file',
+        operation: 'written-file-open',
+        windowId: 'window-1',
+        rendererSessionId: 'renderer-1',
+        conversationId: 'conversation-1',
+        toolCallId: 'tool-write-document',
+      }),
+    ).toMatchObject({
+      operation: 'written-file-open',
+      toolCallId: 'tool-write-document',
+    });
+    expect(
+      parseDshWrittenFileOpenHostResult(
+        { requestId: 'request-open-written-file', opened: true },
+        'request-open-written-file',
+      ),
+    ).toEqual({ requestId: 'request-open-written-file', opened: true });
+    expect(() =>
+      parseDshWrittenFileOpenHostResult(
+        { requestId: 'request-open-written-file', opened: false },
+        'request-open-written-file',
+      ),
+    ).toThrow(/invalid/u);
   });
 
   it('strictly decodes the Canvas-owned composer catalog', () => {
@@ -872,66 +900,34 @@ describe('DSH Session Host contract', () => {
     ).toThrow(/non-empty array/u);
   });
 
-  it('keeps a terminal Markdown artifact separate from the assistant summary', () => {
-    const contentLocator = {
-      file: { authority: 'workspace' as const, path: 'neko/generated/file/story-plan.md' },
-    };
-    expect(
-      parseDshSessionHostProjection({
-        ...projection(),
-        events: [
-          {
-            kind: 'message',
-            role: 'assistant',
-            turn: 1,
-            step: 0,
-            text: '已完成故事规划。',
-            messageId: 'assistant-final',
-            state: 'final',
-            recommendedNextActionMarkdown: '生成首个测试镜头。',
-            artifact: {
-              kind: 'reviewable-markdown',
-              title: '故事规划',
-              contentLocator,
-            },
-          },
-        ],
-      }).events,
-    ).toEqual([
-      {
-        kind: 'message',
-        role: 'assistant',
-        turn: 1,
-        step: 0,
-        text: '已完成故事规划。',
-        messageId: 'assistant-final',
-        state: 'final',
-        recommendedNextActionMarkdown: '生成首个测试镜头。',
-        artifact: {
-          kind: 'reviewable-markdown',
-          title: '故事规划',
-          contentLocator,
+  it('accepts only a canonical Workspace locator on completed write references', () => {
+    const tool = {
+      kind: 'tool' as const,
+      toolCallId: 'tool-write-document',
+      turn: 1,
+      status: 'completed' as const,
+      title: 'write',
+      writtenFileReference: {
+        title: 'story-plan.md',
+        contentLocator: {
+          file: { authority: 'workspace' as const, path: 'notes/story-plan.md' },
         },
       },
+    };
+
+    expect(parseDshSessionHostProjection({ ...projection(), events: [tool] }).events).toEqual([
+      tool,
     ]);
     expect(() =>
       parseDshSessionHostProjection({
         ...projection(),
         events: [
           {
-            kind: 'message',
-            role: 'assistant',
-            turn: 1,
-            step: 0,
-            text: '已完成故事规划。',
-            messageId: 'assistant-final',
-            state: 'final',
-            artifact: {
-              kind: 'reviewable-markdown',
-              title: '故事规划',
+            ...tool,
+            writtenFileReference: {
+              ...tool.writtenFileReference,
               contentLocator: {
-                ...contentLocator,
-                selector: { kind: 'range', start: 0, end: 1 },
+                file: { authority: 'workspace', path: '/private/story-plan.md' },
               },
             },
           },
@@ -940,7 +936,7 @@ describe('DSH Session Host contract', () => {
     ).toThrow(/Workspace file ContentLocator/u);
   });
 
-  it('rejects a recommended next action without a final artifact reference', () => {
+  it('rejects retired terminal publication fields from assistant events', () => {
     expect(() =>
       parseDshSessionHostProjection({
         ...projection(),
@@ -953,34 +949,11 @@ describe('DSH Session Host contract', () => {
             text: '已完成。',
             messageId: 'assistant-final',
             state: 'final',
-            recommendedNextActionMarkdown: '生成首个测试镜头。',
+            artifact: { kind: 'reviewable-markdown' },
           },
         ],
       }),
-    ).toThrow(/requires a final assistant artifact event/u);
-  });
-
-  it('opens a terminal artifact by exact conversation and message identity only', () => {
-    expect(
-      parseDshSessionHostRequest({
-        requestId: 'request-open-artifact',
-        operation: 'terminal-artifact-open',
-        windowId: 'window-1',
-        rendererSessionId: 'renderer-1',
-        conversationId: 'conversation-1',
-        messageId: 'assistant-final',
-      }),
-    ).toMatchObject({
-      operation: 'terminal-artifact-open',
-      conversationId: 'conversation-1',
-      messageId: 'assistant-final',
-    });
-    expect(
-      parseDshTerminalArtifactOpenHostResult(
-        { requestId: 'request-open-artifact', opened: true },
-        'request-open-artifact',
-      ),
-    ).toEqual({ requestId: 'request-open-artifact', opened: true });
+    ).toThrow(/unexpected=artifact/u);
     expect(() =>
       parseDshSessionHostRequest({
         requestId: 'request-open-artifact',
@@ -989,11 +962,8 @@ describe('DSH Session Host contract', () => {
         rendererSessionId: 'renderer-1',
         conversationId: 'conversation-1',
         messageId: 'assistant-final',
-        contentLocator: {
-          file: { authority: 'workspace', path: 'neko/generated/file/forged.md' },
-        },
       }),
-    ).toThrow(/unexpected=contentLocator/u);
+    ).toThrow(/operation/u);
   });
 
   it('rejects compatibility fields and accepts only bounded JSON Tool payloads', () => {

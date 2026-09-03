@@ -105,6 +105,7 @@ export const inject = [
   'sessionProjections',
   'skills',
   'systemPrompt',
+  'tools',
   'workspaceRegistry',
 ];
 
@@ -2566,6 +2567,7 @@ function setupSessionRuntimeContext(
 ) {
   return async (agentCtx: Context): Promise<void> => {
     await ctx.agentPresets.mount(agentCtx, preset);
+    agentCtx.tools.restrict({ deny: ['read_image'] });
     agentCtx.effect(
       () => installModelSelection(agentCtx, runtimeContext.modelConfiguration.modelSelection),
       'openneko:model-selection',

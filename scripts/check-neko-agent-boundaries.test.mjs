@@ -189,6 +189,11 @@ test('rejects restored retired Agent authorities while accepting empty retired d
       join(root, 'packages/agent/webview/src/presenters/context-reference-presenter.ts'),
       'export {};',
     );
+    await mkdir(join(root, 'packages/agent/runtime/src/application'), { recursive: true });
+    await writeFile(
+      join(root, 'packages/agent/runtime/src/application/agent-terminal-markdown.ts'),
+      'export {};',
+    );
     await mkdir(join(root, 'packages/agent/runtime/src/runtime/projection'), { recursive: true });
     await writeFile(
       join(root, 'packages/agent/runtime/src/runtime/projection/conversation-projection-store.ts'),
@@ -228,6 +233,7 @@ test('rejects restored retired Agent authorities while accepting empty retired d
       'packages/agent/contracts/src/work-item-projector.ts: retired Agent path must remain deleted.',
       'packages/agent/contracts/src/work-item.ts: retired Agent path must remain deleted.',
       'packages/agent/webview/src/presenters/context-reference-presenter.ts: retired Agent path must remain deleted.',
+      'packages/agent/runtime/src/application/agent-terminal-markdown.ts: retired Agent path must remain deleted.',
       'packages/host/src/settings/mcp-server-config.ts: retired Agent path must remain deleted.',
       'packages/host/src/settings/types/config.ts: retired Agent path must remain deleted.',
       'apps/neko-desktop/resources/extensions/plugins: retired Agent directory must remain empty.',

@@ -97,16 +97,34 @@ describe('OpenNeko DSH product system prompt', () => {
     );
   });
 
-  it('delegates artifact formatting to exact Host admission', () => {
+  it('delegates portable text persistence to the native DSH filesystem capability', () => {
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'When the exact Host context admits a durable artifact, follow that scoped admission contract',
-    );
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('optional valid next action');
-    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'satisfy every evidence and scope requirement defined by the active Skill',
+      'create or revise it through DSH `read`, `write`, or `edit` under the exact Session Workspace',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'narrow its title and content to the proven local scope',
+      'classifies the requested creator-reviewable result as a durable portable text artifact',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'Claim persistence only after that Tool succeeds',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'does not ask the Host to publish response bytes',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('or substitute the complete document body');
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'Use native filesystem Tools only for portable UTF-8 text',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'the Host projects the verified direct-open file reference from the completed Tool event',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'do not add a saved-file heading or repeat the written file title or Workspace-relative path there',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toContain(
+      'the final response reports the already-written Workspace-relative path',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'narrow the title and content to the proven local scope',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
       'Reuse current Canvas nodes, documents, selected references, generation results',

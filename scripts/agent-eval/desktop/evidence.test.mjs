@@ -281,6 +281,10 @@ describe('Desktop Agent assertion-driven evidence', () => {
       status: 'success',
       expectedArguments: { operation: 'query' },
       resultIncludes: { documentPath: 'boards/story.nkc' },
+      writtenFileReferenceIncludes: {
+        title: 'story.md',
+        contentLocator: { file: { authority: 'workspace', path: 'notes/story.md' } },
+      },
       evidenceRef: 'facts',
     };
     const input = dshEvidenceInput([assertion]);
@@ -291,6 +295,10 @@ describe('Desktop Agent assertion-driven evidence', () => {
         status: 'completed',
         rawInput: { operation: 'query', input: { documentPath: 'boards/story.nkc' } },
         result: { documentPath: 'boards/story.nkc', nodeCount: 2 },
+        writtenFileReference: {
+          title: 'story.md',
+          contentLocator: { file: { authority: 'workspace', path: 'notes/story.md' } },
+        },
       }),
     );
 
@@ -302,10 +310,25 @@ describe('Desktop Agent assertion-driven evidence', () => {
           turn: 1,
           name: 'openneko_canvas',
           status: 'success',
+          writtenFileReference: {
+            title: 'story.md',
+            contentLocator: { file: { authority: 'workspace', path: 'notes/story.md' } },
+          },
         },
       }),
     );
 
+    delete input.projection.events[0].writtenFileReference;
+    expect(run(input)[0]).toEqual(
+      expect.objectContaining({
+        status: 'fail',
+        message: expect.stringContaining('written file reference'),
+      }),
+    );
+    input.projection.events[0].writtenFileReference = {
+      title: 'story.md',
+      contentLocator: { file: { authority: 'workspace', path: 'notes/story.md' } },
+    };
     input.projection.events[0].toolCallId = '';
     expect(run(input)[0]).toEqual(
       expect.objectContaining({ status: 'fail', message: expect.stringContaining('identity') }),
@@ -795,7 +818,7 @@ function dshEvidenceInput(assertions) {
   return input;
 }
 
-function dshToolEvent({ toolCallId, title, status, rawInput, result }) {
+function dshToolEvent({ toolCallId, title, status, rawInput, result, writtenFileReference }) {
   return {
     kind: 'tool',
     turn: 1,
@@ -804,6 +827,7 @@ function dshToolEvent({ toolCallId, title, status, rawInput, result }) {
     title,
     rawInput,
     rawOutput: [{ type: 'text', text: JSON.stringify(result) }],
+    ...(writtenFileReference === undefined ? {} : { writtenFileReference }),
   };
 }
 

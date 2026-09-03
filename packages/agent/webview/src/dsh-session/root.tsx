@@ -114,7 +114,7 @@ export interface DshAgentViewProps {
   readonly onResolveImageAttachmentPreview?: (
     attachmentId: string,
   ) => Promise<DshImageAttachmentPreviewHostResult['preview']>;
-  readonly onOpenTerminalArtifact?: (messageId: string) => void;
+  readonly onOpenWrittenFile?: (toolCallId: string) => void;
   readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
   readonly onSubmit: (
     target: DshConversationCreationTarget,
@@ -189,6 +189,10 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   const hasEvents = (props.projection?.events.length ?? 0) > 0;
   const transcriptItems = useMemo(
     () => projectDshTranscriptPresentation(props.projection?.events ?? []),
+    [props.projection?.events],
+  );
+  const writtenFileReferencesByTurn = useMemo(
+    () => indexWrittenFileReferences(props.projection?.events ?? []),
     [props.projection?.events],
   );
   const activeTurnStart = findActiveTurnStart(props.projection);
@@ -525,8 +529,13 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
                   event={item.event}
                   key={eventKey(item.event, item.sourceIndex)}
                   messageAuthorPresentation={props.messageAuthorPresentation}
-                  onOpenTerminalArtifact={props.onOpenTerminalArtifact}
+                  onOpenWrittenFile={props.onOpenWrittenFile}
                   onResolveImageAttachmentPreview={props.onResolveImageAttachmentPreview}
+                  writtenFileReferences={
+                    item.event.kind === 'message' && item.event.role === 'assistant'
+                      ? writtenFileReferencesByTurn.get(item.event.turn)
+                      : undefined
+                  }
                 />
               ),
             )}
@@ -1376,14 +1385,16 @@ function DshSessionEvent({
   copy,
   event,
   messageAuthorPresentation,
-  onOpenTerminalArtifact,
+  onOpenWrittenFile,
   onResolveImageAttachmentPreview,
+  writtenFileReferences,
 }: {
   readonly copy: DshAgentCopy;
   readonly event: DshSessionHostEvent;
   readonly messageAuthorPresentation?: DshAgentViewProps['messageAuthorPresentation'];
-  readonly onOpenTerminalArtifact?: DshAgentViewProps['onOpenTerminalArtifact'];
+  readonly onOpenWrittenFile?: DshAgentViewProps['onOpenWrittenFile'];
   readonly onResolveImageAttachmentPreview?: DshAgentViewProps['onResolveImageAttachmentPreview'];
+  readonly writtenFileReferences?: readonly WrittenFileLink[];
 }): JSX.Element | null {
   if (event.kind === 'thought') {
     return (
@@ -1446,20 +1457,13 @@ function DshSessionEvent({
                       data-agent-message-state={event.state}
                     >
                       <MarkdownDocumentView className="markdown-content" value={event.text} />
-                      {event.artifact === undefined ? null : (
-                        <TerminalArtifactReference
-                          artifact={event.artifact}
+                      {event.state === 'final' && writtenFileReferences?.length ? (
+                        <WrittenFileReferences
                           copy={copy}
-                          messageId={event.messageId}
-                          onOpen={onOpenTerminalArtifact}
+                          links={writtenFileReferences}
+                          onOpen={onOpenWrittenFile}
                         />
-                      )}
-                      {event.recommendedNextActionMarkdown === undefined ? null : (
-                        <RecommendedNextAction
-                          copy={copy}
-                          markdown={event.recommendedNextActionMarkdown}
-                        />
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 )}
@@ -1512,57 +1516,55 @@ function DshSessionEvent({
   );
 }
 
-function TerminalArtifactReference({
-  artifact,
-  copy,
-  messageId,
-  onOpen,
-}: {
-  readonly artifact: NonNullable<
-    Extract<
-      DshSessionHostEvent,
-      { readonly kind: 'message'; readonly role: 'assistant' }
-    >['artifact']
-  >;
-  readonly copy: DshAgentCopy;
-  readonly messageId: string;
-  readonly onOpen?: DshAgentViewProps['onOpenTerminalArtifact'];
-}): JSX.Element {
-  const path = projectContentLocatorPath(artifact.contentLocator);
-  const openLabel = copy.openPersistedDocument.replace('{title}', artifact.title);
-  return (
-    <div
-      className="agent-terminal-artifact-reference"
-      data-agent-terminal-artifact="reviewable-markdown"
-    >
-      <button
-        type="button"
-        className="agent-terminal-artifact-link"
-        title={`${artifact.title}\n${path}`}
-        aria-label={openLabel}
-        disabled={onOpen === undefined}
-        onClick={onOpen === undefined ? undefined : () => onOpen(messageId)}
-      >
-        <span className="agent-terminal-artifact-icon" aria-hidden="true">
-          <FileIcon size={14} strokeWidth={1.7} />
-        </span>
-        <span className="agent-terminal-artifact-title">{artifact.title}</span>
-      </button>
-    </div>
-  );
+interface WrittenFileLink {
+  readonly toolCallId: string;
+  readonly reference: NonNullable<ToolEvent['writtenFileReference']>;
 }
 
-function RecommendedNextAction({
+function indexWrittenFileReferences(
+  events: readonly DshSessionHostEvent[],
+): ReadonlyMap<number, readonly WrittenFileLink[]> {
+  const references = new Map<number, WrittenFileLink[]>();
+  const seen = new Set<string>();
+  for (const event of events) {
+    if (event.kind !== 'tool' || event.writtenFileReference === undefined) continue;
+    if (seen.has(event.toolCallId)) continue;
+    seen.add(event.toolCallId);
+    const links = references.get(event.turn) ?? [];
+    links.push({ toolCallId: event.toolCallId, reference: event.writtenFileReference });
+    references.set(event.turn, links);
+  }
+  return references;
+}
+
+function WrittenFileReferences({
   copy,
-  markdown,
+  links,
+  onOpen,
 }: {
   readonly copy: DshAgentCopy;
-  readonly markdown: string;
+  readonly links: readonly WrittenFileLink[];
+  readonly onOpen?: DshAgentViewProps['onOpenWrittenFile'];
 }): JSX.Element {
   return (
-    <div className="agent-terminal-next-action" data-agent-terminal-next-action="true">
-      <span className="agent-terminal-next-action__label">{copy.recommendedNextAction}</span>
-      <MarkdownDocumentView className="markdown-content" value={markdown} />
+    <div className="agent-written-file-references" data-agent-written-file-references="true">
+      {links.map(({ toolCallId, reference }) => {
+        const path = projectContentLocatorPath(reference.contentLocator);
+        return (
+          <button
+            type="button"
+            className="agent-written-file-link"
+            title={`${reference.title}\n${path}`}
+            aria-label={copy.openWrittenFile.replace('{title}', reference.title)}
+            disabled={onOpen === undefined}
+            key={toolCallId}
+            onClick={onOpen === undefined ? undefined : () => onOpen(toolCallId)}
+          >
+            <FileIcon size={14} strokeWidth={1.7} aria-hidden="true" />
+            <span>{reference.title}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -2238,7 +2240,7 @@ interface DshAgentCopy {
   readonly modelRequired: string;
   readonly loading: string;
   readonly output: string;
-  readonly openPersistedDocument: string;
+  readonly openWrittenFile: string;
   readonly permissions: string;
   readonly plan: string;
   readonly planProgress: string;
@@ -2246,7 +2248,6 @@ interface DshAgentCopy {
   readonly placeholder: string;
   readonly processNote: string;
   readonly processNoteUnavailable: string;
-  readonly recommendedNextAction: string;
   readonly restartRuntime: string;
   readonly restartingRuntime: string;
   readonly runtimeUnavailableTitle: string;
@@ -2307,7 +2308,7 @@ const EN_COPY: DshAgentCopy = {
   loadingConfiguration: 'Loading model configuration…',
   loading: 'Loading DSH session…',
   output: 'Result',
-  openPersistedDocument: 'Open document: {title}',
+  openWrittenFile: 'Open document: {title}',
   model: 'Model',
   newConversation: 'New conversation',
   modelRequired: 'Select a configured model before sending.',
@@ -2319,7 +2320,6 @@ const EN_COPY: DshAgentCopy = {
   processNote: 'Progress update',
   processNoteUnavailable:
     'The model provided no additional progress update. Expand this section to inspect the current Tool status.',
-  recommendedNextAction: 'Recommended next action',
   restartRuntime: 'Restart DSH',
   restartingRuntime: 'Restarting DSH runtime…',
   runtimeUnavailableTitle: 'DSH runtime unavailable',
@@ -2384,7 +2384,7 @@ const ZH_COPY: DshAgentCopy = {
   loadingConfiguration: '正在加载模型配置…',
   loading: '正在加载 DSH 会话…',
   output: '结果',
-  openPersistedDocument: '打开文档：{title}',
+  openWrittenFile: '打开文档：{title}',
   model: '模型',
   newConversation: '新会话',
   modelRequired: '发送前请选择已配置的模型。',
@@ -2395,7 +2395,6 @@ const ZH_COPY: DshAgentCopy = {
   placeholder: '向 DSH Agent 提问…',
   processNote: '过程说明',
   processNoteUnavailable: '模型未提供额外的过程说明；可展开查看当前工具状态。',
-  recommendedNextAction: '推荐操作',
   restartRuntime: '重启 DSH',
   restartingRuntime: '正在重启 DSH 运行时…',
   runtimeUnavailableTitle: 'DSH 运行时不可用',

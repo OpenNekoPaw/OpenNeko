@@ -991,7 +991,6 @@ describe('OpenNeko DSH ACP bridge boundaries', () => {
     expect(readPackageFile('src/index.ts')).toContain("config.agentPreset ?? 'standard'");
     for (const id of [
       'tool-bash',
-      'tool-fs',
       'tool-skill',
       'tool-goal',
       'plan-mode',
@@ -1000,8 +999,12 @@ describe('OpenNeko DSH ACP bridge boundaries', () => {
       'tool-web',
     ]) {
       expect(readPackageFile('cordis.patch.yml')).toMatch(
-        new RegExp(`- id: ${id}\\n  disabled: true`, 'u'),
+        new RegExp(`- id: ${id}\\n {2}disabled: true`, 'u'),
       );
     }
+    expect(readPackageFile('cordis.patch.yml')).not.toMatch(/- id: tool-fs\n {2}disabled: true/u);
+    expect(readPackageFile('src/index.ts')).toContain(
+      "agentCtx.tools.restrict({ deny: ['read_image'] })",
+    );
   });
 });

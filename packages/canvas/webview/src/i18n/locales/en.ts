@@ -264,6 +264,7 @@ export const en = {
   'node.job': 'AI Job',
   'node.jobCard': 'AI Job',
   'node.file': 'File',
+  'node.openFile': 'Open file: {name}',
   'node.subcanvas': 'Subcanvas',
   'node.canvasEmbed': 'Embedded Canvas',
   'node.markdownInput': 'Markdown content',

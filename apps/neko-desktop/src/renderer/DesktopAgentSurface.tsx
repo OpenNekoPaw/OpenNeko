@@ -465,17 +465,17 @@ export function DesktopAgentSurface({
     },
     [effectiveConversationId],
   );
-  const openTerminalArtifact = useCallback(
-    async (messageId: string) => {
+  const openWrittenFile = useCallback(
+    async (toolCallId: string) => {
       if (effectiveConversationId === undefined) {
-        setOperationError('Opening a persisted document requires an exact Conversation.');
+        setOperationError('Opening a written file requires an exact Conversation.');
         return;
       }
       setOperationError(undefined);
       try {
-        await window.openNekoDesktop.dshSessions.openTerminalArtifact(
+        await window.openNekoDesktop.dshSessions.openWrittenFile(
           effectiveConversationId,
-          messageId,
+          toolCallId,
         );
       } catch (error) {
         setOperationError(describeError(error));
@@ -483,7 +483,6 @@ export function DesktopAgentSurface({
     },
     [effectiveConversationId],
   );
-
   useEffect(
     () => () => {
       if (effectiveConversationId === undefined) return;
@@ -541,7 +540,7 @@ export function DesktopAgentSurface({
       onRestartRuntime={() => void restartRuntime()}
       onRequestMentions={(filter) => void requestMentions(filter)}
       onMaterializeAsset={materializeAsset}
-      onOpenTerminalArtifact={(messageId) => void openTerminalArtifact(messageId)}
+      onOpenWrittenFile={(toolCallId) => void openWrittenFile(toolCallId)}
       onResolveImageAttachmentPreview={resolveImageAttachmentPreview}
       onSubmit={submit}
     />

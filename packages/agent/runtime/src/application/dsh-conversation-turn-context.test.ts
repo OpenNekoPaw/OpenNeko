@@ -102,21 +102,33 @@ describe('DSH Conversation turn context', () => {
 
     const prompt = await resolver.resolve('conversation-1');
     expect(prompt).toContain('default Workspace Canvas');
-    expect(prompt).toContain('Workspace reviewable Markdown admission');
-    expect(prompt).toContain('reviewable-markdown');
-    expect(prompt).toContain('<!-- neko:next-action -->');
-    expect(prompt).toContain('<!-- neko:artifact -->');
-    expect(prompt).toContain('Omit the next-action marker entirely');
-    expect(prompt).toContain('never emit either reserved marker');
-    expect(prompt).toContain('completion status is not a substitute action');
-    expect(prompt).toContain('active Skill may require a stricter creative structure');
+    expect(prompt).toContain('this turn is bound to Workspace "workspace-1"');
+    expect(prompt).toContain('Workspace portable text authoring');
+    expect(prompt).toContain('even when the user does not literally say "save" or "write a file"');
+    expect(prompt).toContain('Create the document with DSH `write`');
+    expect(prompt).toContain('without overwriting or silently renaming it');
+    expect(prompt).toContain(
+      'automatic projection of that Workspace locator as a Canvas reference node and for the Host-rendered direct-open file reference',
+    );
+    expect(prompt).toContain('do not call a Canvas Tool to copy or embed the document');
+    expect(prompt).toContain(
+      'Do not add a saved-file or document-path section, repeat the written file title or Workspace-relative path',
+    );
+    expect(prompt).not.toContain(
+      'return only a concise summary, the verified Workspace-relative file path',
+    );
+    expect(prompt).toContain(
+      'do not substitute the complete document body as a persistence fallback',
+    );
+    expect(prompt).not.toContain('neko:artifact');
+    expect(prompt).not.toContain('neko:next-action');
     expect(resolveTurnContext).toHaveBeenCalledWith(
       'workspace-1',
       createDefaultCanvasWorkspaceTarget('workspace-1'),
     );
   });
 
-  it('does not admit durable Markdown artifacts outside Workspace context', async () => {
+  it('does not inject a terminal document publication protocol outside Workspace context', async () => {
     const resolver = createDshConversationTurnContextResolver({
       contexts: {
         readContext: async () => ({
@@ -130,8 +142,9 @@ describe('DSH Conversation turn context', () => {
     });
 
     const prompt = await resolver.resolve('conversation-assistant');
-    expect(prompt).not.toContain('Workspace reviewable Markdown admission');
-    expect(prompt).not.toContain('reviewable-markdown');
+    expect(prompt).not.toContain('Workspace portable text authoring');
+    expect(prompt).not.toContain('neko:artifact');
+    expect(prompt).not.toContain('neko:next-action');
   });
 
   it('resolves the selected exact Canvas and rejects a cross-Workspace target', async () => {

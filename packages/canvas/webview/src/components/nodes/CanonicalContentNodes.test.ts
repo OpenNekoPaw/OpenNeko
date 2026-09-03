@@ -53,9 +53,6 @@ describe('canonical content node runtime boundaries', () => {
     expect(source).toContain("t('node.contentLocatorMissing')");
     expect(source).toContain('!contentLocator ?');
     expect(source).toContain(
-      'contentLocator && onFullscreenPreview ? () => onFullscreenPreview(node.id) : undefined',
-    );
-    expect(source).toContain(
       'host.executeMaterialAction(CANVAS_EDIT_TEXT_ACTION_ID, [node.id], {})',
     );
     expect(source).toContain('isFullscreenPreviewFile(node.data)');
@@ -76,8 +73,10 @@ describe('canonical content node runtime boundaries', () => {
       }),
     ).toBe('outline.md');
     expect(source).toContain('text: fileName');
+    expect(source).toContain("ariaLabel: t('node.openFile', { name: fileName })");
     expect(source).toContain('text: title');
     expect(baseNodeSource).toContain('data-canvas-node-label');
+    expect(baseNodeSource).toContain('canvas-node-external-label--action');
     expect(baseNodeSource.indexOf('data-canvas-node-label')).toBeLessThan(
       baseNodeSource.indexOf('{/* Node content */}'),
     );

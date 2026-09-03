@@ -35,6 +35,13 @@
       "source": "repository",
       "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081",
       "mutable": true
+    },
+    {
+      "id": "document-image-workspace",
+      "root": "shared-fixtures/document-image-workspace",
+      "source": "repository",
+      "digest": "sha256:05fb3ce37742e4103192352ace48f569adba98f4008e4c12f1ea0bddcf8fb1d2",
+      "mutable": true
     }
   ],
   "cases": [
@@ -87,8 +94,8 @@
       "visibility": "public"
     },
     {
-      "id": "explicit-markdown-artifact-delivery",
-      "file": "cases/explicit-markdown-artifact-delivery.json",
+      "id": "dsh-markdown-authoring",
+      "file": "cases/dsh-markdown-authoring.json",
       "group": "workflow",
       "visibility": "public"
     },

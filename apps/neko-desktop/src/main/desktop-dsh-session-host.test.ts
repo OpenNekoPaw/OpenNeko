@@ -1026,6 +1026,109 @@ describe('Desktop DSH Session Host', () => {
     );
   });
 
+  it('projects and opens only the exact completed DSH text write reference', async () => {
+    const projection = new DshAcpProjection();
+    projection.acceptSessionEvent({
+      sessionId: identity.dshSessionId,
+      sequence: 0,
+      time: 1_000,
+      type: 'turn/start',
+      data: { turn: 1 },
+      replay: false,
+    });
+    projection.acceptSessionUpdate({
+      sessionId: identity.dshSessionId,
+      _meta: { opennekoSequence: 1, opennekoTurn: 1 },
+      update: {
+        sessionUpdate: 'tool_call',
+        toolCallId: 'tool-write-document',
+        title: 'write',
+        status: 'pending',
+        rawInput: { file_path: 'notes/story-plan.md', content: '# Story plan' },
+      },
+    });
+    projection.acceptSessionUpdate({
+      sessionId: identity.dshSessionId,
+      _meta: { opennekoSequence: 2, opennekoTurn: 1 },
+      update: {
+        sessionUpdate: 'tool_call_update',
+        toolCallId: 'tool-write-document',
+        status: 'completed',
+        rawOutput: { path: 'notes/story-plan.md', operation: 'create' },
+      },
+    });
+    const openWrittenFile = vi.fn(async () => undefined);
+    const host = createHost({ projection, openWrittenFile });
+
+    const result = requireSessionResult(
+      await host.execute(
+        { webContentsId: 1, frameUrl: 'openneko://app' },
+        request('submit', {
+          input: {
+            kind: 'message',
+            text: 'continue',
+            references: [],
+            images: [],
+            contextPayloads: [],
+          },
+        }),
+      ),
+    );
+    expect(result.projection.events).toContainEqual(
+      expect.objectContaining({
+        kind: 'tool',
+        toolCallId: 'tool-write-document',
+        writtenFileReference: {
+          title: 'story-plan.md',
+          contentLocator: {
+            file: { authority: 'workspace', path: 'notes/story-plan.md' },
+          },
+        },
+      }),
+    );
+
+    await expect(
+      host.execute(
+        { webContentsId: 1, frameUrl: 'openneko://app' },
+        {
+          requestId: 'request-open-written-file',
+          operation: 'written-file-open',
+          windowId: 'window-1',
+          rendererSessionId: 'renderer-1',
+          conversationId: identity.conversationId,
+          toolCallId: 'tool-write-document',
+        },
+      ),
+    ).resolves.toEqual({ requestId: 'request-open-written-file', opened: true });
+    expect(openWrittenFile).toHaveBeenCalledWith({
+      windowId: 'window-1',
+      rendererSessionId: 'renderer-1',
+      conversationId: identity.conversationId,
+      reference: {
+        toolCallId: 'tool-write-document',
+        title: 'story-plan.md',
+        contentLocator: {
+          file: { authority: 'workspace', path: 'notes/story-plan.md' },
+        },
+      },
+    });
+
+    await expect(
+      host.execute(
+        { webContentsId: 1, frameUrl: 'openneko://app' },
+        {
+          requestId: 'request-open-missing-file',
+          operation: 'written-file-open',
+          windowId: 'window-1',
+          rendererSessionId: 'renderer-1',
+          conversationId: identity.conversationId,
+          toolCallId: 'tool-missing',
+        },
+      ),
+    ).rejects.toThrow(/no completed Workspace text write reference/u);
+    expect(openWrittenFile).toHaveBeenCalledTimes(1);
+  });
+
   it('projects only an exact Conversation image through a sender-bound lazy resource reader', async () => {
     const projection = new DshAcpProjection();
     const attachment = {
@@ -1309,7 +1412,7 @@ describe('Desktop DSH Session Host', () => {
     ]);
   });
 
-  it('projects the summary, artifact and recommended next action separately', async () => {
+  it('projects historical marker-bearing assistant output as one ordinary transcript message', async () => {
     const projection = new DshAcpProjection();
     projection.acceptSessionEvent({
       sessionId: identity.dshSessionId,
@@ -1347,17 +1450,9 @@ describe('Desktop DSH Session Host', () => {
       },
     });
 
-    const resolveTerminalArtifact = vi.fn(async () => ({
-      messageId: 'assistant-artifact',
-      title: 'Durable Plan',
-      contentLocator: {
-        file: { authority: 'workspace' as const, path: 'neko/generated/file/durable-plan.md' },
-      },
-    }));
     const result = requireSessionResult(
       await createHost({
         projection,
-        resolveTerminalArtifact,
         catalogContext: {
           kind: 'workspace',
           workspaceId: 'workspace-1',
@@ -1379,64 +1474,12 @@ describe('Desktop DSH Session Host', () => {
       expect.objectContaining({
         kind: 'message',
         role: 'assistant',
-        text: 'Saved the plan.',
+        text: 'Saved the plan.\n\n<!-- neko:next-action -->\n\nGenerate the opening shot.\n\n<!-- neko:artifact -->\n\n# Durable Plan\n\nFull body.',
         state: 'final',
-        recommendedNextActionMarkdown: 'Generate the opening shot.',
-        artifact: {
-          kind: 'reviewable-markdown',
-          title: 'Durable Plan',
-          contentLocator: {
-            file: { authority: 'workspace', path: 'neko/generated/file/durable-plan.md' },
-          },
-        },
       }),
     );
-    expect(resolveTerminalArtifact).toHaveBeenCalledWith(
-      expect.objectContaining({
-        conversationId: identity.conversationId,
-        dshSessionId: identity.dshSessionId,
-        messageId: 'assistant-artifact',
-      }),
-    );
-    expect(JSON.stringify(result.projection.events)).not.toContain('Full body.');
-    expect(JSON.stringify(result.projection.events)).not.toContain('neko:next-action');
-  });
-
-  it('opens only the exact persisted terminal artifact selected by message identity', async () => {
-    const openTerminalArtifact = vi.fn(async () => undefined);
-    const resolveTerminalArtifact = vi.fn(async () => ({
-      messageId: 'assistant-artifact',
-      title: 'Durable Plan',
-      contentLocator: {
-        file: { authority: 'workspace' as const, path: 'neko/generated/file/durable-plan.md' },
-      },
-    }));
-    const result = await createHost({ resolveTerminalArtifact, openTerminalArtifact }).execute(
-      { webContentsId: 1, frameUrl: 'openneko://app' },
-      {
-        requestId: 'request-open-artifact',
-        operation: 'terminal-artifact-open',
-        windowId: 'window-1',
-        rendererSessionId: 'renderer-1',
-        conversationId: identity.conversationId,
-        messageId: 'assistant-artifact',
-      },
-    );
-
-    expect(result).toEqual({ requestId: 'request-open-artifact', opened: true });
-    expect(openTerminalArtifact).toHaveBeenCalledWith({
-      windowId: 'window-1',
-      rendererSessionId: 'renderer-1',
-      conversationId: identity.conversationId,
-      messageId: 'assistant-artifact',
-      reference: {
-        kind: 'reviewable-markdown',
-        title: 'Durable Plan',
-        contentLocator: {
-          file: { authority: 'workspace', path: 'neko/generated/file/durable-plan.md' },
-        },
-      },
-    });
+    expect(JSON.stringify(result.projection.events)).toContain('Full body.');
+    expect(JSON.stringify(result.projection.events)).toContain('neko:next-action');
   });
 
   it('delegates the exact DSH context-pressure read model without recalculation', async () => {
@@ -1743,6 +1786,9 @@ function createHost(overrides: {
     typeof DesktopDshSessionHost
   >[0]['imagePreviews']['project'];
   readonly releaseImagePreviews?: (windowId: string, conversationId: string) => void;
+  readonly openWrittenFile?: ConstructorParameters<
+    typeof DesktopDshSessionHost
+  >[0]['openWrittenFile'];
   readonly admitPromptImages?: (input: {
     readonly conversationId: string;
     readonly windowId: string;
@@ -1778,12 +1824,6 @@ function createHost(overrides: {
   >;
   readonly turnCanvasTargets?: ReturnType<typeof createDshTurnCanvasTargetOwner>;
   readonly catalogContext?: import('@neko/agent-contracts').AgentConversationContext;
-  readonly resolveTerminalArtifact?: ConstructorParameters<
-    typeof DesktopDshSessionHost
-  >[0]['terminalArtifacts']['resolveTerminalArtifact'];
-  readonly openTerminalArtifact?: ConstructorParameters<
-    typeof DesktopDshSessionHost
-  >[0]['openTerminalArtifact'];
 }) {
   const applyConversation =
     overrides.applyConversation ?? vi.fn(async () => ({ supportsImageInput: false }));
@@ -1862,10 +1902,6 @@ function createHost(overrides: {
     promptImages: {
       admit: overrides.admitPromptImages ?? vi.fn(async () => []),
     },
-    terminalArtifacts: {
-      resolveTerminalArtifact: overrides.resolveTerminalArtifact ?? vi.fn(async () => undefined),
-    },
-    openTerminalArtifact: overrides.openTerminalArtifact ?? vi.fn(async () => undefined),
     imagePreviews: {
       project:
         overrides.projectImagePreview ??
@@ -1874,6 +1910,11 @@ function createHost(overrides: {
         }),
       release: overrides.releaseImagePreviews ?? vi.fn(),
     },
+    openWrittenFile:
+      overrides.openWrittenFile ??
+      vi.fn(async () => {
+        throw new Error('Unexpected written file open.');
+      }),
     promptContext: overrides.promptContext ?? {
       resolve: vi.fn(async () => 'OpenNeko test context'),
     },

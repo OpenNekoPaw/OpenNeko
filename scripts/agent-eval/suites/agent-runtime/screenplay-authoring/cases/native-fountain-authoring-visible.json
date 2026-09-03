@@ -15,20 +15,18 @@
     "canonicalPath": [
       "Desktop Agent public composer",
       "exact DSH Session",
-      "core Read",
-      "Workspace-relative path plus fingerprint",
-      "core Write",
-      "Tool confirmation",
-      "AuthorizedWorkspaceWriter replace CAS",
-      "core Write",
-      "Tool confirmation",
-      "AuthorizedWorkspaceWriter fail-if-exists"
+      "DSH native read",
+      "DSH filesystem observation",
+      "DSH native write",
+      "atomic observed replacement",
+      "DSH native write",
+      "atomic create"
     ],
     "observables": [
       {
         "ref": "native-fountain-authoring-facts",
         "kind": "runtime-fact",
-        "description": "Exact core Read and Write identities, approvals, freshness-protected replace, create result, absent retired screenplay Tools and terminal state.",
+        "description": "Exact native read and write identities, observation-protected update, create result, absent retired screenplay Tools and terminal state.",
         "required": true
       },
       {
@@ -38,8 +36,8 @@
         "required": true
       }
     ],
-    "expectedResult": "The existing screenplay.fountain is replaced from its observed fingerprint and ai-draft.fountain is created through the same core Write path.",
-    "expectedFailure": "Missing Read freshness, a retired screenplay Tool, Agent-owned Text Document session, wrong operation, overwrite race, wrong bytes or non-terminal state fails visibly."
+    "expectedResult": "The existing screenplay.fountain is updated after DSH observes it and ai-draft.fountain is created through the same native filesystem path.",
+    "expectedFailure": "Missing DSH read observation, a retired screenplay Tool, wrong operation, overwrite race, wrong bytes or non-terminal state fails visibly."
   },
   "fixtureRefs": ["screenplay-authoring-workspace"],
   "runtimeProfileId": "canonical-default",
@@ -48,23 +46,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "这是明确的文件写入请求。先调用 Read 读取 screenplay.fountain，并保留返回的精确 fingerprint。然后调用 Write，携带该 expected_fingerprint，把 screenplay.fountain 完整替换为以下精确文本：.INT. KITCHEN - NIGHT\\n\\n@MARA\\nWe leave now.\\n。等待批准并成功后，再调用 Write 创建 ai-draft.fountain，内容精确为：.INT. ROOM - NIGHT\\n\\n@NEKO\\nHello.\\n；创建时不得提供 expected_fingerprint。再次等待批准，成功后只回复 NATIVE_FOUNTAIN_AUTHORING_OK。不得调用 InspectScreenplay、CreateScreenplayDraft 或 ReplaceScreenplayScene。"
-    },
-    {
-      "id": "approve-replace",
-      "kind": "confirm",
-      "afterStepId": "submit",
-      "toolName": "Write",
-      "approved": true,
-      "timeoutMs": 180000
-    },
-    {
-      "id": "approve-create",
-      "kind": "confirm",
-      "afterStepId": "approve-replace",
-      "toolName": "Write",
-      "approved": true,
-      "timeoutMs": 180000
+      "prompt": "这是明确的文件写入请求。先调用 DSH 原生 read 读取 screenplay.fountain。然后调用 DSH 原生 write，把 screenplay.fountain 完整替换为以下精确文本：.INT. KITCHEN - NIGHT\\n\\n@MARA\\nWe leave now.\\n。成功后，再调用 write 创建 ai-draft.fountain，内容精确为：.INT. ROOM - NIGHT\\n\\n@NEKO\\nHello.\\n。全部成功后只回复 NATIVE_FOUNTAIN_AUTHORING_OK。不得调用 InspectScreenplay、CreateScreenplayDraft 或 ReplaceScreenplayScene。"
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
   ],
@@ -78,29 +60,31 @@
     {
       "id": "read",
       "kind": "tool-call",
-      "name": "Read",
+      "name": "read",
       "status": "success",
       "expectedArguments": { "file_path": "screenplay.fountain" },
-      "resultIncludes": {
-        "path": "screenplay.fountain",
-        "fingerprint": { "strategy": "mtime-size" }
-      },
       "evidenceRef": "native-fountain-authoring-facts"
     },
     {
       "id": "replace",
       "kind": "tool-call",
-      "name": "Write",
+      "name": "write",
       "status": "success",
-      "resultIncludes": { "path": "screenplay.fountain", "operation": "replace" },
+      "resultIncludes": {
+        "operation": "update",
+        "after": ".INT. KITCHEN - NIGHT\\n\\n@MARA\\nWe leave now.\\n"
+      },
       "evidenceRef": "native-fountain-authoring-facts"
     },
     {
       "id": "create",
       "kind": "tool-call",
-      "name": "Write",
+      "name": "write",
       "status": "success",
-      "resultIncludes": { "path": "ai-draft.fountain", "operation": "create" },
+      "resultIncludes": {
+        "operation": "create",
+        "after": ".INT. ROOM - NIGHT\\n\\n@NEKO\\nHello.\\n"
+      },
       "evidenceRef": "native-fountain-authoring-facts"
     },
     {

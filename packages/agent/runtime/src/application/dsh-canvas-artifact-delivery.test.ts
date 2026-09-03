@@ -3,10 +3,112 @@ import type { ContentLocator } from '@neko/content-domain';
 import type { DshAcpProjectedEvent } from '../acp/dsh-acp-projection';
 import {
   collectDshCanvasArtifactCompletedToolArtifacts,
+  collectDshCompletedTextWriteReference,
   createDshCanvasArtifactDeliveryService,
 } from './dsh-canvas-artifact-delivery';
 
 describe('DSH Canvas completed Tool artifact collection', () => {
+  it('projects an exact successful native text write as one Canvas output reference', () => {
+    const collection = collect(writeTool('write-1', 'plans/blame-volume-1-pv.md'));
+
+    expect(collection.diagnostics).toEqual([]);
+    expect(collection.batch).toMatchObject({ turn: 1, createdAt: 1_000 });
+    expect(collection.batch?.artifacts).toEqual([
+      expect.objectContaining({
+        kind: 'file-reference',
+        role: 'output',
+        title: 'blame-volume-1-pv.md',
+        contentLocator: {
+          file: { authority: 'workspace', path: 'plans/blame-volume-1-pv.md' },
+        },
+      }),
+    ]);
+  });
+
+  it('projects the same completed write identity for a direct document-open handoff', () => {
+    const event = writeTool('write-link', 'plans/blame-volume-1-pv.md');
+
+    expect(
+      collectDshCompletedTextWriteReference({ events: [event], toolCallId: 'write-link' }),
+    ).toEqual({
+      toolCallId: 'write-link',
+      title: 'blame-volume-1-pv.md',
+      contentLocator: {
+        file: { authority: 'workspace', path: 'plans/blame-volume-1-pv.md' },
+      },
+    });
+    expect(
+      collectDshCompletedTextWriteReference({ events: [event], toolCallId: 'missing' }),
+    ).toBeUndefined();
+  });
+
+  it.each(['/workspace/plan.md', '../plan.md', 'notes/../plan.md', 'plan.nkc'])(
+    'rejects native write path %s instead of projecting an unverified Canvas locator',
+    (filePath) => {
+      const collection = collect(writeTool('write-invalid', filePath));
+
+      expect(collection.batch).toBeUndefined();
+      expect(collection.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'DSH_CANVAS_ARTIFACT_TEXT_WRITE_PROJECTION_INVALID',
+          toolCallId: 'write-invalid',
+          toolName: 'write',
+        }),
+      ]);
+    },
+  );
+
+  it('does not project a native write that did not complete successfully', () => {
+    const collection = collect({
+      ...writeTool('write-failed', 'plans/blame-volume-1-pv.md'),
+      status: 'failed',
+    });
+
+    expect(collection).toEqual({ diagnostics: [] });
+  });
+
+  it('delivers a successful native text write to the exact admitted Canvas', async () => {
+    const delivery = vi.fn(async () => ({ status: 'accepted' as const }));
+    const service = createDshCanvasArtifactDeliveryService({
+      contexts: {
+        readContext: async () => ({
+          kind: 'workspace' as const,
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+        }),
+      },
+      delivery: { deliver: delivery },
+      diagnostics: { report: vi.fn() },
+    });
+
+    await expect(
+      service.deliverCompletedTool({
+        conversationId: 'conversation-1',
+        dshSessionId: 'dsh-1',
+        toolCallId: 'write-1',
+        events: [writeTool('write-1', 'plans/blame-volume-1-pv.md')],
+        canvasTurnTarget: {
+          workspaceId: 'workspace-1',
+          canvasId: 'neko/boards/workspace.nkc',
+        },
+      }),
+    ).resolves.toEqual({ status: 'accepted' });
+
+    expect(delivery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        delivery: { kind: 'completed-tool', toolCallId: 'write-1' },
+        artifacts: [
+          expect.objectContaining({
+            role: 'output',
+            contentLocator: {
+              file: { authority: 'workspace', path: 'plans/blame-volume-1-pv.md' },
+            },
+          }),
+        ],
+      }),
+    );
+  });
+
   it('projects only the stable parent document for an exact content selector', () => {
     const source = {
       file: { authority: 'workspace' as const, path: 'books/blame.epub' },
@@ -76,7 +178,6 @@ describe('DSH Canvas completed Tool artifact collection', () => {
   });
 
   it('delivers an image overview as soon as its Tool event completes', async () => {
-    const publication = vi.fn();
     const delivery = vi.fn(async () => ({ status: 'accepted' as const }));
     const service = createDshCanvasArtifactDeliveryService({
       contexts: {
@@ -86,7 +187,6 @@ describe('DSH Canvas completed Tool artifact collection', () => {
           workspaceGrantId: 'grant-1',
         }),
       },
-      publication: { publish: publication, resolve: vi.fn() },
       delivery: { deliver: delivery },
       diagnostics: { report: vi.fn() },
     });
@@ -108,7 +208,6 @@ describe('DSH Canvas completed Tool artifact collection', () => {
       }),
     ).resolves.toEqual({ status: 'accepted' });
 
-    expect(publication).not.toHaveBeenCalled();
     expect(delivery).toHaveBeenCalledWith(
       expect.objectContaining({
         turn: 1,
@@ -134,7 +233,6 @@ describe('DSH Canvas completed Tool artifact collection', () => {
           workspaceGrantId: 'grant-1',
         }),
       },
-      publication: { publish: vi.fn(), resolve: vi.fn() },
       delivery: { deliver: delivery },
       diagnostics: { report },
     });
@@ -167,277 +265,6 @@ describe('DSH Canvas completed Tool artifact collection', () => {
   });
 });
 
-describe('DSH Canvas terminal Markdown delivery', () => {
-  it('publishes one explicit document and delivers only its file reference', async () => {
-    const publication = vi.fn(async (input) => ({
-      contentLocator: input.contentLocator,
-      contentFingerprint: input.contentFingerprint,
-    }));
-    const resolution = vi.fn(async (input) => ({
-      contentLocator: input.contentLocator,
-    }));
-    const delivery = vi.fn(async () => ({ status: 'accepted' as const }));
-    const service = createDshCanvasArtifactDeliveryService({
-      contexts: {
-        readContext: async () => ({
-          kind: 'workspace' as const,
-          workspaceId: 'workspace-1',
-          workspaceGrantId: 'grant-1',
-        }),
-      },
-      publication: { publish: publication, resolve: resolution },
-      delivery: { deliver: delivery },
-      diagnostics: { report: vi.fn() },
-    });
-
-    await expect(
-      service.deliverTerminal({
-        conversationId: 'conversation-1',
-        dshSessionId: 'dsh-1',
-        turn: 1,
-        events: terminalEvents(
-          'Saved the durable plan.\n\n<!-- neko:next-action -->\n\nGenerate the opening shot.\n\n<!-- neko:artifact -->\n\n# Animation Plan\n\n## Scope\n\nReviewable content.',
-        ),
-        canvasTurnTarget: {
-          workspaceId: 'workspace-1',
-          canvasId: 'neko/boards/workspace.nkc',
-        },
-      }),
-    ).resolves.toEqual({ status: 'accepted' });
-
-    expect(publication).toHaveBeenCalledOnce();
-    expect(publication).toHaveBeenCalledWith(
-      expect.objectContaining({
-        workspaceId: 'workspace-1',
-        markdown: '# Animation Plan\n\n## Scope\n\nReviewable content.',
-        contentLocator: {
-          file: {
-            authority: 'workspace',
-            path: expect.stringMatching(
-              /^neko\/generated\/file\/animation-plan-[a-f0-9]{24}\.md$/u,
-            ),
-          },
-        },
-      }),
-    );
-    expect(delivery).toHaveBeenCalledWith(
-      expect.objectContaining({
-        delivery: { kind: 'completed-turn' },
-        artifacts: [
-          expect.objectContaining({
-            kind: 'file-reference',
-            role: 'analysis',
-            title: 'Animation Plan',
-            mimeType: 'text/markdown',
-          }),
-        ],
-      }),
-    );
-  });
-
-  it('does not publish an ordinary final reply', async () => {
-    const publication = vi.fn();
-    const resolution = vi.fn();
-    const delivery = vi.fn();
-    const service = createDshCanvasArtifactDeliveryService({
-      contexts: {
-        readContext: async () => ({
-          kind: 'workspace' as const,
-          workspaceId: 'workspace-1',
-          workspaceGrantId: 'grant-1',
-        }),
-      },
-      publication: { publish: publication, resolve: resolution },
-      delivery: { deliver: delivery },
-      diagnostics: { report: vi.fn() },
-    });
-
-    await expect(
-      service.deliverTerminal({
-        conversationId: 'conversation-1',
-        dshSessionId: 'dsh-1',
-        turn: 1,
-        events: terminalEvents('This is an ordinary answer.'),
-        canvasTurnTarget: {
-          workspaceId: 'workspace-1',
-          canvasId: 'neko/boards/workspace.nkc',
-        },
-      }),
-    ).resolves.toBeUndefined();
-    expect(publication).not.toHaveBeenCalled();
-    expect(delivery).not.toHaveBeenCalled();
-  });
-
-  it('rebuilds the reference from the final event only when the exact file still exists', async () => {
-    const markdown =
-      'Saved the durable plan.\n\n<!-- neko:artifact -->\n\n# Animation Plan\n\nReviewable content.';
-    const events = terminalEvents(markdown);
-    const resolution = vi.fn(async (input) => ({
-      contentLocator: input.contentLocator,
-    }));
-    const service = createDshCanvasArtifactDeliveryService({
-      contexts: {
-        readContext: async () => ({
-          kind: 'workspace' as const,
-          workspaceId: 'workspace-1',
-          workspaceGrantId: 'grant-1',
-        }),
-      },
-      publication: { publish: vi.fn(), resolve: resolution },
-      delivery: { deliver: vi.fn() },
-      diagnostics: { report: vi.fn() },
-    });
-
-    await expect(
-      service.resolveTerminalArtifact({
-        conversationId: 'conversation-1',
-        dshSessionId: 'dsh-1',
-        messageId: 'assistant-1',
-        events,
-      }),
-    ).resolves.toMatchObject({
-      messageId: 'assistant-1',
-      title: 'Animation Plan',
-      contentLocator: {
-        file: {
-          authority: 'workspace',
-          path: expect.stringMatching(/^neko\/generated\/file\/animation-plan-[a-f0-9]{24}\.md$/u),
-        },
-      },
-    });
-    expect(resolution).toHaveBeenCalledOnce();
-    expect(resolution).toHaveBeenCalledWith({
-      workspaceId: 'workspace-1',
-      contentLocator: expect.objectContaining({
-        file: expect.objectContaining({ authority: 'workspace' }),
-      }),
-    });
-
-    resolution.mockResolvedValueOnce(undefined);
-    await expect(
-      service.resolveTerminalArtifact({
-        conversationId: 'conversation-1',
-        dshSessionId: 'dsh-1',
-        messageId: 'assistant-1',
-        events,
-      }),
-    ).resolves.toBeUndefined();
-  });
-
-  it('rejects a resolver that substitutes another Workspace file', async () => {
-    const service = createDshCanvasArtifactDeliveryService({
-      contexts: {
-        readContext: async () => ({
-          kind: 'workspace' as const,
-          workspaceId: 'workspace-1',
-          workspaceGrantId: 'grant-1',
-        }),
-      },
-      publication: {
-        publish: vi.fn(),
-        resolve: vi.fn(async () => ({
-          contentLocator: {
-            file: { authority: 'workspace' as const, path: 'neko/generated/file/another.md' },
-          },
-        })),
-      },
-      delivery: { deliver: vi.fn() },
-      diagnostics: { report: vi.fn() },
-    });
-
-    await expect(
-      service.resolveTerminalArtifact({
-        conversationId: 'conversation-1',
-        dshSessionId: 'dsh-1',
-        messageId: 'assistant-1',
-        events: terminalEvents(
-          'Saved the durable plan.\n\n<!-- neko:artifact -->\n\n# Animation Plan\n\nReviewable content.',
-        ),
-      }),
-    ).rejects.toThrow('resolution returned another ContentLocator');
-  });
-
-  it('rejects malformed admitted Markdown before publication', async () => {
-    const publication = vi.fn();
-    const delivery = vi.fn();
-    const service = createWorkspaceTerminalDeliveryService(publication, delivery);
-
-    await expect(
-      service.deliverTerminal({
-        conversationId: 'conversation-1',
-        dshSessionId: 'dsh-1',
-        turn: 1,
-        events: terminalEvents('Summary\n\n<!-- neko:artifact -->\n\n## Missing H1'),
-        canvasTurnTarget: {
-          workspaceId: 'workspace-1',
-          canvasId: 'neko/boards/workspace.nkc',
-        },
-      }),
-    ).rejects.toThrow(/must begin with one H1 title/u);
-    expect(publication).not.toHaveBeenCalled();
-    expect(delivery).not.toHaveBeenCalled();
-  });
-
-  it('requires the exact Canvas target before publishing a document', async () => {
-    const publication = vi.fn();
-    const delivery = vi.fn();
-    const service = createWorkspaceTerminalDeliveryService(publication, delivery);
-
-    await expect(
-      service.deliverTerminal({
-        conversationId: 'conversation-1',
-        dshSessionId: 'dsh-1',
-        turn: 1,
-        events: terminalEvents('Summary\n\n<!-- neko:artifact -->\n\n# Durable Plan'),
-      }),
-    ).rejects.toThrow(/no admitted Canvas target/u);
-    expect(publication).not.toHaveBeenCalled();
-    expect(delivery).not.toHaveBeenCalled();
-  });
-
-  it('does not publish an interrupted turn', async () => {
-    const publication = vi.fn();
-    const delivery = vi.fn();
-    const service = createWorkspaceTerminalDeliveryService(publication, delivery);
-
-    await expect(
-      service.deliverTerminal({
-        conversationId: 'conversation-1',
-        dshSessionId: 'dsh-1',
-        turn: 1,
-        events: terminalEvents(
-          'Summary\n\n<!-- neko:artifact -->\n\n# Incomplete Plan',
-          'interrupted',
-        ),
-        canvasTurnTarget: {
-          workspaceId: 'workspace-1',
-          canvasId: 'neko/boards/workspace.nkc',
-        },
-      }),
-    ).resolves.toBeUndefined();
-    expect(publication).not.toHaveBeenCalled();
-    expect(delivery).not.toHaveBeenCalled();
-  });
-});
-
-function createWorkspaceTerminalDeliveryService(
-  publication: ReturnType<typeof vi.fn>,
-  delivery: ReturnType<typeof vi.fn>,
-) {
-  return createDshCanvasArtifactDeliveryService({
-    contexts: {
-      readContext: async () => ({
-        kind: 'workspace' as const,
-        workspaceId: 'workspace-1',
-        workspaceGrantId: 'grant-1',
-      }),
-    },
-    publication: { publish: publication, resolve: vi.fn() },
-    delivery: { deliver: delivery },
-    diagnostics: { report: vi.fn() },
-  });
-}
-
 function collect(event: DshAcpProjectedEvent) {
   return collectDshCanvasArtifactCompletedToolArtifacts({
     events: [event],
@@ -456,6 +283,25 @@ function documentTool(toolCallId: string, source: ContentLocator): DshAcpProject
     title: 'openneko_document',
     rawInput: { operation: 'read', source },
     rawOutput: [{ type: 'text', text: JSON.stringify({ status: 'ready', source }) }],
+  };
+}
+
+function writeTool(toolCallId: string, filePath: string): DshAcpProjectedEvent {
+  return {
+    kind: 'tool',
+    sessionId: 'dsh-1',
+    toolCallId,
+    turn: 1,
+    turnStartedAt: 1_000,
+    status: 'completed',
+    title: 'write',
+    rawInput: { file_path: filePath, content: '# Durable document\n' },
+    rawOutput: [
+      {
+        type: 'text',
+        text: JSON.stringify({ operation: 'create', after: '# Durable document\n' }),
+      },
+    ],
   };
 }
 
@@ -487,28 +333,4 @@ function imageLocator(entryPath: string): ContentLocator {
     file: { authority: 'workspace', path: 'books/blame.epub' },
     selector: { kind: 'entry', path: entryPath },
   };
-}
-
-function terminalEvents(markdown: string, reason = 'end_turn'): readonly DshAcpProjectedEvent[] {
-  return [
-    {
-      kind: 'message',
-      sessionId: 'dsh-1',
-      role: 'assistant',
-      turn: 1,
-      step: 1,
-      text: markdown,
-      messageId: 'assistant-1',
-      state: 'final',
-    },
-    {
-      kind: 'turn',
-      sessionId: 'dsh-1',
-      turn: 1,
-      phase: 'end',
-      startedAt: 1_000,
-      completedAt: 2_000,
-      reason,
-    },
-  ];
 }

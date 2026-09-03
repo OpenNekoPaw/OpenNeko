@@ -1671,6 +1671,30 @@ html.canvas-webview-document #root,
   pointer-events: auto;
 }
 
+button.canvas-node-external-label {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  font-weight: inherit;
+  text-align: left;
+}
+
+.canvas-node-external-label--action {
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.canvas-node-external-label--action:hover {
+  color: var(--hostPort-textLink-activeForeground);
+}
+
+.canvas-node-external-label--action:focus-visible {
+  outline: 1px solid var(--hostPort-focusBorder);
+  outline-offset: 2px;
+}
+
 .canvas-node-drag-rail {
   position: absolute;
   right: 0;

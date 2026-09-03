@@ -841,6 +841,54 @@ body {
   line-height: 1.5;
 }
 
+.agent-written-file-references {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.agent-written-file-link {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: var(--agent-link-fg, var(--hostPort-textLink-foreground, #3794ff));
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.agent-written-file-link span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-written-file-link:hover:not(:disabled) {
+  color: var(--hostPort-textLink-activeForeground, #4daafc);
+}
+
+.agent-written-file-link:focus-visible {
+  outline: 1px solid var(--hostPort-focusBorder, #007fd4);
+  outline-offset: 2px;
+}
+
+.agent-written-file-link:disabled {
+  color: var(--agent-fg-muted);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
 .agent-turn-activity {
   box-sizing: border-box;
   width: min(760px, calc(100% - 28px));
@@ -2549,76 +2597,6 @@ body {
 .agent-reference-token-attached:hover {
   border-color: color-mix(in srgb, var(--agent-accent) 34%, transparent);
   background: color-mix(in srgb, var(--agent-accent) 15%, var(--agent-composer-bg));
-}
-
-.agent-terminal-artifact-reference {
-  margin-top: 4px;
-}
-
-.agent-terminal-artifact-link {
-  display: inline-flex;
-  min-width: 0;
-  max-width: 100%;
-  align-items: center;
-  gap: 3px;
-  padding: 0;
-  border: 0;
-  border-radius: 3px;
-  background: transparent;
-  color: var(--neko-textLink-foreground, #3794ff);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.agent-terminal-artifact-icon {
-  display: inline-flex;
-  flex: none;
-  color: currentColor;
-}
-
-.agent-terminal-artifact-title {
-  min-width: 0;
-  color: currentColor;
-  font-weight: 400;
-  overflow-wrap: anywhere;
-  text-decoration: none;
-}
-
-.agent-terminal-artifact-link:hover .agent-terminal-artifact-title,
-.agent-terminal-artifact-link:focus-visible .agent-terminal-artifact-title {
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.agent-terminal-artifact-link:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--agent-accent) 72%, transparent);
-  outline-offset: 2px;
-}
-
-.agent-terminal-artifact-link:disabled {
-  color: var(--agent-fg-secondary);
-  cursor: default;
-  opacity: 0.72;
-}
-
-.agent-terminal-next-action {
-  display: grid;
-  gap: 2px;
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid color-mix(in srgb, var(--agent-fg) 9%, transparent);
-}
-
-.agent-terminal-next-action__label {
-  color: var(--agent-fg-secondary);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.agent-terminal-next-action > .markdown-content > :first-child,
-.agent-terminal-next-action > .markdown-content > :last-child {
-  margin-block: 0;
 }
 
 .agent-user-prompt-primary {

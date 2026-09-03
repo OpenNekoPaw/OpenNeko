@@ -8,18 +8,17 @@
     "userBehavior": "Attempt raw reads and approved raw writes against exact Canvas and Cut project documents and observe local denials.",
     "canonicalPath": [
       "public DSH Session submit",
-      "core Read file access policy",
+      "DSH native read pre-execution policy",
       "Canvas .nkc protected-project rejection",
-      "core Read file access policy",
+      "DSH native read pre-execution policy",
       "Cut .otio protected-project rejection",
-      "core Write confirmation",
-      "core Write file access policy rejection"
+      "DSH native write pre-execution policy rejection"
     ],
     "observables": [
       {
         "ref": "protected-project-boundary-facts",
         "kind": "runtime-fact",
-        "description": "Exact failed Read and Write calls for .nkc/.otio, absent retired screenplay Tools, absent Bash fallback and idle terminal state.",
+        "description": "Exact failed native read and write calls for .nkc/.otio, absent retired screenplay Tools, absent shell fallback and idle terminal state.",
         "required": true
       },
       {
@@ -39,23 +38,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "依次调用 Read 读取 project.nkc 和 timeline.otio；两次都应被受保护项目边界拒绝。然后调用 Write 尝试把 project.nkc 写成精确内容 {}\\n，等待批准；失败后再调用 Write 尝试把 timeline.otio 写成精确内容 {}\\n，再次等待批准。两次写入都不得提供 expected_fingerprint，且都应被拒绝。完成后只回复 PROTECTED_PROJECT_RAW_ACCESS_REJECTED。不得调用 Bash、InspectScreenplay、CreateScreenplayDraft 或 ReplaceScreenplayScene，也不得改用其他原始文件路径。"
-    },
-    {
-      "id": "approve-canvas-write",
-      "kind": "confirm",
-      "afterStepId": "submit",
-      "toolName": "Write",
-      "approved": true,
-      "timeoutMs": 180000
-    },
-    {
-      "id": "approve-cut-write",
-      "kind": "confirm",
-      "afterStepId": "approve-canvas-write",
-      "toolName": "Write",
-      "approved": true,
-      "timeoutMs": 180000
+      "prompt": "依次调用 DSH 原生 read 读取 project.nkc 和 timeline.otio；两次都应被受保护项目边界拒绝。然后调用 DSH 原生 write 尝试把 project.nkc 和 timeline.otio 分别写成精确内容 {}\\n；两次也都应被拒绝。完成后只回复 PROTECTED_PROJECT_RAW_ACCESS_REJECTED。不得调用 shell、InspectScreenplay、CreateScreenplayDraft 或 ReplaceScreenplayScene，也不得改用其他原始文件路径。"
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
   ],
@@ -64,7 +47,7 @@
     {
       "id": "read-canvas-denied",
       "kind": "tool-call",
-      "name": "Read",
+      "name": "read",
       "status": "error",
       "expectedArguments": { "file_path": "project.nkc" },
       "evidenceRef": "protected-project-boundary-facts"
@@ -72,7 +55,7 @@
     {
       "id": "read-cut-denied",
       "kind": "tool-call",
-      "name": "Read",
+      "name": "read",
       "status": "error",
       "expectedArguments": { "file_path": "timeline.otio" },
       "evidenceRef": "protected-project-boundary-facts"
@@ -80,7 +63,7 @@
     {
       "id": "write-canvas-denied",
       "kind": "tool-call",
-      "name": "Write",
+      "name": "write",
       "status": "error",
       "expectedArguments": { "file_path": "project.nkc", "content": "{}\n" },
       "evidenceRef": "protected-project-boundary-facts"
@@ -88,7 +71,7 @@
     {
       "id": "write-cut-denied",
       "kind": "tool-call",
-      "name": "Write",
+      "name": "write",
       "status": "error",
       "expectedArguments": { "file_path": "timeline.otio", "content": "{}\n" },
       "evidenceRef": "protected-project-boundary-facts"
@@ -96,7 +79,7 @@
     {
       "id": "no-bash",
       "kind": "tool-call",
-      "name": "Bash",
+      "name": "bash",
       "status": "absent",
       "evidenceRef": "protected-project-boundary-facts"
     },

@@ -94,7 +94,7 @@ function isAssistantProgressMessage(
   index: number,
   event: DshSessionHostEvent,
 ): event is AssistantMessageEvent {
-  if (event.kind !== 'message' || event.role !== 'assistant' || event.artifact !== undefined) {
+  if (event.kind !== 'message' || event.role !== 'assistant') {
     return false;
   }
   for (let cursor = index + 1; cursor < events.length; cursor += 1) {

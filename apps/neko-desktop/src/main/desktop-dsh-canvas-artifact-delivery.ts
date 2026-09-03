@@ -6,14 +6,9 @@ import type {
   DshCanvasArtifactDeliveryInput,
   DshCanvasArtifactDeliveryOutcome,
   DshCanvasArtifactDeliveryPort,
-  DshDurableMarkdownArtifactPublicationPort,
 } from '@neko/agent-runtime/application';
 import type { CanvasWorkspaceTurnTarget } from '@neko/canvas-domain';
-import {
-  isWorkspaceFileContentLocator,
-  type AuthorizedWorkspaceWriter,
-  type ContentReadService,
-} from '@neko/content-domain';
+import type { ContentReadService } from '@neko/content-domain';
 import {
   createNodeHostContentReadService,
   type NodeDocumentEntryReader,
@@ -43,7 +38,6 @@ export interface DesktopDshCanvasArtifactDeliveryOptions {
     operation: () => Promise<TResult>,
   ) => Promise<TResult>;
   readonly createContentRead: (workspacePath: string) => ContentReadService;
-  readonly createContentWriter: (workspacePath: string) => AuthorizedWorkspaceWriter;
   readonly createIdentity?: () => string;
 }
 
@@ -72,9 +66,7 @@ export function createDshCanvasArtifactContentRead(input: {
   });
 }
 
-export class DesktopDshCanvasArtifactDelivery
-  implements DshCanvasArtifactDeliveryPort, DshDurableMarkdownArtifactPublicationPort
-{
+export class DesktopDshCanvasArtifactDelivery implements DshCanvasArtifactDeliveryPort {
   private readonly bindings = new Map<string, CanvasDeliveryBinding>();
   private readonly createIdentity: () => string;
 
@@ -140,26 +132,6 @@ export class DesktopDshCanvasArtifactDelivery
       this.reportBlocked(input.workspaceId, code, message);
       return { status: 'blocked', diagnostic: { code, message } };
     }
-  }
-
-  async publish(
-    input: Parameters<DshDurableMarkdownArtifactPublicationPort['publish']>[0],
-  ): ReturnType<DshDurableMarkdownArtifactPublicationPort['publish']> {
-    const workspace = await this.restoreExactWorkspace(input.workspaceId);
-    return publishDshDurableMarkdownArtifact(input, {
-      writer: this.options.createContentWriter(workspace.workspacePath),
-      content: this.options.createContentRead(workspace.workspacePath),
-    });
-  }
-
-  async resolve(
-    input: Parameters<DshDurableMarkdownArtifactPublicationPort['resolve']>[0],
-  ): ReturnType<DshDurableMarkdownArtifactPublicationPort['resolve']> {
-    const workspace = await this.restoreExactWorkspace(input.workspaceId);
-    return resolveDshDurableMarkdownArtifact(
-      input,
-      this.options.createContentRead(workspace.workspacePath),
-    );
   }
 
   private async resolveResourceFingerprints(
@@ -255,61 +227,6 @@ export class DesktopDshCanvasArtifactDelivery
   }
 }
 
-export async function publishDshDurableMarkdownArtifact(
-  input: Parameters<DshDurableMarkdownArtifactPublicationPort['publish']>[0],
-  ports: {
-    readonly writer: AuthorizedWorkspaceWriter;
-    readonly content: Pick<ContentReadService, 'stat'>;
-  },
-): ReturnType<DshDurableMarkdownArtifactPublicationPort['publish']> {
-  if (
-    !isWorkspaceFileContentLocator(input.contentLocator) ||
-    input.contentLocator.selector !== undefined
-  ) {
-    throw new Error('Durable Markdown publication requires a Workspace file ContentLocator.');
-  }
-  const bytes = new TextEncoder().encode(input.markdown);
-  const result = await ports.writer.write(input.contentLocator, bytes, {
-    conflict: 'fail-if-exists',
-    maxBytes: bytes.byteLength,
-  });
-  if (result.status === 'written') {
-    return {
-      contentLocator: result.locator,
-      contentFingerprint: input.contentFingerprint,
-    };
-  }
-  if (result.diagnostic.code !== 'content-conflict') {
-    throw new Error(`Durable Markdown publication failed: ${result.diagnostic.code}.`);
-  }
-  const existing = await ports.content.stat(input.contentLocator);
-  if (existing.status !== 'ready') {
-    throw new Error(`Durable Markdown publication failed: ${existing.diagnostic.code}.`);
-  }
-  return {
-    contentLocator: input.contentLocator,
-    contentFingerprint: input.contentFingerprint,
-  };
-}
-
-export async function resolveDshDurableMarkdownArtifact(
-  input: Parameters<DshDurableMarkdownArtifactPublicationPort['resolve']>[0],
-  content: Pick<ContentReadService, 'stat'>,
-): ReturnType<DshDurableMarkdownArtifactPublicationPort['resolve']> {
-  if (
-    !isWorkspaceFileContentLocator(input.contentLocator) ||
-    input.contentLocator.selector !== undefined
-  ) {
-    throw new Error('Durable Markdown resolution requires a Workspace file ContentLocator.');
-  }
-  const existing = await content.stat(input.contentLocator);
-  if (existing.status === 'unavailable') {
-    if (existing.diagnostic.code === 'content-missing') return undefined;
-    throw new Error(`Durable Markdown resolution failed: ${existing.diagnostic.code}.`);
-  }
-  return { contentLocator: input.contentLocator };
-}
-
 export async function resolveDshCanvasArtifactResourceFingerprints(
   input: DshCanvasArtifactDeliveryInput,
   contentRead: Pick<ContentReadService, 'stat'>,
@@ -343,14 +260,8 @@ export function createDshCanvasArtifactProjectionRequest(
     turn: input.turn,
     target: input.canvasTurnTarget,
   } as const;
-  const deliveryId =
-    input.delivery.kind === 'completed-tool'
-      ? `dsh-tool:${hashStableValue({ ...identity, toolCallId: input.delivery.toolCallId })}`
-      : `dsh-turn:${hashStableValue(identity)}`;
-  const operationId =
-    input.delivery.kind === 'completed-tool'
-      ? `${input.dshSessionId}:turn:${input.turn}:tool:${input.delivery.toolCallId}`
-      : `${input.dshSessionId}:turn:${input.turn}`;
+  const deliveryId = `dsh-tool:${hashStableValue({ ...identity, toolCallId: input.delivery.toolCallId })}`;
+  const operationId = `${input.dshSessionId}:turn:${input.turn}:tool:${input.delivery.toolCallId}`;
   const createdAt = new Date(input.createdAt).toISOString();
   const target = resolveProjectionTarget(input, workspace);
   return {
@@ -378,7 +289,6 @@ export function createDshCanvasArtifactProjectionRequest(
       return {
         kind: artifact.kind,
         title: artifact.title,
-        ...(artifact.mimeType === undefined ? {} : { mimeType: artifact.mimeType }),
         contentLocator: artifact.contentLocator,
         provenance,
       };

@@ -61,4 +61,48 @@ describe('BaseNode drag surfaces', () => {
     expect(onTransformStart).toHaveBeenCalledWith('node-1');
     act(() => window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 })));
   });
+
+  it('treats an actionable external label as a link instead of a drag surface', () => {
+    const onActivate = vi.fn();
+    const onSelect = vi.fn();
+    const onTransformStart = vi.fn();
+    act(() => {
+      root.render(
+        <BaseNode
+          node={{
+            id: 'node-1',
+            type: 'file',
+            position: { x: 20, y: 30 },
+            size: { width: 240, height: 160 },
+            zIndex: 1,
+          }}
+          viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
+          isSelected={false}
+          autoSizeContent={false}
+          nodeLabel={{
+            icon: null,
+            text: 'notes.md',
+            action: { ariaLabel: 'Open file: notes.md', onActivate },
+          }}
+          onSelect={onSelect}
+          onTransformStart={onTransformStart}
+        >
+          <div>Preview</div>
+        </BaseNode>,
+      );
+    });
+
+    const link = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Open file: notes.md"]',
+    );
+    expect(link?.dataset.nodeDragAllow).toBeUndefined();
+    act(() => {
+      link?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+      link?.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 0 }));
+    });
+
+    expect(onActivate).toHaveBeenCalledOnce();
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onTransformStart).not.toHaveBeenCalled();
+  });
 });

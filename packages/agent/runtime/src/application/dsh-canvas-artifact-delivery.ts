@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import type { DshAcpProjectedEvent } from '../acp/dsh-acp-projection';
 import type { AgentConversationContext } from '@neko/agent-contracts';
 import type { CanvasWorkspaceTurnTarget } from '@neko/canvas-domain';
@@ -9,17 +8,31 @@ import {
   contentLocatorKey,
   decodeContentImageDshToolSource,
   decodeContentImagesDshToolInput,
+  isWorkspaceFileContentLocator,
   type ContentLocator,
+  type WorkspaceFileContentLocator,
 } from '@neko/content-domain';
 import { hashStableValue } from '@neko/shared';
-import {
-  resolveWorkspaceGeneratedAssetRelativeDirectory,
-  sanitizeGeneratedAssetPathSegment,
-} from '@neko/generation-domain';
-import {
-  createAgentTerminalArtifactAdmission,
-  parseAgentTerminalMarkdown,
-} from './agent-terminal-markdown';
+import { posix as path } from 'node:path';
+
+const DSH_TEXT_WRITE_TOOL_NAME = 'write';
+const PORTABLE_TEXT_EXTENSIONS = new Set([
+  '.ass',
+  '.csv',
+  '.fountain',
+  '.htm',
+  '.html',
+  '.json',
+  '.markdown',
+  '.md',
+  '.srt',
+  '.ssa',
+  '.tsv',
+  '.txt',
+  '.vtt',
+  '.yaml',
+  '.yml',
+]);
 
 export type DshCanvasArtifact = DshCanvasArtifactResourceArtifact;
 
@@ -27,11 +40,10 @@ type DshCanvasArtifactResourceArtifact = {
   readonly kind: 'file-reference' | 'image';
   readonly artifactId: string;
   readonly contentFingerprint: string;
-  readonly role: 'source' | 'analysis';
+  readonly role: 'source' | 'output';
   readonly title: string;
   readonly sourceId: string;
   readonly sourceArtifactIds?: readonly string[];
-  readonly mimeType?: 'text/markdown';
   readonly contentLocator: ContentLocator;
 };
 
@@ -42,7 +54,9 @@ export interface DshCanvasArtifactBatch {
 }
 
 export interface DshCanvasArtifactCollectionDiagnostic {
-  readonly code: 'DSH_CANVAS_ARTIFACT_CONTENT_TOOL_PROJECTION_INVALID';
+  readonly code:
+    | 'DSH_CANVAS_ARTIFACT_CONTENT_TOOL_PROJECTION_INVALID'
+    | 'DSH_CANVAS_ARTIFACT_TEXT_WRITE_PROJECTION_INVALID';
   readonly toolCallId: string;
   readonly toolName: string;
   readonly message: string;
@@ -53,6 +67,12 @@ export interface DshCanvasArtifactCollection {
   readonly diagnostics: readonly DshCanvasArtifactCollectionDiagnostic[];
 }
 
+export interface DshCompletedTextWriteReference {
+  readonly toolCallId: string;
+  readonly title: string;
+  readonly contentLocator: WorkspaceFileContentLocator;
+}
+
 export interface DshCanvasArtifactDeliveryInput {
   readonly workspaceId: string;
   readonly conversationId: string;
@@ -60,9 +80,7 @@ export interface DshCanvasArtifactDeliveryInput {
   readonly turn: number;
   readonly createdAt: number;
   readonly canvasTurnTarget: CanvasWorkspaceTurnTarget;
-  readonly delivery:
-    | { readonly kind: 'completed-tool'; readonly toolCallId: string }
-    | { readonly kind: 'completed-turn' };
+  readonly delivery: { readonly kind: 'completed-tool'; readonly toolCallId: string };
   readonly artifacts: readonly DshCanvasArtifact[];
 }
 
@@ -85,55 +103,18 @@ export interface DshCanvasArtifactCompletedToolDeliveryInput {
   readonly canvasTurnTarget?: CanvasWorkspaceTurnTarget;
 }
 
-export interface DshCanvasArtifactTerminalDeliveryInput {
-  readonly conversationId: string;
-  readonly dshSessionId: string;
-  readonly turn: number;
-  readonly events: readonly DshAcpProjectedEvent[];
-  readonly canvasTurnTarget?: CanvasWorkspaceTurnTarget;
-}
-
-export interface DshDurableMarkdownArtifactPublicationPort {
-  publish(input: {
-    readonly workspaceId: string;
-    readonly contentLocator: ContentLocator;
-    readonly markdown: string;
-    readonly contentFingerprint: string;
-  }): Promise<{ readonly contentLocator: ContentLocator; readonly contentFingerprint: string }>;
-  resolve(input: {
-    readonly workspaceId: string;
-    readonly contentLocator: ContentLocator;
-  }): Promise<{ readonly contentLocator: ContentLocator } | undefined>;
-}
-
-export interface DshTerminalMarkdownArtifactReference {
-  readonly messageId: string;
-  readonly title: string;
-  readonly contentLocator: ContentLocator;
-}
-
 export interface DshCanvasArtifactDeliveryService {
   deliverCompletedTool(
     input: DshCanvasArtifactCompletedToolDeliveryInput,
   ): Promise<DshCanvasArtifactDeliveryOutcome | undefined>;
-  deliverTerminal(
-    input: DshCanvasArtifactTerminalDeliveryInput,
-  ): Promise<DshCanvasArtifactDeliveryOutcome | undefined>;
-  resolveTerminalArtifact(input: {
-    readonly conversationId: string;
-    readonly dshSessionId: string;
-    readonly messageId: string;
-    readonly events: readonly DshAcpProjectedEvent[];
-  }): Promise<DshTerminalMarkdownArtifactReference | undefined>;
 }
 
-/** Owns completed content-Tool source projection and explicit terminal document delivery. */
+/** Owns completed Tool resource projection to an explicitly admitted Canvas target. */
 export function createDshCanvasArtifactDeliveryService(options: {
   readonly contexts: {
     readContext(conversationId: string): Promise<AgentConversationContext | undefined>;
   };
   readonly delivery: DshCanvasArtifactDeliveryPort;
-  readonly publication: DshDurableMarkdownArtifactPublicationPort;
   readonly diagnostics: {
     report(diagnostic: DshCanvasArtifactCollectionDiagnostic): void;
   };
@@ -141,7 +122,7 @@ export function createDshCanvasArtifactDeliveryService(options: {
   return Object.freeze({
     async deliverCompletedTool(input: DshCanvasArtifactCompletedToolDeliveryInput) {
       const context = await options.contexts.readContext(input.conversationId);
-      if (context?.kind !== 'workspace') return undefined;
+      if (context?.kind !== 'workspace' && context?.kind !== 'authoring') return undefined;
       const collection = collectDshCanvasArtifactCompletedToolArtifacts({
         events: input.events,
         toolCallId: input.toolCallId,
@@ -161,149 +142,10 @@ export function createDshCanvasArtifactDeliveryService(options: {
         artifacts: batch.artifacts,
       });
     },
-    async deliverTerminal(input: DshCanvasArtifactTerminalDeliveryInput) {
-      const context = await options.contexts.readContext(input.conversationId);
-      if (context?.kind !== 'workspace') return undefined;
-      const terminal = input.events.find(
-        (event) => event.kind === 'turn' && event.phase === 'end' && event.turn === input.turn,
-      );
-      if (terminal?.kind !== 'turn' || terminal.phase !== 'end') {
-        throw new Error(`DSH Session '${input.dshSessionId}' has no projected terminal turn.`);
-      }
-      if (!isReviewableTurnEnd(terminal.reason)) return undefined;
-      const finalMarkdown = collectFinalAssistantMarkdown(input.events, terminal.turn);
-      if (finalMarkdown === undefined) return undefined;
-      const result = parseAgentTerminalMarkdown(
-        finalMarkdown,
-        createAgentTerminalArtifactAdmission(),
-      );
-      if (result.artifact === undefined) return undefined;
-      const artifact = deriveTerminalMarkdownArtifact(result.artifact);
-      const canvasTurnTarget = resolveTurnTarget(context, input.canvasTurnTarget);
-      const published = await options.publication.publish({
-        workspaceId: context.workspaceId,
-        contentLocator: artifact.contentLocator,
-        markdown: artifact.markdown,
-        contentFingerprint: artifact.contentFingerprint,
-      });
-      assertPublishedTerminalArtifact(artifact, published);
-      return options.delivery.deliver({
-        workspaceId: context.workspaceId,
-        conversationId: input.conversationId,
-        dshSessionId: input.dshSessionId,
-        turn: terminal.turn,
-        createdAt: terminal.completedAt,
-        canvasTurnTarget,
-        delivery: { kind: 'completed-turn' },
-        artifacts: [
-          {
-            kind: 'file-reference',
-            artifactId: `reviewable-markdown:${artifact.artifactHash}`,
-            contentFingerprint: published.contentFingerprint,
-            role: 'analysis',
-            title: artifact.title,
-            sourceId: `artifact:reviewable-markdown:${artifact.artifactHash}`,
-            mimeType: 'text/markdown',
-            contentLocator: published.contentLocator,
-          },
-        ],
-      });
-    },
-    async resolveTerminalArtifact(
-      input: Parameters<DshCanvasArtifactDeliveryService['resolveTerminalArtifact']>[0],
-    ) {
-      const context = await options.contexts.readContext(input.conversationId);
-      if (context?.kind !== 'workspace') return undefined;
-      const event = input.events.find(
-        (candidate) =>
-          candidate.kind === 'message' &&
-          candidate.role === 'assistant' &&
-          candidate.state === 'final' &&
-          candidate.messageId === input.messageId,
-      );
-      if (event?.kind !== 'message' || event.role !== 'assistant' || event.state !== 'final') {
-        throw new Error(
-          `DSH Session '${input.dshSessionId}' has no final assistant message '${input.messageId}'.`,
-        );
-      }
-      const terminal = input.events.find(
-        (candidate) =>
-          candidate.kind === 'turn' && candidate.phase === 'end' && candidate.turn === event.turn,
-      );
-      if (
-        terminal?.kind !== 'turn' ||
-        terminal.phase !== 'end' ||
-        !isReviewableTurnEnd(terminal.reason)
-      ) {
-        return undefined;
-      }
-      const result = parseAgentTerminalMarkdown(event.text, createAgentTerminalArtifactAdmission());
-      if (result.artifact === undefined) return undefined;
-      const artifact = deriveTerminalMarkdownArtifact(result.artifact);
-      const resolved = await options.publication.resolve({
-        workspaceId: context.workspaceId,
-        contentLocator: artifact.contentLocator,
-      });
-      if (resolved === undefined) return undefined;
-      assertResolvedTerminalArtifact(artifact, resolved);
-      return {
-        messageId: event.messageId,
-        title: artifact.title,
-        contentLocator: resolved.contentLocator,
-      };
-    },
   });
 }
 
-interface DerivedTerminalMarkdownArtifact {
-  readonly artifactHash: string;
-  readonly title: string;
-  readonly markdown: string;
-  readonly contentFingerprint: string;
-  readonly contentLocator: ContentLocator;
-}
-
-function deriveTerminalMarkdownArtifact(
-  artifact: NonNullable<ReturnType<typeof parseAgentTerminalMarkdown>['artifact']>,
-): DerivedTerminalMarkdownArtifact {
-  const artifactHash = sha256Digest(
-    `${artifact.profile}\0${artifact.title}\0${artifact.markdown}`,
-  ).slice(0, 24);
-  return {
-    artifactHash,
-    title: artifact.title,
-    markdown: artifact.markdown,
-    contentFingerprint: `sha256:${sha256Digest(artifact.markdown)}`,
-    contentLocator: createTerminalArtifactContentLocator(artifact.title, artifactHash),
-  };
-}
-
-function assertPublishedTerminalArtifact(
-  expected: DerivedTerminalMarkdownArtifact,
-  published: { readonly contentLocator: ContentLocator; readonly contentFingerprint: string },
-): void {
-  if (contentLocatorKey(published.contentLocator) !== contentLocatorKey(expected.contentLocator)) {
-    throw new Error('Durable Markdown publication returned another ContentLocator.');
-  }
-  if (published.contentFingerprint !== expected.contentFingerprint) {
-    throw new Error('Durable Markdown publication returned another content fingerprint.');
-  }
-}
-
-function assertResolvedTerminalArtifact(
-  expected: DerivedTerminalMarkdownArtifact,
-  resolved: { readonly contentLocator: ContentLocator },
-): void {
-  if (contentLocatorKey(resolved.contentLocator) !== contentLocatorKey(expected.contentLocator)) {
-    throw new Error('Durable Markdown resolution returned another ContentLocator.');
-  }
-}
-
-function sha256Digest(value: string): string {
-  return createHash('sha256').update(value).digest('hex');
-}
-
-/** Collects source artifacts for one exact completed Tool call. */
+/** Collects resource artifacts for one exact completed Tool call. */
 export function collectDshCanvasArtifactCompletedToolArtifacts(input: {
   readonly events: readonly DshAcpProjectedEvent[];
   readonly toolCallId: string;
@@ -312,14 +154,14 @@ export function collectDshCanvasArtifactCompletedToolArtifacts(input: {
   const event = [...input.events]
     .reverse()
     .find((candidate) => candidate.kind === 'tool' && candidate.toolCallId === input.toolCallId);
-  if (event?.kind !== 'tool' || event.status !== 'completed' || !isSupportedContentTool(event)) {
+  if (event?.kind !== 'tool' || event.status !== 'completed' || !isSupportedArtifactTool(event)) {
     return { diagnostics };
   }
   try {
     if (event.turnStartedAt === undefined) {
       throw new Error(`DSH Tool '${input.toolCallId}' has no projected turn start.`);
     }
-    const artifacts = deduplicateResources(collectContentToolSources(event));
+    const artifacts = deduplicateResources(collectToolArtifacts(event));
     if (artifacts.length === 0) return { diagnostics };
     return {
       batch: { turn: event.turn, createdAt: event.turnStartedAt, artifacts },
@@ -331,8 +173,34 @@ export function collectDshCanvasArtifactCompletedToolArtifacts(input: {
   }
 }
 
+export function collectDshCompletedTextWriteReference(input: {
+  readonly events: readonly DshAcpProjectedEvent[];
+  readonly toolCallId: string;
+}): DshCompletedTextWriteReference | undefined {
+  const collection = collectDshCanvasArtifactCompletedToolArtifacts(input);
+  const outputs =
+    collection.batch?.artifacts.filter(
+      (artifact) => artifact.kind === 'file-reference' && artifact.role === 'output',
+    ) ?? [];
+  if (outputs.length === 0) return undefined;
+  if (outputs.length !== 1) {
+    throw new Error(`DSH Tool '${input.toolCallId}' projected multiple text write references.`);
+  }
+  const output = outputs[0];
+  if (output === undefined || !isWorkspaceFileContentLocator(output.contentLocator)) {
+    throw new Error(
+      `DSH Tool '${input.toolCallId}' projected a non-Workspace text write reference.`,
+    );
+  }
+  return {
+    toolCallId: input.toolCallId,
+    title: output.title,
+    contentLocator: output.contentLocator,
+  };
+}
+
 function resolveTurnTarget(
-  context: Extract<AgentConversationContext, { readonly kind: 'workspace' }>,
+  context: Extract<AgentConversationContext, { readonly kind: 'workspace' | 'authoring' }>,
   target: CanvasWorkspaceTurnTarget | undefined,
 ): CanvasWorkspaceTurnTarget {
   if (target === undefined) {
@@ -344,50 +212,18 @@ function resolveTurnTarget(
   return target;
 }
 
-function createTerminalArtifactContentLocator(title: string, artifactHash: string): ContentLocator {
-  const stem = sanitizeGeneratedAssetPathSegment(title).slice(0, 80);
-  return {
-    file: {
-      authority: 'workspace',
-      path: `${resolveWorkspaceGeneratedAssetRelativeDirectory({ mimeType: 'text/markdown' })}/${stem}-${artifactHash}.md`,
-    },
-  };
-}
-
-function collectFinalAssistantMarkdown(
-  events: readonly DshAcpProjectedEvent[],
-  turn: number,
-): string | undefined {
-  return events
-    .filter(
-      (
-        event,
-      ): event is Extract<
-        DshAcpProjectedEvent,
-        { readonly kind: 'message'; readonly role: 'assistant' }
-      > =>
-        event.kind === 'message' &&
-        event.role === 'assistant' &&
-        event.turn === turn &&
-        event.state === 'final' &&
-        event.text.trim().length > 0,
-    )
-    .sort((left, right) => left.step - right.step)
-    .at(-1)
-    ?.text.trim();
-}
-
-function isReviewableTurnEnd(reason: string | undefined): boolean {
-  return !['interrupted', 'max-tokens', 'failed', 'error', 'cancelled'].includes(reason ?? '');
-}
-
-function collectContentToolSources(
+function collectToolArtifacts(
   event: Extract<DshAcpProjectedEvent, { readonly kind: 'tool' }>,
 ): readonly DshCanvasArtifactResourceArtifact[] {
   let locator: ContentLocator;
-  if (event.title === DOCUMENT_DSH_TOOL_NAME) {
+  if (event.title === DSH_TEXT_WRITE_TOOL_NAME) {
+    locator = {
+      file: { authority: 'workspace', path: decodePortableTextWritePath(event.rawInput) },
+    };
+    return [createResourceArtifact(locator, 'file-reference', [], 'output')];
+  } else if (event.title === DOCUMENT_DSH_TOOL_NAME) {
     locator = decodeDocumentDshToolArgs(event.rawInput).input.source;
-    return [createSourceArtifact({ file: locator.file }, 'file-reference')];
+    return [createResourceArtifact({ file: locator.file }, 'file-reference')];
   } else if (event.title === CONTENT_IMAGE_DSH_TOOL_NAME) {
     const rawInput = requireRecord(event.rawInput, `${CONTENT_IMAGE_DSH_TOOL_NAME} input`);
     locator = decodeContentImageDshToolSource(rawInput['source']);
@@ -404,9 +240,9 @@ function collectContentToolSources(
 function createLocatedImageSourceArtifacts(
   locator: ContentLocator,
 ): readonly DshCanvasArtifactResourceArtifact[] {
-  if (locator.selector === undefined) return [createSourceArtifact(locator, 'image')];
-  const parent = createSourceArtifact({ file: locator.file }, 'file-reference');
-  return [parent, createSourceArtifact(locator, 'image', [parent.artifactId])];
+  if (locator.selector === undefined) return [createResourceArtifact(locator, 'image')];
+  const parent = createResourceArtifact({ file: locator.file }, 'file-reference');
+  return [parent, createResourceArtifact(locator, 'image', [parent.artifactId])];
 }
 
 function deduplicateResources(
@@ -433,10 +269,11 @@ function deduplicateResources(
   return [...sources.values()];
 }
 
-function isSupportedContentTool(
+function isSupportedArtifactTool(
   event: Extract<DshAcpProjectedEvent, { readonly kind: 'tool' }>,
 ): event is Extract<DshAcpProjectedEvent, { readonly kind: 'tool' }> & { readonly title: string } {
   return (
+    event.title === DSH_TEXT_WRITE_TOOL_NAME ||
     event.title === DOCUMENT_DSH_TOOL_NAME ||
     event.title === CONTENT_IMAGE_DSH_TOOL_NAME ||
     event.title === CONTENT_IMAGES_DSH_TOOL_NAME
@@ -448,26 +285,21 @@ function contentToolDiagnostic(
   error: unknown,
 ): DshCanvasArtifactCollectionDiagnostic {
   return {
-    code: 'DSH_CANVAS_ARTIFACT_CONTENT_TOOL_PROJECTION_INVALID',
+    code:
+      event.title === DSH_TEXT_WRITE_TOOL_NAME
+        ? 'DSH_CANVAS_ARTIFACT_TEXT_WRITE_PROJECTION_INVALID'
+        : 'DSH_CANVAS_ARTIFACT_CONTENT_TOOL_PROJECTION_INVALID',
     toolCallId: event.toolCallId,
     toolName: event.title,
     message: error instanceof Error ? error.message : String(error),
   };
 }
 
-function createSourceArtifact(
-  locator: ContentLocator,
-  kind: 'file-reference' | 'image',
-  sourceArtifactIds: readonly string[] = [],
-): DshCanvasArtifactResourceArtifact {
-  return createResourceArtifact(locator, kind, 'source', sourceArtifactIds);
-}
-
 function createResourceArtifact(
   locator: ContentLocator,
   kind: 'file-reference' | 'image',
-  role: 'source' | 'analysis',
   sourceArtifactIds: readonly string[] = [],
+  role: 'source' | 'output' = 'source',
 ): DshCanvasArtifactResourceArtifact {
   const locatorKey = contentLocatorKey(locator);
   const locatorHash = hashStableValue(locatorKey);
@@ -482,6 +314,32 @@ function createResourceArtifact(
     ...(sourceArtifactIds.length > 0 ? { sourceArtifactIds } : {}),
     contentLocator: locator,
   };
+}
+
+function decodePortableTextWritePath(value: unknown): string {
+  const input = requireRecord(value, `${DSH_TEXT_WRITE_TOOL_NAME} input`);
+  const filePath = input['file_path'];
+  if (typeof filePath !== 'string' || filePath.length === 0) {
+    throw new Error('DSH write input requires one non-empty file_path.');
+  }
+  const segments = filePath.split('/');
+  if (
+    filePath.includes('\\') ||
+    filePath.includes('\0') ||
+    filePath.startsWith('~') ||
+    path.isAbsolute(filePath) ||
+    path.normalize(filePath) !== filePath ||
+    filePath === '..' ||
+    filePath.startsWith('../') ||
+    segments.some((segment) => segment.length === 0 || segment.includes(':'))
+  ) {
+    throw new Error('DSH write file_path must be a normalized Workspace-relative path.');
+  }
+  const extension = path.extname(filePath).toLocaleLowerCase('en-US');
+  if (!PORTABLE_TEXT_EXTENSIONS.has(extension)) {
+    throw new Error(`DSH write file_path '${filePath}' is not a portable text document.`);
+  }
+  return filePath;
 }
 
 function contentTitle(locator: ContentLocator): string {

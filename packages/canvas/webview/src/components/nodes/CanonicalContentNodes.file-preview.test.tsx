@@ -92,7 +92,48 @@ describe('Canvas File node text preview', () => {
     );
   });
 
-  it('opens a referenced text file in the Text Editor when double-clicked', async () => {
+  it('opens a referenced text file in the Text Editor from its direct file link', async () => {
+    const readTextFilePreview = vi.fn(async (request) => ({
+      requestId: request.requestId,
+      nodeId: request.nodeId,
+      status: 'ready' as const,
+      kind: 'markdown' as const,
+      text: '# Notes',
+      truncated: false,
+      empty: false,
+    }));
+    const executeIntent: CanvasHostRuntime['executeIntent'] = vi.fn(async (request) => ({
+      requestId: request.requestId,
+      commandId: request.commandId,
+      status: 'accepted' as const,
+      snapshot: emptySnapshot(),
+    }));
+    const host = createCanvasWebviewHost(runtime(readTextFilePreview, executeIntent));
+    const node = fileNode('file-markdown', 'notes/readme.md', 'text/markdown');
+
+    await renderFile(root, host, node, true);
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="Open file: readme.md"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.querySelector('button[aria-label="Open file: readme.md"]')).not.toBeNull();
+    expect(executeIntent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        intent: {
+          type: 'execute-material-action',
+          action: expect.objectContaining({
+            actionId: 'text:edit',
+            selectedNodeIds: ['file-markdown'],
+            payload: {},
+          }),
+        },
+      }),
+    );
+  });
+
+  it('keeps double-click activation on the node as the same Text Editor action', async () => {
     const readTextFilePreview = vi.fn(async (request) => ({
       requestId: request.requestId,
       nodeId: request.nodeId,

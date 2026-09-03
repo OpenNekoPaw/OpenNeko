@@ -1,0 +1,141 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "dsh-markdown-authoring",
+  "suiteId": "agent-runtime.workflow-controller",
+  "caseGroup": "workflow",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Request one named, reusable and substantially complete plan from a Workspace conversation without explicitly asking to save a file.",
+    "canonicalPath": [
+      "Workspace-bound Desktop Agent turn",
+      "exact DSH Session cwd",
+      "DSH native write Tool",
+      "DSH filesystem sandbox and observation policy",
+      "Content-verified Workspace locator projected as one Canvas output reference",
+      "ordinary Markdown final answer containing only the summary and recommended action while the Host renders the completed file reference"
+    ],
+    "observables": [
+      {
+        "ref": "dsh-markdown-facts",
+        "kind": "runtime-fact",
+        "description": "Successful native write, one exact clickable Host-rendered written-file reference, one Content-verified Canvas reference projection, and semantically separate summary and recommended action in the ordinary final answer without a duplicated path, with absent terminal publication protocol and terminal idle facts.",
+        "required": true
+      },
+      {
+        "ref": "authored-markdown",
+        "kind": "post-check",
+        "description": "The exact requested Markdown bytes exist at the requested Workspace-relative path.",
+        "required": true
+      },
+      {
+        "ref": "canvas-document-reference",
+        "kind": "post-check",
+        "description": "The validated Workspace Canvas contains exactly one DSH Tool-proven output reference to the authored Markdown locator.",
+        "required": true
+      }
+    ],
+    "expectedResult": "Workspace document admission recognizes the reusable plan without literal save wording, DSH writes release-readiness-plan.md under the exact Session Workspace, the completed write projects one direct-open file reference, Canvas receives one reference node for that locator, and the ordinary final answer reports only the summary and one state-grounded next action without duplicating the filename or path.",
+    "expectedFailure": "Returning the complete plan only as Conversation text, missing or duplicated write, missing direct-open or Canvas reference projection, missing summary/recommended-action reporting, duplicating the filename or path in the final answer, terminal marker publication, wrong bytes or a non-idle turn fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "为发布评审编写一份命名、可复用且内容完整的计划，文档名为 release-readiness-plan.md。计划的精确 UTF-8 内容必须是：# Release Readiness Plan\n\n## Risks\n\n- None identified.\n\n## Verification\n\n- Review the generated file.\n。成功后用普通 Markdown 分别回复两行：总结：DSH_MARKDOWN_WRITTEN；推荐操作：Review the generated document。不要在最终回复中重复文件名、路径或文档正文，也不要调用 Canvas 能力。"
+    },
+    {
+      "id": "idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 240000
+    }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "dsh-markdown-facts"
+    },
+    {
+      "id": "write",
+      "kind": "tool-call",
+      "name": "write",
+      "status": "success",
+      "expectedArguments": {
+        "file_path": "release-readiness-plan.md",
+        "content": "# Release Readiness Plan\n\n## Risks\n\n- None identified.\n\n## Verification\n\n- Review the generated file.\n"
+      },
+      "resultIncludes": {
+        "operation": "create",
+        "after": "# Release Readiness Plan\n\n## Risks\n\n- None identified.\n\n## Verification\n\n- Review the generated file.\n"
+      },
+      "writtenFileReferenceIncludes": {
+        "title": "release-readiness-plan.md",
+        "contentLocator": {
+          "file": {
+            "authority": "workspace",
+            "path": "release-readiness-plan.md"
+          }
+        }
+      },
+      "evidenceRef": "dsh-markdown-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["总结：DSH_MARKDOWN_WRITTEN", "推荐操作：Review the generated document"],
+      "evidenceRef": "dsh-markdown-facts"
+    },
+    {
+      "id": "no-terminal-protocol",
+      "kind": "final-answer",
+      "mode": "not-contains",
+      "text": [
+        "release-readiness-plan.md",
+        "文档：",
+        "已保存文件",
+        "<!-- neko:artifact -->",
+        "<!-- neko:next-action -->",
+        "# Release Readiness Plan"
+      ],
+      "evidenceRef": "dsh-markdown-facts"
+    },
+    {
+      "id": "terminal",
+      "kind": "terminal-idle",
+      "concerns": ["turnIdle", "continuationQueueIdle"],
+      "evidenceRef": "dsh-markdown-facts"
+    }
+  ],
+  "artifactChecks": [
+    {
+      "id": "canvas-document-reference",
+      "kind": "canvas-file-reference",
+      "evidenceRef": "canvas-document-reference",
+      "canvasPath": "neko/boards/workspace.nkc",
+      "contentPath": "release-readiness-plan.md",
+      "role": "output"
+    },
+    {
+      "id": "durable-markdown",
+      "kind": "file",
+      "evidenceRef": "authored-markdown",
+      "path": "release-readiness-plan.md",
+      "digest": "sha256:8c2f4ceaea012c1fe99a3419c2c6d5c836f412a1ea6fcee24e6db2a6dd7bd7be",
+      "validatorId": "utf8-text"
+    },
+    {
+      "id": "no-host-generated-markdown",
+      "kind": "file-absent",
+      "evidenceRef": "authored-markdown",
+      "path": "neko/generated/file"
+    }
+  ],
+  "budget": {
+    "timeoutMs": 240000,
+    "repetitions": 1
+  }
+}

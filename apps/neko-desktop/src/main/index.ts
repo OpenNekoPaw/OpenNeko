@@ -207,10 +207,7 @@ import {
   createMediaPlatform,
   createNodeGenerationJobOwner,
 } from '@neko/generation-domain/media';
-import {
-  createNodeHostContentReadService,
-  NodeAuthorizedWorkspaceWriter,
-} from '@neko/content-domain/node';
+import { createNodeHostContentReadService } from '@neko/content-domain/node';
 import { createNodeDocumentLowLevelAccess } from '@neko/content-domain/document/node';
 import { resolveWorkspaceContentLocator } from '@neko/assets-node';
 import { isWorkspaceFileContentLocator, type ContentLocator } from '@neko/content-domain';
@@ -1455,8 +1452,6 @@ async function startDesktop(): Promise<void> {
             canvasDocumentEntryAccess.readEntry(sourcePath, entryPath),
         },
       }),
-    createContentWriter: (workspacePath) =>
-      new NodeAuthorizedWorkspaceWriter({ workspaceRoot: workspacePath }),
     createIdentity: randomUUID,
   });
   const resourceBrowser = new ResourceBrowserNodeRuntime({
@@ -1675,7 +1670,6 @@ async function startDesktop(): Promise<void> {
   const dshCanvasArtifactDeliveryService = createDshCanvasArtifactDeliveryService({
     contexts: agentConversationContexts,
     delivery: dshCanvasArtifactDelivery,
-    publication: dshCanvasArtifactDelivery,
     diagnostics: {
       report: (diagnostic) =>
         logger.warn('DSH Canvas skipped an invalid content Tool projection.', {
@@ -2222,9 +2216,7 @@ async function startDesktop(): Promise<void> {
     current?: (
       dshSessionId: string,
       conversationId: string,
-      trigger:
-        | { readonly kind: 'completed-tool'; readonly toolCallId: string }
-        | { readonly kind: 'completed-turn'; readonly turn: number },
+      trigger: { readonly kind: 'completed-tool'; readonly toolCallId: string },
     ) => Promise<void>;
   } = {};
   const dshProduct = await startDesktopDshProductRuntime({
@@ -2400,18 +2392,7 @@ async function startDesktop(): Promise<void> {
             if (terminal?.kind !== 'turn' || terminal.phase !== 'end') {
               throw new Error('DSH turn/end projected an invalid turn identity.');
             }
-            if (dshCanvasArtifactDeliveryTrigger.current === undefined) {
-              throw new Error('DSH Canvas artifact delivery is not initialized.');
-            }
-            try {
-              await dshCanvasArtifactDeliveryTrigger.current(
-                notification.sessionId,
-                binding.conversationId,
-                { kind: 'completed-turn', turn: terminal.turn },
-              );
-            } finally {
-              dshTurnCanvasTargets.releaseTurn(notification.sessionId, terminal.turn);
-            }
+            dshTurnCanvasTargets.releaseTurn(notification.sessionId, terminal.turn);
           }
           publishDshChanged(DSH_SESSION_CHANGED_CHANNEL, {
             conversationId: binding.conversationId,
@@ -2446,16 +2427,6 @@ async function startDesktop(): Promise<void> {
   dshCanvasArtifactDeliveryTrigger.current = async (dshSessionId, conversationId, trigger) => {
     try {
       const snapshot = dshProduct.runtime.client.projection.snapshot(dshSessionId);
-      if (trigger.kind === 'completed-turn') {
-        await dshCanvasArtifactDeliveryService.deliverTerminal({
-          conversationId,
-          dshSessionId,
-          turn: trigger.turn,
-          events: snapshot.events,
-          canvasTurnTarget: dshTurnCanvasTargets.read(dshSessionId, trigger.turn),
-        });
-        return;
-      }
       const tool = [...snapshot.events]
         .reverse()
         .find((event) => event.kind === 'tool' && event.toolCallId === trigger.toolCallId);
@@ -2654,10 +2625,9 @@ async function startDesktop(): Promise<void> {
     turnCanvasTargets: dshTurnCanvasTargets,
     promptContext: dshPromptContext,
     promptImages: dshPromptImages,
-    terminalArtifacts: dshCanvasArtifactDeliveryService,
-    openTerminalArtifact: async ({ windowId, rendererSessionId, conversationId, reference }) => {
+    openWrittenFile: async ({ windowId, rendererSessionId, conversationId, reference }) => {
       const context = await agentConversationContexts.readContext(conversationId);
-      if (context?.kind !== 'workspace') {
+      if (context?.kind !== 'workspace' && context?.kind !== 'authoring') {
         throw new Error(
           `Agent Conversation '${conversationId}' has no Workspace document authority.`,
         );

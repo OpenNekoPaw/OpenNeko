@@ -344,6 +344,7 @@ export async function findRetiredAgentPathFindings(root) {
     'packages/agent/contracts/src/work-item-projector.ts',
     'packages/agent/contracts/src/work-item.ts',
     'packages/agent/webview/src/presenters/context-reference-presenter.ts',
+    'packages/agent/runtime/src/application/agent-terminal-markdown.ts',
     'packages/agent/runtime/src/runtime/session/conversation-run-registry.ts',
     'packages/agent/runtime/src/runtime/session/execution-ownership.ts',
     'packages/agent/runtime/src/runtime/turn/creator-visible-artifact-collector.ts',

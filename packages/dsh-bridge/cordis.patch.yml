@@ -7,9 +7,6 @@
 - id: tool-jobs
   disabled: true
 
-- id: tool-fs
-  disabled: true
-
 - id: tool-fs-search
   disabled: true
 

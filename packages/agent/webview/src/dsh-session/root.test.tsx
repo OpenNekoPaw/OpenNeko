@@ -1948,8 +1948,8 @@ describe('DshAgentView content-creation composer', () => {
     expect(view.container.querySelector('[data-agent-thought-state="final"]')).toBeTruthy();
   });
 
-  it('renders a published document link separately from the assistant summary and input tokens', () => {
-    const onOpenTerminalArtifact = vi.fn();
+  it('renders a native DSH text write and the ordinary assistant file reference', () => {
+    const onOpenWrittenFile = vi.fn();
     const view = renderAgent(
       <DshAgentView
         agentSurfaceId="surface-artifact"
@@ -1963,24 +1963,34 @@ describe('DshAgentView content-creation composer', () => {
           inbox: { nextTurn: [], nextStep: [] },
           events: [
             {
+              kind: 'tool',
+              toolCallId: 'tool-write-document',
+              turn: 1,
+              status: 'completed',
+              title: 'write',
+              content: [
+                {
+                  type: 'text',
+                  text: '<path>notes/story-plan.md</path>\n<type>file</type>\n<content>Created file</content>',
+                },
+              ],
+              rawInput: { file_path: 'notes/story-plan.md', content: '# 故事规划' },
+              rawOutput: { path: 'notes/story-plan.md', operation: 'create' },
+              writtenFileReference: {
+                title: 'story-plan.md',
+                contentLocator: {
+                  file: { authority: 'workspace', path: 'notes/story-plan.md' },
+                },
+              },
+            },
+            {
               kind: 'message',
               role: 'assistant',
               turn: 1,
               step: 0,
-              text: '已完成故事规划。',
+              text: '已完成故事规划。\n\n推荐操作：检查内容。',
               messageId: 'assistant-final',
               state: 'final',
-              recommendedNextActionMarkdown: '生成首个测试镜头。',
-              artifact: {
-                kind: 'reviewable-markdown',
-                title: '《BLAME！》动画化企划方案与具体操作步骤',
-                contentLocator: {
-                  file: {
-                    authority: 'workspace',
-                    path: 'neko/generated/file/story-plan.md',
-                  },
-                },
-              },
             },
           ],
         }}
@@ -1995,39 +2005,31 @@ describe('DshAgentView content-creation composer', () => {
         onDecidePermission={vi.fn()}
         onDraftChange={vi.fn()}
         onModelChange={vi.fn()}
-        onOpenTerminalArtifact={onOpenTerminalArtifact}
         onPermissionPresetChange={vi.fn()}
         onRestartRuntime={vi.fn()}
+        onOpenWrittenFile={onOpenWrittenFile}
         onSubmit={vi.fn()}
       />,
     );
 
-    expect(screen.getByText('已完成故事规划。')).toBeTruthy();
-    const reference = view.container.querySelector(
-      '[data-agent-terminal-artifact="reviewable-markdown"]',
-    );
-    expect(reference).toBeTruthy();
-    expect(reference?.classList.contains('agent-terminal-artifact-reference')).toBe(true);
-    expect(reference?.querySelector('[data-agent-reference-token="true"]')).toBeNull();
-    const link = screen.getByRole('button', {
-      name: '打开文档：《BLAME！》动画化企划方案与具体操作步骤',
-    });
-    expect(link.textContent).toBe('《BLAME！》动画化企划方案与具体操作步骤');
-    expect(link.textContent).not.toContain('已保存');
-    expect(link.querySelector('svg')).toBeTruthy();
-    expect(link.getAttribute('title')).toBe(
-      '《BLAME！》动画化企划方案与具体操作步骤\nneko/generated/file/story-plan.md',
-    );
-    expect(reference?.textContent).not.toContain('neko/generated/file');
-    const nextAction = view.container.querySelector('[data-agent-terminal-next-action="true"]');
-    expect(nextAction?.textContent).toContain('推荐操作');
-    expect(nextAction?.textContent).toContain('生成首个测试镜头。');
+    fireEvent.click(screen.getByRole('button', { name: /工作进度.*1 项操作已完成/u }));
     expect(
-      (reference?.compareDocumentPosition(nextAction as Node) ?? 0) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
+      view.container.querySelector('[data-agent-tool-call-id="tool-write-document"]'),
     ).toBeTruthy();
+    const link = screen.getByRole('button', { name: '打开文档：story-plan.md' });
+    expect(link.textContent).toBe('story-plan.md');
+    expect(link.getAttribute('title')).toContain('notes/story-plan.md');
+    expect(
+      view.container.querySelector('[data-agent-message-state="final"] .markdown-content')
+        ?.textContent,
+    ).not.toContain('story-plan.md');
     fireEvent.click(link);
-    expect(onOpenTerminalArtifact).toHaveBeenCalledWith('assistant-final');
+    expect(onOpenWrittenFile).toHaveBeenCalledWith('tool-write-document');
+    expect(
+      view.container.querySelector('[data-agent-written-file-references="true"]'),
+    ).toBeTruthy();
+    expect(view.container.querySelector('[data-agent-terminal-artifact]')).toBeNull();
+    expect(view.container.querySelector('[data-agent-terminal-next-action]')).toBeNull();
   });
 
   it('renders mixed and resource-only user messages as ordered reference tokens', () => {

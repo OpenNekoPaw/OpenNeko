@@ -19,13 +19,15 @@ export async function evaluateArtifactChecks(checks, input) {
   for (const check of checks) {
     try {
       const details =
-        check.kind === 'file'
-          ? await evaluateFileCheck(check, input)
-          : check.kind === 'file-absent'
-            ? await evaluateFileAbsentCheck(check, input)
-            : check.kind === 'directory-files'
-              ? await evaluateDirectoryFilesCheck(check, input)
-              : evaluateStableArtifactCheck(check, input.facts);
+        check.kind === 'canvas-file-reference'
+          ? await evaluateCanvasFileReferenceCheck(check, input)
+          : check.kind === 'file'
+            ? await evaluateFileCheck(check, input)
+            : check.kind === 'file-absent'
+              ? await evaluateFileAbsentCheck(check, input)
+              : check.kind === 'directory-files'
+                ? await evaluateDirectoryFilesCheck(check, input)
+                : evaluateStableArtifactCheck(check, input.facts);
       results.push({
         id: check.id,
         kind: check.kind,
@@ -45,6 +47,47 @@ export async function evaluateArtifactChecks(checks, input) {
     }
   }
   return results;
+}
+
+async function evaluateCanvasFileReferenceCheck(check, input) {
+  const file = await resolveContainedArtifactFile(input.workspace, check.canvasPath);
+  await runPublicValidator('canvas-json', file, input.runValidator);
+  let canvas;
+  try {
+    canvas = JSON.parse(await fs.readFile(file, 'utf8'));
+  } catch {
+    throw new ArtifactCheckFailure(`Canvas artifact is not valid JSON: ${check.canvasPath}`);
+  }
+  const nodes = Array.isArray(canvas?.nodes) ? canvas.nodes : [];
+  const matches = nodes.filter(
+    (node) =>
+      node?.type === 'file' &&
+      node?.data?.contentLocator?.file?.authority === 'workspace' &&
+      node.data.contentLocator.file.path === check.contentPath &&
+      node?.data?.provenance?.role === check.role &&
+      typeof node.data.provenance.contentFingerprint === 'string' &&
+      node.data.provenance.contentFingerprint.startsWith('content:') &&
+      typeof node.data.provenance.deliveryId === 'string' &&
+      node.data.provenance.deliveryId.startsWith('dsh-tool:'),
+  );
+  if (matches.length !== 1) {
+    throw new ArtifactCheckFailure(
+      `Canvas ${check.canvasPath} contains ${matches.length} verified ${check.role} reference(s) for ${check.contentPath}; expected exactly one`,
+    );
+  }
+  const match = matches[0];
+  return {
+    ref: check.canvasPath,
+    kind: 'canvas-file-reference',
+    canvasPath: check.canvasPath,
+    contentPath: check.contentPath,
+    role: check.role,
+    nodeId: match.id,
+    deliveryId: match.data.provenance.deliveryId,
+    contentFingerprint: match.data.provenance.contentFingerprint,
+    validatorId: 'canvas-json',
+    validatorStatus: 'valid',
+  };
 }
 
 export async function resolveContainedArtifactFile(workspace, relativePath) {

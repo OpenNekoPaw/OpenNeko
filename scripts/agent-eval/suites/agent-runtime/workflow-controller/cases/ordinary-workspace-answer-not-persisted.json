@@ -9,25 +9,25 @@
     "canonicalPath": [
       "Workspace-bound Desktop Agent turn",
       "ordinary Markdown final answer",
-      "no terminal artifact admission",
-      "no generated Markdown publication"
+      "no DSH filesystem Tool call",
+      "no Workspace file mutation"
     ],
     "observables": [
       {
         "ref": "ordinary-turn-facts",
         "kind": "runtime-fact",
-        "description": "Ordinary final answer and terminal idle facts with no artifact wire syntax exposed.",
+        "description": "Ordinary final answer and terminal idle facts with no filesystem Tool call.",
         "required": true
       },
       {
         "ref": "generated-file-absence",
         "kind": "post-check",
-        "description": "The canonical generated Markdown directory remains absent in the isolated empty Workspace.",
+        "description": "No file is added to the isolated empty Workspace.",
         "required": true
       }
     ],
-    "expectedResult": "The Agent answers normally with one plain-Markdown next action, the conversation retains the whole ordinary answer, and no Markdown artifact directory is created.",
-    "expectedFailure": "Artifact or next-action wire syntax, automatic file persistence, an empty answer, a missing plain-Markdown next action, or a non-idle turn fails."
+    "expectedResult": "The Agent answers normally, the conversation retains the whole ordinary answer, and no filesystem Tool is called.",
+    "expectedFailure": "Any read/write/edit call, automatic file persistence, an empty answer, or a non-idle turn fails."
   },
   "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
@@ -58,10 +58,24 @@
       "evidenceRef": "ordinary-turn-facts"
     },
     {
-      "id": "no-wire",
-      "kind": "final-answer",
-      "mode": "not-contains",
-      "text": ["<!-- neko:artifact -->", "<!-- neko:next-action -->"],
+      "id": "no-read",
+      "kind": "tool-call",
+      "name": "read",
+      "status": "absent",
+      "evidenceRef": "ordinary-turn-facts"
+    },
+    {
+      "id": "no-write",
+      "kind": "tool-call",
+      "name": "write",
+      "status": "absent",
+      "evidenceRef": "ordinary-turn-facts"
+    },
+    {
+      "id": "no-edit",
+      "kind": "tool-call",
+      "name": "edit",
+      "status": "absent",
       "evidenceRef": "ordinary-turn-facts"
     },
     {

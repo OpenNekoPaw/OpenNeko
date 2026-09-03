@@ -507,11 +507,22 @@ function assertToolCall(assertion, input) {
   if (!toolCall) {
     throw new Error(`Desktop Agent Tool call ${assertion.name} result did not match.`);
   }
+  if (
+    assertion.writtenFileReferenceIncludes !== undefined &&
+    !containsExpectedValue(toolCall.writtenFileReference, assertion.writtenFileReferenceIncludes)
+  ) {
+    throw new Error(
+      `Desktop Agent Tool call ${assertion.name} written file reference did not match.`,
+    );
+  }
   return {
     toolCallId: toolCall.toolCallId,
     turn: toolCall.turn,
     name: toolCall.title,
     status: assertion.status,
+    ...(assertion.writtenFileReferenceIncludes === undefined
+      ? {}
+      : { writtenFileReference: toolCall.writtenFileReference }),
   };
 }
 

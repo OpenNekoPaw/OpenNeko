@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   assertSupportedArtifactValidators,
   evaluateArtifactChecks,
@@ -20,6 +20,71 @@ afterEach(async () => {
 });
 
 describe('contained artifact checks', () => {
+  it('proves one DSH-written Workspace file is referenced as a Canvas output', async () => {
+    const workspace = await createWorkspace();
+    const canvasPath = 'neko/boards/workspace.nkc';
+    await fs.mkdir(join(workspace, 'neko/boards'), { recursive: true });
+    await fs.writeFile(
+      join(workspace, canvasPath),
+      JSON.stringify({
+        nodes: [
+          {
+            id: 'file-1',
+            type: 'file',
+            data: {
+              contentLocator: {
+                file: { authority: 'workspace', path: 'release-readiness-plan.md' },
+              },
+              provenance: {
+                role: 'output',
+                deliveryId: 'dsh-tool:delivery-1',
+                contentFingerprint: 'content:sha256:document-1',
+              },
+            },
+          },
+        ],
+      }),
+    );
+    const check = {
+      id: 'canvas-reference',
+      kind: 'canvas-file-reference',
+      evidenceRef: 'canvas-facts',
+      canvasPath,
+      contentPath: 'release-readiness-plan.md',
+      role: 'output',
+    };
+    const runValidator = vi.fn(async () => undefined);
+
+    await expect(
+      evaluateArtifactChecks([check], { workspace, facts: {}, runValidator }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        status: 'pass',
+        details: expect.objectContaining({
+          kind: 'canvas-file-reference',
+          nodeId: 'file-1',
+          validatorId: 'canvas-json',
+        }),
+      }),
+    ]);
+    expect(runValidator).toHaveBeenCalledWith({
+      validatorId: 'canvas-json',
+      file: await fs.realpath(join(workspace, canvasPath)),
+    });
+
+    const canvas = JSON.parse(await fs.readFile(join(workspace, canvasPath), 'utf8'));
+    canvas.nodes[0].data.provenance.deliveryId = 'other-source:unexpected';
+    await fs.writeFile(join(workspace, canvasPath), JSON.stringify(canvas));
+    await expect(
+      evaluateArtifactChecks([check], { workspace, facts: {}, runValidator }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        status: 'fail',
+        message: expect.stringContaining('expected exactly one'),
+      }),
+    ]);
+  });
+
   it('passes contained absence checks and fails when the path exists', async () => {
     const workspace = await createWorkspace();
     const check = {

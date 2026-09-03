@@ -475,7 +475,11 @@ const ASSERTION_SCHEMA = s.union([
       name: EXTERNAL_ID,
       status: s.enum(['success', 'error', 'absent']),
     },
-    { expectedArguments: s.anyJson(), resultIncludes: s.anyJson() },
+    {
+      expectedArguments: s.anyJson(),
+      resultIncludes: s.anyJson(),
+      writtenFileReferenceIncludes: s.anyJson(),
+    },
   ),
   s.object({
     ...ASSERTION_COMMON,
@@ -642,6 +646,14 @@ const ASSERTION_SCHEMA = s.union([
 ]);
 
 const ARTIFACT_CHECK_SCHEMA = s.union([
+  s.object({
+    id: ID,
+    kind: s.literal('canvas-file-reference'),
+    evidenceRef: ID,
+    canvasPath: PATH,
+    contentPath: PATH,
+    role: s.literal('output'),
+  }),
   s.object({
     id: ID,
     kind: s.literal('file-absent'),
@@ -1061,6 +1073,7 @@ const DEFAULT_EXECUTION_SUPPORT = Object.freeze({
     'canvas-artifact-projection',
   ]),
   artifactCheckKinds: new Set([
+    'canvas-file-reference',
     'file',
     'file-absent',
     'directory-files',

@@ -12,8 +12,7 @@ import {
   type DshComposerImageInput,
   type DshImageAttachmentPreviewHostResult,
   type DshImageAttachmentPreviewsReleaseHostResult,
-  type DshTerminalArtifactOpenHostResult,
-  type DshSessionTerminalArtifactReference,
+  type DshWrittenFileOpenHostResult,
   type DshSessionImageAttachmentIdentity,
   type DshSessionToolContentBlock,
 } from '@neko/agent-contracts/dsh-session-host';
@@ -27,26 +26,18 @@ import type {
   AgentPromptImage,
   ConversationDshSessionBindingStore,
   ConversationDshSessionBoundClient,
+  DshCompletedTextWriteReference,
   DshConversationCatalogStore,
   DshTurnCanvasTargetOwner,
-  DshCanvasArtifactDeliveryService,
-} from '@neko/agent-runtime/application';
-import {
-  AgentTerminalMarkdownContractError,
-  createAgentTerminalArtifactAdmission,
-  parseAgentTerminalMarkdown,
 } from '@neko/agent-runtime/application';
 import type {
   DshAcpProjection,
   DshAcpProjectedDisplayBlock,
   DshAcpProjectedEvent,
 } from '@neko/agent-runtime/acp';
+import { collectDshCompletedTextWriteReference } from '@neko/agent-runtime/application';
 import type { CanvasWorkspaceTurnTarget } from '@neko/canvas-domain';
-import {
-  isWorkspaceFileContentLocator,
-  validateContentLocator,
-  type ContentLocator,
-} from '@neko/content-domain';
+import { validateContentLocator, type ContentLocator } from '@neko/content-domain';
 
 import type { DesktopSenderIdentity } from './window-registry';
 
@@ -87,6 +78,12 @@ export class DesktopDshSessionHost {
         }): DshImageAttachmentPreviewHostResult['preview'];
         release(windowId: string, conversationId: string): void;
       };
+      readonly openWrittenFile: (input: {
+        readonly windowId: string;
+        readonly rendererSessionId: string;
+        readonly conversationId: string;
+        readonly reference: DshCompletedTextWriteReference;
+      }) => Promise<void>;
       readonly promptContext: {
         resolve(
           conversationId: string,
@@ -160,14 +157,6 @@ export class DesktopDshSessionHost {
           readonly modelSupportsImageInput: boolean;
         }): Promise<readonly AgentPromptImage[]>;
       };
-      readonly terminalArtifacts: Pick<DshCanvasArtifactDeliveryService, 'resolveTerminalArtifact'>;
-      readonly openTerminalArtifact: (input: {
-        readonly windowId: string;
-        readonly rendererSessionId: string;
-        readonly conversationId: string;
-        readonly messageId: string;
-        readonly reference: DshSessionTerminalArtifactReference;
-      }) => Promise<void>;
       readonly createConversation: (input: {
         readonly requestId: string;
         readonly windowId: string;
@@ -211,7 +200,7 @@ export class DesktopDshSessionHost {
     | DshComposerMaterializedAssetHostResult
     | DshImageAttachmentPreviewHostResult
     | DshImageAttachmentPreviewsReleaseHostResult
-    | DshTerminalArtifactOpenHostResult
+    | DshWrittenFileOpenHostResult
   > {
     const request = parseDshSessionHostRequest(value);
     const window = this.options.windows.resolveSender(sender);
@@ -279,7 +268,7 @@ export class DesktopDshSessionHost {
     if (request.operation === 'image-preview') {
       const dshSessionId = await this.options.conversations.ensureLoaded(request.conversationId);
       const attachment = findProjectedImageAttachment(
-        projectEvents(this.options.projection.snapshot(dshSessionId).events, false),
+        projectEvents(this.options.projection.snapshot(dshSessionId).events),
         request.attachmentId,
       );
       const preview = this.options.imagePreviews.project({
@@ -306,34 +295,23 @@ export class DesktopDshSessionHost {
       });
       return { requestId: request.requestId, preview };
     }
-    if (request.operation === 'terminal-artifact-open') {
+    if (request.operation === 'written-file-open') {
       const dshSessionId = await this.options.conversations.ensureLoaded(request.conversationId);
-      const snapshot = this.options.projection.snapshot(dshSessionId);
-      const resolved = await this.options.terminalArtifacts.resolveTerminalArtifact({
-        conversationId: request.conversationId,
-        dshSessionId,
-        messageId: request.messageId,
-        events: snapshot.events,
+      const events = this.options.projection.snapshot(dshSessionId).events;
+      const reference = collectDshCompletedTextWriteReference({
+        events,
+        toolCallId: request.toolCallId,
       });
-      if (
-        resolved === undefined ||
-        !isWorkspaceFileContentLocator(resolved.contentLocator) ||
-        resolved.contentLocator.selector !== undefined
-      ) {
+      if (reference === undefined) {
         throw new Error(
-          `DSH terminal artifact '${request.messageId}' is unavailable for the exact Conversation.`,
+          `DSH Tool '${request.toolCallId}' has no completed Workspace text write reference.`,
         );
       }
-      await this.options.openTerminalArtifact({
+      await this.options.openWrittenFile({
         windowId: request.windowId,
         rendererSessionId: request.rendererSessionId,
         conversationId: request.conversationId,
-        messageId: request.messageId,
-        reference: {
-          kind: 'reviewable-markdown',
-          title: resolved.title,
-          contentLocator: resolved.contentLocator,
-        },
+        reference,
       });
       return { requestId: request.requestId, opened: true };
     }
@@ -554,40 +532,6 @@ export class DesktopDshSessionHost {
     const dshSessionId = await this.options.conversations.ensureLoaded(conversationId);
     const snapshot = this.options.projection.snapshot(dshSessionId);
     const inbox = await this.options.conversations.readInbox(conversationId);
-    const terminalArtifacts = new Map<string, DshSessionTerminalArtifactReference>();
-    const terminalArtifactDiagnostics = new Map<string, string>();
-    if (record.context.kind === 'workspace') {
-      for (const event of snapshot.events) {
-        if (event.kind !== 'message' || event.role !== 'assistant' || event.state !== 'final') {
-          continue;
-        }
-        try {
-          const resolved = await this.options.terminalArtifacts.resolveTerminalArtifact({
-            conversationId,
-            dshSessionId,
-            messageId: event.messageId,
-            events: snapshot.events,
-          });
-          if (resolved === undefined) continue;
-          if (
-            !isWorkspaceFileContentLocator(resolved.contentLocator) ||
-            resolved.contentLocator.selector !== undefined
-          ) {
-            throw new Error('Terminal artifact resolution returned a non-file ContentLocator.');
-          }
-          terminalArtifacts.set(event.messageId, {
-            kind: 'reviewable-markdown',
-            title: resolved.title,
-            contentLocator: resolved.contentLocator,
-          });
-        } catch (error) {
-          terminalArtifactDiagnostics.set(
-            event.messageId,
-            error instanceof Error ? error.message : String(error),
-          );
-        }
-      }
-    }
     return {
       conversationId,
       dshSessionId,
@@ -598,12 +542,7 @@ export class DesktopDshSessionHost {
         : { contextPressure: snapshot.contextPressure }),
       inbox,
       todos: snapshot.todos,
-      events: projectEvents(
-        snapshot.events,
-        record.context.kind === 'workspace',
-        terminalArtifacts,
-        terminalArtifactDiagnostics,
-      ),
+      events: projectEvents(snapshot.events),
     };
   }
 }
@@ -630,12 +569,7 @@ function serializeContentLocatorResourceUri(
   return `openneko-content:${encodeURIComponent(JSON.stringify(locator))}`;
 }
 
-function projectEvents(
-  events: readonly DshAcpProjectedEvent[],
-  admitsTerminalArtifact: boolean,
-  terminalArtifacts: ReadonlyMap<string, DshSessionTerminalArtifactReference> = new Map(),
-  terminalArtifactDiagnostics: ReadonlyMap<string, string> = new Map(),
-): readonly DshSessionHostEvent[] {
+function projectEvents(events: readonly DshAcpProjectedEvent[]): readonly DshSessionHostEvent[] {
   const projected: DshSessionHostEvent[] = [];
   for (const event of events) {
     if (event.kind !== 'tool') {
@@ -646,45 +580,6 @@ function projectEvents(
           projected.push({
             kind: 'diagnostic',
             code: 'ACP_RESOURCE_LINK_INVALID',
-            message: error instanceof Error ? error.message : String(error),
-          });
-        }
-        continue;
-      }
-      if (
-        admitsTerminalArtifact &&
-        event.kind === 'message' &&
-        event.role === 'assistant' &&
-        event.state === 'final'
-      ) {
-        try {
-          const terminal = parseAgentTerminalMarkdown(
-            event.text,
-            createAgentTerminalArtifactAdmission(),
-          );
-          const value = projectEvent(
-            { ...event, text: terminal.summaryMarkdown },
-            terminalArtifacts.get(event.messageId),
-            terminal.recommendedNextActionMarkdown,
-          );
-          if (value !== undefined) projected.push(value);
-          const artifactDiagnostic = terminalArtifactDiagnostics.get(event.messageId);
-          if (artifactDiagnostic !== undefined) {
-            projected.push({
-              kind: 'diagnostic',
-              code: 'AGENT_TERMINAL_ARTIFACT_REFERENCE_UNAVAILABLE',
-              message: artifactDiagnostic,
-            });
-          }
-        } catch (error) {
-          const value = projectEvent(event);
-          if (value !== undefined) projected.push(value);
-          projected.push({
-            kind: 'diagnostic',
-            code:
-              error instanceof AgentTerminalMarkdownContractError
-                ? error.code
-                : 'AGENT_TERMINAL_ARTIFACT_PROJECTION_FAILED',
             message: error instanceof Error ? error.message : String(error),
           });
         }
@@ -728,6 +623,13 @@ function projectEvents(
         }
       }
     }
+    const writtenFileReference =
+      event.status === 'completed'
+        ? collectDshCompletedTextWriteReference({
+            events,
+            toolCallId: event.toolCallId,
+          })
+        : undefined;
     projected.push({
       kind: 'tool',
       toolCallId: event.toolCallId,
@@ -737,6 +639,14 @@ function projectEvents(
       ...(content === undefined || content.length === 0 ? {} : { content }),
       ...(rawInput === undefined ? {} : { rawInput }),
       ...(rawOutput === undefined ? {} : { rawOutput }),
+      ...(writtenFileReference === undefined
+        ? {}
+        : {
+            writtenFileReference: {
+              title: writtenFileReference.title,
+              contentLocator: writtenFileReference.contentLocator,
+            },
+          }),
     });
   }
   return projected;
@@ -750,11 +660,7 @@ function projectToolContentBlock(
   return attachment === undefined ? undefined : { type: 'image', label: block.name, attachment };
 }
 
-function projectEvent(
-  event: DshAcpProjectedEvent,
-  artifact?: DshSessionTerminalArtifactReference,
-  recommendedNextActionMarkdown?: string,
-): DshSessionHostEvent | undefined {
+function projectEvent(event: DshAcpProjectedEvent): DshSessionHostEvent | undefined {
   switch (event.kind) {
     case 'message':
       if (event.role === 'user') {
@@ -770,8 +676,6 @@ function projectEvent(
         text: event.text,
         messageId: event.messageId,
         state: event.state,
-        ...(artifact === undefined ? {} : { artifact }),
-        ...(recommendedNextActionMarkdown === undefined ? {} : { recommendedNextActionMarkdown }),
       };
     case 'thought':
       return {

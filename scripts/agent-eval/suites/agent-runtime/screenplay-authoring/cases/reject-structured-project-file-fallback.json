@@ -17,7 +17,7 @@
       {
         "ref": "structured-project-no-fallback-facts",
         "kind": "runtime-fact",
-        "description": "Exact failed Canvas/Cut query calls, absent generic Read/Write/Bash calls and idle terminal state.",
+        "description": "Exact failed Canvas/Cut query calls, absent generic read/write/bash calls and idle terminal state.",
         "required": true
       },
       {
@@ -37,7 +37,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "先调用 canvas_list_nodes 查询精确文件 project.nkc；它应因无效 Canvas codec 内容而失败。然后调用 cut_query_timeline 查询精确文件 timeline.otio；它也应因无效 OTIO codec 内容而失败。两次失败后只回复 STRUCTURED_PROJECT_NO_FILE_FALLBACK。不得调用 Read、Write、Bash 或其他原始文件与 shell 工具，不得改用其他路径。"
+      "prompt": "先调用 canvas_list_nodes 查询精确文件 project.nkc；它应因无效 Canvas codec 内容而失败。然后调用 cut_query_timeline 查询精确文件 timeline.otio；它也应因无效 OTIO codec 内容而失败。两次失败后只回复 STRUCTURED_PROJECT_NO_FILE_FALLBACK。不得调用 read、write、bash 或其他原始文件与 shell 工具，不得改用其他路径。"
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
   ],
@@ -66,21 +66,21 @@
     {
       "id": "no-read-fallback",
       "kind": "tool-call",
-      "name": "Read",
+      "name": "read",
       "status": "absent",
       "evidenceRef": "structured-project-no-fallback-facts"
     },
     {
       "id": "no-write-fallback",
       "kind": "tool-call",
-      "name": "Write",
+      "name": "write",
       "status": "absent",
       "evidenceRef": "structured-project-no-fallback-facts"
     },
     {
       "id": "no-bash-fallback",
       "kind": "tool-call",
-      "name": "Bash",
+      "name": "bash",
       "status": "absent",
       "evidenceRef": "structured-project-no-fallback-facts"
     },

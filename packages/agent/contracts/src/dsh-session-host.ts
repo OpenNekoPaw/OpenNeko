@@ -66,15 +66,14 @@ export interface DshSessionImageAttachmentIdentity {
   readonly height: number;
 }
 
-export interface DshSessionTerminalArtifactReference {
-  readonly kind: 'reviewable-markdown';
-  readonly title: string;
-  readonly contentLocator: WorkspaceFileContentLocator;
-}
-
 export interface DshSessionTodoItem {
   readonly content: string;
   readonly status: 'pending' | 'in_progress' | 'completed';
+}
+
+export interface DshSessionWrittenFileReference {
+  readonly title: string;
+  readonly contentLocator: WorkspaceFileContentLocator;
 }
 
 export type DshSessionHostEvent =
@@ -92,8 +91,6 @@ export type DshSessionHostEvent =
       readonly text: string;
       readonly messageId: string;
       readonly state: 'streaming' | 'final';
-      readonly artifact?: DshSessionTerminalArtifactReference;
-      readonly recommendedNextActionMarkdown?: string;
     }
   | {
       readonly kind: 'thought';
@@ -112,6 +109,7 @@ export type DshSessionHostEvent =
       readonly content?: readonly DshSessionToolContentBlock[];
       readonly rawInput?: DshAcpJsonValue;
       readonly rawOutput?: DshAcpJsonValue;
+      readonly writtenFileReference?: DshSessionWrittenFileReference;
     }
   | {
       readonly kind: 'command';
@@ -285,8 +283,8 @@ export type DshSessionHostRequest =
     })
   | (DshSessionHostConversationRequest & { readonly operation: 'image-previews-release' })
   | (DshSessionHostConversationRequest & {
-      readonly operation: 'terminal-artifact-open';
-      readonly messageId: string;
+      readonly operation: 'written-file-open';
+      readonly toolCallId: string;
     })
   | (DshSessionHostConversationRequest & {
       readonly operation: 'inbox-send-now';
@@ -355,7 +353,7 @@ export interface DshImageAttachmentPreviewsReleaseHostResult {
   readonly released: true;
 }
 
-export interface DshTerminalArtifactOpenHostResult {
+export interface DshWrittenFileOpenHostResult {
   readonly requestId: string;
   readonly opened: true;
 }
@@ -404,7 +402,7 @@ export interface OpenNekoDshSessionBridge {
       attachmentId: string,
     ): Promise<DshImageAttachmentPreviewHostResult['preview']>;
     releaseImageAttachmentPreviews(conversationId: string): Promise<void>;
-    openTerminalArtifact(conversationId: string, messageId: string): Promise<void>;
+    openWrittenFile(conversationId: string, toolCallId: string): Promise<void>;
     getComposerConfiguration(
       workbenchInstanceId: string,
       agentSurfaceId: string,
@@ -564,6 +562,22 @@ export function parseDshSessionHostRequest(value: unknown): DshSessionHostReques
       attachmentId: requireIdentity(record.attachmentId, 'attachmentId'),
     };
   }
+  if (record.operation === 'written-file-open') {
+    requireExactKeys(record, [
+      'requestId',
+      'operation',
+      'windowId',
+      'rendererSessionId',
+      'conversationId',
+      'toolCallId',
+    ]);
+    return {
+      ...base,
+      operation: 'written-file-open',
+      conversationId,
+      toolCallId: requireIdentity(record.toolCallId, 'toolCallId'),
+    };
+  }
   if (record.operation === 'inbox-send-now' || record.operation === 'inbox-remove') {
     requireExactKeys(record, [
       'requestId',
@@ -576,22 +590,6 @@ export function parseDshSessionHostRequest(value: unknown): DshSessionHostReques
     return {
       ...base,
       operation: record.operation,
-      conversationId,
-      messageId: requireIdentity(record.messageId, 'messageId'),
-    };
-  }
-  if (record.operation === 'terminal-artifact-open') {
-    requireExactKeys(record, [
-      'requestId',
-      'operation',
-      'windowId',
-      'rendererSessionId',
-      'conversationId',
-      'messageId',
-    ]);
-    return {
-      ...base,
-      operation: 'terminal-artifact-open',
       conversationId,
       messageId: requireIdentity(record.messageId, 'messageId'),
     };
@@ -1235,15 +1233,15 @@ export function parseDshImageAttachmentPreviewsReleaseHostResult(
   return { requestId, released: true };
 }
 
-export function parseDshTerminalArtifactOpenHostResult(
+export function parseDshWrittenFileOpenHostResult(
   value: unknown,
   expectedRequestId: string,
-): DshTerminalArtifactOpenHostResult {
-  const record = requireRecord(value, 'DSH terminal artifact open result');
+): DshWrittenFileOpenHostResult {
+  const record = requireRecord(value, 'DSH written file open result');
   requireExactKeys(record, ['requestId', 'opened']);
   const requestId = requireIdentity(record.requestId, 'requestId');
   if (requestId !== expectedRequestId || record.opened !== true) {
-    throw new Error('DSH terminal artifact open result is invalid.');
+    throw new Error('DSH written file open result is invalid.');
   }
   return { requestId, opened: true };
 }
@@ -1328,37 +1326,10 @@ function parseEvent(value: unknown): DshSessionHostEvent {
     if (record.role !== 'assistant') throw new Error('DSH Session message role is unsupported.');
     requireAllowedKeys(
       record,
-      [
-        'kind',
-        'role',
-        'turn',
-        'step',
-        'text',
-        'messageId',
-        'state',
-        'artifact',
-        'recommendedNextActionMarkdown',
-      ],
+      ['kind', 'role', 'turn', 'step', 'text', 'messageId', 'state'],
       ['kind', 'role', 'turn', 'step', 'text', 'messageId', 'state'],
     );
     const state = parseAssistantOutputState(record.state);
-    const artifact =
-      record.artifact === undefined ? undefined : parseTerminalArtifactReference(record.artifact);
-    const recommendedNextActionMarkdown =
-      record.recommendedNextActionMarkdown === undefined
-        ? undefined
-        : requireIdentity(
-            record.recommendedNextActionMarkdown,
-            'event.recommendedNextActionMarkdown',
-          );
-    if (
-      recommendedNextActionMarkdown !== undefined &&
-      (artifact === undefined || state !== 'final')
-    ) {
-      throw new Error(
-        'DSH Session recommended next action requires a final assistant artifact event.',
-      );
-    }
     return {
       kind: 'message',
       role: 'assistant',
@@ -1367,8 +1338,6 @@ function parseEvent(value: unknown): DshSessionHostEvent {
       text: requireIdentity(record.text, 'event.text'),
       messageId: requireIdentity(record.messageId, 'event.messageId'),
       state,
-      ...(artifact === undefined ? {} : { artifact }),
-      ...(recommendedNextActionMarkdown === undefined ? {} : { recommendedNextActionMarkdown }),
     };
   }
   if (record.kind === 'thought') {
@@ -1385,7 +1354,17 @@ function parseEvent(value: unknown): DshSessionHostEvent {
   if (record.kind === 'tool') {
     requireAllowedKeys(
       record,
-      ['kind', 'toolCallId', 'turn', 'status', 'title', 'content', 'rawInput', 'rawOutput'],
+      [
+        'kind',
+        'toolCallId',
+        'turn',
+        'status',
+        'title',
+        'content',
+        'rawInput',
+        'rawOutput',
+        'writtenFileReference',
+      ],
       ['kind', 'toolCallId', 'turn', 'status'],
     );
     const status = record.status;
@@ -1397,14 +1376,21 @@ function parseEvent(value: unknown): DshSessionHostEvent {
     ) {
       throw new Error('DSH Session Tool status is unsupported.');
     }
+    const title =
+      record.title === undefined ? undefined : requireIdentity(record.title, 'event.title');
+    const writtenFileReference =
+      record.writtenFileReference === undefined
+        ? undefined
+        : parseWrittenFileReference(record.writtenFileReference);
+    if (writtenFileReference !== undefined && (status !== 'completed' || title !== 'write')) {
+      throw new Error('DSH Session written file reference requires a completed write Tool.');
+    }
     return {
       kind: 'tool',
       toolCallId: requireIdentity(record.toolCallId, 'event.toolCallId'),
       turn: requireNonNegativeInteger(record.turn, 'event.turn'),
       status,
-      ...(record.title === undefined
-        ? {}
-        : { title: requireIdentity(record.title, 'event.title') }),
+      ...(title === undefined ? {} : { title }),
       ...(record.content === undefined ? {} : { content: parseToolContent(record.content) }),
       ...(record.rawInput === undefined
         ? {}
@@ -1412,6 +1398,7 @@ function parseEvent(value: unknown): DshSessionHostEvent {
       ...(record.rawOutput === undefined
         ? {}
         : { rawOutput: decodeDshAcpJsonPayload(record.rawOutput, 'event.rawOutput') }),
+      ...(writtenFileReference === undefined ? {} : { writtenFileReference }),
     };
   }
   if (record.kind === 'command') {
@@ -1495,23 +1482,19 @@ function parseEvent(value: unknown): DshSessionHostEvent {
   throw new Error(`DSH Session event kind '${String(record.kind)}' is unsupported.`);
 }
 
-function parseTerminalArtifactReference(value: unknown): DshSessionTerminalArtifactReference {
-  const record = requireRecord(value, 'DSH Session terminal artifact reference');
-  requireExactKeys(record, ['kind', 'title', 'contentLocator']);
-  if (record.kind !== 'reviewable-markdown') {
-    throw new Error('DSH Session terminal artifact kind is unsupported.');
-  }
+function parseWrittenFileReference(value: unknown): DshSessionWrittenFileReference {
+  const record = requireRecord(value, 'DSH Session written file reference');
+  requireExactKeys(record, ['title', 'contentLocator']);
   const locator = validateContentLocator(record.contentLocator);
   if (
     !locator.ok ||
     !isWorkspaceFileContentLocator(locator.locator) ||
     locator.locator.selector !== undefined
   ) {
-    throw new Error('DSH Session terminal artifact requires a Workspace file ContentLocator.');
+    throw new Error('DSH Session written file reference requires a Workspace file ContentLocator.');
   }
   return {
-    kind: 'reviewable-markdown',
-    title: requireIdentity(record.title, 'terminal artifact title'),
+    title: requireIdentity(record.title, 'written file title'),
     contentLocator: locator.locator,
   };
 }

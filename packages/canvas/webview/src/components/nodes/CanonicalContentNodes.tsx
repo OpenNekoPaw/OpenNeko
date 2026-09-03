@@ -278,6 +278,14 @@ export function FileNode({
     ...(node.data.mediaType ? { mediaType: node.data.mediaType } : {}),
   });
   const [preview, setPreview] = useState<CanvasFilePreviewPresentation>();
+  const activate =
+    contentLocator && eligibleKind && host
+      ? () => void host.executeMaterialAction(CANVAS_EDIT_TEXT_ACTION_ID, [node.id], {})
+      : contentLocator && isFullscreenPreviewFile(node.data) && onFullscreenPreview
+        ? () => onFullscreenPreview(node.id)
+        : contentLocator && onOpen
+          ? () => onOpen(contentLocator)
+          : undefined;
 
   useEffect(() => {
     const currentContentLocator = contentLocatorRef.current;
@@ -309,18 +317,18 @@ export function FileNode({
       presentation="foundational"
       opaqueSurface
       className={eligibleKind ? 'canvas-text-reference-node' : undefined}
-      onActivate={
-        contentLocator && eligibleKind && host
-          ? () => void host.executeMaterialAction(CANVAS_EDIT_TEXT_ACTION_ID, [node.id], {})
-          : contentLocator && isFullscreenPreviewFile(node.data) && onFullscreenPreview
-            ? () => onFullscreenPreview(node.id)
-            : contentLocator && onOpen
-              ? () => onOpen(contentLocator)
-              : undefined
-      }
+      onActivate={activate}
       nodeLabel={{
         icon: <FileIcon size={13} strokeWidth={1.6} aria-hidden="true" />,
         text: fileName,
+        ...(activate === undefined
+          ? {}
+          : {
+              action: {
+                ariaLabel: t('node.openFile', { name: fileName }),
+                onActivate: activate,
+              },
+            }),
       }}
     >
       <div

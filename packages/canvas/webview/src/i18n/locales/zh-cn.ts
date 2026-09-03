@@ -256,6 +256,7 @@ export const zhCN = {
   'node.job': 'AI 作业',
   'node.jobCard': 'AI 作业',
   'node.file': '文件',
+  'node.openFile': '打开文件：{name}',
   'node.subcanvas': '子画布',
   'node.canvasEmbed': '嵌入画布',
   'node.markdownInput': 'Markdown 内容',
