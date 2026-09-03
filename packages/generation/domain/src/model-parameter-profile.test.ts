@@ -44,6 +44,26 @@ describe('Generation model parameter profiles', () => {
     expect(parseGenerationModelParameterProfile(structuredClone(profile))).toEqual(profile);
   });
 
+  it('resolves the verified NewAPI GPT Image 2 gateway model name without fuzzy matching', () => {
+    expect(
+      resolveImageGenerationModelParameterProfile({
+        providerType: 'newapi',
+        modelName: 'gpt-image-2-pro-all',
+      }),
+    ).toEqual(
+      resolveImageGenerationModelParameterProfile({
+        providerType: 'newapi',
+        modelName: 'gpt-image-2',
+      }),
+    );
+    expect(
+      resolveImageGenerationModelParameterProfile({
+        providerType: 'newapi',
+        modelName: 'gpt-image-2-unknown',
+      }),
+    ).toBeUndefined();
+  });
+
   it('declares exact MiniMax H3 defaults without an FPS control', () => {
     const profile = requireProfile('minimax', 'MiniMax-H3');
     const recipe = createVideoGenerationRecipeForProfile(modelBinding(), profile);

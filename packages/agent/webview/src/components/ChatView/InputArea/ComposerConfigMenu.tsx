@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { SessionMode } from '@neko/agent-contracts';
 import type { ChatModelOption } from '@neko/ai-contracts';
+import { aspectRatioPreviewSize } from '@neko/ui/creative';
 import { SettingsIcon } from '@neko/ui/icons';
 import type { MediaCategory, MediaModelSelection } from '../InputAreaContext';
 import { useTranslation } from '../../../i18n/I18nContext';
@@ -343,6 +344,8 @@ function MediaParameterPanel({
           label={t('chat.generation.param.ratio')}
           value={selectedStringValue(image.aspectRatio, controls.aspectRatio)}
           options={controls.aspectRatio.values.map(valueOption)}
+          columns={5}
+          visualRatio
           onChange={(aspectRatio) => onChange({ aspectRatio })}
         />
         <ParameterGroup
@@ -352,6 +355,7 @@ function MediaParameterPanel({
             value,
             label: `${value / 1024}K`,
           }))}
+          columns={3}
           onChange={(value) => onChange({ resolution: value })}
         />
         <ParameterGroup
@@ -361,6 +365,7 @@ function MediaParameterPanel({
             value,
             label: imageQualityLabel(t, value),
           }))}
+          columns={3}
           onChange={(quality) => onChange({ quality })}
         />
       </>
@@ -377,6 +382,8 @@ function MediaParameterPanel({
             label={t('chat.generation.param.ratio')}
             value={selectedStringValue(video.aspectRatio, controls.aspectRatio)}
             options={controls.aspectRatio.values.map(valueOption)}
+            columns={3}
+            visualRatio
             onChange={(aspectRatio) => onChange({ aspectRatio })}
           />
         ) : null}
@@ -385,6 +392,7 @@ function MediaParameterPanel({
             label={t('chat.generation.param.resolution')}
             value={selectedStringValue(video.resolution, controls.resolution)}
             options={controls.resolution.values.map(valueOption)}
+            columns={2}
             onChange={(resolution) => onChange({ resolution })}
           />
         ) : null}
@@ -396,6 +404,7 @@ function MediaParameterPanel({
               value,
               label: `${value}s`,
             }))}
+            columns={3}
             onChange={(duration) => onChange({ duration })}
           />
         ) : null}
@@ -407,6 +416,7 @@ function MediaParameterPanel({
               value,
               label: `${value} fps`,
             }))}
+            columns={3}
             onChange={(fps) => onChange({ fps })}
           />
         ) : null}
@@ -421,6 +431,7 @@ function MediaParameterPanel({
               { value: false, label: t('chat.generation.param.no') },
               { value: true, label: t('chat.generation.param.yes') },
             ]}
+            columns={3}
             onChange={(generateAudio) => onChange({ generateAudio })}
           />
         ) : null}
@@ -479,11 +490,15 @@ function ParameterGroup<Value extends string | number | boolean | undefined>({
   label,
   value,
   options,
+  columns,
+  visualRatio = false,
   onChange,
 }: {
   readonly label: string;
   readonly value: Value | undefined;
   readonly options: readonly ParamOption<Value>[];
+  readonly columns: 2 | 3 | 5;
+  readonly visualRatio?: boolean;
   readonly onChange: (value: Value) => void;
 }) {
   const { t } = useTranslation();
@@ -491,7 +506,13 @@ function ParameterGroup<Value extends string | number | boolean | undefined>({
   return (
     <section className="agent-generation-params-section">
       <h3 className="agent-generation-params-section-title">{label}</h3>
-      <div className="agent-generation-params-options" role="radiogroup" aria-label={label}>
+      <div
+        className="agent-generation-params-options"
+        role="radiogroup"
+        aria-label={label}
+        data-option-columns={columns}
+        data-option-layout={visualRatio ? 'ratio' : 'equal'}
+      >
         {options.map((option) => (
           <button
             key={String(option.value)}
@@ -504,6 +525,12 @@ function ParameterGroup<Value extends string | number | boolean | undefined>({
             title={option.hintKey ? t(option.hintKey) : undefined}
             onClick={() => onChange(option.value)}
           >
+            {visualRatio && typeof option.value === 'string' ? (
+              <span
+                className="agent-generation-params-ratio"
+                style={aspectRatioPreviewSize(option.value)}
+              />
+            ) : null}
             {option.label}
           </button>
         ))}

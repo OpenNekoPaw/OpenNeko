@@ -163,6 +163,16 @@ describe('Composer model configuration', () => {
     expect(imageText).toContain('Quality');
     expect(imageText).not.toContain('512');
     expect(imageText).not.toContain('720p');
+    expect(
+      within(imageDialog)
+        .getByRole('radiogroup', { name: 'Aspect ratio' })
+        .getAttribute('data-option-columns'),
+    ).toBe('5');
+    expect(
+      within(imageDialog)
+        .getByRole('radiogroup', { name: 'Aspect ratio' })
+        .children[0]?.querySelector('.agent-generation-params-ratio'),
+    ).not.toBeNull();
     fireEvent.click(within(imageDialog).getByRole('radio', { name: '2K' }));
     expect(
       within(imageDialog).getByRole('radio', { name: '2K' }).getAttribute('aria-checked'),
@@ -176,6 +186,16 @@ describe('Composer model configuration', () => {
     expect(videoText).not.toContain('1080p');
     expect(videoText).not.toContain('AUTO');
     expect(videoText).not.toContain('Frame rate');
+    expect(
+      within(videoDialog)
+        .getByRole('radiogroup', { name: 'Aspect ratio' })
+        .getAttribute('data-option-columns'),
+    ).toBe('3');
+    expect(
+      within(videoDialog)
+        .getByRole('radiogroup', { name: 'Resolution' })
+        .getAttribute('data-option-columns'),
+    ).toBe('2');
     fireEvent.click(within(videoDialog).getByRole('radio', { name: '6s' }));
     expect(
       within(videoDialog).getByRole('radio', { name: '6s' }).getAttribute('aria-checked'),

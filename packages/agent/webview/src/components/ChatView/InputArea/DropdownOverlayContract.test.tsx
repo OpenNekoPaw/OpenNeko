@@ -324,7 +324,14 @@ describe('dropdown overlay presentation contract', () => {
     expect(paramRule).toContain('width: min(460px, calc(100vw - 24px))');
     expect(paramRule).toContain('max-width: calc(100vw - 24px)');
     expect(paramOptionsRule).toBeTruthy();
-    expect(paramOptionsRule).toContain('flex-wrap: wrap');
+    expect(paramOptionsRule).toContain('display: grid');
+    expect(paramOptionsRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))');
+    expect(css).toMatch(
+      /agent-generation-params-options\[data-option-columns='5'\][\s\S]*?grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/,
+    );
+    expect(css).toMatch(
+      /agent-generation-params-options\[data-option-layout='ratio'\][\s\S]*?min-height:\s*54px/,
+    );
     expect(modelRule).toBeTruthy();
     expect(modelRule).toContain('width: var(--agent-overlay-wide-inline-size)');
     expect(modelRule).toContain('max-width: var(--agent-overlay-wide-max-inline-size)');

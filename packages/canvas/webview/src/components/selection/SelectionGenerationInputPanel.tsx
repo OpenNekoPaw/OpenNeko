@@ -14,6 +14,7 @@ import {
   type GenerationCanvasNode,
 } from '@neko/canvas-domain';
 import { CONTENT_LOCATOR_DRAG_MIME, parseContentLocatorDragData } from '@neko/content-domain';
+import { aspectRatioPreviewSize } from '@neko/ui/creative';
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -1012,7 +1013,7 @@ function OptionGroup<T extends string | number | boolean | undefined>({
             {visualRatio && typeof option === 'string' ? (
               <span
                 className="selection-generation-input-panel__ratio"
-                style={ratioStyle(option)}
+                style={aspectRatioPreviewSize(option)}
               />
             ) : null}
             {format(option)}
@@ -1094,12 +1095,6 @@ function parseRatio(value: string | undefined): readonly [number, number] {
 
 function roundToEight(value: number): number {
   return Math.max(8, Math.round(value / 8) * 8);
-}
-
-function ratioStyle(value: string): { readonly width: number; readonly height: number } {
-  const [width, height] = parseRatio(value);
-  const scale = 18 / Math.max(width, height);
-  return { width: Math.max(5, width * scale), height: Math.max(5, height * scale) };
 }
 
 function modelBindingsEqual(

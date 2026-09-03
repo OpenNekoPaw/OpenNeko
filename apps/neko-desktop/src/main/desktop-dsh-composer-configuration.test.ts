@@ -925,7 +925,7 @@ function createConfig() {
         'gpt-5': { providerId: 'openai', name: 'gpt-5', capabilities: ['chat'] },
         'gpt-image-2': {
           providerId: 'nekoapi-media',
-          name: 'gpt-image-2',
+          name: 'gpt-image-2-pro-all',
           capabilities: ['image.generate'],
         },
         'minimax-h3': {

@@ -97,6 +97,8 @@ const GPT_IMAGE_2_ASPECT_RATIOS = [
   '1:3',
 ] as const;
 
+const GPT_IMAGE_2_API_MODEL_NAMES = new Set(['gpt-image-2', 'gpt-image-2-pro-all']);
+
 const GPT_IMAGE_2_PROFILE: ImageGenerationModelParameterProfile = Object.freeze({
   kind: 'image',
   controls: Object.freeze({
@@ -157,7 +159,7 @@ export function resolveImageGenerationModelParameterProfile(input: {
   readonly providerType: ProviderType;
   readonly modelName: string;
 }): ImageGenerationModelParameterProfile | undefined {
-  return input.providerType === 'newapi' && input.modelName === 'gpt-image-2'
+  return input.providerType === 'newapi' && GPT_IMAGE_2_API_MODEL_NAMES.has(input.modelName)
     ? structuredClone(GPT_IMAGE_2_PROFILE)
     : undefined;
 }

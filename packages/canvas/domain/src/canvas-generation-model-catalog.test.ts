@@ -19,7 +19,7 @@ describe('Canvas Generation model catalog', () => {
     const models = [
       {
         id: 'image-model',
-        name: 'gpt-image-2',
+        name: 'gpt-image-2-pro-all',
         displayName: 'Image Model',
         providerId: 'provider-1',
         type: 'image' as const,

@@ -1,4 +1,5 @@
 export { assertNever } from './property-types';
+export { aspectRatioPreviewSize } from './aspect-ratio-preview';
 export type {
   BooleanPropertyDefinition,
   ColorPropertyDefinition,
