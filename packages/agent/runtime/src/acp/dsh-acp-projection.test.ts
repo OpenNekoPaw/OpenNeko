@@ -171,36 +171,47 @@ describe('DshAcpProjection', () => {
     ).toMatchObject({ kind: 'message', sessionId: 's2', text: 'ok' });
   });
 
-  it('removes an unsettled transient assistant stream when its turn ends fail-visible', () => {
+  it.each(['aborted', 'error', 'interrupted'])(
+    'discards an unsettled transient assistant stream when its turn ends as %s',
+    (reason) => {
+      const projection = new DshAcpProjection();
+      projection.acceptSessionEvent(turnEvent('s1', 0, 'turn/start', 0));
+      projection.acceptSessionEvent(stepEvent('s1', 1, 'step/start', 0, 0));
+      projection.acceptSessionUpdate(assistantChunk('s1', 2, 0, 0, 'text', 0, 'Partial'));
+      projection.acceptSessionEvent(stepEvent('s1', 3, 'step/end', 0, 0));
+
+      expect(projection.acceptSessionEvent(turnEvent('s1', 4, 'turn/end', 0, reason))).toEqual([
+        expect.objectContaining({ kind: 'turn', phase: 'end', turn: 0, reason }),
+      ]);
+      expect(projection.snapshot('s1')).toMatchObject({
+        currentTurn: undefined,
+        events: [
+          expect.objectContaining({ kind: 'turn', phase: 'start' }),
+          expect.objectContaining({ kind: 'turn', phase: 'end', reason }),
+        ],
+      });
+      expect(
+        projection
+          .snapshot('s1')
+          .events.some((event) => event.kind === 'message' && event.role === 'assistant'),
+      ).toBe(false);
+    },
+  );
+
+  it('rejects a completed turn with an unsettled assistant stream', () => {
     const projection = new DshAcpProjection();
     projection.acceptSessionEvent(turnEvent('s1', 0, 'turn/start', 0));
     projection.acceptSessionEvent(stepEvent('s1', 1, 'step/start', 0, 0));
     projection.acceptSessionUpdate(assistantChunk('s1', 2, 0, 0, 'text', 0, 'Partial'));
     projection.acceptSessionEvent(stepEvent('s1', 3, 'step/end', 0, 0));
 
-    expect(projection.acceptSessionEvent(turnEvent('s1', 4, 'turn/end', 0, 'failed'))).toEqual([
-      expect.objectContaining({ kind: 'turn', phase: 'end', turn: 0 }),
+    expect(projection.acceptSessionEvent(turnEvent('s1', 4, 'turn/end', 0, 'completed'))).toEqual([
+      expect.objectContaining({ kind: 'turn', phase: 'end', turn: 0, reason: 'completed' }),
       expect.objectContaining({
         kind: 'diagnostic',
         code: 'ACP_PROJECTION_UNSETTLED_ASSISTANT_STREAM',
       }),
     ]);
-    expect(projection.snapshot('s1')).toMatchObject({
-      currentTurn: undefined,
-      events: [
-        expect.objectContaining({ kind: 'turn', phase: 'start' }),
-        expect.objectContaining({ kind: 'turn', phase: 'end' }),
-        expect.objectContaining({
-          kind: 'diagnostic',
-          code: 'ACP_PROJECTION_UNSETTLED_ASSISTANT_STREAM',
-        }),
-      ],
-    });
-    expect(
-      projection
-        .snapshot('s1')
-        .events.some((event) => event.kind === 'message' && event.role === 'assistant'),
-    ).toBe(false);
   });
 
   it('projects tool call progress with exact turn and sequence', () => {

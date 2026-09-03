@@ -573,12 +573,24 @@ function createProtocolClient(
       const diagnosticEvent = projected.find(
         (projectedEvent) => projectedEvent.kind === 'diagnostic',
       );
-      if (diagnosticEvent !== undefined && diagnosticEvent.kind === 'diagnostic') {
+      const acceptedEvent = projected.some(
+        (projectedEvent) => projectedEvent.kind !== 'diagnostic',
+      );
+      if (
+        diagnosticEvent !== undefined &&
+        diagnosticEvent.kind === 'diagnostic' &&
+        !acceptedEvent
+      ) {
         throw new Error(
           `DSH ACP projection rejected session event: ${diagnosticEvent.code}: ${diagnosticEvent.message}`,
         );
       }
       await handlers.onSessionEvent(event);
+      if (diagnosticEvent !== undefined && diagnosticEvent.kind === 'diagnostic') {
+        throw new Error(
+          `DSH ACP projection rejected session event: ${diagnosticEvent.code}: ${diagnosticEvent.message}`,
+        );
+      }
     },
   };
 }

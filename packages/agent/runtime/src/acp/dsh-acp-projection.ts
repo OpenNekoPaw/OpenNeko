@@ -437,6 +437,7 @@ export class DshAcpProjection {
           ),
         );
       }
+      const reason = readTurnEndReason(notification.data);
       const unsettledAssemblies = [...session.assistantAssemblies.entries()].filter(([key]) =>
         key.startsWith(`${turn}:`),
       );
@@ -453,14 +454,22 @@ export class DshAcpProjection {
           phase: 'end',
           startedAt,
           completedAt: notification.time,
-          reason: readTurnEndReason(notification.data),
+          reason,
         },
         () => {
           session.endedTurns.add(turn);
           if (session.currentTurn === turn) session.currentTurn = undefined;
         },
       );
-      if (completed[0]?.kind === 'diagnostic' || unsettledAssemblies.length === 0) return completed;
+      if (
+        completed[0]?.kind === 'diagnostic' ||
+        unsettledAssemblies.length === 0 ||
+        reason === 'aborted' ||
+        reason === 'error' ||
+        reason === 'interrupted'
+      ) {
+        return completed;
+      }
       return [
         ...completed,
         ...this.record(

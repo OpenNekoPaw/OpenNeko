@@ -107,6 +107,7 @@ describe('DSH Conversation turn context', () => {
     expect(prompt).toContain('<!-- neko:next-action -->');
     expect(prompt).toContain('<!-- neko:artifact -->');
     expect(prompt).toContain('Omit the next-action marker entirely');
+    expect(prompt).toContain('never emit either reserved marker');
     expect(prompt).toContain('completion status is not a substitute action');
     expect(prompt).toContain('active Skill may require a stricter creative structure');
     expect(resolveTurnContext).toHaveBeenCalledWith(

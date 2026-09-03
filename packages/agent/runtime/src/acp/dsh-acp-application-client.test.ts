@@ -826,6 +826,74 @@ describe('DshAcpApplicationClient', () => {
     expect(handlers.onSessionEvent).not.toHaveBeenCalled();
   });
 
+  it('forwards an accepted terminal event before reporting its projection diagnostic', async () => {
+    const handlers = createHandlers();
+    const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
+    await DshAcpApplicationClient.connect({
+      transport: unusedTransport,
+      virtualCwd: '/virtual/workspace',
+      handlers,
+      createConnection: fixture.createConnection,
+    });
+    const protocolClient = fixture.readProtocolClient();
+
+    await protocolClient.extNotification?.('openneko/session/event', {
+      sessionId: 's1',
+      sequence: 0,
+      time: 1_000,
+      type: 'turn/start',
+      data: { turn: 0 },
+      replay: false,
+    });
+    await protocolClient.extNotification?.('openneko/session/event', {
+      sessionId: 's1',
+      sequence: 1,
+      time: 1_001,
+      type: 'step/start',
+      data: { turn: 0, step: 0 },
+      replay: false,
+    });
+    await protocolClient.sessionUpdate?.({
+      sessionId: 's1',
+      _meta: {
+        opennekoSequence: 2,
+        opennekoTurn: 0,
+        opennekoStep: 0,
+        opennekoBlockIndex: 0,
+        opennekoMessagePhase: 'delta',
+        opennekoReplay: false,
+      },
+      update: {
+        sessionUpdate: 'agent_message_chunk',
+        messageId: 'dsh:0:0:text',
+        content: { type: 'text', text: 'Partial' },
+      },
+    });
+    await protocolClient.extNotification?.('openneko/session/event', {
+      sessionId: 's1',
+      sequence: 3,
+      time: 1_003,
+      type: 'step/end',
+      data: { turn: 0, step: 0 },
+      replay: false,
+    });
+    vi.mocked(handlers.onSessionEvent).mockClear();
+
+    const terminal = {
+      sessionId: 's1',
+      sequence: 4,
+      time: 1_004,
+      type: 'turn/end',
+      data: { turn: 0, reason: { kind: 'completed' } },
+      replay: false,
+    } as const;
+    await expect(
+      protocolClient.extNotification?.('openneko/session/event', terminal),
+    ).rejects.toThrow(/ACP_PROJECTION_UNSETTLED_ASSISTANT_STREAM/u);
+    expect(handlers.onSessionEvent).toHaveBeenCalledOnce();
+    expect(handlers.onSessionEvent).toHaveBeenCalledWith(terminal);
+  });
+
   it('cancels the exact inflight Host Tool and rejects a late success', async () => {
     const generation = deferred<DshAcpDomainToolResponse>();
     const handlers = createHandlers();
