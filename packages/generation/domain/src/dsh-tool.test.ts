@@ -10,7 +10,7 @@ import type { GenerationJobSnapshot } from './job/contracts';
 
 describe('Generation DSH tool contract', () => {
   it('owns the exact model-facing operation envelope and camelCase request fields', () => {
-    expect(GENERATION_DSH_TOOL_PARAMETERS.input.oneOf).toHaveLength(6);
+    expect(GENERATION_DSH_TOOL_PARAMETERS.input.oneOf).toHaveLength(5);
     const videoSubmitSchema = GENERATION_DSH_TOOL_PARAMETERS.input.oneOf.find(
       (candidate) => candidate.title === 'video submit input',
     );
@@ -36,12 +36,17 @@ describe('Generation DSH tool contract', () => {
     expect(serialized).toContain('aspectRatio');
     expect(serialized).toContain('purpose');
     expect(serialized).toContain('lifecycleMode');
+    expect(serialized).toContain('image-edit');
+    expect(serialized).toContain('video-edit');
+    expect(serialized).not.toContain('text-to-music');
+    expect(serialized).not.toContain('outpaint');
+    expect(serialized).not.toContain('prepare-for-timeline');
     expect(serialized).not.toContain('negative_prompt');
     expect(serialized).not.toContain('aspect_ratio');
     expect(serialized).not.toContain('anyOf');
   });
 
-  it('exposes model-bound submit, Host-bound ComfyUI submit and describe', () => {
+  it('exposes model-bound submit and describe', () => {
     expect(GENERATION_DSH_TOOL_NAME).toBe('openneko_generation');
     expect(
       decodeGenerationDshToolInput('submit', {
@@ -63,24 +68,8 @@ describe('Generation DSH tool contract', () => {
       operation: 'describe',
       input: { jobId: 'job-1' },
     });
-    expect(
-      decodeGenerationDshToolInput('submit-comfyui', {
-        lifecycleMode: 'detached',
-        workflow: { '3': { class_type: 'KSampler', inputs: { seed: 42 } } },
-        outputKind: 'image',
-        inputBindings: [],
-      }),
-    ).toEqual({
-      operation: 'submit-comfyui',
-      input: {
-        lifecycleMode: 'detached',
-        workflow: { '3': { class_type: 'KSampler', inputs: { seed: 42 } } },
-        outputKind: 'image',
-        inputBindings: [],
-      },
-    });
     expect(() => decodeGenerationDshToolInput('cancel', { jobId: 'job-1' })).toThrow(
-      /must be one of submit, submit-comfyui, describe/,
+      /must be one of submit, describe/,
     );
     expect(() =>
       decodeGenerationDshToolInput('describe', { jobId: 'job-1', include: 'result' }),
@@ -105,33 +94,21 @@ describe('Generation DSH tool contract', () => {
       }),
     ).toThrow(/generation type contract/);
     expect(() =>
-      decodeGenerationDshToolInput('submit-comfyui', {
+      decodeGenerationDshToolInput('submit', {
+        purpose: 'audio.music.generate',
+        generationType: 'text-to-music',
         lifecycleMode: 'detached',
-        endpoint: 'http://127.0.0.1:8188',
-        workflow: { '3': {} },
-        outputKind: 'image',
-        inputBindings: [],
+        request: { prompt: 'score' },
       }),
-    ).toThrow(/input.endpoint is not supported/);
+    ).toThrow(/generation type contract/);
     expect(() =>
-      decodeGenerationDshToolInput('submit-comfyui', {
+      decodeGenerationDshToolInput('submit', {
+        purpose: 'image.generate',
+        generationType: 'image-edit',
         lifecycleMode: 'detached',
-        workflow: { '3': { class_type: 'LoadImage', inputs: { image: 'source.png' } } },
-        outputKind: 'image',
-        inputBindings: [
-          {
-            nodeId: '3',
-            inputName: 'image',
-            contentLocator: { file: { authority: 'workspace', path: 'source.png' } },
-          },
-          {
-            nodeId: '3',
-            inputName: 'image',
-            contentLocator: { file: { authority: 'workspace', path: 'other.png' } },
-          },
-        ],
+        request: { prompt: 'edit' },
       }),
-    ).toThrow(/duplicate exact node input/);
+    ).toThrow(/purpose does not match/);
     expect(() =>
       decodeGenerationDshToolInput('submit', {
         purpose: 'image.generate',

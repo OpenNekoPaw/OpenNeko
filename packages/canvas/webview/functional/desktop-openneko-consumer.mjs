@@ -50,10 +50,6 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
           'provider_id = "canvas-functional"',
           'model_id = "canvas-audio"',
           '',
-          '[default_model_purposes.audio_music_generate]',
-          'provider_id = "canvas-functional"',
-          'model_id = "canvas-music"',
-          '',
           '[[providers]]',
           'id = "canvas-functional"',
           'name = "Canvas Functional"',
@@ -104,14 +100,6 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
           'provider_id = "canvas-functional"',
           'type = "audio"',
           'capabilities = ["audio.generate"]',
-          'enabled = true',
-          '',
-          '[[models]]',
-          'id = "canvas-music"',
-          'name = "Canvas Music"',
-          'provider_id = "canvas-functional"',
-          'type = "audio"',
-          'capabilities = ["audio.music.generate"]',
           'enabled = true',
           '',
         ].join('\n'),
@@ -1948,25 +1936,6 @@ async function exerciseCanvasGenerationAuthoring({
     }
 
     if (action.kind === 'audio') {
-      await click(`${inputSelector} .selection-generation-input-panel__mode-tabs button`, 1);
-      await click(`${inputSelector} .selection-generation-input-panel__model-trigger`);
-      await waitForCondition(
-        evaluate,
-        `document.querySelector('.selection-generation-input-panel__model-menu .selection-generation-input-panel__model-option') instanceof HTMLElement`,
-        'Music model menu did not stabilize.',
-      );
-      const musicModels = await evaluate(`[
-        ...document.querySelectorAll(
-          '.selection-generation-input-panel__model-menu .selection-generation-input-panel__model-option strong',
-        ),
-      ].map((element) => element.textContent?.trim() ?? '')`);
-      if (musicModels.join('|') !== 'Canvas Music|Canvas Audio') {
-        throw new Error(
-          `Canvas music model type matching is invalid: ${JSON.stringify(musicModels)}`,
-        );
-      }
-      screenshots.push(await screenshot('canvas-generation-audio-music-mode'));
-      await click('.selection-generation-input-panel__model-option');
       const workspaceReference = await qualifyWorkspaceReferenceDrop({
         click,
         drag,

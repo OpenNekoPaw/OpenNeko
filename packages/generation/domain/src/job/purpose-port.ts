@@ -47,7 +47,6 @@ export function createPurposeGenerationJobPort(input: {
             request: { ...request.request, ...binding },
           });
         case 'text-to-audio':
-        case 'text-to-music':
           return input.jobs.submitGeneration({
             lifecycleMode: request.lifecycleMode,
             generationType: request.generationType,

@@ -15,6 +15,25 @@ import {
 } from './index';
 import { COMFYUI_PROFESSIONAL_APPLICATION_PROFILE } from './profiles/comfyui';
 
+const TEST_HANDOFF_PROFILE = {
+  ...COMFYUI_PROFESSIONAL_APPLICATION_PROFILE,
+  id: 'test-image-editor',
+  name: 'Test image editor',
+  operations: [
+    ...COMFYUI_PROFESSIONAL_APPLICATION_PROFILE.operations,
+    {
+      id: 'test-image-editor.send-input',
+      label: 'Send to test image editor…',
+      kind: 'resource-handoff' as const,
+      transport: 'host' as const,
+      effect: 'input' as const,
+      requiresApproval: true,
+      verification: 'launch-receipt' as const,
+      inputMimeTypes: ['image/*'],
+    },
+  ],
+};
+
 const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
@@ -69,16 +88,20 @@ describe('ProfessionalApplicationService', () => {
     });
   });
 
-  it('provides semantic image handoff and transfers only an authorized locator', async () => {
+  it('provides a generic semantic image handoff and transfers only an authorized locator', async () => {
     const discovery: ProfessionalApplicationDiscoveryPort = {
-      inspect: vi.fn(async () => readyInspection()),
+      inspect: vi.fn(async () => ({
+        ...readyInspection(),
+        integrationId: TEST_HANDOFF_PROFILE.id,
+        availableOperationIds: TEST_HANDOFF_PROFILE.operations.map((operation) => operation.id),
+      })),
     };
     const authorize = vi.fn(async () => ({ authorizationId: 'authorization-1' }));
     const transfer = vi.fn(async () => ({ targetIdentity: 'comfyui-window-1', accepted: true }));
     const service = createProfessionalApplicationService({
-      profiles: [COMFYUI_PROFESSIONAL_APPLICATION_PROFILE],
+      profiles: [TEST_HANDOFF_PROFILE],
       bindings: createInMemoryProfessionalApplicationBindingRepository([
-        { integrationId: 'comfyui', launchPreference: 'reuse-qualified' },
+        { integrationId: TEST_HANDOFF_PROFILE.id, launchPreference: 'reuse-qualified' },
       ]),
       discovery,
       launcher: {
@@ -97,24 +120,24 @@ describe('ProfessionalApplicationService', () => {
 
     await expect(service.listResourceActions(source)).resolves.toEqual([
       {
-        integrationId: 'comfyui',
-        operationId: 'comfyui.send-input',
-        label: 'Send to ComfyUI…',
+        integrationId: TEST_HANDOFF_PROFILE.id,
+        operationId: 'test-image-editor.send-input',
+        label: 'Send to test image editor…',
         source,
       },
     ]);
     await expect(
       service.handoff({
         handoffId: 'handoff-1',
-        integrationId: 'comfyui',
-        operationId: 'comfyui.send-input',
+        integrationId: TEST_HANDOFF_PROFILE.id,
+        operationId: 'test-image-editor.send-input',
         source,
         locator: { file: { authority: 'workspace', path: 'neko/generated/image-1.png' } },
       }),
     ).resolves.toEqual({
       handoffId: 'handoff-1',
-      integrationId: 'comfyui',
-      operationId: 'comfyui.send-input',
+      integrationId: TEST_HANDOFF_PROFILE.id,
+      operationId: 'test-image-editor.send-input',
       status: 'transferred',
       targetIdentity: 'comfyui-window-1',
     });
@@ -125,7 +148,7 @@ describe('ProfessionalApplicationService', () => {
     expect(JSON.stringify(transfer.mock.calls)).not.toContain('neko/generated/image-1.png');
   });
 
-  it('does not replace an unavailable API operation with Computer Use', async () => {
+  it('does not treat an unrelated advertised operation as launch availability', async () => {
     const discovery: ProfessionalApplicationDiscoveryPort = {
       inspect: vi.fn(async () => ({
         ...readyInspection(),
@@ -156,13 +179,11 @@ describe('ProfessionalApplicationService', () => {
     ).toThrow(/unique/u);
   });
 
-  it('binds only an exact application identity and preserves adjacent user configuration', async () => {
+  it('binds only an exact application identity and preserves launcher configuration', async () => {
     const bindings = createInMemoryProfessionalApplicationBindingRepository([
       {
         integrationId: 'comfyui',
-        endpoint: 'http://127.0.0.1:8188',
         launchPreference: 'launch-new',
-        defaultWorkflowId: 'portrait-review',
       },
     ]);
     const service = createProfessionalApplicationService({
@@ -185,9 +206,7 @@ describe('ProfessionalApplicationService', () => {
         kind: 'application-identity',
         identity: 'com.todesktop.241012ess7yxs0e',
       },
-      endpoint: 'http://127.0.0.1:8188',
       launchPreference: 'launch-new',
-      defaultWorkflowId: 'portrait-review',
     });
     await expect(
       service.bindApplicationIdentity('window-1', 'comfyui', 'org.krita'),
@@ -203,18 +222,14 @@ describe('ProfessionalApplicationService', () => {
         kind: 'application-identity',
         identity: 'com.todesktop.241012ess7yxs0e',
       },
-      endpoint: 'http://127.0.0.1:8288',
       launchPreference: 'reuse-qualified',
-      defaultWorkflowId: 'landscape-review',
     });
     expect(await bindings.get('comfyui')).toMatchObject({
       applicationLocator: {
         kind: 'application-identity',
         identity: 'com.todesktop.241012ess7yxs0e',
       },
-      endpoint: 'http://127.0.0.1:8288',
       launchPreference: 'reuse-qualified',
-      defaultWorkflowId: 'landscape-review',
     });
   });
 

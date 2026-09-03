@@ -19,7 +19,6 @@ import { CanvasDshHostAdapter, type CanvasDshAuthoringPort } from './canvas-host
 import { CutDshHostAdapter } from './cut-host-adapter';
 import {
   GenerationDshHostAdapter,
-  type GenerationDshComfyUiSubmitter,
   type GenerationDshLifecycleProjectionOutcome,
 } from './generation-host-adapter';
 import { DocumentDshHostAdapter } from './document-host-adapter';
@@ -68,11 +67,6 @@ export function createDshDomainToolHandlers(options: {
       readonly request: DshAcpDomainToolRequest;
       readonly snapshot: GenerationJobSnapshot;
     }): Promise<GenerationDshLifecycleProjectionOutcome>;
-    submitComfyUi?: (input: {
-      readonly context: DshDomainToolContext;
-      readonly request: DshAcpDomainToolRequest;
-      readonly submission: Parameters<GenerationDshComfyUiSubmitter['submit']>[0];
-    }) => ReturnType<GenerationDshComfyUiSubmitter['submit']>;
   };
   readonly canvas: {
     resolveService(
@@ -118,7 +112,6 @@ export function createDshDomainToolHandlers(options: {
   };
   readonly skillAuthoring?: Pick<DshSkillAuthoringService, 'create'>;
 }): DshDomainToolHandlers {
-  const submitComfyUi = options.generation.submitComfyUi;
   return Object.freeze({
     async executeGenerationTool(request: DshAcpDomainToolRequest, signal: AbortSignal) {
       let context: Promise<DshDomainToolContext> | undefined;
@@ -150,16 +143,6 @@ export function createDshDomainToolHandlers(options: {
               snapshot,
             }),
         },
-        submitComfyUi
-          ? {
-              submit: async (submission) =>
-                submitComfyUi({
-                  context: await resolveContext(),
-                  request,
-                  submission,
-                }),
-            }
-          : undefined,
       ).execute(request, signal);
     },
 

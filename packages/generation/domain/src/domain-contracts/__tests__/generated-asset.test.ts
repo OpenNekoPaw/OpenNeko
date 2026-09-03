@@ -17,11 +17,6 @@ describe('generated asset path contracts', () => {
       'neko/generated/video',
     );
     expect(
-      resolveWorkspaceGeneratedAssetRelativeDirectory({
-        mimeType: 'application/vnd.neko.storyboard+json',
-      }),
-    ).toBe('neko/generated/storyboard');
-    expect(
       resolveWorkspaceGeneratedAssetRelativeDirectory({ mimeType: 'application/octet-stream' }),
     ).toBe('neko/generated/file');
   });

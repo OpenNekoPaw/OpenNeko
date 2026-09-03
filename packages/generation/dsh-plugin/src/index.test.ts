@@ -38,15 +38,10 @@ describe('OpenNeko Generation DSH plugin', () => {
     expect(definition.parameters).toMatchObject({
       type: 'object',
       properties: {
-        operation: { enum: ['submit', 'submit-comfyui', 'describe'] },
+        operation: { enum: ['submit', 'describe'] },
         input: {
           oneOf: expect.arrayContaining([
             expect.objectContaining({ title: 'describe input', required: ['jobId'] }),
-            expect.objectContaining({
-              title: 'ComfyUI workflow submit input',
-              required: ['lifecycleMode', 'workflow', 'outputKind', 'inputBindings'],
-              additionalProperties: false,
-            }),
             expect.objectContaining({
               title: 'image submit input',
               required: ['purpose', 'lifecycleMode', 'generationType', 'request'],

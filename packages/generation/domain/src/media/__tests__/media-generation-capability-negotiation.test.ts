@@ -30,7 +30,7 @@ describe('MediaGenerationService capability negotiation', () => {
   });
 
   it('passes supported keyframe controls to linked execution', async () => {
-    const harness = createService({ ...baseProvider, type: 'dashscope' });
+    const harness = createService({ ...baseProvider, type: 'bytedance' });
     const request = keyframeRequest(harness.provider);
 
     await expect(harness.service.generateVideo(request)).resolves.toMatchObject({

@@ -21,7 +21,6 @@ export interface DesktopProfessionalApplicationNativePort {
   findMacApplication(bundleId: string, signal?: AbortSignal): Promise<boolean>;
   readMacApplicationBundleId(applicationPath: string, signal?: AbortSignal): Promise<string>;
   openMacApplication(bundleId: string, launchNew: boolean, signal?: AbortSignal): Promise<void>;
-  request(url: string, signal?: AbortSignal): Promise<Response>;
 }
 
 export function createDesktopProfessionalApplicationNativePort(): DesktopProfessionalApplicationNativePort {
@@ -61,15 +60,6 @@ export function createDesktopProfessionalApplicationNativePort(): DesktopProfess
         { signal },
       );
     },
-    request(url, signal) {
-      return fetch(url, {
-        method: 'GET',
-        redirect: 'manual',
-        signal: signal
-          ? AbortSignal.any([signal, AbortSignal.timeout(3_000)])
-          : AbortSignal.timeout(3_000),
-      });
-    },
   };
 }
 
@@ -79,9 +69,6 @@ export class DesktopProfessionalApplicationAdapter
   constructor(
     private readonly native: DesktopProfessionalApplicationNativePort,
     private readonly platform: NodeJS.Platform = process.platform,
-    private readonly capabilities: { readonly comfyUiApiExecution: boolean } = {
-      comfyUiApiExecution: false,
-    },
   ) {}
 
   async identifySelectedApplication(
@@ -103,38 +90,22 @@ export class DesktopProfessionalApplicationAdapter
       throw new Error(`Desktop application adapter does not own '${input.profile.id}'.`);
     }
     const applicationIdentity = await this.findQualifiedApplication(input.profile, input.signal);
-    const api = input.binding?.endpoint
-      ? await this.inspectComfyUiEndpoint(input.binding.endpoint, input.signal)
-      : { ready: false as const, diagnostics: [] as const };
     const availableOperationIds = input.profile.operations.flatMap((operation) =>
-      supportsOperation(
-        operation,
-        Boolean(applicationIdentity),
-        api.ready,
-        this.capabilities.comfyUiApiExecution,
-      )
+      operation.transport === 'host' && operation.kind === 'launch' && applicationIdentity
         ? [operation.id]
         : [],
     );
-    const diagnostics: ProfessionalApplicationDiagnostic[] = [...api.diagnostics];
-    if (!applicationIdentity && !api.ready) {
+    const diagnostics: ProfessionalApplicationDiagnostic[] = [];
+    if (!applicationIdentity) {
       diagnostics.push({
         code: 'application-not-installed' as const,
-        message: input.binding?.endpoint
-          ? 'ComfyUI Desktop was not detected and the configured local endpoint is unavailable.'
-          : 'ComfyUI Desktop was not detected. Configure a loopback endpoint or install the qualified Desktop application.',
+        message: 'ComfyUI Desktop was not detected.',
       });
     }
     return {
       integrationId: input.profile.id,
       state:
-        availableOperationIds.length > 0
-          ? 'ready'
-          : applicationIdentity || api.ready
-            ? 'detected'
-            : input.binding?.endpoint
-              ? 'unavailable'
-              : 'not-installed',
+        availableOperationIds.length > 0 ? 'ready' : applicationIdentity ? 'detected' : 'not-installed',
       ...(applicationIdentity ? { detectedApplicationIdentity: applicationIdentity } : {}),
       availableOperationIds,
       diagnostics,
@@ -166,7 +137,7 @@ export class DesktopProfessionalApplicationAdapter
 
   async transfer(): Promise<{ readonly targetIdentity: string; readonly accepted: boolean }> {
     throw new Error(
-      'Professional application resource transfer is not registered until the authorized ComfyUI upload path is available.',
+      'Professional application resource transfer is not registered for this launcher-only profile.',
     );
   }
 
@@ -186,61 +157,6 @@ export class DesktopProfessionalApplicationAdapter
       throw new Error(`ComfyUI Desktop discovery failed: ${describeError(error)}`);
     }
   }
-
-  private async inspectComfyUiEndpoint(
-    endpoint: string,
-    signal?: AbortSignal,
-  ): Promise<{
-    readonly ready: boolean;
-    readonly diagnostics: readonly {
-      readonly code: 'endpoint-unavailable' | 'endpoint-outside-loopback';
-      readonly message: string;
-    }[];
-  }> {
-    const base = requireLoopbackEndpoint(endpoint);
-    let response: Response;
-    try {
-      response = await this.native.request(`${base}/system_stats`, signal);
-    } catch (error) {
-      if (signal?.aborted) throw error;
-      return {
-        ready: false,
-        diagnostics: [
-          {
-            code: 'endpoint-unavailable',
-            message: `ComfyUI local API is unavailable: ${describeError(error)}`,
-          },
-        ],
-      };
-    }
-    if (response.type === 'opaqueredirect' || response.status >= 300 || response.status < 200) {
-      return {
-        ready: false,
-        diagnostics: [
-          {
-            code:
-              response.status >= 300 && response.status < 400
-                ? 'endpoint-outside-loopback'
-                : 'endpoint-unavailable',
-            message: `ComfyUI local API readiness failed with HTTP ${response.status}.`,
-          },
-        ],
-      };
-    }
-    const payload: unknown = await response.json();
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-      return {
-        ready: false,
-        diagnostics: [
-          {
-            code: 'endpoint-unavailable',
-            message: 'ComfyUI local API returned an invalid system_stats response.',
-          },
-        ],
-      };
-    }
-    return { ready: true, diagnostics: [] };
-  }
 }
 
 export class DesktopUnavailableProfessionalApplicationContentAuthorization implements ProfessionalApplicationContentAuthorizationPort {
@@ -249,32 +165,6 @@ export class DesktopUnavailableProfessionalApplicationContentAuthorization imple
       'Professional application content authorization is unavailable until an owning resource service supplies the exact source.',
     );
   }
-}
-
-function supportsOperation(
-  operation: ProfessionalApplicationOperation,
-  applicationReady: boolean,
-  apiReady: boolean,
-  apiExecutionComposed: boolean,
-): boolean {
-  if (operation.transport === 'host' && operation.kind === 'launch') return applicationReady;
-  return operation.transport === 'api' && apiReady && apiExecutionComposed;
-}
-
-function requireLoopbackEndpoint(endpoint: string): string {
-  const url = new URL(endpoint);
-  if (
-    url.protocol !== 'http:' ||
-    !['127.0.0.1', '[::1]'].includes(url.hostname) ||
-    url.username ||
-    url.password ||
-    url.pathname !== '/' ||
-    url.search ||
-    url.hash
-  ) {
-    throw new Error('ComfyUI endpoint must remain on an explicit HTTP loopback host.');
-  }
-  return url.href.replace(/\/$/u, '');
 }
 
 function requireBundleId(bundleId: string): string {

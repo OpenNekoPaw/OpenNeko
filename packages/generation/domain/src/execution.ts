@@ -1,12 +1,11 @@
 import type {
   AudioGenerationRequest,
   ImageGenerationRequest,
-  MediaAdapterResult,
+  GenerationProviderTaskObservation,
   MediaGenerationType,
   MediaOutput,
   VideoGenerationRequest,
 } from './contracts';
-import type { ComfyUiWorkflowGenerationResult } from './comfyui/index';
 
 export interface GenerationProviderTaskRef {
   readonly providerId: string;
@@ -22,11 +21,11 @@ export interface MediaGenerationExecutionOptions {
   readonly onProgress?: (progress: number) => void;
   readonly onExternalTask?: (
     task: GenerationProviderTaskRef,
-  ) => MediaAdapterResult | void | Promise<MediaAdapterResult | void>;
+  ) => GenerationProviderTaskObservation | void | Promise<GenerationProviderTaskObservation | void>;
 }
 
 export interface MediaGenerationResult {
-  readonly type: Exclude<MediaGenerationType, 'workflow'>;
+  readonly type: MediaGenerationType;
   readonly providerId: string;
   readonly modelId: string;
   readonly outputs: readonly MediaOutput[];
@@ -53,8 +52,7 @@ export interface PromptGenerationResult {
   readonly request: PromptGenerationRequest;
 }
 
-export type GenerationExecutionResult =
-  MediaGenerationResult | PromptGenerationResult | ComfyUiWorkflowGenerationResult;
+export type GenerationExecutionResult = MediaGenerationResult | PromptGenerationResult;
 
 /**
  * The provider accepted a submission but the transport closed before a result
@@ -77,7 +75,9 @@ export interface MediaGenerationExecutionPort {
     request: AudioGenerationRequest,
     options?: MediaGenerationExecutionOptions,
   ): Promise<MediaGenerationResult>;
-  describeExternalTask(task: GenerationProviderTaskBinding): Promise<MediaAdapterResult>;
+  describeExternalTask(
+    task: GenerationProviderTaskBinding,
+  ): Promise<GenerationProviderTaskObservation>;
   cancelExternalTask(task: GenerationProviderTaskBinding): Promise<void>;
 }
 

@@ -196,7 +196,6 @@ import {
 } from '@neko/canvas-domain';
 import { resolveGenerationModelParameterProfile } from '@neko/generation-domain';
 import { GenerationApplicationRuntime } from '@neko/generation-domain/job';
-import { ComfyUiLocalApi, ComfyUiWorkflowRunner } from '@neko/generation-domain/comfyui';
 import {
   PromptGenerationService,
   createAiSdkPromptCompletionPort,
@@ -605,7 +604,6 @@ async function startDesktop(): Promise<void> {
           encodeBase64: (bytes) => Buffer.from(bytes).toString('base64'),
         }),
       });
-      const comfyUiContentRead = createNodeHostContentReadService({ workspaceRoot: root });
       return createNodeGenerationJobOwner({
         owner,
         root,
@@ -616,90 +614,6 @@ async function startDesktop(): Promise<void> {
           providerResolver,
           createAiSdkPromptCompletionPort(),
         ),
-        comfyUiExecution: new ComfyUiWorkflowRunner({
-          api: new ComfyUiLocalApi({
-            request: ({ url, method, body, signal }) =>
-              fetch(url, {
-                method,
-                redirect: 'manual',
-                ...(body === undefined
-                  ? {}
-                  : {
-                      headers: { 'content-type': 'application/json' },
-                      body: JSON.stringify(body),
-                    }),
-                signal: signal
-                  ? AbortSignal.any([signal, AbortSignal.timeout(10_000)])
-                  : AbortSignal.timeout(10_000),
-              }),
-          }),
-          inputs: {
-            materialize: async ({ endpoint, binding, signal }) => {
-              const content = await comfyUiContentRead.read(binding.contentLocator, {
-                maxBytes: 64 * 1024 * 1024,
-                ...(signal ? { signal } : {}),
-              });
-              if (content.status === 'unavailable') {
-                throw new Error(
-                  `ComfyUI input '${binding.nodeId}.${binding.inputName}' is unavailable: ${content.diagnostic.code}.`,
-                );
-              }
-              const mimeType = content.mimeType ?? 'application/octet-stream';
-              if (!mimeType.startsWith('image/')) {
-                throw new Error(
-                  `ComfyUI input '${binding.nodeId}.${binding.inputName}' must be an image.`,
-                );
-              }
-              const digest = createHash('sha256').update(content.bytes).digest('hex');
-              const extension =
-                mimeType === 'image/jpeg'
-                  ? '.jpg'
-                  : mimeType === 'image/webp'
-                    ? '.webp'
-                    : mimeType === 'image/gif'
-                      ? '.gif'
-                      : '.png';
-              const fileName = `openneko-${digest}${extension}`;
-              const form = new FormData();
-              form.append(
-                'image',
-                new Blob([Buffer.from(content.bytes)], { type: mimeType }),
-                fileName,
-              );
-              form.append('type', 'input');
-              form.append('overwrite', 'false');
-              const response = await fetch(`${endpoint.replace(/\/$/u, '')}/upload/image`, {
-                method: 'POST',
-                redirect: 'manual',
-                body: form,
-                signal: signal
-                  ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
-                  : AbortSignal.timeout(30_000),
-              });
-              if (!response.ok || response.status >= 300 || response.type === 'opaqueredirect') {
-                throw new Error(`ComfyUI input upload failed with HTTP ${response.status}.`);
-              }
-              const payload: unknown = await response.json();
-              if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-                throw new Error('ComfyUI input upload returned an invalid response.');
-              }
-              const name = (payload as Record<string, unknown>)['name'];
-              const subfolder = (payload as Record<string, unknown>)['subfolder'];
-              if (
-                typeof name !== 'string' ||
-                !name.trim() ||
-                name.includes('/') ||
-                name.includes('\\')
-              ) {
-                throw new Error('ComfyUI input upload did not return an exact filename.');
-              }
-              return {
-                filename: name,
-                ...(typeof subfolder === 'string' && subfolder ? { subfolder } : {}),
-              };
-            },
-          },
-        }),
       });
     },
   });
@@ -1178,7 +1092,6 @@ async function startDesktop(): Promise<void> {
             modelName: model.name,
           });
         },
-        getDefaultModelPurposeRef: (purpose) => config.getDefaultModelPurposeRef(purpose),
         getDefaultModelRef: (type) => config.getDefaultModelRef(type),
       });
     },
@@ -2264,9 +2177,6 @@ async function startDesktop(): Promise<void> {
         generationRuntime,
         generationProjection: {
           projectSnapshot: async ({ context, request, snapshot }) => {
-            if (snapshot.request.generationType === 'workflow') {
-              return { status: 'accepted' };
-            }
             if (context.binding.kind === 'assistant') return { status: 'accepted' };
             if (context.binding.kind !== 'workspace') {
               return {
@@ -2305,7 +2215,6 @@ async function startDesktop(): Promise<void> {
           },
         },
         configuration: workspaceConfigAuthority,
-        comfyUi: { bindings: professionalApplicationBindings },
         assistant: { assistantSpaceId, root: assistantSpaceRoot },
         skillAuthoring,
         cutRuntime,
@@ -2911,7 +2820,6 @@ async function startDesktop(): Promise<void> {
   const professionalApplicationAdapter = new DesktopProfessionalApplicationAdapter(
     professionalApplicationNative,
     process.platform,
-    { comfyUiApiExecution: true },
   );
   const professionalApplicationService = createProfessionalApplicationService({
     profiles: [COMFYUI_PROFESSIONAL_APPLICATION_PROFILE],

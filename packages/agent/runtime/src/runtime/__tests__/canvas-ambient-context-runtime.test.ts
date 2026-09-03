@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import type { GenerationModelConfig } from '@neko/generation-domain';
 import type { CanvasNode } from '@neko/canvas-domain';
 import {
   CanvasAmbientContextRuntime,
@@ -124,15 +123,11 @@ describe('canvas ambient context runtime', () => {
     expect(runtime.getPendingCanvasChanges()).toEqual([]);
   });
 
-  it('isolates selection, generation config and changes by scope', () => {
+  it('isolates selection and changes by scope', () => {
     const runtime = new CanvasAmbientContextRuntime();
-    const config = {
-      image: { providerId: 'fal', modelId: 'flux' },
-    } as unknown as GenerationModelConfig;
 
     runtime.setCanvasSelection([makeNode('a', 'markdown', { content: 'A' })], 'conv-a');
     runtime.setCanvasSelection([makeNode('b', 'markdown', { content: 'B' })], 'conv-b');
-    runtime.setActiveGenerationConfig(config, 'conv-a');
     runtime.recordCanvasChange(
       { domain: 'canvas', changeType: 'add', id: 'node-a', timestamp: 1 },
       'conv-a',
@@ -140,8 +135,6 @@ describe('canvas ambient context runtime', () => {
 
     expect(runtime.getCanvasSelection('conv-a')[0]?.nodeId).toBe('a');
     expect(runtime.getCanvasSelection('conv-b')[0]?.nodeId).toBe('b');
-    expect(runtime.getActiveGenerationConfig('conv-a')).toBe(config);
-    expect(runtime.getActiveGenerationConfig('conv-b')).toBeUndefined();
     expect(runtime.getPendingCanvasChanges('conv-a')).toHaveLength(1);
     expect(runtime.getPendingCanvasChanges('conv-b')).toEqual([]);
   });

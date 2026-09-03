@@ -8,7 +8,6 @@ export const GENERATION_RECIPE_PURPOSES = [
   'canvas.prompt',
   'image.generate',
   'audio.generate',
-  'audio.music.generate',
   'video.generate',
 ] as const;
 export type GenerationRecipePurpose = (typeof GENERATION_RECIPE_PURPOSES)[number];
@@ -43,8 +42,6 @@ export interface ImageGenerationRecipe extends GenerationRecipeBase<'image'> {
 export interface AudioGenerationRecipe extends GenerationRecipeBase<'audio'> {
   readonly negativePrompt?: string;
   readonly duration?: number;
-  readonly isMusic?: boolean;
-  readonly genre?: string;
   readonly format?: 'mp3' | 'wav' | 'flac';
 }
 
@@ -97,11 +94,9 @@ export function purposeForGenerationRecipeKind(
 }
 
 export function purposeForGenerationRecipe(
-  recipe: Pick<GenerationRecipe, 'kind'> & Partial<Pick<AudioGenerationRecipe, 'isMusic'>>,
+  recipe: Pick<GenerationRecipe, 'kind'>,
 ): GenerationRecipePurpose {
-  return recipe.kind === 'audio' && recipe.isMusic
-    ? 'audio.music.generate'
-    : purposeForGenerationRecipeKind(recipe.kind);
+  return purposeForGenerationRecipeKind(recipe.kind);
 }
 
 export function createGenerationRecipe(
@@ -136,7 +131,6 @@ export function createGenerationRecipe(
         kind,
         prompt: '',
         duration: 10,
-        isMusic: false,
         format: 'mp3',
         ...(model ? { model } : {}),
       };
@@ -159,13 +153,7 @@ export function isGenerationRecipe(value: unknown): value is GenerationRecipe {
     return false;
   }
   const model = value['model'];
-  if (
-    model !== undefined &&
-    !isGenerationRecipeModelBinding(model, {
-      kind: value['kind'],
-      ...(typeof value['isMusic'] === 'boolean' ? { isMusic: value['isMusic'] } : {}),
-    })
-  ) {
+  if (model !== undefined && !isGenerationRecipeModelBinding(model, { kind: value['kind'] })) {
     return false;
   }
   switch (value['kind']) {
@@ -190,8 +178,6 @@ export function isGenerationRecipe(value: unknown): value is GenerationRecipe {
       return (
         isOptionalString(value['negativePrompt']) &&
         isOptionalPositiveNumber(value['duration']) &&
-        (value['isMusic'] === undefined || typeof value['isMusic'] === 'boolean') &&
-        isOptionalNonEmptyString(value['genre']) &&
         (value['format'] === undefined ||
           value['format'] === 'mp3' ||
           value['format'] === 'wav' ||
@@ -297,15 +283,13 @@ export function projectGenerationRecipeRequest(
         throw new Error('The selected Audio Recipe does not support an audio reference input.');
       }
       return {
-        generationType: recipe.isMusic ? 'text-to-music' : 'text-to-audio',
+        generationType: 'text-to-audio',
         ...binding,
         request: {
           prompt,
           ...binding,
           ...(recipe.negativePrompt === undefined ? {} : { negativePrompt: recipe.negativePrompt }),
           ...(recipe.duration === undefined ? {} : { duration: recipe.duration }),
-          ...(recipe.isMusic === undefined ? {} : { isMusic: recipe.isMusic }),
-          ...(recipe.genre === undefined ? {} : { genre: recipe.genre }),
           ...(recipe.format === undefined ? {} : { format: recipe.format }),
         },
       };
@@ -325,7 +309,7 @@ function uniqueLocator(
 
 function isGenerationRecipeModelBinding(
   value: unknown,
-  recipe: Pick<GenerationRecipe, 'kind'> & Partial<Pick<AudioGenerationRecipe, 'isMusic'>>,
+  recipe: Pick<GenerationRecipe, 'kind'>,
 ): value is GenerationRecipeModelBinding {
   return (
     isRecord(value) &&
@@ -397,14 +381,7 @@ const IMAGE_RECIPE_KEYS = new Set([
   'quality',
   'style',
 ]);
-const AUDIO_RECIPE_KEYS = new Set([
-  ...BASE_RECIPE_KEYS,
-  'negativePrompt',
-  'duration',
-  'isMusic',
-  'genre',
-  'format',
-]);
+const AUDIO_RECIPE_KEYS = new Set([...BASE_RECIPE_KEYS, 'negativePrompt', 'duration', 'format']);
 const VIDEO_RECIPE_KEYS = new Set([
   ...BASE_RECIPE_KEYS,
   'negativePrompt',

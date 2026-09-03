@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@neko/ai-contracts": "workspace:*",
     "@neko/agent-contracts": "workspace:*",
     "@neko/agent-runtime": "workspace:*",
     "@neko/agent-webview": "workspace:*",

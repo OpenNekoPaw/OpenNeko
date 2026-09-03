@@ -647,7 +647,6 @@ function artifactNodeSize(artifact: CanvasWorkspaceProjectionArtifact): CanvasNo
       return resolveCanvasNodeDefaultSize('markdown');
     case 'file-reference':
     case 'file':
-    case 'storyboard':
       return resolveCanvasFileNodeDefaultSize({
         path: artifact.title,
         ...(artifact.mimeType ? { mediaType: artifact.mimeType } : {}),

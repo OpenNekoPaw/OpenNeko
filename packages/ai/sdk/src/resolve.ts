@@ -33,7 +33,7 @@ export function resolveProvider(
       });
       return {
         type: 'openai',
-        source: 'native',
+        source: 'ai-sdk',
         image: (modelId: string) => openai.image(modelId),
         language: (modelId: string) => openai(modelId),
         // OpenAI provider does not support video model creation
@@ -53,7 +53,7 @@ export function resolveProvider(
       const baseURL = config.apiUrl.replace(/\/+$/u, '');
       return {
         type: 'bytedance',
-        source: 'native',
+        source: 'ai-sdk',
         image: (modelId: string) => bytedance.image(modelId),
         language: () => null,
         video: (modelId: string) => bytedance.video(modelId),
@@ -78,7 +78,7 @@ export function resolveProvider(
     case 'minimax':
       return {
         type: 'minimax',
-        source: 'native',
+        source: 'ai-sdk',
         image: () => null,
         language: () => null,
         video: (modelId: string) => new MiniMaxH3VideoModel(modelId, config),
@@ -90,10 +90,6 @@ export function resolveProvider(
 
     case 'oneapi':
     case 'generic':
-      return createCompatibleProvider(providerType, config, options);
-
-    case 'xai':
-    case 'kling':
       return createCompatibleProvider(providerType, config, options);
 
     default:

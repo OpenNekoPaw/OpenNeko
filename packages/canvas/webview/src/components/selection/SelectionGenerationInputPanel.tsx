@@ -7,7 +7,6 @@ import {
   type CanvasConnection,
   type CanvasGenerationModelBinding,
   type CanvasGenerationModelOption,
-  type CanvasGenerationPurpose,
   type CanvasGenerationRecipe,
   type CanvasMaterialMediaKind,
   type CanvasNode,
@@ -310,17 +309,6 @@ function GenerationInputPanel({
       onMouseDown={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
     >
-      {recipe.kind === 'audio' ? (
-        <AudioModeTabs
-          recipe={recipe}
-          generationModels={generationModels}
-          onChange={(next) => {
-            setRecipe(next);
-            void commitRecipe(next).catch(reportFailure);
-          }}
-        />
-      ) : null}
-
       <div
         className="selection-generation-input-panel__references"
         data-canvas-generation-reference-zone="true"
@@ -411,11 +399,7 @@ function GenerationInputPanel({
       <textarea
         aria-label={t('generation.prompt')}
         className="selection-generation-input-panel__prompt"
-        placeholder={
-          recipe.kind === 'audio' && recipe.isMusic
-            ? t('generation.musicPromptPlaceholder')
-            : t('generation.promptPlaceholder')
-        }
+        placeholder={t('generation.promptPlaceholder')}
         value={recipe.prompt}
         onChange={(event) => {
           const prompt = event.currentTarget.value;
@@ -580,58 +564,6 @@ function GenerationModelSelector({
         })}
       </div>
     </ComposerPopover>
-  );
-}
-
-function AudioModeTabs({
-  recipe,
-  generationModels,
-  onChange,
-}: {
-  readonly recipe: Extract<CanvasGenerationRecipe, { readonly kind: 'audio' }>;
-  readonly generationModels: readonly CanvasGenerationModelOption[];
-  readonly onChange: (recipe: Extract<CanvasGenerationRecipe, { readonly kind: 'audio' }>) => void;
-}) {
-  const changeMode = (isMusic: boolean): void => {
-    if ((recipe.isMusic ?? false) === isMusic) return;
-    const requiredPurpose: CanvasGenerationPurpose = isMusic
-      ? 'audio.music.generate'
-      : 'audio.generate';
-    const { model, ...withoutModel } = recipe;
-    const defaultModel = generationModels.find(
-      (option) => option.binding.purpose === requiredPurpose && option.isDefault,
-    )?.binding;
-    onChange({
-      ...withoutModel,
-      isMusic,
-      ...(model?.purpose === requiredPurpose
-        ? { model }
-        : defaultModel
-          ? { model: defaultModel }
-          : {}),
-    });
-  };
-  return (
-    <div className="selection-generation-input-panel__mode-tabs" role="tablist">
-      <button
-        type="button"
-        role="tab"
-        aria-selected={!recipe.isMusic}
-        className={!recipe.isMusic ? 'active' : undefined}
-        onClick={() => changeMode(false)}
-      >
-        {t('generation.audioMode')}
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={recipe.isMusic === true}
-        className={recipe.isMusic ? 'active' : undefined}
-        onClick={() => changeMode(true)}
-      >
-        {t('generation.musicMode')}
-      </button>
-    </div>
   );
 }
 
@@ -1034,17 +966,6 @@ function parameterContent(
             format={(value) => value?.toUpperCase() ?? t('generation.auto')}
             onSelect={(format) => apply({ ...recipe, format })}
           />
-          {recipe.isMusic ? (
-            <label className="selection-generation-input-panel__text-parameter">
-              <span>{t('generation.genre')}</span>
-              <input
-                aria-label={t('generation.genre')}
-                value={recipe.genre ?? ''}
-                placeholder={t('generation.genrePlaceholder')}
-                onChange={(event) => onChangeAudioGenre(recipe, event.currentTarget.value, apply)}
-              />
-            </label>
-          ) : null}
         </div>
       );
   }
@@ -1097,14 +1018,6 @@ function OptionGroup<T extends string | number | boolean | undefined>({
   );
 }
 
-function onChangeAudioGenre(
-  recipe: Extract<CanvasGenerationRecipe, { readonly kind: 'audio' }>,
-  value: string,
-  apply: (next: CanvasGenerationRecipe) => void,
-): void {
-  apply({ ...recipe, genre: value.trim() ? value : undefined });
-}
-
 function parameterSummary(recipe: CanvasGenerationRecipe): string {
   switch (recipe.kind) {
     case 'prompt':
@@ -1136,7 +1049,7 @@ function parameterSummary(recipe: CanvasGenerationRecipe): string {
       );
     case 'audio':
       return [
-        recipe.isMusic ? t('generation.musicMode') : t('generation.audioMode'),
+        t('generation.audioMode'),
         recipe.duration && `${recipe.duration}s`,
         recipe.format?.toUpperCase(),
       ]
@@ -1364,9 +1277,7 @@ function isUntouchedGenerationRecipe(recipe: CanvasGenerationRecipe): boolean {
       );
     case 'audio':
       return (
-        recipe.isMusic !== true &&
         !recipe.negativePrompt?.trim() &&
-        !recipe.genre?.trim() &&
         (recipe.duration === undefined || recipe.duration === 10) &&
         (recipe.format === undefined || recipe.format === 'mp3')
       );

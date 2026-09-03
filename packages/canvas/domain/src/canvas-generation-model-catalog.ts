@@ -18,7 +18,7 @@ export interface CanvasGenerationCatalogModel {
   readonly type?: CanvasGenerationModelType;
 }
 
-export type CanvasGenerationModelType = 'llm' | 'image' | 'video' | 'audio';
+export type CanvasGenerationModelType = 'llm' | 'image' | 'video' | 'audio' | 'music';
 
 export interface CanvasGenerationCatalogModelRef {
   readonly providerId: string;
@@ -31,11 +31,8 @@ export interface CanvasGenerationModelCatalogInput<
   readonly providers: readonly CanvasGenerationCatalogProvider[];
   readonly models: readonly Model[];
   readonly resolveParameterProfile?: (model: Model) => GenerationModelParameterProfile | undefined;
-  readonly getDefaultModelPurposeRef: (
-    purpose: CanvasGenerationPurpose,
-  ) => CanvasGenerationCatalogModelRef | undefined;
   readonly getDefaultModelRef: (
-    type: 'llm' | 'image' | 'video' | 'audio',
+    type: CanvasGenerationModelType,
   ) => CanvasGenerationCatalogModelRef | undefined;
 }
 
@@ -51,9 +48,7 @@ export function projectCanvasGenerationModels<Model extends CanvasGenerationCata
       return CANVAS_GENERATION_PURPOSES.filter((purpose) =>
         canvasGenerationModelSupportsPurpose(model, purpose),
       ).map((purpose) => {
-        const configuredDefault =
-          input.getDefaultModelPurposeRef(purpose) ??
-          input.getDefaultModelRef(modelTypeForPurpose(purpose));
+        const configuredDefault = input.getDefaultModelRef(modelTypeForPurpose(purpose));
         return {
           binding: { purpose, providerId: provider.id, modelId: model.id },
           label: model.displayName ?? model.name,
@@ -93,7 +88,6 @@ function modelTypeForPurpose(purpose: CanvasGenerationPurpose): CanvasGeneration
     case 'video.generate':
       return 'video';
     case 'audio.generate':
-    case 'audio.music.generate':
       return 'audio';
   }
 }

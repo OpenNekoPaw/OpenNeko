@@ -15,15 +15,8 @@ describe('media generation type resolution', () => {
     ['video-to-video', 'video'],
     ['video-edit', 'video'],
     ['text-to-audio', 'audio'],
-    ['text-to-music', 'audio'],
   ] as const)('maps %s to the configured %s model type', (generationType, modelType) => {
     expect(resolveMediaModelType(generationType)).toBe(modelType);
-  });
-
-  it('rejects workflow routing because it does not identify one media model type', () => {
-    expect(() => resolveMediaModelType('workflow')).toThrow(
-      'Workflow generation does not identify one media model type.',
-    );
   });
 
   it('uses text-to-image without reference inputs', () => {
@@ -37,6 +30,18 @@ describe('media generation type resolution', () => {
         referenceImageLocator: { file: { authority: 'workspace', path: 'references/image.png' } },
       }),
     ).toBe('image-to-image');
+  });
+
+  it('uses image-edit for an explicit edit operation', () => {
+    expect(
+      resolveImageGenerationType({
+        prompt: 'make the sky darker',
+        operation: 'edit',
+        referenceImageLocator: {
+          file: { authority: 'workspace', path: 'references/image.png' },
+        },
+      }),
+    ).toBe('image-edit');
   });
 
   it('uses image-to-image for a stable ControlNet locator', () => {
@@ -80,5 +85,21 @@ describe('media generation type resolution', () => {
         ],
       }),
     ).toBe('video-to-video');
+  });
+
+  it('uses video-edit for an explicit transform operation', () => {
+    expect(
+      resolveVideoGenerationType({
+        prompt: 'restyle',
+        operation: 'transform',
+        inputs: [
+          {
+            type: 'video',
+            role: 'reference-video',
+            locator: { file: { authority: 'workspace', path: 'videos/source.mp4' } },
+          },
+        ],
+      }),
+    ).toBe('video-edit');
   });
 });

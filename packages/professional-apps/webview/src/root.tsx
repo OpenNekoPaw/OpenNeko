@@ -547,9 +547,9 @@ function ProfessionalApplicationDetailOverlay({
                   : t('professionalApps.selectApplication')}
               </Button>
             ) : null}
-            {item.profile.configurable.endpoint ? (
+            {item.binding ? (
               <Button
-                disabled={!interactive || pending}
+                disabled={!interactive || pending || !item.binding}
                 onClick={onSave}
                 size="sm"
                 variant="secondary"

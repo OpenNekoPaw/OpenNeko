@@ -85,8 +85,7 @@ export function purposeForCanvasGenerationKind(
 }
 
 export function purposeForCanvasGenerationRecipe(
-  recipe: Pick<CanvasGenerationRecipe, 'kind'> &
-    Partial<Pick<CanvasAudioGenerationRecipe, 'isMusic'>>,
+  recipe: Pick<CanvasGenerationRecipe, 'kind'>,
 ): CanvasGenerationPurpose {
   return purposeForGenerationRecipe(recipe);
 }

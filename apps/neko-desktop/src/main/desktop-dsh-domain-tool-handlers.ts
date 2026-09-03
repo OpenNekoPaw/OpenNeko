@@ -38,8 +38,6 @@ import {
   type GenerationApplicationRuntime,
   type GenerationJobSnapshot,
 } from '@neko/generation-domain/job';
-import { createHash } from 'node:crypto';
-import type { ProfessionalApplicationBindingRepository } from '@neko/professional-apps-node';
 import type { DesktopWorkspaceGrantAuthorityPort } from '@neko/host/desktop-workspace-grant-authority';
 import type { ConfigManager, WorkspaceConfigManagerAuthority } from '@neko/host/settings';
 import type { CharacterDshAuthoringService } from '@neko/chara-domain/application';
@@ -81,9 +79,6 @@ export function createDesktopDshDomainToolHandlers(options: {
     readonly root: string;
   };
   readonly skillAuthoring?: Pick<DshSkillAuthoringService, 'create'>;
-  readonly comfyUi?: {
-    readonly bindings: Pick<ProfessionalApplicationBindingRepository, 'get' | 'getEnabled'>;
-  };
   readonly cutRuntime?: {
     resolveExportService(input: {
       readonly workspaceId: string;
@@ -155,7 +150,6 @@ export function createDesktopDshDomainToolHandlers(options: {
       }),
     };
   };
-  const comfyUi = options.comfyUi;
   const domainTools = createDshDomainToolHandlers({
     contexts,
     skillAuthoring: options.skillAuthoring,
@@ -168,40 +162,6 @@ export function createDesktopDshDomainToolHandlers(options: {
           bindings: purposeBindings(resolved.config),
         });
       },
-      ...(comfyUi
-        ? {
-            submitComfyUi: async ({ context, request, submission }) => {
-              const binding = await comfyUi.bindings.get('comfyui');
-              const enabled = binding ? await comfyUi.bindings.getEnabled('comfyui') : false;
-              if (!binding?.endpoint || !enabled) {
-                throw Object.assign(
-                  new Error(
-                    'ComfyUI must be added, enabled and configured with an explicit loopback endpoint.',
-                  ),
-                  { code: 'GENERATION_DSH_COMFYUI_UNCONFIGURED' },
-                );
-              }
-              const resolved = await resolveGenerationOwner(context);
-              const clientDigest = createHash('sha256')
-                .update(`${request.sessionId}\0${request.turn}\0${request.toolCallId}`)
-                .digest('hex')
-                .slice(0, 24);
-              const snapshot = await resolved.jobs.submitGeneration({
-                lifecycleMode: submission.lifecycleMode,
-                generationType: 'workflow',
-                providerId: 'comfyui',
-                request: {
-                  endpoint: binding.endpoint,
-                  clientId: `openneko-${clientDigest}`,
-                  workflow: submission.workflow,
-                  outputKind: submission.outputKind,
-                  inputBindings: submission.inputBindings,
-                },
-              });
-              return { snapshot, jobs: resolved.jobs };
-            },
-          }
-        : {}),
     },
     canvas: {
       resolveService: async (context) => {

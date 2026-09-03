@@ -8,7 +8,6 @@ import {
   createCanvasGenerationNodeData,
   isCanvasGenerationNodeData,
   isCanvasGenerationRecipe,
-  purposeForCanvasGenerationRecipe,
   selectCanvasGenerationOutput,
   updateCanvasGenerationRecipe,
 } from '../canvas-generation-node';
@@ -144,28 +143,6 @@ describe('Canvas Generation Node contract', () => {
       }),
     ).toBe(false);
     expect(selectCanvasGenerationOutput(initial, 'text-output')).toEqual(initial);
-  });
-
-  it('requires the distinct music purpose without introducing another node kind', () => {
-    const musicRecipe = {
-      kind: 'audio' as const,
-      prompt: 'slow ambient score',
-      isMusic: true,
-      model: {
-        purpose: 'audio.music.generate' as const,
-        providerId: 'provider-1',
-        modelId: 'music-model',
-      },
-    };
-
-    expect(purposeForCanvasGenerationRecipe(musicRecipe)).toBe('audio.music.generate');
-    expect(isCanvasGenerationRecipe(musicRecipe)).toBe(true);
-    expect(
-      isCanvasGenerationRecipe({
-        ...musicRecipe,
-        model: { ...musicRecipe.model, purpose: 'audio.generate' },
-      }),
-    ).toBe(false);
   });
 
   it('does not invent video parameters when the selected model has no verified profile', () => {

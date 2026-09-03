@@ -21,7 +21,6 @@ describe('Generation Recipe ownership', () => {
     });
     expect(createGenerationRecipe('audio')).toMatchObject({
       kind: 'audio',
-      isMusic: false,
       format: 'mp3',
     });
     expect(createGenerationRecipe('video')).toMatchObject({
@@ -32,21 +31,8 @@ describe('Generation Recipe ownership', () => {
   });
 
   it('validates exact purpose and rejects unknown Recipe fields', () => {
-    expect(
-      isGenerationRecipe({
-        kind: 'audio',
-        prompt: 'score',
-        isMusic: true,
-        model: {
-          purpose: 'audio.music.generate',
-          providerId: 'provider',
-          modelId: 'model',
-        },
-      }),
-    ).toBe(true);
-    expect(purposeForGenerationRecipe({ kind: 'audio', isMusic: true })).toBe(
-      'audio.music.generate',
-    );
+    expect(purposeForGenerationRecipe({ kind: 'audio' })).toBe('audio.generate');
+    expect(isGenerationRecipe({ kind: 'audio', prompt: 'score', isMusic: true })).toBe(false);
     expect(isGenerationRecipe({ kind: 'image', prompt: '', unexpected: true })).toBe(false);
   });
 

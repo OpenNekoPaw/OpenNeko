@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { GENERATION_PROVIDER_CAPABILITIES } from './provider-capabilities';
 
 describe('generation Provider capabilities', () => {
-  it('publishes every Provider type owned by the AI SDK or a registered media adapter', () => {
+  it('publishes only Provider types with an AI SDK media model contract', () => {
     expect(GENERATION_PROVIDER_CAPABILITIES.map((capability) => capability.providerType)).toEqual([
       'minimax',
       'bytedance',
@@ -10,17 +10,16 @@ describe('generation Provider capabilities', () => {
       'newapi',
       'oneapi',
       'generic',
-      'xai',
-      'kling',
-      'runway',
-      'luma',
-      'liblib',
-      'suno',
-      'vidu',
-      'midjourney',
-      'fal',
-      'dashscope',
     ]);
+  });
+
+  it('does not claim video support for the unverified NewAPI-compatible path', () => {
+    for (const providerType of ['newapi', 'oneapi', 'generic'] as const) {
+      const capability = GENERATION_PROVIDER_CAPABILITIES.find(
+        (candidate) => candidate.providerType === providerType,
+      );
+      expect(capability?.supportedModelTypes).not.toContain('video');
+    }
   });
 
   it('keeps templates inside their owning Provider capability and supported model type', () => {

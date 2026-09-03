@@ -5,14 +5,10 @@ import {
   IMAGE_OPERATION_IDS,
   VIDEO_OPERATION_IDS,
 } from './domain-contracts/creative-media-operations';
-import {
-  CONTENT_LOCATOR_DSH_SCHEMA,
-  validateContentLocator,
-  type ContentLocator,
-} from '@neko/content-domain';
+import { CONTENT_LOCATOR_DSH_SCHEMA } from '@neko/content-domain';
 
 export const GENERATION_DSH_TOOL_NAME = 'openneko_generation' as const;
-export const GENERATION_DSH_TOOL_OPERATIONS = ['submit', 'submit-comfyui', 'describe'] as const;
+export const GENERATION_DSH_TOOL_OPERATIONS = ['submit', 'describe'] as const;
 
 export type GenerationDshToolOperation = (typeof GENERATION_DSH_TOOL_OPERATIONS)[number];
 
@@ -112,80 +108,6 @@ const IMAGE_REQUEST_SCHEMA = {
       additionalProperties: false,
     },
     editInstruction: { type: 'string' },
-    outpaintExpansion: {
-      type: 'object',
-      properties: {
-        left: { type: 'number', required: true },
-        right: { type: 'number', required: true },
-        top: { type: 'number', required: true },
-        bottom: { type: 'number', required: true },
-        fillMode: {
-          type: 'string',
-          enum: ['generative', 'edge-extend', 'transparent'],
-          required: true,
-        },
-      },
-      additionalProperties: false,
-    },
-    splitOptions: {
-      oneOf: [
-        {
-          type: 'object',
-          properties: {
-            profileId: { type: 'string', const: 'grid-crop', required: true },
-            grid: {
-              type: 'object',
-              properties: {
-                rows: { type: 'number', required: true },
-                columns: { type: 'number', required: true },
-                gapPixels: { type: 'number' },
-                marginPixels: { type: 'number' },
-              },
-              additionalProperties: false,
-              required: true,
-            },
-          },
-          additionalProperties: false,
-        },
-        {
-          type: 'object',
-          properties: {
-            profileId: { type: 'string', const: 'comic-panel', required: true },
-            comic: {
-              type: 'object',
-              properties: {
-                readingOrder: {
-                  type: 'string',
-                  enum: ['left-to-right', 'right-to-left', 'top-to-bottom'],
-                },
-                includeBleed: { type: 'boolean' },
-              },
-              additionalProperties: false,
-            },
-          },
-          additionalProperties: false,
-        },
-        {
-          type: 'object',
-          properties: {
-            profileId: {
-              type: 'string',
-              const: 'semantic-segmentation',
-              required: true,
-            },
-            segmentation: {
-              type: 'object',
-              properties: {
-                labels: { type: 'array', items: { type: 'string' } },
-                minimumConfidence: { type: 'number' },
-              },
-              additionalProperties: false,
-            },
-          },
-          additionalProperties: false,
-        },
-      ],
-    },
   },
   additionalProperties: false,
 } as const;
@@ -264,8 +186,6 @@ const AUDIO_REQUEST_SCHEMA = {
     negativePrompt: { type: 'string' },
     metadata: { type: 'object', additionalProperties: true },
     duration: { type: 'number' },
-    isMusic: { type: 'boolean' },
-    genre: { type: 'string' },
     format: { type: 'string', enum: ['mp3', 'wav', 'flac'] },
   },
   additionalProperties: false,
@@ -320,35 +240,6 @@ export const GENERATION_DSH_TOOL_PARAMETERS = {
     oneOf: [
       {
         type: 'object',
-        title: 'ComfyUI workflow submit input',
-        description:
-          'Input for submit-comfyui. The local endpoint and client identity are Host-owned.',
-        properties: {
-          lifecycleMode: {
-            type: 'string',
-            enum: ['linked', 'detached'],
-            required: true,
-          },
-          workflow: { type: 'object', additionalProperties: true, required: true },
-          outputKind: { type: 'string', const: 'image', required: true },
-          inputBindings: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                nodeId: { type: 'string', required: true },
-                inputName: { type: 'string', required: true },
-                contentLocator: { ...CONTENT_LOCATOR_SCHEMA, required: true },
-              },
-              additionalProperties: false,
-            },
-            required: true,
-          },
-        },
-        additionalProperties: false,
-      },
-      {
-        type: 'object',
         title: 'describe input',
         description: 'Input for the describe operation.',
         properties: { jobId: { type: 'string', required: true } },
@@ -398,12 +289,12 @@ export const GENERATION_DSH_TOOL_PARAMETERS = {
       {
         type: 'object',
         title: 'audio submit input',
-        description: 'Input for submit when generationType creates audio or music.',
+        description: 'Input for submit when generationType creates speech audio.',
         properties: {
           ...SUBMIT_PROPERTIES,
           generationType: {
             type: 'string',
-            enum: ['text-to-audio', 'text-to-music'],
+            const: 'text-to-audio',
             required: true,
           },
           request: { ...AUDIO_REQUEST_SCHEMA, required: true },
@@ -417,26 +308,11 @@ export const GENERATION_DSH_TOOL_PARAMETERS = {
 
 export type GenerationDshToolSubmitInput = SubmitPurposeGenerationJobInput;
 
-export interface GenerationDshToolComfyUiSubmitInput {
-  readonly lifecycleMode: 'linked' | 'detached';
-  readonly workflow: Readonly<Record<string, unknown>>;
-  readonly outputKind: 'image';
-  readonly inputBindings: readonly {
-    readonly nodeId: string;
-    readonly inputName: string;
-    readonly contentLocator: ContentLocator;
-  }[];
-}
-
 export interface GenerationDshToolDescribeInput {
   readonly jobId: string;
 }
 
 export type GenerationDshToolInput =
-  | {
-      readonly operation: 'submit-comfyui';
-      readonly input: GenerationDshToolComfyUiSubmitInput;
-    }
   | {
       readonly operation: 'submit';
       readonly input: GenerationDshToolSubmitInput;
@@ -466,87 +342,12 @@ export function decodeGenerationDshToolInput(
   if (operation === 'submit') {
     return { operation, input: decodeSubmitInput(input) };
   }
-  if (operation === 'submit-comfyui') {
-    return { operation, input: decodeComfyUiSubmitInput(input) };
-  }
   if (operation === 'describe') {
     return { operation, input: decodeDescribeInput(input) };
   }
   throw new Error(
     `Generation DSH tool operation must be one of ${GENERATION_DSH_TOOL_OPERATIONS.join(', ')}.`,
   );
-}
-
-function decodeComfyUiSubmitInput(input: unknown): GenerationDshToolComfyUiSubmitInput {
-  const record = requireRecord(input, 'input');
-  requireOnlyKeys(record, ['lifecycleMode', 'workflow', 'outputKind', 'inputBindings'], 'input');
-  if (record.lifecycleMode !== 'linked' && record.lifecycleMode !== 'detached') {
-    throw new Error('input.lifecycleMode must be linked or detached.');
-  }
-  if (record.outputKind !== 'image') {
-    throw new Error('input.outputKind must be image.');
-  }
-  const workflow = requireJsonObject(record.workflow, 'input.workflow');
-  if (Object.keys(workflow).length === 0) {
-    throw new Error('input.workflow must contain at least one exact node.');
-  }
-  if (!Array.isArray(record.inputBindings)) {
-    throw new Error('input.inputBindings must be an array.');
-  }
-  const inputBindings = record.inputBindings.map((value, index) => {
-    const binding = requireRecord(value, `input.inputBindings[${index}]`);
-    requireOnlyKeys(
-      binding,
-      ['nodeId', 'inputName', 'contentLocator'],
-      `input.inputBindings[${index}]`,
-    );
-    const locator = validateContentLocator(binding.contentLocator);
-    if (!locator.ok) {
-      throw new Error(`input.inputBindings[${index}].contentLocator is invalid.`);
-    }
-    return {
-      nodeId: requireNonEmptyString(binding.nodeId, `input.inputBindings[${index}].nodeId`),
-      inputName: requireNonEmptyString(
-        binding.inputName,
-        `input.inputBindings[${index}].inputName`,
-      ),
-      contentLocator: locator.locator,
-    };
-  });
-  const uniqueBindings = new Set(
-    inputBindings.map((binding) => `${binding.nodeId}\0${binding.inputName}`),
-  );
-  if (uniqueBindings.size !== inputBindings.length) {
-    throw new Error('input.inputBindings contains a duplicate exact node input.');
-  }
-  return {
-    lifecycleMode: record.lifecycleMode,
-    workflow,
-    outputKind: record.outputKind,
-    inputBindings,
-  };
-}
-
-function requireJsonObject(value: unknown, field: string): Readonly<Record<string, unknown>> {
-  const record = requireRecord(value, field);
-  for (const [key, nested] of Object.entries(record)) {
-    requireJsonValue(nested, `${field}.${key}`);
-  }
-  return record;
-}
-
-function requireJsonValue(value: unknown, field: string): void {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') return;
-  if (typeof value === 'number' && Number.isFinite(value)) return;
-  if (Array.isArray(value)) {
-    value.forEach((nested, index) => requireJsonValue(nested, `${field}[${index}]`));
-    return;
-  }
-  if (value && typeof value === 'object') {
-    requireJsonObject(value, field);
-    return;
-  }
-  throw new Error(`${field} must contain only finite JSON values.`);
 }
 
 export function projectGenerationJobSnapshot(

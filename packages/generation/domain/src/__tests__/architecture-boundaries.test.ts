@@ -30,7 +30,6 @@ describe('@neko/generation-domain architecture boundaries', () => {
     const roots = [
       resolve(packageRoot, 'src/contracts.ts'),
       resolve(packageRoot, 'src/execution.ts'),
-      resolve(packageRoot, 'src/generation-params.ts'),
       resolve(packageRoot, 'src/index.ts'),
       resolve(packageRoot, 'src/job'),
     ];

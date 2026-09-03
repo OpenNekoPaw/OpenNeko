@@ -430,11 +430,6 @@ function projectGenerationJobSnapshot(
   snapshot: GenerationJobSnapshot,
 ): CanvasGenerationProjectionSnapshot {
   const jobRequest = snapshot.request;
-  if (jobRequest.generationType === 'workflow') {
-    throw new Error(
-      'ComfyUI workflow Jobs cannot be projected as editable Canvas Generation Recipes.',
-    );
-  }
   const request = jobRequest.request;
   const recipe = generationRecipe(jobRequest);
   const parameters: CanvasMaterialGenerationContext = (() => {
@@ -464,12 +459,9 @@ function projectGenerationJobSnapshot(
             : {}),
         };
       case 'text-to-audio':
-      case 'text-to-music':
         return snapshot.request.request.duration
           ? { duration: snapshot.request.request.duration }
           : {};
-      case 'workflow':
-        throw new Error('ComfyUI workflow projection requires a dedicated Canvas recipe contract.');
     }
   })();
   const summary: CanvasMaterialGenerationContext = {
@@ -496,9 +488,6 @@ function projectGenerationJobSnapshot(
 }
 
 function generationRecipe(request: GenerationJobSnapshot['request']): GenerationRecipe {
-  if (request.generationType === 'workflow') {
-    throw new Error('ComfyUI workflow Jobs are not Canvas Generation Recipes.');
-  }
   const model = {
     purpose: generationRecipePurpose(request.generationType),
     providerId: request.providerId,
@@ -563,7 +552,6 @@ function generationRecipe(request: GenerationJobSnapshot['request']): Generation
           : {}),
       };
     case 'text-to-audio':
-    case 'text-to-music':
       return {
         kind: 'audio',
         prompt: request.request.prompt,
@@ -572,8 +560,6 @@ function generationRecipe(request: GenerationJobSnapshot['request']): Generation
           ? { negativePrompt: request.request.negativePrompt }
           : {}),
         ...(request.request.duration !== undefined ? { duration: request.request.duration } : {}),
-        isMusic: request.generationType === 'text-to-music',
-        ...(request.request.genre !== undefined ? { genre: request.request.genre } : {}),
         ...(request.request.format !== undefined ? { format: request.request.format } : {}),
       };
   }
@@ -582,9 +568,6 @@ function generationRecipe(request: GenerationJobSnapshot['request']): Generation
 function generationRecipePurpose(
   generationType: GenerationJobSnapshot['request']['generationType'],
 ): GenerationRecipePurpose {
-  if (generationType === 'workflow') {
-    throw new Error('ComfyUI workflow Jobs do not use a Canvas model purpose.');
-  }
   if (generationType === 'prompt') return 'canvas.prompt';
   if (
     generationType === 'text-to-image' ||
@@ -601,11 +584,10 @@ function generationRecipePurpose(
   ) {
     return 'video.generate';
   }
-  return generationType === 'text-to-music' ? 'audio.music.generate' : 'audio.generate';
+  return 'audio.generate';
 }
 
 function generationJobTitle(snapshot: GenerationJobSnapshot): string {
-  if (snapshot.request.generationType === 'workflow') return 'Run ComfyUI workflow';
   const model = `${snapshot.request.providerId}/${snapshot.request.modelId}`;
   switch (snapshot.request.generationType) {
     case 'prompt':
@@ -621,15 +603,12 @@ function generationJobTitle(snapshot: GenerationJobSnapshot): string {
       return `Generate video · ${model}`;
     case 'text-to-audio':
       return `Generate audio · ${model}`;
-    case 'text-to-music':
-      return `Generate music · ${model}`;
   }
 }
 
 function generationMediaKind(
   generationType: GenerationJobSnapshot['request']['generationType'],
 ): CanvasGenerationProjectionSnapshot['mediaKind'] {
-  if (generationType === 'workflow') return 'image';
   if (generationType === 'prompt') return 'document';
   if (
     generationType === 'text-to-image' ||
@@ -656,7 +635,6 @@ const PROJECTION_KINDS = new Set<string>([
   'image',
   'audio',
   'video',
-  'storyboard',
   'file',
 ]);
 

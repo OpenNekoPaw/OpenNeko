@@ -41,7 +41,6 @@ export interface PreserveAndReportGeneratedOutputProjectionRejectionPolicy {
 interface GeneratedOutputProjectionPayload {
   readonly asset: PathlessGeneratedAsset;
   readonly pathKey: string;
-  readonly storyboardShotPathKeys?: readonly (readonly string[])[];
 }
 
 export interface LocalMetadataGeneratedOutputProjectionStoreOptions {
@@ -117,13 +116,6 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
     const projection: GeneratedOutputProjectionPayload = {
       asset: stripGeneratedAssetPath(asset),
       pathKey,
-      ...(asset.type === 'generated-storyboard'
-        ? {
-            storyboardShotPathKeys: asset.scenes.map((scene) =>
-              scene.shots.map((shot) => this.toPortablePathKey(shot.path)),
-            ),
-          }
-        : {}),
     };
     const projectRelativePath =
       this.options.owner.kind === 'workspace' ? this.toProjectRelativePath(pathKey) : undefined;
@@ -194,47 +186,6 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
       case 'generated-audio':
       case 'generated-video':
         return { ...projection.asset, path: assetPath };
-      case 'generated-storyboard': {
-        const shotPathKeys = projection.storyboardShotPathKeys;
-        if (!shotPathKeys || shotPathKeys.length !== projection.asset.scenes.length) {
-          throw createProjectionRejection(
-            'invalid-generated-output-projection',
-            entry.descriptor.id,
-            `Generated storyboard ${projection.asset.id} has invalid shot paths.`,
-          );
-        }
-        return {
-          ...projection.asset,
-          path: assetPath,
-          scenes: projection.asset.scenes.map((scene, sceneIndex) => {
-            const scenePathKeys = shotPathKeys[sceneIndex];
-            if (!scenePathKeys || scenePathKeys.length !== scene.shots.length) {
-              throw createProjectionRejection(
-                'invalid-generated-output-projection',
-                entry.descriptor.id,
-                `Generated storyboard ${projection.asset.id} has invalid shot paths.`,
-              );
-            }
-            return {
-              ...scene,
-              shots: scene.shots.map((shot, shotIndex) => {
-                const shotPathKey = scenePathKeys[shotIndex];
-                if (!shotPathKey) {
-                  throw createProjectionRejection(
-                    'invalid-generated-output-projection',
-                    entry.descriptor.id,
-                    `Generated storyboard ${projection.asset.id} is missing shot path ${shotIndex}.`,
-                  );
-                }
-                return {
-                  ...shot,
-                  path: this.resolvePathKey(shotPathKey, entry.descriptor.id),
-                };
-              }),
-            };
-          }),
-        };
-      }
     }
   }
 
@@ -335,15 +286,10 @@ function isGeneratedOutputProjectionPayload(
 ): value is GeneratedOutputProjectionPayload {
   return (
     isRecord(value) &&
-    hasOnlyKeys(value, ['asset', 'pathKey', 'storyboardShotPathKeys']) &&
+    hasOnlyKeys(value, ['asset', 'pathKey']) &&
     isPathlessGeneratedAsset(value['asset']) &&
     typeof value['pathKey'] === 'string' &&
-    isPortablePathKey(value['pathKey']) &&
-    (value['storyboardShotPathKeys'] === undefined ||
-      (Array.isArray(value['storyboardShotPathKeys']) &&
-        value['storyboardShotPathKeys'].every(
-          (scene) => Array.isArray(scene) && scene.every(isPortablePathKey),
-        )))
+    isPortablePathKey(value['pathKey'])
   );
 }
 
@@ -375,21 +321,6 @@ function isPathlessGeneratedAsset(value: unknown): value is PathlessGeneratedAss
         isFiniteNumber(value['width']) &&
         isFiniteNumber(value['height']) &&
         isFiniteNumber(value['fps'])
-      );
-    case 'generated-storyboard':
-      return (
-        Array.isArray(value['scenes']) &&
-        value['scenes'].every(
-          (scene) =>
-            isRecord(scene) &&
-            isFiniteNumber(scene['sceneIndex']) &&
-            typeof scene['heading'] === 'string' &&
-            Array.isArray(scene['shots']) &&
-            scene['shots'].every(
-              (shot) =>
-                isRecord(shot) && shot['type'] === 'generated-image' && isGeneratedImageShape(shot),
-            ),
-        )
       );
     default:
       return false;

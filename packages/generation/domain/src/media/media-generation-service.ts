@@ -30,25 +30,6 @@ import {
   validateVideoGenerationParameters,
 } from '../model-parameter-profile';
 
-function hasThreeReferenceImageControls(
-  request: ImageGenerationRequest | VideoGenerationRequest | AudioGenerationRequest,
-): request is ImageGenerationRequest {
-  if (!(
-    'controlImageLocator' in request ||
-    'ipAdapterRefs' in request ||
-    'cameraReference' in request ||
-    'panoramaReference' in request
-  )) {
-    return false;
-  }
-  return Boolean(
-    request.controlImageLocator ||
-    request.ipAdapterRefs?.some((reference) => reference.imageLocator) ||
-    request.cameraReference ||
-    request.panoramaReference,
-  );
-}
-
 interface PreparedMediaGeneration {
   readonly request: ImageGenerationRequest | VideoGenerationRequest | AudioGenerationRequest;
   readonly providerId: string;
@@ -91,11 +72,11 @@ export class MediaGenerationService implements MediaGenerationExecutionPort {
     request: AudioGenerationRequest,
     options: MediaGenerationExecutionOptions = {},
   ): Promise<MediaGenerationResult> {
-    return this.generate(request.isMusic ? 'text-to-music' : 'text-to-audio', request, options);
+    return this.generate('text-to-audio', request, options);
   }
 
   private async generate(
-    generationType: Exclude<MediaGenerationType, 'workflow'>,
+    generationType: MediaGenerationType,
     request: ImageGenerationRequest | VideoGenerationRequest | AudioGenerationRequest,
     options: MediaGenerationExecutionOptions,
   ): Promise<MediaGenerationResult> {
@@ -136,7 +117,7 @@ export class MediaGenerationService implements MediaGenerationExecutionPort {
   }
 
   private async prepareGeneration(
-    generationType: Exclude<MediaGenerationType, 'workflow'>,
+    generationType: MediaGenerationType,
     initialRequest: ImageGenerationRequest | VideoGenerationRequest | AudioGenerationRequest,
   ): Promise<PreparedMediaGeneration> {
     let request = initialRequest;
@@ -156,29 +137,29 @@ export class MediaGenerationService implements MediaGenerationExecutionPort {
       throw new Error(`Configured media provider ${routing.providerId} is unavailable.`);
     }
     const isVideoGeneration = generationType.includes('video');
-    const requiresPreciseImageCapabilities =
-      generationType.includes('image') && hasThreeReferenceImageControls(request);
-    const requiresModel = isVideoGeneration || requiresPreciseImageCapabilities;
-    const model = requiresModel ? this.configManager.getModel(routing.modelId) : undefined;
-    if (requiresModel && !model) {
+    const model = this.configManager.getModel(routing.modelId);
+    if (!model) {
       throw new Error(`Configured media model ${routing.modelId} is unavailable.`);
     }
     const capabilityDiagnostics = isVideoGeneration
-      ? validateProviderVideoRequest(provider.type, request as VideoGenerationRequest)
+      ? validateProviderVideoRequest(
+          provider.type,
+          request as VideoGenerationRequest,
+          model.capabilities,
+        )
       : generationType.includes('image')
         ? validateProviderImageRequest(
             provider.type,
             request as ImageGenerationRequest,
-            model?.capabilities ?? [],
+            model.capabilities,
           )
         : [];
-    const modelParameterProfile =
-      isVideoGeneration && model
-        ? resolveGenerationModelParameterProfile({
-            providerType: provider.type,
-            modelName: model.name,
-          })
-        : undefined;
+    const modelParameterProfile = isVideoGeneration
+      ? resolveGenerationModelParameterProfile({
+          providerType: provider.type,
+          modelName: model.name,
+        })
+      : undefined;
     const modelParameterDiagnostics = modelParameterProfile
       ? validateVideoGenerationParameters(modelParameterProfile, request as VideoGenerationRequest)
       : [];

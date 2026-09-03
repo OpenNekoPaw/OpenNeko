@@ -171,33 +171,12 @@ export function computeAspectRatioLabel(width: number, height: number): string {
 
 function extractGeneratedAssetLineage(
   metadata: Record<string, unknown> | undefined,
-): Pick<
-  GeneratedAsset,
-  'characterIds' | 'sourceNodeId' | 'sourceCueId' | 'speakerEntityId' | 'voiceAssetId'
-> {
+): Pick<GeneratedAsset, 'sourceNodeId'> {
   if (!metadata) return {};
 
   const sourceNodeId =
     typeof metadata['sourceNodeId'] === 'string' ? metadata['sourceNodeId'] : undefined;
-  const sourceCueId =
-    typeof metadata['sourceCueId'] === 'string' ? metadata['sourceCueId'] : undefined;
-  const speakerEntityId =
-    typeof metadata['speakerEntityId'] === 'string' ? metadata['speakerEntityId'] : undefined;
-  const voiceAssetId =
-    typeof metadata['voiceAssetId'] === 'string' ? metadata['voiceAssetId'] : undefined;
-  const characterIds = Array.isArray(metadata['characterIds'])
-    ? metadata['characterIds'].filter(
-        (value): value is string => typeof value === 'string' && value.length > 0,
-      )
-    : undefined;
-
-  return {
-    sourceNodeId,
-    sourceCueId,
-    speakerEntityId,
-    voiceAssetId,
-    characterIds: characterIds && characterIds.length > 0 ? characterIds : undefined,
-  };
+  return sourceNodeId ? { sourceNodeId } : {};
 }
 
 function extractGeneratedAssetGenerationLineage(

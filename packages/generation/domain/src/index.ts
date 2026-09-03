@@ -1,4 +1,3 @@
-export * from './generation-params';
 export * from './model-parameter-profile';
 export * from './recipe';
 export type {
@@ -6,21 +5,15 @@ export type {
   ControlMode,
   ImageGenerationRequest,
   IPAdapterReference,
-  MediaAdapter,
-  MediaAdapterError,
-  MediaAdapterResult,
-  MediaAudioSubmitter,
+  GenerationProviderTaskError,
+  GenerationProviderTaskObservation,
   MediaGenerationRequestBase,
   MediaGenerationType,
-  MediaImageSubmitter,
   MaterializedImageGenerationRequest,
   MaterializedIPAdapterReference,
   MediaOperationStatus,
   MediaOutput,
   MediaOutputType,
-  MediaTaskCanceller,
-  MediaTaskDescriber,
-  MediaVideoSubmitter,
   MaterializedVideoGenerationRequest,
   MaterializedVideoGenerationInput,
   VideoGenerationInput,

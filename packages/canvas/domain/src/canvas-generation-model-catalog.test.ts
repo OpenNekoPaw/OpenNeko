@@ -27,14 +27,6 @@ describe('Canvas Generation model catalog', () => {
         options: { privateProviderParameter: true },
       },
       {
-        id: 'music-model',
-        name: 'wire-music-model',
-        displayName: 'Music Model',
-        providerId: 'provider-1',
-        type: 'audio' as const,
-        capabilities: ['audio.music.generate'],
-      },
-      {
         id: 'video-model',
         name: 'MiniMax-H3',
         displayName: 'MiniMax H3',
@@ -66,33 +58,9 @@ describe('Canvas Generation model catalog', () => {
           : type === 'audio'
             ? { providerId: 'provider-1', modelId: 'audio-model' }
             : undefined,
-      getDefaultModelPurposeRef: (purpose) =>
-        purpose === 'audio.music.generate'
-          ? { providerId: 'provider-1', modelId: 'music-model' }
-          : undefined,
     });
 
     expect(catalog).toEqual([
-      {
-        binding: {
-          purpose: 'audio.generate',
-          providerId: 'provider-1',
-          modelId: 'music-model',
-        },
-        label: 'Music Model',
-        providerLabel: 'Provider One',
-        isDefault: false,
-      },
-      {
-        binding: {
-          purpose: 'audio.music.generate',
-          providerId: 'provider-1',
-          modelId: 'music-model',
-        },
-        label: 'Music Model',
-        providerLabel: 'Provider One',
-        isDefault: true,
-      },
       {
         binding: {
           purpose: 'canvas.prompt',
@@ -135,13 +103,10 @@ describe('Canvas Generation model catalog', () => {
   it('uses model type instead of generic capabilities for Canvas purpose matching', () => {
     expect(canvasGenerationModelSupportsPurpose({ type: 'llm' }, 'audio.generate')).toBe(false);
     expect(canvasGenerationModelSupportsPurpose({ type: 'audio' }, 'audio.generate')).toBe(true);
-    expect(canvasGenerationModelSupportsPurpose({ type: 'audio' }, 'audio.music.generate')).toBe(
-      true,
-    );
     expect(canvasGenerationModelSupportsPurpose({}, 'canvas.prompt')).toBe(false);
   });
 
-  it('offers every audio model in both audio modes and orders each configured default first', () => {
+  it('projects only the executable audio catalog', () => {
     const catalog = projectCanvasGenerationModels({
       providers: [{ id: 'provider-1', displayName: 'Provider One' }],
       models: [
@@ -153,38 +118,15 @@ describe('Canvas Generation model catalog', () => {
           type: 'audio',
           capabilities: [],
         },
-        {
-          id: 'music-model',
-          name: 'music-model',
-          displayName: 'Music Model',
-          providerId: 'provider-1',
-          type: 'audio',
-          capabilities: ['chat'],
-        },
       ],
       getDefaultModelRef: (type) =>
         type === 'audio' ? { providerId: 'provider-1', modelId: 'audio-model' } : undefined,
-      getDefaultModelPurposeRef: (purpose) =>
-        purpose === 'audio.music.generate'
-          ? { providerId: 'provider-1', modelId: 'music-model' }
-          : undefined,
     });
 
     expect(
       catalog
         .filter((option) => option.binding.purpose === 'audio.generate')
         .map((option) => [option.label, option.isDefault]),
-    ).toEqual([
-      ['Audio Model', true],
-      ['Music Model', false],
-    ]);
-    expect(
-      catalog
-        .filter((option) => option.binding.purpose === 'audio.music.generate')
-        .map((option) => [option.label, option.isDefault]),
-    ).toEqual([
-      ['Music Model', true],
-      ['Audio Model', false],
-    ]);
+    ).toEqual([['Audio Model', true]]);
   });
 });

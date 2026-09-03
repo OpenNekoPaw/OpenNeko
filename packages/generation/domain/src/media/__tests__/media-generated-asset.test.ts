@@ -41,7 +41,6 @@ describe('media generated asset helpers', () => {
             workflowId: 'workflow-1',
             workflowStageId: 'shot-generation',
             sourceNodeId: 'node-1',
-            characterIds: ['char-1', ''],
           },
         },
         now: () => '2026-01-01T00:00:00.000Z',
@@ -55,7 +54,6 @@ describe('media generated asset helpers', () => {
         prompt: 'A cat',
         model: 'flux',
         sourceNodeId: 'node-1',
-        characterIds: ['char-1'],
         lifecycle: expect.objectContaining({
           assetId,
           contentDigest: 'sha256:image',

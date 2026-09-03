@@ -5,10 +5,7 @@ import type {
   VideoGenerationRequest,
 } from '@neko/generation-domain';
 
-const MEDIA_MODEL_TYPE_BY_GENERATION_TYPE: Record<
-  Exclude<MediaGenerationType, 'workflow'>,
-  MediaModelType
-> = {
+const MEDIA_MODEL_TYPE_BY_GENERATION_TYPE: Record<MediaGenerationType, MediaModelType> = {
   'text-to-image': 'image',
   'image-to-image': 'image',
   'image-edit': 'image',
@@ -17,13 +14,9 @@ const MEDIA_MODEL_TYPE_BY_GENERATION_TYPE: Record<
   'video-to-video': 'video',
   'video-edit': 'video',
   'text-to-audio': 'audio',
-  'text-to-music': 'audio',
 };
 
 export function resolveMediaModelType(generationType: MediaGenerationType): MediaModelType {
-  if (generationType === 'workflow') {
-    throw new Error('Workflow generation does not identify one media model type.');
-  }
   return MEDIA_MODEL_TYPE_BY_GENERATION_TYPE[generationType];
 }
 

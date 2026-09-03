@@ -125,7 +125,6 @@ const config: KnipConfig = {
     'packages/generation/domain': {
       entry: [
         'src/index.ts',
-        'src/comfyui/index.ts',
         'src/job/index.ts',
         'src/media/index.ts',
         'src/prompt/index.ts',

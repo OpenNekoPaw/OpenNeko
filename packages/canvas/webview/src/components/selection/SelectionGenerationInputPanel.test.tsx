@@ -562,45 +562,6 @@ describe('SelectionGenerationInputPanel', () => {
     );
   });
 
-  it('switches one Audio node to music mode and filters the model purpose', async () => {
-    const updateGenerationRecipe = vi.fn(async (_nodeId: string, _recipe: CanvasGenerationRecipe) =>
-      snapshot(),
-    );
-    const node = generationNode({
-      kind: 'audio',
-      prompt: '',
-      model: {
-        purpose: 'audio.generate',
-        providerId: 'provider-1',
-        modelId: 'audio-model-1',
-      },
-    });
-    render([node], [], [node.id], createHost(undefined, { updateGenerationRecipe }));
-
-    await act(async () => {
-      Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
-        .find((button) => button.textContent === 'Music generation')
-        ?.click();
-    });
-    expect(updateGenerationRecipe).toHaveBeenCalledWith(
-      node.id,
-      expect.objectContaining({
-        kind: 'audio',
-        isMusic: true,
-        model: {
-          purpose: 'audio.music.generate',
-          providerId: 'provider-1',
-          modelId: 'music-model-1',
-        },
-      }),
-    );
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('[aria-label="Model"]')?.click();
-    });
-    expect(document.body.textContent).toContain('Music Model');
-    expect(document.body.textContent).not.toContain('Audio Model');
-  });
-
   it('keeps the node-anchored panel compact at a fixed gap in a narrow viewport', () => {
     const node = nodeWithHistory();
     render([node], [], [node.id], createHost(), { width: 320, height: 640 });
@@ -912,16 +873,6 @@ const GENERATION_MODELS = [
       modelId: 'audio-model-1',
     },
     label: 'Audio Model',
-    providerLabel: 'Provider One',
-    isDefault: true,
-  },
-  {
-    binding: {
-      purpose: 'audio.music.generate' as const,
-      providerId: 'provider-1',
-      modelId: 'music-model-1',
-    },
-    label: 'Music Model',
     providerLabel: 'Provider One',
     isDefault: true,
   },

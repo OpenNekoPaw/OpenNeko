@@ -46,7 +46,7 @@
     },
     {
       "tool": "openneko_generation",
-      "operations": ["submit", "submit-comfyui", "describe"],
+      "operations": ["submit", "describe"],
       "registration": "packages/generation/dsh-plugin/src/index.ts",
       "schemaOwner": "packages/generation/domain/src/dsh-tool.ts",
       "validator": "decodeGenerationDshToolInput",

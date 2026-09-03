@@ -1,4 +1,3 @@
-import type { GenerationModelConfig } from '@neko/generation-domain';
 import type { CanvasNode, CanvasNodeType } from '@neko/canvas-domain';
 
 export const DEFAULT_CANVAS_AMBIENT_SCOPE_ID = 'default';
@@ -45,7 +44,6 @@ export interface CanvasAmbientContextRuntimeOptions {
 
 export interface CanvasAmbientContextScopeState {
   selectedNodes: SelectedNodeSummary[];
-  generationConfig?: GenerationModelConfig;
   pendingChanges: CanvasChangeSummary[];
 }
 
@@ -79,20 +77,6 @@ export class CanvasAmbientContextRuntime {
     const state = this.getScope(scopeId);
     state.selectedNodes = [];
     return [];
-  }
-
-  setActiveGenerationConfig(
-    config: GenerationModelConfig,
-    scopeId = DEFAULT_CANVAS_AMBIENT_SCOPE_ID,
-  ): GenerationModelConfig {
-    this.getScope(scopeId).generationConfig = config;
-    return config;
-  }
-
-  getActiveGenerationConfig(
-    scopeId = DEFAULT_CANVAS_AMBIENT_SCOPE_ID,
-  ): GenerationModelConfig | undefined {
-    return this.getScope(scopeId).generationConfig;
   }
 
   recordCanvasChange(

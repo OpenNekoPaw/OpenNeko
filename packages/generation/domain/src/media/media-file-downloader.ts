@@ -82,7 +82,7 @@ export interface DownloadMediaOptions {
  *
  * @param operationId   - Used as filename prefix
  * @param generationType - Used for format fallback detection (e.g. 'text-to-image')
- * @param outputs    - Array of { url?, type? } from the media adapter
+ * @param outputs    - Array of { url?, type? } from the provider result
  * @param outputDir  - Absolute path to the target directory (created if absent)
  * @param options    - Optional transcoding callback
  * @returns Absolute paths of successfully saved files (same order as outputs)
