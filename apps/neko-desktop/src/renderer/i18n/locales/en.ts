@@ -96,7 +96,7 @@ export const en = {
     'Language models for new conversations; the current default is marked on its card.',
   'settings.agent.generationModels': 'Generation models',
   'settings.agent.generationModelsDescription':
-    'Models are separated by image, video, and audio; each default is marked on its card.',
+    'Models are separated by image, video, audio, and music; each default is marked on its card.',
   'settings.agent.defaultModel': 'Default',
   'settings.agent.setAsDefault': 'Set as default',
   'settings.agent.providers': 'Providers',
@@ -112,7 +112,7 @@ export const en = {
     'Provide language models for DSH conversations.',
   'settings.agent.providerGroup.generation': 'Generation providers',
   'settings.agent.providerGroup.generation.description':
-    'Provide image, video, or audio generation models.',
+    'Provide image, video, audio, or music generation models.',
   'settings.agent.providerGroup.empty': 'No configured providers',
   'settings.agent.providerPreset': 'Provider type',
   'settings.agent.providerPreset.dialogue.description':
@@ -200,6 +200,7 @@ export const en = {
   'settings.agent.modelType.image': 'Image generation',
   'settings.agent.modelType.video': 'Video generation',
   'settings.agent.modelType.audio': 'Audio generation',
+  'settings.agent.modelType.music': 'Music generation',
   'settings.agent.credential.configured': 'Credential configured',
   'settings.agent.credential.missing': 'Credential missing',
   'settings.agent.credential.invalid': 'Credential invalid',

@@ -30,8 +30,8 @@ const VISIBLE_CAPABILITY_TAGS_BY_CATEGORY = {
     ['text_to_audio', ['text_to_audio', 'audio.generate']],
     ['tts', ['audio.tts']],
     ['asr', ['audio.asr']],
-    ['text_to_music', ['text_to_music', 'audio.music.generate']],
   ],
+  music: [['text_to_music', ['text_to_music', 'audio.music.generate']]],
 } as const satisfies Record<ModelType, readonly (readonly [string, readonly string[]])[]>;
 
 export function groupModelOptionsByProvider(

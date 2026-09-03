@@ -49,7 +49,7 @@ interface ParamOption<Value extends string = string> {
   readonly hintKey?: string;
 }
 
-const CATEGORIES: readonly ComposerConfigCategory[] = ['llm', 'image', 'video', 'audio'];
+const CATEGORIES: readonly ComposerConfigCategory[] = ['llm', 'image', 'video', 'audio', 'music'];
 const SECTIONS: readonly ComposerConfigSection[] = ['model', 'params'];
 const RATIO_OPTIONS: readonly ParamOption<GenerationParams['ratio']>[] = [
   { value: '16:9', label: '16:9' },
@@ -405,6 +405,17 @@ function MediaParameterPanel({
           onChange={(value) => onChange({ videoDuration: parseDuration(value) })}
         />
       </>
+    );
+  }
+
+  if (category === 'music') {
+    return (
+      <ParameterGroup
+        label={t('chat.generation.param.audioDuration')}
+        value={String(params.audioDuration)}
+        options={AUDIO_DURATION_OPTIONS}
+        onChange={(value) => onChange({ audioDuration: parseDuration(value) })}
+      />
     );
   }
 

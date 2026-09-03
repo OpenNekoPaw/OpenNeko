@@ -269,7 +269,7 @@ export function DesktopAgentSurface({
   };
 
   const selectMediaModel = async (
-    category: 'image' | 'video' | 'audio',
+    category: 'image' | 'video' | 'audio' | 'music',
     modelOptionId: string,
   ): Promise<void> => {
     if (configuring) return;

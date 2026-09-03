@@ -54,6 +54,7 @@ export interface SkillSummary {
 // Generation params -------------------------------------------------------
 
 export type GenCategory = 'image' | 'video' | 'audio';
+export type MediaModelCategory = GenCategory | 'music';
 export type EntryPromptMenu = 'roleplay';
 export type CharacterConversationMode =
   import('@neko/agent-contracts').AgentCharacterDialogueLaunchBinding['mode'];
@@ -85,7 +86,7 @@ export interface ComposerMenuSelectionState {
   readonly selectedIndex: number;
 }
 
-export type ComposerConfigCategory = 'llm' | GenCategory;
+export type ComposerConfigCategory = 'llm' | MediaModelCategory;
 export type ComposerConfigSection = 'model' | 'params';
 
 export type ComposerControlMenuId =

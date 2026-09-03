@@ -93,7 +93,7 @@ const generationCapabilities = [
     supportLevel: 'custom',
     requiresApiKey: true,
     allowCustomModels: true,
-    supportedModelTypes: ['image', 'video', 'audio'],
+    supportedModelTypes: ['image', 'video', 'audio', 'music'],
     modelTemplates: [],
   },
 ] as const;
@@ -885,6 +885,7 @@ describe('Desktop Settings surfaces', () => {
       models: [
         modelFixture('chat-model', 'chat', 'llm'),
         modelFixture('image-model', 'media', 'image'),
+        modelFixture('music-model', 'media', 'music'),
         modelFixture('hybrid-chat', 'hybrid', 'llm'),
         modelFixture('hybrid-video', 'hybrid', 'video'),
       ],
@@ -1157,7 +1158,11 @@ async function setSelectValue(select: HTMLSelectElement, value: string): Promise
   });
 }
 
-function modelFixture(id: string, providerId: string, type: 'llm' | 'image' | 'video' | 'audio') {
+function modelFixture(
+  id: string,
+  providerId: string,
+  type: 'llm' | 'image' | 'video' | 'audio' | 'music',
+) {
   return {
     id,
     providerId,
@@ -1171,7 +1176,9 @@ function modelFixture(id: string, providerId: string, type: 'llm' | 'image' | 'v
           ? (['text_to_image', 'image.generate'] as const)
           : type === 'video'
             ? (['text_to_video', 'video.generate'] as const)
-            : (['text_to_audio', 'audio.generate'] as const),
+            : type === 'audio'
+              ? (['text_to_audio', 'audio.generate'] as const)
+              : (['text_to_music', 'audio.music.generate'] as const),
     enabled: true,
   } as const;
 }

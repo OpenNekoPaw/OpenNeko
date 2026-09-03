@@ -631,6 +631,7 @@ export class ConfigManager {
       image: defaults.image ? toModelOptionId(defaults.image) : undefined,
       video: defaults.video ? toModelOptionId(defaults.video) : undefined,
       audio: defaults.audio ? toModelOptionId(defaults.audio) : undefined,
+      music: defaults.music ? toModelOptionId(defaults.music) : undefined,
     });
   }
 

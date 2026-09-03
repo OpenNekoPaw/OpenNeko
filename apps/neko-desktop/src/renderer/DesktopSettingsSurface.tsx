@@ -64,8 +64,8 @@ const MODEL_CAPABILITY_OPTIONS = {
     { id: 'textToAudio', capabilities: ['text_to_audio'] },
     { id: 'tts', capabilities: ['audio.tts'] },
     { id: 'asr', capabilities: ['audio.asr'] },
-    { id: 'music', capabilities: ['text_to_music', 'audio.music.generate'] },
   ],
+  music: [{ id: 'music', capabilities: ['text_to_music', 'audio.music.generate'] }],
 } as const satisfies Record<
   DesktopAiModelType,
   readonly {
@@ -1326,7 +1326,7 @@ function ModelForm({
   onCancel,
   onSave,
   providerId,
-  supportedTypes = ['llm', 'image', 'video', 'audio'],
+  supportedTypes = ['llm', 'image', 'video', 'audio', 'music'],
 }: {
   readonly allowCustomModels?: boolean;
   readonly disabled: boolean;

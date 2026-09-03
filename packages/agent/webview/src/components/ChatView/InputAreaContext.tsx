@@ -18,13 +18,20 @@ import type {
 import type { ConversationKind } from '@neko/agent-contracts';
 import type { ChatModelOption } from '@neko/ai-contracts';
 import type { AgentContextPayload } from '@neko/agent-contracts';
-import type { SlashCommand, MentionItem, GenCategory, GenerationParams } from './InputArea/types';
-export type MediaCategory = 'image' | 'video' | 'audio';
+import type {
+  SlashCommand,
+  MentionItem,
+  GenCategory,
+  GenerationParams,
+  MediaModelCategory,
+} from './InputArea/types';
+export type MediaCategory = MediaModelCategory;
 
 export interface MediaModelSelection {
   image: string;
   video: string;
   audio: string;
+  music: string;
 }
 
 export interface InputAreaContextValue {

@@ -1,10 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type {
-  AgentModelPurpose,
-  AssistantConfigState,
-  AssistantSettingsSnapshot,
-  ConfigManager,
-} from '@neko/host/settings';
+import type { AssistantConfigState, AssistantSettingsSnapshot } from '@neko/host/settings';
+import type { ModelType } from '@neko/ai-contracts';
 import {
   createDefaultCanvasWorkspaceTarget,
   createCanvasWorkspaceContextCatalog,
@@ -170,8 +166,9 @@ describe('Desktop DSH composer configuration', () => {
       category: 'image',
       modelOptionId: 'nekoapi-media:gpt-image-2',
     });
-    expect(workspaceConfig.setDefaultModelPurposeRefs).toHaveBeenCalledWith({
-      'image.generate': { providerId: 'nekoapi-media', modelId: 'gpt-image-2' },
+    expect(workspaceConfig.setDefaultModelRef).toHaveBeenCalledWith('image', {
+      providerId: 'nekoapi-media',
+      modelId: 'gpt-image-2',
     });
     await expect(
       service.selectMediaModel({
@@ -187,8 +184,24 @@ describe('Desktop DSH composer configuration', () => {
         video: 'minimax-media:minimax-h3',
       },
     });
-    expect(workspaceConfig.setDefaultModelPurposeRefs).toHaveBeenLastCalledWith({
-      'video.generate': { providerId: 'minimax-media', modelId: 'minimax-h3' },
+    expect(workspaceConfig.setDefaultModelRef).toHaveBeenLastCalledWith('video', {
+      providerId: 'minimax-media',
+      modelId: 'minimax-h3',
+    });
+    await expect(
+      service.selectMediaModel({
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+        category: 'music',
+        modelOptionId: 'nekoapi-media:suno-v4',
+      }),
+    ).resolves.toMatchObject({
+      selectedMediaModelOptionIds: { music: 'nekoapi-media:suno-v4' },
+    });
+    expect(workspaceConfig.setDefaultModelRef).toHaveBeenLastCalledWith('music', {
+      providerId: 'nekoapi-media',
+      modelId: 'suno-v4',
     });
     await expect(
       service.selectMediaModel({
@@ -692,6 +705,7 @@ describe('Desktop DSH composer configuration', () => {
       'openai:gpt-5',
       'nekoapi-media:gpt-image-2',
       'minimax-media:minimax-h3',
+      'nekoapi-media:suno-v4',
     ]);
     expect(projected.selectedModelOptionId).toBeUndefined();
     expect(projected.diagnostic).toBe('The selected chat model is not executable by DSH.');
@@ -861,30 +875,24 @@ function permissionPresets(currentValue: string) {
 
 function createConfig() {
   let state = createState();
-  let purposeRefs: Partial<
-    Record<AgentModelPurpose, { readonly providerId: string; readonly modelId: string }>
+  let defaultRefs: Partial<
+    Record<ModelType, { readonly providerId: string; readonly modelId: string }>
   > = {
-    'image.generate': { providerId: 'nekoapi-media', modelId: 'gpt-image-2' },
+    image: { providerId: 'nekoapi-media', modelId: 'gpt-image-2' },
   };
   return {
     getAssistantConfigState: vi.fn(() => state),
-    getDefaultModelPurposeRef: vi.fn((purpose: string) => {
-      if (
-        purpose !== 'image.generate' &&
-        purpose !== 'video.generate' &&
-        purpose !== 'audio.generate'
-      ) {
-        return undefined;
-      }
-      return purposeRefs[purpose];
-    }),
+    getDefaultModelRef: vi.fn((type: ModelType) => defaultRefs[type]),
     getEffectiveAgentWorkspaceConfigSnapshot: vi.fn(() => ({})),
     setAssistantSettings: vi.fn(async (updates: Partial<AssistantSettingsSnapshot>) => {
       state = { ...state, ...updates };
     }),
-    setDefaultModelPurposeRefs: vi.fn(
-      async (updates: Parameters<ConfigManager['setDefaultModelPurposeRefs']>[0]) => {
-        purposeRefs = { ...purposeRefs, ...updates };
+    setDefaultModelRef: vi.fn(
+      async (
+        type: ModelType,
+        ref: { readonly providerId: string; readonly modelId: string } | undefined,
+      ) => {
+        defaultRefs = { ...defaultRefs, [type]: ref };
       },
     ),
   };
@@ -939,6 +947,15 @@ function createState(): AssistantConfigState {
         providerLabel: 'MiniMax',
         category: 'video',
         capabilities: ['video.generate', 'image_to_video'],
+      },
+      {
+        id: 'nekoapi-media:suno-v4',
+        label: 'Suno V4',
+        providerId: 'nekoapi-media',
+        modelId: 'suno-v4',
+        providerLabel: 'NekoAPI Media',
+        category: 'music',
+        capabilities: ['audio.music.generate', 'text_to_music'],
       },
     ],
     modelGroups: [],

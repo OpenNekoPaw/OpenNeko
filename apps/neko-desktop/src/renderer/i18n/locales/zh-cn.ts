@@ -89,7 +89,8 @@ export const zhCN = {
   'settings.agent.dialogueModelsDescription':
     '配置新会话使用的语言模型，当前默认项直接标识在卡片中。',
   'settings.agent.generationModels': '生成模型',
-  'settings.agent.generationModelsDescription': '按图片、视频和音频区分，默认项直接标识在卡片中。',
+  'settings.agent.generationModelsDescription':
+    '按图片、视频、音频和音乐区分，默认项直接标识在卡片中。',
   'settings.agent.defaultModel': '默认',
   'settings.agent.setAsDefault': '设为默认',
   'settings.agent.providers': 'Provider',
@@ -102,7 +103,7 @@ export const zhCN = {
   'settings.agent.providerGroup.dialogue': '对话 Provider',
   'settings.agent.providerGroup.dialogue.description': '为 DSH 会话提供语言模型。',
   'settings.agent.providerGroup.generation': '生成 Provider',
-  'settings.agent.providerGroup.generation.description': '提供图片、视频或音频生成模型。',
+  'settings.agent.providerGroup.generation.description': '提供图片、视频、音频或音乐生成模型。',
   'settings.agent.providerGroup.empty': '暂无已配置 Provider',
   'settings.agent.providerPreset': 'Provider 类型',
   'settings.agent.providerPreset.dialogue.description':
@@ -183,6 +184,7 @@ export const zhCN = {
   'settings.agent.modelType.image': '图片生成',
   'settings.agent.modelType.video': '视频生成',
   'settings.agent.modelType.audio': '音频生成',
+  'settings.agent.modelType.music': '音乐生成',
   'settings.agent.credential.configured': '凭据已配置',
   'settings.agent.credential.missing': '缺少凭据',
   'settings.agent.credential.invalid': '凭据无效',

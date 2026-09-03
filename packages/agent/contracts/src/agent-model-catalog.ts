@@ -1,9 +1,10 @@
+import type { ModelType } from '@neko/ai-contracts';
 import {
   parseAgentAvailabilityProjection,
   type AgentAvailabilityProjection,
 } from './agent-availability';
 
-export type AgentModelType = 'llm' | 'image' | 'video' | 'audio';
+export type AgentModelType = ModelType;
 
 export interface AgentModelCatalogEntry {
   readonly id: string;
@@ -95,7 +96,8 @@ export function parseAgentModelCatalogEntry(value: unknown): AgentModelCatalogEn
     modelType !== 'llm' &&
     modelType !== 'image' &&
     modelType !== 'video' &&
-    modelType !== 'audio'
+    modelType !== 'audio' &&
+    modelType !== 'music'
   ) {
     throw new Error(`Unknown Agent model type '${String(modelType)}'.`);
   }

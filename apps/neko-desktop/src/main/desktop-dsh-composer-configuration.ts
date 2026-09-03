@@ -42,10 +42,7 @@ interface ComposerSurfaceIdentity {
 
 type ComposerConfigManager = Pick<
   ConfigManager,
-  | 'getAssistantConfigState'
-  | 'getDefaultModelPurposeRef'
-  | 'setAssistantSettings'
-  | 'setDefaultModelPurposeRefs'
+  'getAssistantConfigState' | 'getDefaultModelRef' | 'setAssistantSettings' | 'setDefaultModelRef'
 > & {
   getEffectiveAgentWorkspaceConfigSnapshot(): Pick<
     ReturnType<ConfigManager['getEffectiveAgentWorkspaceConfigSnapshot']>,
@@ -344,7 +341,7 @@ export function createDesktopDshComposerConfiguration(options: {
 
     async selectMediaModel(
       input: ComposerSurfaceIdentity & {
-        readonly category: 'image' | 'video' | 'audio';
+        readonly category: 'image' | 'video' | 'audio' | 'music';
         readonly modelOptionId: string;
       },
     ): Promise<DshComposerConfigurationProjection> {
@@ -363,11 +360,9 @@ export function createDesktopDshComposerConfiguration(options: {
       const selected = matches[0];
       if (!selected)
         throw new Error(`Composer media model '${input.modelOptionId}' is unavailable.`);
-      await config.setDefaultModelPurposeRefs({
-        [mediaPurpose(input.category)]: {
-          providerId: selected.providerId,
-          modelId: selected.modelId,
-        },
+      await config.setDefaultModelRef(input.category, {
+        providerId: selected.providerId,
+        modelId: selected.modelId,
       });
       return projectConfiguration(
         config,
@@ -467,14 +462,6 @@ function projectMentionMediaType(
   return kind === 'file' ? 'text' : undefined;
 }
 
-function mediaPurpose(
-  category: 'image' | 'video' | 'audio',
-): 'image.generate' | 'video.generate' | 'audio.generate' {
-  if (category === 'image') return 'image.generate';
-  if (category === 'video') return 'video.generate';
-  return 'audio.generate';
-}
-
 function projectConfiguration(
   config: ComposerConfigManager,
   executionCatalog: DesktopDshExecutionCatalog,
@@ -524,12 +511,12 @@ function projectConfiguration(
 }
 
 function projectSelectedMediaModelOptionIds(
-  config: Pick<ConfigManager, 'getDefaultModelPurposeRef'>,
+  config: Pick<ConfigManager, 'getDefaultModelRef'>,
   models: readonly DshComposerModelOption[],
 ): DshComposerConfigurationProjection['selectedMediaModelOptionIds'] {
-  const result: Partial<Record<'image' | 'video' | 'audio', string>> = {};
-  for (const category of ['image', 'video', 'audio'] as const) {
-    const ref = config.getDefaultModelPurposeRef(mediaPurpose(category));
+  const result: Partial<Record<'image' | 'video' | 'audio' | 'music', string>> = {};
+  for (const category of ['image', 'video', 'audio', 'music'] as const) {
+    const ref = config.getDefaultModelRef(category);
     if (!ref) continue;
     const matches = models.filter(
       (model) =>
@@ -540,7 +527,7 @@ function projectSelectedMediaModelOptionIds(
     const [match] = matches;
     if (matches.length !== 1 || !match) {
       throw new Error(
-        `Composer ${category} purpose binding '${ref.providerId}/${ref.modelId}' must resolve to exactly one model option.`,
+        `Composer ${category} default model '${ref.providerId}/${ref.modelId}' must resolve to exactly one model option.`,
       );
     }
     result[category] = match.id;
@@ -593,7 +580,7 @@ function projectModel(model: {
   readonly providerId: string;
   readonly modelId: string;
   readonly providerLabel?: string;
-  readonly category?: 'llm' | 'image' | 'video' | 'audio';
+  readonly category?: 'llm' | 'image' | 'video' | 'audio' | 'music';
   readonly capabilities?: readonly string[];
 }): DshComposerModelOption {
   return {

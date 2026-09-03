@@ -111,7 +111,7 @@ export class DesktopDshSessionHost {
           readonly windowId: string;
           readonly workbenchInstanceId: string;
           readonly agentSurfaceId: string;
-          readonly category: 'image' | 'video' | 'audio';
+          readonly category: 'image' | 'video' | 'audio' | 'music';
           readonly modelOptionId: string;
         }): Promise<DshComposerConfigurationHostResult['configuration']>;
         selectPermissionPreset(input: {

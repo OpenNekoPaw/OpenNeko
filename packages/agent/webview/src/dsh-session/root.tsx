@@ -109,7 +109,7 @@ export interface DshAgentViewProps {
   readonly onDraftChange: (value: string) => void;
   readonly onModelChange: (modelOptionId: string) => void;
   readonly onMediaModelChange?: (
-    category: 'image' | 'video' | 'audio',
+    category: 'image' | 'video' | 'audio' | 'music',
     modelOptionId: string,
   ) => void;
   readonly onPermissionPresetChange: (permissionPresetId: string) => void;
@@ -744,7 +744,7 @@ function DshComposer({
   readonly onDraftChange: (value: string) => void;
   readonly onModelChange: (modelOptionId: string) => void;
   readonly onMediaModelChange?: (
-    category: 'image' | 'video' | 'audio',
+    category: 'image' | 'video' | 'audio' | 'music',
     modelOptionId: string,
   ) => void;
   readonly onPermissionPresetChange: (permissionPresetId: string) => void;
@@ -1010,6 +1010,7 @@ function DshComposer({
         image: configuration?.selectedMediaModelOptionIds.image ?? 'none',
         video: configuration?.selectedMediaModelOptionIds.video ?? 'none',
         audio: configuration?.selectedMediaModelOptionIds.audio ?? 'none',
+        music: configuration?.selectedMediaModelOptionIds.music ?? 'none',
       }}
       availableMediaModels={models.filter((model) => model.category !== 'llm')}
       mediaModelOptOutEnabled={false}

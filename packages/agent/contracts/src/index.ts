@@ -14,12 +14,6 @@ export * from './agent-availability';
 export * from './canonical-base64';
 export * from './agent-interaction-binding';
 export * from './agent-model-catalog';
-export {
-  parseAgentFlatPurposeModelRefs,
-  type AgentFlatPurposeModelRefMap,
-  type AgentFlatPurposeModelRefs,
-  type AgentPurposeModelRef,
-} from './agent-purpose-model';
 export * from './agent-conversation-context';
 export * from './agent-conversation-binding';
 export * from './agent-input-intent';

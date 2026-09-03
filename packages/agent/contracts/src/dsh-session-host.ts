@@ -324,7 +324,7 @@ export type DshSessionHostRequest =
       readonly operation: 'composer-media-model';
       readonly workbenchInstanceId: string;
       readonly agentSurfaceId: string;
-      readonly category: 'image' | 'video' | 'audio';
+      readonly category: 'image' | 'video' | 'audio' | 'music';
       readonly modelOptionId: string;
     })
   | (DshSessionHostSenderRequest & {
@@ -429,7 +429,7 @@ export interface OpenNekoDshSessionBridge {
     selectComposerMediaModel(
       workbenchInstanceId: string,
       agentSurfaceId: string,
-      category: 'image' | 'video' | 'audio',
+      category: 'image' | 'video' | 'audio' | 'music',
       modelOptionId: string,
     ): Promise<DshComposerConfigurationProjection>;
     selectComposerPermissionPreset(
@@ -1132,7 +1132,15 @@ function parseAgentContextPayload(value: unknown, field: string): AgentContextPa
 }
 
 function parseModelType(value: unknown): ModelType {
-  if (value === 'llm' || value === 'image' || value === 'video' || value === 'audio') return value;
+  if (
+    value === 'llm' ||
+    value === 'image' ||
+    value === 'video' ||
+    value === 'audio' ||
+    value === 'music'
+  ) {
+    return value;
+  }
   throw new Error(`DSH composer model category '${String(value)}' is unsupported.`);
 }
 
@@ -1141,9 +1149,9 @@ function parseSelectedMediaModelOptionIds(
   models: readonly DshComposerModelOption[],
 ): DshComposerConfigurationProjection['selectedMediaModelOptionIds'] {
   const record = requireRecord(value, 'DSH composer selected media models');
-  requireAllowedKeys(record, ['image', 'video', 'audio'], []);
-  const result: Partial<Record<'image' | 'video' | 'audio', string>> = {};
-  for (const category of ['image', 'video', 'audio'] as const) {
+  requireAllowedKeys(record, ['image', 'video', 'audio', 'music'], []);
+  const result: Partial<Record<Exclude<ModelType, 'llm'>, string>> = {};
+  for (const category of ['image', 'video', 'audio', 'music'] as const) {
     if (record[category] === undefined) continue;
     const modelOptionId = requireIdentity(
       record[category],

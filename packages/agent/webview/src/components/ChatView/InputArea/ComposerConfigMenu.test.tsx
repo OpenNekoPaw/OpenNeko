@@ -15,7 +15,7 @@ describe('Composer model configuration', () => {
           availableModels={[]}
           selectedModel=""
           onModelSelect={vi.fn()}
-          mediaModelSelection={{ image: 'none', video: 'none', audio: 'none' }}
+          mediaModelSelection={{ image: 'none', video: 'none', audio: 'none', music: 'none' }}
           availableMediaModels={[]}
           onMediaModelSelect={vi.fn()}
           genParams={DEFAULT_GENERATION_PARAMS}
@@ -38,7 +38,7 @@ describe('Composer model configuration', () => {
           availableModels={[]}
           selectedModel=""
           onModelSelect={vi.fn()}
-          mediaModelSelection={{ image: 'none', video: 'none', audio: 'none' }}
+          mediaModelSelection={{ image: 'none', video: 'none', audio: 'none', music: 'none' }}
           availableMediaModels={[]}
           onMediaModelSelect={vi.fn()}
           genParams={DEFAULT_GENERATION_PARAMS}
@@ -72,6 +72,7 @@ describe('Composer model configuration', () => {
             image: 'media-provider:image-generator',
             video: 'none',
             audio: 'none',
+            music: 'media-provider:music-generator',
           }}
           availableMediaModels={[
             {
@@ -81,6 +82,14 @@ describe('Composer model configuration', () => {
               modelId: 'image-generator',
               category: 'image',
               capabilities: ['image.generate'],
+            },
+            {
+              id: 'media-provider:music-generator',
+              label: 'Music Generator',
+              providerId: 'media-provider',
+              modelId: 'music-generator',
+              category: 'music',
+              capabilities: ['audio.music.generate'],
             },
           ]}
           onMediaModelSelect={vi.fn()}
@@ -96,5 +105,9 @@ describe('Composer model configuration', () => {
     const dialog = screen.getByRole('dialog', { name: 'Creation configuration' });
     expect(dialog.textContent).toContain('Image generation model');
     expect(dialog.textContent).toContain('Image Generator');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Music' }));
+    expect(dialog.textContent).toContain('Music generation model');
+    expect(dialog.textContent).toContain('Music Generator');
   });
 });
