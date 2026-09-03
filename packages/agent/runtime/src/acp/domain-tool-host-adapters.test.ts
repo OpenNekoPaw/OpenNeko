@@ -99,6 +99,42 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     });
   });
 
+  it('returns model parameter adjustments with the settled Generation facts', async () => {
+    const jobs = createGenerationJobs();
+    const submitted = createVideoGenerationSnapshot();
+    const succeeded: GenerationJobSnapshot = {
+      ...submitted,
+      phase: 'succeeded',
+      updatedAt: 3,
+      progress: { stage: 'completed', percent: 100 },
+      resultLocators: [
+        { file: { authority: 'workspace', path: 'neko/generated/job-video/video.mp4' } },
+      ],
+    };
+    jobs.submitGeneration.mockResolvedValue(submitted);
+    jobs.observeGeneration.mockReturnValue(snapshots(submitted, succeeded));
+    const adapter = new GenerationDshHostAdapter(jobs);
+
+    await expect(
+      adapter.execute(
+        request('openneko_generation', 'submit', {
+          purpose: 'video.generate',
+          generationType: 'image-to-video',
+          lifecycleMode: 'detached',
+          request: { prompt: 'A slow upward push' },
+        }),
+      ),
+    ).resolves.toMatchObject({
+      outcome: 'success',
+      result: {
+        parameterAdjustments: [
+          { parameter: 'resolution', reason: 'invalid' },
+          { parameter: 'fps', reason: 'unsupported' },
+        ],
+      },
+    });
+  });
+
   it('projects each distinct Generation lifecycle snapshot through the exact Tool request', async () => {
     const jobs = createGenerationJobs();
     const submitted = createGenerationSnapshot();
@@ -585,6 +621,34 @@ function createSucceededGenerationSnapshot(): GenerationJobSnapshot {
     updatedAt: 3,
     progress: { stage: 'completed', percent: 100 },
     resultLocators: [{ file: { authority: 'workspace', path: 'neko/generated/job-1/image.png' } }],
+  };
+}
+
+function createVideoGenerationSnapshot(): GenerationJobSnapshot {
+  return {
+    ref: { kind: 'generation', jobId: 'job-video' },
+    phase: 'pending',
+    createdAt: 1,
+    updatedAt: 2,
+    lifecycleMode: 'detached',
+    request: {
+      providerId: 'minimax-provider',
+      modelId: 'minimax-h3',
+      generationType: 'image-to-video',
+      parameterAdjustments: [
+        { parameter: 'resolution', reason: 'invalid' },
+        { parameter: 'fps', reason: 'unsupported' },
+      ],
+      request: {
+        prompt: 'A slow upward push',
+        providerId: 'minimax-provider',
+        modelId: 'minimax-h3',
+        duration: 6,
+        resolution: '768P',
+        aspectRatio: '16:9',
+      },
+    },
+    progress: { stage: 'queued', percent: 0 },
   };
 }
 

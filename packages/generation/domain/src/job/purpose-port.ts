@@ -6,6 +6,7 @@ import type {
   PurposeGenerationJobPort,
   SubmitPurposeGenerationJobInput,
 } from './contracts';
+import { conformVideoGenerationRequestToProfile } from '../model-parameter-profile';
 
 export function createPurposeGenerationJobPort(input: {
   readonly jobs: GenerationJobPort;
@@ -24,7 +25,8 @@ export function createPurposeGenerationJobPort(input: {
           return input.jobs.submitGeneration({
             lifecycleMode: request.lifecycleMode,
             generationType: request.generationType,
-            ...binding,
+            providerId: binding.providerId,
+            modelId: binding.modelId,
             request: request.request,
           });
         case 'text-to-image':
@@ -33,25 +35,48 @@ export function createPurposeGenerationJobPort(input: {
           return input.jobs.submitGeneration({
             lifecycleMode: request.lifecycleMode,
             generationType: request.generationType,
-            ...binding,
-            request: { ...request.request, ...binding },
+            providerId: binding.providerId,
+            modelId: binding.modelId,
+            request: {
+              ...request.request,
+              providerId: binding.providerId,
+              modelId: binding.modelId,
+            },
           });
         case 'text-to-video':
         case 'image-to-video':
         case 'video-to-video':
-        case 'video-edit':
+        case 'video-edit': {
+          const boundVideoRequest = {
+            ...request.request,
+            providerId: binding.providerId,
+            modelId: binding.modelId,
+          };
+          const preparedVideo = binding.parameterProfile
+            ? conformVideoGenerationRequestToProfile(boundVideoRequest, binding.parameterProfile)
+            : { request: boundVideoRequest, adjustments: [] };
           return input.jobs.submitGeneration({
             lifecycleMode: request.lifecycleMode,
             generationType: request.generationType,
-            ...binding,
-            request: { ...request.request, ...binding },
+            providerId: binding.providerId,
+            modelId: binding.modelId,
+            ...(preparedVideo.adjustments.length === 0
+              ? {}
+              : { parameterAdjustments: preparedVideo.adjustments }),
+            request: preparedVideo.request,
           });
+        }
         case 'text-to-audio':
           return input.jobs.submitGeneration({
             lifecycleMode: request.lifecycleMode,
             generationType: request.generationType,
-            ...binding,
-            request: { ...request.request, ...binding },
+            providerId: binding.providerId,
+            modelId: binding.modelId,
+            request: {
+              ...request.request,
+              providerId: binding.providerId,
+              modelId: binding.modelId,
+            },
           });
       }
     },

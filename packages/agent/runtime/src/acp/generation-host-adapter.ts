@@ -125,6 +125,14 @@ function generationFactsJson(
     stage: facts.stage,
     lifecycleMode: facts.lifecycleMode,
     generationType: facts.generationType,
+    ...(facts.parameterAdjustments === undefined
+      ? {}
+      : {
+          parameterAdjustments: facts.parameterAdjustments.map((adjustment) => ({
+            parameter: adjustment.parameter,
+            reason: adjustment.reason,
+          })),
+        }),
     createdAt: facts.createdAt,
     updatedAt: facts.updatedAt,
     ...(facts.failure === undefined

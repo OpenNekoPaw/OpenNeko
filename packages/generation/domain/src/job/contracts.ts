@@ -7,6 +7,10 @@ import type {
   VideoGenerationRequest,
 } from '../contracts';
 import type {
+  GenerationModelParameterProfile,
+  GenerationParameterAdjustment,
+} from '../model-parameter-profile';
+import type {
   GenerationExecutionResult,
   GenerationProviderTaskRef,
   PromptGenerationRequest,
@@ -25,6 +29,7 @@ export type { GenerationProviderTaskRef } from '../execution';
 interface GenerationJobRequestBase {
   readonly providerId: string;
   readonly modelId: string;
+  readonly parameterAdjustments?: readonly GenerationParameterAdjustment[];
 }
 
 export type GenerationJobRequest =
@@ -131,12 +136,21 @@ export interface PurposeGenerationJobPort extends Omit<GenerationJobPort, 'submi
 }
 
 export interface PurposeGenerationBindingResolver {
-  resolveGenerationBinding(
-    purpose: string,
-  ):
-    | { readonly providerId: string; readonly modelId: string }
+  resolveGenerationBinding(purpose: string):
+    | {
+        readonly providerId: string;
+        readonly modelId: string;
+        readonly parameterProfile?: GenerationModelParameterProfile;
+      }
     | undefined
-    | Promise<{ readonly providerId: string; readonly modelId: string } | undefined>;
+    | Promise<
+        | {
+            readonly providerId: string;
+            readonly modelId: string;
+            readonly parameterProfile?: GenerationModelParameterProfile;
+          }
+        | undefined
+      >;
 }
 
 export type GenerationJobErrorCode =

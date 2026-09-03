@@ -135,8 +135,7 @@ export function conformVideoGenerationRecipeToProfile(
   readonly recipe: VideoGenerationRecipe;
   readonly adjustments: readonly GenerationParameterAdjustment[];
 } {
-  const adjustments: GenerationParameterAdjustment[] = [];
-  const supported = new Set(profile.supportedParameters);
+  const parameters = conformVideoGenerationParameters(recipe, profile);
   const resolved = {
     kind: recipe.kind,
     prompt: recipe.prompt,
@@ -146,38 +145,92 @@ export function conformVideoGenerationRecipeToProfile(
   return {
     recipe: {
       ...resolved,
-      ...conformStringParameter('negativePrompt', recipe.negativePrompt, supported, adjustments),
+      ...parameters.values,
+    },
+    adjustments: parameters.adjustments,
+  };
+}
+
+export function conformVideoGenerationRequestToProfile(
+  request: VideoGenerationRequest,
+  profile: VideoGenerationModelParameterProfile,
+): {
+  readonly request: VideoGenerationRequest;
+  readonly adjustments: readonly GenerationParameterAdjustment[];
+} {
+  const parameters = conformVideoGenerationParameters(request, profile);
+  return {
+    request: {
+      prompt: request.prompt,
+      ...(request.providerId === undefined ? {} : { providerId: request.providerId }),
+      ...(request.modelId === undefined ? {} : { modelId: request.modelId }),
+      ...(request.metadata === undefined ? {} : { metadata: request.metadata }),
+      ...(request.operation === undefined ? {} : { operation: request.operation }),
+      ...(request.inputs === undefined ? {} : { inputs: request.inputs }),
+      ...(request.cameraAngle === undefined ? {} : { cameraAngle: request.cameraAngle }),
+      ...(request.shotScale === undefined ? {} : { shotScale: request.shotScale }),
+      ...(request.editInstruction === undefined
+        ? {}
+        : { editInstruction: request.editInstruction }),
+      ...parameters.values,
+    },
+    adjustments: parameters.adjustments,
+  };
+}
+
+function conformVideoGenerationParameters(
+  values: Pick<
+    VideoGenerationRequest,
+    | 'negativePrompt'
+    | 'duration'
+    | 'resolution'
+    | 'fps'
+    | 'aspectRatio'
+    | 'generateAudio'
+    | 'motionStrength'
+    | 'cameraMovement'
+  >,
+  profile: VideoGenerationModelParameterProfile,
+): {
+  readonly values: Partial<VideoGenerationRequest>;
+  readonly adjustments: readonly GenerationParameterAdjustment[];
+} {
+  const adjustments: GenerationParameterAdjustment[] = [];
+  const supported = new Set(profile.supportedParameters);
+  return {
+    values: {
+      ...conformStringParameter('negativePrompt', values.negativePrompt, supported, adjustments),
       ...conformIntegerParameter(
         'duration',
-        recipe.duration,
+        values.duration,
         profile.controls.duration,
         supported,
         adjustments,
       ),
       ...conformStringParameterWithControl(
         'resolution',
-        recipe.resolution,
+        values.resolution,
         profile.controls.resolution,
         supported,
         adjustments,
       ),
-      ...conformIntegerParameter('fps', recipe.fps, profile.controls.fps, supported, adjustments),
+      ...conformIntegerParameter('fps', values.fps, profile.controls.fps, supported, adjustments),
       ...conformStringParameterWithControl(
         'aspectRatio',
-        recipe.aspectRatio,
+        values.aspectRatio,
         profile.controls.aspectRatio,
         supported,
         adjustments,
       ),
       ...conformBooleanParameter(
         'generateAudio',
-        recipe.generateAudio,
+        values.generateAudio,
         profile.controls.generateAudio,
         supported,
         adjustments,
       ),
-      ...conformNumberParameter('motionStrength', recipe.motionStrength, supported, adjustments),
-      ...conformStringParameter('cameraMovement', recipe.cameraMovement, supported, adjustments),
+      ...conformNumberParameter('motionStrength', values.motionStrength, supported, adjustments),
+      ...conformStringParameter('cameraMovement', values.cameraMovement, supported, adjustments),
     },
     adjustments,
   };

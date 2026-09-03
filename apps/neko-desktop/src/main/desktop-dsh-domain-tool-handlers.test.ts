@@ -217,6 +217,87 @@ describe('Desktop DSH domain Tool handlers', () => {
     );
   });
 
+  it('resolves the video model profile before submitting an Agent Generation Job', async () => {
+    const root = await createRoot();
+    const submitGeneration = vi.fn<GenerationJobPort['submitGeneration']>(async () =>
+      generationSnapshot(),
+    );
+    const resolveModelRefForPurpose = vi.fn(() => ({
+      providerId: 'minimax-provider',
+      modelId: 'minimax-h3',
+    }));
+    const handlers = createDesktopDshDomainToolHandlers({
+      bindings: {
+        async getByDshSessionId() {
+          return sessionBinding();
+        },
+      },
+      contexts: {
+        async readContext() {
+          return workspaceContext();
+        },
+      },
+      workspaceGrants: {
+        resolveAuthorizedWorkspace: vi.fn(async () => workspaceResolution(root)),
+      },
+      coordinateCanvasMutation,
+      generationRuntime: {
+        getJobs: vi.fn(async () => generationJobs(submitGeneration)),
+      },
+      generationProjection,
+      configuration: {
+        getApplicationConfig: vi.fn(),
+        getWorkspaceConfig: vi.fn(
+          () =>
+            ({
+              resolveModelRefForPurpose,
+              getProvider: (providerId: string) =>
+                providerId === 'minimax-provider'
+                  ? { id: providerId, type: 'minimax', enabled: true }
+                  : undefined,
+              getModel: (modelId: string) =>
+                modelId === 'minimax-h3'
+                  ? {
+                      id: modelId,
+                      providerId: 'minimax-provider',
+                      name: 'MiniMax-H3',
+                      capabilities: ['video.generate', 'image_to_video'],
+                      enabled: true,
+                    }
+                  : undefined,
+            }) as never,
+        ),
+      },
+      assistant: { assistantSpaceId: 'assistant:one', root },
+    });
+
+    await expect(
+      handlers.executeGenerationTool(videoGenerationRequest(), new AbortController().signal),
+    ).resolves.toMatchObject({ outcome: 'success', jobId: 'job:one' });
+    expect(submitGeneration).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerId: 'minimax-provider',
+        modelId: 'minimax-h3',
+        parameterAdjustments: [
+          { parameter: 'negativePrompt', reason: 'unsupported' },
+          { parameter: 'resolution', reason: 'invalid' },
+          { parameter: 'fps', reason: 'unsupported' },
+          { parameter: 'generateAudio', reason: 'unsupported' },
+          { parameter: 'motionStrength', reason: 'unsupported' },
+          { parameter: 'cameraMovement', reason: 'unsupported' },
+        ],
+        request: {
+          prompt: 'A slow upward push',
+          providerId: 'minimax-provider',
+          modelId: 'minimax-h3',
+          duration: 6,
+          resolution: '768P',
+          aspectRatio: '16:9',
+        },
+      }),
+    );
+  });
+
   it('resolves Canvas only after exact Workspace authorization', async () => {
     const root = await createRoot();
     const resolveAuthorizedWorkspace = vi.fn(async () => workspaceResolution(root));
@@ -679,6 +760,33 @@ function generationRequest(): DshAcpDomainToolRequest {
       lifecycleMode: 'detached',
       generationType: 'text-to-image',
       request: { prompt: 'cat' },
+    },
+  };
+}
+
+function videoGenerationRequest(): DshAcpDomainToolRequest {
+  return {
+    sessionId: 'dsh-session:one',
+    turn: 1,
+    toolCallId: 'call:video',
+    sandboxMode: 'workspace-write',
+    tool: 'openneko_generation',
+    operation: 'submit',
+    input: {
+      purpose: 'video.generate',
+      lifecycleMode: 'detached',
+      generationType: 'image-to-video',
+      request: {
+        prompt: 'A slow upward push',
+        negativePrompt: 'text',
+        duration: 6,
+        resolution: '1080p',
+        fps: 24,
+        aspectRatio: '16:9',
+        generateAudio: false,
+        motionStrength: 0.25,
+        cameraMovement: 'dolly-in',
+      },
     },
   };
 }

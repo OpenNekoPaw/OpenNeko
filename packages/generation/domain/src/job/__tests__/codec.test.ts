@@ -53,6 +53,52 @@ describe('Generation Job codec', () => {
     expect(decodeGenerationJobSnapshot(encodeGenerationJobSnapshot(value))).toEqual(value);
   });
 
+  it('round-trips visible video parameter adjustments', () => {
+    const value: GenerationJobSnapshot = {
+      ...snapshot(),
+      request: {
+        generationType: 'image-to-video',
+        providerId: 'minimax-provider',
+        modelId: 'minimax-h3',
+        parameterAdjustments: [
+          { parameter: 'resolution', reason: 'invalid' },
+          { parameter: 'fps', reason: 'unsupported' },
+        ],
+        request: {
+          prompt: 'A slow upward push',
+          providerId: 'minimax-provider',
+          modelId: 'minimax-h3',
+          duration: 6,
+          resolution: '768P',
+          aspectRatio: '16:9',
+          inputs: [
+            {
+              type: 'image',
+              role: 'first-frame',
+              locator: { file: { authority: 'workspace', path: 'shots/SH01.png' } },
+            },
+          ],
+        },
+      },
+    };
+
+    expect(decodeGenerationJobSnapshot(encodeGenerationJobSnapshot(value))).toEqual(value);
+  });
+
+  it('rejects parameter adjustments on a non-video Job', () => {
+    expect(() =>
+      decodeGenerationJobSnapshot(
+        JSON.stringify({
+          ...snapshot(),
+          request: {
+            ...snapshot().request,
+            parameterAdjustments: [{ parameter: 'fps', reason: 'unsupported' }],
+          },
+        }),
+      ),
+    ).toThrow(expect.objectContaining({ code: 'generation-job-persistence-invalid' }));
+  });
+
   it.each([
     ['unknown field', { unexpectedField: 1 }],
     ['resultRefs', { resultRefs: [{ id: 'unsupported-result' }] }],

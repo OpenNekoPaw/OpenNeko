@@ -33,6 +33,7 @@ import { createNodeDocumentLowLevelAccess } from '@neko/content-domain/document/
 import { join } from 'node:path';
 import { CutProjectAuthoringService } from '@neko/cut-domain';
 import type { CutExportApplicationService } from '@neko/cut-node';
+import { resolveGenerationModelParameterProfile } from '@neko/generation-domain';
 import {
   createPurposeGenerationJobPort,
   type GenerationApplicationRuntime,
@@ -366,10 +367,29 @@ export function createDesktopDshDomainToolHandlers(options: {
   });
 }
 
-function purposeBindings(config: Pick<ConfigManager, 'resolveModelRefForPurpose'>) {
+function purposeBindings(
+  config: Pick<ConfigManager, 'resolveModelRefForPurpose' | 'getProvider' | 'getModel'>,
+) {
   return {
     resolveGenerationBinding(purpose: string) {
-      return config.resolveModelRefForPurpose(purpose);
+      const binding = config.resolveModelRefForPurpose(purpose);
+      if (!binding) return undefined;
+      if (purpose !== 'video.generate') return binding;
+      const provider = config.getProvider(binding.providerId);
+      const model = config.getModel(binding.modelId);
+      if (!provider || !model) {
+        throw new Error(
+          `Generation binding ${binding.providerId}/${binding.modelId} is unavailable.`,
+        );
+      }
+      const parameterProfile = resolveGenerationModelParameterProfile({
+        providerType: provider.type,
+        modelName: model.name,
+      });
+      return {
+        ...binding,
+        ...(parameterProfile === undefined ? {} : { parameterProfile }),
+      };
     },
   };
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   conformVideoGenerationRecipeToProfile,
+  conformVideoGenerationRequestToProfile,
   createVideoGenerationRecipeForProfile,
   parseGenerationModelParameterProfile,
   resolveGenerationModelParameterProfile,
@@ -66,6 +67,79 @@ describe('Generation model parameter profiles', () => {
     ).toEqual([
       expect.objectContaining({ parameter: 'resolution', reason: 'invalid' }),
       expect.objectContaining({ parameter: 'fps', reason: 'unsupported' }),
+    ]);
+  });
+
+  it('conforms an Agent video request to the same MiniMax H3 profile as Canvas', () => {
+    const profile = requireProfile('minimax', 'MiniMax-H3');
+    const result = conformVideoGenerationRequestToProfile(
+      {
+        prompt: 'Slowly push upward through the structure',
+        providerId: 'minimax-provider',
+        modelId: 'minimax-h3',
+        inputs: [
+          {
+            type: 'image',
+            role: 'first-frame',
+            locator: { file: { authority: 'workspace', path: 'shots/SH01.png' } },
+          },
+        ],
+        negativePrompt: 'text and watermarks',
+        duration: 6,
+        resolution: '1080p',
+        fps: 24,
+        aspectRatio: '16:9',
+        generateAudio: false,
+        motionStrength: 0.25,
+        cameraMovement: 'dolly-in',
+        shotScale: 'extreme-wide',
+      },
+      profile,
+    );
+
+    expect(result.request).toEqual({
+      prompt: 'Slowly push upward through the structure',
+      providerId: 'minimax-provider',
+      modelId: 'minimax-h3',
+      inputs: [
+        {
+          type: 'image',
+          role: 'first-frame',
+          locator: { file: { authority: 'workspace', path: 'shots/SH01.png' } },
+        },
+      ],
+      duration: 6,
+      resolution: '768P',
+      aspectRatio: '16:9',
+      shotScale: 'extreme-wide',
+    });
+    expect(result.adjustments).toEqual([
+      { parameter: 'negativePrompt', reason: 'unsupported' },
+      { parameter: 'resolution', reason: 'invalid' },
+      { parameter: 'fps', reason: 'unsupported' },
+      { parameter: 'generateAudio', reason: 'unsupported' },
+      { parameter: 'motionStrength', reason: 'unsupported' },
+      { parameter: 'cameraMovement', reason: 'unsupported' },
+    ]);
+  });
+
+  it('fills required MiniMax H3 defaults for a minimal Agent video request', () => {
+    const profile = requireProfile('minimax', 'MiniMax-H3');
+    const result = conformVideoGenerationRequestToProfile(
+      { prompt: 'A slow upward push' },
+      profile,
+    );
+
+    expect(result.request).toEqual({
+      prompt: 'A slow upward push',
+      duration: 5,
+      resolution: '768P',
+      aspectRatio: '16:9',
+    });
+    expect(result.adjustments).toEqual([
+      { parameter: 'duration', reason: 'missing-required' },
+      { parameter: 'resolution', reason: 'missing-required' },
+      { parameter: 'aspectRatio', reason: 'missing-required' },
     ]);
   });
 

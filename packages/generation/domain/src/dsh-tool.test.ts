@@ -171,4 +171,41 @@ describe('Generation DSH tool contract', () => {
     expect(projectGenerationJobSnapshot(snapshot)).not.toHaveProperty('request');
     expect(projectGenerationJobSnapshot(snapshot)).not.toHaveProperty('providerTask');
   });
+
+  it('projects visible parameter adjustments without exposing the generation request', () => {
+    const snapshot: GenerationJobSnapshot = {
+      ref: { kind: 'generation', jobId: 'job-video' },
+      phase: 'pending',
+      createdAt: 1,
+      updatedAt: 1,
+      lifecycleMode: 'detached',
+      request: {
+        providerId: 'minimax-provider',
+        modelId: 'minimax-h3',
+        generationType: 'image-to-video',
+        parameterAdjustments: [
+          { parameter: 'resolution', reason: 'invalid' },
+          { parameter: 'fps', reason: 'unsupported' },
+        ],
+        request: {
+          prompt: 'A slow upward push',
+          providerId: 'minimax-provider',
+          modelId: 'minimax-h3',
+          duration: 6,
+          resolution: '768P',
+          aspectRatio: '16:9',
+        },
+      },
+      progress: { stage: 'queued', percent: 0 },
+    };
+
+    expect(projectGenerationJobSnapshot(snapshot)).toMatchObject({
+      jobId: 'job-video',
+      parameterAdjustments: [
+        { parameter: 'resolution', reason: 'invalid' },
+        { parameter: 'fps', reason: 'unsupported' },
+      ],
+    });
+    expect(projectGenerationJobSnapshot(snapshot)).not.toHaveProperty('request');
+  });
 });

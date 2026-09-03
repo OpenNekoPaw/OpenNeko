@@ -19,6 +19,7 @@ import type {
   ImageGenerationRequest,
   VideoGenerationRequest,
 } from '../contracts';
+import { VIDEO_GENERATION_PARAMETER_IDS } from '../model-parameter-profile';
 import type { PromptGenerationRequest } from '../execution';
 
 const JOB_PHASES: ReadonlySet<string> = new Set([
@@ -176,8 +177,18 @@ function isGenerationJobRequest(value: unknown): value is GenerationJobRequest {
   }
   const generationType = value['generationType'];
   const request = value['request'];
+  const parameterAdjustments = value['parameterAdjustments'];
   if (typeof generationType !== 'string') return false;
-  if (!isNonEmptyString(value['modelId']) || !hasOnlyKeys(value, MODEL_JOB_REQUEST_KEYS)) {
+  if (
+    !isNonEmptyString(value['modelId']) ||
+    !hasOnlyKeys(value, MODEL_JOB_REQUEST_KEYS) ||
+    (parameterAdjustments !== undefined &&
+      (!Array.isArray(parameterAdjustments) ||
+        !parameterAdjustments.every(isGenerationParameterAdjustment)))
+  ) {
+    return false;
+  }
+  if (parameterAdjustments !== undefined && !VIDEO_GENERATION_TYPES.has(generationType)) {
     return false;
   }
   if (generationType === 'prompt') return isPromptRequest(request);
@@ -185,6 +196,17 @@ function isGenerationJobRequest(value: unknown): value is GenerationJobRequest {
   if (VIDEO_GENERATION_TYPES.has(generationType)) return isVideoRequest(request);
   if (AUDIO_GENERATION_TYPES.has(generationType)) return isAudioRequest(request);
   return false;
+}
+
+function isGenerationParameterAdjustment(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    hasOnlyKeys(value, GENERATION_PARAMETER_ADJUSTMENT_KEYS) &&
+    typeof value['parameter'] === 'string' &&
+    VIDEO_GENERATION_PARAMETER_ID_SET.has(value['parameter']) &&
+    typeof value['reason'] === 'string' &&
+    GENERATION_PARAMETER_ADJUSTMENT_REASONS.has(value['reason'])
+  );
 }
 
 function isPromptRequest(value: unknown): value is PromptGenerationRequest {
@@ -425,7 +447,22 @@ const PURPOSE_GENERATION_REQUEST_KEYS = new Set([
   'lifecycleMode',
   'request',
 ]);
-const MODEL_JOB_REQUEST_KEYS = new Set(['providerId', 'modelId', 'generationType', 'request']);
+const MODEL_JOB_REQUEST_KEYS = new Set([
+  'providerId',
+  'modelId',
+  'parameterAdjustments',
+  'generationType',
+  'request',
+]);
+const GENERATION_PARAMETER_ADJUSTMENT_KEYS = new Set(['parameter', 'reason']);
+const VIDEO_GENERATION_PARAMETER_ID_SET: ReadonlySet<string> = new Set(
+  VIDEO_GENERATION_PARAMETER_IDS,
+);
+const GENERATION_PARAMETER_ADJUSTMENT_REASONS: ReadonlySet<string> = new Set([
+  'unsupported',
+  'invalid',
+  'missing-required',
+]);
 const GENERATION_JOB_SNAPSHOT_KEYS = new Set([
   'ref',
   'submissionId',

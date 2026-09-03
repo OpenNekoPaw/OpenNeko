@@ -116,7 +116,7 @@ const VIDEO_REQUEST_SCHEMA = {
   type: 'object',
   title: 'video generation request',
   description:
-    'Video request. Use camelCase fields such as aspectRatio; provider and model bindings are Host-owned.',
+    'Video request. Use camelCase fields such as aspectRatio. Provider and model bindings are Host-owned; optional model controls are normalized against the selected model and returned as visible parameter adjustments.',
   properties: {
     prompt: { type: 'string', required: true },
     negativePrompt: { type: 'string' },
@@ -329,6 +329,7 @@ export interface GenerationDshToolBoundedFacts {
   readonly stage: GenerationJobSnapshot['progress']['stage'];
   readonly lifecycleMode: GenerationJobSnapshot['lifecycleMode'];
   readonly generationType: GenerationJobSnapshot['request']['generationType'];
+  readonly parameterAdjustments?: GenerationJobSnapshot['request']['parameterAdjustments'];
   readonly createdAt: number;
   readonly updatedAt: number;
   readonly failure?: GenerationJobSnapshot['failure'];
@@ -360,6 +361,9 @@ export function projectGenerationJobSnapshot(
     stage: snapshot.progress.stage,
     lifecycleMode: snapshot.lifecycleMode,
     generationType: snapshot.request.generationType,
+    ...(snapshot.request.parameterAdjustments === undefined
+      ? {}
+      : { parameterAdjustments: snapshot.request.parameterAdjustments }),
     createdAt: snapshot.createdAt,
     updatedAt: snapshot.updatedAt,
     ...(snapshot.failure === undefined ? {} : { failure: snapshot.failure }),
