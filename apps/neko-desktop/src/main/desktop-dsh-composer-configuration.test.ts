@@ -179,6 +179,23 @@ describe('Desktop DSH composer configuration', () => {
         workbenchInstanceId: 'workbench-1',
         agentSurfaceId: 'surface-1',
         category: 'video',
+        modelOptionId: 'minimax-media:minimax-h3',
+      }),
+    ).resolves.toMatchObject({
+      selectedMediaModelOptionIds: {
+        image: 'nekoapi-media:gpt-image-2',
+        video: 'minimax-media:minimax-h3',
+      },
+    });
+    expect(workspaceConfig.setDefaultModelPurposeRefs).toHaveBeenLastCalledWith({
+      'video.generate': { providerId: 'minimax-media', modelId: 'minimax-h3' },
+    });
+    await expect(
+      service.selectMediaModel({
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+        category: 'video',
         modelOptionId: 'nekoapi-media:gpt-image-2',
       }),
     ).rejects.toThrow(/Composer video model/u);
@@ -674,6 +691,7 @@ describe('Desktop DSH composer configuration', () => {
     expect(projected.models.map((model) => model.id)).toEqual([
       'openai:gpt-5',
       'nekoapi-media:gpt-image-2',
+      'minimax-media:minimax-h3',
     ]);
     expect(projected.selectedModelOptionId).toBeUndefined();
     expect(projected.diagnostic).toBe('The selected chat model is not executable by DSH.');
@@ -843,27 +861,30 @@ function permissionPresets(currentValue: string) {
 
 function createConfig() {
   let state = createState();
+  let purposeRefs: Partial<
+    Record<AgentModelPurpose, { readonly providerId: string; readonly modelId: string }>
+  > = {
+    'image.generate': { providerId: 'nekoapi-media', modelId: 'gpt-image-2' },
+  };
   return {
     getAssistantConfigState: vi.fn(() => state),
+    getDefaultModelPurposeRef: vi.fn((purpose: string) => {
+      if (
+        purpose !== 'image.generate' &&
+        purpose !== 'video.generate' &&
+        purpose !== 'audio.generate'
+      ) {
+        return undefined;
+      }
+      return purposeRefs[purpose];
+    }),
     getEffectiveAgentWorkspaceConfigSnapshot: vi.fn(() => ({})),
     setAssistantSettings: vi.fn(async (updates: Partial<AssistantSettingsSnapshot>) => {
       state = { ...state, ...updates };
     }),
     setDefaultModelPurposeRefs: vi.fn(
       async (updates: Parameters<ConfigManager['setDefaultModelPurposeRefs']>[0]) => {
-        const defaultMediaModels = { ...state.defaultMediaModels };
-        for (const [purpose, ref] of Object.entries(updates) as [
-          AgentModelPurpose,
-          NonNullable<(typeof updates)[AgentModelPurpose]> | undefined,
-        ][]) {
-          if (!ref) continue;
-          const category = purpose.replace('.generate', '');
-          if (category !== 'image' && category !== 'video' && category !== 'audio') {
-            throw new Error(`Unexpected media purpose '${purpose}'.`);
-          }
-          defaultMediaModels[category] = `${ref.providerId}:${ref.modelId}`;
-        }
-        state = { ...state, defaultMediaModels };
+        purposeRefs = { ...purposeRefs, ...updates };
       },
     ),
   };
@@ -910,8 +931,20 @@ function createState(): AssistantConfigState {
         category: 'image',
         capabilities: ['image.generate'],
       },
+      {
+        id: 'minimax-media:minimax-h3',
+        label: 'MiniMax H3',
+        providerId: 'minimax-media',
+        modelId: 'minimax-h3',
+        providerLabel: 'MiniMax',
+        category: 'video',
+        capabilities: ['video.generate', 'image_to_video'],
+      },
     ],
     modelGroups: [],
-    defaultMediaModels: { image: 'nekoapi-media:gpt-image-2' },
+    defaultMediaModels: {
+      image: 'nekoapi-media:gpt-image-2',
+      video: 'minimax-media:minimax-h3',
+    },
   };
 }

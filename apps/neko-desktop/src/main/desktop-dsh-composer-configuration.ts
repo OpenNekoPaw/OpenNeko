@@ -42,7 +42,10 @@ interface ComposerSurfaceIdentity {
 
 type ComposerConfigManager = Pick<
   ConfigManager,
-  'getAssistantConfigState' | 'setAssistantSettings' | 'setDefaultModelPurposeRefs'
+  | 'getAssistantConfigState'
+  | 'getDefaultModelPurposeRef'
+  | 'setAssistantSettings'
+  | 'setDefaultModelPurposeRefs'
 > & {
   getEffectiveAgentWorkspaceConfigSnapshot(): Pick<
     ReturnType<ConfigManager['getEffectiveAgentWorkspaceConfigSnapshot']>,
@@ -503,7 +506,7 @@ function projectConfiguration(
   return {
     models,
     ...(selected === undefined ? {} : { selectedModelOptionId: selected.id }),
-    selectedMediaModelOptionIds: { ...state.defaultMediaModels },
+    selectedMediaModelOptionIds: projectSelectedMediaModelOptionIds(config, models),
     permissionPresetId: permissionPresets.currentValue,
     permissionPresets: permissionPresets.options.map((option) => ({
       id: option.value,
@@ -518,6 +521,31 @@ function projectConfiguration(
       : {}),
     ...(diagnostic === undefined ? {} : { diagnostic }),
   };
+}
+
+function projectSelectedMediaModelOptionIds(
+  config: Pick<ConfigManager, 'getDefaultModelPurposeRef'>,
+  models: readonly DshComposerModelOption[],
+): DshComposerConfigurationProjection['selectedMediaModelOptionIds'] {
+  const result: Partial<Record<'image' | 'video' | 'audio', string>> = {};
+  for (const category of ['image', 'video', 'audio'] as const) {
+    const ref = config.getDefaultModelPurposeRef(mediaPurpose(category));
+    if (!ref) continue;
+    const matches = models.filter(
+      (model) =>
+        model.category === category &&
+        model.providerId === ref.providerId &&
+        model.modelId === ref.modelId,
+    );
+    const [match] = matches;
+    if (matches.length !== 1 || !match) {
+      throw new Error(
+        `Composer ${category} purpose binding '${ref.providerId}/${ref.modelId}' must resolve to exactly one model option.`,
+      );
+    }
+    result[category] = match.id;
+  }
+  return result;
 }
 
 function requireEffectiveConfiguration(
