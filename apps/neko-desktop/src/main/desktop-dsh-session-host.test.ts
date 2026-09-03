@@ -47,7 +47,13 @@ describe('Desktop DSH Session Host', () => {
           workbenchInstanceId: 'workbench-1',
           agentSurfaceId: 'surface-1',
           permissionPresetId: 'workspace-write',
-          target: { kind: 'project', projectId: 'project-1' },
+          target: {
+            kind: 'authoring',
+            workspaceId: 'workspace-1',
+            workspaceGrantId: 'grant-1',
+            authority: { kind: 'project', projectId: 'project-1' },
+            target: null,
+          },
           initialInput: {
             kind: 'message',
             text: 'Create in project',
@@ -66,7 +72,13 @@ describe('Desktop DSH Session Host', () => {
       workbenchInstanceId: 'workbench-1',
       agentSurfaceId: 'surface-1',
       permissionPresetId: 'workspace-write',
-      target: { kind: 'project', projectId: 'project-1' },
+      target: {
+        kind: 'authoring',
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'grant-1',
+        authority: { kind: 'project', projectId: 'project-1' },
+        target: null,
+      },
       initialInput: {
         kind: 'message',
         text: 'Create in project',

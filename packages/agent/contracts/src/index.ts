@@ -91,3 +91,4 @@ export {
 } from './builtin-slash-command';
 
 export * from './character-dialogue-handoff';
+export * from './character-creation-handoff';

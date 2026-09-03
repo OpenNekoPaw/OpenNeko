@@ -172,9 +172,23 @@ describe('DSH Session Host contract', () => {
     expect(
       parseDshSessionHostRequest({
         ...createRequest,
-        target: { kind: 'project', projectId: 'project-1' },
+        target: {
+          kind: 'authoring',
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+          authority: { kind: 'project', projectId: 'project-1' },
+          target: { kind: 'character-project', characterProjectId: 'character-project-1' },
+        },
       }),
-    ).toMatchObject({ target: { kind: 'project', projectId: 'project-1' } });
+    ).toMatchObject({
+      target: {
+        kind: 'authoring',
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'grant-1',
+        authority: { kind: 'project', projectId: 'project-1' },
+        target: { kind: 'character-project', characterProjectId: 'character-project-1' },
+      },
+    });
     expect(
       parseDshSessionHostRequest({
         ...createRequest,
@@ -209,7 +223,7 @@ describe('DSH Session Host contract', () => {
     expect(() =>
       parseDshSessionHostRequest({
         ...createRequest,
-        target: { kind: 'project', projectId: '', workspaceId: 'forged' },
+        target: { kind: 'authoring', projectId: '', workspaceId: 'forged' },
       }),
     ).toThrow();
   });

@@ -29,6 +29,7 @@ import {
 import { decodedBase64ByteLength, requireCanonicalBase64 } from './canonical-base64';
 import {
   parseAgentEntryTargetBinding,
+  type AgentAuthoringBinding,
   type AgentCharacterDialogueLaunchBinding,
 } from './agent-entry-intent';
 
@@ -258,9 +259,7 @@ interface DshSessionHostConversationRequest extends DshSessionHostSenderRequest 
 }
 
 export type DshConversationCreationTarget =
-  | { readonly kind: 'surface' }
-  | { readonly kind: 'project'; readonly projectId: string }
-  | AgentCharacterDialogueLaunchBinding;
+  { readonly kind: 'surface' } | AgentAuthoringBinding | AgentCharacterDialogueLaunchBinding;
 
 export type DshSessionHostRequest =
   | (DshSessionHostSenderRequest & {
@@ -619,9 +618,12 @@ function parseConversationCreationTarget(value: unknown): DshConversationCreatio
     requireExactKeys(record, ['kind']);
     return { kind: 'surface' };
   }
-  if (record.kind === 'project') {
-    requireExactKeys(record, ['kind', 'projectId']);
-    return { kind: 'project', projectId: requireIdentity(record.projectId, 'projectId') };
+  if (record.kind === 'authoring') {
+    const binding = parseAgentEntryTargetBinding(record);
+    if (binding.kind !== 'authoring') {
+      throw new Error('DSH authoring Conversation target must use an authoring binding.');
+    }
+    return binding;
   }
   if (record.kind === 'character-dialogue') {
     const binding = parseAgentEntryTargetBinding(record);

@@ -62,7 +62,13 @@ describe('DSH Session preload bridge', () => {
       'workbench-1',
       'surface-1',
       'workspace-write',
-      { kind: 'project', projectId: 'project-1' },
+      {
+        kind: 'authoring',
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'grant-1',
+        authority: { kind: 'project', projectId: 'project-1' },
+        target: null,
+      },
       {
         kind: 'message',
         text: 'Create in project',
@@ -80,7 +86,13 @@ describe('DSH Session preload bridge', () => {
       workbenchInstanceId: 'workbench-1',
       agentSurfaceId: 'surface-1',
       permissionPresetId: 'workspace-write',
-      target: { kind: 'project', projectId: 'project-1' },
+      target: {
+        kind: 'authoring',
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'grant-1',
+        authority: { kind: 'project', projectId: 'project-1' },
+        target: null,
+      },
       initialInput: {
         kind: 'message',
         text: 'Create in project',

@@ -2782,6 +2782,40 @@ async function startDesktop(): Promise<void> {
         surfaceIsUnbound: scope.kind === 'unbound',
         projects: shellService,
         workspaceGrants: workspaceGrantAuthority,
+        authoringTargets: {
+          require: async ({ workspace, projectId, target }) => {
+            const creativeWorkspace = await createProjectCreativeWorkspace({
+              workspace,
+              workspaceId: workspace.workspaceId,
+              projectId,
+            }).read({ projectId });
+            const items =
+              target.kind === 'content-document'
+                ? creativeWorkspace.composition.content
+                : target.kind === 'character-project'
+                  ? creativeWorkspace.composition.characters
+                  : creativeWorkspace.composition.worlds;
+            const available = items.some((item) => {
+              if (item.diagnostic !== undefined || item.target.kind !== target.kind) return false;
+              if (item.target.kind === 'content-document' && target.kind === 'content-document') {
+                return item.target.documentId === target.documentId;
+              }
+              if (item.target.kind === 'character-project' && target.kind === 'character-project') {
+                return item.target.characterProjectId === target.characterProjectId;
+              }
+              return (
+                item.target.kind === 'world-project' &&
+                target.kind === 'world-project' &&
+                item.target.worldProjectId === target.worldProjectId
+              );
+            });
+            if (!available) {
+              throw new Error(
+                `Agent authoring target '${JSON.stringify(target)}' is unavailable in Project '${projectId}'.`,
+              );
+            }
+          },
+        },
       });
       const published = await dshProduct.runtime.conversations.publication.publish({
         context: context.context,
