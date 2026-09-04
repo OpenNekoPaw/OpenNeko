@@ -7,10 +7,13 @@ import {
   type CanvasWorkspaceProjectionRequest,
 } from '../../types/canvas-workspace-delivery';
 import type { GenerationJobSnapshot } from '@neko/generation-domain/job';
+import { projectGenerationRecipeRequest } from '@neko/generation-domain';
 import type { CanvasNode } from '../../types/canvas';
 import type { ContentLocator, WorkspaceFileContentLocator } from '@neko/content-domain';
 import { createEmptyCanvasData } from '../canvasHeadlessAuthoring';
 import { planCanvasArtifactProjection } from '../canvasArtifactProjection';
+import { resolveCanvasGenerationInputs } from '../../canvas-generation-inputs';
+import { projectResolvedCanvasMaterialToCanvas } from '../../canvas-content-authoring';
 
 const sourceLocator: ContentLocator = {
   file: { authority: 'workspace', path: 'neko/assets/References/source-image.png' },
@@ -89,6 +92,134 @@ describe('planCanvasArtifactProjection', () => {
     expect(progressOnly.artifacts[0]?.provenance.contentFingerprint).toBe(
       first.artifacts[0]?.provenance.contentFingerprint,
     );
+  });
+
+  it('projects Agent media inputs as Canvas references and preserves regeneration parameters', async () => {
+    const firstFrame: ContentLocator = {
+      file: { authority: 'workspace', path: 'neko/generated/image/first-frame.png' },
+    };
+    const snapshot = generationSnapshot({
+      request: {
+        providerId: 'minimax-provider',
+        modelId: 'minimax-h3',
+        generationType: 'image-to-video',
+        request: {
+          prompt: 'Slowly push into the megastructure',
+          negativePrompt: 'fast camera',
+          duration: 6,
+          resolution: '768P',
+          fps: 24,
+          aspectRatio: '16:9',
+          generateAudio: false,
+          motionStrength: 0.2,
+          cameraMovement: 'slow push-in',
+          cameraAngle: 'low-angle upward view',
+          shotScale: 'extreme wide shot',
+          editInstruction: 'Preserve the first-frame composition',
+          inputs: [{ type: 'image', role: 'first-frame', locator: firstFrame }],
+        },
+      },
+    });
+
+    const first = planCanvasArtifactProjection(
+      createEmptyCanvasData('Workspace'),
+      generationRequest(snapshot),
+    );
+    const replay = planCanvasArtifactProjection(first.canvasData, generationRequest(snapshot));
+    const generation = first.canvasData.nodes.find((node) => node.type === 'generation');
+    const reference = first.canvasData.connections.find(
+      (connection) => connection.targetId === generation?.id,
+    );
+    const source = first.canvasData.nodes.find((node) => node.id === reference?.sourceId);
+
+    expect(source).toMatchObject({
+      type: 'media',
+      data: { mediaType: 'image', contentLocator: firstFrame },
+    });
+    expect(source!.position.x + source!.size.width).toBeLessThan(generation!.position.x);
+    expect(reference).toMatchObject({
+      type: 'reference',
+      targetEndpoint: { scope: 'port', portId: 'reference' },
+    });
+    expect(first.connectionIds).toEqual([reference?.id]);
+    expect(replay.status).toBe('noop');
+    expect(replay.canvasData.connections).toHaveLength(1);
+
+    if (!generation || generation.type !== 'generation') {
+      throw new Error('Expected projected Generation node.');
+    }
+    const inputs = await resolveCanvasGenerationInputs({
+      canvas: first.canvasData,
+      nodeId: generation.id,
+      port: {
+        fingerprintText: (text) => text,
+        readText: async () => {
+          throw new Error('Video reference projection must not read text.');
+        },
+        authorizeLocator: async () => true,
+      },
+    });
+    expect(projectGenerationRecipeRequest(generation.data.recipe, inputs)).toEqual({
+      providerId: 'minimax-provider',
+      modelId: 'minimax-h3',
+      generationType: 'image-to-video',
+      request: {
+        providerId: 'minimax-provider',
+        modelId: 'minimax-h3',
+        prompt: 'Slowly push into the megastructure',
+        negativePrompt: 'fast camera',
+        duration: 6,
+        resolution: '768P',
+        fps: 24,
+        aspectRatio: '16:9',
+        generateAudio: false,
+        motionStrength: 0.2,
+        cameraMovement: 'slow push-in',
+        cameraAngle: 'low-angle upward view',
+        shotScale: 'extreme wide shot',
+        editInstruction: 'Preserve the first-frame composition',
+        inputs: [{ type: 'image', role: 'first-frame', locator: firstFrame }],
+      },
+    });
+  });
+
+  it('reuses an existing Canvas material for an Agent generation reference', () => {
+    const firstFrame: ContentLocator = {
+      file: { authority: 'workspace', path: 'neko/generated/image/existing-frame.png' },
+    };
+    const initial = projectResolvedCanvasMaterialToCanvas({
+      canvas: createEmptyCanvasData('Workspace'),
+      material: { locator: firstFrame, title: 'existing-frame.png', mediaKind: 'image' },
+      generateId: () => 'existing-frame',
+    });
+    const projected = planCanvasArtifactProjection(
+      initial,
+      generationRequest(
+        generationSnapshot({
+          request: {
+            providerId: 'minimax-provider',
+            modelId: 'minimax-h3',
+            generationType: 'image-to-video',
+            request: {
+              prompt: 'Animate the existing frame',
+              inputs: [{ type: 'image', role: 'first-frame', locator: firstFrame }],
+            },
+          },
+        }),
+      ),
+    );
+
+    expect(projected.canvasData.nodes).toHaveLength(2);
+    expect(projected.canvasData.nodes.filter((node) => node.id === 'existing-frame')).toHaveLength(
+      1,
+    );
+    expect(projected.canvasData.connections).toEqual([
+      expect.objectContaining({
+        sourceId: 'existing-frame',
+        targetId: 'generation:generation%3Aone',
+        type: 'reference',
+      }),
+    ]);
   });
 
   it('projects a flat creative-content graph with explicit source relations', () => {

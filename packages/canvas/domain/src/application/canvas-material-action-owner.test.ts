@@ -556,6 +556,7 @@ function generationProjection(jobId: string): CanvasGenerationProjectionSnapshot
     phase: 'running',
     title: 'Regenerate image',
     inputNodeIds: [generatedTarget.nodeId],
+    inputMaterials: [],
     mediaKind: 'image',
     summary: {
       prompt: 'Cold industrial corridor',

@@ -38,7 +38,7 @@ describe('Canvas Generation Job projection', () => {
       expect.objectContaining({
         sourceId: 'source-node',
         targetId: 'generation:generation-1',
-        type: 'derived-from',
+        type: 'reference',
       }),
     ]);
   });
@@ -195,6 +195,7 @@ function snapshot(
     phase: 'pending',
     title: 'Generate concept frame',
     inputNodeIds: ['source-node'],
+    inputMaterials: [],
     mediaKind: 'image',
     summary: { prompt: 'Create a concept frame', model: 'fixture-model' },
     recipe: {

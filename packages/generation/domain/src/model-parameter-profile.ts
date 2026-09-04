@@ -201,6 +201,9 @@ export function conformVideoGenerationRecipeToProfile(
     kind: recipe.kind,
     prompt: recipe.prompt,
     ...(recipe.model ? { model: recipe.model } : {}),
+    ...(recipe.cameraAngle === undefined ? {} : { cameraAngle: recipe.cameraAngle }),
+    ...(recipe.shotScale === undefined ? {} : { shotScale: recipe.shotScale }),
+    ...(recipe.editInstruction === undefined ? {} : { editInstruction: recipe.editInstruction }),
   } satisfies VideoGenerationRecipe;
 
   return {

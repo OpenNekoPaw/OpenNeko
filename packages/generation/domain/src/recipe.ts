@@ -54,6 +54,9 @@ export interface VideoGenerationRecipe extends GenerationRecipeBase<'video'> {
   readonly generateAudio?: boolean;
   readonly motionStrength?: number;
   readonly cameraMovement?: string;
+  readonly cameraAngle?: string;
+  readonly shotScale?: string;
+  readonly editInstruction?: string;
 }
 
 export type GenerationRecipe =
@@ -192,7 +195,10 @@ export function isGenerationRecipe(value: unknown): value is GenerationRecipe {
         isOptionalNonEmptyString(value['aspectRatio']) &&
         (value['generateAudio'] === undefined || typeof value['generateAudio'] === 'boolean') &&
         isOptionalRange(value['motionStrength'], 0, 1) &&
-        isOptionalNonEmptyString(value['cameraMovement'])
+        isOptionalNonEmptyString(value['cameraMovement']) &&
+        isOptionalNonEmptyString(value['cameraAngle']) &&
+        isOptionalNonEmptyString(value['shotScale']) &&
+        isOptionalNonEmptyString(value['editInstruction'])
       );
   }
 }
@@ -262,6 +268,11 @@ export function projectGenerationRecipeRequest(
           ...(recipe.generateAudio === undefined ? {} : { generateAudio: recipe.generateAudio }),
           ...(recipe.motionStrength === undefined ? {} : { motionStrength: recipe.motionStrength }),
           ...(recipe.cameraMovement === undefined ? {} : { cameraMovement: recipe.cameraMovement }),
+          ...(recipe.cameraAngle === undefined ? {} : { cameraAngle: recipe.cameraAngle }),
+          ...(recipe.shotScale === undefined ? {} : { shotScale: recipe.shotScale }),
+          ...(recipe.editInstruction === undefined
+            ? {}
+            : { editInstruction: recipe.editInstruction }),
           ...(video
             ? {
                 inputs: [
@@ -392,4 +403,7 @@ const VIDEO_RECIPE_KEYS = new Set([
   'generateAudio',
   'motionStrength',
   'cameraMovement',
+  'cameraAngle',
+  'shotScale',
+  'editInstruction',
 ]);

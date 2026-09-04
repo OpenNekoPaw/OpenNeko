@@ -88,10 +88,7 @@ export function planCanvasArtifactProjection(
       .map((node) => node.id);
     const projectedNodeIds = new Set(nodeIds);
     const connectionIds = nextCanvasData.connections
-      .filter(
-        (connection) =>
-          projectedNodeIds.has(connection.sourceId) && projectedNodeIds.has(connection.targetId),
-      )
+      .filter((connection) => projectedNodeIds.has(connection.targetId))
       .map((connection) => connection.id);
     return {
       status:

@@ -1,4 +1,5 @@
 import {
+  contentLocatorKey,
   normalizeWorkspaceContentPath,
   validateContentLocator,
   type ContentLocator,
@@ -20,6 +21,7 @@ import {
 import { hashStableValue } from '@neko/shared';
 import {
   isCanvasGenerationProjectionSnapshot,
+  type CanvasGenerationProjectionInputMaterial,
   type CanvasGenerationProjectionSnapshot,
 } from '../canvas-generation-projection';
 
@@ -225,6 +227,7 @@ export function createGenerationJobWorkspaceDeliveryRequest(
     ref: projection.ref,
     phase: projection.phase,
     recipe: projection.recipe,
+    inputMaterials: projection.inputMaterials,
     submissionId: projection.submissionId,
     recipeInputFingerprint: projection.recipeInputFingerprint,
     summary: projection.summary,
@@ -477,6 +480,7 @@ function projectGenerationJobSnapshot(
     phase: snapshot.phase,
     title: generationJobTitle(snapshot),
     inputNodeIds: [],
+    inputMaterials: generationInputMaterials(snapshot.request),
     mediaKind: generationMediaKind(snapshot.request.generationType),
     summary,
     recipe,
@@ -544,11 +548,23 @@ function generationRecipe(request: GenerationJobSnapshot['request']): Generation
         ...(request.request.aspectRatio !== undefined
           ? { aspectRatio: request.request.aspectRatio }
           : {}),
+        ...(request.request.generateAudio !== undefined
+          ? { generateAudio: request.request.generateAudio }
+          : {}),
         ...(request.request.motionStrength !== undefined
           ? { motionStrength: request.request.motionStrength }
           : {}),
         ...(request.request.cameraMovement !== undefined
           ? { cameraMovement: request.request.cameraMovement }
+          : {}),
+        ...(request.request.cameraAngle !== undefined
+          ? { cameraAngle: request.request.cameraAngle }
+          : {}),
+        ...(request.request.shotScale !== undefined
+          ? { shotScale: request.request.shotScale }
+          : {}),
+        ...(request.request.editInstruction !== undefined
+          ? { editInstruction: request.request.editInstruction }
           : {}),
       };
     case 'text-to-audio':
@@ -563,6 +579,47 @@ function generationRecipe(request: GenerationJobSnapshot['request']): Generation
         ...(request.request.format !== undefined ? { format: request.request.format } : {}),
       };
   }
+}
+
+function generationInputMaterials(
+  request: GenerationJobSnapshot['request'],
+): readonly CanvasGenerationProjectionInputMaterial[] {
+  switch (request.generationType) {
+    case 'image-to-image':
+    case 'image-edit':
+      return request.request.referenceImageLocator
+        ? [{ locator: request.request.referenceImageLocator, mediaKind: 'image' }]
+        : [];
+    case 'image-to-video':
+    case 'video-to-video':
+    case 'video-edit':
+      return deduplicateInputMaterials(
+        (request.request.inputs ?? []).map((input) => ({
+          locator: input.locator,
+          mediaKind: input.type,
+        })),
+      );
+    case 'prompt':
+    case 'text-to-image':
+    case 'text-to-video':
+    case 'text-to-audio':
+      return [];
+  }
+}
+
+function deduplicateInputMaterials(
+  inputs: readonly CanvasGenerationProjectionInputMaterial[],
+): readonly CanvasGenerationProjectionInputMaterial[] {
+  const byLocator = new Map<string, CanvasGenerationProjectionInputMaterial>();
+  for (const input of inputs) {
+    const key = contentLocatorKey(input.locator);
+    const existing = byLocator.get(key);
+    if (existing && existing.mediaKind !== input.mediaKind) {
+      throw new Error(`Generation input "${key}" has conflicting media kinds.`);
+    }
+    byLocator.set(key, input);
+  }
+  return [...byLocator.values()];
 }
 
 function generationRecipePurpose(

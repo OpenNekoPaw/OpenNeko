@@ -1,5 +1,7 @@
 import {
+  attachCanvasGenerationReference,
   createCanvasGenerationNode,
+  projectResolvedCanvasMaterialToCanvas,
   requireCanvasGenerationNode,
   updateCanvasGenerationNodeRecipe,
   type CanvasData,
@@ -96,6 +98,108 @@ describe('CanvasGenerationNodeRuntime', () => {
     });
     expect(result.canvas.nodes).toHaveLength(1);
     expect(result.canvas.nodes[0]?.type).toBe('generation');
+  });
+
+  it('resubmits a projected video recipe with its first frame and effective parameters intact', async () => {
+    const firstFrame = {
+      file: {
+        authority: 'workspace' as const,
+        path: 'neko/generated/image/first-frame.png',
+      },
+    };
+    const submitGeneration = vi.fn(async (input: SubmitGenerationJobInput) =>
+      snapshot({ submissionId: input.submissionId, phase: 'running' }),
+    );
+    const runtime = new CanvasGenerationNodeRuntime({
+      generation: {
+        getWorkspaceJobs: vi.fn(async () => createJobs({ submitGeneration })),
+        validateBinding: vi.fn(),
+      },
+      createContentReader: () => ({
+        stat: async (locator) => ({
+          status: 'ready',
+          locator,
+          byteLength: 1,
+          fingerprint: { strategy: 'sha256', value: 'first-frame' },
+        }),
+        read: async () => {
+          throw new Error('Image-to-video preparation must not read image bytes.');
+        },
+      }),
+      createSubmissionId: () => 'submission-1',
+    });
+    const withGeneration = updateCanvasGenerationNodeRecipe({
+      canvas: createCanvasGenerationNode({
+        canvas: emptyCanvas(),
+        nodeId: 'generation-1',
+        kind: 'video',
+        position: { x: 392, y: 48 },
+      }),
+      nodeId: 'generation-1',
+      recipe: {
+        kind: 'video',
+        prompt: 'Slowly push into the megastructure',
+        negativePrompt: 'fast camera',
+        model: {
+          purpose: 'video.generate',
+          providerId: 'minimax-provider',
+          modelId: 'minimax-h3',
+        },
+        duration: 6,
+        resolution: '768P',
+        fps: 24,
+        aspectRatio: '16:9',
+        generateAudio: false,
+        motionStrength: 0.2,
+        cameraMovement: 'slow push-in',
+        cameraAngle: 'low-angle upward view',
+        shotScale: 'extreme wide shot',
+        editInstruction: 'Preserve the first-frame composition',
+      },
+    });
+    const withMaterial = projectResolvedCanvasMaterialToCanvas({
+      canvas: withGeneration,
+      material: { locator: firstFrame, title: 'first-frame.png', mediaKind: 'image' },
+      generateId: () => 'first-frame',
+    });
+    const canvas = attachCanvasGenerationReference({
+      canvas: withMaterial,
+      nodeId: 'generation-1',
+      sourceNodeId: 'first-frame',
+    });
+
+    await runtime.startNode({
+      identity,
+      workspace,
+      canvas,
+      nodeId: 'generation-1',
+      persistCanvas: async () => undefined,
+    });
+
+    expect(submitGeneration).toHaveBeenCalledWith({
+      generationType: 'image-to-video',
+      providerId: 'minimax-provider',
+      modelId: 'minimax-h3',
+      lifecycleMode: 'detached',
+      submissionId: 'submission-1',
+      request: {
+        providerId: 'minimax-provider',
+        modelId: 'minimax-h3',
+        prompt: 'Slowly push into the megastructure',
+        negativePrompt: 'fast camera',
+        duration: 6,
+        resolution: '768P',
+        fps: 24,
+        aspectRatio: '16:9',
+        generateAudio: false,
+        motionStrength: 0.2,
+        cameraMovement: 'slow push-in',
+        cameraAngle: 'low-angle upward view',
+        shotScale: 'extreme wide shot',
+        editInstruction: 'Preserve the first-frame composition',
+        inputs: [{ type: 'image', role: 'first-frame', locator: firstFrame }],
+      },
+    });
   });
 
   it('resumes an uncertain unbound submission with the same idempotency identity', async () => {
@@ -369,15 +473,9 @@ describe('CanvasGenerationNodeRuntime', () => {
 });
 
 function configuredCanvas(): CanvasData {
-  const empty: CanvasData = {
-    name: 'Fixture',
-    viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
-    nodes: [],
-    connections: [],
-  };
   return updateCanvasGenerationNodeRecipe({
     canvas: createCanvasGenerationNode({
-      canvas: empty,
+      canvas: emptyCanvas(),
       nodeId: 'generation-1',
       kind: 'image',
       position: { x: 32, y: 48 },
@@ -395,6 +493,15 @@ function configuredCanvas(): CanvasData {
       height: 768,
     },
   });
+}
+
+function emptyCanvas(): CanvasData {
+  return {
+    name: 'Fixture',
+    viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+    nodes: [],
+    connections: [],
+  };
 }
 
 function withRun(canvas: CanvasData, run: CanvasGenerationRunBinding): CanvasData {

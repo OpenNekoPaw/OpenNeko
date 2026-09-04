@@ -6,6 +6,7 @@ import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { createEmptyCanvasData, planCanvasArtifactProjection } from '@neko/canvas-domain';
 import type { DshCanvasArtifactDeliveryInput } from '@neko/agent-runtime/application';
 import type { LocalMetadataStore } from '@neko/local-metadata';
+import type { GenerationJobSnapshot } from '@neko/generation-domain/job';
 import { ConsoleLogger } from '@neko/shared/logger';
 import {
   DesktopDshCanvasArtifactDelivery,
@@ -235,6 +236,87 @@ describe('Desktop DSH Canvas projection request', () => {
     }
   });
 
+  it('persists Agent generation inputs as visible Canvas references', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'openneko-dsh-generation-reference-'));
+    const workspacePath = join(home, 'workspace');
+    const canvasPath = join(workspacePath, 'neko', 'boards', 'story.nkc');
+    await mkdir(join(workspacePath, 'neko', 'boards'), { recursive: true });
+    await mkdir(join(workspacePath, 'neko', 'generated', 'image'), { recursive: true });
+    await writeFile(join(workspacePath, 'neko', 'generated', 'image', 'first-frame.png'), 'image');
+    await writeFile(
+      canvasPath,
+      JSON.stringify({
+        name: 'Story',
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        nodes: [],
+        connections: [],
+      }),
+    );
+    const metadataStore = createInMemoryMetadataStore();
+    const target = { workspaceId: 'workspace-1', canvasId: 'neko/boards/story.nkc' };
+    const host = createElectronNekoHostPorts({
+      homedir: home,
+      nekoHome: join(home, '.neko'),
+      workspaceRoot: workspacePath,
+      logger: new ConsoleLogger('DesktopDshGenerationReferenceTest'),
+    });
+    const delivery = new DesktopDshCanvasArtifactDelivery({
+      applicationInstanceId: 'app-1',
+      metadataStore,
+      workspaceRegistry: {
+        restore: vi.fn(async () => ({
+          workspaceId: 'workspace-1',
+          workspacePath,
+          displayName: 'Workspace',
+          locator: { kind: 'relative' as const, value: 'workspace' },
+        })),
+      },
+      host,
+      coordinateCanvasMutation: async (_target, operation) => operation(),
+      createContentRead: () => {
+        throw new Error('Generation reference projection must not bypass Canvas content identity.');
+      },
+      createIdentity: () => 'identity-1',
+    });
+
+    try {
+      await expect(
+        delivery.projectGenerationJob({
+          workspaceId: 'workspace-1',
+          dshSessionId: 'dsh-1',
+          turn: 1,
+          toolCallId: 'generation-1',
+          canvasTurnTarget: target,
+          snapshot: imageToVideoSnapshot(),
+        }),
+      ).resolves.toEqual({ status: 'accepted' });
+      const canvas = JSON.parse(await readFile(canvasPath, 'utf8'));
+      const generation = canvas.nodes.find((node: { type: string }) => node.type === 'generation');
+      const source = canvas.nodes.find((node: { type: string }) => node.type === 'media');
+      expect(source).toMatchObject({
+        data: {
+          mediaType: 'image',
+          contentLocator: {
+            file: {
+              authority: 'workspace',
+              path: 'neko/generated/image/first-frame.png',
+            },
+          },
+        },
+      });
+      expect(canvas.connections).toEqual([
+        expect.objectContaining({
+          sourceId: source.id,
+          targetId: generation.id,
+          type: 'reference',
+          targetEndpoint: { nodeId: generation.id, scope: 'port', portId: 'reference' },
+        }),
+      ]);
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
   it('resolves document-entry ContentLocators through the canonical entry reader', async () => {
     const workspacePath = await mkdtemp(join(tmpdir(), 'openneko-dsh-canvas-entry-'));
     const sourcePath = join(workspacePath, 'book.epub');
@@ -261,7 +343,6 @@ describe('Desktop DSH Canvas projection request', () => {
       fingerprint: { strategy: 'sha256' },
     });
   });
-
 });
 
 function workspace(): AssetWorkspaceResolution {
@@ -298,6 +379,40 @@ function deliveryInput(turn = 1): DshCanvasArtifactDeliveryInput {
         },
       },
     ],
+  };
+}
+
+function imageToVideoSnapshot(): GenerationJobSnapshot {
+  return {
+    ref: { kind: 'generation', jobId: 'generation-video-1' },
+    phase: 'running',
+    createdAt: 1,
+    updatedAt: 2,
+    lifecycleMode: 'linked',
+    request: {
+      providerId: 'minimax-provider',
+      modelId: 'minimax-h3',
+      generationType: 'image-to-video',
+      request: {
+        prompt: 'Slowly push into the megastructure',
+        duration: 6,
+        resolution: '768P',
+        aspectRatio: '16:9',
+        inputs: [
+          {
+            type: 'image',
+            role: 'first-frame',
+            locator: {
+              file: {
+                authority: 'workspace',
+                path: 'neko/generated/image/first-frame.png',
+              },
+            },
+          },
+        ],
+      },
+    },
+    progress: { stage: 'waiting-provider', percent: 25 },
   };
 }
 
