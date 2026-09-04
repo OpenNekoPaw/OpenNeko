@@ -185,6 +185,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
     onDraftChange,
     surfaceKind,
   } = props;
+  const agentViewRef = useRef<HTMLDivElement>(null);
   const copy = locale === 'zh-cn' ? ZH_COPY : EN_COPY;
   const [entryExperience, setEntryExperience] = useState<'assistant' | 'authoring'>('assistant');
   const [entryDetail, setEntryDetail] = useState<'project' | 'character' | 'world'>('character');
@@ -250,6 +251,38 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
     props.surfaceKind === 'workspace'
       ? 'agent-workspace-initial-center-group'
       : 'agent-entry-center-group';
+  useEffect(() => {
+    const agentView = agentViewRef.current;
+    if (agentView === null) {
+      throw new Error('Agent Webview root is unavailable for clipboard handling.');
+    }
+    const ownerDocument = agentView.ownerDocument;
+    const handleCopy = (event: ClipboardEvent): void => {
+      if (event.defaultPrevented) return;
+      const selectedText = resolveAgentSelectedText(agentView, event.target);
+      if (selectedText === undefined || event.clipboardData === null) return;
+      event.clipboardData.setData('text/plain', selectedText);
+      event.preventDefault();
+    };
+    const handleCopyShortcut = (event: KeyboardEvent): void => {
+      if (!isCopyShortcut(event) || event.defaultPrevented) return;
+      const selectedText = resolveAgentSelectedText(agentView, event.target);
+      const clipboard = ownerDocument.defaultView?.navigator.clipboard;
+      if (selectedText === undefined || clipboard?.writeText === undefined) return;
+      event.preventDefault();
+      void clipboard.writeText(selectedText).catch((error: unknown) => {
+        logger.warn('Agent Webview could not write the selected text to the clipboard.', {
+          error,
+        });
+      });
+    };
+    ownerDocument.addEventListener('copy', handleCopy);
+    ownerDocument.addEventListener('keydown', handleCopyShortcut);
+    return () => {
+      ownerDocument.removeEventListener('copy', handleCopy);
+      ownerDocument.removeEventListener('keydown', handleCopyShortcut);
+    };
+  }, []);
   useEffect(() => {
     const handoff = initialCharacterCreationHandoff;
     if (
@@ -492,6 +525,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
 
   return (
     <div
+      ref={agentViewRef}
       className="dsh-agent-view agent-chat-view flex h-full min-h-0 flex-1 flex-col overflow-hidden"
       data-agent-surface={props.agentSurfaceId}
       data-agent-surface-kind={props.surfaceKind}
@@ -683,6 +717,51 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
         </>
       )}
     </div>
+  );
+}
+
+function resolveAgentSelectedText(
+  agentView: HTMLElement,
+  eventTarget: EventTarget | null,
+): string | undefined {
+  if (
+    (eventTarget instanceof HTMLInputElement || eventTarget instanceof HTMLTextAreaElement) &&
+    agentView.contains(eventTarget)
+  ) {
+    const selectionStart = eventTarget.selectionStart;
+    const selectionEnd = eventTarget.selectionEnd;
+    if (selectionStart === null || selectionEnd === null || selectionStart === selectionEnd) {
+      return undefined;
+    }
+    return eventTarget.value.slice(selectionStart, selectionEnd);
+  }
+
+  const selection = agentView.ownerDocument.getSelection();
+  if (selection === null || selection.isCollapsed || selection.rangeCount === 0) {
+    return undefined;
+  }
+  const selectedRange = selection.getRangeAt(0);
+  if (!selectedRange.intersectsNode(agentView)) return undefined;
+
+  const agentRange = agentView.ownerDocument.createRange();
+  agentRange.selectNodeContents(agentView);
+  const constrainedRange = selectedRange.cloneRange();
+  if (selectedRange.compareBoundaryPoints(Range.START_TO_START, agentRange) < 0) {
+    constrainedRange.setStart(agentRange.startContainer, agentRange.startOffset);
+  }
+  if (selectedRange.compareBoundaryPoints(Range.END_TO_END, agentRange) > 0) {
+    constrainedRange.setEnd(agentRange.endContainer, agentRange.endOffset);
+  }
+  const selectedText = constrainedRange.toString();
+  return selectedText.length > 0 ? selectedText : undefined;
+}
+
+function isCopyShortcut(event: KeyboardEvent): boolean {
+  return (
+    event.key.toLocaleLowerCase() === 'c' &&
+    (event.metaKey || event.ctrlKey) &&
+    !event.altKey &&
+    !event.shiftKey
   );
 }
 

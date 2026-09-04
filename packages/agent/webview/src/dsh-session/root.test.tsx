@@ -20,6 +20,7 @@ const defaultCanvasTarget = {
 
 afterEach(() => {
   cleanup();
+  window.getSelection()?.removeAllRanges();
   vi.useRealTimers();
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
 });
@@ -1225,6 +1226,12 @@ describe('DshAgentView content-creation composer', () => {
     renderAgent(<DshComposerHarness onSubmit={vi.fn(async () => true)} />);
     const composer = screen.getByRole('textbox', { name: '消息' }) as HTMLTextAreaElement;
     const value = '批量选择并复制 Agent 输入';
+    const setData = vi.fn();
+    const writeText = vi.fn<(text: string) => Promise<void>>(async () => undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
 
     fireEvent.change(composer, { target: { value } });
     composer.focus();
@@ -1232,15 +1239,86 @@ describe('DshAgentView content-creation composer', () => {
 
     expect(composer.selectionStart).toBe(2);
     expect(composer.selectionEnd).toBe(8);
-    expect(fireEvent.copy(composer)).toBe(true);
+    expect(fireEvent.copy(composer, { clipboardData: { setData } })).toBe(false);
+    expect(setData).toHaveBeenCalledWith('text/plain', value.slice(2, 8));
     expect(fireEvent.keyDown(composer, { key: 'a', code: 'KeyA', metaKey: true })).toBe(true);
     expect(fireEvent.keyDown(composer, { key: 'a', code: 'KeyA', ctrlKey: true })).toBe(true);
 
     composer.select();
     expect(composer.selectionStart).toBe(0);
     expect(composer.selectionEnd).toBe(value.length);
-    expect(fireEvent.keyDown(composer, { key: 'c', code: 'KeyC', metaKey: true })).toBe(true);
-    expect(fireEvent.keyDown(composer, { key: 'c', code: 'KeyC', ctrlKey: true })).toBe(true);
+    setData.mockClear();
+    expect(fireEvent.copy(composer, { clipboardData: { setData } })).toBe(false);
+    expect(setData).toHaveBeenCalledWith('text/plain', value);
+    expect(fireEvent.keyDown(composer, { key: 'c', code: 'KeyC', metaKey: true })).toBe(false);
+    expect(fireEvent.keyDown(composer, { key: 'c', code: 'KeyC', ctrlKey: true })).toBe(false);
+    expect(writeText).toHaveBeenNthCalledWith(1, value);
+    expect(writeText).toHaveBeenNthCalledWith(2, value);
+  });
+
+  it('writes selected transcript text to the native copy event', () => {
+    const reply = '这段 Agent 回复可以选中并复制。';
+    const setData = vi.fn();
+    const writeText = vi.fn<(text: string) => Promise<void>>(async () => undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const view = renderAgent(
+      <DshComposerHarness
+        onSubmit={vi.fn(async () => true)}
+        projection={{
+          conversationId: 'conversation-copy-selection',
+          dshSessionId: 'dsh-copy-selection',
+          title: '复制选区',
+          todos: [],
+          inbox: { nextTurn: [], nextStep: [] },
+          events: [
+            {
+              kind: 'message',
+              role: 'assistant',
+              turn: 1,
+              step: 1,
+              text: reply,
+              messageId: 'message-copy-selection',
+              state: 'final',
+            },
+          ],
+        }}
+      />,
+    );
+    const paragraph = screen.getByText(reply);
+    const textNode = paragraph.firstChild;
+    if (!(textNode instanceof Text)) throw new Error('Rendered reply text node is unavailable.');
+    const range = document.createRange();
+    range.setStart(textNode, 3);
+    range.setEnd(textNode, 11);
+    window.getSelection()?.addRange(range);
+
+    expect(fireEvent.copy(document.body, { clipboardData: { setData } })).toBe(false);
+    expect(setData).toHaveBeenCalledWith('text/plain', reply.slice(3, 11));
+    expect(fireEvent.keyDown(document.body, { key: 'c', code: 'KeyC', metaKey: true })).toBe(false);
+    expect(writeText).toHaveBeenCalledWith(reply.slice(3, 11));
+
+    const outsideAgent = document.createElement('span');
+    outsideAgent.textContent = '不应复制的 Canvas 文本';
+    document.body.append(outsideAgent);
+    const pageRange = document.createRange();
+    pageRange.selectNodeContents(document.body);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(pageRange);
+    writeText.mockClear();
+
+    expect(fireEvent.keyDown(document.body, { key: 'c', code: 'KeyC', metaKey: true })).toBe(false);
+    const copiedPageSelection = writeText.mock.calls[0]?.[0];
+    expect(copiedPageSelection).toContain(reply);
+    expect(copiedPageSelection).not.toContain(outsideAgent.textContent);
+    outsideAgent.remove();
+
+    window.getSelection()?.removeAllRanges();
+    setData.mockClear();
+    expect(fireEvent.copy(view.container, { clipboardData: { setData } })).toBe(true);
+    expect(setData).not.toHaveBeenCalled();
   });
 
   it('restores pasted image content when Host admission rejects the submission', async () => {

@@ -1,7 +1,12 @@
 import { desktopAgentDiagnosticPortalScenario } from './desktop-agent-diagnostic-portal.mjs';
+import { openFixtureWorkspace } from './desktop-operations.mjs';
 
 const COMPOSER_SELECTOR = '.desktop-scene-workbench--agent-only .agent-composer-textarea';
+const TRANSCRIPT_SELECTOR = '.desktop-scene-workbench--agent-only .agent-user-prompt-primary';
+const WORKSPACE_COMPOSER_SELECTOR = '[data-dock-owner="agent"] .agent-composer-textarea';
+const WORKSPACE_TRANSCRIPT_SELECTOR = '[data-dock-owner="agent"] .agent-user-prompt-primary';
 const SELECTION_TEXT = 'OpenNeko Agent selection copy';
+const WORKSPACE_SELECTION_TEXT = 'OpenNeko workspace Agent selection copy';
 
 export const desktopAgentTextSelectionScenario = Object.freeze({
   id: 'desktop-agent-text-selection',
@@ -51,6 +56,38 @@ export const desktopAgentTextSelectionScenario = Object.freeze({
     checkpoint('agent-composer-partial-selection', partialSelection);
     const partialScreenshot = await screenshot('agent-composer-partial-selection');
 
+    await pressKey('End');
+    await waitForEvaluation(
+      evaluate,
+      `(() => {
+        const send = document.querySelector('.desktop-scene-workbench--agent-only .agent-composer-send');
+        return send instanceof HTMLButtonElement && !send.disabled;
+      })()`,
+      'Agent Composer did not enable the send control.',
+    );
+    await click('.desktop-scene-workbench--agent-only .agent-composer-send');
+    await waitForSelector(TRANSCRIPT_SELECTOR);
+    const transcriptSelection = await selectTranscriptText(
+      evaluate,
+      TRANSCRIPT_SELECTOR,
+      SELECTION_TEXT,
+    );
+    checkpoint('agent-transcript-light-selection', transcriptSelection);
+    const transcriptScreenshot = await screenshot('agent-transcript-light-selection');
+
+    await pressKey('c', ['Meta']);
+    await click(COMPOSER_SELECTOR);
+    await pressKey('v', ['Meta']);
+    await waitForEvaluation(
+      evaluate,
+      `document.querySelector(${JSON.stringify(COMPOSER_SELECTOR)})?.value === ${JSON.stringify(SELECTION_TEXT)}`,
+      'Agent transcript selection did not paste into the Composer.',
+    );
+    const transcriptPastedValue = await evaluate(
+      `document.querySelector(${JSON.stringify(COMPOSER_SELECTOR)})?.value ?? ''`,
+    );
+    checkpoint('agent-transcript-native-copy-paste', { transcriptPastedValue });
+
     await selectTheme({ click, evaluate, theme: 'dark', waitForSelector });
     await type(COMPOSER_SELECTOR, SELECTION_TEXT);
     await pressKey('a', ['Meta']);
@@ -62,12 +99,74 @@ export const desktopAgentTextSelectionScenario = Object.freeze({
     checkpoint('agent-composer-dark-selection', darkSelection);
     const darkScreenshot = await screenshot('agent-composer-dark-selection');
 
+    await openFixtureWorkspace(evaluate);
+    await waitForSelector('.desktop-scene-workbench--workspace');
+    await waitForSelector(WORKSPACE_COMPOSER_SELECTOR);
+    await type(WORKSPACE_COMPOSER_SELECTOR, WORKSPACE_SELECTION_TEXT);
+    await waitForEvaluation(
+      evaluate,
+      `(() => {
+        const send = document.querySelector('[data-dock-owner="agent"] .agent-composer-send');
+        return send instanceof HTMLButtonElement && !send.disabled;
+      })()`,
+      'Workspace Agent Composer did not enable the send control.',
+    );
+    await click('[data-dock-owner="agent"] .agent-composer-send');
+    await waitForSelector(WORKSPACE_TRANSCRIPT_SELECTOR);
+    await click('.canvas-main-surface-inner');
+    await click(WORKSPACE_TRANSCRIPT_SELECTOR);
+    const workspaceTranscriptSelection = await selectTranscriptText(
+      evaluate,
+      WORKSPACE_TRANSCRIPT_SELECTOR,
+      WORKSPACE_SELECTION_TEXT,
+    );
+    const canvasKeyboardFocused = await evaluate(
+      `document.querySelector('.canvas-workbench-root')?.getAttribute('data-neko-keyboard-focused')`,
+    );
+    if (canvasKeyboardFocused !== 'false') {
+      throw new Error(
+        `Canvas retained keyboard focus after Agent transcript interaction: '${String(canvasKeyboardFocused)}'.`,
+      );
+    }
+    checkpoint('workspace-agent-transcript-selection-after-canvas-focus', {
+      ...workspaceTranscriptSelection,
+      canvasKeyboardFocused,
+    });
+    const workspaceScreenshot = await screenshot(
+      'workspace-agent-transcript-selection-after-canvas-focus',
+    );
+
+    await pressKey('c', ['Meta']);
+    await click(WORKSPACE_COMPOSER_SELECTOR);
+    await pressKey('v', ['Meta']);
+    await waitForEvaluation(
+      evaluate,
+      `document.querySelector(${JSON.stringify(WORKSPACE_COMPOSER_SELECTOR)})?.value === ${JSON.stringify(WORKSPACE_SELECTION_TEXT)}`,
+      'Workspace Agent transcript selection did not paste after Canvas focus.',
+    );
+    const workspaceTranscriptPastedValue = await evaluate(
+      `document.querySelector(${JSON.stringify(WORKSPACE_COMPOSER_SELECTOR)})?.value ?? ''`,
+    );
+    checkpoint('workspace-agent-transcript-native-copy-paste', {
+      workspaceTranscriptPastedValue,
+    });
+
     return {
       lightSelection,
       partialSelection,
       restoredValue,
+      transcriptSelection,
+      transcriptPastedValue,
       darkSelection,
-      screenshots: [lightScreenshot, partialScreenshot, darkScreenshot],
+      workspaceTranscriptSelection,
+      workspaceTranscriptPastedValue,
+      screenshots: [
+        lightScreenshot,
+        partialScreenshot,
+        transcriptScreenshot,
+        darkScreenshot,
+        workspaceScreenshot,
+      ],
     };
   },
 });
@@ -122,6 +221,43 @@ function inspectComposerSelection(evaluate) {
       selectionBackground: selection.backgroundColor,
       selectionForeground: selection.color,
       theme: document.documentElement.dataset.nekoTheme,
+    };
+  })()`);
+}
+
+function selectTranscriptText(evaluate, selector, expectedText) {
+  return evaluate(`(() => {
+    const transcript = document.querySelector(${JSON.stringify(selector)});
+    if (!(transcript instanceof HTMLElement)) {
+      throw new Error('Agent transcript text is unavailable.');
+    }
+    const range = document.createRange();
+    range.selectNodeContents(transcript);
+    const selection = window.getSelection();
+    if (selection === null) throw new Error('Agent transcript selection is unavailable.');
+    selection.removeAllRanges();
+    selection.addRange(range);
+    const selectionStyle = getComputedStyle(transcript, '::selection');
+    const selectedText = selection.toString();
+    if (
+      selectedText !== ${JSON.stringify(expectedText)} ||
+      selectionStyle.backgroundColor === 'rgba(0, 0, 0, 0)' ||
+      selectionStyle.backgroundColor.length === 0 ||
+      selectionStyle.color.length === 0
+    ) {
+      throw new Error(
+        'Agent transcript selection is incomplete: ' +
+          JSON.stringify({
+            selectedText,
+            selectionBackground: selectionStyle.backgroundColor,
+            selectionForeground: selectionStyle.color,
+          }),
+      );
+    }
+    return {
+      selectedText,
+      selectionBackground: selectionStyle.backgroundColor,
+      selectionForeground: selectionStyle.color,
     };
   })()`);
 }
