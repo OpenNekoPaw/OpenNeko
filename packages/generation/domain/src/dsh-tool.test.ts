@@ -76,6 +76,52 @@ describe('Generation DSH tool contract', () => {
     ).toThrow(/input.include is not supported/);
   });
 
+  it('accepts one explicit first-frame locator and rejects an empty selector', () => {
+    const input = {
+      purpose: 'video.generate',
+      generationType: 'image-to-video',
+      lifecycleMode: 'linked',
+      request: {
+        prompt: 'A slow upward push',
+        operation: 'generate-from-image',
+        duration: 6,
+        aspectRatio: '16:9',
+        inputs: [
+          {
+            type: 'image',
+            role: 'first-frame',
+            locator: {
+              file: { authority: 'workspace', path: 'neko/generated/image/first-frame.png' },
+            },
+            mimeType: 'image/png',
+          },
+        ],
+      },
+    } as const;
+
+    expect(decodeGenerationDshToolInput('submit', input)).toEqual({
+      operation: 'submit',
+      input,
+    });
+    expect(() =>
+      decodeGenerationDshToolInput('submit', {
+        ...input,
+        request: {
+          ...input.request,
+          inputs: [
+            {
+              ...input.request.inputs[0],
+              locator: {
+                ...input.request.inputs[0].locator,
+                selector: {},
+              },
+            },
+          ],
+        },
+      }),
+    ).toThrow(/generation type contract/);
+  });
+
   it('rejects semantic negatives before any Job is created', () => {
     expect(() =>
       decodeGenerationDshToolInput('submit', {

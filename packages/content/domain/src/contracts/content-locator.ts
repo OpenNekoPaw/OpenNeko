@@ -66,7 +66,7 @@ const TEXT_RANGE_SELECTOR_KEYS = [
 export const CONTENT_LOCATOR_DSH_SCHEMA = {
   type: 'object',
   description:
-    'Canonical @neko/content-domain ContentLocator. Use file.authority and an optional selector; never add a top-level kind.',
+    'Canonical @neko/content-domain ContentLocator. Use file.authority. Omit selector when the whole file is the target; never send selector: {} or add a top-level kind.',
   properties: {
     file: {
       oneOf: [

@@ -216,6 +216,89 @@ describe('MediaGenerationExecutor linked execution', () => {
     });
   });
 
+  it('submits one MiniMax first frame through the AI SDK image-to-video path', async () => {
+    const provider: Provider = {
+      ...unsupportedProvider,
+      id: 'minimax-provider',
+      type: 'minimax',
+      apiUrl: 'https://api.minimaxi.com/v2',
+    };
+    const model: Model = {
+      ...unsupportedModel,
+      id: 'h3-model',
+      name: 'MiniMax-H3',
+      providerId: provider.id,
+      type: 'video',
+      capabilities: ['video.generate', 'image_to_video'],
+    };
+    let submittedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+        submittedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return new Response(JSON.stringify({ task_id: 'h3-image-task' }), { status: 200 });
+      }),
+    );
+    const executor = new MediaGenerationExecutor(
+      createConfig(provider, model),
+      createProviderResolver(provider),
+      {
+        requestAssetMaterializer: {
+          readAsBase64: async () => '',
+          resolveAsUrl: async () => 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB',
+        },
+      },
+    );
+
+    await expect(
+      executor.executeLinked({
+        generationType: 'image-to-video',
+        providerId: provider.id,
+        modelId: model.id,
+        request: {
+          prompt: 'A slow upward push',
+          operation: 'generate-from-image',
+          duration: 6,
+          resolution: '768P',
+          aspectRatio: '16:9',
+          inputs: [
+            {
+              type: 'image',
+              role: 'first-frame',
+              locator: { file: { authority: 'workspace', path: 'frames/first.png' } },
+              mimeType: 'image/png',
+            },
+          ],
+        },
+        onExternalTask: async () => ({
+          status: 'completed',
+          outputs: [{ type: 'video', url: 'https://cdn.example/output.mp4' }],
+        }),
+      }),
+    ).resolves.toEqual({
+      outputs: [{ type: 'video', url: 'https://cdn.example/output.mp4' }],
+      metadata: { providerResolutionSource: 'ai-sdk' },
+    });
+    expect(submittedBody).toMatchObject({
+      model: 'MiniMax-H3',
+      resolution: '768P',
+      duration: 6,
+      ratio: 'adaptive',
+    });
+    const content = submittedBody?.content;
+    expect(Array.isArray(content)).toBe(true);
+    if (!Array.isArray(content)) throw new Error('MiniMax request content was not an array.');
+    expect(
+      content.filter(
+        (entry: unknown) =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          'role' in entry &&
+          entry.role === 'first_frame',
+      ),
+    ).toHaveLength(1);
+  });
+
   it('persists an AI SDK video task checkpoint before the first status query', async () => {
     const h3Provider: Provider = {
       ...unsupportedProvider,

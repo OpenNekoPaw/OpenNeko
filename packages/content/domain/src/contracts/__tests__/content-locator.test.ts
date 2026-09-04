@@ -29,6 +29,9 @@ describe('content locator contracts', () => {
       additionalProperties: false,
     });
     expect(CONTENT_LOCATOR_DSH_SCHEMA.properties).not.toHaveProperty('kind');
+    expect(CONTENT_LOCATOR_DSH_SCHEMA.description).toContain(
+      'Omit selector when the whole file is the target',
+    );
   });
 
   it('addresses a Workspace file with one file authority and no owner lifecycle', () => {
