@@ -374,7 +374,6 @@ function purposeBindings(
     resolveGenerationBinding(purpose: string) {
       const binding = config.resolveModelRefForPurpose(purpose);
       if (!binding) return undefined;
-      if (purpose !== 'video.generate') return binding;
       const provider = config.getProvider(binding.providerId);
       const model = config.getModel(binding.modelId);
       if (!provider || !model) {
@@ -382,12 +381,17 @@ function purposeBindings(
           `Generation binding ${binding.providerId}/${binding.modelId} is unavailable.`,
         );
       }
-      const parameterProfile = resolveVideoGenerationModelParameterProfile({
-        providerType: provider.type,
-        modelName: model.name,
-      });
+      const parameterProfile =
+        purpose === 'video.generate'
+          ? resolveVideoGenerationModelParameterProfile({
+              providerType: provider.type,
+              modelName: model.name,
+            })
+          : undefined;
       return {
         ...binding,
+        providerType: provider.type,
+        modelCapabilities: model.capabilities,
         ...(parameterProfile === undefined ? {} : { parameterProfile }),
       };
     },

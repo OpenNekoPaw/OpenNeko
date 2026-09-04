@@ -1,5 +1,6 @@
 import type { JobRef, JobSnapshotBase, JobStore } from '@neko/shared/job-lifecycle';
 import type { WorkspaceFileContentLocator } from '@neko/content-domain';
+import type { ProviderType } from '@neko/ai-contracts';
 import type {
   AudioGenerationRequest,
   ImageGenerationRequest,
@@ -140,6 +141,8 @@ export interface PurposeGenerationBindingResolver {
     | {
         readonly providerId: string;
         readonly modelId: string;
+        readonly providerType?: ProviderType;
+        readonly modelCapabilities?: readonly string[];
         readonly parameterProfile?: VideoGenerationModelParameterProfile;
       }
     | undefined
@@ -147,6 +150,8 @@ export interface PurposeGenerationBindingResolver {
         | {
             readonly providerId: string;
             readonly modelId: string;
+            readonly providerType?: ProviderType;
+            readonly modelCapabilities?: readonly string[];
             readonly parameterProfile?: VideoGenerationModelParameterProfile;
           }
         | undefined

@@ -58,7 +58,11 @@ const IMAGE_REQUEST_SCHEMA = {
     height: { type: 'number' },
     aspectRatio: { type: 'string' },
     count: { type: 'number' },
-    referenceImageLocator: CONTENT_LOCATOR_SCHEMA,
+    referenceImageLocator: {
+      ...CONTENT_LOCATOR_SCHEMA,
+      description:
+        'Stable image ContentLocator used as an image-to-image reference. Set generationType to image-to-image.',
+    },
     maskLocator: CONTENT_LOCATOR_SCHEMA,
     inpaintStrength: { type: 'number' },
     quality: { type: 'string', enum: ['standard', 'hd'] },
@@ -69,7 +73,12 @@ const IMAGE_REQUEST_SCHEMA = {
       enum: ['canny', 'depth', 'pose', 'normal', 'segment', 'lineart', 'softedge', 'scribble'],
     },
     controlStrength: { type: 'number' },
-    ipAdapterRefs: { type: 'array', items: IP_ADAPTER_REFERENCE_SCHEMA },
+    ipAdapterRefs: {
+      type: 'array',
+      items: IP_ADAPTER_REFERENCE_SCHEMA,
+      description:
+        'Optional model-specific IP-Adapter controls. Include only when the Host explicitly reports image.reference.ip-adapter for the selected model; schema presence alone does not mean the model supports it.',
+    },
     cameraReference: {
       type: 'object',
       properties: {
@@ -259,7 +268,8 @@ export const GENERATION_DSH_TOOL_PARAMETERS = {
       {
         type: 'object',
         title: 'image submit input',
-        description: 'Input for submit when generationType creates or edits an image.',
+        description:
+          'Input for submit when generationType creates or edits an image. generationType must match the request: no image inputs is text-to-image, a reference/control/IP-Adapter/panorama image is image-to-image, and a mask/edit instruction is image-edit.',
         properties: {
           ...SUBMIT_PROPERTIES,
           generationType: {
@@ -274,7 +284,8 @@ export const GENERATION_DSH_TOOL_PARAMETERS = {
       {
         type: 'object',
         title: 'video submit input',
-        description: 'Input for submit when generationType creates or edits a video.',
+        description:
+          'Input for submit when generationType creates or edits a video. generationType must match request.inputs: image inputs require image-to-video and reference video/audio requires video-to-video.',
         properties: {
           ...SUBMIT_PROPERTIES,
           generationType: {

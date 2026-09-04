@@ -53,6 +53,50 @@ describe('media generation type resolution', () => {
     ).toBe('image-to-image');
   });
 
+  it.each([
+    {
+      label: 'IP adapter reference',
+      request: {
+        prompt: 'keep the subject',
+        ipAdapterRefs: [
+          {
+            imageLocator: { file: { authority: 'workspace' as const, path: 'subject.png' } },
+            mode: 'subject' as const,
+          },
+        ],
+      },
+    },
+    {
+      label: 'panorama reference',
+      request: {
+        prompt: 'match the environment',
+        panoramaReference: {
+          imageLocator: { file: { authority: 'workspace' as const, path: 'panorama.png' } },
+          orientation: { yawDeg: 0, pitchDeg: 0, fieldOfViewDeg: 90 },
+          identity: { sessionId: 'session-1', requestId: 'request-1' },
+        },
+      },
+    },
+  ])('uses image-to-image for a stable $label', ({ request }) => {
+    expect(resolveImageGenerationType(request)).toBe('image-to-image');
+  });
+
+  it.each([
+    {
+      label: 'mask',
+      request: {
+        prompt: 'replace the masked region',
+        maskLocator: { file: { authority: 'workspace' as const, path: 'mask.png' } },
+      },
+    },
+    {
+      label: 'edit instruction',
+      request: { prompt: 'revise the image', editInstruction: 'make the sky darker' },
+    },
+  ])('uses image-edit for an explicit $label', ({ request }) => {
+    expect(resolveImageGenerationType(request)).toBe('image-edit');
+  });
+
   it('uses text-to-video without reference inputs', () => {
     expect(resolveVideoGenerationType({ prompt: 'animate a cat' })).toBe('text-to-video');
   });

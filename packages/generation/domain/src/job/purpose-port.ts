@@ -7,6 +7,14 @@ import type {
   SubmitPurposeGenerationJobInput,
 } from './contracts';
 import { conformVideoGenerationRequestToProfile } from '../model-parameter-profile';
+import {
+  resolveImageGenerationType,
+  resolveVideoGenerationType,
+} from '../media/media-generation-kind';
+import {
+  validateProviderImageRequest,
+  validateProviderVideoRequest,
+} from '../media/media-operation-capabilities';
 
 export function createPurposeGenerationJobPort(input: {
   readonly jobs: GenerationJobPort;
@@ -31,7 +39,22 @@ export function createPurposeGenerationJobPort(input: {
           });
         case 'text-to-image':
         case 'image-to-image':
-        case 'image-edit':
+        case 'image-edit': {
+          const expectedType = resolveImageGenerationType(request.request);
+          if (request.generationType !== expectedType) {
+            throw new Error(
+              `Generation type ${request.generationType} does not match image request inputs; expected ${expectedType}.`,
+            );
+          }
+          if (binding.providerType) {
+            assertNoCapabilityErrors(
+              validateProviderImageRequest(
+                binding.providerType,
+                request.request,
+                binding.modelCapabilities,
+              ),
+            );
+          }
           return input.jobs.submitGeneration({
             lifecycleMode: request.lifecycleMode,
             generationType: request.generationType,
@@ -43,10 +66,17 @@ export function createPurposeGenerationJobPort(input: {
               modelId: binding.modelId,
             },
           });
+        }
         case 'text-to-video':
         case 'image-to-video':
         case 'video-to-video':
         case 'video-edit': {
+          const expectedType = resolveVideoGenerationType(request.request);
+          if (request.generationType !== expectedType) {
+            throw new Error(
+              `Generation type ${request.generationType} does not match video request inputs; expected ${expectedType}.`,
+            );
+          }
           const boundVideoRequest = {
             ...request.request,
             providerId: binding.providerId,
@@ -55,6 +85,15 @@ export function createPurposeGenerationJobPort(input: {
           const preparedVideo = binding.parameterProfile
             ? conformVideoGenerationRequestToProfile(boundVideoRequest, binding.parameterProfile)
             : { request: boundVideoRequest, adjustments: [] };
+          if (binding.providerType) {
+            assertNoCapabilityErrors(
+              validateProviderVideoRequest(
+                binding.providerType,
+                preparedVideo.request,
+                binding.modelCapabilities,
+              ),
+            );
+          }
           return input.jobs.submitGeneration({
             lifecycleMode: request.lifecycleMode,
             generationType: request.generationType,
@@ -90,4 +129,14 @@ export function createPurposeGenerationJobPort(input: {
     reconcileGeneration: (command: GenerationJobCommandInput) =>
       input.jobs.reconcileGeneration(command),
   });
+}
+
+function assertNoCapabilityErrors(
+  diagnostics: readonly { readonly severity: string; readonly message: string }[],
+): void {
+  const errors = diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
+  if (errors.length === 0) return;
+  throw new Error(
+    `Media provider capability negotiation failed: ${errors.map(({ message }) => message).join('; ')}`,
+  );
 }

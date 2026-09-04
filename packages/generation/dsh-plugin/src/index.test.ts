@@ -112,7 +112,7 @@ describe('OpenNeko Generation DSH plugin', () => {
             lifecycleMode: 'detached',
             request: {
               prompt: 'Preserve the character silhouette',
-              operation: 'edit',
+              operation: 'generate',
               referenceImageLocator: {
                 file: { authority: 'workspace', path: 'books/volume.epub' },
                 selector: { kind: 'entry', path: 'images/page-12.jpg' },
@@ -133,7 +133,7 @@ describe('OpenNeko Generation DSH plugin', () => {
           lifecycleMode: 'detached',
           request: {
             prompt: 'Preserve the character silhouette',
-            operation: 'edit',
+            operation: 'generate',
             referenceImageLocator: {
               file: { authority: 'workspace', path: 'books/volume.epub' },
               selector: { kind: 'entry', path: 'images/page-12.jpg' },
@@ -153,7 +153,7 @@ describe('OpenNeko Generation DSH plugin', () => {
             lifecycleMode: 'detached',
             request: {
               prompt: 'Retired locator shape',
-              operation: 'edit',
+              operation: 'generate',
               referenceImageLocator: {
                 kind: 'document-entry',
                 file: { authority: 'workspace', path: 'books/volume.epub' },

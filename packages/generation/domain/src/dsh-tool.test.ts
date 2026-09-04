@@ -44,6 +44,8 @@ describe('Generation DSH tool contract', () => {
     expect(serialized).not.toContain('negative_prompt');
     expect(serialized).not.toContain('aspect_ratio');
     expect(serialized).not.toContain('anyOf');
+    expect(serialized).toContain('schema presence alone does not mean the model supports it');
+    expect(serialized).toContain('generationType must match the request');
   });
 
   it('exposes model-bound submit and describe', () => {

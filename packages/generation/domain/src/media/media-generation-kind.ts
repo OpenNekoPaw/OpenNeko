@@ -35,10 +35,17 @@ export function assertMediaModelType(
 export function resolveImageGenerationType(
   request: ImageGenerationRequest,
 ): 'text-to-image' | 'image-to-image' | 'image-edit' {
-  if (request.operation && request.operation !== 'generate') {
+  if (
+    (request.operation && request.operation !== 'generate') ||
+    request.maskLocator ||
+    request.editInstruction
+  ) {
     return 'image-edit';
   }
-  return request.referenceImageLocator || request.controlImageLocator
+  return request.referenceImageLocator ||
+    request.controlImageLocator ||
+    request.ipAdapterRefs?.length ||
+    request.panoramaReference
     ? 'image-to-image'
     : 'text-to-image';
 }

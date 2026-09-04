@@ -192,7 +192,26 @@ describe('Desktop DSH domain Tool handlers', () => {
       generationProjection: { projectSnapshot },
       configuration: {
         getApplicationConfig: vi.fn(),
-        getWorkspaceConfig: vi.fn(() => ({ resolveModelRefForPurpose }) as never),
+        getWorkspaceConfig: vi.fn(
+          () =>
+            ({
+              resolveModelRefForPurpose,
+              getProvider: (providerId: string) =>
+                providerId === 'provider:one'
+                  ? { id: providerId, type: 'generic', enabled: true }
+                  : undefined,
+              getModel: (modelId: string) =>
+                modelId === 'model:one'
+                  ? {
+                      id: modelId,
+                      providerId: 'provider:one',
+                      name: 'image-model',
+                      capabilities: ['image.generate', 'text_to_image'],
+                      enabled: true,
+                    }
+                  : undefined,
+            }) as never,
+        ),
       },
       assistant: { assistantSpaceId: 'assistant:one', root },
     });
@@ -215,6 +234,35 @@ describe('Desktop DSH domain Tool handlers', () => {
         snapshot: expect.objectContaining({ ref: { kind: 'generation', jobId: 'job:one' } }),
       }),
     );
+
+    const unsupportedControlRequest = {
+      ...generationRequest(),
+      toolCallId: 'call:unsupported-image-control',
+      input: {
+        purpose: 'image.generate',
+        lifecycleMode: 'detached',
+        generationType: 'image-to-image',
+        request: {
+          prompt: 'Keep the subject identity',
+          ipAdapterRefs: [
+            {
+              imageLocator: { file: { authority: 'workspace', path: 'references/subject.png' } },
+              mode: 'subject',
+            },
+          ],
+        },
+      },
+    } satisfies DshAcpDomainToolRequest;
+    await expect(
+      handlers.executeGenerationTool(unsupportedControlRequest, new AbortController().signal),
+    ).resolves.toMatchObject({
+      outcome: 'failure',
+      diagnostic: {
+        code: 'GENERATION_DSH_TOOL_FAILED',
+        message: expect.stringContaining('image.reference.ip-adapter'),
+      },
+    });
+    expect(submitGeneration).toHaveBeenCalledTimes(1);
   });
 
   it('resolves the video model profile before submitting an Agent Generation Job', async () => {
@@ -290,6 +338,13 @@ describe('Desktop DSH domain Tool handlers', () => {
           prompt: 'A slow upward push',
           providerId: 'minimax-provider',
           modelId: 'minimax-h3',
+          inputs: [
+            {
+              type: 'image',
+              role: 'first-frame',
+              locator: { file: { authority: 'workspace', path: 'frames/SH01.png' } },
+            },
+          ],
           duration: 6,
           resolution: '768P',
           aspectRatio: '16:9',
@@ -779,6 +834,13 @@ function videoGenerationRequest(): DshAcpDomainToolRequest {
       request: {
         prompt: 'A slow upward push',
         negativePrompt: 'text',
+        inputs: [
+          {
+            type: 'image',
+            role: 'first-frame',
+            locator: { file: { authority: 'workspace', path: 'frames/SH01.png' } },
+          },
+        ],
         duration: 6,
         resolution: '1080p',
         fps: 24,
