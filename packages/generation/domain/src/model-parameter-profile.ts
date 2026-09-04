@@ -86,7 +86,9 @@ export interface ImageGenerationModelParameterProfile {
   };
 }
 
-export type ImageGenerationParameterId = 'size' | 'quality' | 'count';
+export const IMAGE_GENERATION_PARAMETER_IDS = ['size', 'quality', 'count'] as const;
+
+export type ImageGenerationParameterId = (typeof IMAGE_GENERATION_PARAMETER_IDS)[number];
 
 export interface ImageGenerationParameterDiagnostic {
   readonly parameter: ImageGenerationParameterId;
@@ -103,7 +105,7 @@ export type GenerationModelParameterProfile =
   ImageGenerationModelParameterProfile | VideoGenerationModelParameterProfile;
 
 export interface GenerationParameterAdjustment {
-  readonly parameter: VideoGenerationParameterId;
+  readonly parameter: VideoGenerationParameterId | ImageGenerationParameterId;
   readonly reason: 'unsupported' | 'invalid' | 'missing-required';
 }
 
@@ -254,6 +256,48 @@ export function conformImageGenerationRecipeToProfile(
       count: profile.fixed.outputCount,
       quality,
       ...(recipe.style === undefined ? {} : { style: recipe.style }),
+    },
+    adjustments,
+  };
+}
+
+export function conformImageGenerationRequestToProfile(
+  request: ImageGenerationRequest,
+  profile: ImageGenerationModelParameterProfile,
+): {
+  readonly request: ImageGenerationRequest;
+  readonly adjustments: readonly ImageGenerationParameterAdjustment[];
+} {
+  const {
+    width: _width,
+    height: _height,
+    aspectRatio: _aspectRatio,
+    count: _count,
+    quality: _quality,
+    ...base
+  } = request;
+  const selectedSize = profile.controls.size.values.find((option) =>
+    imageSizeMatches(option, request),
+  );
+  const size = selectedSize ?? requireImageSizeDefault(profile.controls.size);
+  const quality =
+    request.quality && profile.controls.quality.values.includes(request.quality)
+      ? request.quality
+      : requireImageQuality(profile.controls.quality.defaultValue);
+  const adjustments: ImageGenerationParameterAdjustment[] = [];
+  if (!selectedSize) adjustments.push({ parameter: 'size', reason: 'invalid' });
+  if (request.quality !== undefined && request.quality !== quality) {
+    adjustments.push({ parameter: 'quality', reason: 'invalid' });
+  }
+  if (request.count !== undefined && request.count !== profile.fixed.outputCount) {
+    adjustments.push({ parameter: 'count', reason: 'invalid' });
+  }
+  return {
+    request: {
+      ...base,
+      ...imageSizeRecipeValues(size),
+      count: profile.fixed.outputCount,
+      quality,
     },
     adjustments,
   };

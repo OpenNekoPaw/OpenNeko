@@ -7,8 +7,8 @@ import type {
   SubmitPurposeGenerationJobInput,
 } from './contracts';
 import {
+  conformImageGenerationRequestToProfile,
   conformVideoGenerationRequestToProfile,
-  validateImageGenerationParameters,
 } from '../model-parameter-profile';
 import {
   resolveImageGenerationType,
@@ -49,21 +49,24 @@ export function createPurposeGenerationJobPort(input: {
               `Generation type ${request.generationType} does not match image request inputs; expected ${expectedType}.`,
             );
           }
+          const boundImageRequest = {
+            ...request.request,
+            providerId: binding.providerId,
+            modelId: binding.modelId,
+          };
+          if (binding.parameterProfile?.kind === 'video') {
+            throw new Error('Generation model parameter profile does not match image purpose.');
+          }
+          const preparedImage = binding.parameterProfile
+            ? conformImageGenerationRequestToProfile(boundImageRequest, binding.parameterProfile)
+            : { request: boundImageRequest, adjustments: [] };
           if (binding.providerType) {
             assertNoCapabilityErrors(
               validateProviderImageRequest(
                 binding.providerType,
-                request.request,
+                preparedImage.request,
                 binding.modelCapabilities,
               ),
-            );
-          }
-          if (binding.parameterProfile) {
-            if (binding.parameterProfile.kind !== 'image') {
-              throw new Error('Generation model parameter profile does not match image purpose.');
-            }
-            assertNoParameterErrors(
-              validateImageGenerationParameters(binding.parameterProfile, request.request),
             );
           }
           return input.jobs.submitGeneration({
@@ -71,11 +74,10 @@ export function createPurposeGenerationJobPort(input: {
             generationType: request.generationType,
             providerId: binding.providerId,
             modelId: binding.modelId,
-            request: {
-              ...request.request,
-              providerId: binding.providerId,
-              modelId: binding.modelId,
-            },
+            ...(preparedImage.adjustments.length === 0
+              ? {}
+              : { parameterAdjustments: preparedImage.adjustments }),
+            request: preparedImage.request,
           });
         }
         case 'text-to-video':
@@ -143,13 +145,6 @@ export function createPurposeGenerationJobPort(input: {
     reconcileGeneration: (command: GenerationJobCommandInput) =>
       input.jobs.reconcileGeneration(command),
   });
-}
-
-function assertNoParameterErrors(diagnostics: readonly { readonly message: string }[]): void {
-  if (diagnostics.length === 0) return;
-  throw new Error(
-    `Media model parameter validation failed: ${diagnostics.map(({ message }) => message).join('; ')}`,
-  );
 }
 
 function assertNoCapabilityErrors(

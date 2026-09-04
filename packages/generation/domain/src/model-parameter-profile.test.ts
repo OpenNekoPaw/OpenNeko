@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  conformImageGenerationRequestToProfile,
   conformImageGenerationRecipeToProfile,
   conformVideoGenerationRecipeToProfile,
   conformVideoGenerationRequestToProfile,
@@ -130,6 +131,43 @@ describe('Generation model parameter profiles', () => {
       adjustments: [
         { parameter: 'size', reason: 'invalid' },
         { parameter: 'count', reason: 'invalid' },
+      ],
+    });
+  });
+
+  it('conforms Agent image requests to automatic model defaults with visible adjustments', () => {
+    const profile = resolveImageGenerationModelParameterProfile({
+      providerType: 'newapi',
+      modelName: 'gpt-image-2',
+    });
+    if (!profile) throw new Error('GPT Image 2 parameter profile is unavailable.');
+
+    expect(
+      conformImageGenerationRequestToProfile(
+        {
+          prompt: 'Recompose the supplied frame as a 16:9 environment.',
+          operation: 'edit',
+          referenceImageLocator: {
+            file: { authority: 'workspace', path: 'references/source.png' },
+          },
+          aspectRatio: '16:9',
+          quality: 'hd',
+        },
+        profile,
+      ),
+    ).toEqual({
+      request: {
+        prompt: 'Recompose the supplied frame as a 16:9 environment.',
+        operation: 'edit',
+        referenceImageLocator: {
+          file: { authority: 'workspace', path: 'references/source.png' },
+        },
+        count: 1,
+        quality: 'auto',
+      },
+      adjustments: [
+        { parameter: 'size', reason: 'invalid' },
+        { parameter: 'quality', reason: 'invalid' },
       ],
     });
   });

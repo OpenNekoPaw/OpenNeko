@@ -156,8 +156,8 @@ describe('createPurposeGenerationJobPort', () => {
     expect(submitGeneration).not.toHaveBeenCalled();
   });
 
-  it('rejects image parameters outside the Host-bound model profile before Job creation', async () => {
-    const submitGeneration = vi.fn();
+  it('conforms Agent image parameters to the Host-bound model profile before Job creation', async () => {
+    const submitGeneration = vi.fn(async (input) => input);
     const profile = resolveImageGenerationModelParameterProfile({
       providerType: 'newapi',
       modelName: 'gpt-image-2',
@@ -174,25 +174,44 @@ describe('createPurposeGenerationJobPort', () => {
       },
     });
 
-    await expect(
-      port.submitGeneration({
-        lifecycleMode: 'linked',
-        purpose: 'image.edit',
-        generationType: 'image-edit',
-        request: {
-          prompt: 'Recompose this page.',
-          operation: 'edit',
-          referenceImageLocator: {
-            file: { authority: 'workspace', path: 'volume.epub' },
-            selector: { kind: 'entry', path: 'image/page.jpg' },
-          },
-          width: 1920,
-          height: 1080,
-          aspectRatio: '16:9',
+    await port.submitGeneration({
+      lifecycleMode: 'linked',
+      purpose: 'image.edit',
+      generationType: 'image-edit',
+      request: {
+        prompt: 'Recompose this page as a 16:9 frame.',
+        operation: 'edit',
+        referenceImageLocator: {
+          file: { authority: 'workspace', path: 'volume.epub' },
+          selector: { kind: 'entry', path: 'image/page.jpg' },
         },
-      }),
-    ).rejects.toThrow('rejects parameter size');
-    expect(submitGeneration).not.toHaveBeenCalled();
+        aspectRatio: '16:9',
+        quality: 'hd',
+      },
+    });
+
+    expect(submitGeneration).toHaveBeenCalledWith({
+      lifecycleMode: 'linked',
+      generationType: 'image-edit',
+      providerId: 'image-provider',
+      modelId: 'gpt-image-2',
+      parameterAdjustments: [
+        { parameter: 'size', reason: 'invalid' },
+        { parameter: 'quality', reason: 'invalid' },
+      ],
+      request: {
+        prompt: 'Recompose this page as a 16:9 frame.',
+        operation: 'edit',
+        referenceImageLocator: {
+          file: { authority: 'workspace', path: 'volume.epub' },
+          selector: { kind: 'entry', path: 'image/page.jpg' },
+        },
+        providerId: 'image-provider',
+        modelId: 'gpt-image-2',
+        count: 1,
+        quality: 'auto',
+      },
+    });
   });
 
   it('conforms Agent video parameters to the Host-bound model profile before Job creation', async () => {

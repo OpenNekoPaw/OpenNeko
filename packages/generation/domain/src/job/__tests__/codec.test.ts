@@ -85,14 +85,59 @@ describe('Generation Job codec', () => {
     expect(decodeGenerationJobSnapshot(encodeGenerationJobSnapshot(value))).toEqual(value);
   });
 
-  it('rejects parameter adjustments on a non-video Job', () => {
+  it('round-trips visible image parameter adjustments', () => {
+    const value: GenerationJobSnapshot = {
+      ...snapshot(),
+      request: {
+        generationType: 'image-edit',
+        providerId: 'image-provider',
+        modelId: 'gpt-image-2',
+        parameterAdjustments: [
+          { parameter: 'size', reason: 'invalid' },
+          { parameter: 'quality', reason: 'invalid' },
+        ],
+        request: {
+          prompt: 'Recompose the source frame.',
+          providerId: 'image-provider',
+          modelId: 'gpt-image-2',
+          operation: 'edit',
+          referenceImageLocator: {
+            file: { authority: 'workspace', path: 'references/source.png' },
+          },
+          count: 1,
+          quality: 'auto',
+        },
+      },
+    };
+
+    expect(decodeGenerationJobSnapshot(encodeGenerationJobSnapshot(value))).toEqual(value);
+  });
+
+  it('rejects parameter adjustments on a non-media Job', () => {
+    expect(() =>
+      decodeGenerationJobSnapshot(
+        JSON.stringify({
+          ...snapshot(),
+          request: {
+            generationType: 'prompt',
+            providerId: 'provider-1',
+            modelId: 'text-model',
+            parameterAdjustments: [{ parameter: 'fps', reason: 'unsupported' }],
+            request: { prompt: 'Write a scene.' },
+          },
+        }),
+      ),
+    ).toThrow(expect.objectContaining({ code: 'generation-job-persistence-invalid' }));
+  });
+
+  it('rejects unsupported reasons for image parameter adjustments', () => {
     expect(() =>
       decodeGenerationJobSnapshot(
         JSON.stringify({
           ...snapshot(),
           request: {
             ...snapshot().request,
-            parameterAdjustments: [{ parameter: 'fps', reason: 'unsupported' }],
+            parameterAdjustments: [{ parameter: 'size', reason: 'unsupported' }],
           },
         }),
       ),

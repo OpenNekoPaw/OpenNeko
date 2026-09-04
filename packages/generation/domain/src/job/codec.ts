@@ -20,7 +20,10 @@ import type {
   VideoGenerationRequest,
 } from '../contracts';
 import { isImageOperationId, isVideoOperationId } from '../domain-contracts';
-import { VIDEO_GENERATION_PARAMETER_IDS } from '../model-parameter-profile';
+import {
+  IMAGE_GENERATION_PARAMETER_IDS,
+  VIDEO_GENERATION_PARAMETER_IDS,
+} from '../model-parameter-profile';
 import type { PromptGenerationRequest } from '../execution';
 
 const JOB_PHASES: ReadonlySet<string> = new Set([
@@ -189,7 +192,11 @@ function isGenerationJobRequest(value: unknown): value is GenerationJobRequest {
   ) {
     return false;
   }
-  if (parameterAdjustments !== undefined && !VIDEO_GENERATION_TYPES.has(generationType)) {
+  if (
+    parameterAdjustments !== undefined &&
+    !VIDEO_GENERATION_TYPES.has(generationType) &&
+    !IMAGE_GENERATION_TYPES.has(generationType)
+  ) {
     return false;
   }
   if (generationType === 'prompt') return isPromptRequest(request);
@@ -200,13 +207,20 @@ function isGenerationJobRequest(value: unknown): value is GenerationJobRequest {
 }
 
 function isGenerationParameterAdjustment(value: unknown): boolean {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, GENERATION_PARAMETER_ADJUSTMENT_KEYS) ||
+    typeof value['parameter'] !== 'string' ||
+    typeof value['reason'] !== 'string'
+  ) {
+    return false;
+  }
+  if (IMAGE_GENERATION_PARAMETER_ID_SET.has(value['parameter'])) {
+    return value['reason'] === 'invalid';
+  }
   return (
-    isRecord(value) &&
-    hasOnlyKeys(value, GENERATION_PARAMETER_ADJUSTMENT_KEYS) &&
-    typeof value['parameter'] === 'string' &&
     VIDEO_GENERATION_PARAMETER_ID_SET.has(value['parameter']) &&
-    typeof value['reason'] === 'string' &&
-    GENERATION_PARAMETER_ADJUSTMENT_REASONS.has(value['reason'])
+    VIDEO_GENERATION_PARAMETER_ADJUSTMENT_REASONS.has(value['reason'])
   );
 }
 
@@ -458,10 +472,13 @@ const MODEL_JOB_REQUEST_KEYS = new Set([
   'request',
 ]);
 const GENERATION_PARAMETER_ADJUSTMENT_KEYS = new Set(['parameter', 'reason']);
+const IMAGE_GENERATION_PARAMETER_ID_SET: ReadonlySet<string> = new Set(
+  IMAGE_GENERATION_PARAMETER_IDS,
+);
 const VIDEO_GENERATION_PARAMETER_ID_SET: ReadonlySet<string> = new Set(
   VIDEO_GENERATION_PARAMETER_IDS,
 );
-const GENERATION_PARAMETER_ADJUSTMENT_REASONS: ReadonlySet<string> = new Set([
+const VIDEO_GENERATION_PARAMETER_ADJUSTMENT_REASONS: ReadonlySet<string> = new Set([
   'unsupported',
   'invalid',
   'missing-required',
