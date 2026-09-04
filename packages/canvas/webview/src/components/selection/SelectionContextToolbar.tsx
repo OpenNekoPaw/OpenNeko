@@ -98,6 +98,7 @@ const STABLE_MATERIAL_ACTION_IDS: Readonly<Record<CanvasMaterialMediaKind, reado
 interface SelectionContextToolbarProps {
   readonly nodes: readonly CanvasNode[];
   readonly selectedNodeIds: readonly string[];
+  readonly unavailableNodeIds?: ReadonlySet<string>;
   readonly viewport: CanvasViewport;
   readonly viewportSize: { readonly width: number; readonly height: number };
   readonly hidden?: boolean;
@@ -128,6 +129,7 @@ type MaterialActionState =
 export function SelectionContextToolbar({
   nodes,
   selectedNodeIds,
+  unavailableNodeIds = new Set(),
   viewport,
   viewportSize,
   hidden = false,
@@ -147,9 +149,13 @@ export function SelectionContextToolbar({
     () => selectedNodeIds.flatMap((id) => nodes.find((node) => node.id === id) ?? []),
     [nodes, selectedNodeIds],
   );
+  const selectionUnavailable = selectedNodes.some((node) => unavailableNodeIds.has(node.id));
   const materialIdentityKey = useMemo(
-    () => selectedNodes.map(materialActionIdentityKey).join('\u0000'),
-    [selectedNodes],
+    () =>
+      selectionUnavailable
+        ? `unavailable:${selectedNodes.map((node) => node.id).join('\u0000')}`
+        : selectedNodes.map(materialActionIdentityKey).join('\u0000'),
+    [selectedNodes, selectionUnavailable],
   );
   const selectedNodeIdsKey = JSON.stringify(selectedNodeIds);
   const selectedNodeIdsRef = useRef(selectedNodeIds);
@@ -158,7 +164,7 @@ export function SelectionContextToolbar({
     let current = true;
     setExecutionDiagnostic(undefined);
     const requestNodeIds = selectedNodeIdsRef.current;
-    if (!host || requestNodeIds.length === 0) {
+    if (!host || requestNodeIds.length === 0 || selectionUnavailable) {
       setMaterialActionState({ status: 'idle', descriptors: [] });
       return () => {
         current = false;
@@ -182,34 +188,50 @@ export function SelectionContextToolbar({
     return () => {
       current = false;
     };
-  }, [host, materialIdentityKey, selectedNodeIdsKey]);
-  const actions = useMemo(
-    () =>
-      resolveActions(
-        selectedNodes,
-        host,
-        materialActionState.descriptors,
-        canvasStore,
-        clipboardStore,
-        historyStore,
-        setExecutionDiagnostic,
-        onMarkdownEdit,
-      ),
-    [
+  }, [host, materialIdentityKey, selectedNodeIdsKey, selectionUnavailable]);
+  const actions = useMemo(() => {
+    if (selectionUnavailable) {
+      return [
+        {
+          key: 'delete-selection',
+          label: t('menu.delete'),
+          icon: <TrashIcon size={14} />,
+          placement: 'visible',
+          priority: 10,
+          display: 'label',
+          section: 'canvas',
+          danger: true,
+          run: () => canvasStore.getState().deleteSelected(),
+        } satisfies ToolbarAction,
+      ];
+    }
+    return resolveActions(
+      selectedNodes,
+      host,
+      materialActionState.descriptors,
       canvasStore,
       clipboardStore,
       historyStore,
-      host,
-      materialActionState.descriptors,
+      setExecutionDiagnostic,
       onMarkdownEdit,
-      selectedNodes,
-    ],
-  );
+    );
+  }, [
+    canvasStore,
+    clipboardStore,
+    historyStore,
+    host,
+    materialActionState.descriptors,
+    onMarkdownEdit,
+    selectedNodes,
+    selectionUnavailable,
+  ]);
   if (hidden || selectedNodes.length === 0 || actions.length === 0) return null;
 
   const position = resolveToolbarPosition(selectedNodes, viewport, viewportSize);
   const { primary, overflow } = partitionActions(actions);
-  const selectionLabel = resolveSelectionLabel(selectedNodes);
+  const selectionLabel = selectionUnavailable
+    ? t('node.unavailableBadge')
+    : resolveSelectionLabel(selectedNodes);
 
   return (
     <div

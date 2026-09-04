@@ -25,6 +25,7 @@ import {
   type CanvasTextFilePreviewResult,
 } from './canvas-text-file-preview';
 import {
+  isCanvasGenerationNodeData,
   purposeForCanvasGenerationKind,
   type CanvasGenerationRunBinding,
 } from './types/canvas-generation-node';
@@ -271,6 +272,9 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     const node = this.canvas.nodes.find((candidate) => candidate.id === input.nodeId);
     if (!node) throw new Error(`Canvas preview resource node "${input.nodeId}" is stale.`);
     if (node.type === 'generation') {
+      if (!isCanvasGenerationNodeData(node.data)) {
+        throw new Error(`Canvas Generation node "${node.id}" is unavailable.`);
+      }
       const output = node.data.outputs.find((candidate) => candidate.outputId === input.outputId);
       if (!output || !contentLocatorsEqual(output.locator, input.locator)) {
         throw new Error(`Canvas preview resource output "${input.outputId}" is stale.`);
@@ -897,6 +901,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
       if (
         !node ||
         node.type !== 'generation' ||
+        !isCanvasGenerationNodeData(node.data) ||
         !node.data.latestRun ||
         !generationProjectionMatchesRun(projection, node.data.latestRun)
       ) {
@@ -910,7 +915,13 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     const generation = this.options.effects.generation;
     if (!generation) return;
     for (const node of this.canvas.nodes) {
-      if (node.type !== 'generation' || !node.data.latestRun) continue;
+      if (
+        node.type !== 'generation' ||
+        !isCanvasGenerationNodeData(node.data) ||
+        !node.data.latestRun
+      ) {
+        continue;
+      }
       const current = this.generationNodes.get(node.id);
       if (current && generationProjectionMatchesRun(current, node.data.latestRun)) continue;
       try {
@@ -948,6 +959,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     const node = this.canvas.nodes.find((candidate) => candidate.id === nodeId);
     return (
       node?.type === 'generation' &&
+      isCanvasGenerationNodeData(node.data) &&
       node.data.latestRun !== undefined &&
       generationRunsEqual(node.data.latestRun, run)
     );

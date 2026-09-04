@@ -268,6 +268,8 @@ export const zhCN = {
   'node.rotation': '旋转：{degrees}°',
   'node.unsupportedBadge': '不支持',
   'node.unsupportedType': '不支持的节点类型',
+  'node.unavailableBadge': '不可用',
+  'node.unavailableData': '此节点的数据无效，画布中的其他内容仍可继续使用。',
   'node.unserializableData': '[数据无法序列化]',
   'node.contentUnavailable': '内容失效',
   'node.contentLocatorMissing': '该节点没有有效的内容引用。',

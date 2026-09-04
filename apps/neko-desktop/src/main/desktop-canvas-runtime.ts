@@ -29,8 +29,9 @@ import {
 } from '@neko/content-domain';
 import { createNodeHostContentReadService } from '@neko/content-domain/node';
 import {
+  isLoadableNkcResult,
   loadNkc,
-  saveNkc,
+  saveLoadableNkc,
   type CanvasData,
   type CanvasMaterialAuthoringRequest,
   type CanvasMediaLibraryCopyConflictPolicy,
@@ -970,7 +971,7 @@ export class DesktopCanvasRuntime {
       throw error;
     }
     const loaded = loadNkc(await this.options.host.files.readText(documentPath));
-    if (!loaded.validation.valid) {
+    if (!isLoadableNkcResult(loaded)) {
       const diagnostics = loaded.validation.errors
         .slice(0, 3)
         .map((diagnostic) => `${diagnostic.field}: ${diagnostic.message}`)
@@ -988,7 +989,7 @@ export class DesktopCanvasRuntime {
     await this.options.host.files.createDirectory(directory);
     const temporaryPath = `${documentPath}.${randomUUID()}.tmp`;
     try {
-      await this.options.host.files.writeText(temporaryPath, saveNkc(canvas));
+      await this.options.host.files.writeText(temporaryPath, saveLoadableNkc(canvas));
       await this.options.host.files.rename(temporaryPath, documentPath);
     } catch (error: unknown) {
       await this.options.host.files

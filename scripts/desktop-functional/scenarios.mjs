@@ -1,5 +1,6 @@
 import { canvasOpenNekoConsumerScenario } from '../../packages/canvas/webview/functional/desktop-openneko-consumer.mjs';
 import { canvasTextFilePreviewScenario } from '../../packages/canvas/webview/functional/desktop-text-file-preview.mjs';
+import { canvasNodeLocalFailureScenario } from '../../packages/canvas/webview/functional/desktop-node-local-failure.mjs';
 import { cutOpenNekoConsumerScenario } from '../../packages/cut/webview/functional/desktop-openneko-consumer.mjs';
 import { previewOpenNekoConsumerScenario } from '../../packages/preview/webview/functional/desktop-openneko-consumer.mjs';
 import {
@@ -50,6 +51,7 @@ const scenarios = new Map(
     cutOpenNekoConsumerScenario,
     canvasOpenNekoConsumerScenario,
     canvasTextFilePreviewScenario,
+    canvasNodeLocalFailureScenario,
     previewOpenNekoConsumerScenario,
     desktopAgentProviderUiScenario,
     desktopAiModelSettingsScenario,

@@ -194,7 +194,7 @@ describe('createCanvasWebviewHost', () => {
             width: 1024,
             height: 1024,
             count: 1,
-            quality: 'standard',
+            quality: 'auto',
           }),
           outputs: [],
         }),

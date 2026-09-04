@@ -71,6 +71,41 @@ describe('Canvas Host runtime contract', () => {
     ]);
   });
 
+  it('accepts a snapshot with one unavailable node while preserving its raw content', () => {
+    const unavailableData = {
+      recipe: { kind: 'image', prompt: '' },
+      outputs: [],
+      phase: 'running',
+    };
+    const snapshot = parseCanvasHostSnapshot({
+      ...validSnapshot(),
+      canvas: {
+        ...DEFAULT_CANVAS_DATA,
+        nodes: [
+          {
+            id: 'available-note',
+            type: 'markdown',
+            position: { x: 0, y: 0 },
+            size: { width: 240, height: 160 },
+            zIndex: 0,
+            data: { content: 'still available' },
+          },
+          {
+            id: 'unavailable-generation',
+            type: 'generation',
+            position: { x: 280, y: 0 },
+            size: { width: 240, height: 160 },
+            zIndex: 1,
+            data: unavailableData,
+          },
+        ],
+      },
+    });
+
+    expect(snapshot.canvas.nodes).toHaveLength(2);
+    expect(snapshot.canvas.nodes[1]?.data).toEqual(unavailableData);
+  });
+
   it('requires explicit source semantics and typed Generation Node creation', () => {
     const source = createCanvasHostIntentRequest({
       requestId: 'request-source',

@@ -12,7 +12,10 @@ import {
   type CanvasMaterialMediaKind,
   type CanvasMaterialOrigin,
 } from './types/canvas-material-contracts';
-import { selectedCanvasGenerationOutput } from './types/canvas-generation-node';
+import {
+  isCanvasGenerationNodeData,
+  selectedCanvasGenerationOutput,
+} from './types/canvas-generation-node';
 import { type CanvasNode } from './types/canvas';
 
 export interface CanvasMaterialActionTarget {
@@ -48,6 +51,7 @@ export function resolveCanvasMaterialActionTargets(
       throw new Error(`Canvas material action selection references unknown node "${nodeId}".`);
     }
     if (node.type === 'generation') {
+      if (!isCanvasGenerationNodeData(node.data)) return [];
       const output = selectedCanvasGenerationOutput(node.data);
       if (!output) return [];
       const locatorResult = validateContentLocator(output.locator);

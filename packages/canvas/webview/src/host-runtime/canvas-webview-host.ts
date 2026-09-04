@@ -13,7 +13,7 @@ import {
   type CanvasGenerationRuntimeProjection,
   type CanvasTextFilePreviewResult,
 } from '@neko/canvas-domain';
-import { isValidNkc, type CanvasData, type CanvasViewport } from '@neko/canvas-domain';
+import { isLoadableNkc, type CanvasData, type CanvasViewport } from '@neko/canvas-domain';
 import type { ContentLocator } from '@neko/content-domain';
 import type {
   CanvasMaterialActionDescriptor,
@@ -652,8 +652,8 @@ function mergeCanvasStatus(previous: CanvasData, value: unknown): CanvasData {
     nodes: value['nodes'],
     connections: value['connections'],
   };
-  if (!isValidNkc(next)) {
-    throw new Error('Canvas status does not contain a valid .nkc document.');
+  if (!isLoadableNkc(next)) {
+    throw new Error('Canvas status does not contain a loadable .nkc document.');
   }
   return next;
 }

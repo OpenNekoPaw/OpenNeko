@@ -44,6 +44,68 @@ afterEach(async () => {
 });
 
 describe('DesktopCanvasRuntime', () => {
+  it('opens a Canvas with unavailable Generation content and preserves it while saving siblings', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-node-local-'));
+    roots.push(workspacePath);
+    const identity = createIdentity();
+    const unavailableData = {
+      recipe: { kind: 'image', prompt: '' },
+      outputs: [],
+      phase: 'running',
+    };
+    await writeFixtureFile(
+      workspacePath,
+      identity.documentId,
+      JSON.stringify({
+        name: 'Node-local failure',
+        nodes: [
+          {
+            id: 'note-1',
+            type: 'markdown',
+            position: { x: 0, y: 0 },
+            size: { width: 280, height: 180 },
+            zIndex: 0,
+            data: { content: 'available sibling' },
+          },
+          {
+            id: 'generation-invalid',
+            type: 'generation',
+            position: { x: 320, y: 0 },
+            size: { width: 240, height: 180 },
+            zIndex: 1,
+            data: unavailableData,
+          },
+        ],
+        connections: [],
+      }),
+    );
+    const runtime = createRuntime(workspacePath, identity);
+
+    const opened = await runtime.getSnapshot('window-1', identity);
+    expect(opened.canvas.nodes.map((node) => node.id)).toEqual(['note-1', 'generation-invalid']);
+    const changed = await executeAcceptedIntent(
+      runtime,
+      identity,
+      opened,
+      'rename-sibling-canvas',
+      {
+        type: 'replace-document',
+        canvas: { ...opened.canvas, name: 'Sibling edit saved' },
+        removedNodeIds: [],
+      },
+    );
+    await executeAcceptedIntent(runtime, identity, changed, 'save-sibling-edit', { type: 'save' });
+
+    const persisted = JSON.parse(
+      await readFile(path.join(workspacePath, identity.documentId), 'utf8'),
+    ) as { name: string; nodes: Array<{ id: string; data: unknown }> };
+    expect(persisted.name).toBe('Sibling edit saved');
+    expect(persisted.nodes.find((node) => node.id === 'generation-invalid')?.data).toEqual(
+      unavailableData,
+    );
+    await runtime.dispose();
+  });
+
   it('returns the document snapshot before resuming persisted Generation runs', async () => {
     const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-progressive-'));
     roots.push(workspacePath);

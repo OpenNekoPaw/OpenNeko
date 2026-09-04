@@ -31,7 +31,7 @@ describe('project file I/O guardrails', () => {
 
     expect(source).toContain("import type { NekoHostPorts } from '@neko/host/ports'");
     expect(source).toContain('loadNkc(');
-    expect(source).toContain('saveNkc(');
+    expect(source).toContain('saveLoadableNkc(');
     expect(source).toContain('this.options.host.files');
     expect(source).not.toMatch(/from ['"](?:node:)?fs['"]/);
     expect(source).not.toMatch(/from ['"]vscode['"]/);
@@ -47,7 +47,7 @@ describe('project file I/O guardrails', () => {
       /\.writeText\(/,
       /\.rename\(/,
       /\.delete\(/,
-      /saveNkc\(/,
+      /saveLoadableNkc\(/,
       /JSON\.stringify\(/,
     ]) {
       expect(loadBody, `loadDocument must not match ${pattern}`).not.toMatch(pattern);
@@ -61,7 +61,7 @@ describe('project file I/O guardrails', () => {
     expect(saveBody, 'DesktopCanvasRuntime#saveDocument should exist').not.toBe('');
     expect(saveBody).toContain('await this.options.host.files.createDirectory(directory)');
     expect(saveBody).toContain(
-      'await this.options.host.files.writeText(temporaryPath, saveNkc(canvas))',
+      'await this.options.host.files.writeText(temporaryPath, saveLoadableNkc(canvas))',
     );
     expect(saveBody).toContain('await this.options.host.files.rename(temporaryPath, documentPath)');
     expect(saveBody).toContain('delete(temporaryPath, { idempotent: true })');

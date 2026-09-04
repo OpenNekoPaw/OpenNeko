@@ -2,6 +2,7 @@ import {
   conformCanvasImageGenerationRecipeToProfile,
   conformCanvasVideoGenerationRecipeToProfile,
   createCanvasGenerationNodeData,
+  isCanvasGenerationNodeData,
   purposeForCanvasGenerationRecipe,
   inferCanvasMediaType,
   selectedCanvasGenerationOutput,
@@ -69,7 +70,9 @@ export function SelectionGenerationInputPanel({
     selectedNodeIds.length === 1
       ? nodes.find(
           (candidate): candidate is GenerationCanvasNode =>
-            candidate.id === selectedNodeIds[0] && candidate.type === 'generation',
+            candidate.id === selectedNodeIds[0] &&
+            candidate.type === 'generation' &&
+            isCanvasGenerationNodeData(candidate.data),
         )
       : undefined;
   if (hidden || !selectedNode) return null;

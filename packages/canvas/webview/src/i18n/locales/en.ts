@@ -276,6 +276,9 @@ export const en = {
   'node.rotation': 'Rotation: {degrees}°',
   'node.unsupportedBadge': 'UNSUPPORTED',
   'node.unsupportedType': 'Unsupported node type',
+  'node.unavailableBadge': 'UNAVAILABLE',
+  'node.unavailableData':
+    'This node contains invalid data. Other canvas content remains available.',
   'node.unserializableData': '[unserializable data]',
   'node.contentUnavailable': 'Content unavailable',
   'node.contentLocatorMissing': 'This node has no valid content reference.',

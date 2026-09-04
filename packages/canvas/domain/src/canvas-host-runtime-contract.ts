@@ -15,7 +15,7 @@ import {
   type CanvasMaterialActionIntent,
   type CanvasMaterialAuthoringRequest,
 } from './types/canvas-material-contracts';
-import { isValidNkc } from './nkc/codec';
+import { isLoadableNkc } from './nkc/codec';
 import { type CanvasData } from './types/canvas';
 import {
   CANVAS_GENERATION_PURPOSES,
@@ -318,8 +318,8 @@ export function parseCanvasHostSnapshot(value: unknown): CanvasHostSnapshot {
     'generationNodes',
   ]);
   const canvas = record['canvas'];
-  if (!isValidNkc(canvas)) {
-    throw invalidPayload('Canvas Host snapshot does not contain a valid .nkc document.');
+  if (!isLoadableNkc(canvas)) {
+    throw invalidPayload('Canvas Host snapshot does not contain a loadable .nkc document.');
   }
   return {
     identity: parseCanvasHostRuntimeIdentity(record['identity']),
@@ -463,8 +463,8 @@ function parseCanvasHostIntent(value: unknown): CanvasHostIntent {
   if (type === 'replace-document') {
     requireExactKeys(record, ['type', 'canvas', 'removedNodeIds']);
     const canvas = record['canvas'];
-    if (!isValidNkc(canvas)) {
-      throw invalidPayload('Canvas Host replace-document intent requires valid .nkc data.');
+    if (!isLoadableNkc(canvas)) {
+      throw invalidPayload('Canvas Host replace-document intent requires loadable .nkc data.');
     }
     return {
       type,

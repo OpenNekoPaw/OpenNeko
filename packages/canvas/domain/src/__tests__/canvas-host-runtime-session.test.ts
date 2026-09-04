@@ -950,6 +950,59 @@ describe('CanvasHostRuntimeSession', () => {
     expect((await runtime.getSnapshot()).generationNodes).toEqual([]);
   });
 
+  it('skips an unavailable Generation node while reattaching its valid sibling', async () => {
+    const run = {
+      submissionId: 'submission-valid',
+      recipeInputFingerprint: 'sha256:valid',
+      jobRef: { kind: 'generation' as const, jobId: 'job-valid' },
+    };
+    const validCanvas = generationCanvasWithRun('generation-valid', run);
+    const resumeNode = vi.fn(async ({ canvas }) => ({
+      canvas,
+      projection: {
+        nodeId: 'generation-valid',
+        submissionId: run.submissionId,
+        recipeInputFingerprint: run.recipeInputFingerprint,
+        jobRef: run.jobRef,
+        phase: 'running' as const,
+      },
+    }));
+    const runtime = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas: {
+        ...validCanvas,
+        nodes: [
+          {
+            id: 'generation-unavailable',
+            type: 'generation',
+            position: { x: 320, y: 0 },
+            size: { width: 240, height: 180 },
+            zIndex: 1,
+            data: { recipe: { kind: 'image', prompt: '' }, outputs: [], phase: 'running' },
+          } as never,
+          ...validCanvas.nodes,
+        ],
+      },
+      effects: {
+        generation: {
+          ...unusedGenerationEffects(),
+          resumeNode,
+          observeNode: async function* () {},
+        },
+      },
+    });
+
+    await runtime.reattachGenerationNodes();
+
+    expect(resumeNode).toHaveBeenCalledTimes(1);
+    expect(resumeNode).toHaveBeenCalledWith(
+      expect.objectContaining({ nodeId: 'generation-valid', run }),
+    );
+    expect((await runtime.getSnapshot()).generationNodes).toEqual([
+      expect.objectContaining({ nodeId: 'generation-valid', phase: 'running' }),
+    ]);
+  });
+
   it('reprojects only the exact Generation run restored by undo', async () => {
     const run = {
       submissionId: 'submission-undo',

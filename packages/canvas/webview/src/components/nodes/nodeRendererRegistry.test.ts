@@ -118,6 +118,38 @@ describe('nodeRendererRegistry', () => {
     expect(markup).toContain('UNSUPPORTED');
     expect(markup).toContain('future-node');
   });
+
+  it('renders invalid Generation content as one unavailable node without invoking its renderer', () => {
+    const node = {
+      id: 'generation-invalid',
+      type: 'generation',
+      position: { x: 0, y: 0 },
+      size: { width: 240, height: 140 },
+      zIndex: 1,
+      data: { recipe: { kind: 'image', prompt: '' }, outputs: [], phase: 'running' },
+    } as never;
+    const generationRenderer = () => {
+      throw new Error('Invalid Generation content reached the Generation renderer.');
+    };
+
+    const markup = renderToStaticMarkup(
+      renderCanvasNode(
+        { generation: generationRenderer },
+        {
+          node,
+          allNodes: [node],
+          selectedNodeIds: [],
+          viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+          isSelected: false,
+          containerRef: { current: null },
+        },
+      ),
+    );
+
+    expect(markup).toContain('data-canvas-node-unavailable="generation-invalid"');
+    expect(markup).toContain('UNAVAILABLE');
+    expect(markup).toContain('canonical Recipe/run/output contract');
+  });
 });
 
 function renderNode(

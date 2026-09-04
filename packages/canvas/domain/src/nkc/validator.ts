@@ -604,3 +604,46 @@ export function validateNkc(data: unknown, options: NkcValidateOptions = {}): Va
     warnings: options.strict ? [] : warnings,
   };
 }
+
+/**
+ * Validate the durable content owned by one otherwise projectable Canvas node.
+ * Geometry and identity errors remain document-level because the Renderer cannot
+ * safely place or address such a node.
+ */
+export function validateNkcNodeContent(node: unknown): ValidationResult {
+  const errors: ValidationError[] = [];
+  const warnings: ValidationError[] = [];
+  validateNode(omitUndefinedObjectFields(node), 'node', errors, warnings);
+
+  return {
+    valid: errors.every((diagnostic) => !isNodeContentField(diagnostic.field)),
+    errors: errors.filter((diagnostic) => isNodeContentField(diagnostic.field)),
+    warnings: warnings.filter((diagnostic) => isNodeContentField(diagnostic.field)),
+  };
+}
+
+export function isNkcNodeContentDiagnostic(diagnostic: Pick<ValidationError, 'field'>): boolean {
+  return /^nodes\[\d+\]\.data(?:\.|$)/u.test(diagnostic.field);
+}
+
+function isNodeContentField(field: string): boolean {
+  return field === 'node.data' || field.startsWith('node.data.');
+}
+
+function omitUndefinedObjectFields(value: unknown, seen = new WeakMap<object, unknown>()): unknown {
+  if (value === null || typeof value !== 'object') return value;
+  const existing = seen.get(value);
+  if (existing !== undefined) return existing;
+  if (Array.isArray(value)) {
+    const copy: unknown[] = [];
+    seen.set(value, copy);
+    value.forEach((entry) => copy.push(omitUndefinedObjectFields(entry, seen)));
+    return copy;
+  }
+  const copy: Record<string, unknown> = {};
+  seen.set(value, copy);
+  for (const [key, entry] of Object.entries(value)) {
+    if (entry !== undefined) copy[key] = omitUndefinedObjectFields(entry, seen);
+  }
+  return copy;
+}
