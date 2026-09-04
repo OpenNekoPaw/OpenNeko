@@ -2343,6 +2343,34 @@ button.canvas-node-external-label {
   font-size: 9px;
 }
 
+.selection-generation-input-panel__reference-preview {
+  position: relative;
+  width: 64px;
+  height: 44px;
+  flex: none;
+  overflow: hidden;
+  margin: 0;
+  border: 1px solid var(--control-border);
+  border-radius: 7px;
+  background: var(--node-surface);
+}
+
+.selection-generation-input-panel__reference-preview figcaption {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow: hidden;
+  padding: 8px 4px 2px;
+  background: linear-gradient(transparent, color-mix(in srgb, var(--node-surface) 88%, black));
+  color: var(--node-fg);
+  font-size: 9px;
+  line-height: 12px;
+  pointer-events: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .selection-generation-input-panel__controls > select {
   max-width: 140px;
 }

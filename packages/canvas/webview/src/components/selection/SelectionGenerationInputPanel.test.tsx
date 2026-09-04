@@ -8,6 +8,7 @@ import type {
   CanvasNode,
   GenerationCanvasNode,
   MarkdownCanvasNode,
+  MediaCanvasNode,
 } from '@neko/canvas-domain';
 import { createEmptyCanvasData } from '@neko/canvas-domain';
 import { CONTENT_LOCATOR_DRAG_MIME, createContentLocatorDragData } from '@neko/content-domain';
@@ -88,6 +89,32 @@ describe('SelectionGenerationInputPanel', () => {
     render([reference], [], [reference.id], createHost());
 
     expect(container.innerHTML).toBe('');
+  });
+
+  it('renders an image reference through the authorized Canvas preview path', () => {
+    const postMessage = vi.fn();
+    const node = generationNode({ kind: 'video', prompt: 'Animate the first frame' });
+    const reference = imageReferenceNode();
+    render(
+      [reference, node],
+      [referenceConnection(reference.id, node.id)],
+      [node.id],
+      createHost(undefined, { postMessage }),
+    );
+
+    expect(
+      container.querySelector('[data-canvas-generation-reference-preview="image"]'),
+    ).not.toBeNull();
+    expect(container.querySelector('[data-preview-surface="image"]')).not.toBeNull();
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'preview:resolveResource',
+        nodeId: reference.id,
+        outputId: reference.id,
+        contentLocator: reference.data.contentLocator,
+        contentKind: 'image',
+      }),
+    );
   });
 
   it('adds an authorized reference to the exact generation node', async () => {
@@ -671,6 +698,24 @@ function referenceNode(): MarkdownCanvasNode {
     size: { width: 240, height: 160 },
     zIndex: 0,
     data: { content: '# Reference note\nA stable text input.' },
+  };
+}
+
+function imageReferenceNode(): MediaCanvasNode {
+  return {
+    id: 'reference-image-1',
+    type: 'media',
+    position: { x: 20, y: 30 },
+    size: { width: 240, height: 160 },
+    zIndex: 0,
+    data: {
+      assetPath: 'neko/generated/image/reference-image.png',
+      mediaType: 'image',
+      title: 'Reference image',
+      contentLocator: {
+        file: { authority: 'workspace', path: 'neko/generated/image/reference-image.png' },
+      },
+    },
   };
 }
 

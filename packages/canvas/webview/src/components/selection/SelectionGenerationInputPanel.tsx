@@ -36,6 +36,8 @@ import {
 import { createPortal } from 'react-dom';
 import { useOptionalCanvasHost } from '../../host-runtime';
 import { t } from '../../i18n';
+import { PreviewSurface } from '../../preview/PreviewRendererRegistry';
+import type { PreviewSourceDescriptor } from '../../preview/types';
 import { resolveSelectionToolbarTop } from './selectionAttachmentGeometry';
 
 interface SelectionGenerationInputPanelProps {
@@ -382,15 +384,29 @@ function GenerationInputPanel({
         </ComposerPopover>
         <div className="selection-generation-input-panel__reference-list">
           {references.length > 0 ? (
-            references.map(({ connection, source }, index) => (
-              <span key={connection.id} className="selection-generation-input-panel__reference">
-                {source ? referenceLabel(source) : t('generation.referenceMissing')}
-                <small>
-                  {connection.targetEndpoint?.portId ??
-                    t('generation.reference', { number: index + 1 })}
-                </small>
-              </span>
-            ))
+            references.map(({ connection, source }, index) => {
+              const label = source ? referenceLabel(source) : t('generation.referenceMissing');
+              const previewSource = source ? imageReferencePreviewSource(source) : undefined;
+              const role =
+                connection.targetEndpoint?.portId ??
+                t('generation.reference', { number: index + 1 });
+              return previewSource ? (
+                <figure
+                  key={connection.id}
+                  className="selection-generation-input-panel__reference-preview"
+                  data-canvas-generation-reference-preview="image"
+                  title={`${label} · ${role}`}
+                >
+                  <PreviewSurface source={previewSource} surfaceKind="inline" chrome="full-bleed" />
+                  <figcaption>{label}</figcaption>
+                </figure>
+              ) : (
+                <span key={connection.id} className="selection-generation-input-panel__reference">
+                  {label}
+                  <small>{role}</small>
+                </span>
+              );
+            })
           ) : (
             <span className="selection-generation-input-panel__empty-reference">
               <strong>{t('generation.references')}</strong>
@@ -1131,6 +1147,44 @@ function referenceLabel(node: CanvasNode): string {
     case 'job':
       return node.id;
   }
+}
+
+function imageReferencePreviewSource(node: CanvasNode): PreviewSourceDescriptor | undefined {
+  if (node.type === 'media') {
+    if (node.data.mediaType !== 'image' || !node.data.contentLocator) return undefined;
+    return {
+      id: `canvas-generation-reference:${node.id}`,
+      nodeId: node.id,
+      outputId: node.id,
+      role: 'source-image',
+      title: referenceLabel(node),
+      contentLocator: node.data.contentLocator,
+    };
+  }
+  if (node.type === 'file') {
+    if (node.data.mediaKind !== 'image' || !node.data.contentLocator) return undefined;
+    return {
+      id: `canvas-generation-reference:${node.id}`,
+      nodeId: node.id,
+      outputId: node.id,
+      role: 'source-image',
+      title: referenceLabel(node),
+      contentLocator: node.data.contentLocator,
+    };
+  }
+  if (node.type === 'generation') {
+    const output = selectedCanvasGenerationOutput(node.data);
+    if (!output || output.kind !== 'image') return undefined;
+    return {
+      id: `canvas-generation-reference:${node.id}:${output.outputId}`,
+      nodeId: node.id,
+      outputId: output.outputId,
+      role: 'generation-candidate',
+      title: referenceLabel(node),
+      contentLocator: output.locator,
+    };
+  }
+  return undefined;
 }
 
 function referenceSourceKind(
