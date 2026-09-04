@@ -48,7 +48,7 @@ const IMAGE_REQUEST_SCHEMA = {
   type: 'object',
   title: 'image generation request',
   description:
-    'Image request. Use camelCase fields such as negativePrompt and aspectRatio; provider and model bindings are Host-owned.',
+    'Image request. Use camelCase fields such as negativePrompt and aspectRatio; provider and model bindings are Host-owned, and explicit parameters are validated against the selected model profile.',
   properties: {
     prompt: { type: 'string', required: true },
     negativePrompt: { type: 'string' },
@@ -61,7 +61,7 @@ const IMAGE_REQUEST_SCHEMA = {
     referenceImageLocator: {
       ...CONTENT_LOCATOR_SCHEMA,
       description:
-        'Stable image ContentLocator used as an image-to-image reference. Set generationType to image-to-image.',
+        'Stable image ContentLocator used by image-to-image or image-edit. Use image-to-image with operation generate; use image-edit with edit, inpaint, or style-transfer.',
     },
     maskLocator: CONTENT_LOCATOR_SCHEMA,
     inpaintStrength: { type: 'number' },
@@ -269,7 +269,7 @@ export const GENERATION_DSH_TOOL_PARAMETERS = {
         type: 'object',
         title: 'image submit input',
         description:
-          'Input for submit when generationType creates or edits an image. generationType must match the request: no image inputs is text-to-image, a reference/control/IP-Adapter/panorama image is image-to-image, and a mask/edit instruction is image-edit.',
+          'Input for submit when generationType creates or edits an image. generationType must match the request: generate without image inputs is text-to-image; generate with a reference/control/IP-Adapter/panorama image is image-to-image; edit, inpaint, style-transfer, a mask, or editInstruction is image-edit. outpaint is not a canonical operation.',
         properties: {
           ...SUBMIT_PROPERTIES,
           generationType: {

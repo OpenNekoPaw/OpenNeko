@@ -6,7 +6,10 @@ import type {
   PurposeGenerationJobPort,
   SubmitPurposeGenerationJobInput,
 } from './contracts';
-import { conformVideoGenerationRequestToProfile } from '../model-parameter-profile';
+import {
+  conformVideoGenerationRequestToProfile,
+  validateImageGenerationParameters,
+} from '../model-parameter-profile';
 import {
   resolveImageGenerationType,
   resolveVideoGenerationType,
@@ -55,6 +58,14 @@ export function createPurposeGenerationJobPort(input: {
               ),
             );
           }
+          if (binding.parameterProfile) {
+            if (binding.parameterProfile.kind !== 'image') {
+              throw new Error('Generation model parameter profile does not match image purpose.');
+            }
+            assertNoParameterErrors(
+              validateImageGenerationParameters(binding.parameterProfile, request.request),
+            );
+          }
           return input.jobs.submitGeneration({
             lifecycleMode: request.lifecycleMode,
             generationType: request.generationType,
@@ -82,6 +93,9 @@ export function createPurposeGenerationJobPort(input: {
             providerId: binding.providerId,
             modelId: binding.modelId,
           };
+          if (binding.parameterProfile?.kind === 'image') {
+            throw new Error('Generation model parameter profile does not match video purpose.');
+          }
           const preparedVideo = binding.parameterProfile
             ? conformVideoGenerationRequestToProfile(boundVideoRequest, binding.parameterProfile)
             : { request: boundVideoRequest, adjustments: [] };
@@ -129,6 +143,13 @@ export function createPurposeGenerationJobPort(input: {
     reconcileGeneration: (command: GenerationJobCommandInput) =>
       input.jobs.reconcileGeneration(command),
   });
+}
+
+function assertNoParameterErrors(diagnostics: readonly { readonly message: string }[]): void {
+  if (diagnostics.length === 0) return;
+  throw new Error(
+    `Media model parameter validation failed: ${diagnostics.map(({ message }) => message).join('; ')}`,
+  );
 }
 
 function assertNoCapabilityErrors(

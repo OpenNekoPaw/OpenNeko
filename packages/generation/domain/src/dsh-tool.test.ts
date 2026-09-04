@@ -14,6 +14,9 @@ describe('Generation DSH tool contract', () => {
     const videoSubmitSchema = GENERATION_DSH_TOOL_PARAMETERS.input.oneOf.find(
       (candidate) => candidate.title === 'video submit input',
     );
+    const imageSubmitSchema = GENERATION_DSH_TOOL_PARAMETERS.input.oneOf.find(
+      (candidate) => candidate.title === 'image submit input',
+    );
     expect(videoSubmitSchema).toMatchObject({
       properties: {
         request: {
@@ -39,7 +42,15 @@ describe('Generation DSH tool contract', () => {
     expect(serialized).toContain('image-edit');
     expect(serialized).toContain('video-edit');
     expect(serialized).not.toContain('text-to-music');
-    expect(serialized).not.toContain('outpaint');
+    expect(imageSubmitSchema).toMatchObject({
+      properties: {
+        request: {
+          properties: {
+            operation: { enum: ['generate', 'edit', 'inpaint', 'style-transfer'] },
+          },
+        },
+      },
+    });
     expect(serialized).not.toContain('prepare-for-timeline');
     expect(serialized).not.toContain('negative_prompt');
     expect(serialized).not.toContain('aspect_ratio');
@@ -120,6 +131,38 @@ describe('Generation DSH tool contract', () => {
             },
           ],
         },
+      }),
+    ).toThrow(/generation type contract/);
+  });
+
+  it('accepts an EPUB entry as the source of an image edit and rejects outpaint', () => {
+    const input = {
+      purpose: 'image.edit',
+      generationType: 'image-edit',
+      lifecycleMode: 'linked',
+      request: {
+        prompt: 'Recompose the architecture into one wide environment frame.',
+        operation: 'edit',
+        editInstruction: 'Remove page layout and characters while preserving the architecture.',
+        aspectRatio: '16:9',
+        width: 2048,
+        height: 1152,
+        quality: 'hd',
+        referenceImageLocator: {
+          file: { authority: 'workspace', path: 'neko/assets/Blame/volume-01.epub' },
+          selector: { kind: 'entry', path: 'image/page-1.jpg' },
+        },
+      },
+    } as const;
+
+    expect(decodeGenerationDshToolInput('submit', input)).toEqual({
+      operation: 'submit',
+      input,
+    });
+    expect(() =>
+      decodeGenerationDshToolInput('submit', {
+        ...input,
+        request: { ...input.request, operation: 'outpaint' },
       }),
     ).toThrow(/generation type contract/);
   });

@@ -355,7 +355,11 @@ export class MediaGenerationExecutor {
               model: imageModel,
               prompt: imagePrompt,
               n: imgReq.count ?? 1,
-              size: size as `${number}x${number}` | undefined,
+              ...(size
+                ? { size: size as `${number}x${number}` }
+                : imgReq.aspectRatio
+                  ? { aspectRatio: imgReq.aspectRatio as `${number}:${number}` }
+                  : {}),
               abortSignal,
               maxRetries: 0,
               // eslint-disable-next-line @typescript-eslint/no-explicit-any

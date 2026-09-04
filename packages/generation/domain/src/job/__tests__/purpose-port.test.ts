@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { GenerationJobPort } from '../contracts';
 import { createPurposeGenerationJobPort } from '../purpose-port';
-import { resolveVideoGenerationModelParameterProfile } from '../../model-parameter-profile';
+import {
+  resolveImageGenerationModelParameterProfile,
+  resolveVideoGenerationModelParameterProfile,
+} from '../../model-parameter-profile';
 
 describe('createPurposeGenerationJobPort', () => {
   it('resolves one immutable binding before submitting to the canonical Job port', async () => {
@@ -150,6 +153,45 @@ describe('createPurposeGenerationJobPort', () => {
         },
       }),
     ).rejects.toThrow('image.reference.ip-adapter');
+    expect(submitGeneration).not.toHaveBeenCalled();
+  });
+
+  it('rejects image parameters outside the Host-bound model profile before Job creation', async () => {
+    const submitGeneration = vi.fn();
+    const profile = resolveImageGenerationModelParameterProfile({
+      providerType: 'newapi',
+      modelName: 'gpt-image-2',
+    });
+    if (!profile) throw new Error('GPT Image 2 parameter profile is unavailable.');
+    const port = createPurposeGenerationJobPort({
+      jobs: createJobs({ submitGeneration }),
+      bindings: {
+        resolveGenerationBinding: () => ({
+          providerId: 'image-provider',
+          modelId: 'gpt-image-2',
+          parameterProfile: profile,
+        }),
+      },
+    });
+
+    await expect(
+      port.submitGeneration({
+        lifecycleMode: 'linked',
+        purpose: 'image.edit',
+        generationType: 'image-edit',
+        request: {
+          prompt: 'Recompose this page.',
+          operation: 'edit',
+          referenceImageLocator: {
+            file: { authority: 'workspace', path: 'volume.epub' },
+            selector: { kind: 'entry', path: 'image/page.jpg' },
+          },
+          width: 1920,
+          height: 1080,
+          aspectRatio: '16:9',
+        },
+      }),
+    ).rejects.toThrow('rejects parameter resolution');
     expect(submitGeneration).not.toHaveBeenCalled();
   });
 

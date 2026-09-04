@@ -127,6 +127,7 @@ describe('MediaGenerationExecutor linked execution', () => {
           prompt: 'A portrait',
           operation: 'edit',
           editInstruction: 'Change the background to blue',
+          aspectRatio: '16:9',
           referenceImageLocator: {
             file: { authority: 'workspace', path: 'references/source.png' },
           },
@@ -139,6 +140,47 @@ describe('MediaGenerationExecutor linked execution', () => {
     expect(submittedForm).toBeInstanceOf(FormData);
     expect(submittedForm?.getAll('image')).toHaveLength(1);
     expect(submittedForm?.get('prompt')).toBe('A portrait\n\nChange the background to blue');
+    expect(submittedForm?.get('aspect_ratio')).toBe('16:9');
+  });
+
+  it('forwards aspectRatio through the AI SDK image contract when size is omitted', async () => {
+    const provider: Provider = {
+      ...unsupportedProvider,
+      id: 'newapi-provider',
+      type: 'newapi',
+      apiUrl: 'https://www.nekoapi.com',
+    };
+    const model: Model = {
+      ...unsupportedModel,
+      id: 'image-model',
+      name: 'gpt-image-2',
+      providerId: provider.id,
+      capabilities: ['image.generate'],
+    };
+    let submittedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+        submittedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return new Response(JSON.stringify({ created: 0, data: [{ b64_json: 'image-bytes' }] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }),
+    );
+    const executor = new MediaGenerationExecutor(
+      createConfig(provider, model),
+      createProviderResolver(provider),
+    );
+
+    await executor.executeLinked({
+      generationType: 'text-to-image',
+      providerId: provider.id,
+      modelId: model.id,
+      request: { prompt: 'A wide industrial city', aspectRatio: '16:9' },
+    });
+
+    expect(submittedBody).toMatchObject({ aspect_ratio: '16:9' });
   });
 
   it('executes video-edit through the AI SDK task lifecycle with the reference video', async () => {

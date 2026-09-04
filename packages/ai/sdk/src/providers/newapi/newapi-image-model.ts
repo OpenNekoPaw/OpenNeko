@@ -222,6 +222,7 @@ export class NewAPIImageModel implements ImageModelV3 {
     form.append('prompt', options.prompt ?? '');
     if (options.n) form.append('n', String(options.n));
     if (options.size) form.append('size', options.size);
+    if (options.aspectRatio) form.append('aspect_ratio', options.aspectRatio);
     const quality = normalizeNewAPIImageQuality(nekoExtras['quality'], this.modelId);
     if (quality !== undefined) form.append('quality', String(quality));
 

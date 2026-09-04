@@ -19,6 +19,7 @@ import type {
   ImageGenerationRequest,
   VideoGenerationRequest,
 } from '../contracts';
+import { isImageOperationId, isVideoOperationId } from '../domain-contracts';
 import { VIDEO_GENERATION_PARAMETER_IDS } from '../model-parameter-profile';
 import type { PromptGenerationRequest } from '../execution';
 
@@ -234,6 +235,7 @@ function isImageRequest(value: unknown): value is ImageGenerationRequest {
   return (
     isMediaRequestBase(value) &&
     hasOnlyKeys(value, IMAGE_REQUEST_KEYS) &&
+    (value['operation'] === undefined || isImageOperationId(value['operation'])) &&
     optionalNumbersAreFinite(value, [
       'width',
       'height',
@@ -275,6 +277,7 @@ function isVideoRequest(value: unknown): value is VideoGenerationRequest {
   return (
     isMediaRequestBase(value) &&
     hasOnlyKeys(value, VIDEO_REQUEST_KEYS) &&
+    (value['operation'] === undefined || isVideoOperationId(value['operation'])) &&
     optionalNumbersAreFinite(value, ['duration', 'fps', 'motionStrength']) &&
     (value['generateAudio'] === undefined || typeof value['generateAudio'] === 'boolean') &&
     (value['inputs'] === undefined ||

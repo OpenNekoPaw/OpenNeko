@@ -26,7 +26,8 @@ import {
   validateProviderVideoRequest,
 } from './media-operation-capabilities';
 import {
-  resolveVideoGenerationModelParameterProfile,
+  resolveGenerationModelParameterProfile,
+  validateImageGenerationParameters,
   validateVideoGenerationParameters,
 } from '../model-parameter-profile';
 
@@ -154,15 +155,25 @@ export class MediaGenerationService implements MediaGenerationExecutionPort {
             model.capabilities,
           )
         : [];
-    const modelParameterProfile = isVideoGeneration
-      ? resolveVideoGenerationModelParameterProfile({
-          providerType: provider.type,
-          modelName: model.name,
-        })
-      : undefined;
-    const modelParameterDiagnostics = modelParameterProfile
-      ? validateVideoGenerationParameters(modelParameterProfile, request as VideoGenerationRequest)
-      : [];
+    const modelParameterProfile =
+      isVideoGeneration || generationType.includes('image')
+        ? resolveGenerationModelParameterProfile({
+            providerType: provider.type,
+            modelName: model.name,
+          })
+        : undefined;
+    const modelParameterDiagnostics =
+      modelParameterProfile?.kind === 'video'
+        ? validateVideoGenerationParameters(
+            modelParameterProfile,
+            request as VideoGenerationRequest,
+          )
+        : modelParameterProfile?.kind === 'image'
+          ? validateImageGenerationParameters(
+              modelParameterProfile,
+              request as ImageGenerationRequest,
+            )
+          : [];
     const capabilityErrors = [
       ...capabilityDiagnostics
         .filter((diagnostic) => diagnostic.severity === 'error')

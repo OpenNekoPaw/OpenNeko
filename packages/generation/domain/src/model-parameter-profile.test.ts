@@ -7,6 +7,7 @@ import {
   resolveImageGenerationModelParameterProfile,
   resolveGenerationModelParameterProfile,
   resolveVideoGenerationModelParameterProfile,
+  validateImageGenerationParameters,
   validateVideoGenerationParameters,
 } from './model-parameter-profile';
 
@@ -62,6 +63,42 @@ describe('Generation model parameter profiles', () => {
         modelName: 'gpt-image-2-unknown',
       }),
     ).toBeUndefined();
+  });
+
+  it('validates GPT Image 2 dimensions against the same controls shown by Canvas', () => {
+    const profile = resolveImageGenerationModelParameterProfile({
+      providerType: 'newapi',
+      modelName: 'gpt-image-2',
+    });
+    if (!profile) throw new Error('GPT Image 2 parameter profile is unavailable.');
+
+    expect(
+      validateImageGenerationParameters(profile, {
+        width: 2048,
+        height: 1152,
+        aspectRatio: '16:9',
+        count: 1,
+        quality: 'hd',
+      }),
+    ).toEqual([]);
+    expect(
+      validateImageGenerationParameters(profile, {
+        width: 1920,
+        height: 1080,
+        aspectRatio: '16:9',
+        count: 2,
+      }),
+    ).toEqual([
+      expect.objectContaining({ parameter: 'resolution', reason: 'invalid' }),
+      expect.objectContaining({ parameter: 'count', reason: 'invalid' }),
+    ]);
+    expect(
+      validateImageGenerationParameters(profile, {
+        width: 2048,
+        height: 1024,
+        aspectRatio: '16:9',
+      }),
+    ).toEqual([expect.objectContaining({ parameter: 'resolution', reason: 'invalid' })]);
   });
 
   it('declares exact MiniMax H3 defaults without an FPS control', () => {

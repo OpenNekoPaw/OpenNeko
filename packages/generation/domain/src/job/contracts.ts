@@ -8,8 +8,8 @@ import type {
   VideoGenerationRequest,
 } from '../contracts';
 import type {
+  GenerationModelParameterProfile,
   GenerationParameterAdjustment,
-  VideoGenerationModelParameterProfile,
 } from '../model-parameter-profile';
 import type {
   GenerationExecutionResult,
@@ -143,7 +143,7 @@ export interface PurposeGenerationBindingResolver {
         readonly modelId: string;
         readonly providerType?: ProviderType;
         readonly modelCapabilities?: readonly string[];
-        readonly parameterProfile?: VideoGenerationModelParameterProfile;
+        readonly parameterProfile?: GenerationModelParameterProfile;
       }
     | undefined
     | Promise<
@@ -152,7 +152,7 @@ export interface PurposeGenerationBindingResolver {
             readonly modelId: string;
             readonly providerType?: ProviderType;
             readonly modelCapabilities?: readonly string[];
-            readonly parameterProfile?: VideoGenerationModelParameterProfile;
+            readonly parameterProfile?: GenerationModelParameterProfile;
           }
         | undefined
       >;

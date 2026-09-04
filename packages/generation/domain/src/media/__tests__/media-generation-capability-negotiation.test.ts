@@ -86,17 +86,48 @@ describe('MediaGenerationService capability negotiation', () => {
     });
     expect(harness.executeLinked).toHaveBeenCalledWith(expect.objectContaining({ request }));
   });
+
+  it('rejects image parameters outside the selected model profile before linked execution', async () => {
+    const harness = createService(
+      { ...baseProvider, type: 'newapi' },
+      {
+        modelName: 'gpt-image-2',
+        modelType: 'image',
+        capabilities: ['image.generate', 'image.edit'],
+      },
+    );
+
+    await expect(
+      harness.service.generateImage({
+        prompt: 'A wide industrial city',
+        providerId: harness.provider.id,
+        modelId: harness.model.id,
+        width: 1920,
+        height: 1080,
+        aspectRatio: '16:9',
+      }),
+    ).rejects.toThrow('Selected generation model rejects parameter resolution');
+    expect(harness.executeLinked).not.toHaveBeenCalled();
+  });
 });
 
-function createService(providerInput: Provider, options: { readonly modelName?: string } = {}) {
+function createService(
+  providerInput: Provider,
+  options: {
+    readonly modelName?: string;
+    readonly modelType?: 'image' | 'video';
+    readonly capabilities?: string[];
+  } = {},
+) {
   const provider = { ...providerInput, id: `${providerInput.type}-provider` };
+  const modelType = options.modelType ?? 'video';
   const model: Model = {
-    id: `${provider.id}-video`,
-    name: options.modelName ?? `${provider.id}-video`,
-    displayName: 'Video model',
+    id: `${provider.id}-${modelType}`,
+    name: options.modelName ?? `${provider.id}-${modelType}`,
+    displayName: `${modelType} model`,
     providerId: provider.id,
-    type: 'video',
-    capabilities: ['image_to_video'],
+    type: modelType,
+    capabilities: options.capabilities ?? ['image_to_video'],
     enabled: true,
   };
   const config = createReadOnlyConfig(provider, model);

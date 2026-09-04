@@ -1,5 +1,5 @@
 import type { ProviderType } from '@neko/ai-contracts';
-import type { VideoGenerationRequest } from './contracts';
+import type { ImageGenerationRequest, VideoGenerationRequest } from './contracts';
 import type { GenerationRecipeModelBinding, VideoGenerationRecipe } from './recipe';
 
 export const VIDEO_GENERATION_PARAMETER_IDS = [
@@ -64,6 +64,14 @@ export interface ImageGenerationModelParameterProfile {
   readonly fixed: {
     readonly outputCount: 1;
   };
+}
+
+export type ImageGenerationParameterId = 'aspectRatio' | 'resolution' | 'quality' | 'count';
+
+export interface ImageGenerationParameterDiagnostic {
+  readonly parameter: ImageGenerationParameterId;
+  readonly reason: 'invalid' | 'missing-required';
+  readonly message: string;
 }
 
 export type GenerationModelParameterProfile =
@@ -342,6 +350,61 @@ export function validateVideoGenerationParameters(
   );
   validatePresence('motionStrength', values.motionStrength, supported, diagnostics);
   validatePresence('cameraMovement', values.cameraMovement, supported, diagnostics);
+  return diagnostics;
+}
+
+export function validateImageGenerationParameters(
+  profile: ImageGenerationModelParameterProfile,
+  values: Pick<ImageGenerationRequest, 'width' | 'height' | 'aspectRatio' | 'count' | 'quality'>,
+): readonly ImageGenerationParameterDiagnostic[] {
+  const diagnostics: ImageGenerationParameterDiagnostic[] = [];
+  const { width, height, aspectRatio, count, quality } = values;
+
+  if (aspectRatio !== undefined && !profile.controls.aspectRatio.values.includes(aspectRatio)) {
+    diagnostics.push(invalidImageDiagnostic('aspectRatio'));
+  }
+
+  if ((width === undefined) !== (height === undefined)) {
+    diagnostics.push({
+      parameter: 'resolution',
+      reason: 'missing-required',
+      message: 'Selected generation model requires width and height to be provided together.',
+    });
+  } else if (width !== undefined && height !== undefined) {
+    const resolution = Math.max(width, height);
+    if (
+      !Number.isInteger(width) ||
+      !Number.isInteger(height) ||
+      width <= 0 ||
+      height <= 0 ||
+      !validIntegerControlValue(profile.controls.resolution, resolution)
+    ) {
+      diagnostics.push(invalidImageDiagnostic('resolution'));
+    } else if (aspectRatio === undefined) {
+      diagnostics.push({
+        parameter: 'aspectRatio',
+        reason: 'missing-required',
+        message: 'Selected generation model requires aspectRatio with an explicit resolution.',
+      });
+    } else if (
+      profile.controls.aspectRatio.values.includes(aspectRatio) &&
+      !dimensionsMatchAspectRatio(width, height, aspectRatio)
+    ) {
+      diagnostics.push({
+        parameter: 'resolution',
+        reason: 'invalid',
+        message:
+          'Selected generation model rejects width and height that do not match aspectRatio.',
+      });
+    }
+  }
+
+  if (count !== undefined && count !== profile.fixed.outputCount) {
+    diagnostics.push(invalidImageDiagnostic('count'));
+  }
+  if (quality !== undefined && !profile.controls.quality.values.includes(quality)) {
+    diagnostics.push(invalidImageDiagnostic('quality'));
+  }
   return diagnostics;
 }
 
@@ -639,6 +702,31 @@ function validIntegerControlValue(
     value <= control.max &&
     (value - control.min) % control.step === 0
   );
+}
+
+function dimensionsMatchAspectRatio(width: number, height: number, aspectRatio: string): boolean {
+  const [ratioWidth, ratioHeight] = aspectRatio.split(':').map(Number);
+  if (!ratioWidth || !ratioHeight) return false;
+  const edge = Math.max(width, height);
+  const expectedWidth =
+    ratioWidth >= ratioHeight ? edge : roundToEight((edge * ratioWidth) / ratioHeight);
+  const expectedHeight =
+    ratioWidth >= ratioHeight ? roundToEight((edge * ratioHeight) / ratioWidth) : edge;
+  return width === expectedWidth && height === expectedHeight;
+}
+
+function roundToEight(value: number): number {
+  return Math.max(8, Math.round(value / 8) * 8);
+}
+
+function invalidImageDiagnostic(
+  parameter: ImageGenerationParameterId,
+): ImageGenerationParameterDiagnostic {
+  return {
+    parameter,
+    reason: 'invalid',
+    message: `Selected generation model rejects parameter ${parameter}.`,
+  };
 }
 
 function unsupportedDiagnostic(

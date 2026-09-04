@@ -33,7 +33,7 @@ import { createNodeDocumentLowLevelAccess } from '@neko/content-domain/document/
 import { join } from 'node:path';
 import { CutProjectAuthoringService } from '@neko/cut-domain';
 import type { CutExportApplicationService } from '@neko/cut-node';
-import { resolveVideoGenerationModelParameterProfile } from '@neko/generation-domain';
+import { resolveGenerationModelParameterProfile } from '@neko/generation-domain';
 import {
   createPurposeGenerationJobPort,
   type GenerationApplicationRuntime,
@@ -382,8 +382,8 @@ function purposeBindings(
         );
       }
       const parameterProfile =
-        purpose === 'video.generate'
-          ? resolveVideoGenerationModelParameterProfile({
+        purpose === 'image.generate' || purpose === 'image.edit' || purpose === 'video.generate'
+          ? resolveGenerationModelParameterProfile({
               providerType: provider.type,
               modelName: model.name,
             })
