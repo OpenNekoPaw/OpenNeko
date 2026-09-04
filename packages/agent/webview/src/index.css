@@ -3106,6 +3106,10 @@ body {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.agent-generation-params-options[data-option-columns='4'] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .agent-generation-params-options[data-option-columns='5'] {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
@@ -3127,8 +3131,7 @@ body {
   font-size: 12px;
 }
 
-.agent-generation-params-options[data-option-layout='ratio']
-  .agent-generation-params-option {
+.agent-generation-params-options[data-option-layout='ratio'] .agent-generation-params-option {
   min-height: 54px;
   flex-direction: column;
   gap: 5px;

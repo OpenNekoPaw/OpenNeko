@@ -1,4 +1,5 @@
 import type { ContentLocator } from '@neko/content-domain';
+import type { ImageGenerationQuality } from './contracts';
 import type { GenerationJobRequest } from './job/contracts';
 
 export const GENERATION_RECIPE_KINDS = ['prompt', 'image', 'audio', 'video'] as const;
@@ -35,7 +36,7 @@ export interface ImageGenerationRecipe extends GenerationRecipeBase<'image'> {
   readonly height?: number;
   readonly aspectRatio?: string;
   readonly count?: number;
-  readonly quality?: 'standard' | 'hd';
+  readonly quality?: ImageGenerationQuality;
   readonly style?: string;
 }
 
@@ -126,7 +127,7 @@ export function createGenerationRecipe(
         width: 1024,
         height: 1024,
         count: 1,
-        quality: 'standard',
+        quality: 'auto',
         ...(model ? { model } : {}),
       };
     case 'audio':
@@ -173,6 +174,10 @@ export function isGenerationRecipe(value: unknown): value is GenerationRecipe {
         isOptionalNonEmptyString(value['aspectRatio']) &&
         isOptionalPositiveInteger(value['count']) &&
         (value['quality'] === undefined ||
+          value['quality'] === 'auto' ||
+          value['quality'] === 'low' ||
+          value['quality'] === 'medium' ||
+          value['quality'] === 'high' ||
           value['quality'] === 'standard' ||
           value['quality'] === 'hd') &&
         isOptionalNonEmptyString(value['style'])

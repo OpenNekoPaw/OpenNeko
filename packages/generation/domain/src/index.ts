@@ -4,6 +4,7 @@ export type {
   AudioGenerationRequest,
   ControlMode,
   ImageGenerationRequest,
+  ImageGenerationQuality,
   IPAdapterReference,
   GenerationProviderTaskError,
   GenerationProviderTaskObservation,

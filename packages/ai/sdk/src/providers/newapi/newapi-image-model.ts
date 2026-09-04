@@ -424,14 +424,8 @@ function decodeBase64OrDataUrl(input: string): { bytes: Uint8Array; mimeType: st
 function normalizeNewAPIImageQuality(value: unknown, modelId: string): string | undefined {
   if (typeof value !== 'string' || value.length === 0) return undefined;
   if (!modelId.startsWith('gpt-image-')) return value;
-  switch (value) {
-    case 'hd':
-      return 'high';
-    case 'standard':
-      return 'auto';
-    default:
-      return value;
-  }
+  if (value === 'auto' || value === 'low' || value === 'medium' || value === 'high') return value;
+  throw new Error(`NewAPI GPT Image model rejects quality '${value}'.`);
 }
 
 const AMBIGUOUS_IMAGE_SUBMISSION_CODES = new Set([

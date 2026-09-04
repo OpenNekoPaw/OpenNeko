@@ -18,6 +18,7 @@ describe('Generation Recipe ownership', () => {
       kind: 'image',
       aspectRatio: '1:1',
       count: 1,
+      quality: 'auto',
     });
     expect(createGenerationRecipe('audio')).toMatchObject({
       kind: 'audio',

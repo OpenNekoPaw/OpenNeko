@@ -83,11 +83,14 @@ describe('Canvas Generation model catalog', () => {
         parameterProfile: expect.objectContaining({
           kind: 'image',
           controls: expect.objectContaining({
-            aspectRatio: expect.objectContaining({
-              values: expect.arrayContaining(['1:1', '1:3']),
+            size: expect.objectContaining({
+              defaultValue: 'auto',
+              values: expect.arrayContaining([
+                { id: 'auto' },
+                { id: '1536x1024', width: 1536, height: 1024, aspectRatio: '3:2' },
+              ]),
             }),
-            resolution: expect.objectContaining({ suggestedValues: [1024, 2048, 4096] }),
-            quality: expect.objectContaining({ values: ['low', 'standard', 'hd'] }),
+            quality: expect.objectContaining({ values: ['auto', 'low', 'medium', 'high'] }),
           }),
           fixed: { outputCount: 1 },
         }),

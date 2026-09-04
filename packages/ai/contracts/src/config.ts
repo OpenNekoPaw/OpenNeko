@@ -282,9 +282,9 @@ export type ModelCapability =
   | 'audio.tts'
   | 'audio.asr'
   | 'audio.music.generate'
-  | 'text_to_music'
   | 'content.safety.moderate'
   | 'local.video.probe'
+  | 'text_to_music'
   | 'workflow'
   | 'image_edit'
   | 'video_edit'
@@ -325,9 +325,9 @@ export const KNOWN_MODEL_CAPABILITIES = [
   'audio.tts',
   'audio.asr',
   'audio.music.generate',
-  'text_to_music',
   'content.safety.moderate',
   'local.video.probe',
+  'text_to_music',
   'workflow',
   'image_edit',
   'video_edit',

@@ -305,11 +305,8 @@ describe('SelectionGenerationInputPanel', () => {
         providerId: 'provider-1',
         modelId: 'image-model-1',
       },
-      aspectRatio: '1:1',
-      width: 1024,
-      height: 1024,
       count: 1,
-      quality: 'standard',
+      quality: 'auto',
     });
 
     render([node], [], [node.id], createHost(undefined, { updateGenerationRecipe }));
@@ -323,10 +320,7 @@ describe('SelectionGenerationInputPanel', () => {
           providerId: 'provider-1',
           modelId: 'image-model-1',
         },
-        aspectRatio: '1:1',
-        width: 1024,
-        height: 1024,
-        quality: 'standard',
+        quality: 'auto',
         count: 1,
       }),
     );
@@ -335,10 +329,10 @@ describe('SelectionGenerationInputPanel', () => {
     ).toContain('Image Model');
     expect(
       container.querySelector<HTMLButtonElement>('[aria-label="Parameters"]')?.textContent,
-    ).toContain('1:1 · 1K · Medium');
+    ).toContain('Auto · Auto');
     expect(
       container.querySelector<HTMLButtonElement>('[aria-label="Count"]')?.textContent,
-    ).toContain('× 1');
+    ).toBeUndefined();
   });
 
   it('does not replace an authored unset Recipe with the configured default', () => {
@@ -360,39 +354,66 @@ describe('SelectionGenerationInputPanel', () => {
     expect(parameterMenu?.style.getPropertyValue('--generation-input-panel-width')).toBe('520px');
     expect(
       parameterMenu?.querySelectorAll('.selection-generation-input-panel__option-group'),
-    ).toHaveLength(3);
+    ).toHaveLength(2);
     expect(
       parameterMenu?.querySelectorAll(
-        '.selection-generation-input-panel__option-group[data-option-layout="ratio"] button',
+        '.selection-generation-input-panel__option-group[data-option-layout="image-size"] button',
       ),
-    ).toHaveLength(14);
+    ).toHaveLength(8);
     expect(
       parameterMenu?.querySelectorAll(
-        '.selection-generation-input-panel__option-group[data-option-layout="equal"] button',
+        '.selection-generation-input-panel__option-group[data-option-layout="compact"] button',
       ),
-    ).toHaveLength(3);
+    ).toHaveLength(4);
     await act(async () => {
-      document.querySelector<HTMLButtonElement>('[aria-label="Aspect ratio: 16:9"]')?.click();
-      document.querySelector<HTMLButtonElement>('[aria-label="Resolution: 4K"]')?.click();
-    });
-
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('[aria-label="Count"]')?.click();
-    });
-    const countMenu = document.querySelector<HTMLElement>(
-      '.selection-generation-input-panel__count-menu',
-    );
-    expect(countMenu?.querySelectorAll('[role="menuitemradio"]')).toHaveLength(4);
-    await act(async () => {
-      Array.from(countMenu?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? [])
-        .find((button) => button.textContent?.trim() === '× 2')
+      document
+        .querySelector<HTMLButtonElement>('[aria-label="Size and aspect ratio: 3:2 · 1536×1024"]')
         ?.click();
+    });
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[aria-label="Quality: High"]')?.click();
     });
 
     expect(updateGenerationRecipe).toHaveBeenCalledWith(
       node.id,
-      expect.objectContaining({ kind: 'image', count: 2, width: 4096 }),
+      expect.objectContaining({
+        kind: 'image',
+        count: 1,
+        width: 1536,
+        height: 1024,
+        aspectRatio: '3:2',
+        quality: 'high',
+      }),
     );
+  });
+
+  it('repairs stale image parameters and reports the model adjustment', async () => {
+    const updateGenerationRecipe = vi.fn(async () => snapshot());
+    const node = generationNode({
+      kind: 'image',
+      prompt: 'Keep the prompt',
+      model: GENERATION_MODELS[1].binding,
+      width: 1920,
+      height: 1080,
+      aspectRatio: '16:9',
+      count: 4,
+      quality: 'high',
+    });
+    render([node], [], [node.id], createHost(undefined, { updateGenerationRecipe }));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(updateGenerationRecipe).toHaveBeenCalledWith(node.id, {
+      kind: 'image',
+      prompt: 'Keep the prompt',
+      model: GENERATION_MODELS[1].binding,
+      count: 1,
+      quality: 'high',
+    });
+    expect(container.textContent).toContain('Parameters were adjusted to match Image Model');
   });
 
   it('repairs stale video parameters and exposes only controls accepted by the model', async () => {
@@ -876,41 +897,25 @@ const GENERATION_MODELS = [
     parameterProfile: {
       kind: 'image' as const,
       controls: {
-        aspectRatio: {
-          kind: 'string-enum' as const,
-          required: true,
+        size: {
+          kind: 'image-size-enum' as const,
           values: [
-            '1:1',
-            '16:9',
-            '9:16',
-            '3:4',
-            '4:3',
-            '3:2',
-            '2:3',
-            '5:4',
-            '4:5',
-            '21:9',
-            '2:1',
-            '1:2',
-            '3:1',
-            '1:3',
+            { id: 'auto' },
+            { id: '1024x1024', width: 1024, height: 1024, aspectRatio: '1:1' },
+            { id: '1536x1024', width: 1536, height: 1024, aspectRatio: '3:2' },
+            { id: '1024x1536', width: 1024, height: 1536, aspectRatio: '2:3' },
+            { id: '2048x2048', width: 2048, height: 2048, aspectRatio: '1:1' },
+            { id: '2048x1152', width: 2048, height: 1152, aspectRatio: '16:9' },
+            { id: '3840x2160', width: 3840, height: 2160, aspectRatio: '16:9' },
+            { id: '2160x3840', width: 2160, height: 3840, aspectRatio: '9:16' },
           ],
-          defaultValue: '1:1',
-        },
-        resolution: {
-          kind: 'integer' as const,
-          required: true,
-          min: 1024,
-          max: 4096,
-          step: 1024,
-          defaultValue: 1024,
-          suggestedValues: [1024, 2048, 4096],
+          defaultValue: 'auto',
         },
         quality: {
           kind: 'string-enum' as const,
           required: true,
-          values: ['low', 'standard', 'hd'],
-          defaultValue: 'standard',
+          values: ['auto', 'low', 'medium', 'high'],
+          defaultValue: 'auto',
         },
       },
       fixed: { outputCount: 1 as const },

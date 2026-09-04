@@ -158,26 +158,21 @@ const composerConfiguration: DshComposerConfigurationProjection = {
 const imageParameterProfile = {
   kind: 'image' as const,
   controls: {
-    aspectRatio: {
-      kind: 'string-enum' as const,
-      required: true,
-      values: ['1:1', '16:9', '9:16', '1:3'],
-      defaultValue: '1:1',
-    },
-    resolution: {
-      kind: 'integer' as const,
-      required: true,
-      min: 1024,
-      max: 4096,
-      step: 1024,
-      defaultValue: 1024,
-      suggestedValues: [1024, 2048, 4096],
+    size: {
+      kind: 'image-size-enum' as const,
+      values: [
+        { id: 'auto' },
+        { id: '1024x1024', width: 1024, height: 1024, aspectRatio: '1:1' },
+        { id: '1536x1024', width: 1536, height: 1024, aspectRatio: '3:2' },
+        { id: '1024x1536', width: 1024, height: 1536, aspectRatio: '2:3' },
+      ],
+      defaultValue: 'auto',
     },
     quality: {
       kind: 'string-enum' as const,
       required: true,
-      values: ['low', 'standard', 'hd'],
-      defaultValue: 'standard',
+      values: ['auto', 'low', 'medium', 'high'],
+      defaultValue: 'auto',
     },
   },
   fixed: { outputCount: 1 as const },
@@ -1151,9 +1146,9 @@ describe('DesktopAgentSurface', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Parameters' }));
 
     const dialog = screen.getByRole('dialog', { name: 'Creation configuration' });
-    expect(dialog.textContent).toContain('1K');
-    expect(dialog.textContent).toContain('2K');
-    expect(dialog.textContent).toContain('4K');
+    expect(dialog.textContent).toContain('1024×1024');
+    expect(dialog.textContent).toContain('1536×1024');
+    expect(dialog.textContent).toContain('Auto');
     expect(dialog.textContent).toContain('Quality');
     expect(dialog.textContent).not.toContain('512');
     expect(dialog.textContent).not.toContain('720p');

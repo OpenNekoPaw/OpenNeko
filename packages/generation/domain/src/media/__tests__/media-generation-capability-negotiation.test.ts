@@ -106,7 +106,7 @@ describe('MediaGenerationService capability negotiation', () => {
         height: 1080,
         aspectRatio: '16:9',
       }),
-    ).rejects.toThrow('Selected generation model rejects parameter resolution');
+    ).rejects.toThrow('Selected generation model rejects parameter size');
     expect(harness.executeLinked).not.toHaveBeenCalled();
   });
 });

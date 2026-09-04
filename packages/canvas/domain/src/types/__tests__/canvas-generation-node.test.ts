@@ -30,6 +30,48 @@ describe('Canvas Generation Node contract', () => {
     );
   });
 
+  it('loads persisted image Recipes whose selected model uses standard or HD quality names', () => {
+    for (const quality of ['standard', 'hd'] as const) {
+      const loaded = loadNkc(
+        JSON.stringify({
+          name: 'Persisted image generation',
+          nodes: [
+            {
+              ...generationNode(),
+              data: {
+                recipe: {
+                  kind: 'image',
+                  prompt: 'A wide environment frame',
+                  model: {
+                    purpose: 'image.generate',
+                    providerId: 'image-provider',
+                    modelId: 'image-model',
+                  },
+                  width: 1920,
+                  height: 1080,
+                  aspectRatio: '16:9',
+                  quality,
+                },
+                latestRun: {
+                  recipeInputFingerprint: 'recipe-fingerprint',
+                  jobRef: { kind: 'generation', jobId: 'generation-job' },
+                },
+                outputs: [],
+              },
+            },
+          ],
+          connections: [],
+        }),
+      );
+
+      expect(loaded.validation.errors).toEqual([]);
+      expect(loaded.data.nodes[0]).toMatchObject({
+        type: 'generation',
+        data: { recipe: { kind: 'image', quality } },
+      });
+    }
+  });
+
   it('keeps valid sibling content visible when one Generation Node is invalid', () => {
     const loaded = loadNkc(
       JSON.stringify({

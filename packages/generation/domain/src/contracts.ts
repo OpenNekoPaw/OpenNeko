@@ -33,6 +33,8 @@ export type MediaOperationStatus = 'pending' | 'processing' | 'completed' | 'fai
  */
 export type MediaOutputType = 'image' | 'video' | 'audio';
 
+export type ImageGenerationQuality = 'auto' | 'low' | 'medium' | 'high' | 'standard' | 'hd';
+
 // =============================================================================
 // ControlNet & IP-Adapter Types
 // =============================================================================
@@ -104,7 +106,7 @@ export interface ImageGenerationRequest extends MediaGenerationRequestBase {
   /** Inpaint strength 0.0–1.0 (only meaningful when maskLocator is set) */
   inpaintStrength?: number;
   /** Image quality setting */
-  quality?: 'standard' | 'hd';
+  quality?: ImageGenerationQuality;
   /** Style preset */
   style?: string;
   /** Stable ControlNet conditioning image location, materialized before provider execution. */

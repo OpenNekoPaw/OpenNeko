@@ -191,7 +191,7 @@ describe('createPurposeGenerationJobPort', () => {
           aspectRatio: '16:9',
         },
       }),
-    ).rejects.toThrow('rejects parameter resolution');
+    ).rejects.toThrow('rejects parameter size');
     expect(submitGeneration).not.toHaveBeenCalled();
   });
 

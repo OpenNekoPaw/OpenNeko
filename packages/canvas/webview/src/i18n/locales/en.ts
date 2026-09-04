@@ -210,6 +210,7 @@ export const en = {
   'generation.temperature': 'Temperature',
   'generation.maxTokens': 'Max tokens',
   'generation.aspectRatio': 'Aspect ratio',
+  'generation.imageSize': 'Size and aspect ratio',
   'generation.count': 'Count',
   'generation.duration': 'Duration',
   'generation.resolution': 'Resolution',

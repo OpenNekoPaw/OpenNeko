@@ -1,6 +1,14 @@
 import type { ProviderType } from '@neko/ai-contracts';
-import type { ImageGenerationRequest, VideoGenerationRequest } from './contracts';
-import type { GenerationRecipeModelBinding, VideoGenerationRecipe } from './recipe';
+import type {
+  ImageGenerationQuality,
+  ImageGenerationRequest,
+  VideoGenerationRequest,
+} from './contracts';
+import type {
+  GenerationRecipeModelBinding,
+  ImageGenerationRecipe,
+  VideoGenerationRecipe,
+} from './recipe';
 
 export const VIDEO_GENERATION_PARAMETER_IDS = [
   'negativePrompt',
@@ -38,6 +46,19 @@ export interface GenerationBooleanParameterControl {
   readonly defaultValue?: boolean;
 }
 
+export interface GenerationImageSizeOption {
+  readonly id: string;
+  readonly width?: number;
+  readonly height?: number;
+  readonly aspectRatio?: string;
+}
+
+export interface GenerationImageSizeParameterControl {
+  readonly kind: 'image-size-enum';
+  readonly values: readonly GenerationImageSizeOption[];
+  readonly defaultValue: string;
+}
+
 export interface VideoGenerationModelParameterProfile {
   readonly kind: 'video';
   readonly supportedParameters: readonly VideoGenerationParameterId[];
@@ -57,8 +78,7 @@ export interface VideoGenerationModelParameterProfile {
 export interface ImageGenerationModelParameterProfile {
   readonly kind: 'image';
   readonly controls: {
-    readonly aspectRatio: GenerationStringEnumParameterControl;
-    readonly resolution: GenerationIntegerParameterControl;
+    readonly size: GenerationImageSizeParameterControl;
     readonly quality: GenerationStringEnumParameterControl;
   };
   readonly fixed: {
@@ -66,12 +86,17 @@ export interface ImageGenerationModelParameterProfile {
   };
 }
 
-export type ImageGenerationParameterId = 'aspectRatio' | 'resolution' | 'quality' | 'count';
+export type ImageGenerationParameterId = 'size' | 'quality' | 'count';
 
 export interface ImageGenerationParameterDiagnostic {
   readonly parameter: ImageGenerationParameterId;
   readonly reason: 'invalid' | 'missing-required';
   readonly message: string;
+}
+
+export interface ImageGenerationParameterAdjustment {
+  readonly parameter: ImageGenerationParameterId;
+  readonly reason: 'invalid';
 }
 
 export type GenerationModelParameterProfile =
@@ -88,31 +113,25 @@ export interface GenerationParameterDiagnostic extends GenerationParameterAdjust
 
 const ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'] as const;
 
-const GPT_IMAGE_2_ASPECT_RATIOS = [
-  '1:1',
-  '16:9',
-  '9:16',
-  '3:4',
-  '4:3',
-  '3:2',
-  '2:3',
-  '5:4',
-  '4:5',
-  '21:9',
-  '2:1',
-  '1:2',
-  '3:1',
-  '1:3',
-] as const;
-
 const GPT_IMAGE_2_API_MODEL_NAMES = new Set(['gpt-image-2', 'gpt-image-2-pro-all']);
 
 const GPT_IMAGE_2_PROFILE: ImageGenerationModelParameterProfile = Object.freeze({
   kind: 'image',
   controls: Object.freeze({
-    aspectRatio: stringEnum(true, GPT_IMAGE_2_ASPECT_RATIOS, '1:1'),
-    resolution: integerControl(true, 1024, 4096, 1024, 1024, [1024, 2048, 4096]),
-    quality: stringEnum(true, ['low', 'standard', 'hd'], 'standard'),
+    size: imageSizeEnum(
+      [
+        { id: 'auto' },
+        { id: '1024x1024', width: 1024, height: 1024, aspectRatio: '1:1' },
+        { id: '1536x1024', width: 1536, height: 1024, aspectRatio: '3:2' },
+        { id: '1024x1536', width: 1024, height: 1536, aspectRatio: '2:3' },
+        { id: '2048x2048', width: 2048, height: 2048, aspectRatio: '1:1' },
+        { id: '2048x1152', width: 2048, height: 1152, aspectRatio: '16:9' },
+        { id: '3840x2160', width: 3840, height: 2160, aspectRatio: '16:9' },
+        { id: '2160x3840', width: 2160, height: 3840, aspectRatio: '9:16' },
+      ],
+      'auto',
+    ),
+    quality: stringEnum(true, ['auto', 'low', 'medium', 'high'], 'auto'),
   }),
   fixed: Object.freeze({ outputCount: 1 }),
 });
@@ -183,6 +202,61 @@ export function resolveVideoGenerationModelParameterProfile(input: {
     return structuredClone(SEEDANCE_2_PROFILE);
   }
   return undefined;
+}
+
+export function createImageGenerationRecipeForProfile(
+  model: GenerationRecipeModelBinding,
+  profile: ImageGenerationModelParameterProfile,
+): ImageGenerationRecipe {
+  const size = requireImageSizeDefault(profile.controls.size);
+  return {
+    kind: 'image',
+    prompt: '',
+    model,
+    ...imageSizeRecipeValues(size),
+    count: profile.fixed.outputCount,
+    ...(profile.controls.quality.defaultValue === undefined
+      ? {}
+      : { quality: requireImageQuality(profile.controls.quality.defaultValue) }),
+  };
+}
+
+export function conformImageGenerationRecipeToProfile(
+  recipe: ImageGenerationRecipe,
+  profile: ImageGenerationModelParameterProfile,
+): {
+  readonly recipe: ImageGenerationRecipe;
+  readonly adjustments: readonly ImageGenerationParameterAdjustment[];
+} {
+  const adjustments: ImageGenerationParameterAdjustment[] = [];
+  const selectedSize = profile.controls.size.values.find((option) =>
+    imageSizeMatches(option, recipe),
+  );
+  const size = selectedSize ?? requireImageSizeDefault(profile.controls.size);
+  if (!selectedSize) adjustments.push({ parameter: 'size', reason: 'invalid' });
+  const quality =
+    recipe.quality && profile.controls.quality.values.includes(recipe.quality)
+      ? recipe.quality
+      : requireImageQuality(profile.controls.quality.defaultValue);
+  if (recipe.quality !== undefined && recipe.quality !== quality) {
+    adjustments.push({ parameter: 'quality', reason: 'invalid' });
+  }
+  if (recipe.count !== undefined && recipe.count !== profile.fixed.outputCount) {
+    adjustments.push({ parameter: 'count', reason: 'invalid' });
+  }
+  return {
+    recipe: {
+      kind: 'image',
+      prompt: recipe.prompt,
+      ...(recipe.model ? { model: recipe.model } : {}),
+      ...(recipe.negativePrompt === undefined ? {} : { negativePrompt: recipe.negativePrompt }),
+      ...imageSizeRecipeValues(size),
+      count: profile.fixed.outputCount,
+      quality,
+      ...(recipe.style === undefined ? {} : { style: recipe.style }),
+    },
+    adjustments,
+  };
 }
 
 export function createVideoGenerationRecipeForProfile(
@@ -358,45 +432,10 @@ export function validateImageGenerationParameters(
   values: Pick<ImageGenerationRequest, 'width' | 'height' | 'aspectRatio' | 'count' | 'quality'>,
 ): readonly ImageGenerationParameterDiagnostic[] {
   const diagnostics: ImageGenerationParameterDiagnostic[] = [];
-  const { width, height, aspectRatio, count, quality } = values;
+  const { count, quality } = values;
 
-  if (aspectRatio !== undefined && !profile.controls.aspectRatio.values.includes(aspectRatio)) {
-    diagnostics.push(invalidImageDiagnostic('aspectRatio'));
-  }
-
-  if ((width === undefined) !== (height === undefined)) {
-    diagnostics.push({
-      parameter: 'resolution',
-      reason: 'missing-required',
-      message: 'Selected generation model requires width and height to be provided together.',
-    });
-  } else if (width !== undefined && height !== undefined) {
-    const resolution = Math.max(width, height);
-    if (
-      !Number.isInteger(width) ||
-      !Number.isInteger(height) ||
-      width <= 0 ||
-      height <= 0 ||
-      !validIntegerControlValue(profile.controls.resolution, resolution)
-    ) {
-      diagnostics.push(invalidImageDiagnostic('resolution'));
-    } else if (aspectRatio === undefined) {
-      diagnostics.push({
-        parameter: 'aspectRatio',
-        reason: 'missing-required',
-        message: 'Selected generation model requires aspectRatio with an explicit resolution.',
-      });
-    } else if (
-      profile.controls.aspectRatio.values.includes(aspectRatio) &&
-      !dimensionsMatchAspectRatio(width, height, aspectRatio)
-    ) {
-      diagnostics.push({
-        parameter: 'resolution',
-        reason: 'invalid',
-        message:
-          'Selected generation model rejects width and height that do not match aspectRatio.',
-      });
-    }
+  if (!profile.controls.size.values.some((option) => imageSizeMatches(option, values))) {
+    diagnostics.push(invalidImageDiagnostic('size'));
   }
 
   if (count !== undefined && count !== profile.fixed.outputCount) {
@@ -424,7 +463,7 @@ function parseImageGenerationModelParameterProfile(
     record['controls'],
     'Generation image parameter controls must be an object.',
   );
-  requireExactKeys(controlsRecord, ['aspectRatio', 'resolution', 'quality']);
+  requireExactKeys(controlsRecord, ['size', 'quality']);
   const fixedRecord = requireRecord(
     record['fixed'],
     'Generation image fixed parameters must be an object.',
@@ -436,24 +475,23 @@ function parseImageGenerationModelParameterProfile(
   const profile: ImageGenerationModelParameterProfile = {
     kind: 'image',
     controls: {
-      aspectRatio: parseStringEnumControl(controlsRecord['aspectRatio']),
-      resolution: parseIntegerControl(controlsRecord['resolution']),
+      size: parseImageSizeControl(controlsRecord['size']),
       quality: parseStringEnumControl(controlsRecord['quality']),
     },
     fixed: { outputCount: 1 },
   };
-  if (profile.controls.aspectRatio.defaultValue === undefined) {
-    throw new Error('Generation image aspect-ratio control requires a default.');
-  }
-  if (profile.controls.resolution.defaultValue === undefined) {
-    throw new Error('Generation image resolution control requires a default.');
-  }
   if (profile.controls.quality.defaultValue === undefined) {
     throw new Error('Generation image quality control requires a default.');
   }
   if (
     profile.controls.quality.values.some(
-      (value) => value !== 'low' && value !== 'standard' && value !== 'hd',
+      (value) =>
+        value !== 'auto' &&
+        value !== 'low' &&
+        value !== 'medium' &&
+        value !== 'high' &&
+        value !== 'standard' &&
+        value !== 'hd',
     )
   ) {
     throw new Error('Generation image quality control contains an unsupported value.');
@@ -704,19 +742,58 @@ function validIntegerControlValue(
   );
 }
 
-function dimensionsMatchAspectRatio(width: number, height: number, aspectRatio: string): boolean {
-  const [ratioWidth, ratioHeight] = aspectRatio.split(':').map(Number);
-  if (!ratioWidth || !ratioHeight) return false;
-  const edge = Math.max(width, height);
-  const expectedWidth =
-    ratioWidth >= ratioHeight ? edge : roundToEight((edge * ratioWidth) / ratioHeight);
-  const expectedHeight =
-    ratioWidth >= ratioHeight ? roundToEight((edge * ratioHeight) / ratioWidth) : edge;
-  return width === expectedWidth && height === expectedHeight;
+function imageSizeEnum(
+  values: readonly GenerationImageSizeOption[],
+  defaultValue: string,
+): GenerationImageSizeParameterControl {
+  return Object.freeze({
+    kind: 'image-size-enum',
+    values: Object.freeze(values.map((value) => Object.freeze({ ...value }))),
+    defaultValue,
+  });
 }
 
-function roundToEight(value: number): number {
-  return Math.max(8, Math.round(value / 8) * 8);
+function imageSizeMatches(
+  option: GenerationImageSizeOption,
+  values: Pick<ImageGenerationRequest, 'width' | 'height' | 'aspectRatio'>,
+): boolean {
+  return (
+    option.width === values.width &&
+    option.height === values.height &&
+    option.aspectRatio === values.aspectRatio
+  );
+}
+
+function imageSizeRecipeValues(
+  option: GenerationImageSizeOption,
+): Pick<ImageGenerationRecipe, 'width' | 'height' | 'aspectRatio'> {
+  return {
+    ...(option.width === undefined ? {} : { width: option.width }),
+    ...(option.height === undefined ? {} : { height: option.height }),
+    ...(option.aspectRatio === undefined ? {} : { aspectRatio: option.aspectRatio }),
+  };
+}
+
+function requireImageSizeDefault(
+  control: GenerationImageSizeParameterControl,
+): GenerationImageSizeOption {
+  const option = control.values.find((value) => value.id === control.defaultValue);
+  if (!option) throw new Error('Generation image size default is unavailable.');
+  return option;
+}
+
+function requireImageQuality(value: string | undefined): ImageGenerationQuality {
+  if (
+    value === 'auto' ||
+    value === 'low' ||
+    value === 'medium' ||
+    value === 'high' ||
+    value === 'standard' ||
+    value === 'hd'
+  ) {
+    return value;
+  }
+  throw new Error('Generation image quality default is invalid.');
 }
 
 function invalidImageDiagnostic(
@@ -798,6 +875,60 @@ function booleanControl(
     required,
     ...(defaultValue === undefined ? {} : { defaultValue }),
   });
+}
+
+function parseImageSizeControl(value: unknown): GenerationImageSizeParameterControl {
+  const record = requireRecord(value, 'Generation image size control must be an object.');
+  requireExactKeys(record, ['kind', 'values', 'defaultValue']);
+  if (record['kind'] !== 'image-size-enum' || !Array.isArray(record['values'])) {
+    throw new Error('Generation image size control is invalid.');
+  }
+  const values = record['values'].map((candidate) => {
+    const option = requireRecord(candidate, 'Generation image size option must be an object.');
+    requireAllowedKeys(option, ['id', 'width', 'height', 'aspectRatio']);
+    const id = option['id'];
+    if (typeof id !== 'string' || id.length === 0) {
+      throw new Error('Generation image size option identity is required.');
+    }
+    const width = option['width'];
+    const height = option['height'];
+    const aspectRatio = option['aspectRatio'];
+    const automatic = width === undefined && height === undefined && aspectRatio === undefined;
+    if (
+      !automatic &&
+      (!Number.isInteger(width) ||
+        Number(width) <= 0 ||
+        !Number.isInteger(height) ||
+        Number(height) <= 0 ||
+        typeof aspectRatio !== 'string' ||
+        aspectRatio.length === 0)
+    ) {
+      throw new Error('Generation image size option must be automatic or fully specified.');
+    }
+    return {
+      id,
+      ...(width === undefined ? {} : { width: Number(width) }),
+      ...(height === undefined ? {} : { height: Number(height) }),
+      ...(aspectRatio === undefined ? {} : { aspectRatio }),
+    } satisfies GenerationImageSizeOption;
+  });
+  if (values.length === 0 || new Set(values.map((option) => option.id)).size !== values.length) {
+    throw new Error('Generation image size option identities must be unique.');
+  }
+  if (
+    new Set(
+      values.map(
+        (option) => `${option.width ?? ''}x${option.height ?? ''}:${option.aspectRatio ?? ''}`,
+      ),
+    ).size !== values.length
+  ) {
+    throw new Error('Generation image size options must be unique.');
+  }
+  const defaultValue = record['defaultValue'];
+  if (typeof defaultValue !== 'string' || !values.some((option) => option.id === defaultValue)) {
+    throw new Error('Generation image size default must identify one option.');
+  }
+  return { kind: 'image-size-enum', values, defaultValue };
 }
 
 function parseStringEnumControl(value: unknown): GenerationStringEnumParameterControl {

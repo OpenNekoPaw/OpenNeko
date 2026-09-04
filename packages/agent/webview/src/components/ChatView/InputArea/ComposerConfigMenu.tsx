@@ -341,22 +341,17 @@ function MediaParameterPanel({
     return (
       <>
         <ParameterGroup
-          label={t('chat.generation.param.ratio')}
-          value={selectedStringValue(image.aspectRatio, controls.aspectRatio)}
-          options={controls.aspectRatio.values.map(valueOption)}
-          columns={5}
-          visualRatio
-          onChange={(aspectRatio) => onChange({ aspectRatio })}
-        />
-        <ParameterGroup
-          label={t('chat.generation.param.resolution')}
-          value={selectedIntegerValue(image.resolution, controls.resolution)}
-          options={integerControlValues(controls.resolution).map((value) => ({
-            value,
-            label: `${value / 1024}K`,
+          label={t('chat.generation.param.size')}
+          value={selectedImageSizeId(image, controls.size)}
+          options={controls.size.values.map((option) => ({
+            value: option.id,
+            label:
+              option.width === undefined || option.height === undefined
+                ? t('chat.generation.param.auto')
+                : `${option.aspectRatio} · ${option.width}×${option.height}`,
           }))}
-          columns={3}
-          onChange={(value) => onChange({ resolution: value })}
+          columns={2}
+          onChange={(id) => onChange(imageSizeParams(controls.size, id))}
         />
         <ParameterGroup
           label={t('chat.generation.param.quality')}
@@ -365,7 +360,7 @@ function MediaParameterPanel({
             value,
             label: imageQualityLabel(t, value),
           }))}
-          columns={3}
+          columns={4}
           onChange={(quality) => onChange({ quality })}
         />
       </>
@@ -450,6 +445,35 @@ function valueOption<Value extends string>(value: Value): ParamOption<Value> {
   return { value, label: value };
 }
 
+type ImageSizeControl = Extract<
+  MediaModelParameterProfile,
+  { readonly kind: 'image' }
+>['controls']['size'];
+
+function selectedImageSizeId(image: GenerationParams['image'], control: ImageSizeControl): string {
+  return (
+    control.values.find(
+      (option) =>
+        option.width === image.width &&
+        option.height === image.height &&
+        option.aspectRatio === image.aspectRatio,
+    )?.id ?? control.defaultValue
+  );
+}
+
+function imageSizeParams(
+  control: ImageSizeControl,
+  id: string,
+): Partial<GenerationParams['image']> {
+  const option = control.values.find((candidate) => candidate.id === id);
+  if (!option) throw new Error(`Unsupported image size '${id}'.`);
+  return {
+    width: option.width,
+    height: option.height,
+    aspectRatio: option.aspectRatio,
+  };
+}
+
 function selectedStringValue(
   value: string | undefined,
   control: { readonly values: readonly string[]; readonly defaultValue?: string },
@@ -497,7 +521,7 @@ function ParameterGroup<Value extends string | number | boolean | undefined>({
   readonly label: string;
   readonly value: Value | undefined;
   readonly options: readonly ParamOption<Value>[];
-  readonly columns: 2 | 3 | 5;
+  readonly columns: 2 | 3 | 4 | 5;
   readonly visualRatio?: boolean;
   readonly onChange: (value: Value) => void;
 }) {
@@ -640,9 +664,13 @@ function imageQualityLabel(
   t: (key: string, params?: Record<string, string | number>) => string,
   value: string,
 ): string {
-  if (value === 'standard') return t('chat.generation.param.quality.medium');
-  if (value === 'hd') return t('chat.generation.param.quality.high');
-  return t('chat.generation.param.quality.low');
+  if (value === 'auto') return t('chat.generation.param.auto');
+  if (value === 'low') return t('chat.generation.param.quality.low');
+  if (value === 'medium') return t('chat.generation.param.quality.medium');
+  if (value === 'high') return t('chat.generation.param.quality.high');
+  if (value === 'standard') return t('chat.generation.param.quality.standard');
+  if (value === 'hd') return t('chat.generation.param.quality.hd');
+  throw new Error(`Unsupported image quality '${value}'.`);
 }
 
 function getCategoryLabel(
@@ -664,9 +692,9 @@ function getMediaParameterSummary(
   t: (key: string, params?: Record<string, string | number>) => string,
 ): string {
   if (mode === 'image') {
-    return [params.image.aspectRatio, formatImageResolution(params.image.resolution)]
-      .filter(Boolean)
-      .join(' · ');
+    return params.image.width && params.image.height
+      ? `${params.image.aspectRatio ?? ''} · ${params.image.width}×${params.image.height}`
+      : t('chat.generation.param.auto');
   }
   if (mode === 'video') {
     return [
@@ -683,10 +711,6 @@ function getMediaParameterSummary(
 
 function formatDuration(value: number | undefined): string {
   return value === undefined ? '' : `${value}s`;
-}
-
-function formatImageResolution(value: number | undefined): string {
-  return value === undefined ? '' : `${value / 1024}K`;
 }
 
 function findTriggerModel(input: {

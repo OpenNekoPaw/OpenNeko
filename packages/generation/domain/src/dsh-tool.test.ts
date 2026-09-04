@@ -147,7 +147,7 @@ describe('Generation DSH tool contract', () => {
         aspectRatio: '16:9',
         width: 2048,
         height: 1152,
-        quality: 'hd',
+        quality: 'high',
         referenceImageLocator: {
           file: { authority: 'workspace', path: 'neko/assets/Blame/volume-01.epub' },
           selector: { kind: 'entry', path: 'image/page-1.jpg' },

@@ -1,4 +1,5 @@
 import {
+  conformCanvasImageGenerationRecipeToProfile,
   conformCanvasVideoGenerationRecipeToProfile,
   createCanvasGenerationNodeData,
   purposeForCanvasGenerationRecipe,
@@ -8,6 +9,8 @@ import {
   type CanvasGenerationModelBinding,
   type CanvasGenerationModelOption,
   type CanvasGenerationRecipe,
+  type CanvasImageGenerationQuality,
+  type CanvasImageGenerationSizeParameterControl,
   type CanvasMaterialMediaKind,
   type CanvasNode,
   type CanvasViewport,
@@ -215,19 +218,25 @@ function GenerationInputPanel({
     void commitRecipe(configuredDefaultRecipe).catch(reportFailure);
   }, [commitRecipe, configuredDefaultRecipe]);
   useEffect(() => {
-    if (recipe.kind !== 'video' || !selectedModel) return;
-    const next =
-      selectedModel.parameterProfile?.kind === 'video'
-        ? conformCanvasVideoGenerationRecipeToProfile(recipe, selectedModel.parameterProfile).recipe
-        : {
-            ...createCanvasGenerationNodeData('video', selectedModel.binding).recipe,
-            prompt: recipe.prompt,
-          };
+    if ((recipe.kind !== 'image' && recipe.kind !== 'video') || !selectedModel) return;
+    const result =
+      recipe.kind === 'image' && selectedModel.parameterProfile?.kind === 'image'
+        ? conformCanvasImageGenerationRecipeToProfile(recipe, selectedModel.parameterProfile)
+        : recipe.kind === 'video' && selectedModel.parameterProfile?.kind === 'video'
+          ? conformCanvasVideoGenerationRecipeToProfile(recipe, selectedModel.parameterProfile)
+          : {
+              recipe: {
+                ...createCanvasGenerationNodeData(recipe.kind, selectedModel.binding).recipe,
+                prompt: recipe.prompt,
+              },
+              adjustments: [],
+            };
+    const next = result.recipe;
     if (recipesEqual(recipe, next)) return;
     setRecipe(next);
     void commitRecipe(next)
       .then(() => {
-        if (selectedModel.parameterProfile?.kind === 'video') {
+        if (result.adjustments.length > 0) {
           setLocalDiagnostic(t('generation.parametersAdjusted', { model: selectedModel.label }));
         }
       })
@@ -241,17 +250,19 @@ function GenerationInputPanel({
   const selectModel = (option: CanvasGenerationModelOption): void => {
     const candidate: CanvasGenerationRecipe = { ...recipe, model: option.binding };
     const result =
-      candidate.kind === 'video'
-        ? option.parameterProfile?.kind === 'video'
-          ? conformCanvasVideoGenerationRecipeToProfile(candidate, option.parameterProfile)
-          : {
-              recipe: {
-                ...createCanvasGenerationNodeData('video', option.binding).recipe,
-                prompt: candidate.prompt,
-              },
-              adjustments: [],
-            }
-        : { recipe: candidate, adjustments: [] };
+      candidate.kind === 'image' && option.parameterProfile?.kind === 'image'
+        ? conformCanvasImageGenerationRecipeToProfile(candidate, option.parameterProfile)
+        : candidate.kind === 'video'
+          ? option.parameterProfile?.kind === 'video'
+            ? conformCanvasVideoGenerationRecipeToProfile(candidate, option.parameterProfile)
+            : {
+                recipe: {
+                  ...createCanvasGenerationNodeData('video', option.binding).recipe,
+                  prompt: candidate.prompt,
+                },
+                adjustments: [],
+              }
+          : { recipe: candidate, adjustments: [] };
     const next = result.recipe;
     setRecipe(next);
     void commitRecipe(next)
@@ -445,7 +456,7 @@ function GenerationInputPanel({
             onCommit={commitRecipe}
             onFailure={reportFailure}
           />
-          {recipe.kind === 'image' ? (
+          {recipe.kind === 'image' && selectedModel?.parameterProfile?.kind !== 'image' ? (
             <>
               <span
                 className="selection-generation-input-panel__control-divider"
@@ -861,38 +872,21 @@ function parameterContent(
       const { controls } = parameterProfile;
       return (
         <div className="selection-generation-input-panel__parameter-content">
-          <OptionGroup
-            label={t('generation.aspectRatio')}
-            value={recipe.aspectRatio}
-            options={controls.aspectRatio.values}
-            format={(value) => value ?? t('generation.auto')}
-            visualRatio
-            layout="ratio"
-            onSelect={(aspectRatio) =>
-              apply(withImageResolution({ ...recipe, aspectRatio }, imageResolutionEdge(recipe)))
-            }
-          />
-          <OptionGroup
-            label={t('generation.resolution')}
-            value={imageResolutionEdge(recipe)}
-            options={integerControlOptions(controls.resolution)}
-            format={(value) => `${(value ?? 1024) / 1024}K`}
-            layout="equal"
-            onSelect={(edge) => apply(withImageResolution(recipe, edge))}
+          <OptionGroup<string>
+            label={t('generation.imageSize')}
+            value={selectedImageSizeId(recipe, controls.size)}
+            options={controls.size.values.map((option) => option.id)}
+            format={(id) => formatImageSizeOption(controls.size, id)}
+            layout="image-size"
+            onSelect={(id) => apply(applyImageSizeOption(recipe, controls.size, id))}
           />
           <OptionGroup
             label={t('generation.quality')}
-            value={imageQualityProfileValue(recipe.quality)}
+            value={recipe.quality ?? controls.quality.defaultValue ?? 'auto'}
             options={controls.quality.values}
-            format={(value) =>
-              value === 'standard'
-                ? t('generation.qualityMedium')
-                : value === 'hd'
-                  ? t('generation.qualityHigh')
-                  : t('generation.qualityLow')
-            }
+            format={formatImageQuality}
             layout="compact"
-            onSelect={(quality) => apply({ ...recipe, quality: imageQualityRecipeValue(quality) })}
+            onSelect={(quality) => apply({ ...recipe, quality: parseImageQuality(quality) })}
           />
         </div>
       );
@@ -979,18 +973,37 @@ function parameterContent(
   }
 }
 
-function imageQualityProfileValue(
-  quality: Extract<CanvasGenerationRecipe, { readonly kind: 'image' }>['quality'],
-): string {
-  return quality ?? 'low';
+function parseImageQuality(quality: string): CanvasImageGenerationQuality {
+  if (
+    quality === 'auto' ||
+    quality === 'low' ||
+    quality === 'medium' ||
+    quality === 'high' ||
+    quality === 'standard' ||
+    quality === 'hd'
+  ) {
+    return quality;
+  }
+  throw new Error(`Unsupported image quality '${quality}'.`);
 }
 
-function imageQualityRecipeValue(
-  quality: string,
-): Extract<CanvasGenerationRecipe, { readonly kind: 'image' }>['quality'] {
-  if (quality === 'low') return undefined;
-  if (quality === 'standard' || quality === 'hd') return quality;
-  throw new Error(`Unsupported image quality '${quality}'.`);
+function formatImageQuality(quality: string): string {
+  switch (quality) {
+    case 'auto':
+      return t('generation.auto');
+    case 'low':
+      return t('generation.qualityLow');
+    case 'medium':
+      return t('generation.qualityMedium');
+    case 'high':
+      return t('generation.qualityHigh');
+    case 'standard':
+      return t('generation.qualityStandard');
+    case 'hd':
+      return t('generation.qualityHd');
+    default:
+      throw new Error(`Unsupported image quality '${quality}'.`);
+  }
 }
 
 function OptionGroup<T extends string | number | boolean | undefined>({
@@ -1008,7 +1021,7 @@ function OptionGroup<T extends string | number | boolean | undefined>({
   readonly format: (value: T) => string;
   readonly onSelect: (value: T) => void;
   readonly visualRatio?: boolean;
-  readonly layout?: 'ratio' | 'equal' | 'compact';
+  readonly layout?: 'ratio' | 'equal' | 'compact' | 'image-size';
 }) {
   return (
     <fieldset
@@ -1050,15 +1063,11 @@ function parameterSummary(recipe: CanvasGenerationRecipe): string {
         .filter(Boolean)
         .join(' · ');
     case 'image': {
-      const resolutionEdge = imageResolutionEdge(recipe);
       return [
-        recipe.aspectRatio ?? t('generation.auto'),
-        resolutionEdge ? `${resolutionEdge / 1024}K` : undefined,
-        recipe.quality === 'hd'
-          ? t('generation.qualityHigh')
-          : recipe.quality === 'standard'
-            ? t('generation.qualityMedium')
-            : t('generation.qualityLow'),
+        recipe.width && recipe.height
+          ? `${recipe.aspectRatio ?? ''} · ${recipe.width}×${recipe.height}`
+          : t('generation.auto'),
+        formatImageQuality(recipe.quality ?? 'auto'),
       ]
         .filter(Boolean)
         .join(' · ');
@@ -1080,37 +1089,44 @@ function parameterSummary(recipe: CanvasGenerationRecipe): string {
   }
 }
 
-function imageResolutionEdge(
+function selectedImageSizeId(
   recipe: Extract<CanvasGenerationRecipe, { readonly kind: 'image' }>,
-): number | undefined {
-  return recipe.width && recipe.height ? Math.max(recipe.width, recipe.height) : undefined;
+  control: CanvasImageGenerationSizeParameterControl,
+): string {
+  return (
+    control.values.find(
+      (option) =>
+        option.width === recipe.width &&
+        option.height === recipe.height &&
+        option.aspectRatio === recipe.aspectRatio,
+    )?.id ?? control.defaultValue
+  );
 }
 
-function withImageResolution(
+function applyImageSizeOption(
   recipe: Extract<CanvasGenerationRecipe, { readonly kind: 'image' }>,
-  edge: number | undefined,
+  control: CanvasImageGenerationSizeParameterControl,
+  id: string,
 ): Extract<CanvasGenerationRecipe, { readonly kind: 'image' }> {
-  if (!edge) {
-    const { width: _width, height: _height, ...withoutResolution } = recipe;
-    return withoutResolution;
-  }
-  const [widthRatio, heightRatio] = parseRatio(recipe.aspectRatio);
-  const landscape = widthRatio >= heightRatio;
+  const option = control.values.find((candidate) => candidate.id === id);
+  if (!option) throw new Error(`Unsupported image size '${id}'.`);
+  const { width: _width, height: _height, aspectRatio: _aspectRatio, ...withoutImageSize } = recipe;
   return {
-    ...recipe,
-    width: landscape ? edge : roundToEight((edge * widthRatio) / heightRatio),
-    height: landscape ? roundToEight((edge * heightRatio) / widthRatio) : edge,
+    ...withoutImageSize,
+    ...(option.width === undefined ? {} : { width: option.width }),
+    ...(option.height === undefined ? {} : { height: option.height }),
+    ...(option.aspectRatio === undefined ? {} : { aspectRatio: option.aspectRatio }),
   };
 }
 
-function parseRatio(value: string | undefined): readonly [number, number] {
-  if (!value) return [1, 1];
-  const [width, height] = value.split(':').map(Number);
-  return width && height ? [width, height] : [1, 1];
-}
-
-function roundToEight(value: number): number {
-  return Math.max(8, Math.round(value / 8) * 8);
+function formatImageSizeOption(
+  control: CanvasImageGenerationSizeParameterControl,
+  id: string,
+): string {
+  const option = control.values.find((candidate) => candidate.id === id);
+  if (!option) throw new Error(`Unsupported image size '${id}'.`);
+  if (option.width === undefined || option.height === undefined) return t('generation.auto');
+  return `${option.aspectRatio} · ${option.width}×${option.height}`;
 }
 
 function modelBindingsEqual(
@@ -1317,7 +1333,7 @@ function isUntouchedGenerationRecipe(recipe: CanvasGenerationRecipe): boolean {
         (recipe.width === undefined || recipe.width === 1024) &&
         (recipe.height === undefined || recipe.height === 1024) &&
         (recipe.count === undefined || recipe.count === 1) &&
-        (recipe.quality === undefined || recipe.quality === 'standard')
+        (recipe.quality === undefined || recipe.quality === 'auto')
       );
     case 'video':
       return (

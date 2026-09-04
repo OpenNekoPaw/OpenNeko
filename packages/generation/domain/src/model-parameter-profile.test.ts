@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  conformImageGenerationRecipeToProfile,
   conformVideoGenerationRecipeToProfile,
   conformVideoGenerationRequestToProfile,
   createVideoGenerationRecipeForProfile,
+  createImageGenerationRecipeForProfile,
   parseGenerationModelParameterProfile,
   resolveImageGenerationModelParameterProfile,
   resolveGenerationModelParameterProfile,
@@ -19,30 +21,49 @@ describe('Generation model parameter profiles', () => {
     });
     if (!profile) throw new Error('GPT Image 2 parameter profile is unavailable.');
 
-    expect(profile.controls.aspectRatio.values).toEqual([
-      '1:1',
-      '16:9',
-      '9:16',
-      '3:4',
-      '4:3',
-      '3:2',
-      '2:3',
-      '5:4',
-      '4:5',
-      '21:9',
-      '2:1',
-      '1:2',
-      '3:1',
-      '1:3',
-    ]);
-    expect(profile.controls.resolution.suggestedValues).toEqual([1024, 2048, 4096]);
+    expect(profile.controls.size).toEqual({
+      kind: 'image-size-enum',
+      values: [
+        { id: 'auto' },
+        { id: '1024x1024', width: 1024, height: 1024, aspectRatio: '1:1' },
+        { id: '1536x1024', width: 1536, height: 1024, aspectRatio: '3:2' },
+        { id: '1024x1536', width: 1024, height: 1536, aspectRatio: '2:3' },
+        { id: '2048x2048', width: 2048, height: 2048, aspectRatio: '1:1' },
+        { id: '2048x1152', width: 2048, height: 1152, aspectRatio: '16:9' },
+        { id: '3840x2160', width: 3840, height: 2160, aspectRatio: '16:9' },
+        { id: '2160x3840', width: 2160, height: 3840, aspectRatio: '9:16' },
+      ],
+      defaultValue: 'auto',
+    });
     expect(profile.controls.quality).toEqual({
       kind: 'string-enum',
       required: true,
-      values: ['low', 'standard', 'hd'],
-      defaultValue: 'standard',
+      values: ['auto', 'low', 'medium', 'high'],
+      defaultValue: 'auto',
     });
     expect(parseGenerationModelParameterProfile(structuredClone(profile))).toEqual(profile);
+  });
+
+  it('keeps legacy image quality names available to profiles for other providers', () => {
+    const profile = {
+      kind: 'image',
+      controls: {
+        size: {
+          kind: 'image-size-enum',
+          values: [{ id: 'auto' }],
+          defaultValue: 'auto',
+        },
+        quality: {
+          kind: 'string-enum',
+          required: true,
+          values: ['standard', 'hd'],
+          defaultValue: 'standard',
+        },
+      },
+      fixed: { outputCount: 1 },
+    };
+
+    expect(parseGenerationModelParameterProfile(profile)).toEqual(profile);
   });
 
   it('resolves the verified NewAPI GPT Image 2 gateway model name without fuzzy matching', () => {
@@ -65,6 +86,54 @@ describe('Generation model parameter profiles', () => {
     ).toBeUndefined();
   });
 
+  it('creates and conforms image Recipes from the exact model profile', () => {
+    const profile = resolveImageGenerationModelParameterProfile({
+      providerType: 'newapi',
+      modelName: 'gpt-image-2',
+    });
+    if (!profile) throw new Error('GPT Image 2 parameter profile is unavailable.');
+    const model = {
+      purpose: 'image.generate' as const,
+      providerId: 'image-provider',
+      modelId: 'gpt-image-2',
+    };
+
+    expect(createImageGenerationRecipeForProfile(model, profile)).toEqual({
+      kind: 'image',
+      prompt: '',
+      model,
+      count: 1,
+      quality: 'auto',
+    });
+    expect(
+      conformImageGenerationRecipeToProfile(
+        {
+          kind: 'image',
+          prompt: 'Keep this prompt',
+          model,
+          width: 4096,
+          height: 2304,
+          aspectRatio: '16:9',
+          count: 4,
+          quality: 'high',
+        },
+        profile,
+      ),
+    ).toEqual({
+      recipe: {
+        kind: 'image',
+        prompt: 'Keep this prompt',
+        model,
+        count: 1,
+        quality: 'high',
+      },
+      adjustments: [
+        { parameter: 'size', reason: 'invalid' },
+        { parameter: 'count', reason: 'invalid' },
+      ],
+    });
+  });
+
   it('validates GPT Image 2 dimensions against the same controls shown by Canvas', () => {
     const profile = resolveImageGenerationModelParameterProfile({
       providerType: 'newapi',
@@ -74,11 +143,11 @@ describe('Generation model parameter profiles', () => {
 
     expect(
       validateImageGenerationParameters(profile, {
-        width: 2048,
-        height: 1152,
-        aspectRatio: '16:9',
+        width: 1536,
+        height: 1024,
+        aspectRatio: '3:2',
         count: 1,
-        quality: 'hd',
+        quality: 'high',
       }),
     ).toEqual([]);
     expect(
@@ -89,16 +158,23 @@ describe('Generation model parameter profiles', () => {
         count: 2,
       }),
     ).toEqual([
-      expect.objectContaining({ parameter: 'resolution', reason: 'invalid' }),
+      expect.objectContaining({ parameter: 'size', reason: 'invalid' }),
       expect.objectContaining({ parameter: 'count', reason: 'invalid' }),
     ]);
     expect(
       validateImageGenerationParameters(profile, {
-        width: 2048,
+        width: 1536,
         height: 1024,
         aspectRatio: '16:9',
       }),
-    ).toEqual([expect.objectContaining({ parameter: 'resolution', reason: 'invalid' })]);
+    ).toEqual([expect.objectContaining({ parameter: 'size', reason: 'invalid' })]);
+
+    expect(
+      validateImageGenerationParameters(profile, {
+        count: 1,
+        quality: 'auto',
+      }),
+    ).toEqual([]);
   });
 
   it('declares exact MiniMax H3 defaults without an FPS control', () => {

@@ -65,7 +65,7 @@ const IMAGE_REQUEST_SCHEMA = {
     },
     maskLocator: CONTENT_LOCATOR_SCHEMA,
     inpaintStrength: { type: 'number' },
-    quality: { type: 'string', enum: ['standard', 'hd'] },
+    quality: { type: 'string', enum: ['auto', 'low', 'medium', 'high', 'standard', 'hd'] },
     style: { type: 'string' },
     controlImageLocator: CONTENT_LOCATOR_SCHEMA,
     controlMode: {

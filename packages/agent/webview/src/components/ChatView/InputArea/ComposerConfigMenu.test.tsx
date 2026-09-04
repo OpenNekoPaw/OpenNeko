@@ -157,25 +157,27 @@ describe('Composer model configuration', () => {
     const imageDialog = screen.getByRole('dialog', { name: 'Creation configuration' });
     const imageText = imageDialog.textContent ?? '';
     expect(imageText).toContain('1:1');
-    expect(imageText).toContain('1K');
-    expect(imageText).toContain('2K');
-    expect(imageText).toContain('4K');
+    expect(imageText).toContain('1024×1024');
+    expect(imageText).toContain('1536×1024');
+    expect(imageText).toContain('Auto');
     expect(imageText).toContain('Quality');
     expect(imageText).not.toContain('512');
     expect(imageText).not.toContain('720p');
     expect(
       within(imageDialog)
-        .getByRole('radiogroup', { name: 'Aspect ratio' })
+        .getByRole('radiogroup', { name: 'Size and aspect ratio' })
         .getAttribute('data-option-columns'),
-    ).toBe('5');
+    ).toBe('2');
     expect(
       within(imageDialog)
-        .getByRole('radiogroup', { name: 'Aspect ratio' })
-        .children[0]?.querySelector('.agent-generation-params-ratio'),
-    ).not.toBeNull();
-    fireEvent.click(within(imageDialog).getByRole('radio', { name: '2K' }));
+        .getByRole('radiogroup', { name: 'Quality' })
+        .getAttribute('data-option-columns'),
+    ).toBe('4');
+    fireEvent.click(within(imageDialog).getByRole('radio', { name: '3:2 · 1536×1024' }));
     expect(
-      within(imageDialog).getByRole('radio', { name: '2K' }).getAttribute('aria-checked'),
+      within(imageDialog)
+        .getByRole('radio', { name: '3:2 · 1536×1024' })
+        .getAttribute('aria-checked'),
     ).toBe('true');
 
     fireEvent.click(screen.getByRole('tab', { name: 'Video' }));
@@ -218,26 +220,25 @@ function imageProfile() {
   return {
     kind: 'image' as const,
     controls: {
-      aspectRatio: {
-        kind: 'string-enum' as const,
-        required: true,
-        values: ['1:1', '16:9', '9:16', '3:4', '4:3'],
-        defaultValue: '1:1',
-      },
-      resolution: {
-        kind: 'integer' as const,
-        required: true,
-        min: 1024,
-        max: 4096,
-        step: 1024,
-        suggestedValues: [1024, 2048, 4096],
-        defaultValue: 1024,
+      size: {
+        kind: 'image-size-enum' as const,
+        values: [
+          { id: 'auto' },
+          { id: '1024x1024', width: 1024, height: 1024, aspectRatio: '1:1' },
+          { id: '1536x1024', width: 1536, height: 1024, aspectRatio: '3:2' },
+          { id: '1024x1536', width: 1024, height: 1536, aspectRatio: '2:3' },
+          { id: '2048x2048', width: 2048, height: 2048, aspectRatio: '1:1' },
+          { id: '2048x1152', width: 2048, height: 1152, aspectRatio: '16:9' },
+          { id: '3840x2160', width: 3840, height: 2160, aspectRatio: '16:9' },
+          { id: '2160x3840', width: 2160, height: 3840, aspectRatio: '9:16' },
+        ],
+        defaultValue: 'auto',
       },
       quality: {
         kind: 'string-enum' as const,
         required: true,
-        values: ['low', 'standard', 'hd'],
-        defaultValue: 'standard',
+        values: ['auto', 'low', 'medium', 'high'],
+        defaultValue: 'auto',
       },
     },
     fixed: { outputCount: 1 as const },

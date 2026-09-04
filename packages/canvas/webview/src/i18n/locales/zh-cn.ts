@@ -202,6 +202,7 @@ export const zhCN = {
   'generation.temperature': '随机度',
   'generation.maxTokens': '最大字数',
   'generation.aspectRatio': '画面比例',
+  'generation.imageSize': '尺寸与画面比例',
   'generation.count': '数量',
   'generation.duration': '时长',
   'generation.resolution': '分辨率',

@@ -64,8 +64,9 @@ export type MediaModelParameterProfile = NonNullable<
 
 export interface GenerationParams {
   readonly image: {
+    readonly width?: number;
+    readonly height?: number;
     readonly aspectRatio?: string;
-    readonly resolution?: number;
     readonly quality?: string;
   };
   readonly video: {

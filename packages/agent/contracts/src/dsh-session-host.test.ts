@@ -145,26 +145,21 @@ describe('DSH Session Host contract', () => {
           parameterProfile: {
             kind: 'image',
             controls: {
-              aspectRatio: {
-                kind: 'string-enum',
-                required: true,
-                values: ['1:1', '16:9'],
-                defaultValue: '1:1',
-              },
-              resolution: {
-                kind: 'integer',
-                required: true,
-                min: 1024,
-                max: 4096,
-                step: 1024,
-                defaultValue: 1024,
-                suggestedValues: [1024, 2048, 4096],
+              size: {
+                kind: 'image-size-enum',
+                values: [
+                  { id: 'auto' },
+                  { id: '1024x1024', width: 1024, height: 1024, aspectRatio: '1:1' },
+                  { id: '1536x1024', width: 1536, height: 1024, aspectRatio: '3:2' },
+                  { id: '1024x1536', width: 1024, height: 1536, aspectRatio: '2:3' },
+                ],
+                defaultValue: 'auto',
               },
               quality: {
                 kind: 'string-enum',
                 required: true,
-                values: ['low', 'standard', 'hd'],
-                defaultValue: 'standard',
+                values: ['auto', 'low', 'medium', 'high'],
+                defaultValue: 'auto',
               },
             },
             fixed: { outputCount: 1 },

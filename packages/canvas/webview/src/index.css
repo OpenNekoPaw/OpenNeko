@@ -2683,7 +2683,15 @@ button.canvas-node-external-label {
 }
 
 .selection-generation-input-panel__option-group[data-option-layout='compact']
-  .selection-generation-input-panel__option-grid,
+  .selection-generation-input-panel__option-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.selection-generation-input-panel__option-group[data-option-layout='image-size']
+  .selection-generation-input-panel__option-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .selection-generation-input-panel__option-group[data-option-layout='equal']
   .selection-generation-input-panel__option-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2845,6 +2853,8 @@ button.canvas-node-external-label {
   .selection-generation-input-panel__option-group[data-option-layout='ratio']
     .selection-generation-input-panel__option-grid,
   .selection-generation-input-panel__option-group[data-option-layout='compact']
+    .selection-generation-input-panel__option-grid,
+  .selection-generation-input-panel__option-group[data-option-layout='image-size']
     .selection-generation-input-panel__option-grid,
   .selection-generation-input-panel__option-group[data-option-layout='equal']
     .selection-generation-input-panel__option-grid {

@@ -6,6 +6,8 @@ import {
 import {
   GENERATION_RECIPE_KINDS,
   GENERATION_RECIPE_PURPOSES,
+  createImageGenerationRecipeForProfile,
+  conformImageGenerationRecipeToProfile,
   conformVideoGenerationRecipeToProfile,
   createGenerationRecipe,
   createVideoGenerationRecipeForProfile,
@@ -20,6 +22,10 @@ import {
   type GenerationRecipePurpose,
   type GenerationParameterAdjustment,
   type GenerationModelParameterProfile,
+  type GenerationImageSizeParameterControl,
+  type ImageGenerationQuality,
+  type ImageGenerationParameterAdjustment,
+  type ImageGenerationModelParameterProfile,
   type VideoGenerationModelParameterProfile,
   type ImageGenerationRecipe,
   type PromptGenerationRecipe,
@@ -34,6 +40,8 @@ export type CanvasGenerationPurpose = GenerationRecipePurpose;
 export type CanvasGenerationModelBinding = GenerationRecipeModelBinding;
 export type CanvasPromptGenerationRecipe = PromptGenerationRecipe;
 export type CanvasImageGenerationRecipe = ImageGenerationRecipe;
+export type CanvasImageGenerationQuality = ImageGenerationQuality;
+export type CanvasImageGenerationSizeParameterControl = GenerationImageSizeParameterControl;
 export type CanvasAudioGenerationRecipe = AudioGenerationRecipe;
 export type CanvasVideoGenerationRecipe = VideoGenerationRecipe;
 export type CanvasGenerationRecipe = GenerationRecipe;
@@ -100,11 +108,13 @@ export function createCanvasGenerationNodeData(
     throw new Error('Canvas Generation parameter profile does not match the node kind.');
   }
   const recipe =
-    kind === 'video' && model
-      ? parameterProfile?.kind === 'video'
-        ? createVideoGenerationRecipeForProfile(model, parameterProfile)
-        : { kind: 'video' as const, prompt: '', model }
-      : createGenerationRecipe(kind, model);
+    kind === 'image' && model && parameterProfile?.kind === 'image'
+      ? createImageGenerationRecipeForProfile(model, parameterProfile)
+      : kind === 'video' && model
+        ? parameterProfile?.kind === 'video'
+          ? createVideoGenerationRecipeForProfile(model, parameterProfile)
+          : { kind: 'video' as const, prompt: '', model }
+        : createGenerationRecipe(kind, model);
   return {
     recipe,
     outputs: [],
@@ -119,6 +129,16 @@ export function conformCanvasVideoGenerationRecipeToProfile(
   readonly adjustments: readonly GenerationParameterAdjustment[];
 } {
   return conformVideoGenerationRecipeToProfile(recipe, parameterProfile);
+}
+
+export function conformCanvasImageGenerationRecipeToProfile(
+  recipe: CanvasImageGenerationRecipe,
+  parameterProfile: ImageGenerationModelParameterProfile,
+): {
+  readonly recipe: CanvasImageGenerationRecipe;
+  readonly adjustments: readonly ImageGenerationParameterAdjustment[];
+} {
+  return conformImageGenerationRecipeToProfile(recipe, parameterProfile);
 }
 
 export function isCanvasGenerationRecipe(value: unknown): value is CanvasGenerationRecipe {
