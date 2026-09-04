@@ -133,6 +133,10 @@ describe('OpenNeko DSH product system prompt', () => {
       'Use native filesystem Tools only for portable UTF-8 text',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'A temporary spill path returned as Tool transport metadata is outside the Session Workspace',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('Never pass it to native filesystem Tools');
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
       'the Host projects the verified direct-open file reference from the completed Tool event',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(

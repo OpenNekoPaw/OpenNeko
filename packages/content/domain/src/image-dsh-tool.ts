@@ -19,7 +19,7 @@ export const CONTENT_IMAGE_DSH_SOURCE_SCHEMA = {
   type: 'object',
   title: 'workspace ContentLocator',
   description:
-    'Canonical Workspace ContentLocator returned by an OpenNeko content capability. Preserve it exactly; document entries include selector.kind="entry" and selector.path.',
+    'Canonical Workspace ContentLocator for raster image bytes. Preserve an imageInfo locator returned by openneko_document exactly; document image entries include selector.kind="entry" and selector.path. A chapter, XHTML, HTML, or other document entry is not an image source.',
   properties: {
     file: {
       type: 'object',
@@ -61,7 +61,7 @@ export const CONTENT_IMAGES_DSH_TOOL_PARAMETERS = {
     items: CONTENT_IMAGE_DSH_SOURCE_SCHEMA,
     required: true,
     description:
-      'One to four distinct image ContentLocators in comparison order. The result is one overview contact sheet; use openneko_read_image only after selecting a page for close inspection.',
+      'One to four distinct raster image ContentLocators in comparison order. Use imageInfo locators returned by openneko_document, never chapter/XHTML/HTML entries. The result is one overview contact sheet; use openneko_read_image only after selecting a page for close inspection.',
   },
 } as const;
 
@@ -122,8 +122,8 @@ export function decodeContentImagesDshToolInput(value: unknown): ContentImagesDs
     throw new Error(`sources must contain between 1 and ${CONTENT_IMAGES_DSH_MAX_SOURCES} images.`);
   }
   const sources = record.sources.map(decodeContentImageDshToolSource);
-  for (let index = 0; index < sources.length; index += 1) {
-    if (sources.slice(0, index).some((source) => contentLocatorsEqual(source, sources[index]!))) {
+  for (const [index, candidate] of sources.entries()) {
+    if (sources.slice(0, index).some((source) => contentLocatorsEqual(source, candidate))) {
       throw new Error(`sources contains a duplicate ContentLocator at index ${index}.`);
     }
   }

@@ -109,6 +109,7 @@ describe('OpenNeko Document DSH plugin', () => {
   it('reads a Content locator into a durable DSH image result', async () => {
     const definitions: Array<{
       readonly name: string;
+      readonly description: string;
       readonly output: { readonly render: (args: unknown, value: never) => unknown };
       readonly execute: (args: unknown, execution: unknown) => Promise<unknown>;
       readonly isConcurrencySafe?: (args: unknown) => boolean;
@@ -158,6 +159,7 @@ describe('OpenNeko Document DSH plugin', () => {
     apply(ctx as never);
     const definition = definitions.find((candidate) => candidate.name === 'openneko_read_image');
     if (!definition) throw new Error('Content image DSH Tool was not registered.');
+    expect(definition.description).toContain('never pass a chapter, XHTML, HTML');
     expect(definition.isConcurrencySafe?.({ source })).toBe(false);
     const execution = {
       signal: new AbortController().signal,
@@ -345,6 +347,7 @@ describe('OpenNeko Document DSH plugin', () => {
   it('returns four authorized images as one deterministic overview contact sheet', async () => {
     const definitions: Array<{
       readonly name: string;
+      readonly description: string;
       readonly output: { readonly render: (args: unknown, value: never) => unknown };
       readonly execute: (args: unknown, execution: unknown) => Promise<unknown>;
       readonly isConcurrencySafe?: (args: unknown) => boolean;
@@ -420,6 +423,7 @@ describe('OpenNeko Document DSH plugin', () => {
     apply(ctx as never);
     const definition = definitions.find((candidate) => candidate.name === 'openneko_read_images');
     if (!definition) throw new Error('Content image overview DSH Tool was not registered.');
+    expect(definition.description).toContain('never pass chapter, XHTML, HTML');
     expect(definition.isConcurrencySafe?.({ sources })).toBe(false);
     const result = (await definition.execute(
       { sources },

@@ -25,6 +25,12 @@ describe('Content image DSH contract', () => {
     expect(CONTENT_IMAGE_DSH_CHUNK_BYTES).toBeLessThan(192 * 1024);
     expect(CONTENT_IMAGE_DSH_DETAILS).toEqual(['overview', 'original']);
     expect(CONTENT_IMAGE_DSH_TOOL_PARAMETERS.source.properties).toHaveProperty('selector');
+    expect(CONTENT_IMAGE_DSH_TOOL_PARAMETERS.source.description).toContain(
+      'imageInfo locator returned by openneko_document',
+    );
+    expect(CONTENT_IMAGE_DSH_TOOL_PARAMETERS.source.description).toContain(
+      'XHTML, HTML, or other document entry is not an image source',
+    );
     expect(CONTENT_IMAGE_DSH_TOOL_PARAMETERS.detail.enum).toEqual(['overview', 'original']);
     expect(decodeContentImageDshToolInput({ source, detail: 'overview' })).toEqual({
       source,

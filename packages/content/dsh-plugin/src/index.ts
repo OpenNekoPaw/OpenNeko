@@ -81,7 +81,7 @@ export function apply(ctx: Context): void {
           defineTool({
             name: CONTENT_IMAGE_DSH_TOOL_NAME,
             description:
-              'Read an image from an exact OpenNeko ContentLocator and return the image itself. Use detail="overview" for initial visual screening and detail="original" only for selected images that need close inspection. Use this for document image locators returned by openneko_document; use read_image for ordinary filesystem paths. Requires the current model to accept image input.',
+              'Read raster image bytes from an exact OpenNeko ContentLocator and return the image itself. For packaged documents, use an imageInfo locator returned by openneko_document; never pass a chapter, XHTML, HTML, or other document entry. Use detail="overview" for initial visual screening and detail="original" only for selected images that need close inspection. Use read_image for ordinary filesystem paths. Requires the current model to accept image input.',
             parameters: CONTENT_IMAGE_DSH_TOOL_PARAMETERS,
             output: {
               schema: {
@@ -192,7 +192,7 @@ export function apply(ctx: Context): void {
           defineTool({
             name: CONTENT_IMAGES_DSH_TOOL_NAME,
             description:
-              'Compare 1–4 distinct OpenNeko document images as one low-resolution contact sheet. Pass exact ContentLocators in decision-relevant order. This Tool is only for overview screening; after choosing a page, use openneko_read_image with detail="original" for close inspection.',
+              'Compare 1–4 distinct OpenNeko raster images as one low-resolution contact sheet. Pass exact imageInfo ContentLocators returned by openneko_document in decision-relevant order; never pass chapter, XHTML, HTML, or other document entries. This Tool is only for overview screening; after choosing a page, use openneko_read_image with detail="original" for close inspection.',
             parameters: CONTENT_IMAGES_DSH_TOOL_PARAMETERS,
             output: {
               schema: {
@@ -246,7 +246,9 @@ export function apply(ctx: Context): void {
             isConcurrencySafe: () => false,
             async execute(args, execution) {
               const { sources } = decodeContentImagesDshToolInput(args);
-              await assertImageCapableRoute(imageCtx, execution, sources[0]!);
+              const firstSource = sources[0];
+              if (!firstSource) throw new Error('Content image overview requires an image source.');
+              await assertImageCapableRoute(imageCtx, execution, firstSource);
               const attachments = imageCtx.attachments;
               const byteCap = Math.min(
                 attachments.imageLimits.maxImageBytes,
