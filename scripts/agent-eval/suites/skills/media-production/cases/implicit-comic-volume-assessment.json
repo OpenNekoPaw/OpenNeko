@@ -21,8 +21,8 @@
         "required": true
       }
     ],
-    "expectedResult": "The Agent verifies source coverage before artifact generation. It refuses to produce a volume-level adaptation plan from the three inspected pages, limits any persisted or conversational creative result to a clearly titled local selected-page observation, and identifies one stratified source-review operation covering story-bearing early, middle and late regions plus a continuous cause-action-consequence sequence as the exact prerequisite for a later volume-level plan.",
-    "expectedFailure": "Missing media-production receipt, generating a volume-level or whole-work concept before the coverage requirement is met, using a broad title and adding a late evidence disclaimer, recommending a fixed duration or format, treating the cover, contents page or isolated pages as narrative coverage, failing to narrow the current scope, proposing another arbitrary or exhaustive sample without a bounded early/middle/late decision map and continuous-sequence check, continuing to read merely to earn a volume-level label, or inventing plot, objective, causality or an episode map fails."
+    "expectedResult": "The Agent verifies source structure and story-bearing coverage before artifact generation. It refuses to produce a volume-level adaptation plan from the three inspected pages, limits any persisted or conversational creative result to a clearly titled source-coverage or local selected-page assessment, and identifies one bounded source-review operation that establishes contents or chapter boundaries, reading order, non-story units, story-bearing early, middle and late regions, a continuous cause-action-consequence sequence, and the missing visual, character, story, world and storyboard-translation evidence required for a later volume-level plan.",
+    "expectedFailure": "Missing media-production receipt, generating a volume-level or whole-work concept before the coverage requirement is met, treating visual style as complete animation analysis, using a broad title and adding a late evidence disclaimer, recommending a fixed duration or format, treating the cover, contents page or isolated pages as narrative coverage, failing to narrow the current scope, proposing another arbitrary or exhaustive sample without a bounded early/middle/late decision map and continuous-sequence check, continuing to read merely to earn a volume-level label, or inventing plot, objective, causality or an episode map fails."
   },
   "fixtureRefs": ["comic-volume-planning-workspace"],
   "runtimeProfileId": "plan-markdown",
@@ -50,7 +50,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:1c4d243d8ac71d944e0a22b7f4aa2bdabca3ebd8b80475775f3ad579a2b55862"
+        "fingerprint": "sha256:214c29ab578b745df9d8156f58f27f90342470b5b0e83f278c50015d0ac23d71"
       },
       "status": "injected",
       "evidenceRef": "volume-assessment-facts"
@@ -72,7 +72,25 @@
       "id": "output",
       "kind": "final-answer",
       "mode": "contains",
-      "text": ["240", "3", "覆盖", "不足", "局部", "前段", "中段", "后段", "连续", "下一步"],
+      "text": [
+        "240",
+        "3",
+        "覆盖",
+        "不足",
+        "目录",
+        "阅读顺序",
+        "正文",
+        "前段",
+        "中段",
+        "后段",
+        "连续",
+        "画面",
+        "人物",
+        "剧情",
+        "世界观",
+        "分镜",
+        "下一步"
+      ],
       "evidenceRef": "volume-assessment-facts"
     },
     {

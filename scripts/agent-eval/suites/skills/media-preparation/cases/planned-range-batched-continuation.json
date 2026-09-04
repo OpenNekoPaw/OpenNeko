@@ -1,0 +1,126 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "planned-range-batched-continuation",
+  "suiteId": "skill.media-preparation",
+  "caseGroup": "workflow",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Continue material preparation for a complete multi-shot plan that has only one broad illustration, without skipping to production video.",
+    "canonicalPath": [
+      "authoritative planned shot range",
+      "screenplay and broad illustration source read",
+      "builtin media-preparation Skill",
+      "planned-range material coverage inventory",
+      "reusable static-reference batch",
+      "same-stage continuation to the next unresolved batch",
+      "no video generation"
+    ],
+    "observables": [
+      {
+        "ref": "batched-preparation-facts",
+        "kind": "runtime-fact",
+        "description": "Two canonical turns, full planned-range coverage, bounded static preparation batches, exact remaining gaps, and absent production-video execution.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The first turn builds one per-shot production-input table across SH01-SH04, including story beat, applicable world rules, characters, objects, scenes, composition, static references, image-prompt status and distinct video-motion-intent status. It prepares the highest-reuse, lower-cost static-reference batch instead of a video even though SH01 already has a consumable first frame. The bare continuation updates the same table and handles the next critical static or prompt batch. Each operation stays bounded, while neither one still nor one packet is presented as completing preparation.",
+    "expectedFailure": "Preparing only SH01 without accounting for every planned shot, omitting story or world decisions, omitting per-shot image and video intent status, grouping unanalyzed sibling shots as later work, treating the broad illustration or prior per-shot ready state as complete coverage, skipping to a video packet or video generation, declaring preparation complete after one batch, inventing a global workflow state, or asking what continue means fails."
+  },
+  "fixtureRefs": ["creative-planning-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "inventory-and-first-batch",
+      "kind": "submit",
+      "prompt": "$media-preparation $image 读取 @screenplay.fountain 和 @station-illustration.svg。以下是当前权威且完整的计划镜头范围：SH01，Mara 在 23:47 的雨夜站台撑开红伞；SH02，无头灯列车驶入并开门；SH03，Mara 收伞走向黄线；SH04，天桥上的 Mara 看见车厢内儿童大小的剪影，红伞留在下方空站台。当前只有 station-illustration.svg，它可直接作为 SH01 视频首帧并覆盖其开放红伞人物状态、站台、列车和总体风格，但不能覆盖收伞状态、天桥空间、儿童剪影或其他镜头构图。先建立覆盖 SH01-SH04 的紧凑逐镜生产输入表，包含剧情节拍、世界规则、人物、物品、场景、构图、静态参考、图像提示词状态和独立的视频运动意图状态，再按复用价值和成本准备第一批静态参考输入；本轮不执行任何生成。明确当前批次、消费镜头、仍缺素材和提示词、唯一下一步，不得把一张图或一个包称为预处理完成。"
+    },
+    { "id": "first-idle", "kind": "wait-for-idle", "timeoutMs": 180000 },
+    {
+      "id": "continue-preparation",
+      "kind": "submit",
+      "prompt": "继续下一步"
+    },
+    { "id": "continued-idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "batched-preparation-facts"
+    },
+    {
+      "id": "skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-preparation",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-preparation",
+        "fingerprint": "sha256:d20b1e82cc099ead56e6f86a761f5d5695b44a3ab8c11fdb64b5311e0ce0400b"
+      },
+      "status": "injected",
+      "evidenceRef": "batched-preparation-facts"
+    },
+    {
+      "id": "continued-output",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": [
+        "SH01",
+        "SH02",
+        "SH03",
+        "SH04",
+        "逐镜生产输入",
+        "剧情",
+        "世界",
+        "人物",
+        "物品",
+        "场景",
+        "构图",
+        "图像提示词",
+        "视频运动意图",
+        "当前批次",
+        "消费镜头",
+        "静态",
+        "仍缺",
+        "下一步"
+      ],
+      "evidenceRef": "batched-preparation-facts"
+    },
+    {
+      "id": "no-premature-stage-completion",
+      "kind": "final-answer",
+      "mode": "not-contains",
+      "text": [
+        "预处理已完成",
+        "素材准备已全部完成",
+        "所有素材已就绪",
+        "进入视频生成",
+        "视频输入可提交",
+        "执行 SH01",
+        "SH01 视频输入",
+        "视频生成候选",
+        "开始后期"
+      ],
+      "evidenceRef": "batched-preparation-facts"
+    },
+    {
+      "id": "no-image-generation",
+      "kind": "tool-call",
+      "name": "GenerateImage",
+      "status": "absent",
+      "evidenceRef": "batched-preparation-facts"
+    },
+    {
+      "id": "no-video-generation",
+      "kind": "tool-call",
+      "name": "GenerateVideo",
+      "status": "absent",
+      "evidenceRef": "batched-preparation-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 360000, "repetitions": 1 }
+}

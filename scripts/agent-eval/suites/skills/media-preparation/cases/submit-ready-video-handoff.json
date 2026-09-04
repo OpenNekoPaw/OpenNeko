@@ -21,7 +21,7 @@
         "required": true
       }
     ],
-    "expectedResult": "The response visibly binds the selected Mara shot to the resolvable station-illustration.svg first-frame asset and its role, then returns a submit-ready/not-executed creator-facing handoff. It keeps the observed static first-frame state separate from one continuous shot's video-motion intent, expected result, direct acceptance, and downstream use. It remains internally schema-bound without printing Tool names, wrapper fields, raw locators, runtime IDs, parameter tables, or invocation JSON.",
+    "expectedResult": "The response visibly binds the selected Mara shot to the resolvable station-illustration.svg first-frame asset and its role, explicitly records that no image operation is required, then returns a submit-ready/not-executed creator-facing handoff. It keeps the observed static first-frame state separate from one continuous shot's video-motion intent, expected result, direct acceptance, and downstream use. It remains internally schema-bound without printing Tool names, wrapper fields, raw locators, runtime IDs, parameter tables, or invocation JSON.",
     "expectedFailure": "Falling back to concept analysis, emitting a provisional or candidate generation packet, omitting the real image binding, inventing operation names or parameters, keeping the packet blocked despite available dependencies, printing runtime invocation details, creating a task plan, or executing generation fails."
   },
   "fixtureRefs": ["creative-planning-workspace"],
@@ -31,7 +31,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$media-preparation $video 读取 @screenplay.fountain 和 @station-illustration.svg。已选镜头：Mara 在 23:47 的雨夜站台撑红伞，远处无头灯列车出现。把现有插画作为首帧，准备一个可直接提交给当前视频生成能力的单一连续镜头输入包，但不要执行生成。只返回可解析的来源绑定及素材职责、准备状态、首帧静态状态、与首帧分开的视频运动意图、预期产物、直接验收和下游用途；不要展示工具名、schema 字段、原始 locator、运行时 ID、参数表或调用 JSON。"
+      "prompt": "$media-preparation $video 读取 @screenplay.fountain 和 @station-illustration.svg。当前已批准的完整计划范围只有一个连续镜头：Mara 在 23:47 的雨夜站台撑红伞，远处无头灯列车出现；角色、红伞、站台、列车、风格与首帧均由现有插画稳定覆盖。把现有插画作为首帧，明确本镜不需要图像操作，并准备一个可直接提交给当前视频生成能力的单一连续镜头输入包，但不要执行生成。只返回可解析的来源绑定及素材职责、准备状态、首帧静态状态、与首帧分开的视频运动意图、预期产物、直接验收和下游用途；不要展示工具名、schema 字段、原始 locator、运行时 ID、参数表或调用 JSON。"
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
   ],
@@ -50,7 +50,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-preparation",
-        "fingerprint": "sha256:0f23ac800b9d6928ed9a7775a8ab3ff03ff1c540fffe96cf479b7b63d341b1ba"
+        "fingerprint": "sha256:d20b1e82cc099ead56e6f86a761f5d5695b44a3ab8c11fdb64b5311e0ce0400b"
       },
       "status": "injected",
       "evidenceRef": "ready-preparation-facts"
@@ -90,6 +90,7 @@
         "可提交",
         "未执行",
         "素材职责",
+        "不需要图像操作",
         "首帧静态状态",
         "视频运动意图",
         "预期产物",

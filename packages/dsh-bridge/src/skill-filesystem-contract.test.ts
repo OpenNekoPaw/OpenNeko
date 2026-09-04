@@ -323,19 +323,35 @@ describe('locked DSH filesystem Skill provider contract', () => {
     expect(definitions.get('media-production')).toContain(
       '每阶段只记录目标产物、输入依赖和完成条件',
     );
-    expect(definitions.get('media-production')).toContain('当前创意阶段必须按作品需要落实');
-    expect(definitions.get('media-production')).toContain('剧情/人物/场景/风格/声音');
+    expect(definitions.get('media-production')).toContain('路线按依赖推进');
+    expect(definitions.get('media-production')).toContain('当前创意阶段必须形成与声明制作范围相称');
+    expect(definitions.get('media-production')).toContain('画面分析');
+    expect(definitions.get('media-production')).toContain('人物分析');
+    expect(definitions.get('media-production')).toContain('剧情分析');
+    expect(definitions.get('media-production')).toContain('世界观分析');
+    expect(definitions.get('media-production')).toContain('分镜转译分析');
     expect(definitions.get('media-production')).toContain('默认不展开预处理提示词');
     expect(definitions.get('media-production')).toContain('仅在用户明确要求');
-    expect(definitions.get('media-production')).toContain('前、中、后各一批低清联系表');
+    expect(definitions.get('media-production')).toContain('前、中、后各取一批低清联系表');
     expect(definitions.get('media-production')).toContain('每批最多四张不同页面');
     expect(definitions.get('media-production')).toContain('高清默认只读取一张最终入选页');
     expect(definitions.get('media-production')).toContain('读取与视觉检查是瞬态证据');
-    expect(definitions.get('media-production')).toContain('缩小为开篇、局部场景或已选序列概念');
+    expect(definitions.get('media-production')).toContain(
+      '识别目录或章节边界、阅读顺序以及封面、目录、空白、广告、重复等非正文单元',
+    );
+    expect(definitions.get('media-production')).toContain(
+      '缩小为来源覆盖评估、开篇、局部场景或已选序列概念',
+    );
     expect(definitions.get('media-production')).toContain('来源—决定映射');
     expect(definitions.get('media-production')).toContain('对应行的“依据性质”');
     expect(definitions.get('media-production')).toContain('不创建审批对象、gate、预算授权');
     expect(definitions.get('media-production')).toContain('只推荐一个能推进整体路线的下一操作');
+    expect(definitions.get('media-production')).toContain('覆盖当前制作范围的权威镜头表');
+    expect(definitions.get('media-production')).toContain('逐镜盘点该范围消费的剧情节拍与世界规则');
+    expect(definitions.get('media-production')).toContain('每个镜头必须被具体覆盖');
+    expect(definitions.get('media-production')).toContain('单张图只满足它实际呈现且已绑定的职责');
+    expect(definitions.get('media-production')).toContain('PV 的当前制作范围默认是整支 PV');
+    expect(definitions.get('media-production')).toContain('逐镜生成意图缺口');
     expect(definitions.get('storyboard')).toContain('可直接更新的 Markdown 场景/镜头表');
     expect(definitions.get('storyboard')).toContain(
       'one `SHxx` row is one continuous observable take',
@@ -350,9 +366,23 @@ describe('locked DSH filesystem Skill provider contract', () => {
     expect(definitions.get('media-preparation')).toContain('验收不得放宽上游创意合同');
     expect(definitions.get('media-preparation')).toContain('不要求预算估算或预算授权');
     expect(definitions.get('media-preparation')).toContain('不要生成候选调用包');
-    expect(definitions.get('media-preparation')).toContain('只取一个最小连续生产单元');
-    expect(definitions.get('media-preparation')).toContain('静帧提示词只描述一个时刻');
-    expect(definitions.get('media-preparation')).toContain('不等于 `可提交／未执行`');
+    expect(definitions.get('media-preparation')).toContain('建立紧凑的逐镜生产输入表');
+    expect(definitions.get('media-preparation')).toContain('按复用价值和成本推进');
+    expect(definitions.get('media-preparation')).toContain('一组兼容素材或逐镜提示词缺口');
+    expect(definitions.get('media-preparation')).toContain('称为预处理完成');
+    expect(definitions.get('media-preparation')).toContain(
+      '不得把尚未分析的镜头合并成“后续再准备”',
+    );
+    expect(definitions.get('media-preparation')).toContain('没有真实等价素材时就是关键缺口');
+    expect(definitions.get('media-preparation')).toContain('不能作为阶段 authority');
+    expect(definitions.get('media-preparation')).toContain('只描述一个时刻的图像提示词');
+    expect(definitions.get('media-preparation')).toContain('逐镜生产输入表');
+    expect(definitions.get('media-preparation')).toContain('剧情节拍与适用世界规则');
+    expect(definitions.get('media-preparation')).toContain('“有一张氛围图”不等于基础参考完整');
+    expect(definitions.get('media-preparation')).toContain('不需要图像操作');
+    expect(definitions.get('media-preparation')).toContain('全部逐镜生成意图必须已经完成');
+    expect(definitions.get('media-preparation')).toContain('图像提示词与视频提示词不能合并');
+    expect(definitions.get('media-preparation')).toContain('不等于整个预处理阶段完成');
     expect(definitions.get('media-preparation')).toContain(
       '内部必须按当前 schema 编译完整 Tool 调用封装',
     );

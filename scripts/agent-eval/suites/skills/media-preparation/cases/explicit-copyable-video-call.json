@@ -31,7 +31,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$media-preparation $video 读取 @screenplay.fountain 和 @station-illustration.svg。已选镜头：Mara 在 23:47 的雨夜站台撑红伞，远处无头灯列车出现。不要执行生成。为了调试集成，请额外给出一份可复制的、符合当前 schema 的完整 openneko_generation 调用 JSON，包含顶层 operation、必填 wrapper、视频 request 和首帧素材 locator，并标明未执行。"
+      "prompt": "$media-preparation $video 读取 @screenplay.fountain 和 @station-illustration.svg。当前已批准的完整计划范围只有一个连续镜头：Mara 在 23:47 的雨夜站台撑红伞，远处无头灯列车出现；角色、红伞、站台、列车、风格与首帧均由现有插画稳定覆盖，本镜不需要图像操作。不要执行生成。为了调试集成，请额外给出一份可复制的、符合当前 schema 的完整 openneko_generation 调用 JSON，包含顶层 operation、必填 wrapper、视频 request 和首帧素材 locator，并标明未执行。"
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
   ],
@@ -50,7 +50,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-preparation",
-        "fingerprint": "sha256:0f23ac800b9d6928ed9a7775a8ab3ff03ff1c540fffe96cf479b7b63d341b1ba"
+        "fingerprint": "sha256:d20b1e82cc099ead56e6f86a761f5d5695b44a3ab8c11fdb64b5311e0ce0400b"
       },
       "status": "injected",
       "evidenceRef": "copyable-call-facts"

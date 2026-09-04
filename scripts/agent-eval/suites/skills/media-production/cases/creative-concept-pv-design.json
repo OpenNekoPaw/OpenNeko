@@ -54,7 +54,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:1c4d243d8ac71d944e0a22b7f4aa2bdabca3ebd8b80475775f3ad579a2b55862"
+        "fingerprint": "sha256:214c29ab578b745df9d8156f58f27f90342470b5b0e83f278c50015d0ac23d71"
       },
       "status": "injected",
       "evidenceRef": "creative-pv-facts"

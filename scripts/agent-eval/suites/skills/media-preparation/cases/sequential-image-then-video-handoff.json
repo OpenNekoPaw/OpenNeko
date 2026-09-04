@@ -31,7 +31,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$media-preparation $image $video 读取 @screenplay.fountain 和 @station-illustration.svg。为 SH01 准备下一次可执行操作：现有插画只承担身份与风格参考，不能直接作为视频首帧；必须先生成符合 16:9 构图的起始静帧，之后才能用该结果做 8 秒图生视频。本轮不执行生成。只返回当前操作、来源绑定与职责、静帧提示词、预期产物、直接验收、后续依赖和唯一下一步；后续视频只保留运动约束并明确等待静帧，不得给出第二个可提交包或共享状态。"
+      "prompt": "$media-preparation $image $video 读取 @screenplay.fountain 和 @station-illustration.svg。当前已批准的完整计划范围只有 SH01。为 SH01 准备下一次可执行操作：现有插画只承担身份与风格参考，不能直接作为视频首帧；必须先生成符合 16:9 构图的起始静帧，之后才能用该结果做 8 秒图生视频。本轮不执行生成。只返回当前操作、来源绑定与职责、静帧提示词、预期产物、直接验收、后续依赖和唯一下一步；后续视频只保留运动约束并明确等待静帧，不得给出第二个可提交包或共享状态。"
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
   ],
@@ -50,7 +50,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-preparation",
-        "fingerprint": "sha256:0f23ac800b9d6928ed9a7775a8ab3ff03ff1c540fffe96cf479b7b63d341b1ba"
+        "fingerprint": "sha256:d20b1e82cc099ead56e6f86a761f5d5695b44a3ab8c11fdb64b5311e0ce0400b"
       },
       "status": "injected",
       "evidenceRef": "sequential-handoff-facts"
