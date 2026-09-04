@@ -201,11 +201,7 @@ import {
   createAiSdkPromptCompletionPort,
 } from '@neko/generation-domain/prompt';
 import { GENERATION_PROVIDER_CAPABILITIES } from '@neko/generation-domain/provider-capabilities';
-import {
-  createContentReadMediaRequestAssetMaterializer,
-  createMediaPlatform,
-  createNodeGenerationJobOwner,
-} from '@neko/generation-domain/media';
+import { createMediaPlatform, createNodeGenerationJobOwner } from '@neko/generation-domain/media';
 import { createNodeHostContentReadService } from '@neko/content-domain/node';
 import { createNodeDocumentLowLevelAccess } from '@neko/content-domain/document/node';
 import { resolveWorkspaceContentLocator } from '@neko/assets-node';
@@ -216,6 +212,7 @@ import {
 } from '@neko/preview-domain/resource-projection';
 import { DesktopCanvasRuntime } from './desktop-canvas-runtime';
 import { DesktopCutRuntime } from './desktop-cut-runtime';
+import { createDesktopGenerationRequestAssetMaterializer } from './desktop-generation-request-asset-materializer';
 import { createCutCanvasHandoffPayload, parseCutCanvasHandoffPayload } from '@neko/cut-domain';
 import { openDesktopCanvasDocument } from './desktop-creative-document-runtime';
 import { createDesktopNativeThemeController } from './desktop-native-theme';
@@ -599,10 +596,7 @@ async function startDesktop(): Promise<void> {
       const media = createMediaPlatform({
         configManager,
         providerResolver,
-        requestAssetMaterializer: createContentReadMediaRequestAssetMaterializer({
-          contentRead: createNodeHostContentReadService({ workspaceRoot: root }),
-          encodeBase64: (bytes) => Buffer.from(bytes).toString('base64'),
-        }),
+        requestAssetMaterializer: createDesktopGenerationRequestAssetMaterializer(root),
       });
       return createNodeGenerationJobOwner({
         owner,

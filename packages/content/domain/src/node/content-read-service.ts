@@ -14,7 +14,7 @@ import type {
   DocumentEntryContentLocator,
   PackageResourceContentLocator,
 } from '../contracts';
-import { NodeWorkspaceContentReadHandler } from './workspace-content-read-handler';
+import { mimeTypeForPath, NodeWorkspaceContentReadHandler } from './workspace-content-read-handler';
 import type { AuthorizeWorkspacePathInput, WorkspacePathGuardResult } from './workspace-path-guard';
 
 export interface NodeDocumentEntryReader {
@@ -65,11 +65,13 @@ export class NodeDocumentEntryContentReadHandler implements ContentReadHandler<D
   ): Promise<ContentStat> {
     const loaded = await this.load(locator, options);
     if (loaded.status === 'unavailable') return loaded;
+    const mimeType = mimeTypeForPath(locator.selector.path);
     return {
       status: 'ready',
       locator,
       byteLength: loaded.bytes.byteLength,
       fingerprint: loaded.fingerprint,
+      ...(mimeType ? { mimeType } : {}),
     };
   }
 
@@ -81,6 +83,7 @@ export class NodeDocumentEntryContentReadHandler implements ContentReadHandler<D
     if (loaded.status === 'unavailable') return loaded;
     const range = sliceRange(loaded.bytes, options);
     if (range.ok === false) return unavailable(locator, range.code);
+    const mimeType = mimeTypeForPath(locator.selector.path);
     return {
       status: 'ready',
       locator,
@@ -88,6 +91,7 @@ export class NodeDocumentEntryContentReadHandler implements ContentReadHandler<D
       offset: range.offset,
       totalByteLength: loaded.bytes.byteLength,
       fingerprint: loaded.fingerprint,
+      ...(mimeType ? { mimeType } : {}),
     };
   }
 
