@@ -2,13 +2,57 @@
   "schema": "neko.agent-eval.suite",
   "id": "skill.image",
   "owner": { "kind": "skill", "id": "image" },
-  "target": { "kind": "skill", "identity": { "name": "image", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "image", "fingerprint": "sha256:6daa91d4028b9b95cd678000ed653d31f696449735c2857115f23897d682124c" } },
-  "runtimeProfiles": [{ "id": "canonical-default", "settings": { "executionMode": "auto" }, "configurationHash": "sha256:14bbfefd201fb00c3a3b85b137a6e6ce0badd0db63bc7bf496454b7689ee0460" }],
-  "modelProfiles": [{ "id": "nekoapi-image-purpose", "selection": "explicit", "chat": { "providerId": "nekoapi-chat", "modelId": "gpt-5.6-luna" }, "purposes": { "image.generate": { "providerId": "nekoapi-media", "modelId": "gpt-image-2" } }, "configurationHash": "sha256:84106dbcf3b4b105eabd31f2b2b8705f954c486ba789f93093fc68cd23b3d4ce" }],
+  "target": {
+    "kind": "skill",
+    "identity": {
+      "name": "image",
+      "source": "builtin",
+      "provenance": "builtin",
+      "rootId": "builtin-skills",
+      "relativePath": "image",
+      "fingerprint": "sha256:a8bcb339ca83108d465a924dc8a61a4796531555ee61effb1c82efcfb7912f3e"
+    }
+  },
+  "runtimeProfiles": [
+    {
+      "id": "canonical-default",
+      "settings": { "executionMode": "auto" },
+      "configurationHash": "sha256:14bbfefd201fb00c3a3b85b137a6e6ce0badd0db63bc7bf496454b7689ee0460"
+    }
+  ],
+  "modelProfiles": [
+    {
+      "id": "nekoapi-image-purpose",
+      "selection": "explicit",
+      "chat": { "providerId": "nekoapi-chat", "modelId": "gpt-5.6-luna" },
+      "purposes": { "image.generate": { "providerId": "nekoapi-media", "modelId": "gpt-image-2" } },
+      "configurationHash": "sha256:84106dbcf3b4b105eabd31f2b2b8705f954c486ba789f93093fc68cd23b3d4ce"
+    }
+  ],
   "judgeProfiles": [],
-  "fixtures": [{ "id": "empty-workspace", "root": "shared-fixtures/empty-workspace", "source": "repository", "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081", "mutable": true }],
-  "cases": [{ "id": "generate-image", "file": "cases/generate-image.json", "group": "canonical", "visibility": "public" }],
+  "fixtures": [
+    {
+      "id": "empty-workspace",
+      "root": "shared-fixtures/empty-workspace",
+      "source": "repository",
+      "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081",
+      "mutable": true
+    }
+  ],
+  "cases": [
+    {
+      "id": "generate-image",
+      "file": "cases/generate-image.json",
+      "group": "canonical",
+      "visibility": "public"
+    }
+  ],
   "rubricRefs": [],
   "baselinePolicy": { "mode": "none" },
-  "reportPolicy": { "rawRetentionDays": 14, "trustedCiRetentionDays": 14, "committedSummary": true, "includeHistory": false }
+  "reportPolicy": {
+    "rawRetentionDays": 14,
+    "trustedCiRetentionDays": 14,
+    "committedSummary": true,
+    "includeHistory": false
+  }
 }

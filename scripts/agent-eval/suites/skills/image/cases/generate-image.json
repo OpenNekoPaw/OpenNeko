@@ -23,13 +23,9 @@
     "expectedResult": "The image Skill calls GenerateImage and observes its terminal result before finalization.",
     "expectedFailure": "Missing Skill, terminal Tool result, artifact, or terminal idle fails."
   },
-  "fixtureRefs": [
-    "empty-workspace"
-  ],
+  "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": [
-    "nekoapi-image-purpose"
-  ],
+  "modelProfileIds": ["nekoapi-image-purpose"],
   "steps": [
     {
       "id": "submit",
@@ -52,7 +48,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "image",
-        "fingerprint": "sha256:6daa91d4028b9b95cd678000ed653d31f696449735c2857115f23897d682124c"
+        "fingerprint": "sha256:a8bcb339ca83108d465a924dc8a61a4796531555ee61effb1c82efcfb7912f3e"
       },
       "status": "injected",
       "evidenceRef": "image-facts"
@@ -81,10 +77,7 @@
     {
       "id": "terminal",
       "kind": "terminal-idle",
-      "concerns": [
-        "turnIdle",
-        "continuationQueueIdle"
-      ],
+      "concerns": ["turnIdle", "continuationQueueIdle"],
       "evidenceRef": "image-facts"
     }
   ],
