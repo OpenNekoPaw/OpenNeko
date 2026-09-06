@@ -1,4 +1,5 @@
 import type { ListSessionsRequest, ListSessionsResponse } from '@agentclientprotocol/sdk';
+import { createCanvasWorkspaceTarget } from '@neko/canvas-domain';
 
 import {
   createConversationDshSessionBindingService,
@@ -52,7 +53,10 @@ export interface ConversationDshSessionApplication {
   readonly home: DshConversationHomeProjection;
   readonly archive: ConversationDshSessionArchive;
   readonly publication: ConversationDshSessionPublication;
-  readonly catalog: Pick<DshConversationCatalogStore, 'get'>;
+  readonly catalog: Pick<
+    DshConversationCatalogStore,
+    'get' | 'readCanvasSelection' | 'selectCanvas'
+  >;
   branchConversation(input: {
     readonly sourceConversationId: string;
     readonly messageId: string;
@@ -167,12 +171,26 @@ export function createConversationDshSessionApplication(
         throw new Error(`DSH Conversation branch source is missing: ${input.sourceConversationId}`);
       }
       const sourceDshSessionId = await activation.ensureLoaded(input.sourceConversationId);
+      const canvasId = await options.catalog.readCanvasSelection(input.sourceConversationId);
+      if (
+        canvasId !== undefined &&
+        source.context.kind !== 'workspace' &&
+        source.context.kind !== 'authoring'
+      ) {
+        throw new Error('A Conversation Canvas selection requires a Workspace context.');
+      }
       return publication.branch({
         sourceConversationId: input.sourceConversationId,
         sourceDshSessionId,
         messageId: input.messageId,
         context: source.context,
         title: source.title,
+        ...(canvasId === undefined ||
+        (source.context.kind !== 'workspace' && source.context.kind !== 'authoring')
+          ? {}
+          : {
+              canvasSelection: createCanvasWorkspaceTarget(source.context.workspaceId, canvasId),
+            }),
       });
     },
   };

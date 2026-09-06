@@ -607,6 +607,21 @@ const bridge: OpenNekoDesktopBridge &
       const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
       return parseDshComposerConfigurationHostResult(response, request.requestId).configuration;
     },
+    async selectComposerCanvas(workbenchInstanceId, agentSurfaceId, conversationId, canvasId) {
+      const context = requireDesktopWindowContext();
+      const request = {
+        requestId: nextRequestId('dsh-composer-canvas'),
+        operation: 'composer-canvas' as const,
+        windowId: context.windowId,
+        rendererSessionId: context.rendererSessionId,
+        workbenchInstanceId,
+        agentSurfaceId,
+        conversationId,
+        canvasId,
+      };
+      const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
+      return parseDshComposerConfigurationHostResult(response, request.requestId).configuration;
+    },
     async searchComposerMentions(workbenchInstanceId, agentSurfaceId, filter) {
       const context = requireDesktopWindowContext();
       const request = {

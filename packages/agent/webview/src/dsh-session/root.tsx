@@ -67,7 +67,6 @@ import { projectContentLocatorPath } from '../presenters/content-locator-present
 import { projectPathReferenceToken } from '../presenters/reference-token-presenter';
 import {
   useDshComposerCanvasSelection,
-  useDshComposerPresentationSnapshotStore,
   type DshComposerCanvasSelectionScope,
 } from './presentation-snapshot';
 import { projectDshTranscriptPresentation, type ToolEvent } from './transcript-presentation';
@@ -115,6 +114,7 @@ export interface DshAgentViewProps {
     modelOptionId: string,
   ) => void;
   readonly onPermissionPresetChange: (permissionPresetId: string) => void;
+  readonly onCanvasSelect: (canvasId: string) => Promise<void>;
   readonly onRemoveQueuedMessage?: (messageId: string) => void;
   readonly onSendQueuedMessageNow?: (messageId: string) => void;
   readonly onRestartRuntime: () => void;
@@ -214,13 +214,10 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   >('companion');
   const [entryWorldLaunch, setEntryWorldLaunch] = useState<SelectedWorldLaunch>();
   const [entryContextDiagnostic, setEntryContextDiagnostic] = useState<string>();
-  const composerPresentationSnapshots = useDshComposerPresentationSnapshotStore();
-  const previousConversationIdRef = useRef(props.conversationId);
   const adoptedCharacterHandoffRef = useRef<string>();
   const adoptedCharacterCreationHandoffRef = useRef<string>();
   const adoptedProjectTemplateHandoffRef = useRef<string>();
   const adoptedWorldCreationHandoffRef = useRef<string>();
-  const canvasWorkspaceId = props.composerConfiguration?.context?.canvas.workspaceId;
   const conversationTitle = props.projection?.title ?? copy.newConversation;
   const runtimeReady = props.runtime?.status === 'running';
   const hasEvents = (props.projection?.events.length ?? 0) > 0;
@@ -410,33 +407,6 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
     };
   }, [entryDetail, entryDetailExpanded, props.entryContext?.experimentalCreative]);
   useEffect(() => {
-    const previousConversationId = previousConversationIdRef.current;
-    previousConversationIdRef.current = props.conversationId;
-    if (
-      previousConversationId !== undefined ||
-      props.conversationId === undefined ||
-      canvasWorkspaceId === undefined
-    ) {
-      return;
-    }
-    composerPresentationSnapshots.transferIfAbsent(
-      {
-        agentSurfaceId: props.agentSurfaceId,
-        workspaceId: canvasWorkspaceId,
-      },
-      {
-        agentSurfaceId: props.agentSurfaceId,
-        conversationId: props.conversationId,
-        workspaceId: canvasWorkspaceId,
-      },
-    );
-  }, [
-    canvasWorkspaceId,
-    composerPresentationSnapshots,
-    props.agentSurfaceId,
-    props.conversationId,
-  ]);
-  useEffect(() => {
     const experimentalCreative = props.entryContext?.experimentalCreative;
     if (!entryDetailExpanded || entryDetail !== 'world' || !experimentalCreative) {
       return;
@@ -494,6 +464,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
       onModelChange={props.onModelChange}
       onMediaModelChange={props.onMediaModelChange}
       onPermissionPresetChange={props.onPermissionPresetChange}
+      onCanvasSelect={props.onCanvasSelect}
       onRemoveQueuedMessage={props.onRemoveQueuedMessage}
       onSendQueuedMessageNow={props.onSendQueuedMessageNow}
       onRequestMentions={props.onRequestMentions}
@@ -789,6 +760,7 @@ function DshComposer({
   onModelChange,
   onMediaModelChange,
   onPermissionPresetChange,
+  onCanvasSelect,
   onRemoveQueuedMessage,
   onSendQueuedMessageNow,
   onRequestMentions,
@@ -832,6 +804,7 @@ function DshComposer({
     modelOptionId: string,
   ) => void;
   readonly onPermissionPresetChange: (permissionPresetId: string) => void;
+  readonly onCanvasSelect: (canvasId: string) => Promise<void>;
   readonly onRemoveQueuedMessage?: (messageId: string) => void;
   readonly onSendQueuedMessageNow?: (messageId: string) => void;
   readonly onRequestMentions?: (filter: string) => void;
@@ -889,25 +862,33 @@ function DshComposer({
   const canvasCatalog = configuration?.context?.canvas;
   const canvasSelectionScope: DshComposerCanvasSelectionScope | undefined = useMemo(
     () =>
-      canvasCatalog === undefined
+      canvasCatalog === undefined || conversationId !== undefined
         ? undefined
         : {
             agentSurfaceId,
             workspaceId: canvasCatalog.workspaceId,
-            ...(conversationId === undefined ? {} : { conversationId }),
           },
     [agentSurfaceId, canvasCatalog, conversationId],
   );
-  const [storedSelectedCanvasId, selectCanvasId] =
+  const [draftSelectedCanvasId, selectDraftCanvasId] =
     useDshComposerCanvasSelection(canvasSelectionScope);
+  const conversationSelection = configuration?.context?.canvasSelection;
+  const storedSelectedCanvasId =
+    conversationId === undefined
+      ? draftSelectedCanvasId
+      : conversationSelection?.conversationId === conversationId
+        ? conversationSelection.canvasId
+        : undefined;
   const storedSelectedCanvasOption = canvasCatalog?.options.find(
     (option) => option.target.canvasId === storedSelectedCanvasId,
   );
   const defaultCanvasOption = canvasCatalog?.options.find(
     (option) => option.target.canvasId === canvasCatalog.defaultTarget.canvasId,
   );
-  const selectedCanvasOption = storedSelectedCanvasOption ?? defaultCanvasOption;
-  const effectiveSelectedCanvasId = selectedCanvasOption?.target.canvasId ?? storedSelectedCanvasId;
+  const selectedCanvasOption =
+    storedSelectedCanvasOption ?? (conversationId === undefined ? defaultCanvasOption : undefined);
+  const effectiveSelectedCanvasId =
+    selectedCanvasOption?.target.canvasId ?? storedSelectedCanvasId ?? '';
   useEffect(() => {
     if (
       canvasSelectionScope === undefined ||
@@ -922,12 +903,12 @@ function DshComposer({
       canvasId: storedSelectedCanvasId,
       defaultCanvasId: defaultCanvasOption.target.canvasId,
     });
-    selectCanvasId(defaultCanvasOption.target.canvasId);
+    selectDraftCanvasId(defaultCanvasOption.target.canvasId);
   }, [
     canvasCatalog,
     canvasSelectionScope,
     defaultCanvasOption,
-    selectCanvasId,
+    selectDraftCanvasId,
     storedSelectedCanvasId,
     storedSelectedCanvasOption,
   ]);
@@ -1238,11 +1219,14 @@ function DshComposer({
                     selectedId: effectiveSelectedCanvasId,
                     loading: false,
                     ...(canvasSelectionDiagnostic === undefined &&
+                    configuration.context.canvasSelectionDiagnostic === undefined &&
                     canvasCatalog.diagnostics.length === 0
                       ? {}
                       : {
                           diagnostic:
-                            canvasSelectionDiagnostic ?? canvasCatalog.diagnostics.join(' '),
+                            canvasSelectionDiagnostic ??
+                            configuration.context.canvasSelectionDiagnostic ??
+                            canvasCatalog.diagnostics.join(' '),
                         }),
                     onSelect: async (optionId) => {
                       const option = canvasCatalog.options.find(
@@ -1254,8 +1238,13 @@ function DshComposer({
                         );
                         return;
                       }
-                      selectCanvasId(optionId);
-                      setInputDiagnostic(undefined);
+                      try {
+                        if (conversationId === undefined) selectDraftCanvasId(optionId);
+                        else await onCanvasSelect(optionId);
+                        setInputDiagnostic(undefined);
+                      } catch (error) {
+                        setInputDiagnostic(describeError(error));
+                      }
                     },
                   },
                 }

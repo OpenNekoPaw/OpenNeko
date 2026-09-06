@@ -8,6 +8,7 @@ import type {
 } from '@agentclientprotocol/sdk';
 import type { AgentConversationContext } from '@neko/agent-contracts';
 import type { DshComposerSubmitInput } from '@neko/agent-contracts/dsh-session-host';
+import type { CanvasWorkspaceTurnTarget } from '@neko/canvas-domain';
 
 import { createConversationId } from '../session/conversation-id';
 import type { ConversationDshSessionBindingService } from './conversation-dsh-session-binding';
@@ -20,6 +21,7 @@ export interface ConversationDshSessionPublication {
     readonly conversationId?: string;
     readonly context: AgentConversationContext;
     readonly title: string;
+    readonly canvasSelection?: CanvasWorkspaceTurnTarget;
   }): Promise<{ readonly conversationId: string; readonly dshSessionId: string }>;
   branch(input: {
     readonly sourceConversationId: string;
@@ -27,6 +29,7 @@ export interface ConversationDshSessionPublication {
     readonly messageId: string;
     readonly context: AgentConversationContext;
     readonly title: string;
+    readonly canvasSelection?: CanvasWorkspaceTurnTarget;
   }): Promise<{ readonly conversationId: string; readonly dshSessionId: string }>;
 }
 
@@ -63,19 +66,23 @@ export function createConversationDshSessionPublication(options: {
       readonly conversationId?: string;
       readonly context: AgentConversationContext;
       readonly title: string;
+      readonly canvasSelection?: CanvasWorkspaceTurnTarget;
     }) {
       const conversationId =
         input.conversationId === undefined
           ? createIdentity(options.conversationIdentitySeed)
           : requireConversationId(input.conversationId);
       const timestamp = now().toISOString();
-      await options.catalog.reserve({
-        conversationId,
-        title: requireTitle(input.title),
-        createdAt: timestamp,
-        updatedAt: timestamp,
-        context: input.context,
-      });
+      await options.catalog.reserve(
+        {
+          conversationId,
+          title: requireTitle(input.title),
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          context: input.context,
+        },
+        input.canvasSelection,
+      );
 
       let dshSessionId: string;
       try {
@@ -119,13 +126,16 @@ export function createConversationDshSessionPublication(options: {
       const timestamp = now().toISOString();
       try {
         const cwd = requireAbsoluteCwd(await options.lookupCwd.resolve(input.context));
-        await options.catalog.reserve({
-          conversationId,
-          title: requireTitle(input.title),
-          createdAt: timestamp,
-          updatedAt: timestamp,
-          context: input.context,
-        });
+        await options.catalog.reserve(
+          {
+            conversationId,
+            title: requireTitle(input.title),
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            context: input.context,
+          },
+          input.canvasSelection,
+        );
         const result = await options.binding.bind({ conversationId, dshSessionId });
         if (!result.ok) {
           throw new Error(`DSH Conversation branch failed: ${result.code}: ${result.message}`);

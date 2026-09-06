@@ -1774,6 +1774,39 @@ describe('Desktop DSH Session Host', () => {
     );
   });
 
+  it('saves Canvas selection only through the sender-bound Composer owner and publishes its change', async () => {
+    const selectCanvas = vi.fn(async () => composerConfiguration());
+    const publishChanged = vi.fn();
+    const host = createHost({ selectCanvas, publishChanged });
+    const request = {
+      requestId: 'select-canvas',
+      operation: 'composer-canvas',
+      windowId: 'window-1',
+      rendererSessionId: 'renderer-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'surface-1',
+      conversationId: identity.conversationId,
+      canvasId: 'neko/boards/story.nkc',
+    };
+    const sender = { webContentsId: 1, frameUrl: 'openneko://app' };
+    await expect(
+      host.execute(sender, { ...request, rendererSessionId: 'renderer-other' }),
+    ).rejects.toThrow(/sender-bound/u);
+    expect(selectCanvas).not.toHaveBeenCalled();
+    await host.execute(sender, request);
+    expect(selectCanvas).toHaveBeenCalledExactlyOnceWith({
+      windowId: 'window-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'surface-1',
+      conversationId: identity.conversationId,
+      canvasId: 'neko/boards/story.nkc',
+    });
+    expect(publishChanged).toHaveBeenCalledWith({
+      conversationId: identity.conversationId,
+      composerChanged: true,
+    });
+  });
+
   it('branches from one exact reply and returns the new Conversation projection', async () => {
     const branchConversation = vi.fn(async () => ({ conversationId: 'conversation-branch' }));
     const publishChanged = vi.fn();
@@ -1801,6 +1834,9 @@ describe('Desktop DSH Session Host', () => {
 });
 
 function createHost(overrides: {
+  readonly selectCanvas?: ConstructorParameters<
+    typeof DesktopDshSessionHost
+  >[0]['composer']['selectCanvas'];
   readonly prompt?: ConversationDshSessionBoundClient['prompt'];
   readonly projection?: DshAcpProjection;
   readonly publishChanged?: (event: DshSessionChangedEvent) => void;
@@ -1924,6 +1960,7 @@ function createHost(overrides: {
     turnCanvasTargets: overrides.turnCanvasTargets ?? createDshTurnCanvasTargetOwner(),
     composer: {
       project: vi.fn(async () => composerConfiguration()),
+      selectCanvas: overrides.selectCanvas ?? vi.fn(async () => composerConfiguration()),
       selectModel: overrides.selectModel ?? vi.fn(async () => composerConfiguration()),
       selectMediaModel: overrides.selectMediaModel ?? vi.fn(async () => composerConfiguration()),
       selectPermissionPreset:

@@ -155,6 +155,8 @@ function applicationFixture(conversationId: string) {
   return {
     catalog: {
       reserve: vi.fn(async () => undefined),
+      readCanvasSelection: vi.fn(async () => undefined),
+      selectCanvas: vi.fn(async () => undefined),
       get: vi.fn(async (requested: string) => (requested === conversationId ? record : undefined)),
       read: vi.fn(async () => ({ records: [record], diagnostics: [] })),
     },

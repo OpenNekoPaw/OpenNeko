@@ -177,6 +177,8 @@ export interface DshComposerContextProjection {
   readonly workspaceId: string;
   readonly workspaceLabel: string;
   readonly canvas: CanvasWorkspaceContextCatalog;
+  readonly canvasSelection: { readonly conversationId: string; readonly canvasId: string } | null;
+  readonly canvasSelectionDiagnostic?: string;
 }
 
 export interface DshComposerConfigurationProjection {
@@ -297,6 +299,13 @@ export type DshSessionHostRequest =
       readonly messageId: string;
     })
   | (DshSessionHostSenderRequest & {
+      readonly operation: 'composer-canvas';
+      readonly workbenchInstanceId: string;
+      readonly agentSurfaceId: string;
+      readonly conversationId: string;
+      readonly canvasId: string;
+    })
+  | (DshSessionHostSenderRequest & {
       readonly operation: 'composer-snapshot';
       readonly workbenchInstanceId: string;
       readonly agentSurfaceId: string;
@@ -377,6 +386,7 @@ export interface DshComposerMaterializedAssetHostResult {
 
 export interface DshSessionChangedEvent {
   readonly conversationId: string;
+  readonly composerChanged?: true;
 }
 
 export interface OpenNekoDshSessionBridge {
@@ -409,6 +419,12 @@ export interface OpenNekoDshSessionBridge {
     getComposerConfiguration(
       workbenchInstanceId: string,
       agentSurfaceId: string,
+    ): Promise<DshComposerConfigurationProjection>;
+    selectComposerCanvas(
+      workbenchInstanceId: string,
+      agentSurfaceId: string,
+      conversationId: string,
+      canvasId: string,
     ): Promise<DshComposerConfigurationProjection>;
     searchComposerMentions(
       workbenchInstanceId: string,
@@ -471,6 +487,7 @@ export function parseDshSessionHostRequest(value: unknown): DshSessionHostReques
   }
   if (
     record.operation === 'composer-snapshot' ||
+    record.operation === 'composer-canvas' ||
     record.operation === 'composer-mentions' ||
     record.operation === 'composer-materialize-asset' ||
     record.operation === 'composer-model' ||
@@ -493,6 +510,15 @@ export function parseDshSessionHostRequest(value: unknown): DshSessionHostReques
     if (record.operation === 'composer-snapshot') {
       requireExactKeys(record, commonKeys);
       return { ...common, operation: 'composer-snapshot' };
+    }
+    if (record.operation === 'composer-canvas') {
+      requireExactKeys(record, [...commonKeys, 'conversationId', 'canvasId']);
+      return {
+        ...common,
+        operation: 'composer-canvas',
+        conversationId: requireIdentity(record.conversationId, 'conversationId'),
+        canvasId: requireIdentity(record.canvasId, 'canvasId'),
+      };
     }
     if (record.operation === 'composer-mentions') {
       requireExactKeys(record, [...commonKeys, 'filter']);
@@ -1157,7 +1183,18 @@ function parseSelectedMediaModelOptionIds(
 
 function parseComposerContext(value: unknown): DshComposerContextProjection {
   const record = requireRecord(value, 'DSH composer context');
-  requireExactKeys(record, ['kind', 'workspaceId', 'workspaceLabel', 'canvas']);
+  requireAllowedKeys(
+    record,
+    [
+      'kind',
+      'workspaceId',
+      'workspaceLabel',
+      'canvas',
+      'canvasSelection',
+      'canvasSelectionDiagnostic',
+    ],
+    ['kind', 'workspaceId', 'workspaceLabel', 'canvas', 'canvasSelection'],
+  );
   if (record.kind !== 'workspace') {
     throw new Error(`DSH composer context kind '${String(record.kind)}' is unsupported.`);
   }
@@ -1166,11 +1203,30 @@ function parseComposerContext(value: unknown): DshComposerContextProjection {
   if (canvas.workspaceId !== workspaceId) {
     throw new Error('DSH composer Canvas catalog must match its Workspace context.');
   }
+  let canvasSelection: DshComposerContextProjection['canvasSelection'] = null;
+  if (record.canvasSelection !== null) {
+    const selection = requireRecord(record.canvasSelection, 'Conversation Canvas selection');
+    requireExactKeys(selection, ['conversationId', 'canvasId']);
+    canvasSelection = {
+      conversationId: requireIdentity(selection.conversationId, 'conversationId'),
+      canvasId: parseCanvasWorkspaceTurnTarget({ workspaceId, canvasId: selection.canvasId })
+        .canvasId,
+    };
+  }
   return {
     kind: 'workspace',
     workspaceId,
     workspaceLabel: requireIdentity(record.workspaceLabel, 'context.workspaceLabel'),
     canvas,
+    canvasSelection,
+    ...(record.canvasSelectionDiagnostic === undefined
+      ? {}
+      : {
+          canvasSelectionDiagnostic: requireIdentity(
+            record.canvasSelectionDiagnostic,
+            'canvasSelectionDiagnostic',
+          ),
+        }),
   };
 }
 
@@ -1255,8 +1311,14 @@ export function parseDshWrittenFileOpenHostResult(
 
 export function parseDshSessionChangedEvent(value: unknown): DshSessionChangedEvent {
   const record = requireRecord(value, 'DSH Session changed event');
-  requireExactKeys(record, ['conversationId']);
-  return { conversationId: requireIdentity(record.conversationId, 'conversationId') };
+  requireAllowedKeys(record, ['conversationId', 'composerChanged'], ['conversationId']);
+  if (record.composerChanged !== undefined && record.composerChanged !== true) {
+    throw new Error('DSH composer change notification must be true when present.');
+  }
+  return {
+    conversationId: requireIdentity(record.conversationId, 'conversationId'),
+    ...(record.composerChanged === true ? { composerChanged: true } : {}),
+  };
 }
 
 export function parseDshSessionHostProjection(value: unknown): DshSessionHostProjection {

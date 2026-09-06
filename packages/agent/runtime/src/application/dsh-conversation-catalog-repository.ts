@@ -3,6 +3,10 @@ import {
   type AgentConversationContext,
 } from '@neko/agent-contracts';
 import {
+  parseCanvasWorkspaceTurnTarget,
+  type CanvasWorkspaceTurnTarget,
+} from '@neko/canvas-domain';
+import {
   LocalMetadataError,
   initializeLocalMetadataTables,
   serializeLocalMetadataJson,
@@ -29,9 +33,14 @@ export interface DshConversationCatalogSnapshot {
 }
 
 export interface DshConversationCatalogStore {
-  reserve(input: DshConversationCatalogRecord): Promise<void>;
+  reserve(
+    input: DshConversationCatalogRecord,
+    canvasSelection?: CanvasWorkspaceTurnTarget,
+  ): Promise<void>;
   get(conversationId: string): Promise<DshConversationCatalogRecord | undefined>;
   read(): Promise<DshConversationCatalogSnapshot>;
+  readCanvasSelection(conversationId: string): Promise<string | undefined>;
+  selectCanvas(conversationId: string, target: CanvasWorkspaceTurnTarget): Promise<void>;
 }
 
 export function initializeDshConversationCatalogTables(store: LocalMetadataStore): Promise<void> {
@@ -44,6 +53,10 @@ export function initializeDshConversationCatalogTables(store: LocalMetadataStore
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       ) STRICT`,
+      `CREATE TABLE IF NOT EXISTS agent_conversation_canvas_selection (
+        conversation_id TEXT PRIMARY KEY,
+        canvas_id TEXT NOT NULL
+      ) STRICT`,
     ],
     operation: 'initialize-agent-dsh-conversation-catalog',
   });
@@ -53,8 +66,10 @@ export function createPersistentDshConversationCatalogStore(options: {
   readonly metadataStore: LocalMetadataStore;
 }): DshConversationCatalogStore {
   return Object.freeze({
-    reserve(input: DshConversationCatalogRecord) {
+    reserve(input: DshConversationCatalogRecord, canvasSelection?: CanvasWorkspaceTurnTarget) {
       const record = parseCatalogRecord(input);
+      if (canvasSelection !== undefined)
+        requireCanvasSelectionContext(record.context, canvasSelection);
       return options.metadataStore.transaction(
         { mode: 'state-write', ownership: 'state', operation: 'reserve-dsh-conversation' },
         async ({ sql }) => {
@@ -86,6 +101,72 @@ export function createPersistentDshConversationCatalogStore(options: {
               `Agent Conversation '${record.conversationId}' was not added to the catalog.`,
             );
           }
+          if (canvasSelection !== undefined) {
+            await sql.run(
+              `INSERT INTO agent_conversation_canvas_selection(conversation_id, canvas_id) VALUES (?, ?)`,
+              [record.conversationId, canvasSelection.canvasId],
+            );
+          }
+        },
+      );
+    },
+
+    readCanvasSelection(conversationId: string) {
+      const identity = requireIdentity(conversationId, 'Conversation');
+      return options.metadataStore.transaction(
+        { mode: 'read', ownership: 'state', operation: 'read-conversation-canvas-selection' },
+        async ({ sql }) => {
+          const rows = await sql.all(
+            `SELECT selection.canvas_id FROM agent_dsh_conversation_catalog AS catalog
+             LEFT JOIN agent_conversation_canvas_selection AS selection
+               ON selection.conversation_id = catalog.conversation_id
+             WHERE catalog.conversation_id = ?`,
+            [identity],
+          );
+          const [row] = rows;
+          if (rows.length !== 1 || row === undefined)
+            throw persistenceError(
+              'read-conversation-canvas-selection',
+              `Conversation '${identity}' is unavailable.`,
+            );
+          const value = row['canvas_id'];
+          if (value === null) return undefined;
+          if (typeof value !== 'string')
+            throw persistenceError(
+              'read-conversation-canvas-selection',
+              'Canvas selection must be a string.',
+            );
+          return value;
+        },
+      );
+    },
+
+    selectCanvas(conversationId: string, target: CanvasWorkspaceTurnTarget) {
+      const identity = requireIdentity(conversationId, 'Conversation');
+      return options.metadataStore.transaction(
+        { mode: 'state-write', ownership: 'state', operation: 'select-conversation-canvas' },
+        async ({ sql }) => {
+          const rows = await sql.all(
+            `SELECT authority.context_json FROM agent_dsh_conversation_catalog AS catalog
+             JOIN agent_conversation_authority AS authority ON authority.conversation_id = catalog.conversation_id
+             WHERE catalog.conversation_id = ?`,
+            [identity],
+          );
+          const [row] = rows;
+          if (rows.length !== 1 || row === undefined)
+            throw persistenceError(
+              'select-conversation-canvas',
+              `Conversation '${identity}' is unavailable.`,
+            );
+          const context = parseAgentConversationContext(
+            JSON.parse(requireString(row['context_json'], 'context_json')),
+          );
+          requireCanvasSelectionContext(context, target);
+          await sql.run(
+            `INSERT INTO agent_conversation_canvas_selection(conversation_id, canvas_id) VALUES (?, ?)
+             ON CONFLICT(conversation_id) DO UPDATE SET canvas_id = excluded.canvas_id`,
+            [identity, target.canvasId],
+          );
         },
       );
     },
@@ -154,6 +235,22 @@ export function createPersistentDshConversationCatalogStore(options: {
       );
     },
   });
+}
+
+function requireCanvasSelectionContext(
+  context: AgentConversationContext,
+  value: CanvasWorkspaceTurnTarget,
+): void {
+  const target = parseCanvasWorkspaceTurnTarget(value);
+  if (
+    (context.kind !== 'workspace' && context.kind !== 'authoring') ||
+    context.workspaceId !== target.workspaceId
+  ) {
+    throw persistenceError(
+      'select-conversation-canvas',
+      'Canvas selection must match the Conversation Workspace.',
+    );
+  }
 }
 
 function decodeCatalogRow(row: LocalMetadataSqlRow): DshConversationCatalogRecord {

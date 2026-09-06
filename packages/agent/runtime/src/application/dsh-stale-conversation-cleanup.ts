@@ -72,6 +72,9 @@ async function discardOwnedConversationRows(
   conversationId: string,
   operation: string,
 ): Promise<void> {
+  await sql.run(`DELETE FROM agent_conversation_canvas_selection WHERE conversation_id = ?`, [
+    conversationId,
+  ]);
   const catalog = await sql.run(
     `DELETE FROM agent_dsh_conversation_catalog WHERE conversation_id = ?`,
     [conversationId],

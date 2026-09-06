@@ -296,6 +296,24 @@ describe('DSH Session preload bridge', () => {
         modelOptionId: 'deepseek-official:deepseek-v4',
       }),
     );
+    await bridge.dshSessions.selectComposerCanvas(
+      'workbench-1',
+      'surface-1',
+      'conversation-1',
+      'neko/boards/story.nkc',
+    );
+    expect(state.invoke).toHaveBeenLastCalledWith(
+      DSH_SESSION_HOST_CHANNEL,
+      expect.objectContaining({
+        operation: 'composer-canvas',
+        windowId: 'window-1',
+        rendererSessionId: 'renderer-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+        conversationId: 'conversation-1',
+        canvasId: 'neko/boards/story.nkc',
+      }),
+    );
     await bridge.dshSessions.selectComposerMediaModel(
       'workbench-1',
       'surface-1',

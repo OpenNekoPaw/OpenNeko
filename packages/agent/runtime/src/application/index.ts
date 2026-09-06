@@ -8,6 +8,7 @@ export * from './conversation-dsh-session-client';
 export * from './conversation-dsh-session-application';
 export * from './conversation-dsh-session-publication';
 export * from './dsh-conversation-catalog-repository';
+export * from './dsh-conversation-canvas-selection';
 export * from './dsh-conversation-home-projection';
 export * from './dsh-stale-conversation-cleanup';
 export * from './dsh-domain-tool-context-resolver';

@@ -97,7 +97,7 @@ export function DesktopAgentSurface({
   const [operationError, setOperationError] = useState<string>();
   const [configuring, setConfiguring] = useState(false);
   const composerSnapshots = useDshComposerPresentationSnapshotStore();
-  const [createdCanvas, setCreatedCanvas] = useState<{
+  const [createdDraftCanvas, setCreatedDraftCanvas] = useState<{
     readonly scope: DshComposerCanvasSelectionScope;
     readonly canvasId: string;
   }>();
@@ -221,7 +221,9 @@ export function DesktopAgentSurface({
     requestPreparation();
     const unsubscribeSession = conversationId
       ? window.openNekoDesktop.dshSessions.subscribe((event) => {
-          if (event.conversationId === conversationId) requestRefresh();
+          if (event.conversationId !== conversationId) return;
+          if (event.composerChanged) void refreshComposerConfiguration();
+          else requestRefresh();
         })
       : () => undefined;
     const unsubscribePermissions = conversationId
@@ -341,6 +343,31 @@ export function DesktopAgentSurface({
     } finally {
       submissionCount.current = Math.max(0, submissionCount.current - 1);
       setSubmitting(submissionCount.current > 0);
+    }
+  };
+
+  const selectCanvas = async (canvasId: string): Promise<void> => {
+    if (effectiveConversationId === undefined)
+      throw new Error('Canvas selection requires a Conversation.');
+    const requestedSceneId = sceneId;
+    const sequence = ++composerRefreshSequence.current;
+    setConfiguring(true);
+    try {
+      const configuration = await window.openNekoDesktop.dshSessions.selectComposerCanvas(
+        workbenchInstanceId,
+        agentSurfaceId,
+        effectiveConversationId,
+        canvasId,
+      );
+      if (
+        requestedSceneId === activeSceneId.current &&
+        sequence === composerRefreshSequence.current
+      ) {
+        setComposerConfiguration(configuration);
+        setComposerConfigurationError(undefined);
+      }
+    } finally {
+      if (requestedSceneId === activeSceneId.current) setConfiguring(false);
     }
   };
 
@@ -506,16 +533,16 @@ export function DesktopAgentSurface({
   useEffect(() => {
     const catalog = composerConfiguration?.context?.canvas;
     if (
-      createdCanvas === undefined ||
-      catalog?.workspaceId !== createdCanvas.scope.workspaceId ||
+      createdDraftCanvas === undefined ||
+      catalog?.workspaceId !== createdDraftCanvas.scope.workspaceId ||
       !catalog.options.some(
-        (option) => option.target.canvasId === createdCanvas.canvasId && !option.disabled,
+        (option) => option.target.canvasId === createdDraftCanvas.canvasId && !option.disabled,
       )
     )
       return;
-    composerSnapshots.select(createdCanvas.scope, createdCanvas.canvasId);
-    setCreatedCanvas(undefined);
-  }, [composerConfiguration, composerSnapshots, createdCanvas]);
+    composerSnapshots.select(createdDraftCanvas.scope, createdDraftCanvas.canvasId);
+    setCreatedDraftCanvas(undefined);
+  }, [composerConfiguration, composerSnapshots, createdDraftCanvas]);
   const resolveImageAttachmentPreview = useCallback(
     async (attachmentId: string) => {
       if (effectiveConversationId === undefined) {
@@ -554,13 +581,14 @@ export function DesktopAgentSurface({
               const scope = {
                 agentSurfaceId,
                 workspaceId: composerWorkspaceId,
-                ...(effectiveConversationId === undefined
-                  ? {}
-                  : { conversationId: effectiveConversationId }),
               };
               const canvasId = await onCreateCanvas(name);
-              setCreatedCanvas({ scope, canvasId });
-              await refreshComposerConfiguration();
+              if (effectiveConversationId === undefined) {
+                setCreatedDraftCanvas({ scope, canvasId });
+                await refreshComposerConfiguration();
+              } else {
+                await selectCanvas(canvasId);
+              }
             }}
           />
         ) : undefined
@@ -603,6 +631,7 @@ export function DesktopAgentSurface({
       onMediaModelChange={(category, modelOptionId) =>
         void selectMediaModel(category, modelOptionId)
       }
+      onCanvasSelect={selectCanvas}
       onPermissionPresetChange={(permissionPresetId) =>
         void selectPermissionPreset(permissionPresetId)
       }

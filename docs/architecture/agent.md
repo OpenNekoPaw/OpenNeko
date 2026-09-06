@@ -62,6 +62,10 @@ DSH Session 保存 harness transcript、model context、turn/call lineage、Inbo
 OpenNeko catalog 只保存用户可管理的 Conversation metadata、Workspace/domain binding、DSH Session
 reference、权限/信任和领域 artifact/Job reference；不得复制完整 transcript 或把 projection 变成第二事实源。
 
+Composer 的画布选择由 Agent application 按精确 Conversation 持久保存，重开从同一记录恢复；
+创建分支时继承源会话当前选择，父子会话后续独立修改。草稿选择属于可恢复 presentation，首次提交时
+与 Conversation 一起保存。已提交消息的画布目标按精确 turn 冻结，不受后续选择、导航或分支操作影响。
+
 Session 不可解析、binding 丢失或 DSH 不可用时，只将对应 Conversation 标记为不可执行并显示明确
 diagnostic。不得创建空 Session、选择其他 reader、覆盖用户数据、停止 sibling Conversation，或让局部错误
 导致应用启动失败。

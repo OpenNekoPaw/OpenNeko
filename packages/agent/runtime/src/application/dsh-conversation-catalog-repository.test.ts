@@ -6,6 +6,11 @@ import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createConversationId } from '../session/conversation-id';
+import { createDshConversationCanvasSelection } from './dsh-conversation-canvas-selection';
+import {
+  createCanvasWorkspaceContextCatalog,
+  createDefaultCanvasWorkspaceTarget,
+} from '@neko/canvas-domain';
 import { initializeAgentConversationContextAuthorityTable } from './agent-conversation-context-authority';
 import {
   createPersistentDshConversationCatalogStore,
@@ -19,6 +24,97 @@ afterEach(async () => {
 });
 
 describe('persistent DSH Conversation catalog', () => {
+  it('projects a default for an unavailable selection and keeps disabled records and sibling Conversations visible', async () => {
+    const fixture = await createFixture();
+    const record = workspaceRecord('/workspace/selection', '2026-08-19T01:00:00.000Z');
+    const sibling = {
+      ...record,
+      conversationId: createConversationId('/workspace/selection-sibling'),
+    };
+    const target = { workspaceId: record.context.workspaceId, canvasId: 'neko/boards/story.nkc' };
+    await fixture.catalog.reserve(record, target);
+    await fixture.catalog.reserve(sibling, { ...target, canvasId: 'neko/boards/disabled.nkc' });
+    const service = createDshConversationCanvasSelection(fixture.catalog);
+    const canvas = createCanvasWorkspaceContextCatalog({
+      workspaceId: target.workspaceId,
+      options: [
+        { target: createDefaultCanvasWorkspaceTarget(target.workspaceId), label: 'workspace.nkc' },
+        {
+          target: { ...target, canvasId: 'neko/boards/disabled.nkc' },
+          label: 'disabled.nkc',
+          disabled: true,
+          diagnostic: 'Document unavailable',
+        },
+      ],
+    });
+    try {
+      await expect(service.project(record.conversationId, canvas)).resolves.toEqual({
+        canvasSelection: {
+          conversationId: record.conversationId,
+          canvasId: canvas.defaultTarget.canvasId,
+        },
+        canvasSelectionDiagnostic: expect.stringContaining('unavailable'),
+      });
+      await expect(fixture.catalog.readCanvasSelection(record.conversationId)).resolves.toBe(
+        target.canvasId,
+      );
+      await expect(service.project(sibling.conversationId, canvas)).resolves.toEqual({
+        canvasSelection: {
+          conversationId: sibling.conversationId,
+          canvasId: 'neko/boards/disabled.nkc',
+        },
+      });
+      await expect(
+        service.select(record.conversationId, canvas, 'neko/boards/disabled.nkc'),
+      ).rejects.toThrow('Document unavailable');
+      await expect(service.select(record.conversationId, canvas, '../outside.nkc')).rejects.toThrow(
+        'unavailable',
+      );
+      await expect(fixture.catalog.read()).resolves.toMatchObject({
+        records: expect.arrayContaining([record, sibling]),
+        diagnostics: [],
+      });
+    } finally {
+      await fixture.store.dispose();
+    }
+  });
+
+  it('persists the selected Canvas across a database reopen without changing sibling context', async () => {
+    const fixture = await createFixture();
+    const record = workspaceRecord('/workspace/canvas', '2026-08-19T01:00:00.000Z');
+    const sibling = { ...record, conversationId: createConversationId('/workspace/sibling') };
+    const target = { workspaceId: record.context.workspaceId, canvasId: 'neko/boards/story.nkc' };
+    await fixture.catalog.reserve(record, target);
+    await fixture.catalog.reserve(sibling);
+    await fixture.store.dispose();
+
+    const reopened = createNodeSqliteLocalMetadataStore({ homedir: fixture.root });
+    await reopened.open({ databasePath: fixture.databasePath, busyTimeoutMs: 1_000 });
+    try {
+      const catalog = createPersistentDshConversationCatalogStore({ metadataStore: reopened });
+      await expect(catalog.readCanvasSelection(record.conversationId)).resolves.toBe(
+        target.canvasId,
+      );
+      await expect(catalog.readCanvasSelection(sibling.conversationId)).resolves.toBeUndefined();
+      await expect(catalog.get(record.conversationId)).resolves.toEqual(record);
+      await expect(
+        catalog.selectCanvas(record.conversationId, {
+          ...target,
+          workspaceId: 'workspace:unrelated',
+        }),
+      ).rejects.toThrow(/Workspace/u);
+      await catalog.selectCanvas(sibling.conversationId, {
+        ...target,
+        canvasId: 'neko/boards/sibling.nkc',
+      });
+      await expect(catalog.readCanvasSelection(record.conversationId)).resolves.toBe(
+        target.canvasId,
+      );
+    } finally {
+      await reopened.dispose();
+    }
+  });
+
   it('atomically persists catalog metadata and exact domain context across reopen', async () => {
     const fixture = await createFixture();
     const record = workspaceRecord('/workspace/reopen', '2026-08-19T01:00:00.000Z');

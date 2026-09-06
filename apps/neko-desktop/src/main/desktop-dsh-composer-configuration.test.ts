@@ -5,6 +5,7 @@ import {
   createDefaultCanvasWorkspaceTarget,
   createCanvasWorkspaceContextCatalog,
   createCanvasWorkspaceTarget,
+  type CanvasWorkspaceContextCatalog,
 } from '@neko/canvas-domain';
 
 import { createDesktopDshComposerConfiguration } from './desktop-dsh-composer-configuration';
@@ -29,6 +30,7 @@ describe('Desktop DSH composer configuration', () => {
     const setPermissionPreset = vi.fn(async (_conversationId: string, permissionPresetId: string) =>
       permissionPresets(permissionPresetId),
     );
+    const selectionOwner = conversationCanvasSelection();
     const service = createDesktopDshComposerConfiguration({
       resolveSurface: vi.fn(async () => ({
         windowId: 'window-1',
@@ -47,6 +49,7 @@ describe('Desktop DSH composer configuration', () => {
         })),
       },
       canvas: canvasIndex(),
+      canvasSelection: selectionOwner,
       workspaceGrants: {
         restore: restoreWorkspace,
       },
@@ -235,6 +238,27 @@ describe('Desktop DSH composer configuration', () => {
         modelOptionId: 'nekoapi-media:gpt-image-2',
       }),
     ).rejects.toThrow(/Composer video model/u);
+    const selectionRequest = {
+      windowId: 'window-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'surface-1',
+      conversationId: 'conversation-1',
+      canvasId: 'neko/boards/story.nkc',
+    };
+    await expect(
+      service.selectCanvas({ ...selectionRequest, conversationId: 'conversation-other' }),
+    ).rejects.toThrow(/authorized Conversation/u);
+    expect(selectionOwner.select).not.toHaveBeenCalled();
+    await expect(service.selectCanvas(selectionRequest)).resolves.toMatchObject({
+      context: {
+        canvasSelection: { conversationId: 'conversation-1', canvasId: 'neko/boards/story.nkc' },
+      },
+    });
+    expect(selectionOwner.select).toHaveBeenCalledWith(
+      'conversation-1',
+      expect.objectContaining({ workspaceId: 'workspace-1' }),
+      'neko/boards/story.nkc',
+    );
   });
 
   it('reads the DSH pre-turn catalog for a Draft without requiring a Conversation', async () => {
@@ -261,6 +285,7 @@ describe('Desktop DSH composer configuration', () => {
       })),
       contexts: { readContext: vi.fn(async () => undefined) },
       canvas: canvasIndex(),
+      canvasSelection: conversationCanvasSelection(),
       workspaceGrants: {
         restore: vi.fn(async () => {
           throw new Error('Workspace resolution must not run.');
@@ -335,6 +360,7 @@ describe('Desktop DSH composer configuration', () => {
       resolveSurface: vi.fn(async () => ({ windowId: 'window-1', binding })),
       contexts: { readContext: vi.fn(async () => undefined) },
       canvas: canvasIndex(),
+      canvasSelection: conversationCanvasSelection(),
       workspaceGrants: {
         restore: vi.fn(async () => ({
           workspace: {
@@ -395,6 +421,7 @@ describe('Desktop DSH composer configuration', () => {
       })),
       contexts: { readContext: vi.fn(async () => undefined) },
       canvas: canvasIndex(),
+      canvasSelection: conversationCanvasSelection(),
       workspaceGrants: {
         restore: vi.fn(async () => {
           throw new Error('Workspace resolution must not run.');
@@ -440,6 +467,7 @@ describe('Desktop DSH composer configuration', () => {
       })),
       contexts: { readContext: vi.fn(async () => undefined) },
       canvas: canvasIndex(),
+      canvasSelection: conversationCanvasSelection(),
       workspaceGrants: {
         restore: vi.fn(async () => {
           throw new Error('Workspace resolution must not run.');
@@ -569,6 +597,7 @@ describe('Desktop DSH composer configuration', () => {
       })),
       contexts: { readContext: vi.fn(async () => undefined) },
       canvas: canvasIndex(),
+      canvasSelection: conversationCanvasSelection(),
       workspaceGrants: {
         restore: vi.fn(async () => ({
           workspace: {
@@ -694,6 +723,7 @@ describe('Desktop DSH composer configuration', () => {
       })),
       contexts: { readContext: vi.fn(async () => undefined) },
       canvas: canvasIndex(),
+      canvasSelection: conversationCanvasSelection(),
       workspaceGrants: {
         restore: vi.fn(async () => {
           throw new Error('Workspace resolution must not run.');
@@ -761,6 +791,7 @@ describe('Desktop DSH composer configuration', () => {
         })),
       },
       canvas: canvasIndex(),
+      canvasSelection: conversationCanvasSelection(),
       workspaceGrants: {
         restore: vi.fn(async () => {
           throw new Error('Workspace resolution must not run.');
@@ -1028,5 +1059,14 @@ function createState(): AssistantConfigState {
       image: 'nekoapi-media:gpt-image-2',
       video: 'minimax-media:minimax-h3',
     },
+  };
+}
+
+function conversationCanvasSelection() {
+  return {
+    project: vi.fn(async (conversationId: string, canvas: CanvasWorkspaceContextCatalog) => ({
+      canvasSelection: { conversationId, canvasId: canvas.defaultTarget.canvasId },
+    })),
+    select: vi.fn(async () => undefined),
   };
 }

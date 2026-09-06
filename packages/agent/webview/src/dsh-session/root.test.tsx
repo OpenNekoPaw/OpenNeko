@@ -8,10 +8,7 @@ import { I18nProvider } from '@neko/ui/i18n/react';
 import type { DshComposerMaterializedAssetProjection } from '@neko/agent-contracts/dsh-session-host';
 
 import { DshAgentView } from './root';
-import {
-  createDshComposerSessionPresentationSnapshotStore,
-  DshComposerPresentationSnapshotProvider,
-} from './presentation-snapshot';
+import { DshComposerPresentationSnapshotProvider } from './presentation-snapshot';
 
 const defaultCanvasTarget = {
   workspaceId: 'workspace-1',
@@ -430,6 +427,7 @@ describe('DshAgentView content-creation composer', () => {
   it('renders canonical DSH command lifecycle as one retained activity', () => {
     const view = renderAgent(
       <DshAgentView
+        onCanvasSelect={vi.fn(async () => undefined)}
         agentSurfaceId="surface-command"
         surfaceKind="assistant"
         conversationId="conversation-1"
@@ -487,6 +485,7 @@ describe('DshAgentView content-creation composer', () => {
     };
     const view = renderAgent(
       <DshAgentView
+        onCanvasSelect={vi.fn(async () => undefined)}
         agentSurfaceId="surface-tool"
         surfaceKind="assistant"
         conversationId="conversation-1"
@@ -540,6 +539,7 @@ describe('DshAgentView content-creation composer', () => {
   it('renders a failed DSH Tool event as a visible error state', () => {
     const view = renderAgent(
       <DshAgentView
+        onCanvasSelect={vi.fn(async () => undefined)}
         agentSurfaceId="surface-tool-failure"
         surfaceKind="assistant"
         conversationId="conversation-1"
@@ -884,6 +884,7 @@ describe('DshAgentView content-creation composer', () => {
     const onSubmit = vi.fn();
     const view = renderAgent(
       <DshAgentView
+        onCanvasSelect={vi.fn(async () => undefined)}
         agentSurfaceId="surface-1"
         surfaceKind="workspace"
         composerConfiguration={{
@@ -919,6 +920,7 @@ describe('DshAgentView content-creation composer', () => {
             kind: 'workspace',
             workspaceId: 'workspace-1',
             workspaceLabel: '短片项目',
+            canvasSelection: null,
             canvas: {
               workspaceId: 'workspace-1',
               defaultTarget: defaultCanvasTarget,
@@ -1029,153 +1031,71 @@ describe('DshAgentView content-creation composer', () => {
     expect(onPermissionPresetChange).toHaveBeenCalledWith('danger-full-access');
   });
 
-  it('restores the exact Conversation Canvas after the Agent scene unmounts', async () => {
-    const onSubmit = vi.fn(
-      async (
-        _target: Parameters<React.ComponentProps<typeof DshAgentView>['onSubmit']>[0],
-        _input: Parameters<React.ComponentProps<typeof DshAgentView>['onSubmit']>[1],
-      ) => true,
-    );
-    const scene = (visible: boolean, conversationId = 'conversation-1') => (
-      <DshComposerPresentationSnapshotProvider>
+  it('renders the Host-owned Conversation selection after the entire page is recreated', async () => {
+    const onSubmit = vi.fn(async () => true);
+    const page = (key: number) => (
+      <DshComposerPresentationSnapshotProvider key={key}>
         <I18nProvider service={new I18nService('zh-cn')}>
-          {visible ? (
-            <WorkspaceCanvasSelectionHarness conversationId={conversationId} onSubmit={onSubmit} />
-          ) : null}
-        </I18nProvider>
-      </DshComposerPresentationSnapshotProvider>
-    );
-    const view = render(scene(true));
-    fireEvent.change(screen.getByRole('combobox', { name: '画布索引' }), {
-      target: { value: 'neko/boards/story.nkc' },
-    });
-
-    view.rerender(scene(false));
-    view.rerender(scene(true));
-
-    expect((screen.getByRole('combobox', { name: '画布索引' }) as HTMLSelectElement).value).toBe(
-      'neko/boards/story.nkc',
-    );
-    fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
-    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-    expect(onSubmit.mock.calls[0]?.[1]).toMatchObject({
-      canvasTurnTarget: {
-        workspaceId: 'workspace-1',
-        canvasId: 'neko/boards/story.nkc',
-      },
-    });
-  });
-
-  it('restores the exact Conversation Canvas after the Renderer page owner is recreated', async () => {
-    let serialized: string | null = null;
-    const storage = {
-      getItem: () => serialized,
-      setItem: (_key: string, value: string) => {
-        serialized = value;
-      },
-    };
-    const onSubmit = vi.fn(
-      async (
-        _target: Parameters<React.ComponentProps<typeof DshAgentView>['onSubmit']>[0],
-        _input: Parameters<React.ComponentProps<typeof DshAgentView>['onSubmit']>[1],
-      ) => true,
-    );
-    const page = (pageKey: number) => (
-      <DshComposerPresentationSnapshotProvider
-        key={pageKey}
-        store={createDshComposerSessionPresentationSnapshotStore(storage)}
-      >
-        <I18nProvider service={new I18nService('zh-cn')}>
-          <WorkspaceCanvasSelectionHarness conversationId="conversation-1" onSubmit={onSubmit} />
+          <WorkspaceCanvasSelectionHarness
+            conversationId="conversation-1"
+            selectedCanvasId="neko/boards/story.nkc"
+            onSubmit={onSubmit}
+          />
         </I18nProvider>
       </DshComposerPresentationSnapshotProvider>
     );
     const view = render(page(1));
-    fireEvent.change(screen.getByRole('combobox', { name: '画布索引' }), {
-      target: { value: 'neko/boards/story.nkc' },
-    });
-
     view.rerender(page(2));
-
-    expect((screen.getByRole('combobox', { name: '画布索引' }) as HTMLSelectElement).value).toBe(
+    expect(screen.getByRole<HTMLSelectElement>('combobox', { name: '画布索引' }).value).toBe(
       'neko/boards/story.nkc',
     );
     fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
-    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-    expect(onSubmit.mock.calls[0]?.[1]).toMatchObject({
-      canvasTurnTarget: {
-        workspaceId: 'workspace-1',
-        canvasId: 'neko/boards/story.nkc',
-      },
-    });
-  });
-
-  it('resets a stale local Canvas selection to the catalog default', async () => {
-    const scopeKey = JSON.stringify(['conversation', 'conversation-1', 'workspace-1']);
-    let serialized: string | null = JSON.stringify({ [scopeKey]: 'removed-canvas-target' });
-    const storage = {
-      getItem: () => serialized,
-      setItem: (_key: string, value: string) => {
-        serialized = value;
-      },
-    };
-
-    render(
-      <DshComposerPresentationSnapshotProvider
-        store={createDshComposerSessionPresentationSnapshotStore(storage)}
-      >
-        <I18nProvider service={new I18nService('zh-cn')}>
-          <WorkspaceCanvasSelectionHarness
-            conversationId="conversation-1"
-            onSubmit={vi.fn(async () => true)}
-          />
-        </I18nProvider>
-      </DshComposerPresentationSnapshotProvider>,
-    );
-
-    expect((screen.getByRole('combobox', { name: '画布索引' }) as HTMLSelectElement).value).toBe(
-      'neko/boards/workspace.nkc',
-    );
-    await waitFor(() => {
-      expect(JSON.parse(serialized ?? '{}')).toEqual({
-        [scopeKey]: 'neko/boards/workspace.nkc',
-      });
-    });
-  });
-
-  it('isolates sibling Conversation selections and transfers the first-turn draft selection', async () => {
-    const onSubmit = vi.fn(
-      async (
-        _target: Parameters<React.ComponentProps<typeof DshAgentView>['onSubmit']>[0],
-        _input: Parameters<React.ComponentProps<typeof DshAgentView>['onSubmit']>[1],
-      ) => true,
-    );
-    const scene = (conversationId?: string) => (
-      <DshComposerPresentationSnapshotProvider>
-        <I18nProvider service={new I18nService('zh-cn')}>
-          <WorkspaceCanvasSelectionHarness conversationId={conversationId} onSubmit={onSubmit} />
-        </I18nProvider>
-      </DshComposerPresentationSnapshotProvider>
-    );
-    const view = render(scene());
-    fireEvent.change(screen.getByRole('combobox', { name: '画布索引' }), {
-      target: { value: 'neko/boards/story.nkc' },
-    });
-
-    view.rerender(scene('conversation-new'));
     await waitFor(() =>
-      expect((screen.getByRole('combobox', { name: '画布索引' }) as HTMLSelectElement).value).toBe(
-        'neko/boards/story.nkc',
+      expect(onSubmit).toHaveBeenCalledWith(
+        { kind: 'surface' },
+        expect.objectContaining({
+          canvasTurnTarget: { workspaceId: 'workspace-1', canvasId: 'neko/boards/story.nkc' },
+        }),
       ),
     );
-    view.rerender(scene('conversation-sibling'));
-    expect((screen.getByRole('combobox', { name: '画布索引' }) as HTMLSelectElement).value).toBe(
-      'neko/boards/workspace.nkc',
+  });
+
+  it('keeps the committed selection until the Host acknowledges a new Canvas', async () => {
+    const onSelect = vi.fn(async () => {
+      throw new Error('Selection write failed');
+    });
+    renderAgent(
+      <WorkspaceCanvasSelectionHarness
+        conversationId="conversation-1"
+        selectedCanvasId="neko/boards/story.nkc"
+        onCanvasSelect={onSelect}
+        onSubmit={vi.fn(async () => true)}
+      />,
     );
-    view.rerender(scene('conversation-new'));
-    expect((screen.getByRole('combobox', { name: '画布索引' }) as HTMLSelectElement).value).toBe(
+    fireEvent.change(screen.getByRole('combobox', { name: '画布索引' }), {
+      target: { value: defaultCanvasTarget.canvasId },
+    });
+    await waitFor(() => expect(onSelect).toHaveBeenCalledWith(defaultCanvasTarget.canvasId));
+    expect(await screen.findByText('Selection write failed')).toBeTruthy();
+    expect(screen.getByRole<HTMLSelectElement>('combobox', { name: '画布索引' }).value).toBe(
       'neko/boards/story.nkc',
     );
+  });
+
+  it('blocks submission while another Conversation projection is still displayed', () => {
+    const onSubmit = vi.fn(async () => true);
+    renderAgent(
+      <WorkspaceCanvasSelectionHarness
+        conversationId="conversation-fork"
+        selectionConversationId="conversation-parent"
+        selectedCanvasId="neko/boards/story.nkc"
+        onSubmit={onSubmit}
+      />,
+    );
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: '画布不可用' }).disabled).toBe(
+      true,
+    );
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it('submits a pasted image through the canonical DSH image input', async () => {
@@ -1355,6 +1275,7 @@ describe('DshAgentView content-creation composer', () => {
   it('restores the assistant entry presentation without claiming unsupported bindings', () => {
     const view = renderAgent(
       <DshAgentView
+        onCanvasSelect={vi.fn(async () => undefined)}
         agentSurfaceId="surface-assistant"
         surfaceKind="assistant"
         configuring={false}
@@ -1382,6 +1303,7 @@ describe('DshAgentView content-creation composer', () => {
   it('owns its English presentation copy when the Desktop bundle has no chat keys', () => {
     const view = renderAgent(
       <DshAgentView
+        onCanvasSelect={vi.fn(async () => undefined)}
         agentSurfaceId="surface-en"
         surfaceKind="assistant"
         composerConfiguration={{
@@ -1436,6 +1358,7 @@ describe('DshAgentView content-creation composer', () => {
     const onSubmit = vi.fn();
     const view = renderAgent(
       <DshAgentView
+        onCanvasSelect={vi.fn(async () => undefined)}
         agentSurfaceId="surface-entry"
         surfaceKind="entry"
         composerConfiguration={{
@@ -1608,6 +1531,7 @@ describe('DshAgentView content-creation composer', () => {
     const onSubmit = vi.fn();
     const view = renderAgent(
       <DshAgentView
+        onCanvasSelect={vi.fn(async () => undefined)}
         agentSurfaceId="surface-entry-context"
         surfaceKind="entry"
         entryContext={{
@@ -1670,6 +1594,7 @@ describe('DshAgentView content-creation composer', () => {
     const onConsumed = vi.fn();
     renderAgent(
       <DshAgentView
+        onCanvasSelect={vi.fn(async () => undefined)}
         agentSurfaceId="surface-character-handoff"
         surfaceKind="entry"
         composerConfiguration={{
@@ -1794,6 +1719,7 @@ describe('DshAgentView content-creation composer', () => {
     });
     renderAgent(
       <DshAgentView
+        onCanvasSelect={vi.fn(async () => undefined)}
         agentSurfaceId="surface-character-creation"
         surfaceKind="entry"
         initialCharacterCreationHandoff={{
@@ -1892,6 +1818,7 @@ describe('DshAgentView content-creation composer', () => {
     const onDraftChange = vi.fn();
     renderAgent(
       <DshAgentView
+        onCanvasSelect={vi.fn(async () => undefined)}
         agentSurfaceId="surface-blank-character"
         surfaceKind="entry"
         initialCharacterCreationHandoff={{
@@ -1955,6 +1882,7 @@ describe('DshAgentView content-creation composer', () => {
     }));
     renderAgent(
       <DshAgentView
+        onCanvasSelect={vi.fn(async () => undefined)}
         agentSurfaceId="surface-world-creation"
         surfaceKind="entry"
         initialWorldCreationHandoff={{
@@ -2049,6 +1977,7 @@ describe('DshAgentView content-creation composer', () => {
     const onDraftChange = vi.fn();
     renderAgent(
       <DshAgentView
+        onCanvasSelect={vi.fn(async () => undefined)}
         agentSurfaceId="surface-blank-world"
         surfaceKind="entry"
         initialWorldCreationHandoff={{
@@ -2098,6 +2027,7 @@ describe('DshAgentView content-creation composer', () => {
       const onSubmit = vi.fn(async () => true);
       renderAgent(
         <DshAgentView
+          onCanvasSelect={vi.fn(async () => undefined)}
           agentSurfaceId={`surface-project-template-${template}`}
           surfaceKind="entry"
           initialProjectTemplateHandoff={{
@@ -2173,6 +2103,7 @@ describe('DshAgentView content-creation composer', () => {
   it('keeps Project Creation while omitting experimental creative context in Release', () => {
     const view = renderAgent(
       <DshAgentView
+        onCanvasSelect={vi.fn(async () => undefined)}
         agentSurfaceId="surface-release-entry"
         surfaceKind="entry"
         entryContext={{
@@ -2208,6 +2139,7 @@ describe('DshAgentView content-creation composer', () => {
     vi.setSystemTime(10_000);
     const view = renderAgent(
       <DshAgentView
+        onCanvasSelect={vi.fn(async () => undefined)}
         agentSurfaceId="surface-active"
         surfaceKind="assistant"
         conversationId="conversation-1"
@@ -2248,6 +2180,7 @@ describe('DshAgentView content-creation composer', () => {
     rerenderAgent(
       view,
       <DshAgentView
+        onCanvasSelect={vi.fn(async () => undefined)}
         agentSurfaceId="surface-active"
         surfaceKind="assistant"
         conversationId="conversation-1"
@@ -2294,6 +2227,7 @@ describe('DshAgentView content-creation composer', () => {
   it('shows canonical DSH turn duration in the existing status row', () => {
     renderAgent(
       <DshAgentView
+        onCanvasSelect={vi.fn(async () => undefined)}
         agentSurfaceId="surface-duration"
         surfaceKind="assistant"
         conversationId="conversation-1"
@@ -2338,6 +2272,7 @@ describe('DshAgentView content-creation composer', () => {
   it('renders DSH streaming text and reasoning through the retained transcript components', () => {
     const view = renderAgent(
       <DshAgentView
+        onCanvasSelect={vi.fn(async () => undefined)}
         agentSurfaceId="surface-stream"
         surfaceKind="assistant"
         conversationId="conversation-1"
@@ -2394,6 +2329,7 @@ describe('DshAgentView content-creation composer', () => {
     rerenderAgent(
       view,
       <DshAgentView
+        onCanvasSelect={vi.fn(async () => undefined)}
         agentSurfaceId="surface-stream"
         surfaceKind="assistant"
         conversationId="conversation-1"
@@ -2459,6 +2395,7 @@ describe('DshAgentView content-creation composer', () => {
     const onOpenWrittenFile = vi.fn();
     const view = renderAgent(
       <DshAgentView
+        onCanvasSelect={vi.fn(async () => undefined)}
         agentSurfaceId="surface-artifact"
         surfaceKind="workspace"
         conversationId="conversation-1"
@@ -2542,6 +2479,7 @@ describe('DshAgentView content-creation composer', () => {
   it('renders mixed and resource-only user messages as ordered reference tokens', () => {
     const view = renderAgent(
       <DshAgentView
+        onCanvasSelect={vi.fn(async () => undefined)}
         agentSurfaceId="surface-resource"
         surfaceKind="workspace"
         conversationId="conversation-1"
@@ -2820,6 +2758,7 @@ function renderImageMessage(
 ) {
   return renderAgent(
     <DshAgentView
+      onCanvasSelect={vi.fn(async () => undefined)}
       agentSurfaceId="surface-image"
       surfaceKind="workspace"
       conversationId="conversation-image"
@@ -2877,6 +2816,7 @@ function renderToolImage(
 ) {
   return renderAgent(
     <DshAgentView
+      onCanvasSelect={vi.fn(async () => undefined)}
       agentSurfaceId="surface-tool-image"
       surfaceKind="workspace"
       conversationId="conversation-tool-image"
@@ -2975,6 +2915,7 @@ function DshComposerHarness({
   const [draft, setDraft] = useState('');
   return (
     <DshAgentView
+      onCanvasSelect={vi.fn(async () => undefined)}
       agentSurfaceId="surface-input-catalog"
       surfaceKind="workspace"
       conversationId={conversationId}
@@ -3011,6 +2952,10 @@ function DshComposerHarness({
           kind: 'workspace',
           workspaceId: 'workspace-1',
           workspaceLabel: 'Workspace One',
+          canvasSelection:
+            conversationId === undefined
+              ? null
+              : { conversationId, canvasId: defaultCanvasTarget.canvasId },
           canvas: {
             workspaceId: 'workspace-1',
             defaultTarget: defaultCanvasTarget,
@@ -3069,14 +3014,21 @@ function DshComposerHarness({
 
 function WorkspaceCanvasSelectionHarness({
   conversationId,
+  selectionConversationId = conversationId,
+  selectedCanvasId = defaultCanvasTarget.canvasId,
+  onCanvasSelect = vi.fn(async () => undefined),
   onSubmit,
 }: {
   readonly conversationId?: string;
+  readonly selectionConversationId?: string;
+  readonly selectedCanvasId?: string;
+  readonly onCanvasSelect?: (canvasId: string) => Promise<void>;
   readonly onSubmit: React.ComponentProps<typeof DshAgentView>['onSubmit'];
 }): JSX.Element {
   const [draft, setDraft] = useState('分析画布');
   return (
     <DshAgentView
+      onCanvasSelect={onCanvasSelect}
       agentSurfaceId="surface-workspace-selection"
       surfaceKind="workspace"
       conversationId={conversationId}
@@ -3100,6 +3052,10 @@ function WorkspaceCanvasSelectionHarness({
           kind: 'workspace',
           workspaceId: 'workspace-1',
           workspaceLabel: 'Workspace One',
+          canvasSelection:
+            selectionConversationId === undefined
+              ? null
+              : { conversationId: selectionConversationId, canvasId: selectedCanvasId },
           canvas: {
             workspaceId: 'workspace-1',
             defaultTarget: defaultCanvasTarget,

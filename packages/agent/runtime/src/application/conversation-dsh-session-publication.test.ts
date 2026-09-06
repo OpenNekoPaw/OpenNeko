@@ -117,13 +117,31 @@ describe('Conversation DSH Session publication', () => {
       workspaceId: 'workspace:one',
       workspaceGrantId: 'grant:one',
     };
-    const source = await application.publication.publish({ title: 'Source', context });
+    const source = await application.publication.publish({
+      title: 'Source',
+      context,
+      canvasSelection: { workspaceId: context.workspaceId, canvasId: 'neko/boards/initial.nkc' },
+    });
 
+    await catalog.selectCanvas(source.conversationId, {
+      workspaceId: context.workspaceId,
+      canvasId: 'neko/boards/story.nkc',
+    });
     const branch = await application.branchConversation({
       sourceConversationId: source.conversationId,
       messageId: 'assistant-1',
     });
 
+    await expect(catalog.readCanvasSelection(branch.conversationId)).resolves.toBe(
+      'neko/boards/story.nkc',
+    );
+    await catalog.selectCanvas(source.conversationId, {
+      workspaceId: context.workspaceId,
+      canvasId: 'neko/boards/parent.nkc',
+    });
+    await expect(catalog.readCanvasSelection(branch.conversationId)).resolves.toBe(
+      'neko/boards/story.nkc',
+    );
     expect(branch.conversationId).not.toBe(source.conversationId);
     expect(branch.dshSessionId).toBe('dsh-session-branch');
     expect(client.branchSession).toHaveBeenCalledWith({
@@ -457,9 +475,17 @@ function memoryCatalog(order: string[]): DshConversationCatalogStore & {
   readonly records: DshConversationCatalogRecord[];
 } {
   const records: DshConversationCatalogRecord[] = [];
+  const canvasSelections = new Map<string, string>();
   return {
     records,
-    async reserve(record) {
+    async readCanvasSelection(conversationId) {
+      return canvasSelections.get(conversationId);
+    },
+    async selectCanvas(conversationId, target) {
+      canvasSelections.set(conversationId, target.canvasId);
+    },
+    async reserve(record, canvasSelection) {
+      if (canvasSelection) canvasSelections.set(record.conversationId, canvasSelection.canvasId);
       order.push('catalog-reserve');
       records.push(record);
     },

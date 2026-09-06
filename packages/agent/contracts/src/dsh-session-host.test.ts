@@ -438,6 +438,22 @@ describe('DSH Session Host contract', () => {
     ).toThrow(/invalid/u);
   });
 
+  it('decodes an exact Conversation Canvas mutation and rejects malformed requests locally', () => {
+    const request = {
+      operation: 'composer-canvas',
+      requestId: 'canvas-select',
+      windowId: 'window-1',
+      rendererSessionId: 'renderer-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'surface-1',
+      conversationId: 'conversation-1',
+      canvasId: 'neko/boards/story.nkc',
+    };
+    expect(() => parseDshSessionHostRequest({ ...request, conversationId: '' })).toThrow();
+    expect(() => parseDshSessionHostRequest({ ...request, unregisteredField: true })).toThrow();
+    expect(parseDshSessionHostRequest(request)).toEqual(request);
+  });
+
   it('strictly decodes the Canvas-owned composer catalog', () => {
     expect(
       parseDshComposerConfigurationProjection({
@@ -447,6 +463,7 @@ describe('DSH Session Host contract', () => {
         permissionPresets: [{ id: 'workspace-write', label: 'Workspace Write', selectable: true }],
         context: {
           kind: 'workspace',
+          canvasSelection: null,
           workspaceId: 'workspace-1',
           workspaceLabel: 'Workspace One',
           canvas: {
@@ -497,6 +514,7 @@ describe('DSH Session Host contract', () => {
         permissionPresets: [{ id: 'workspace-write', label: 'Workspace Write', selectable: true }],
         context: {
           kind: 'workspace',
+          canvasSelection: null,
           workspaceId: 'workspace-1',
           workspaceLabel: 'Workspace One',
           canvas: {

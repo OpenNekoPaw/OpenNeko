@@ -96,6 +96,13 @@ export class DesktopDshSessionHost {
         ): Promise<string>;
       };
       readonly composer: {
+        selectCanvas(input: {
+          readonly windowId: string;
+          readonly workbenchInstanceId: string;
+          readonly agentSurfaceId: string;
+          readonly conversationId: string;
+          readonly canvasId: string;
+        }): Promise<DshComposerConfigurationHostResult['configuration']>;
         project(input: {
           readonly windowId: string;
           readonly workbenchInstanceId: string;
@@ -216,6 +223,7 @@ export class DesktopDshSessionHost {
     }
     if (
       request.operation === 'composer-snapshot' ||
+      request.operation === 'composer-canvas' ||
       request.operation === 'composer-mentions' ||
       request.operation === 'composer-materialize-asset' ||
       request.operation === 'composer-model' ||
@@ -227,6 +235,18 @@ export class DesktopDshSessionHost {
         workbenchInstanceId: request.workbenchInstanceId,
         agentSurfaceId: request.agentSurfaceId,
       };
+      if (request.operation === 'composer-canvas') {
+        const configuration = await this.options.composer.selectCanvas({
+          ...scope,
+          conversationId: request.conversationId,
+          canvasId: request.canvasId,
+        });
+        this.options.publishChanged({
+          conversationId: request.conversationId,
+          composerChanged: true,
+        });
+        return { requestId: request.requestId, configuration };
+      }
       if (request.operation === 'composer-mentions') {
         return {
           requestId: request.requestId,

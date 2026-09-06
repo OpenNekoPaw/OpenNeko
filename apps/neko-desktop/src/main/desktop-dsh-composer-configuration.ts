@@ -23,6 +23,7 @@ import type {
   AgentConversationContextAuthorityPort,
   ConversationDshSessionBoundClient,
   DshSessionLookupCwdPort,
+  createDshConversationCanvasSelection,
 } from '@neko/agent-runtime/application';
 import type { ConfigManager } from '@neko/host/settings';
 import { resolveGenerationModelParameterProfile } from '@neko/generation-domain';
@@ -60,6 +61,7 @@ export function createDesktopDshComposerConfiguration(options: {
   resolveSurface(input: ComposerSurfaceIdentity): Promise<ComposerSurfaceScope>;
   readonly contexts: Pick<AgentConversationContextAuthorityPort, 'readContext'>;
   readonly canvas: Pick<CanvasWorkspaceIndexService, 'readCatalog'>;
+  readonly canvasSelection: ReturnType<typeof createDshConversationCanvasSelection>;
   readonly workspaceGrants: {
     restore(
       windowId: string,
@@ -121,6 +123,7 @@ export function createDesktopDshComposerConfiguration(options: {
   const resolveConfiguration = async (
     binding: AgentConversationContext,
     windowId: string,
+    conversationId?: string,
   ): Promise<{
     readonly config: ComposerConfigManager;
     readonly context?: DshComposerContextProjection;
@@ -144,6 +147,9 @@ export function createDesktopDshComposerConfiguration(options: {
         workspaceId: resolution.workspace.workspaceId,
         workspaceLabel: resolution.workspace.displayName,
         canvas,
+        ...(conversationId === undefined
+          ? { canvasSelection: null }
+          : await options.canvasSelection.project(conversationId, canvas)),
       },
     };
   };
@@ -185,9 +191,47 @@ export function createDesktopDshComposerConfiguration(options: {
   };
 
   return Object.freeze({
+    async selectCanvas(
+      input: ComposerSurfaceIdentity & {
+        readonly conversationId: string;
+        readonly canvasId: string;
+      },
+    ): Promise<DshComposerConfigurationProjection> {
+      const scope = await options.resolveSurface(input);
+      if (scope.conversationId !== input.conversationId) {
+        throw new Error('Canvas selection does not match the authorized Conversation Surface.');
+      }
+      const resolved = await resolveConfiguration(
+        scope.binding,
+        scope.windowId,
+        scope.conversationId,
+      );
+      if (resolved.context === undefined)
+        throw new Error('Canvas selection requires a Workspace Conversation.');
+      await options.canvasSelection.select(
+        input.conversationId,
+        resolved.context.canvas,
+        input.canvasId,
+      );
+      return projectConfiguration(
+        resolved.config,
+        options.executionCatalog,
+        await readPermissionProjection(scope.conversationId),
+        {
+          ...resolved.context,
+          canvasSelection: { conversationId: input.conversationId, canvasId: input.canvasId },
+          canvasSelectionDiagnostic: undefined,
+        },
+        await readInputCatalog(scope.conversationId, scope.binding),
+      );
+    },
     async project(input: ComposerSurfaceIdentity): Promise<DshComposerConfigurationProjection> {
       const scope = await options.resolveSurface(input);
-      const resolved = await resolveConfiguration(scope.binding, scope.windowId);
+      const resolved = await resolveConfiguration(
+        scope.binding,
+        scope.windowId,
+        scope.conversationId,
+      );
       return projectConfiguration(
         resolved.config,
         options.executionCatalog,
@@ -291,7 +335,11 @@ export function createDesktopDshComposerConfiguration(options: {
       input: ComposerSurfaceIdentity & { readonly modelOptionId: string },
     ): Promise<DshComposerConfigurationProjection> {
       const scope = await options.resolveSurface(input);
-      const resolved = await resolveConfiguration(scope.binding, scope.windowId);
+      const resolved = await resolveConfiguration(
+        scope.binding,
+        scope.windowId,
+        scope.conversationId,
+      );
       const config = resolved.config;
       const state = config.getAssistantConfigState();
       const matches = state.chatModelOptions.filter((model) => model.id === input.modelOptionId);
@@ -325,7 +373,11 @@ export function createDesktopDshComposerConfiguration(options: {
       input: ComposerSurfaceIdentity & { readonly permissionPresetId: string },
     ): Promise<DshComposerConfigurationProjection> {
       const scope = await options.resolveSurface(input);
-      const resolved = await resolveConfiguration(scope.binding, scope.windowId);
+      const resolved = await resolveConfiguration(
+        scope.binding,
+        scope.windowId,
+        scope.conversationId,
+      );
       const current = await options.permissions.read(scope.conversationId);
       if (!current.options.some((option) => option.value === input.permissionPresetId)) {
         throw new Error(
@@ -352,7 +404,11 @@ export function createDesktopDshComposerConfiguration(options: {
       },
     ): Promise<DshComposerConfigurationProjection> {
       const scope = await options.resolveSurface(input);
-      const resolved = await resolveConfiguration(scope.binding, scope.windowId);
+      const resolved = await resolveConfiguration(
+        scope.binding,
+        scope.windowId,
+        scope.conversationId,
+      );
       const config = resolved.config;
       const state = config.getAssistantConfigState();
       const matches = state.chatModelOptions.filter(
@@ -387,7 +443,7 @@ export function createDesktopDshComposerConfiguration(options: {
       if (binding === undefined) {
         throw new Error(`Conversation '${conversationId}' has no authoritative domain context.`);
       }
-      const resolved = await resolveConfiguration(binding, windowId);
+      const resolved = await resolveConfiguration(binding, windowId, conversationId);
       return apply(conversationId, resolved.config);
     },
 
@@ -403,7 +459,7 @@ export function createDesktopDshComposerConfiguration(options: {
       if (binding === undefined) {
         throw new Error(`Conversation '${conversationId}' has no authoritative domain context.`);
       }
-      const resolved = await resolveConfiguration(binding, windowId);
+      const resolved = await resolveConfiguration(binding, windowId, conversationId);
       const effective = requireEffectiveConfiguration(resolved.config, options.executionCatalog);
       const permissions = await readPermissionProjection(conversationId);
       if (!permissions.options.some((option) => option.value === permissions.currentValue)) {

@@ -57,6 +57,7 @@ import {
   createDshDomainConversationService,
   createDshConversationTurnContextResolver,
   createDshTurnCanvasTargetOwner,
+  createDshConversationCanvasSelection,
   createDshCanvasArtifactDeliveryService,
   projectDshConversationTitle,
   type DshDomainConversationService,
@@ -2459,6 +2460,7 @@ async function startDesktop(): Promise<void> {
     },
     contexts: agentConversationContexts,
     canvas: canvasWorkspaceIndexService,
+    canvasSelection: createDshConversationCanvasSelection(dshProduct.runtime.conversations.catalog),
     workspaceGrants: workspaceGrantAuthority,
     configuration: workspaceConfigAuthority,
     sessions: dshProduct.runtime.conversations.conversations,
@@ -2736,6 +2738,9 @@ async function startDesktop(): Promise<void> {
       const published = await dshProduct.runtime.conversations.publication.publish({
         context: context.context,
         title: projectDshConversationTitle(initialInput),
+        ...(initialInput.kind === 'command' || initialInput.canvasTurnTarget === undefined
+          ? {}
+          : { canvasSelection: initialInput.canvasTurnTarget }),
       });
       await dshProduct.runtime.conversations.conversations.setSessionMode(
         published.conversationId,

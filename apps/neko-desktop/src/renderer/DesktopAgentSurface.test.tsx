@@ -143,6 +143,7 @@ const composerConfiguration: DshComposerConfigurationProjection = {
     kind: 'workspace',
     workspaceId: 'workspace-1',
     workspaceLabel: 'My Film',
+    canvasSelection: { conversationId: 'conversation-1', canvasId: defaultCanvasTarget.canvasId },
     canvas: {
       workspaceId: 'workspace-1',
       defaultTarget: defaultCanvasTarget,
@@ -188,7 +189,9 @@ const entryComposerConfiguration: DshComposerConfigurationProjection = {
   permissionPresets: composerConfiguration.permissionPresets,
 };
 
-let sessionListener: ((event: { readonly conversationId: string }) => void) | undefined;
+let sessionListener:
+  | ((event: { readonly conversationId: string; readonly composerChanged?: true }) => void)
+  | undefined;
 let permissionListener: ((event: { readonly conversationId: string }) => void) | undefined;
 let canvasWorkspaceIndexListener: ((event: { readonly workspaceId: string }) => void) | undefined;
 const dshSessions = {
@@ -217,6 +220,20 @@ const dshSessions = {
   releaseImageAttachmentPreviews: vi.fn(async () => undefined),
   openWrittenFile: vi.fn(async () => undefined),
   getComposerConfiguration: vi.fn(async () => composerConfiguration),
+  selectComposerCanvas: vi.fn(
+    async (
+      _workbench: string,
+      _surface: string,
+      conversationId: string,
+      canvasId: string,
+    ): Promise<DshComposerConfigurationProjection> => {
+      const configuration = await dshSessions.getComposerConfiguration();
+      return {
+        ...configuration,
+        context: { ...configuration.context!, canvasSelection: { conversationId, canvasId } },
+      };
+    },
+  ),
   searchComposerMentions: vi.fn(async () => []),
   selectComposerModel: vi.fn(async () => ({
     ...composerConfiguration,
@@ -349,6 +366,104 @@ describe('DesktopAgentSurface', () => {
       runtimeListener?.({ status: 'running', sessionConfigurationPending: true }),
     );
     expect(dshRuntime.prepareSession).toHaveBeenCalledOnce();
+  });
+
+  it('restores committed Canvas state with a fresh page store and saves only the exact Conversation through IPC', async () => {
+    const target = { workspaceId: 'workspace-1', canvasId: 'neko/boards/story.nkc' };
+    let savedConfiguration: DshComposerConfigurationProjection = {
+      ...composerConfiguration,
+      context: {
+        ...composerConfiguration.context!,
+        canvas: {
+          ...composerConfiguration.context!.canvas,
+          options: [
+            ...composerConfiguration.context!.canvas.options,
+            { target, label: 'story.nkc' },
+          ],
+        },
+      },
+    };
+    dshSessions.getComposerConfiguration.mockImplementation(async () => savedConfiguration);
+    dshSessions.getSnapshot.mockResolvedValue({ ...projection, currentTurn: undefined });
+    dshPermissions.list.mockResolvedValue([]);
+    dshSessions.selectComposerCanvas.mockImplementation(
+      async (_workbench, _surface, conversationId, canvasId) => {
+        savedConfiguration = {
+          ...savedConfiguration,
+          context: {
+            ...savedConfiguration.context!,
+            canvasSelection: { conversationId, canvasId },
+          },
+        };
+        return savedConfiguration;
+      },
+    );
+    const page = (sceneId: string, agentSurfaceId: string) => (
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId={sceneId}
+        agentSurfaceId={agentSurfaceId}
+        conversationId="conversation-1"
+        surfaceKind="workspace"
+      />
+    );
+    const first = render(page('scene-before-close', 'surface-before-close'));
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Canvas index' }), {
+      target: { value: target.canvasId },
+    });
+    await waitFor(() =>
+      expect(dshSessions.selectComposerCanvas).toHaveBeenCalledExactlyOnceWith(
+        'workbench-1',
+        'surface-before-close',
+        'conversation-1',
+        target.canvasId,
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole<HTMLSelectElement>('combobox', { name: 'Canvas index' }).value).toBe(
+        target.canvasId,
+      ),
+    );
+    first.unmount();
+    render(page('scene-after-close', 'surface-after-close'));
+    await waitFor(() =>
+      expect(screen.getByRole<HTMLSelectElement>('combobox', { name: 'Canvas index' }).value).toBe(
+        target.canvasId,
+      ),
+    );
+    fireEvent.change(screen.getByLabelText('Message'), {
+      target: { value: 'Continue on this Canvas' },
+    });
+    fireEvent.click(screen.getByLabelText('Send (Enter)'));
+    await waitFor(() =>
+      expect(dshSessions.submit).toHaveBeenCalledWith(
+        'conversation-1',
+        expect.objectContaining({ canvasTurnTarget: target }),
+      ),
+    );
+    const reads = dshSessions.getComposerConfiguration.mock.calls.length;
+    await act(async () =>
+      sessionListener?.({ conversationId: 'conversation-other', composerChanged: true }),
+    );
+    expect(dshSessions.getComposerConfiguration).toHaveBeenCalledTimes(reads);
+    savedConfiguration = {
+      ...savedConfiguration,
+      context: {
+        ...savedConfiguration.context!,
+        canvasSelection: {
+          conversationId: 'conversation-1',
+          canvasId: defaultCanvasTarget.canvasId,
+        },
+      },
+    };
+    await act(async () =>
+      sessionListener?.({ conversationId: 'conversation-1', composerChanged: true }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole<HTMLSelectElement>('combobox', { name: 'Canvas index' }).value).toBe(
+        defaultCanvasTarget.canvasId,
+      ),
+    );
   });
 
   it('branches from the exact final assistant reply and publishes the new Conversation identity', async () => {
