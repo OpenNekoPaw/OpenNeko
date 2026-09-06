@@ -8,6 +8,31 @@ import {
 } from './dsh-canvas-artifact-delivery';
 
 describe('DSH Canvas completed Tool artifact collection', () => {
+  it('collects only explicit local Markdown references, including reference-style image links', () => {
+    const event = writeTool('references', 'plans/plan.md');
+    const collection = collect({
+      ...event,
+      rawInput: {
+        file_path: 'plans/plan.md',
+        content: [
+          '[设计](../assets/design.png)',
+          '![图][frame]',
+          '[frame]: ../generated/shot%201.png',
+          '`[代码](fake.png)`',
+          '[外部](https://example.com/a.png)',
+          '[锚点](#heading)',
+          '[越界](../../outside.png)',
+          '裸文件名.png',
+        ].join('\n\n'),
+      },
+    });
+    expect(collection.diagnostics).toEqual([]);
+    expect(collection.batch?.artifacts).toHaveLength(1);
+    expect(collection.batch?.artifacts[0]?.referenceLocators).toEqual([
+      { file: { authority: 'workspace', path: 'assets/design.png' } },
+      { file: { authority: 'workspace', path: 'generated/shot 1.png' } },
+    ]);
+  });
   it('projects an exact successful native text write as one Canvas output reference', () => {
     const collection = collect(writeTool('write-1', 'plans/blame-volume-1-pv.md'));
 
@@ -147,7 +172,7 @@ describe('DSH Canvas completed Tool artifact collection', () => {
     ]);
   });
 
-  it('projects every original source from an image overview without persisting the contact sheet', () => {
+  it('projects one contact sheet with ordered source references instead of every original page', () => {
     const sources = [imageLocator('image/page-1.jpg'), imageLocator('image/page-2.jpg')];
     const collection = collect(imageOverviewTool('overview-1', sources));
     const parent = collection.batch?.artifacts.find(
@@ -164,15 +189,10 @@ describe('DSH Canvas completed Tool artifact collection', () => {
       }),
       expect.objectContaining({
         kind: 'image',
-        title: 'page-1.jpg',
+        title: '阅读总览（2 页）',
         sourceArtifactIds: [parent?.artifactId],
-        contentLocator: sources[0],
-      }),
-      expect.objectContaining({
-        kind: 'image',
-        title: 'page-2.jpg',
-        sourceArtifactIds: [parent?.artifactId],
-        contentLocator: sources[1],
+        referenceLocators: sources,
+        overviewAttachment: expect.objectContaining({ attachmentId: 'contact-sheet' }),
       }),
     ]);
   });
@@ -215,8 +235,7 @@ describe('DSH Canvas completed Tool artifact collection', () => {
         delivery: { kind: 'completed-tool', toolCallId: 'overview-1' },
         artifacts: [
           expect.objectContaining({ kind: 'file-reference', title: 'blame.epub' }),
-          expect.objectContaining({ kind: 'image', title: 'page-1.jpg' }),
-          expect.objectContaining({ kind: 'image', title: 'page-2.jpg' }),
+          expect.objectContaining({ kind: 'image', title: '阅读总览（2 页）' }),
         ],
       }),
     );
@@ -322,7 +341,14 @@ function imageOverviewTool(
       { type: 'text', text: 'image overview' },
       {
         type: 'image',
-        attachment: { attachmentId: 'contact-sheet', mediaType: 'image/jpeg' },
+        attachment: {
+          attachmentId: 'contact-sheet',
+          mediaType: 'image/png',
+          bytes: 100,
+          width: 1024,
+          height: 1024,
+          name: 'overview.jpg',
+        },
       },
     ],
   };

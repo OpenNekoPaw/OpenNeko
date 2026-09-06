@@ -1,6 +1,9 @@
 import {
+  contentLocatorKey,
+  isContentLocator,
   isWorkspaceFileContentLocator,
   validateContentLocator,
+  type ContentLocator,
   type WorkspaceFileContentLocator,
 } from '@neko/content-domain';
 import {
@@ -66,8 +69,18 @@ export interface CanvasGenerationOutputBinding {
   readonly recipeInputFingerprint: string;
 }
 
+export interface CanvasGenerationInputMaterialBinding {
+  readonly locator: ContentLocator;
+  readonly mediaKind: 'image' | 'audio' | 'video';
+}
+
+export function canvasGenerationInputPreviewId(locator: ContentLocator): string {
+  return `input:${contentLocatorKey(locator)}`;
+}
+
 export interface CanvasGenerationNodeData {
   readonly recipe: CanvasGenerationRecipe;
+  readonly inputMaterials?: readonly CanvasGenerationInputMaterialBinding[];
   readonly latestRun?: CanvasGenerationRunBinding;
   readonly outputs: readonly CanvasGenerationOutputBinding[];
   readonly selectedOutputId?: string;
@@ -148,6 +161,19 @@ export function isCanvasGenerationRecipe(value: unknown): value is CanvasGenerat
 export function isCanvasGenerationNodeData(value: unknown): value is CanvasGenerationNodeData {
   if (!isRecord(value) || !hasOnlyKeys(value, GENERATION_NODE_DATA_KEYS)) return false;
   if (!isCanvasGenerationRecipe(value['recipe']) || !Array.isArray(value['outputs'])) return false;
+  if (
+    value['inputMaterials'] !== undefined &&
+    (!Array.isArray(value['inputMaterials']) ||
+      !value['inputMaterials'].every(isCanvasGenerationInputMaterialBinding))
+  ) {
+    return false;
+  }
+  const inputMaterialKeys = new Set<string>();
+  for (const material of value['inputMaterials'] ?? []) {
+    const key = contentLocatorKey(material.locator);
+    if (inputMaterialKeys.has(key)) return false;
+    inputMaterialKeys.add(key);
+  }
   if (!value['outputs'].every(isCanvasGenerationOutputBinding)) return false;
   const outputIds = new Set<string>();
   for (const output of value['outputs']) {
@@ -335,6 +361,18 @@ function isCanvasGenerationOutputBinding(value: unknown): value is CanvasGenerat
   );
 }
 
+function isCanvasGenerationInputMaterialBinding(
+  value: unknown,
+): value is CanvasGenerationInputMaterialBinding {
+  if (!isRecord(value) || !hasOnlyKeys(value, INPUT_MATERIAL_BINDING_KEYS)) return false;
+  return (
+    isContentLocator(value['locator']) &&
+    (value['mediaKind'] === 'image' ||
+      value['mediaKind'] === 'audio' ||
+      value['mediaKind'] === 'video')
+  );
+}
+
 function isGenerationJobRef(value: unknown): value is JobRef<'generation'> {
   return isJobRef(value) && value.kind === 'generation';
 }
@@ -366,6 +404,7 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 const RUN_BINDING_KEYS = new Set(['submissionId', 'recipeInputFingerprint', 'jobRef']);
+const INPUT_MATERIAL_BINDING_KEYS = new Set(['locator', 'mediaKind']);
 const OUTPUT_BINDING_KEYS = new Set([
   'outputId',
   'jobRef',
@@ -373,4 +412,10 @@ const OUTPUT_BINDING_KEYS = new Set([
   'kind',
   'recipeInputFingerprint',
 ]);
-const GENERATION_NODE_DATA_KEYS = new Set(['recipe', 'latestRun', 'outputs', 'selectedOutputId']);
+const GENERATION_NODE_DATA_KEYS = new Set([
+  'recipe',
+  'inputMaterials',
+  'latestRun',
+  'outputs',
+  'selectedOutputId',
+]);

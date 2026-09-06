@@ -14,6 +14,7 @@ import { createEmptyCanvasData } from '../canvasHeadlessAuthoring';
 import { planCanvasArtifactProjection } from '../canvasArtifactProjection';
 import { resolveCanvasGenerationInputs } from '../../canvas-generation-inputs';
 import { projectResolvedCanvasMaterialToCanvas } from '../../canvas-content-authoring';
+import { projectCanvasQuerySnapshot } from '../../dsh-tool';
 
 const sourceLocator: ContentLocator = {
   file: { authority: 'workspace', path: 'neko/assets/References/source-image.png' },
@@ -21,6 +22,101 @@ const sourceLocator: ContentLocator = {
 const generatedLocator = generatedOutputLocator('shot-1');
 
 describe('planCanvasArtifactProjection', () => {
+  it('finds an exact generation output beyond the bounded default query without guessing an id', () => {
+    const locator = generationResultLocator('hidden-candidate');
+    const generated = planCanvasArtifactProjection(
+      createEmptyCanvasData(),
+      generationRequest(generationSnapshot({ phase: 'succeeded', resultLocators: [locator] })),
+    );
+    const filler: CanvasNode[] = Array.from({ length: 40 }, (_, index) => ({
+      id: `note-${index}`,
+      type: 'markdown',
+      position: { x: index * 400, y: 0 },
+      size: { width: 300, height: 200 },
+      zIndex: index,
+      data: { content: 'unrelated' },
+    }));
+    const snapshot = {
+      documentPath: 'board.nkc',
+      fingerprint: { strategy: 'sha256' as const, value: 'test' },
+      canvas: { ...generated.canvasData, nodes: [...filler, ...generated.canvasData.nodes] },
+    };
+    const selected = projectCanvasQuerySnapshot(snapshot, {
+      documentPath: 'board.nkc',
+      contentLocators: [locator],
+    });
+    expect(selected.nodes.map((node) => node.nodeId)).toEqual(generated.nodeIds);
+    expect(
+      projectCanvasQuerySnapshot(snapshot, {
+        documentPath: 'board.nkc',
+        contentLocators: [sourceLocator],
+      }).nodes,
+    ).toEqual([]);
+  });
+  it('reuses both selected and unselected generation outputs when inspected repeatedly', () => {
+    const locators = [
+      generationResultLocator('candidate-a'),
+      generationResultLocator('candidate-b'),
+    ];
+    const generated = planCanvasArtifactProjection(
+      createEmptyCanvasData(),
+      generationRequest(
+        generationSnapshot({
+          phase: 'succeeded',
+          resultLocators: locators,
+        }),
+      ),
+    );
+    for (const locator of locators) {
+      const source = sourceArtifact('inspect');
+      const artifact = {
+        ...source,
+        kind: 'image' as const,
+        contentLocator: locator,
+        provenance: { ...source.provenance, kind: 'image' as const },
+      };
+      const inspected = planCanvasArtifactProjection(
+        generated.canvasData,
+        request({ deliveryId: 'inspect', artifacts: [artifact] }),
+      );
+      expect(inspected.status).toBe('noop');
+      expect(inspected.nodeIds).toEqual(generated.nodeIds);
+      expect(inspected.canvasData).toEqual(generated.canvasData);
+    }
+  });
+
+  it('connects explicit Markdown references to existing generation outputs without importing nodes', () => {
+    const locator = generationResultLocator('candidate');
+    const generated = planCanvasArtifactProjection(
+      createEmptyCanvasData(),
+      generationRequest(generationSnapshot({ phase: 'succeeded', resultLocators: [locator] })),
+    );
+    const document = sourceDocumentArtifact({
+      artifactId: 'plan',
+      portablePath: 'plan.md',
+      contentFingerprint: 'plan-content',
+    });
+    const linkedDocument = {
+      ...document,
+      provenance: {
+        ...document.provenance,
+        deliveryId: 'document',
+        referenceLocators: [locator, sourceLocator],
+      },
+    };
+    const input = request({ deliveryId: 'document', artifacts: [linkedDocument] });
+    const projected = planCanvasArtifactProjection(generated.canvasData, input);
+    expect(projected.canvasData.nodes.map((node) => node.type)).toEqual(['generation', 'file']);
+    expect(projected.canvasData.connections).toEqual([
+      expect.objectContaining({
+        sourceId: generated.nodeIds[0],
+        targetId: projected.nodeIds[0],
+        type: 'reference',
+      }),
+    ]);
+    expect(planCanvasArtifactProjection(projected.canvasData, input).status).toBe('noop');
+    expect(projected.canvasData.nodes[0]).toEqual(generated.canvasData.nodes[0]);
+  });
   it('updates one Generation node and binds committed result locators only after success', () => {
     const pending = planCanvasArtifactProjection(
       createEmptyCanvasData('Workspace'),
@@ -94,7 +190,7 @@ describe('planCanvasArtifactProjection', () => {
     );
   });
 
-  it('projects Agent media inputs as Canvas references and preserves regeneration parameters', async () => {
+  it('keeps Agent media inputs inside the Generation node and preserves regeneration parameters', async () => {
     const firstFrame: ContentLocator = {
       file: { authority: 'workspace', path: 'neko/generated/image/first-frame.png' },
     };
@@ -127,23 +223,13 @@ describe('planCanvasArtifactProjection', () => {
     );
     const replay = planCanvasArtifactProjection(first.canvasData, generationRequest(snapshot));
     const generation = first.canvasData.nodes.find((node) => node.type === 'generation');
-    const reference = first.canvasData.connections.find(
-      (connection) => connection.targetId === generation?.id,
-    );
-    const source = first.canvasData.nodes.find((node) => node.id === reference?.sourceId);
-
-    expect(source).toMatchObject({
-      type: 'media',
-      data: { mediaType: 'image', contentLocator: firstFrame },
+    expect(first.canvasData.nodes).toHaveLength(1);
+    expect(generation?.data).toMatchObject({
+      inputMaterials: [{ mediaKind: 'image', locator: firstFrame }],
     });
-    expect(source!.position.x + source!.size.width).toBeLessThan(generation!.position.x);
-    expect(reference).toMatchObject({
-      type: 'reference',
-      targetEndpoint: { scope: 'port', portId: 'reference' },
-    });
-    expect(first.connectionIds).toEqual([reference?.id]);
+    expect(first.connectionIds).toEqual([]);
     expect(replay.status).toBe('noop');
-    expect(replay.canvasData.connections).toHaveLength(1);
+    expect(replay.canvasData.connections).toHaveLength(0);
 
     if (!generation || generation.type !== 'generation') {
       throw new Error('Expected projected Generation node.');
@@ -156,7 +242,12 @@ describe('planCanvasArtifactProjection', () => {
         readText: async () => {
           throw new Error('Video reference projection must not read text.');
         },
-        authorizeLocator: async () => true,
+        stat: async (locator) => ({
+          status: 'ready',
+          locator,
+          byteLength: 1,
+          fingerprint: { strategy: 'sha256', value: 'fixture' },
+        }),
       },
     });
     expect(projectGenerationRecipeRequest(generation.data.recipe, inputs)).toEqual({
@@ -181,6 +272,73 @@ describe('planCanvasArtifactProjection', () => {
         inputs: [{ type: 'image', role: 'first-frame', locator: firstFrame }],
       },
     });
+  });
+
+  it('links an adjusted generation directly to the Generation node that produced its input', async () => {
+    const firstFrame = generationResultLocator('first-frame');
+    const source = planCanvasArtifactProjection(
+      createEmptyCanvasData('Workspace'),
+      generationRequest(
+        generationSnapshot({
+          ref: { kind: 'generation', jobId: 'generation:source' },
+          phase: 'succeeded',
+          resultLocators: [firstFrame],
+          progress: { stage: 'completed', percent: 100 },
+        }),
+      ),
+    );
+    const adjusted = planCanvasArtifactProjection(
+      source.canvasData,
+      generationRequest(
+        generationSnapshot({
+          ref: { kind: 'generation', jobId: 'generation:adjusted' },
+          request: {
+            providerId: 'image-provider',
+            modelId: 'image-model',
+            generationType: 'image-to-image',
+            request: {
+              prompt: 'Repair the previous composition',
+              referenceImageLocator: firstFrame,
+            },
+          },
+        }),
+      ),
+    );
+
+    expect(adjusted.canvasData.nodes.map((node) => node.type)).toEqual([
+      'generation',
+      'generation',
+    ]);
+    expect(adjusted.canvasData.connections).toEqual([
+      expect.objectContaining({
+        sourceId: 'generation:generation%3Asource',
+        targetId: 'generation:generation%3Aadjusted',
+        type: 'derived-from',
+      }),
+    ]);
+    expect(
+      adjusted.canvasData.nodes.find(
+        (node) => node.id === 'generation:generation%3Aadjusted' && node.type === 'generation',
+      )?.data,
+    ).toMatchObject({ inputMaterials: [{ mediaKind: 'image', locator: firstFrame }] });
+    await expect(
+      resolveCanvasGenerationInputs({
+        canvas: adjusted.canvasData,
+        nodeId: 'generation:generation%3Aadjusted',
+        port: {
+          fingerprintText: (text) => text,
+          readText: async () => {
+            throw new Error('Image input lineage must not be resolved as text.');
+          },
+          stat: async (locator) => ({
+            status: 'ready',
+            locator,
+            byteLength: 1,
+            fingerprint: { strategy: 'sha256', value: 'fixture' },
+          }),
+        },
+      }),
+    ).resolves.toEqual([{ kind: 'image', locator: firstFrame }]);
   });
 
   it('reuses an existing Canvas material for an Agent generation reference', () => {

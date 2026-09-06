@@ -197,6 +197,10 @@ export function createDesktopDshDomainToolHandlers(options: {
           );
         const service: CanvasDshAuthoringPort = {
           query: authoring.query.bind(authoring),
+          groupNodes: (input) =>
+            coordinateMutation(input, (expectedFingerprint) =>
+              authoring.groupNodes({ ...input, expectedFingerprint }),
+            ),
           createNode: (input) =>
             coordinateMutation(input, (expectedFingerprint) =>
               authoring.createNode({

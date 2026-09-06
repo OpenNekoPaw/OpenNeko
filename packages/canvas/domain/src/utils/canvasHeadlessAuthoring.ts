@@ -5,6 +5,7 @@ import type {
   CanvasJobArtifactRef,
   CanvasJobStatus,
   CanvasNode,
+  GroupCanvasNode,
   CanvasSerializableRecord,
   CanvasSerializableValue,
 } from '../types/canvas';
@@ -17,6 +18,7 @@ import type {
   CanvasCreateCompositeResult,
   CanvasCreateConnectionRequest,
   CanvasCreateConnectionResult,
+  CanvasGroupNodesRequest,
   CanvasNodeCreateSpec,
   CanvasUpdateBlockRequest,
   CanvasUpdateBlockResult,
@@ -146,6 +148,61 @@ export function planCanvasNodeCreation(
     batch,
     canvasData: applyCanvasHeadlessAuthoringOperations(context.canvasData, batch.operations),
     result: { nodeId: node.id, node },
+  };
+}
+
+export function planCanvasNodeGrouping(
+  context: CanvasHeadlessAuthoringPlannerContext,
+  request: CanvasGroupNodesRequest,
+): {
+  readonly group: GroupCanvasNode;
+  readonly operations: readonly CanvasHeadlessAuthoringOperation[];
+} {
+  if (request.nodeIds.length === 0 || new Set(request.nodeIds).size !== request.nodeIds.length) {
+    throw new Error('Canvas grouping requires distinct, explicit node identities.');
+  }
+  const existing =
+    request.groupId === undefined ? undefined : requireNode(context.canvasData, request.groupId);
+  if (existing && (existing.type !== 'group' || existing.parentId !== undefined)) {
+    throw new Error('Canvas grouping target must be a top-level group.');
+  }
+  const members = request.nodeIds.map((id) => requireNode(context.canvasData, id));
+  for (const node of members) {
+    if (node.type === 'group' || (node.parentId !== undefined && node.parentId !== existing?.id)) {
+      throw new Error(
+        `Canvas node ${node.id} cannot be moved from another group or nested by grouping.`,
+      );
+    }
+  }
+  const candidate =
+    existing ??
+    planCanvasNodeCreation(context, { type: 'group', data: { label: request.label ?? '生成素材' } })
+      .result.node;
+  if (candidate.type !== 'group' || !candidate.container)
+    throw new Error('Canvas grouping requires a group container.');
+  const childIds = [...new Set([...candidate.container.childIds, ...request.nodeIds])];
+  const children = childIds.map((id) => requireNode(context.canvasData, id));
+  const x = Math.min(...children.map((node) => node.position.x)) - 24;
+  const y = Math.min(...children.map((node) => node.position.y)) - 64;
+  const right = Math.max(...children.map((node) => node.position.x + node.size.width)) + 24;
+  const bottom = Math.max(...children.map((node) => node.position.y + node.size.height)) + 24;
+  const group: GroupCanvasNode = {
+    ...candidate,
+    position: { x, y },
+    size: { width: right - x, height: bottom - y },
+    zIndex: Math.min(...children.map((node) => node.zIndex)) - 1,
+    data: { ...candidate.data, ...(request.label === undefined ? {} : { label: request.label }) },
+    container: { ...candidate.container, childIds },
+  };
+  return {
+    group,
+    operations: [
+      { kind: existing ? 'node.replace' : 'node.create', node: group },
+      ...members.map((node): CanvasHeadlessAuthoringOperation => ({
+        kind: 'node.replace',
+        node: { ...node, parentId: group.id },
+      })),
+    ],
   };
 }
 

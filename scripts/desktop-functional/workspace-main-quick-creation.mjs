@@ -415,6 +415,140 @@ export const workspaceMainQuickCreationScenario = Object.freeze({
   },
 });
 
+export const workspaceCanvasIndexCreationScenario = Object.freeze({
+  id: 'workspace-canvas-index-creation',
+  owner: '@neko/app-desktop',
+  prepare: workspaceMainQuickCreationScenario.prepare,
+  async run({
+    cdp,
+    checkpoint,
+    click,
+    evaluate,
+    prepared,
+    pressKey,
+    screenshot,
+    type,
+    waitForDesktopBridge,
+    waitForSelector,
+  }) {
+    await openFixtureWorkspace(evaluate);
+    const rail = '[data-workspace-canvas-context="true"]';
+    const trigger = `${rail} [data-workspace-quick-create-trigger="canvas-index"]`;
+    await waitForSelector(trigger);
+    const images = [];
+    const capture = async (label) => {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      images.push(await screenshot(label));
+    };
+    const openCreation = async () => {
+      await evaluate(`document.querySelector('${trigger}').focus({ preventScroll: true })`);
+      await pressKey('Space');
+      await waitForSelector(`${FORM} input`);
+    };
+    await capture('index-canvas-initial');
+    await openCreation();
+    await capture('index-canvas-name');
+    await type(`${FORM} input`, 'Cancelled Index');
+    await click(`${FORM} button[type="button"]`);
+    await waitForCondition(
+      evaluate,
+      `document.querySelector('${FORM}') === null`,
+      'Index Canvas cancellation did not close the form.',
+    );
+    await openCreation();
+    if (await evaluate(`document.querySelector('${FORM} input').value !== ''`)) {
+      throw new Error('Cancelled index Canvas name was retained.');
+    }
+    await click(`${FORM} button[type="submit"]`);
+    await waitForSelector(`${FORM} [role="alert"]`);
+    await type(`${FORM} input`, 'Context Index With A Long Name');
+    await click(`${FORM} button[type="submit"]`);
+    await waitForCondition(
+      evaluate,
+      `document.querySelector('${FORM}') === null && document.querySelector('${rail} select')?.value === 'Context Index With A Long Name.nkc'`,
+      'New index Canvas was not created and selected from the context rail.',
+    );
+    const indexPath = join(prepared.workspacePath, 'Context Index With A Long Name.nkc');
+    const indexBytes = await readFile(indexPath, 'utf8');
+    if (JSON.parse(indexBytes).name !== 'Context Index With A Long Name')
+      throw new Error('Index Canvas bytes are invalid.');
+    await capture('index-canvas-created');
+    await openCreation();
+    await type(`${FORM} input`, 'Context Index With A Long Name');
+    await click(`${FORM} button[type="submit"]`);
+    await waitForSelector(`${FORM} [role="alert"]`);
+    await capture('index-canvas-conflict');
+    if ((await readFile(indexPath, 'utf8')) !== indexBytes)
+      throw new Error('Duplicate index Canvas creation changed the existing document.');
+    await pressKey('Escape');
+    await click('.shell-diagnostic__dismiss');
+    await cdp.send('Page.reload', { ignoreCache: true });
+    await waitForDesktopBridge(30_000);
+    await waitForCondition(
+      evaluate,
+      `document.querySelector('${rail} select')?.value === 'Context Index With A Long Name.nkc'`,
+      'Created index Canvas selection was not restored after reload.',
+    );
+    checkpoint('index-created-selected-restored', await inspectAgentCanvasIndex(evaluate));
+
+    await createEntry({
+      click,
+      evaluate,
+      type,
+      waitForSelector,
+      trigger: `${MAIN_SLOT} [data-workspace-quick-create-trigger="tab"]`,
+      kind: 'canvas',
+      name: 'Adjacent Canvas',
+      extension: '.nkc',
+    });
+    await access(join(prepared.workspacePath, 'Adjacent Canvas.nkc'));
+    await waitForCondition(
+      evaluate,
+      `Array.from(document.querySelectorAll('${rail} select option')).some((option) => option.value === 'Adjacent Canvas.nkc')`,
+      'Existing Main Canvas creation did not refresh the index.',
+    );
+    const adjacent = await inspectAgentCanvasIndex(evaluate);
+    if (adjacent.selectedId !== 'Context Index With A Long Name.nkc')
+      throw new Error('Adjacent Canvas creation replaced the selected index.');
+    await evaluate(`(() => {
+      const select = document.querySelector('${rail} select');
+      select.value = 'Adjacent Canvas.nkc';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    })()`);
+    await waitForCondition(
+      evaluate,
+      `document.querySelector('${rail} select').value === 'Adjacent Canvas.nkc'`,
+      'Existing Canvas selection did not work.',
+    );
+    await evaluate(`(() => {
+      const select = document.querySelector('${rail} select');
+      select.value = 'Context Index With A Long Name.nkc';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    })()`);
+    checkpoint('adjacent-canvas-creation-and-selection', adjacent);
+    await evaluate('window.resizeTo(960, 640)');
+    await waitForCondition(evaluate, 'window.outerWidth === 960', 'Desktop window did not resize.');
+    await click('[data-workbench-region-control="creative-panels"]');
+    await click('[data-workbench-region-option="main"]');
+    await pressKey('Escape');
+    await capture('index-canvas-narrow-rail');
+    const narrow = await evaluate(`(() => {
+      const rail = document.querySelector('${rail}').getBoundingClientRect();
+      const button = document.querySelector('${trigger}').getBoundingClientRect();
+      return { fits: button.left >= rail.left && button.right <= rail.right, width: innerWidth, height: innerHeight, rail: rail.toJSON(), button: button.toJSON() };
+    })()`);
+    await openCreation();
+    await capture('index-canvas-narrow');
+    await pressKey('Escape');
+    checkpoint('narrow-index-control', narrow);
+    if (!narrow.fits)
+      throw new Error(
+        `Index Canvas button is clipped in the narrow context rail: ${JSON.stringify(narrow)}`,
+      );
+    return { adjacent, narrow, screenshots: images };
+  },
+});
+
 async function createEntry({
   click,
   evaluate,

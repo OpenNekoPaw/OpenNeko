@@ -43,13 +43,13 @@ describe('Content image DSH contract', () => {
     });
   });
 
-  it('accepts one to four distinct overview sources and rejects unbounded shapes', () => {
+  it('accepts up to twenty distinct overview sources and rejects unbounded shapes', () => {
     const second = {
       ...source,
       selector: { kind: 'entry' as const, path: 'OPS/images/page-2.png' },
     };
     expect(CONTENT_IMAGES_DSH_TOOL_NAME).toBe('openneko_read_images');
-    expect(CONTENT_IMAGES_DSH_MAX_SOURCES).toBe(4);
+    expect(CONTENT_IMAGES_DSH_MAX_SOURCES).toBe(16);
     expect(CONTENT_IMAGES_DSH_TOOL_PARAMETERS.sources).toMatchObject({
       type: 'array',
       required: true,
@@ -57,7 +57,12 @@ describe('Content image DSH contract', () => {
     expect(decodeContentImagesDshToolInput({ sources: [source, second] })).toEqual({
       sources: [source, second],
     });
-    expect(() => decodeContentImagesDshToolInput({ sources: [] })).toThrow(/between 1 and 4/u);
+    const batch = Array.from({ length: 16 }, (_, index) => ({
+      ...source,
+      selector: { kind: 'entry' as const, path: `OPS/images/page-${index + 1}.png` },
+    }));
+    expect(decodeContentImagesDshToolInput({ sources: batch }).sources).toEqual(batch);
+    expect(() => decodeContentImagesDshToolInput({ sources: [] })).toThrow(/between 1 and 16/u);
     expect(() => decodeContentImagesDshToolInput({ sources: [source, second, source] })).toThrow(
       /duplicate ContentLocator at index 2/u,
     );
@@ -74,12 +79,16 @@ describe('Content image DSH contract', () => {
     ).toThrow(/must contain exactly sources/u);
     expect(() =>
       decodeContentImagesDshToolInput({
-        sources: [source, second, source, second, source],
+        sources: [...batch, second],
       }),
-    ).toThrow(/between 1 and 4/u);
+    ).toThrow(/between 1 and 16/u);
   });
 
   it('rejects raw paths, extra fields, and invalid offsets', () => {
+    expect(() =>
+      decodeContentImageDshToolInput({ source: { ...source, detail: 'overview' } }),
+    ).toThrow(/canonical Workspace ContentLocator/u);
+    expect(CONTENT_IMAGE_DSH_TOOL_PARAMETERS.detail.description).toContain('never source.detail');
     expect(() => decodeContentImageDshToolInput({ source, detail: 'thumbnail' })).toThrow(
       /overview, original/u,
     );

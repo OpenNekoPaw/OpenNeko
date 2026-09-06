@@ -885,6 +885,16 @@ async function startDesktop(): Promise<void> {
   }
   const canvasUsesChineseLabels = app.getLocale().toLocaleLowerCase().startsWith('zh');
   const canvasGenerationRuntime = new CanvasGenerationNodeRuntime({
+    createContentReader: (workspaceRoot, projectId) =>
+      createProjectContentReadService({
+        projectId,
+        workspaceRoot,
+        globalMediaLibraryRoot: globalStorage.mediaLibraries,
+        documentEntryReader: {
+          readEntry: (sourcePath, entryPath) =>
+            canvasDocumentEntryAccess.readEntry(sourcePath, entryPath),
+        },
+      }),
     generation: {
       getWorkspaceJobs: (input) =>
         generationRuntime.getJobs({
@@ -1349,6 +1359,8 @@ async function startDesktop(): Promise<void> {
     metadataStore: localMetadataStore,
     workspaceRegistry,
     host,
+    readImageAttachment: (sessionId, attachmentId) =>
+      dshProduct.runtime.client.readImageAttachment({ sessionId, attachmentId }),
     coordinateCanvasMutation: (target, operation) =>
       canvasRuntime.coordinateCanvasDocumentMutation(target, operation),
     createContentRead: (workspacePath) =>

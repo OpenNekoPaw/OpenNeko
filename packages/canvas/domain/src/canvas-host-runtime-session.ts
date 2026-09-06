@@ -26,6 +26,7 @@ import {
 } from './canvas-text-file-preview';
 import {
   isCanvasGenerationNodeData,
+  canvasGenerationInputPreviewId,
   purposeForCanvasGenerationKind,
   type CanvasGenerationRunBinding,
 } from './types/canvas-generation-node';
@@ -274,6 +275,15 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     if (node.type === 'generation') {
       if (!isCanvasGenerationNodeData(node.data)) {
         throw new Error(`Canvas Generation node "${node.id}" is unavailable.`);
+      }
+      if (input.outputId === canvasGenerationInputPreviewId(input.locator)) {
+        const material = node.data.inputMaterials?.find((candidate) =>
+          contentLocatorsEqual(candidate.locator, input.locator),
+        );
+        if (!material || material.mediaKind !== input.contentKind) {
+          throw new Error(`Canvas Generation input reference on "${node.id}" is stale.`);
+        }
+        return;
       }
       const output = node.data.outputs.find((candidate) => candidate.outputId === input.outputId);
       if (!output || !contentLocatorsEqual(output.locator, input.locator)) {

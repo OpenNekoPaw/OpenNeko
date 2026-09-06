@@ -7,10 +7,13 @@ import type {
   DshCanvasArtifactDeliveryOutcome,
   DshCanvasArtifactDeliveryPort,
 } from '@neko/agent-runtime/application';
+import { materializeDshCanvasImageOverviews } from '@neko/agent-runtime/application';
+import type { DshAcpImageAttachmentReadProjection } from '@neko/agent-contracts/dsh-acp';
 import type { CanvasWorkspaceTurnTarget } from '@neko/canvas-domain';
 import type { ContentReadService } from '@neko/content-domain';
 import {
   createNodeHostContentReadService,
+  NodeAuthorizedWorkspaceWriter,
   type NodeDocumentEntryReader,
 } from '@neko/content-domain/node';
 import {
@@ -38,6 +41,10 @@ export interface DesktopDshCanvasArtifactDeliveryOptions {
     operation: () => Promise<TResult>,
   ) => Promise<TResult>;
   readonly createContentRead: (workspacePath: string) => ContentReadService;
+  readonly readImageAttachment: (
+    sessionId: string,
+    attachmentId: string,
+  ) => Promise<DshAcpImageAttachmentReadProjection>;
   readonly createIdentity?: () => string;
 }
 
@@ -79,12 +86,17 @@ export class DesktopDshCanvasArtifactDelivery implements DshCanvasArtifactDelive
       const workspace = await this.restoreExactWorkspace(input.workspaceId);
       const deliveryId = createDshCanvasArtifactProjectionRequest(input, workspace).process
         .deliveryId;
-      const results = await this.enqueueProjection(workspace, deliveryId, async () =>
-        createDshCanvasArtifactProjectionRequest(
+      const results = await this.enqueueProjection(workspace, deliveryId, async () => {
+        await materializeDshCanvasImageOverviews(input, {
+          readAttachment: this.options.readImageAttachment,
+          contentRead: this.options.createContentRead(workspace.workspacePath),
+          writer: new NodeAuthorizedWorkspaceWriter({ workspaceRoot: workspace.workspacePath }),
+        });
+        return createDshCanvasArtifactProjectionRequest(
           await this.resolveResourceFingerprints(input, workspace),
           workspace,
-        ),
-      );
+        );
+      });
       const blocked = results.find(
         (result) =>
           result.deliveryId === deliveryId &&
@@ -283,6 +295,7 @@ export function createDshCanvasArtifactProjectionRequest(
         ...('sourceArtifactIds' in artifact
           ? { sourceArtifactIds: artifact.sourceArtifactIds }
           : {}),
+        ...(artifact.referenceLocators ? { referenceLocators: artifact.referenceLocators } : {}),
         operationId,
         createdAt,
       };
@@ -290,6 +303,14 @@ export function createDshCanvasArtifactProjectionRequest(
         kind: artifact.kind,
         title: artifact.title,
         contentLocator: artifact.contentLocator,
+        ...(artifact.overviewAttachment
+          ? {
+              intrinsicDimensions: {
+                width: artifact.overviewAttachment.width,
+                height: artifact.overviewAttachment.height,
+              },
+            }
+          : {}),
         provenance,
       };
     }),

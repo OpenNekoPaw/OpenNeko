@@ -1,4 +1,5 @@
 import {
+  canvasGenerationInputPreviewId,
   conformCanvasImageGenerationRecipeToProfile,
   conformCanvasVideoGenerationRecipeToProfile,
   createCanvasGenerationNodeData,
@@ -17,7 +18,12 @@ import {
   type CanvasViewport,
   type GenerationCanvasNode,
 } from '@neko/canvas-domain';
-import { CONTENT_LOCATOR_DRAG_MIME, parseContentLocatorDragData } from '@neko/content-domain';
+import {
+  CONTENT_LOCATOR_DRAG_MIME,
+  contentLocatorKey,
+  parseContentLocatorDragData,
+  type ContentLocator,
+} from '@neko/content-domain';
 import { aspectRatioPreviewSize } from '@neko/ui/creative';
 import {
   CheckIcon,
@@ -154,16 +160,44 @@ function GenerationInputPanel({
     recipe.kind,
     measuredHeight,
   );
-  const references = useMemo(
-    () =>
-      connections
-        .filter((connection) => connection.targetId === node.id)
-        .map((connection) => ({
-          connection,
-          source: nodes.find((candidate) => candidate.id === connection.sourceId),
-        })),
-    [connections, node.id, nodes],
-  );
+  const references = useMemo(() => {
+    const connected = connections
+      .filter((connection) => connection.targetId === node.id && connection.type === 'reference')
+      .map((connection, index) => {
+        const source = nodes.find((candidate) => candidate.id === connection.sourceId);
+        return {
+          key: connection.id,
+          label: source ? referenceLabel(source) : t('generation.referenceMissing'),
+          role:
+            connection.targetEndpoint?.portId ?? t('generation.reference', { number: index + 1 }),
+          locator: source ? referenceLocator(source) : undefined,
+          previewSource: source ? imageReferencePreviewSource(source) : undefined,
+        };
+      });
+    const connectedLocatorKeys = new Set(
+      connected.flatMap((reference) =>
+        reference.locator ? [contentLocatorKey(reference.locator)] : [],
+      ),
+    );
+    const embedded = (node.data.inputMaterials ?? []).flatMap((material, index) => {
+      const locatorKey = contentLocatorKey(material.locator);
+      if (connectedLocatorKeys.has(locatorKey)) return [];
+      const label = contentLocatorLabel(material.locator);
+      return [
+        {
+          key: `embedded:${locatorKey}`,
+          label,
+          role: t('generation.reference', { number: connected.length + index + 1 }),
+          locator: material.locator,
+          previewSource:
+            material.mediaKind === 'image'
+              ? imageMaterialPreviewSource(node.id, material.locator, label)
+              : undefined,
+        },
+      ];
+    });
+    return [...connected, ...embedded];
+  }, [connections, node.data.inputMaterials, node.id, nodes]);
   useEffect(() => {
     const panel = panelRef.current;
     if (!panel) return;
@@ -398,24 +432,24 @@ function GenerationInputPanel({
         </ComposerPopover>
         <div className="selection-generation-input-panel__reference-list">
           {references.length > 0 ? (
-            references.map(({ connection, source }, index) => {
-              const label = source ? referenceLabel(source) : t('generation.referenceMissing');
-              const previewSource = source ? imageReferencePreviewSource(source) : undefined;
-              const role =
-                connection.targetEndpoint?.portId ??
-                t('generation.reference', { number: index + 1 });
+            references.map(({ key, label, previewSource, role }) => {
               return previewSource ? (
                 <figure
-                  key={connection.id}
+                  key={key}
                   className="selection-generation-input-panel__reference-preview"
                   data-canvas-generation-reference-preview="image"
                   title={`${label} · ${role}`}
                 >
-                  <PreviewSurface source={previewSource} surfaceKind="inline" chrome="full-bleed" />
+                  <PreviewSurface
+                    source={previewSource}
+                    surfaceKind="inline"
+                    chrome="full-bleed"
+                    feedback="compact"
+                  />
                   <figcaption>{label}</figcaption>
                 </figure>
               ) : (
-                <span key={connection.id} className="selection-generation-input-panel__reference">
+                <span key={key} className="selection-generation-input-panel__reference">
                   {label}
                   <small>{role}</small>
                 </span>
@@ -1204,6 +1238,33 @@ function imageReferencePreviewSource(node: CanvasNode): PreviewSourceDescriptor 
     };
   }
   return undefined;
+}
+
+function referenceLocator(node: CanvasNode): ContentLocator | undefined {
+  if (node.type === 'media' || node.type === 'file') return node.data.contentLocator;
+  if (node.type === 'generation') return selectedCanvasGenerationOutput(node.data)?.locator;
+  return undefined;
+}
+
+function imageMaterialPreviewSource(
+  generationNodeId: string,
+  locator: ContentLocator,
+  title: string,
+): PreviewSourceDescriptor {
+  const locatorKey = contentLocatorKey(locator);
+  return {
+    id: `canvas-generation-input:${generationNodeId}:${locatorKey}`,
+    nodeId: generationNodeId,
+    outputId: canvasGenerationInputPreviewId(locator),
+    role: 'source-image',
+    title,
+    contentLocator: locator,
+  };
+}
+
+function contentLocatorLabel(locator: ContentLocator): string {
+  const selectedPath = locator.selector?.kind === 'entry' ? locator.selector.path : undefined;
+  return basename(selectedPath ?? locator.file.path);
 }
 
 function referenceSourceKind(

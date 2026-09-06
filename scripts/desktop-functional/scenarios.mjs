@@ -1,6 +1,7 @@
 import { canvasOpenNekoConsumerScenario } from '../../packages/canvas/webview/functional/desktop-openneko-consumer.mjs';
 import { canvasTextFilePreviewScenario } from '../../packages/canvas/webview/functional/desktop-text-file-preview.mjs';
 import { canvasNodeLocalFailureScenario } from '../../packages/canvas/webview/functional/desktop-node-local-failure.mjs';
+import { canvasGenerationReferencePreviewScenario } from '../../packages/canvas/webview/functional/desktop-generation-reference-preview.mjs';
 import { cutOpenNekoConsumerScenario } from '../../packages/cut/webview/functional/desktop-openneko-consumer.mjs';
 import { previewOpenNekoConsumerScenario } from '../../packages/preview/webview/functional/desktop-openneko-consumer.mjs';
 import {
@@ -27,6 +28,7 @@ import { extensionManagementLifecycleScenario } from './extension-management-lif
 import { noActiveProjectCatalogsScenario } from './no-active-project-catalogs.mjs';
 import { projectContentScenario } from './project-content.mjs';
 import {
+  workspaceCanvasIndexCreationScenario,
   workspaceMainEmptySuggestionsScenario,
   workspaceMainQuickCreationScenario,
 } from './workspace-main-quick-creation.mjs';
@@ -52,6 +54,7 @@ const scenarios = new Map(
     canvasOpenNekoConsumerScenario,
     canvasTextFilePreviewScenario,
     canvasNodeLocalFailureScenario,
+    canvasGenerationReferencePreviewScenario,
     previewOpenNekoConsumerScenario,
     desktopAgentProviderUiScenario,
     desktopAiModelSettingsScenario,
@@ -77,6 +80,7 @@ const scenarios = new Map(
     workspaceFileCreationScenario,
     workspaceRetiredStorageIsolationScenario,
     projectContentScenario,
+    workspaceCanvasIndexCreationScenario,
     workspaceMainEmptySuggestionsScenario,
     workspaceMainQuickCreationScenario,
     developmentCreativeCapabilityVisibilityScenario,

@@ -59,6 +59,7 @@ export interface CanvasWorkspaceProjectionProvenance {
   readonly role: CanvasWorkspaceArtifactRole;
   readonly sourceId: string;
   readonly sourceArtifactIds?: readonly string[];
+  readonly referenceLocators?: readonly ContentLocator[];
   readonly taskId?: string;
   readonly operationId?: string;
   readonly runId?: string;
@@ -791,6 +792,11 @@ export function isCanvasWorkspaceProjectionRequest(
       typeof provenance['kind'] === 'string' &&
       typeof provenance['role'] === 'string' &&
       typeof provenance['sourceId'] === 'string' &&
+      (provenance['referenceLocators'] === undefined ||
+        (Array.isArray(provenance['referenceLocators']) &&
+          provenance['referenceLocators'].every(
+            (locator) => validateContentLocator(locator).ok,
+          ))) &&
       (provenance['sourceArtifactIds'] === undefined ||
         (Array.isArray(provenance['sourceArtifactIds']) &&
           provenance['sourceArtifactIds'].every((sourceId) => typeof sourceId === 'string'))) &&
@@ -976,6 +982,20 @@ function validateArtifactRelations(
 
   artifacts.forEach((artifact, index) => {
     const sourceArtifactIds = artifact.provenance.sourceArtifactIds;
+    const referenceLocators = artifact.provenance.referenceLocators;
+    if (
+      referenceLocators !== undefined &&
+      (!Array.isArray(referenceLocators) ||
+        referenceLocators.some((locator) => !validateContentLocator(locator).ok))
+    ) {
+      diagnostics.push(
+        diagnostic(
+          'invalid-content-locator',
+          'Canvas document references require canonical content locators.',
+          ['artifacts', index, 'provenance', 'referenceLocators'],
+        ),
+      );
+    }
     if (sourceArtifactIds === undefined) return;
     const path = ['artifacts', index, 'provenance', 'sourceArtifactIds'] as const;
     if (!Array.isArray(sourceArtifactIds)) {

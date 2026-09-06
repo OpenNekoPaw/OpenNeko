@@ -21,22 +21,19 @@ import {
   type CanvasMaterialMediaKind,
 } from './types/canvas-material-contracts';
 import type { JobFailureSummary, JobPhase } from '@neko/shared/job-lifecycle';
-import { hashStableValue } from '@neko/shared';
 import {
   isCanvasGenerationRecipe,
-  selectedCanvasGenerationOutput,
+  type CanvasGenerationInputMaterialBinding,
   type CanvasGenerationOutputBinding,
   type CanvasGenerationRecipe,
 } from './types/canvas-generation-node';
-import {
-  portableMaterialPath,
-  projectResolvedCanvasMaterialToCanvas,
-} from './canvas-content-authoring';
+import { resolveCanvasGenerationNodeDefaultSize } from './canvas-node-sizing';
+import { findAvailableCanvasNodePosition } from './utils/canvasNodePlacement';
 
-export interface CanvasGenerationProjectionInputMaterial {
-  readonly locator: ContentLocator;
-  readonly mediaKind: Extract<CanvasMaterialMediaKind, 'image' | 'audio' | 'video'>;
-}
+const GENERATION_LAYOUT_ORIGIN = { x: 120, y: 120 } as const;
+const GENERATION_SOURCE_GAP = 32;
+
+export type CanvasGenerationProjectionInputMaterial = CanvasGenerationInputMaterialBinding;
 
 export interface CanvasGenerationProjectionSnapshot {
   readonly ref: CanvasGenerationJobRef;
@@ -94,15 +91,18 @@ function projectGenerationSnapshot(
   inputCanvas: CanvasData,
   snapshot: CanvasGenerationProjectionSnapshot,
 ): CanvasData {
-  const position = snapshot.position ?? jobPosition(inputCanvas);
-  const prepared = projectGenerationInputMaterials(inputCanvas, snapshot, position);
+  const existing = findGenerationNode(inputCanvas, snapshot.ref);
+  const matchedInputNodeIds = findExistingInputNodeIds(inputCanvas, snapshot.inputMaterials).filter(
+    (nodeId) => nodeId !== existing?.id,
+  );
+  const inputNodeIds = uniqueStrings([...snapshot.inputNodeIds, ...matchedInputNodeIds]);
+  const position = resolveGenerationNodePosition(inputCanvas, snapshot, existing, inputNodeIds);
   const effectiveSnapshot = {
     ...snapshot,
-    inputNodeIds: uniqueStrings([...snapshot.inputNodeIds, ...prepared.inputNodeIds]),
+    inputNodeIds,
     position,
   };
-  assertProjectionSnapshot(prepared.canvas, effectiveSnapshot);
-  const existing = findGenerationNode(prepared.canvas, effectiveSnapshot.ref);
+  assertProjectionSnapshot(inputCanvas, effectiveSnapshot);
   if (existing?.data.outputs.length && snapshot.phase !== 'succeeded') {
     throw new Error('A non-succeeded Generation Job must not project result artifacts.');
   }
@@ -110,7 +110,7 @@ function projectGenerationSnapshot(
     throw new Error('A succeeded Generation Job requires at least one committed result locator.');
   }
   const outputs = createOutputBindings(effectiveSnapshot);
-  const canvas = upsertGenerationNode(prepared.canvas, effectiveSnapshot, existing, outputs);
+  const canvas = upsertGenerationNode(inputCanvas, effectiveSnapshot, existing, outputs);
   return projectJobLineage(
     canvas,
     effectiveSnapshot,
@@ -132,7 +132,9 @@ export function isCanvasGenerationProjectionSnapshot(
   }
   if (
     !Array.isArray(value['inputMaterials']) ||
-    !value['inputMaterials'].every(isProjectionInputMaterial)
+    !value['inputMaterials'].every(isProjectionInputMaterial) ||
+    new Set(value['inputMaterials'].map((material) => contentLocatorKey(material.locator))).size !==
+      value['inputMaterials'].length
   ) {
     return false;
   }
@@ -207,6 +209,13 @@ function assertProjectionSnapshot(
   if (snapshot.retryOf && snapshot.regenerateOf) {
     throw new Error('Canvas Generation projection cannot be both a retry and a regeneration.');
   }
+  if (
+    !snapshot.inputMaterials.every(isProjectionInputMaterial) ||
+    new Set(snapshot.inputMaterials.map((material) => contentLocatorKey(material.locator))).size !==
+      snapshot.inputMaterials.length
+  ) {
+    throw new Error('Canvas Generation projection input materials are invalid or duplicated.');
+  }
   const nodeIds = new Set(canvas.nodes.map((node) => node.id));
   for (const nodeId of snapshot.inputNodeIds) {
     if (!nodeId.trim() || !nodeIds.has(nodeId)) {
@@ -242,6 +251,9 @@ function upsertGenerationNode(
               ...node,
               data: {
                 recipe: snapshot.recipe,
+                ...(snapshot.inputMaterials.length > 0
+                  ? { inputMaterials: snapshot.inputMaterials }
+                  : {}),
                 latestRun: generationRun(snapshot),
                 outputs: [...merged.values()],
                 ...(selectedOutputId ? { selectedOutputId } : {}),
@@ -256,9 +268,10 @@ function upsertGenerationNode(
     { canvasData: canvas, generateId: () => generationNodeId(snapshot.ref) },
     {
       type: 'generation',
-      position: snapshot.position ?? jobPosition(canvas),
+      position: requireProjectionPosition(snapshot),
       data: {
         recipe: snapshot.recipe,
+        ...(snapshot.inputMaterials.length > 0 ? { inputMaterials: snapshot.inputMaterials } : {}),
         latestRun: generationRun(snapshot),
         outputs,
         ...(selectedOutput ? { selectedOutputId: selectedOutput.outputId } : {}),
@@ -274,19 +287,26 @@ function projectJobLineage(
 ): CanvasData {
   let connections = canvas.connections;
   for (const sourceId of snapshot.inputNodeIds) {
+    const source = canvas.nodes.find((node) => node.id === sourceId);
+    if (!source) {
+      throw new Error(`Canvas Generation input node "${sourceId}" does not exist.`);
+    }
+    const connection =
+      source.type === 'generation'
+        ? derivedFromConnection(sourceId, job.id)
+        : referenceConnection(sourceId, job.id);
     if (
       connections.some(
-        (connection) =>
-          connection.type === 'reference' &&
-          connection.sourceId === sourceId &&
-          connection.targetId === job.id,
+        (candidate) =>
+          candidate.type === connection.type &&
+          candidate.sourceId === sourceId &&
+          candidate.targetId === job.id,
       )
     ) {
       continue;
     }
-    const connection = referenceConnection(sourceId, job.id);
     if (connections.some((candidate) => candidate.id === connection.id)) {
-      throw new Error(`Canvas Generation reference identity "${connection.id}" is occupied.`);
+      throw new Error(`Canvas Generation input relation identity "${connection.id}" is occupied.`);
     }
     connections = [...connections, connection];
   }
@@ -412,45 +432,63 @@ function generationNodeId(ref: CanvasGenerationJobRef): string {
   return `generation:${encodeURIComponent(ref.jobId)}`;
 }
 
-function jobPosition(canvas: CanvasData): { readonly x: number; readonly y: number } {
-  return { x: 120 + (canvas.nodes.length % 3) * 36, y: 120 };
+function requireProjectionPosition(
+  snapshot: CanvasGenerationProjectionSnapshot,
+): CanvasNode['position'] {
+  if (!snapshot.position) {
+    throw new Error('Canvas Generation projection requires a resolved node position.');
+  }
+  return snapshot.position;
 }
 
-function projectGenerationInputMaterials(
+function resolveGenerationNodePosition(
   canvas: CanvasData,
   snapshot: CanvasGenerationProjectionSnapshot,
-  generationPosition: { readonly x: number; readonly y: number },
-): { readonly canvas: CanvasData; readonly inputNodeIds: readonly string[] } {
-  let next = canvas;
-  const inputNodeIds: string[] = [];
-  for (const material of snapshot.inputMaterials) {
-    const existing = findContentNode(next, material.locator);
-    if (existing) {
-      inputNodeIds.push(existing.id);
-      continue;
-    }
+  existing: GenerationCanvasNode | undefined,
+  inputNodeIds: readonly string[],
+): CanvasNode['position'] {
+  if (snapshot.position) return snapshot.position;
+  if (existing) return existing.position;
 
-    const locatorIdentity = contentLocatorKey(material.locator);
-    const nodeId = `generation-input:${hashStableValue(locatorIdentity).slice(0, 24)}`;
-    next = projectResolvedCanvasMaterialToCanvas({
-      canvas: next,
-      material: {
-        locator: material.locator,
-        title: basename(portableMaterialPath(material.locator)),
-        mediaKind: material.mediaKind,
-        position: {
-          x: generationPosition.x - 360,
-          y: generationPosition.y + inputNodeIds.length * 220,
-        },
-      },
-      generateId: () => nodeId,
-    });
-    if (!next.nodes.some((node) => node.id === nodeId)) {
-      throw new Error(`Canvas Generation input "${locatorIdentity}" was not projected.`);
-    }
-    inputNodeIds.push(nodeId);
-  }
-  return { canvas: next, inputNodeIds };
+  const sourceNodes = uniqueNodes([
+    ...inputNodeIds.map((nodeId) => requireCanvasNode(canvas, nodeId)),
+    ...(snapshot.retryOf ? [requireGenerationNode(canvas, snapshot.retryOf)] : []),
+    ...(snapshot.regenerateOf ? [requireGenerationNode(canvas, snapshot.regenerateOf)] : []),
+  ]);
+  const preferred =
+    sourceNodes.length > 0
+      ? {
+          x:
+            Math.max(...sourceNodes.map((node) => node.position.x + node.size.width)) +
+            GENERATION_SOURCE_GAP,
+          y: Math.min(...sourceNodes.map((node) => node.position.y)),
+        }
+      : GENERATION_LAYOUT_ORIGIN;
+  return findAvailableCanvasNodePosition(
+    preferred,
+    resolveCanvasGenerationNodeDefaultSize(snapshot.recipe.kind),
+    canvas.nodes.filter((node) => node.parentId === undefined),
+  );
+}
+
+function requireCanvasNode(canvas: CanvasData, nodeId: string): CanvasNode {
+  const node = canvas.nodes.find((candidate) => candidate.id === nodeId);
+  if (!node) throw new Error(`Canvas Generation input node "${nodeId}" does not exist.`);
+  return node;
+}
+
+function uniqueNodes(nodes: readonly CanvasNode[]): readonly CanvasNode[] {
+  return [...new Map(nodes.map((node) => [node.id, node])).values()];
+}
+
+function findExistingInputNodeIds(
+  canvas: CanvasData,
+  inputMaterials: readonly CanvasGenerationProjectionInputMaterial[],
+): readonly string[] {
+  return inputMaterials.flatMap((material) => {
+    const existing = findContentNode(canvas, material.locator);
+    return existing ? [existing.id] : [];
+  });
 }
 
 function findContentNode(canvas: CanvasData, locator: ContentLocator): CanvasNode | undefined {
@@ -458,8 +496,7 @@ function findContentNode(canvas: CanvasData, locator: ContentLocator): CanvasNod
   return canvas.nodes
     .filter((node) => {
       if (node.type === 'generation') {
-        const selected = selectedCanvasGenerationOutput(node.data);
-        return selected !== undefined && contentLocatorKey(selected.locator) === identity;
+        return node.data.outputs.some((output) => contentLocatorKey(output.locator) === identity);
       }
       const candidate = 'contentLocator' in node.data ? node.data.contentLocator : undefined;
       return isContentLocator(candidate) && contentLocatorKey(candidate) === identity;
@@ -471,12 +508,7 @@ function findContentNode(canvas: CanvasData, locator: ContentLocator): CanvasNod
 }
 
 function contentNodeRank(node: CanvasNode): number {
-  return node.type === 'media' || node.type === 'file' ? 0 : node.type === 'generation' ? 1 : 2;
-}
-
-function basename(value: string): string {
-  const normalized = value.replace(/\\/g, '/');
-  return normalized.slice(normalized.lastIndexOf('/') + 1) || value;
+  return node.type === 'generation' ? 0 : node.type === 'media' || node.type === 'file' ? 1 : 2;
 }
 
 function uniqueStrings(values: readonly string[]): readonly string[] {

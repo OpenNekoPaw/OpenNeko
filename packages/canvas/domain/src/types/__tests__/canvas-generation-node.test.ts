@@ -14,7 +14,20 @@ import {
 
 describe('Canvas Generation Node contract', () => {
   it('round-trips canonical Recipe, run, output, and selection facts without runtime state', () => {
-    const node = generationNode();
+    const node: GenerationCanvasNode = {
+      ...generationNode(),
+      data: {
+        ...generationNode().data,
+        inputMaterials: [
+          {
+            mediaKind: 'image',
+            locator: {
+              file: { authority: 'workspace', path: 'neko/generated/image/reference.png' },
+            },
+          },
+        ],
+      },
+    };
     const canvas: CanvasData = {
       name: 'Generation',
       nodes: [node],
@@ -28,6 +41,19 @@ describe('Canvas Generation Node contract', () => {
     expect(JSON.stringify(loaded.data)).not.toMatch(
       /schemaVersion|contractVersion|providerTask|runtimeUrl|runtimePath|credential|phase/,
     );
+  });
+
+  it('rejects duplicate embedded input material identities', () => {
+    const material = {
+      mediaKind: 'image' as const,
+      locator: { file: { authority: 'workspace' as const, path: 'reference.png' } },
+    };
+    expect(
+      isCanvasGenerationNodeData({
+        ...createCanvasGenerationNodeData('image'),
+        inputMaterials: [material, material],
+      }),
+    ).toBe(false);
   });
 
   it('loads persisted image Recipes whose selected model uses standard or HD quality names', () => {

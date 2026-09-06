@@ -2371,6 +2371,12 @@ button.canvas-node-external-label {
   white-space: nowrap;
 }
 
+[data-preview-feedback='compact'] .canvas-preview-feedback {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 0 4px 12px;
+}
+
 .selection-generation-input-panel__controls > select {
   max-width: 140px;
 }

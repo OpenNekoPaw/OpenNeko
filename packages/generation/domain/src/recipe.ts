@@ -72,7 +72,7 @@ export type GenerationRecipeResolvedInput =
     }
   | {
       readonly kind: 'image' | 'audio' | 'video';
-      readonly sourceNodeId: string;
+      readonly sourceNodeId?: string;
       readonly locator: ContentLocator;
     };
 

@@ -39,6 +39,12 @@ export interface CanvasCreateConnectionRequest {
   label?: string;
 }
 
+export interface CanvasGroupNodesRequest {
+  readonly nodeIds: readonly string[];
+  readonly groupId?: string;
+  readonly label?: string;
+}
+
 export interface CanvasCreateConnectionResult {
   connectionId: string;
   connection?: CanvasConnection;

@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { createNodeHostContentReadService } from '@neko/content-domain/node';
 import { type ContentReadService, type WorkspaceFileContentLocator } from '@neko/content-domain';
 import {
   beginCanvasGenerationRun,
@@ -15,6 +14,7 @@ import {
   type CanvasGenerationRuntimeProjection,
   type CanvasGenerationStartResult,
   type CanvasGenerationWorkspace,
+  type CanvasHostRuntimeIdentity,
 } from '@neko/canvas-domain';
 import {
   GenerationJobError,
@@ -40,7 +40,7 @@ export interface CanvasGenerationWorkspaceJobResolver {
 
 export interface CanvasGenerationNodeRuntimeOptions {
   readonly generation: CanvasGenerationWorkspaceJobResolver;
-  readonly createContentReader?: (workspaceRoot: string) => ContentReadService;
+  readonly createContentReader: (workspaceRoot: string, projectId: string) => ContentReadService;
   readonly createSubmissionId?: () => string;
 }
 
@@ -70,7 +70,12 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
       }
     }
 
-    const prepared = await this.prepare(input.workspace, input.canvas, input.nodeId);
+    const prepared = await this.prepare(
+      input.workspace,
+      input.canvas,
+      input.nodeId,
+      input.identity.projectId,
+    );
     const submissionId = this.createSubmissionId();
     const runCanvas = replaceNodeData(
       input.canvas,
@@ -100,7 +105,12 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
     }
     if (input.run.jobRef) {
       const jobs = await this.requireWorkspaceJobs(input.workspace);
-      const prepared = await this.prepare(input.workspace, input.canvas, input.nodeId);
+      const prepared = await this.prepare(
+        input.workspace,
+        input.canvas,
+        input.nodeId,
+        input.identity.projectId,
+      );
       const snapshot = await jobs.describeGeneration(input.run.jobRef);
       const selected = selectedCanvasGenerationOutput(node.data);
       return {
@@ -108,6 +118,7 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
         projection: {
           ...(await this.projectSnapshot(
             input.workspace,
+            input.identity.projectId,
             input.nodeId,
             input.run,
             snapshot,
@@ -117,7 +128,12 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
         },
       };
     }
-    const prepared = await this.prepare(input.workspace, input.canvas, input.nodeId);
+    const prepared = await this.prepare(
+      input.workspace,
+      input.canvas,
+      input.nodeId,
+      input.identity.projectId,
+    );
     if (prepared.fingerprint !== input.run.recipeInputFingerprint) {
       return {
         canvas: input.canvas,
@@ -151,14 +167,26 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
     const initial = await jobs.describeGeneration(input.run.jobRef);
     assertSnapshotBinding(input.run, initial);
     updatedAt = initial.updatedAt;
-    yield await this.projectSnapshot(input.workspace, input.nodeId, input.run, initial);
+    yield await this.projectSnapshot(
+      input.workspace,
+      input.identity.projectId,
+      input.nodeId,
+      input.run,
+      initial,
+    );
     if (isTerminalJobPhase(initial.phase)) return;
     for await (const snapshot of jobs.observeGeneration(input.run.jobRef)) {
       this.requireActive();
       assertSnapshotBinding(input.run, snapshot);
       if (snapshot.updatedAt < updatedAt) continue;
       updatedAt = snapshot.updatedAt;
-      yield await this.projectSnapshot(input.workspace, input.nodeId, input.run, snapshot);
+      yield await this.projectSnapshot(
+        input.workspace,
+        input.identity.projectId,
+        input.nodeId,
+        input.run,
+        snapshot,
+      );
       if (isTerminalJobPhase(snapshot.phase)) return;
     }
     throw new Error(
@@ -173,7 +201,13 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
     const jobs = await this.requireWorkspaceJobs(input.workspace);
     const snapshot = await jobs.cancelGeneration({ ref: input.run.jobRef });
     assertSnapshotBinding(input.run, snapshot);
-    return this.projectSnapshot(input.workspace, input.nodeId, input.run, snapshot);
+    return this.projectSnapshot(
+      input.workspace,
+      input.identity.projectId,
+      input.nodeId,
+      input.run,
+      snapshot,
+    );
   }
 
   detachWindow(_windowId: string): void {
@@ -185,6 +219,7 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
   }
 
   private async submitAndBind(input: {
+    readonly identity: CanvasHostRuntimeIdentity;
     readonly workspace: CanvasGenerationWorkspace;
     readonly canvas: CanvasData;
     readonly nodeId: string;
@@ -225,7 +260,13 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
     if (!run?.jobRef) throw new Error('Canvas Generation Job binding was not persisted.');
     return {
       canvas: boundCanvas,
-      projection: await this.projectSnapshot(input.workspace, input.nodeId, run, snapshot),
+      projection: await this.projectSnapshot(
+        input.workspace,
+        input.identity.projectId,
+        input.nodeId,
+        run,
+        snapshot,
+      ),
     };
   }
 
@@ -233,6 +274,7 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
     workspace: CanvasGenerationWorkspace,
     canvas: CanvasData,
     nodeId: string,
+    projectId: string,
   ): Promise<{ readonly request: GenerationJobRequest; readonly fingerprint: string }> {
     const node = requireCanvasGenerationNode(canvas, nodeId);
     const model = node.data.recipe.model;
@@ -242,9 +284,7 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
       kind: node.data.recipe.kind,
       binding: model,
     });
-    const reader =
-      this.options.createContentReader?.(workspace.workspacePath) ??
-      createNodeHostContentReadService({ workspaceRoot: workspace.workspacePath });
+    const reader = this.options.createContentReader(workspace.workspacePath, projectId);
     const inputs = await resolveCanvasGenerationInputs({
       canvas,
       nodeId,
@@ -262,7 +302,7 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
             digest: result.fingerprint.value,
           };
         },
-        authorizeLocator: async (locator) => (await reader.stat(locator)).status === 'ready',
+        stat: (locator) => reader.stat(locator),
       },
     });
     const fingerprint = fingerprintValue({ recipe: node.data.recipe, inputs });
@@ -279,6 +319,7 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
 
   private async projectSnapshot(
     workspace: CanvasGenerationWorkspace,
+    projectId: string,
     nodeId: string,
     run: CanvasGenerationRunBinding,
     snapshot: GenerationJobSnapshot,
@@ -292,9 +333,7 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
     ) {
       return projection;
     }
-    const reader =
-      this.options.createContentReader?.(workspace.workspacePath) ??
-      createNodeHostContentReadService({ workspaceRoot: workspace.workspacePath });
+    const reader = this.options.createContentReader(workspace.workspacePath, projectId);
     const content = await reader.read(selectedPromptLocator ?? snapshot.resultLocators![0]!, {
       maxBytes: 4 * 1024 * 1024,
     });

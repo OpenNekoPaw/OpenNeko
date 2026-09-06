@@ -11,7 +11,7 @@ export const CONTENT_IMAGES_DSH_TOOL_NAME = 'openneko_read_images' as const;
 export const CONTENT_IMAGE_DSH_TOOL_OPERATION = 'read-chunk' as const;
 export const CONTENT_IMAGE_DSH_CHUNK_BYTES = 128 * 1024;
 export const CONTENT_IMAGE_DSH_DETAILS = ['overview', 'original'] as const;
-export const CONTENT_IMAGES_DSH_MAX_SOURCES = 4;
+export const CONTENT_IMAGES_DSH_MAX_SOURCES = 16;
 
 export type ContentImageDshDetail = (typeof CONTENT_IMAGE_DSH_DETAILS)[number];
 
@@ -19,7 +19,7 @@ export const CONTENT_IMAGE_DSH_SOURCE_SCHEMA = {
   type: 'object',
   title: 'workspace ContentLocator',
   description:
-    'Canonical Workspace ContentLocator for raster image bytes. Preserve an imageInfo locator returned by openneko_document exactly; document image entries include selector.kind="entry" and selector.path. A chapter, XHTML, HTML, or other document entry is not an image source.',
+    'Canonical Workspace ContentLocator for raster image bytes. Preserve an imageInfo locator returned by openneko_document exactly; document image entries include selector.kind="entry" and selector.path. A chapter, XHTML, HTML, or other document entry is not an image source. This locator contains only file and optional selector; do not put read options such as detail inside it.',
   properties: {
     file: {
       type: 'object',
@@ -51,7 +51,7 @@ export const CONTENT_IMAGE_DSH_TOOL_PARAMETERS = {
     type: 'string',
     enum: CONTENT_IMAGE_DSH_DETAILS,
     description:
-      'Use overview for initial visual screening and original only for selected images that need close inspection. Defaults to original.',
+      'Top-level sibling of source, never source.detail. Use overview for initial visual screening and original only for selected images that need close inspection. Defaults to original. Example: {"source":{"file":{"authority":"workspace","path":"reference.png"}},"detail":"overview"}.',
   },
 } as const;
 
@@ -61,7 +61,7 @@ export const CONTENT_IMAGES_DSH_TOOL_PARAMETERS = {
     items: CONTENT_IMAGE_DSH_SOURCE_SCHEMA,
     required: true,
     description:
-      'One to four distinct raster image ContentLocators in comparison order. Use imageInfo locators returned by openneko_document, never chapter/XHTML/HTML entries. The result is one overview contact sheet; use openneko_read_image only after selecting a page for close inspection.',
+      'One to sixteen distinct raster image ContentLocators in reading/comparison order. Prefer eight pages per batch; use four for dense pages and up to sixteen for broad overview. A final batch may contain fewer than four pages. Use imageInfo locators returned by openneko_document, never chapter/XHTML/HTML entries. The result is ONE large contact sheet of numbered thumbnails, not separate image attachments. Use openneko_read_image with detail="original" for names, dialogue, equipment and other details selected from the overview.',
   },
 } as const;
 

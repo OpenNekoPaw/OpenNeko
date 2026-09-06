@@ -117,6 +117,38 @@ describe('SelectionGenerationInputPanel', () => {
     );
   });
 
+  it('renders an embedded Agent input without requiring a separate Canvas material node', () => {
+    const postMessage = vi.fn();
+    const locator = {
+      file: {
+        authority: 'workspace' as const,
+        path: 'neko/generated/image/first-frame.png',
+      },
+    };
+    const base = generationNode({ kind: 'video', prompt: 'Animate the first frame' });
+    const node: GenerationCanvasNode = {
+      ...base,
+      data: {
+        ...base.data,
+        inputMaterials: [{ mediaKind: 'image', locator }],
+      },
+    };
+    render([node], [], [node.id], createHost(undefined, { postMessage }));
+
+    expect(
+      container.querySelector('[data-canvas-generation-reference-preview="image"]'),
+    ).not.toBeNull();
+    expect(container.textContent).toContain('first-frame.png');
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'preview:resolveResource',
+        nodeId: node.id,
+        contentLocator: locator,
+        contentKind: 'image',
+      }),
+    );
+  });
+
   it('adds an authorized reference to the exact generation node', async () => {
     const attachGenerationReference = vi.fn(async () => snapshot());
     const node = generationNode({ kind: 'image', prompt: '' });

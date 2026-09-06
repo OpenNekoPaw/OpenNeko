@@ -548,6 +548,42 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     });
   });
 
+  it('routes grouping only through the exact authorized Canvas owner', async () => {
+    const service = createCanvasService();
+    const snapshot = createCanvasSnapshot();
+    vi.mocked(service.groupNodes).mockResolvedValue({
+      ...snapshot,
+      node: snapshot.canvas.nodes[0]!,
+    });
+    const adapter = new CanvasDshHostAdapter(service);
+    const input = {
+      documentPath: snapshot.documentPath,
+      command: { kind: 'group_nodes', nodeIds: ['node-1'], label: '设计批次' },
+    };
+    expect(await adapter.execute(request('openneko_canvas', 'apply', input))).toMatchObject({
+      outcome: 'success',
+      result: { command: 'group_nodes', nodeId: 'node-1' },
+    });
+    expect(service.groupNodes).toHaveBeenCalledExactlyOnceWith({
+      documentPath: snapshot.documentPath,
+      request: input.command,
+    });
+    expect(
+      await adapter.execute(
+        request('openneko_canvas', 'apply', {
+          ...input,
+          command: { ...input.command, nodeIds: [] },
+        }),
+      ),
+    ).toMatchObject({ outcome: 'failure', diagnostic: { code: 'CANVAS_DSH_TOOL_INVALID_INPUT' } });
+    expect(service.groupNodes).toHaveBeenCalledTimes(1);
+    expect(
+      await adapter.execute(request('openneko_canvas', 'apply', input, 'read-only')),
+    ).toMatchObject({ outcome: 'failure', diagnostic: { code: 'DSH_DOMAIN_TOOL_READ_ONLY' } });
+    expect(service.groupNodes).toHaveBeenCalledTimes(1);
+    expect(service.createNode).not.toHaveBeenCalled();
+  });
+
   it('does not wrap domain Tools in MCP or use a wildcard Host tool registry', async () => {
     const generationSource = await import('node:fs/promises').then(({ readFile }) =>
       readFile(new URL('./generation-host-adapter.ts', import.meta.url), 'utf8'),
@@ -660,6 +696,7 @@ async function* snapshots(
 
 function createCanvasService(): CanvasDshAuthoringPort {
   return {
+    groupNodes: vi.fn(),
     query: vi.fn(),
     createNode: vi.fn(),
     updateNode: vi.fn(),

@@ -14,6 +14,7 @@ export * from './dsh-domain-tool-context-resolver';
 export * from './dsh-skill-authoring';
 export * from './dsh-conversation-turn-context';
 export * from './dsh-canvas-artifact-delivery';
+export * from './dsh-canvas-image-overview';
 export * from './dsh-turn-canvas-target-owner';
 export * from './dsh-permission-owner';
 export * from './agent-authoring-mutation-authority';

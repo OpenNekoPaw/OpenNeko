@@ -1,4 +1,9 @@
-import { validateContentLocator, type ContentLocator } from '@neko/content-domain';
+import {
+  contentLocatorKey,
+  validateContentLocator,
+  type ContentLocator,
+  type ContentReadService,
+} from '@neko/content-domain';
 import type { CanvasData, CanvasNode, GenerationCanvasNode } from './types/canvas';
 import {
   selectedCanvasGenerationOutput,
@@ -16,17 +21,14 @@ export type CanvasGenerationResolvedInput =
     }
   | {
       readonly kind: 'image' | 'audio' | 'video';
-      readonly sourceNodeId: string;
+      readonly sourceNodeId?: string;
       readonly locator: ContentLocator;
     };
 
 export interface CanvasGenerationInputResolutionPort {
   fingerprintText(text: string): string | Promise<string>;
   readText(locator: ContentLocator): Promise<{ readonly text: string; readonly digest: string }>;
-  authorizeLocator(
-    locator: ContentLocator,
-    expectedKind: Exclude<CanvasGenerationInputKind, 'text'> | 'document',
-  ): boolean | Promise<boolean>;
+  stat: ContentReadService['stat'];
 }
 
 export class CanvasGenerationInputError extends Error {
@@ -37,7 +39,7 @@ export class CanvasGenerationInputError extends Error {
       | 'generation-input-output-unavailable'
       | 'generation-input-type-mismatch'
       | 'generation-input-locator-invalid'
-      | 'generation-input-unauthorized',
+      | 'generation-input-unavailable',
     message: string,
     readonly sourceNodeId?: string,
   ) {
@@ -60,7 +62,7 @@ export async function resolveCanvasGenerationInputs(input: {
   }
   const resolved: CanvasGenerationResolvedInput[] = [];
   for (const connection of input.canvas.connections.filter(
-    (candidate) => candidate.targetId === target.id,
+    (candidate) => candidate.targetId === target.id && candidate.type === 'reference',
   )) {
     const source = input.canvas.nodes.find((node) => node.id === connection.sourceId);
     if (!source) {
@@ -73,6 +75,21 @@ export async function resolveCanvasGenerationInputs(input: {
     const value = await resolveSource(source, input.port);
     assertCompatible(target.data.recipe.kind, value.kind, source.id);
     resolved.push(value);
+  }
+  const connectedLocatorKeys = new Set(
+    resolved.flatMap((value) =>
+      value.kind === 'image' || value.kind === 'audio' || value.kind === 'video'
+        ? [contentLocatorKey(value.locator)]
+        : [],
+    ),
+  );
+  for (const material of target.data.inputMaterials ?? []) {
+    const locatorKey = contentLocatorKey(material.locator);
+    if (connectedLocatorKeys.has(locatorKey)) continue;
+    const value = await resolveLocator(undefined, material.locator, material.mediaKind, input.port);
+    assertCompatible(target.data.recipe.kind, value.kind, undefined);
+    resolved.push(value);
+    connectedLocatorKeys.add(locatorKey);
   }
   return resolved;
 }
@@ -99,7 +116,7 @@ async function resolveSource(
     case 'file': {
       if (source.data.mediaKind === 'document') {
         const locator = requireLocator(source.id, source.data.contentLocator);
-        await authorize(source.id, locator, 'document', port);
+        await assertAvailable(source.id, locator, 'document', port);
         const text = await port.readText(locator);
         return { kind: 'text', sourceNodeId: source.id, ...text };
       }
@@ -135,7 +152,7 @@ async function resolveGenerationSource(
     );
   }
   if (output.kind === 'prompt') {
-    await authorize(source.id, output.locator, 'document', port);
+    await assertAvailable(source.id, output.locator, 'document', port);
     const text = await port.readText(output.locator);
     return { kind: 'text', sourceNodeId: source.id, ...text };
   }
@@ -143,38 +160,41 @@ async function resolveGenerationSource(
 }
 
 async function resolveLocator(
-  sourceNodeId: string,
+  sourceNodeId: string | undefined,
   value: unknown,
   kind: 'image' | 'audio' | 'video',
   port: CanvasGenerationInputResolutionPort,
 ): Promise<CanvasGenerationResolvedInput> {
   const locator = requireLocator(sourceNodeId, value);
-  await authorize(sourceNodeId, locator, kind, port);
-  return { kind, sourceNodeId, locator };
+  await assertAvailable(sourceNodeId, locator, kind, port);
+  return { kind, ...(sourceNodeId ? { sourceNodeId } : {}), locator };
 }
 
-function requireLocator(sourceNodeId: string, value: unknown): ContentLocator {
+function requireLocator(sourceNodeId: string | undefined, value: unknown): ContentLocator {
   const validation = validateContentLocator(value);
   if (!validation.ok) {
+    const source = sourceNodeId ? `node "${sourceNodeId}"` : 'embedded material';
     throw new CanvasGenerationInputError(
       'generation-input-locator-invalid',
-      `Canvas Generation input "${sourceNodeId}" has no stable ContentLocator.`,
+      `Canvas Generation ${source} has no stable ContentLocator.`,
       sourceNodeId,
     );
   }
   return validation.locator;
 }
 
-async function authorize(
-  sourceNodeId: string,
+async function assertAvailable(
+  sourceNodeId: string | undefined,
   locator: ContentLocator,
   kind: 'image' | 'audio' | 'video' | 'document',
   port: CanvasGenerationInputResolutionPort,
 ): Promise<void> {
-  if (!(await port.authorizeLocator(locator, kind))) {
+  const result = await port.stat(locator);
+  if (result.status !== 'ready') {
+    const source = sourceNodeId ? `node "${sourceNodeId}"` : 'embedded material';
     throw new CanvasGenerationInputError(
-      'generation-input-unauthorized',
-      `Canvas Generation input "${sourceNodeId}" is not authorized for ${kind}.`,
+      'generation-input-unavailable',
+      `Canvas Generation ${source} ${kind} input is unavailable: ${result.diagnostic.code}.`,
       sourceNodeId,
     );
   }
@@ -183,13 +203,14 @@ async function authorize(
 function assertCompatible(
   targetKind: CanvasGenerationKind,
   inputKind: CanvasGenerationInputKind,
-  sourceNodeId: string,
+  sourceNodeId: string | undefined,
 ): void {
   const accepted = ACCEPTED_INPUTS[targetKind];
   if (!accepted.includes(inputKind)) {
+    const source = sourceNodeId ? `node "${sourceNodeId}"` : 'embedded material';
     throw new CanvasGenerationInputError(
       'generation-input-type-mismatch',
-      `Canvas Generation ${targetKind} Recipe does not accept ${inputKind} input from "${sourceNodeId}".`,
+      `Canvas Generation ${targetKind} Recipe does not accept ${inputKind} input from ${source}.`,
       sourceNodeId,
     );
   }

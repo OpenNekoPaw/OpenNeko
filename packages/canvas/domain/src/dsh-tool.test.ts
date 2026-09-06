@@ -21,6 +21,45 @@ import type {
 } from './canvas-project-authoring-service';
 
 describe('Canvas DSH tool contract', () => {
+  it('validates exact resource lookup without accepting malformed or unbounded locators', () => {
+    const locator = { file: { authority: 'workspace', path: 'neko/generated/image/shot.png' } };
+    const input = { documentPath: 'boards/story.nkc', contentLocators: [locator] };
+    expect(decodeCanvasDshToolInput('query', input)).toEqual({ operation: 'query', input });
+    for (const contentLocators of [
+      [],
+      [locator, locator],
+      [{ file: { authority: 'workspace', path: '../outside.png' } }],
+    ]) {
+      expect(() => decodeCanvasDshToolInput('query', { ...input, contentLocators })).toThrow();
+    }
+  });
+  it('accepts explicit batch membership and rejects layout injection or ambiguous members', () => {
+    const input = {
+      documentPath: 'boards/story.nkc',
+      command: {
+        kind: 'group_nodes',
+        nodeIds: ['first', 'second'],
+        groupId: 'batch',
+        label: '同批素材',
+      },
+    };
+    expect(decodeCanvasDshToolInput('apply', input)).toEqual({ operation: 'apply', input });
+    for (const nodeIds of [
+      [],
+      ['first', 'first'],
+      Array.from({ length: 33 }, (_, index) => `node-${index}`),
+    ]) {
+      expect(() =>
+        decodeCanvasDshToolInput('apply', { ...input, command: { ...input.command, nodeIds } }),
+      ).toThrow();
+    }
+    expect(() =>
+      decodeCanvasDshToolInput('apply', {
+        ...input,
+        command: { ...input.command, position: { x: 0, y: 0 } },
+      }),
+    ).toThrow();
+  });
   it('exposes only bounded query and single-command apply inputs', () => {
     expect(CANVAS_DSH_TOOL_NAME).toBe('openneko_canvas');
     expect(CANVAS_DSH_TOOL_OPERATIONS).toEqual(['query', 'apply']);
@@ -131,7 +170,7 @@ describe('Canvas DSH tool contract', () => {
         documentPath: 'boards/story.nkc',
         command: { kind: 'create-node', node: {} },
       }),
-    ).toThrow(/create_node, update_node, or create_connection/u);
+    ).toThrow(/create_node, update_node, create_connection, or group_nodes/u);
     expect(() =>
       decodeCanvasDshToolInput('apply', {
         documentPath: 'boards/story.nkc',

@@ -1,5 +1,6 @@
 import {
   createCanvasGenerationNode,
+  canvasGenerationInputPreviewId,
   createEmptyCanvasData,
   updateCanvasGenerationNodeRecipe,
   type CanvasMaterialActionDescriptor,
@@ -28,6 +29,58 @@ const identity: CanvasHostRuntimeIdentity = {
 };
 
 describe('CanvasHostRuntimeSession', () => {
+  it('authorizes saved input previews without granting arbitrary resources or changing outputs', () => {
+    const locator = {
+      file: { authority: 'workspace' as const, path: 'books/source.epub' },
+      selector: { kind: 'entry' as const, path: 'image/reference.jpg' },
+    };
+    const runtime = new CanvasHostRuntimeSession({
+      identity,
+      effects: {},
+      initialCanvas: {
+        ...createEmptyCanvasData(),
+        nodes: [
+          {
+            id: 'input-owner',
+            type: 'generation',
+            position: { x: 0, y: 0 },
+            size: { width: 240, height: 180 },
+            zIndex: 1,
+            data: {
+              recipe: { kind: 'image', prompt: 'Use the reference' },
+              outputs: [],
+              inputMaterials: [{ mediaKind: 'image', locator }],
+            },
+          },
+        ],
+      },
+    });
+    const preview = {
+      nodeId: 'input-owner',
+      outputId: canvasGenerationInputPreviewId(locator),
+      locator,
+      contentKind: 'image' as const,
+    };
+    expect(() => runtime.authorizePreviewSource(preview)).not.toThrow();
+    expect(() => runtime.authorizePreviewSource({ ...preview, contentKind: 'video' })).toThrow(
+      'reference',
+    );
+    expect(() => runtime.authorizePreviewSource({ ...preview, nodeId: 'another-node' })).toThrow(
+      'stale',
+    );
+    const forged = { ...locator, selector: { kind: 'entry' as const, path: 'image/secret.jpg' } };
+    expect(() =>
+      runtime.authorizePreviewSource({
+        ...preview,
+        locator: forged,
+        outputId: canvasGenerationInputPreviewId(forged),
+      }),
+    ).toThrow('reference');
+    expect(() =>
+      runtime.authorizePreviewSource({ ...preview, outputId: 'invented-output' }),
+    ).toThrow('output');
+    expect(() => runtime.authorizePreviewSource(preview)).not.toThrow();
+  });
   it('owns serialized replace, undo, redo and atomic save effects', async () => {
     const saveDocument = vi.fn(async () => undefined);
     const runtime = new CanvasHostRuntimeSession({

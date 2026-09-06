@@ -25,6 +25,51 @@ describe('PreviewSurface canonical descriptor lifecycle', () => {
     vi.restoreAllMocks();
   });
 
+  it('keeps thumbnail diagnostics accessible without rendering full error text inside the tile', async () => {
+    const listeners = new Set<(message: unknown) => void>();
+    const error = 'Canvas reference is unavailable: neko/generated/image/a-very-long-filename.png';
+    const host = {
+      documentId: 'board.nkc',
+      supportsMessage: () => true,
+      getState: () => undefined,
+      setState: () => undefined,
+      postMessage(message: unknown) {
+        if (!isRecord(message) || message['type'] !== 'preview:resolveResource') return;
+        queueMicrotask(() =>
+          listeners.forEach((listener) =>
+            listener({ type: 'preview:resourceResolved', requestId: message['requestId'], error }),
+          ),
+        );
+      },
+      subscribe(listener: (message: unknown) => void) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    } as unknown as CanvasWebviewHostPort;
+    await act(async () =>
+      root.render(
+        <CanvasHostProvider host={host}>
+          <PreviewSurface
+            feedback="compact"
+            source={{
+              id: 'reference',
+              nodeId: 'node',
+              outputId: 'input',
+              role: 'source-image',
+              contentLocator: { file: { authority: 'workspace', path: 'image.png' } },
+            }}
+          />
+        </CanvasHostProvider>,
+      ),
+    );
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.getAttribute('title')).toBe(error);
+    expect(alert?.getAttribute('aria-label')).toBe(error);
+    expect(alert?.textContent).toBe('');
+    expect(alert?.querySelector('svg')).not.toBeNull();
+    expect(container.querySelector('img')).toBeNull();
+  });
+
   it('resolves one descriptor, renders the shared Viewer, and releases the exact lease', async () => {
     vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
     const messages: unknown[] = [];

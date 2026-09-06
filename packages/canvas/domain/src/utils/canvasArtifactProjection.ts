@@ -12,7 +12,7 @@ import type {
   GroupCanvasNode,
 } from '../types/canvas';
 import type { CanvasHeadlessAuthoringOperation } from '../types/canvas-headless-authoring';
-import { contentLocatorKey, isContentLocator } from '@neko/content-domain';
+import { contentLocatorKey, isContentLocator, type ContentLocator } from '@neko/content-domain';
 import { hashStableValue } from '@neko/shared';
 import {
   applyCanvasHeadlessAuthoringOperations,
@@ -25,14 +25,14 @@ import {
   resolveCanvasNodeDefaultSize,
 } from '../canvas-node-sizing';
 import { projectGenerationSnapshotToCanvasDelivery } from '../canvas-generation-projection';
+import { findAvailableCanvasNodePosition } from './canvasNodePlacement';
+import { readCanvasNodeContentLocators } from './canvasNodeContent';
 
 /** Existing inbox node identity retained for rendering; new projections never create it. */
 export const CANVAS_WORKSPACE_INBOX_NODE_ID = 'workspace-inbox' as const;
 
 const CONTENT_ORIGIN = { x: 40, y: 40 } as const;
 const CONTENT_HORIZONTAL_GAP = 32;
-const CONTENT_VERTICAL_GAP = 16;
-const CONTENT_COLUMN_GAP = 16;
 const CONTENT_LANE_WIDTH = 288;
 const CONTENT_GRID_COLUMNS = 5;
 const GROUP_PADDING = 16;
@@ -124,7 +124,7 @@ export function planCanvasArtifactProjection(
       continue;
     }
 
-    const exactExisting = existingContentNodes.get(contentIdentity)?.[0];
+    const exactExisting = selectExistingContentNode(existingContentNodes.get(contentIdentity));
     const existing = exactExisting;
     if (existing) {
       const refreshed = refreshExistingResourceProvenance(existing, artifact);
@@ -168,7 +168,7 @@ export function planCanvasArtifactProjection(
             }),
           ),
       );
-      const groupPosition = findAvailableContentPosition(
+      const groupPosition = findAvailableCanvasNodePosition(
         createPreferredPosition('output', groupedSourceNodes, roleLanes),
         generatedBatchGroup.size,
         topLevelLayoutNodes,
@@ -202,7 +202,7 @@ export function planCanvasArtifactProjection(
     const size = artifactNodeSize(artifact);
     const position = belongsToGeneratedBatchGroup
       ? generatedBatchChildPositions?.get(id)
-      : findAvailableContentPosition(
+      : findAvailableCanvasNodePosition(
           createPreferredPosition(artifact.provenance.role, sourceNodes, roleLanes),
           size,
           topLevelLayoutNodes,
@@ -230,6 +230,7 @@ export function planCanvasArtifactProjection(
     artifacts,
     resolvedByArtifactId,
     canvasData.connections,
+    layoutNodes,
   );
   operations.push(
     ...projectedConnections.created.map((connection): CanvasHeadlessAuthoringOperation => ({
@@ -341,14 +342,39 @@ function indexExistingContentNodes(
 ): ReadonlyMap<string, readonly CanvasNode[]> {
   const index = new Map<string, CanvasNode[]>();
   for (const node of nodes) {
-    const identity = readNodeContentIdentity(node);
-    if (!identity) continue;
-    const matches = index.get(identity) ?? [];
-    matches.push(node);
-    matches.sort((left, right) => left.zIndex - right.zIndex || left.id.localeCompare(right.id));
-    index.set(identity, matches);
+    const identities = [
+      ...readCanvasNodeContentLocators(node).map(locatorIdentity),
+      readNodeContentIdentity(node),
+    ];
+    for (const identity of new Set(identities)) {
+      if (!identity) continue;
+      const matches = index.get(identity) ?? [];
+      matches.push(node);
+      matches.sort(
+        (left, right) =>
+          Number(right.type === 'generation') - Number(left.type === 'generation') ||
+          left.zIndex - right.zIndex ||
+          left.id.localeCompare(right.id),
+      );
+      index.set(identity, matches);
+    }
   }
   return index;
+}
+
+function selectExistingContentNode(
+  matches: readonly CanvasNode[] | undefined,
+): CanvasNode | undefined {
+  if (matches && matches.filter((node) => node.type === 'generation').length > 1) {
+    throw new Error(
+      'projection-conflict: Multiple Generation nodes own this output; an explicit node relationship is required.',
+    );
+  }
+  return matches?.[0];
+}
+
+function locatorIdentity(locator: ContentLocator): string {
+  return hashStableValue({ kind: 'content-locator', locator: contentLocatorKey(locator) });
 }
 
 function createArtifactContentIdentity(artifact: CanvasWorkspaceProjectionArtifact): string {
@@ -535,44 +561,6 @@ function createPreferredPosition(
   return { x: CONTENT_ORIGIN.x + lane * CONTENT_LANE_WIDTH, y: CONTENT_ORIGIN.y };
 }
 
-function findAvailableContentPosition(
-  preferred: CanvasNode['position'],
-  size: CanvasNode['size'],
-  existingNodes: readonly CanvasNode[],
-): CanvasNode['position'] {
-  let y = preferred.y;
-  while (true) {
-    let nextY = y;
-    for (let column = 0; column < CONTENT_GRID_COLUMNS; column += 1) {
-      const position = {
-        x: preferred.x + column * (size.width + CONTENT_COLUMN_GAP),
-        y,
-      };
-      const intersecting = existingNodes.filter((node) =>
-        rectanglesOverlap({ position, size }, node),
-      );
-      if (intersecting.length === 0) return position;
-      nextY = Math.max(
-        nextY,
-        ...intersecting.map((node) => node.position.y + node.size.height + CONTENT_VERTICAL_GAP),
-      );
-    }
-    y = nextY > y ? nextY : y + size.height + CONTENT_VERTICAL_GAP;
-  }
-}
-
-function rectanglesOverlap(
-  left: Pick<CanvasNode, 'position' | 'size'>,
-  right: Pick<CanvasNode, 'position' | 'size'>,
-): boolean {
-  return !(
-    left.position.x + left.size.width <= right.position.x ||
-    right.position.x + right.size.width <= left.position.x ||
-    left.position.y + left.size.height <= right.position.y ||
-    right.position.y + right.size.height <= left.position.y
-  );
-}
-
 function createArtifactNode(
   artifact: CanvasWorkspaceProjectionArtifact,
   id: string,
@@ -679,6 +667,14 @@ function createSerializableProvenance(
     ...(provenance.sourceArtifactIds
       ? { sourceArtifactIds: [...provenance.sourceArtifactIds] }
       : {}),
+    ...(provenance.referenceLocators
+      ? {
+          referenceLocators: provenance.referenceLocators.map((locator) => ({
+            file: { ...locator.file },
+            ...(locator.selector ? { selector: { ...locator.selector } } : {}),
+          })),
+        }
+      : {}),
     ...(provenance.taskId ? { taskId: provenance.taskId } : {}),
     ...(provenance.runId ? { runId: provenance.runId } : {}),
     createdAt: provenance.createdAt,
@@ -689,6 +685,7 @@ function planArtifactConnections(
   artifacts: readonly CanvasWorkspaceProjectionArtifact[],
   resolvedByArtifactId: ReadonlyMap<string, ResolvedProjectionArtifact>,
   existingConnections: readonly CanvasConnection[],
+  nodes: readonly CanvasNode[],
 ): {
   readonly created: readonly CanvasConnection[];
   readonly connectionIds: readonly string[];
@@ -732,6 +729,40 @@ function planArtifactConnections(
       };
       created.push(connection);
       connectionIds.push(connection.id);
+      allConnections.push(connection);
+    }
+  }
+  const indexedNodes = indexExistingContentNodes(nodes);
+  for (const artifact of artifacts) {
+    const target = resolvedByArtifactId.get(artifact.provenance.artifactId);
+    if (!target) throw new Error(`Artifact ${artifact.provenance.artifactId} was not resolved.`);
+    for (const locator of artifact.provenance.referenceLocators ?? []) {
+      const source = selectExistingContentNode(indexedNodes.get(locatorIdentity(locator)));
+      // A document link does not authorize importing an additional Canvas node.
+      if (!source || source.id === target.node.id) continue;
+      const equivalent = allConnections.find(
+        (connection) =>
+          connection.sourceId === source.id &&
+          connection.targetId === target.node.id &&
+          connection.type === 'reference',
+      );
+      if (equivalent) {
+        connectionIds.push(equivalent.id);
+        continue;
+      }
+      const id = `workspace-reference-${hashStableValue({ sourceId: source.id, targetId: target.node.id }).slice(0, 24)}`;
+      if (allConnections.some((connection) => connection.id === id))
+        throw new Error(`projection-conflict: Canvas connection ${id} is occupied.`);
+      const connection: CanvasConnection = {
+        id,
+        sourceId: source.id,
+        targetId: target.node.id,
+        type: 'reference',
+        sourceEndpoint: { nodeId: source.id, scope: 'node' },
+        targetEndpoint: { nodeId: target.node.id, scope: 'node' },
+      };
+      created.push(connection);
+      connectionIds.push(id);
       allConnections.push(connection);
     }
   }

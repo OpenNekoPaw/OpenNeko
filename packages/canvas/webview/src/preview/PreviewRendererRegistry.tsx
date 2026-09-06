@@ -12,6 +12,7 @@ import type { PreviewPlaybackControl, PreviewSourceDescriptor } from './types';
 import type { PlaybackSurfaceKind } from '../stores/playbackStore';
 import { useOptionalCanvasHost } from '../host-runtime';
 import { getLocale, t } from '../i18n';
+import { WarningIcon } from '@neko/ui/icons';
 import {
   readCanonicalContentLocator,
   readCanonicalContentLocatorKey,
@@ -24,6 +25,7 @@ export interface PreviewRendererProps {
   playbackControl?: PreviewPlaybackControl;
   chrome?: 'contained' | 'full-bleed';
   mediaPlayback?: 'interactive' | 'inline' | 'ambient';
+  feedback?: 'full' | 'compact';
 }
 
 export type PreviewRenderer = ComponentType<PreviewRendererProps>;
@@ -54,6 +56,7 @@ function CanonicalPreviewRenderer({
   chrome = 'contained',
   playbackControl,
   mediaPlayback,
+  feedback = 'full',
 }: PreviewRendererProps): ReactNode {
   const { descriptor, diagnostic } = useCanvasPreviewDescriptor(source);
   const contentKind = previewContentKind(source);
@@ -90,13 +93,16 @@ function CanonicalPreviewRenderer({
       className={previewFrameClassName(chrome)}
       data-preview-surface={contentKind}
       data-preview-chrome={chrome}
+      data-preview-feedback={feedback}
     >
       {diagnostic ? (
         <div
-          className="flex h-full items-center justify-center px-3 text-center text-xs text-[var(--hostPort-errorForeground)]"
+          className="canvas-preview-feedback flex h-full items-center justify-center px-3 text-center text-xs text-[var(--hostPort-errorForeground)]"
           role="alert"
+          title={diagnostic}
+          aria-label={diagnostic}
         >
-          {diagnostic}
+          {feedback === 'compact' ? <WarningIcon size={16} /> : diagnostic}
         </div>
       ) : descriptor ? (
         <LightweightPreview

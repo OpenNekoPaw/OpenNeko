@@ -1,4 +1,10 @@
-import { normalizeWorkspaceContentPath, validateContentLocator } from '@neko/content-domain';
+import {
+  contentLocatorKey,
+  normalizeWorkspaceContentPath,
+  validateContentLocator,
+  type ContentLocator,
+} from '@neko/content-domain';
+import { readCanvasNodeContentLocators } from './utils/canvasNodeContent';
 
 import type { CanvasConnection, CanvasNode, CanvasNodeType } from './types/canvas';
 import type {
@@ -135,6 +141,26 @@ const CREATE_CONNECTION_COMMAND_SCHEMA = {
   additionalProperties: false,
 } as const;
 
+const GROUP_NODES_COMMAND_SCHEMA = {
+  type: 'object',
+  title: 'group_nodes command',
+  properties: {
+    kind: { type: 'string', const: 'group_nodes', required: true },
+    nodeIds: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'One to 32 distinct existing non-group node identities.',
+      required: true,
+    },
+    groupId: {
+      type: 'string',
+      description: 'Existing group identity to append to; omit to create a group.',
+    },
+    label: { type: 'string' },
+  },
+  additionalProperties: false,
+} as const;
+
 export const CANVAS_DSH_TOOL_PARAMETERS = {
   operation: {
     type: 'string',
@@ -158,6 +184,12 @@ export const CANVAS_DSH_TOOL_PARAMETERS = {
             description: 'Optional exact nodes whose bounded one-hop subgraph should be returned.',
             items: { type: 'string' },
           },
+          contentLocators: {
+            type: 'array',
+            items: CONTENT_LOCATOR_SCHEMA,
+            description:
+              'Exact resource locators to find existing source or Generation output nodes, including nodes outside the default bounded page.',
+          },
         },
         additionalProperties: false,
       },
@@ -175,6 +207,7 @@ export const CANVAS_DSH_TOOL_PARAMETERS = {
               CREATE_NODE_COMMAND_SCHEMA,
               UPDATE_NODE_COMMAND_SCHEMA,
               CREATE_CONNECTION_COMMAND_SCHEMA,
+              GROUP_NODES_COMMAND_SCHEMA,
             ],
             required: true,
           },
@@ -197,6 +230,7 @@ export type CanvasDshToolJsonValue =
 export interface CanvasDshToolQueryInput {
   readonly documentPath: string;
   readonly nodeIds?: readonly string[];
+  readonly contentLocators?: readonly ContentLocator[];
 }
 
 export type CanvasDshCreateNodeSpec =
@@ -223,6 +257,12 @@ export type CanvasDshCreateNodeSpec =
     };
 
 export type CanvasDshApplyCommand =
+  | {
+      readonly kind: 'group_nodes';
+      readonly nodeIds: readonly string[];
+      readonly groupId?: string;
+      readonly label?: string;
+    }
   | { readonly kind: 'create_node'; readonly node: CanvasDshCreateNodeSpec }
   | {
       readonly kind: 'update_node';
@@ -282,7 +322,7 @@ export interface CanvasDshToolQueryFacts {
 export type CanvasDshToolApplyFacts =
   | {
       readonly documentPath: string;
-      readonly command: 'create_node' | 'update_node';
+      readonly command: 'create_node' | 'update_node' | 'group_nodes';
       readonly nodeId: string;
       readonly nodeType: CanvasNode['type'];
     }
@@ -311,6 +351,16 @@ export function projectCanvasQuerySnapshot(
   const missingNodeIds = [...requestedIds].filter(
     (nodeId) => !snapshot.canvas.nodes.some((node) => node.id === nodeId),
   );
+  const requestedLocators = new Set(input.contentLocators?.map(contentLocatorKey));
+  for (const node of snapshot.canvas.nodes) {
+    if (
+      readCanvasNodeContentLocators(node).some((locator) =>
+        requestedLocators.has(contentLocatorKey(locator)),
+      )
+    )
+      requestedIds.add(node.id);
+  }
+  const hasSelection = input.nodeIds !== undefined || input.contentLocators !== undefined;
   const includedIds = new Set(requestedIds);
   if (requestedIds.size > 0) {
     for (const connection of snapshot.canvas.connections) {
@@ -320,14 +370,18 @@ export function projectCanvasQuerySnapshot(
       }
     }
   }
-  const candidateNodes =
-    requestedIds.size === 0
-      ? snapshot.canvas.nodes
-      : snapshot.canvas.nodes.filter((node) => includedIds.has(node.id));
+  const candidateNodes = !hasSelection
+    ? snapshot.canvas.nodes
+    : [
+        ...snapshot.canvas.nodes.filter((node) => requestedIds.has(node.id)),
+        ...snapshot.canvas.nodes.filter(
+          (node) => includedIds.has(node.id) && !requestedIds.has(node.id),
+        ),
+      ];
   const nodes = candidateNodes.slice(0, CANVAS_DSH_MAX_PROJECTED_NODES);
   const projectedNodeIds = new Set(nodes.map((node) => node.id));
   const candidateConnections = snapshot.canvas.connections.filter((connection) =>
-    requestedIds.size === 0
+    !hasSelection
       ? projectedNodeIds.has(connection.sourceId) && projectedNodeIds.has(connection.targetId)
       : requestedIds.has(connection.sourceId) || requestedIds.has(connection.targetId),
   );
@@ -347,7 +401,7 @@ export function projectCanvasQuerySnapshot(
 }
 
 export function projectCanvasNodeMutationResult(
-  command: 'create_node' | 'update_node',
+  command: 'create_node' | 'update_node' | 'group_nodes',
   result: CanvasProjectNodeMutationResult,
 ): CanvasDshToolApplyFacts {
   return {
@@ -397,12 +451,29 @@ export function canvasDshCreateConnectionRequest(
 
 function decodeQueryInput(input: unknown): CanvasDshToolQueryInput {
   const record = requireRecord(input, 'input');
-  requireOnlyKeys(record, ['documentPath', 'nodeIds'], 'input');
+  requireOnlyKeys(record, ['documentPath', 'nodeIds', 'contentLocators'], 'input');
   const nodeIds =
     record.nodeIds === undefined ? undefined : requireNodeIds(record.nodeIds, 'input.nodeIds');
+  let contentLocators: ContentLocator[] | undefined;
+  if (record.contentLocators !== undefined) {
+    if (
+      !Array.isArray(record.contentLocators) ||
+      record.contentLocators.length === 0 ||
+      record.contentLocators.length > CANVAS_DSH_MAX_PROJECTED_NODES
+    )
+      throw new Error('input.contentLocators requires one to 32 locators.');
+    contentLocators = record.contentLocators.map((locator) => {
+      const validation = validateContentLocator(locator);
+      if (!validation.ok) throw new Error('input.contentLocators contains an invalid locator.');
+      return validation.locator;
+    });
+    if (new Set(contentLocators.map(contentLocatorKey)).size !== contentLocators.length)
+      throw new Error('input.contentLocators must be distinct.');
+  }
   return {
     documentPath: requireDocumentPath(record.documentPath, 'input.documentPath'),
     ...(nodeIds ? { nodeIds } : {}),
+    ...(contentLocators ? { contentLocators } : {}),
   };
 }
 
@@ -418,6 +489,21 @@ function decodeApplyInput(input: unknown): CanvasDshToolApplyInput {
 function requireCommand(input: unknown, field: string): CanvasDshApplyCommand {
   const command = requireRecord(input, field);
   const kind = command.kind;
+  if (kind === 'group_nodes') {
+    requireOnlyKeys(command, ['kind', 'nodeIds', 'groupId', 'label'], field);
+    const nodeIds = requireNodeIds(command.nodeIds, `${field}.nodeIds`);
+    if (nodeIds.length === 0) throw new Error(`${field}.nodeIds must not be empty.`);
+    return {
+      kind,
+      nodeIds,
+      ...(command.groupId === undefined
+        ? {}
+        : { groupId: requireIdentity(command.groupId, `${field}.groupId`) }),
+      ...(command.label === undefined
+        ? {}
+        : { label: requireIdentity(command.label, `${field}.label`) }),
+    };
+  }
   if (kind === 'create_node') {
     requireOnlyKeys(command, ['kind', 'node'], field);
     return { kind, node: requireCreatableNode(command.node, `${field}.node`) };
@@ -443,7 +529,9 @@ function requireCommand(input: unknown, field: string): CanvasDshApplyCommand {
         : { label: requireIdentity(command.label, `${field}.label`) }),
     };
   }
-  throw new Error(`${field}.kind must be create_node, update_node, or create_connection.`);
+  throw new Error(
+    `${field}.kind must be create_node, update_node, create_connection, or group_nodes.`,
+  );
 }
 
 function requireCreatableNode(input: unknown, field: string): CanvasDshCreateNodeSpec {
@@ -508,6 +596,8 @@ function projectNodeData(node: CanvasNode): Readonly<Record<string, CanvasDshToo
     case 'group':
       return jsonRecord({
         ...(node.data.label ? { label: node.data.label } : {}),
+        childIds: (node.container?.childIds ?? []).slice(0, CANVAS_DSH_MAX_PROJECTED_NODES),
+        childCount: node.container?.childIds.length ?? 0,
       });
     case 'media':
       return jsonRecord({

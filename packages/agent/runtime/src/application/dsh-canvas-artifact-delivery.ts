@@ -1,5 +1,9 @@
 import type { DshAcpProjectedEvent } from '../acp/dsh-acp-projection';
 import type { AgentConversationContext } from '@neko/agent-contracts';
+import {
+  decodeDshAcpImageAttachmentRefProjection,
+  type DshAcpImageAttachmentRefProjection,
+} from '@neko/agent-contracts/dsh-acp';
 import type { CanvasWorkspaceTurnTarget } from '@neko/canvas-domain';
 import { DOCUMENT_DSH_TOOL_NAME, decodeDocumentDshToolArgs } from '@neko/content-domain/document';
 import {
@@ -13,7 +17,9 @@ import {
   type WorkspaceFileContentLocator,
 } from '@neko/content-domain';
 import { hashStableValue } from '@neko/shared';
+import { createHash } from 'node:crypto';
 import { posix as path } from 'node:path';
+import { projectMarkdownNavigation } from '@neko/markdown';
 
 const DSH_TEXT_WRITE_TOOL_NAME = 'write';
 const PORTABLE_TEXT_EXTENSIONS = new Set([
@@ -44,7 +50,9 @@ type DshCanvasArtifactResourceArtifact = {
   readonly title: string;
   readonly sourceId: string;
   readonly sourceArtifactIds?: readonly string[];
+  readonly referenceLocators?: readonly ContentLocator[];
   readonly contentLocator: ContentLocator;
+  readonly overviewAttachment?: DshAcpImageAttachmentRefProjection;
 };
 
 export interface DshCanvasArtifactBatch {
@@ -220,7 +228,9 @@ function collectToolArtifacts(
     locator = {
       file: { authority: 'workspace', path: decodePortableTextWritePath(event.rawInput) },
     };
-    return [createResourceArtifact(locator, 'file-reference', [], 'output')];
+    const artifact = createResourceArtifact(locator, 'file-reference', [], 'output');
+    const referenceLocators = collectWrittenMarkdownReferences(event.rawInput, locator.file.path);
+    return [{ ...artifact, ...(referenceLocators.length > 0 ? { referenceLocators } : {}) }];
   } else if (event.title === DOCUMENT_DSH_TOOL_NAME) {
     locator = decodeDocumentDshToolArgs(event.rawInput).input.source;
     return [createResourceArtifact({ file: locator.file }, 'file-reference')];
@@ -229,12 +239,85 @@ function collectToolArtifacts(
     locator = decodeContentImageDshToolSource(rawInput['source']);
     return createLocatedImageSourceArtifacts(locator);
   } else if (event.title === CONTENT_IMAGES_DSH_TOOL_NAME) {
-    return decodeContentImagesDshToolInput(event.rawInput).sources.flatMap((source) =>
-      createLocatedImageSourceArtifacts(source),
+    const { sources } = decodeContentImagesDshToolInput(event.rawInput);
+    if (!Array.isArray(event.rawOutput)) throw new Error('Image overview has no output blocks.');
+    const images = event.rawOutput.filter(
+      (block: unknown) =>
+        typeof block === 'object' && block !== null && Reflect.get(block, 'type') === 'image',
     );
+    if (images.length !== 1)
+      throw new Error('Image overview requires exactly one image attachment.');
+    const raw = requireRecord(
+      requireRecord(images[0], 'Image overview block')['attachment'],
+      'Image overview attachment',
+    );
+    const attachment = decodeDshAcpImageAttachmentRefProjection({
+      attachmentId: raw['attachmentId'],
+      mediaType: raw['mediaType'],
+      bytes: raw['bytes'],
+      width: raw['width'],
+      height: raw['height'],
+    });
+    const extension = {
+      'image/png': 'png',
+      'image/jpeg': 'jpg',
+      'image/webp': 'webp',
+      'image/gif': 'gif',
+    }[attachment.mediaType];
+    const identity = createHash('sha256')
+      .update(JSON.stringify({ attachment, sources }))
+      .digest('hex');
+    const parents = sources
+      .filter((source) => source.selector !== undefined)
+      .map((source) => createResourceArtifact({ file: source.file }, 'file-reference'));
+    const artifact = createResourceArtifact(
+      {
+        file: {
+          authority: 'workspace',
+          path: `neko/derived/image-overviews/${identity}.${extension}`,
+        },
+      },
+      'image',
+      [...new Set(parents.map((parent) => parent.artifactId))],
+      'output',
+    );
+    return [
+      ...parents,
+      {
+        ...artifact,
+        title: `阅读总览（${sources.length} 页）`,
+        referenceLocators: sources,
+        overviewAttachment: attachment,
+      },
+    ];
   } else {
     return [];
   }
+}
+
+function collectWrittenMarkdownReferences(
+  rawInput: unknown,
+  documentPath: string,
+): readonly ContentLocator[] {
+  if (!['.md', '.markdown'].includes(path.extname(documentPath).toLowerCase())) return [];
+  const input = requireRecord(rawInput, 'write input');
+  if (typeof input['content'] !== 'string') throw new Error('Markdown write requires content.');
+  const navigation = projectMarkdownNavigation(input['content']);
+  if (navigation.diagnostics.some((diagnostic) => diagnostic.severity === 'error')) {
+    throw new Error('Written Markdown references could not be parsed.');
+  }
+  const references = new Map<string, ContentLocator>();
+  for (const reference of navigation.references) {
+    const destination = reference.destination;
+    if (!destination || /^(?:[a-z][a-z\d+.-]*:|\/|#)/iu.test(destination)) continue;
+    const relative = decodeURIComponent(destination.split(/[?#]/u)[0] ?? '');
+    if (!relative || relative.includes('\\') || relative.startsWith('/')) continue;
+    const resolved = path.normalize(path.join(path.dirname(documentPath), relative));
+    if (resolved === '..' || resolved.startsWith('../') || resolved === documentPath) continue;
+    const locator: ContentLocator = { file: { authority: 'workspace', path: resolved } };
+    references.set(contentLocatorKey(locator), locator);
+  }
+  return [...references.values()];
 }
 
 function createLocatedImageSourceArtifacts(

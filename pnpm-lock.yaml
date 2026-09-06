@@ -301,7 +301,7 @@ importers:
         version: 18.3.7(@types/react@18.3.31)
       '@vitejs/plugin-react':
         specifier: 5.1.4
-        version: 5.1.4(vite@7.3.6(@types/node@24.13.3)(jiti@1.21.7)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
+        version: 5.1.4(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
       autoprefixer:
         specifier: 10.4.27
         version: 10.4.27(postcss@8.5.6)
@@ -322,10 +322,10 @@ importers:
         version: 6.0.3
       vite:
         specifier: 7.3.6
-        version: 7.3.6(@types/node@24.13.3)(jiti@1.21.7)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0)
+        version: 7.3.6(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0)
       vitest:
         specifier: 4.1.2
-        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@7.3.6(@types/node@24.13.3)(jiti@1.21.7)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
+        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
   packages/agent/contracts:
     dependencies:
@@ -406,6 +406,9 @@ importers:
       '@neko/local-metadata':
         specifier: workspace:*
         version: link:../../local-metadata
+      '@neko/markdown':
+        specifier: workspace:*
+        version: link:../../markdown
       '@neko/media':
         specifier: workspace:*
         version: link:../../media
@@ -1020,6 +1023,9 @@ importers:
         specifier: ^0.35.3
         version: 0.35.3(@types/node@24.13.3)
     devDependencies:
+      '@deepseek-ai/dsh-attachment-local':
+        specifier: 0.1.1-rc.2
+        version: 0.1.1-rc.2(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-attachment@0.1.1-rc.2(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-brand@0.1.1-rc.2(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-invariants@0.1.1-rc.2(@deepseek-ai/cordis@4.0.1)))(@deepseek-ai/dsh-invariants@0.1.1-rc.2(@deepseek-ai/cordis@4.0.1)))(@deepseek-ai/dsh-home-paths@0.1.1-rc.2(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-invariants@0.1.1-rc.2(@deepseek-ai/cordis@4.0.1)))(@deepseek-ai/dsh-invariants@0.1.1-rc.2(@deepseek-ai/cordis@4.0.1))(@types/node@24.13.3)
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.3
@@ -2166,10 +2172,10 @@ importers:
         version: 6.0.3
       vite:
         specifier: 7.3.6
-        version: 7.3.6(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0)
+        version: 7.3.6(@types/node@25.7.0)(jiti@1.21.7)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0)
       vitest:
         specifier: 4.1.2
-        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@7.3.6(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
+        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@7.3.6(@types/node@25.7.0)(jiti@1.21.7)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
   packages/world/domain:
     devDependencies:
@@ -2661,6 +2667,14 @@ packages:
     resolution: {integrity: sha512-QqNSF0+Ddn6qWY480dlilwEy6FLv3JKEWx1UQgoNJrxD4y54SDRzqBQB9yDXWKOoOGyC+05TN6/Px10GNIzMWA==}
     peerDependencies:
       '@deepseek-ai/cordis': ^4.0.1
+      '@deepseek-ai/dsh-invariants': 0.1.1-rc.2
+
+  '@deepseek-ai/dsh-attachment-local@0.1.1-rc.2':
+    resolution: {integrity: sha512-bU24CZc2ElJ7JPUUeWLcibRsiuXjsj9dVuUu8yx6t2vensjbqo70kzAIA4eh9q6ai4CeU1/9cRnKLcMQbgNxMQ==}
+    peerDependencies:
+      '@deepseek-ai/cordis': ^4.0.1
+      '@deepseek-ai/dsh-attachment': ^0.1.1-rc.2
+      '@deepseek-ai/dsh-home-paths': 0.1.1-rc.2
       '@deepseek-ai/dsh-invariants': 0.1.1-rc.2
 
   '@deepseek-ai/dsh-attachment@0.1.1-rc.2':
@@ -9372,6 +9386,17 @@ snapshots:
       '@deepseek-ai/cordis': 4.0.1(@deepseek-ai/cordis-plugin-include@1.0.6)(@deepseek-ai/cordis-plugin-loader@1.0.2)
       '@deepseek-ai/dsh-invariants': 0.1.1-rc.2(@deepseek-ai/cordis@4.0.1)
 
+  '@deepseek-ai/dsh-attachment-local@0.1.1-rc.2(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-attachment@0.1.1-rc.2(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-brand@0.1.1-rc.2(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-invariants@0.1.1-rc.2(@deepseek-ai/cordis@4.0.1)))(@deepseek-ai/dsh-invariants@0.1.1-rc.2(@deepseek-ai/cordis@4.0.1)))(@deepseek-ai/dsh-home-paths@0.1.1-rc.2(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-invariants@0.1.1-rc.2(@deepseek-ai/cordis@4.0.1)))(@deepseek-ai/dsh-invariants@0.1.1-rc.2(@deepseek-ai/cordis@4.0.1))(@types/node@24.13.3)':
+    dependencies:
+      '@deepseek-ai/cordis': 4.0.1(@deepseek-ai/cordis-plugin-include@1.0.6)(@deepseek-ai/cordis-plugin-loader@1.0.2)
+      '@deepseek-ai/dsh-attachment': 0.1.1-rc.2(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-brand@0.1.1-rc.2(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-invariants@0.1.1-rc.2(@deepseek-ai/cordis@4.0.1)))(@deepseek-ai/dsh-invariants@0.1.1-rc.2(@deepseek-ai/cordis@4.0.1))
+      '@deepseek-ai/dsh-home-paths': 0.1.1-rc.2(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-invariants@0.1.1-rc.2(@deepseek-ai/cordis@4.0.1))
+      '@deepseek-ai/dsh-invariants': 0.1.1-rc.2(@deepseek-ai/cordis@4.0.1)
+      '@deepseek-ai/schemastery': 3.18.1
+      sharp: 0.35.3(@types/node@24.13.3)
+    transitivePeerDependencies:
+      - '@types/node'
+
   '@deepseek-ai/dsh-attachment@0.1.1-rc.2(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-brand@0.1.1-rc.2(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-invariants@0.1.1-rc.2(@deepseek-ai/cordis@4.0.1)))(@deepseek-ai/dsh-invariants@0.1.1-rc.2(@deepseek-ai/cordis@4.0.1))':
     dependencies:
       '@deepseek-ai/cordis': 4.0.1(@deepseek-ai/cordis-plugin-include@1.0.6)(@deepseek-ai/cordis-plugin-loader@1.0.2)
@@ -11878,18 +11903,6 @@ snapshots:
 
   '@vercel/oidc@3.2.0': {}
 
-  '@vitejs/plugin-react@5.1.4(vite@7.3.6(@types/node@24.13.3)(jiti@1.21.7)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))':
-    dependencies:
-      '@babel/core': 7.29.0
-      '@babel/plugin-transform-react-jsx-self': 7.27.1(@babel/core@7.29.0)
-      '@babel/plugin-transform-react-jsx-source': 7.27.1(@babel/core@7.29.0)
-      '@rolldown/pluginutils': 1.0.0-rc.3
-      '@types/babel__core': 7.20.5
-      react-refresh: 0.18.0
-      vite: 7.3.6(@types/node@24.13.3)(jiti@1.21.7)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0)
-    transitivePeerDependencies:
-      - supports-color
-
   '@vitejs/plugin-react@5.1.4(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))':
     dependencies:
       '@babel/core': 7.29.0
@@ -11937,14 +11950,6 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.0
 
-  '@vitest/mocker@4.1.2(vite@7.3.6(@types/node@24.13.3)(jiti@1.21.7)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))':
-    dependencies:
-      '@vitest/spy': 4.1.2
-      estree-walker: 3.0.3
-      magic-string: 0.30.21
-    optionalDependencies:
-      vite: 7.3.6(@types/node@24.13.3)(jiti@1.21.7)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0)
-
   '@vitest/mocker@4.1.2(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))':
     dependencies:
       '@vitest/spy': 4.1.2
@@ -11952,6 +11957,14 @@ snapshots:
       magic-string: 0.30.21
     optionalDependencies:
       vite: 7.3.6(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0)
+
+  '@vitest/mocker@4.1.2(vite@7.3.6(@types/node@25.7.0)(jiti@1.21.7)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))':
+    dependencies:
+      '@vitest/spy': 4.1.2
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+    optionalDependencies:
+      vite: 7.3.6(@types/node@25.7.0)(jiti@1.21.7)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0)
 
   '@vitest/mocker@4.1.2(vite@7.3.6(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))':
     dependencies:
@@ -16022,22 +16035,6 @@ snapshots:
       tinyglobby: 0.2.16
       vite: 7.3.6(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0)
 
-  vite@7.3.6(@types/node@24.13.3)(jiti@1.21.7)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0):
-    dependencies:
-      esbuild: 0.27.2
-      fdir: 6.5.0(picomatch@4.0.4)
-      picomatch: 4.0.4
-      postcss: 8.5.6
-      rollup: 4.60.3
-      tinyglobby: 0.2.16
-    optionalDependencies:
-      '@types/node': 24.13.3
-      fsevents: 2.3.3
-      jiti: 1.21.7
-      terser: 5.49.0
-      tsx: 4.21.0
-      yaml: 2.9.0
-
   vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0):
     dependencies:
       esbuild: 0.27.2
@@ -16050,6 +16047,22 @@ snapshots:
       '@types/node': 24.13.3
       fsevents: 2.3.3
       jiti: 2.7.0
+      terser: 5.49.0
+      tsx: 4.21.0
+      yaml: 2.9.0
+
+  vite@7.3.6(@types/node@25.7.0)(jiti@1.21.7)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0):
+    dependencies:
+      esbuild: 0.27.2
+      fdir: 6.5.0(picomatch@4.0.4)
+      picomatch: 4.0.4
+      postcss: 8.5.6
+      rollup: 4.60.3
+      tinyglobby: 0.2.16
+    optionalDependencies:
+      '@types/node': 25.7.0
+      fsevents: 2.3.3
+      jiti: 1.21.7
       terser: 5.49.0
       tsx: 4.21.0
       yaml: 2.9.0
@@ -16069,35 +16082,6 @@ snapshots:
       terser: 5.49.0
       tsx: 4.21.0
       yaml: 2.9.0
-
-  vitest@4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@7.3.6(@types/node@24.13.3)(jiti@1.21.7)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0)):
-    dependencies:
-      '@vitest/expect': 4.1.2
-      '@vitest/mocker': 4.1.2(vite@7.3.6(@types/node@24.13.3)(jiti@1.21.7)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
-      '@vitest/pretty-format': 4.1.2
-      '@vitest/runner': 4.1.2
-      '@vitest/snapshot': 4.1.2
-      '@vitest/spy': 4.1.2
-      '@vitest/utils': 4.1.2
-      es-module-lexer: 2.1.0
-      expect-type: 1.3.0
-      magic-string: 0.30.21
-      obug: 2.1.1
-      pathe: 2.0.3
-      picomatch: 4.0.4
-      std-env: 4.1.0
-      tinybench: 2.9.0
-      tinyexec: 1.1.2
-      tinyglobby: 0.2.16
-      tinyrainbow: 3.1.0
-      vite: 7.3.6(@types/node@24.13.3)(jiti@1.21.7)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0)
-      why-is-node-running: 2.3.0
-    optionalDependencies:
-      '@opentelemetry/api': 1.9.0
-      '@types/node': 24.13.3
-      jsdom: 27.4.0
-    transitivePeerDependencies:
-      - msw
 
   vitest@4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0)):
     dependencies:
@@ -16124,6 +16108,35 @@ snapshots:
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
       '@types/node': 24.13.3
+      jsdom: 27.4.0
+    transitivePeerDependencies:
+      - msw
+
+  vitest@4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@7.3.6(@types/node@25.7.0)(jiti@1.21.7)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0)):
+    dependencies:
+      '@vitest/expect': 4.1.2
+      '@vitest/mocker': 4.1.2(vite@7.3.6(@types/node@25.7.0)(jiti@1.21.7)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
+      '@vitest/pretty-format': 4.1.2
+      '@vitest/runner': 4.1.2
+      '@vitest/snapshot': 4.1.2
+      '@vitest/spy': 4.1.2
+      '@vitest/utils': 4.1.2
+      es-module-lexer: 2.1.0
+      expect-type: 1.3.0
+      magic-string: 0.30.21
+      obug: 2.1.1
+      pathe: 2.0.3
+      picomatch: 4.0.4
+      std-env: 4.1.0
+      tinybench: 2.9.0
+      tinyexec: 1.1.2
+      tinyglobby: 0.2.16
+      tinyrainbow: 3.1.0
+      vite: 7.3.6(@types/node@25.7.0)(jiti@1.21.7)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0)
+      why-is-node-running: 2.3.0
+    optionalDependencies:
+      '@opentelemetry/api': 1.9.0
+      '@types/node': 25.7.0
       jsdom: 27.4.0
     transitivePeerDependencies:
       - msw

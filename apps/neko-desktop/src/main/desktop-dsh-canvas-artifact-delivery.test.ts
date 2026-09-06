@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { createEmptyCanvasData, planCanvasArtifactProjection } from '@neko/canvas-domain';
 import type { DshCanvasArtifactDeliveryInput } from '@neko/agent-runtime/application';
+import { collectDshCanvasArtifactCompletedToolArtifacts } from '@neko/agent-runtime/application';
+import sharp from 'sharp';
 import type { LocalMetadataStore } from '@neko/local-metadata';
 import type { GenerationJobSnapshot } from '@neko/generation-domain/job';
 import { ConsoleLogger } from '@neko/shared/logger';
@@ -17,6 +19,126 @@ import {
 import { createElectronNekoHostPorts } from './electron-host-ports';
 
 describe('Desktop DSH Canvas projection request', () => {
+  it('persists one exact overview attachment and reuses it on repeat delivery without reading original pages', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'openneko-overview-delivery-'));
+    try {
+      const workspacePath = join(home, 'workspace');
+      await mkdir(join(workspacePath, 'neko/boards'), { recursive: true });
+      await writeFile(join(workspacePath, 'book.epub'), 'source document');
+      const canvasPath = join(workspacePath, 'neko/boards/workspace.nkc');
+      await writeFile(canvasPath, JSON.stringify(createEmptyCanvasData('Overview')));
+      const bytes = await sharp({
+        create: { width: 256, height: 192, channels: 3, background: '#abcdef' },
+      })
+        .png()
+        .toBuffer();
+      const attachment = {
+        attachmentId: 'overview-attachment',
+        mediaType: 'image/png' as const,
+        bytes: bytes.length,
+        width: 256,
+        height: 192,
+      };
+      const sources = Array.from({ length: 16 }, (_, index) => ({
+        file: { authority: 'workspace' as const, path: 'book.epub' },
+        selector: { kind: 'entry' as const, path: `page-${index + 1}.jpg` },
+      }));
+      const collection = collectDshCanvasArtifactCompletedToolArtifacts({
+        toolCallId: 'overview',
+        events: [
+          {
+            kind: 'tool',
+            sessionId: 'dsh-1',
+            toolCallId: 'overview',
+            turn: 1,
+            turnStartedAt: 1000,
+            status: 'completed',
+            title: 'openneko_read_images',
+            rawInput: { sources },
+            rawOutput: [{ type: 'image', attachment }],
+          },
+        ],
+      });
+      expect(collection.diagnostics).toEqual([]);
+      const artifacts = collection.batch!.artifacts;
+      expect(artifacts).toHaveLength(2);
+      const overview = artifacts.find((artifact) => artifact.overviewAttachment)!;
+      const readImageAttachment = vi.fn(async () => ({
+        attachment,
+        data: bytes.toString('base64'),
+      }));
+      const readEntry = vi.fn(async (): Promise<Uint8Array> => {
+        throw new Error('Overview delivery must not read original pages.');
+      });
+      const contentRead = createDshCanvasArtifactContentRead({
+        workspacePath,
+        documentEntryReader: { readEntry },
+      });
+      const metadataStore = createInMemoryMetadataStore();
+      const host = createElectronNekoHostPorts({
+        homedir: home,
+        nekoHome: join(home, '.neko'),
+        workspaceRoot: workspacePath,
+        logger: new ConsoleLogger('OverviewDelivery'),
+      });
+      const createDelivery = () =>
+        new DesktopDshCanvasArtifactDelivery({
+          applicationInstanceId: 'overview-app',
+          metadataStore,
+          host,
+          readImageAttachment,
+          workspaceRegistry: { restore: async () => ({ ...workspace(), workspacePath }) },
+          coordinateCanvasMutation: async (_target, operation) => operation(),
+          createContentRead: () => contentRead,
+        });
+      const input = {
+        ...deliveryInput(),
+        artifacts,
+        delivery: { kind: 'completed-tool' as const, toolCallId: 'overview' },
+      };
+      await expect(createDelivery().deliver(input)).resolves.toEqual({ status: 'accepted' });
+      const saved = await readFile(join(workspacePath, overview.contentLocator.file.path));
+      expect(saved).toEqual(bytes);
+      expect(readImageAttachment).toHaveBeenCalledWith('dsh-1', attachment.attachmentId);
+      expect(readEntry).not.toHaveBeenCalled();
+      const first = JSON.parse(await readFile(canvasPath, 'utf8'));
+      expect(first.nodes).toHaveLength(2);
+      expect(first.connections).toHaveLength(1);
+      expect(JSON.stringify(first)).toContain('page-16.jpg');
+      expect(JSON.stringify(first)).not.toContain('overviewAttachment');
+      await expect(createDelivery().deliver(input)).resolves.toEqual({ status: 'accepted' });
+      expect(readImageAttachment).toHaveBeenCalledTimes(1);
+      await expect(
+        createDelivery().deliver({
+          ...input,
+          turn: 2,
+          delivery: { kind: 'completed-tool', toolCallId: 'overview-again' },
+        }),
+      ).resolves.toEqual({ status: 'accepted' });
+      expect(JSON.parse(await readFile(canvasPath, 'utf8')).nodes).toHaveLength(2);
+      expect(await readFile(join(workspacePath, overview.contentLocator.file.path))).toEqual(bytes);
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+  it('carries explicit Markdown links without adding the linked resource to the delivery', () => {
+    const input = deliveryInput();
+    const locator = {
+      file: { authority: 'workspace' as const, path: 'neko/generated/image/first.png' },
+    };
+    const request = createDshCanvasArtifactProjectionRequest(
+      {
+        ...input,
+        artifacts: input.artifacts.map((artifact) => ({
+          ...artifact,
+          referenceLocators: [locator],
+        })),
+      },
+      workspace(),
+    );
+    expect(request.artifacts).toHaveLength(input.artifacts.length);
+    expect(request.artifacts[0]?.provenance.referenceLocators).toEqual([locator]);
+  });
   it('uses a stable completed-Tool identity and reuses the durable file node by ContentLocator', () => {
     const input = deliveryInput();
     const first = createDshCanvasArtifactProjectionRequest(input, workspace());
@@ -200,6 +322,9 @@ describe('Desktop DSH Canvas projection request', () => {
     });
     const delivery = new DesktopDshCanvasArtifactDelivery({
       applicationInstanceId: 'app-1',
+      readImageAttachment: async () => {
+        throw new Error('Unexpected image attachment read.');
+      },
       metadataStore,
       workspaceRegistry: {
         restore: vi.fn(async () => ({
@@ -236,7 +361,7 @@ describe('Desktop DSH Canvas projection request', () => {
     }
   });
 
-  it('persists Agent generation inputs as visible Canvas references', async () => {
+  it('persists Agent generation inputs inside the Generation node without duplicate material nodes', async () => {
     const home = await mkdtemp(join(tmpdir(), 'openneko-dsh-generation-reference-'));
     const workspacePath = join(home, 'workspace');
     const canvasPath = join(workspacePath, 'neko', 'boards', 'story.nkc');
@@ -262,6 +387,9 @@ describe('Desktop DSH Canvas projection request', () => {
     });
     const delivery = new DesktopDshCanvasArtifactDelivery({
       applicationInstanceId: 'app-1',
+      readImageAttachment: async () => {
+        throw new Error('Unexpected image attachment read.');
+      },
       metadataStore,
       workspaceRegistry: {
         restore: vi.fn(async () => ({
@@ -290,28 +418,58 @@ describe('Desktop DSH Canvas projection request', () => {
           snapshot: imageToVideoSnapshot(),
         }),
       ).resolves.toEqual({ status: 'accepted' });
-      const canvas = JSON.parse(await readFile(canvasPath, 'utf8'));
-      const generation = canvas.nodes.find((node: { type: string }) => node.type === 'generation');
-      const source = canvas.nodes.find((node: { type: string }) => node.type === 'media');
-      expect(source).toMatchObject({
-        data: {
-          mediaType: 'image',
-          contentLocator: {
-            file: {
-              authority: 'workspace',
-              path: 'neko/generated/image/first-frame.png',
-            },
+      await expect(
+        delivery.projectGenerationJob({
+          workspaceId: 'workspace-1',
+          dshSessionId: 'dsh-1',
+          turn: 2,
+          toolCallId: 'generation-2',
+          canvasTurnTarget: target,
+          snapshot: {
+            ...imageToVideoSnapshot(),
+            ref: { kind: 'generation', jobId: 'generation-video-2' },
           },
+        }),
+      ).resolves.toEqual({ status: 'accepted' });
+      const canvas = JSON.parse(await readFile(canvasPath, 'utf8'));
+      const generations = canvas.nodes.filter(
+        (node: { type: string }) => node.type === 'generation',
+      );
+      const generation = generations[0];
+      expect(canvas.nodes).toHaveLength(2);
+      expect(generation).toMatchObject({
+        type: 'generation',
+        data: {
+          inputMaterials: [
+            {
+              mediaKind: 'image',
+              locator: {
+                file: {
+                  authority: 'workspace',
+                  path: 'neko/generated/image/first-frame.png',
+                },
+              },
+            },
+          ],
         },
       });
-      expect(canvas.connections).toEqual([
-        expect.objectContaining({
-          sourceId: source.id,
-          targetId: generation.id,
-          type: 'reference',
-          targetEndpoint: { nodeId: generation.id, scope: 'port', portId: 'reference' },
-        }),
-      ]);
+      expect(canvas.nodes).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'media',
+            data: {
+              contentLocator: {
+                file: {
+                  authority: 'workspace',
+                  path: 'neko/generated/image/first-frame.png',
+                },
+              },
+            },
+          }),
+        ]),
+      );
+      expect(canvas.connections).toEqual([]);
+      expect(rectanglesOverlap(generations[0], generations[1])).toBe(false);
     } finally {
       await rm(home, { recursive: true, force: true });
     }
@@ -452,4 +610,16 @@ function createInMemoryMetadataStore(): LocalMetadataStore {
       operation: (context: { readonly repositories: typeof repositories }) => Promise<unknown>,
     ) => operation({ repositories }),
   } as never;
+}
+
+function rectanglesOverlap(
+  left: { position: { x: number; y: number }; size: { width: number; height: number } },
+  right: { position: { x: number; y: number }; size: { width: number; height: number } },
+): boolean {
+  return !(
+    left.position.x + left.size.width <= right.position.x ||
+    right.position.x + right.size.width <= left.position.x ||
+    left.position.y + left.size.height <= right.position.y ||
+    right.position.y + right.size.height <= left.position.y
+  );
 }

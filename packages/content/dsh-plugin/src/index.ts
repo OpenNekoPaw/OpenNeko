@@ -33,7 +33,7 @@ import sharp from 'sharp';
 export const name = 'openneko-content-tools';
 export const inject = ['opennekoHostTools', 'tools'];
 const CONTENT_IMAGE_OVERVIEW_MAX_DIMENSION = 768;
-const CONTENT_IMAGES_OVERVIEW_MAX_DIMENSION = 1_536;
+const CONTENT_IMAGES_OVERVIEW_CELL_DIMENSION = 768;
 const CONTENT_IMAGES_OVERVIEW_GUTTER = 12;
 
 declare module '@deepseek-ai/cordis' {
@@ -192,7 +192,7 @@ export function apply(ctx: Context): void {
           defineTool({
             name: CONTENT_IMAGES_DSH_TOOL_NAME,
             description:
-              'Compare 1–4 distinct OpenNeko raster images as one low-resolution contact sheet. Pass exact imageInfo ContentLocators returned by openneko_document in decision-relevant order; never pass chapter, XHTML, HTML, or other document entries. This Tool is only for overview screening; after choosing a page, use openneko_read_image with detail="original" for close inspection.',
+              'Read 1–16 distinct OpenNeko raster images as ONE large contact sheet of ordered thumbnails, not separate image attachments. Prefer 8 pages; use 4 for dense pages and up to 16 for broad overview, with fewer pages allowed for the final batch. Pass sources in reading/comparison order; never pass chapter, XHTML, HTML, or other document entries. Preserve the exact imageInfo ContentLocators returned by openneko_document. Overview supports scene and appearance mapping, not reliable dialogue or equipment detail; use openneko_read_image with detail="original" for close inspection.',
             parameters: CONTENT_IMAGES_DSH_TOOL_PARAMETERS,
             output: {
               schema: {
@@ -220,7 +220,11 @@ export function apply(ctx: Context): void {
                     required: true,
                     properties: {
                       attachmentId: { type: 'string', required: true },
-                      mediaType: { type: 'string', const: 'image/jpeg', required: true },
+                      mediaType: {
+                        type: 'string',
+                        enum: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
+                        required: true,
+                      },
                       bytes: { type: 'integer', required: true },
                       width: { type: 'integer', required: true },
                       height: { type: 'integer', required: true },
@@ -238,7 +242,10 @@ export function apply(ctx: Context): void {
                   )
                   .join('\n');
                 return [
-                  { type: 'text', text: `Overview contact sheet slots:\n${mapping}` },
+                  {
+                    type: 'text',
+                    text: `Overview contact sheet ${ref.width}x${ref.height} px; slots are ordered left-to-right, top-to-bottom. Thumbnails are for overview only; inspect original pages for names, dialogue and equipment details.\n${mapping}`,
+                  },
                   { type: 'image', attachment: ref },
                 ];
               },
@@ -306,7 +313,7 @@ export function apply(ctx: Context): void {
                 })),
                 image: {
                   attachmentId: ref.attachmentId,
-                  mediaType: contactSheet.mimeType,
+                  mediaType: ref.mediaType,
                   bytes: ref.bytes,
                   width: ref.width,
                   height: ref.height,
@@ -331,16 +338,16 @@ async function prepareContentImagesOverview(
   readonly bytes: Uint8Array;
   readonly mimeType: 'image/jpeg';
 }> {
+  const columns = Math.ceil(Math.sqrt(images.length));
+  const rows = Math.ceil(images.length / columns);
   const maxDimension = Math.min(
-    CONTENT_IMAGES_OVERVIEW_MAX_DIMENSION,
+    CONTENT_IMAGES_OVERVIEW_CELL_DIMENSION * columns,
     limits.maxImageDimension,
     Math.floor(Math.sqrt(limits.maxImagePixels)),
   );
   if (maxDimension < 1) {
     throw new Error('Content image overview has no valid output dimensions.');
   }
-  const columns = images.length === 1 ? 1 : 2;
-  const rows = Math.ceil(images.length / columns);
   const width = maxDimension;
   const height = Math.max(1, Math.floor((maxDimension * rows) / columns));
   const cellWidth = Math.floor(width / columns);
@@ -412,7 +419,7 @@ function overviewSlotBadge(label: string): string {
 }
 
 function overviewSlotLabel(index: number): string {
-  return String.fromCharCode('A'.charCodeAt(0) + index);
+  return String(index + 1);
 }
 
 function errorMessage(error: unknown): string {

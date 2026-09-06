@@ -13,6 +13,7 @@ import {
   projectCanvasNodeMutationResult,
   projectCanvasQuerySnapshot,
   type CanvasCreateConnectionRequest,
+  type CanvasGroupNodesRequest,
   type CanvasNodeCreateSpec,
   type CanvasProjectConnectionMutationResult,
   type CanvasProjectNodeMutationResult,
@@ -22,6 +23,11 @@ import {
 import { enforceDshDomainToolEffect } from './dsh-domain-tool-access';
 
 export interface CanvasDshAuthoringPort {
+  groupNodes(input: {
+    readonly documentPath: string;
+    readonly request: CanvasGroupNodesRequest;
+    readonly signal?: AbortSignal;
+  }): Promise<CanvasProjectNodeMutationResult>;
   query(input: {
     readonly documentPath: string;
     readonly signal?: AbortSignal;
@@ -88,6 +94,17 @@ export class CanvasDshHostAdapter {
         return { outcome: 'success', result: projectCanvasQuerySnapshot(snapshot, decoded.input) };
       }
       const command = decoded.input.command;
+      if (command.kind === 'group_nodes') {
+        const result = await service.groupNodes({
+          documentPath: decoded.input.documentPath,
+          request: command,
+          ...(signal === undefined ? {} : { signal }),
+        });
+        return {
+          outcome: 'success',
+          result: projectCanvasNodeMutationResult(command.kind, result),
+        };
+      }
       if (command.kind === 'create_node') {
         const result = await service.createNode({
           documentPath: decoded.input.documentPath,
