@@ -38,6 +38,7 @@ describe('CanvasFullscreenPreviewOverlay', () => {
       items: [
         expect.objectContaining({
           id: 'canvas-fullscreen:generation:generation-image:output-1',
+          nodeId: 'generation-image',
           outputId: 'output-1',
           role: 'image',
           previewKind: 'image',
@@ -47,6 +48,7 @@ describe('CanvasFullscreenPreviewOverlay', () => {
         }),
         expect.objectContaining({
           id: 'canvas-fullscreen:generation:generation-image:output-2',
+          nodeId: 'generation-image',
           outputId: 'output-2',
           role: 'image',
           previewKind: 'image',
@@ -168,6 +170,34 @@ describe('CanvasFullscreenPreviewOverlay', () => {
     expect(dialog?.textContent).toContain('1 / 2');
     expect(container.querySelector('[data-preview-ui="lightweight"]')).not.toBeNull();
     expect(container.querySelector('img')?.getAttribute('src')).toContain('/output-1');
+    const thumbnails = container.querySelectorAll<HTMLButtonElement>(
+      '.canvas-image-preview-overlay__thumbnail',
+    );
+    expect(thumbnails).toHaveLength(2);
+    expect(thumbnails[0]?.querySelector('img')?.getAttribute('src')).toContain('/output-1');
+    expect(thumbnails[1]?.querySelector('img')?.getAttribute('src')).toContain('/output-2');
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    const initialRequests = previewRequests(host.postMessage);
+    expect(initialRequests).toHaveLength(3);
+    expect(initialRequests.map((request) => request['nodeId'])).toEqual([
+      'generation-image',
+      'generation-image',
+      'generation-image',
+    ]);
+    expect(initialRequests.map((request) => request['outputId']).sort()).toEqual([
+      'output-1',
+      'output-1',
+      'output-2',
+    ]);
+    for (const request of initialRequests) {
+      expect(request['contentLocator']).toEqual({
+        file: { authority: 'workspace', path: `neko/generated/${String(request['outputId'])}.png` },
+      });
+    }
+    const initialBody = initialRequests.find((request) =>
+      String(request['requestId']).startsWith('canvas-preview-resource-'),
+    );
+    expect(initialBody).toBeDefined();
 
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
@@ -177,8 +207,12 @@ describe('CanvasFullscreenPreviewOverlay', () => {
     expect(container.querySelector('img')?.getAttribute('src')).toContain('/output-2');
     expect(host.postMessage).toHaveBeenCalledWith({
       type: 'preview:releaseResource',
-      descriptorId: 'descriptor-output-1',
+      descriptorId: `descriptor-${String(initialBody?.['requestId'])}`,
     });
+    expect(previewRequests(host.postMessage)).toHaveLength(4);
+    await act(async () => thumbnails[0]?.click());
+    expect(dialog?.dataset.imagePreviewActiveIndex).toBe('0');
+    expect(container.querySelector('img')?.getAttribute('src')).toContain('/output-1');
 
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -186,10 +220,7 @@ describe('CanvasFullscreenPreviewOverlay', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
 
     await act(async () => root.unmount());
-    expect(host.postMessage).toHaveBeenCalledWith({
-      type: 'preview:releaseResource',
-      descriptorId: 'descriptor-output-2',
-    });
+    expectReleasedPreviewRequests(host.postMessage);
     container.remove();
   });
 
@@ -237,11 +268,44 @@ describe('CanvasFullscreenPreviewOverlay', () => {
     await act(async () => root.unmount());
     await act(async () => host.resolve());
 
-    expect(host.postMessage).toHaveBeenCalledWith({
-      type: 'preview:releaseResource',
-      descriptorId: 'descriptor-output-1',
-    });
+    expect(previewRequests(host.postMessage)).toHaveLength(3);
+    expectReleasedPreviewRequests(host.postMessage);
     container.remove();
+  });
+
+  it('keeps a real thumbnail failure compact while another output remains previewable', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const host = createPreviewHost('output-1');
+    try {
+      await act(async () => {
+        root.render(
+          <CanvasHostProvider host={host.port}>
+            <CanvasFullscreenPreviewOverlay request={galleryRequest()} onClose={() => undefined} />
+          </CanvasHostProvider>,
+        );
+      });
+      const alert = container.querySelector(
+        '.canvas-image-preview-overlay__thumbnail [role="alert"]',
+      );
+      expect(alert?.getAttribute('title')).toBe('Output file is unavailable.');
+      expect(alert?.getAttribute('aria-label')).toBe('Output file is unavailable.');
+      expect(alert?.textContent).toBe('');
+      expect(alert?.querySelector('svg')).not.toBeNull();
+      await act(async () => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      });
+      const body = container.querySelector('.canvas-image-preview-overlay__content');
+      expect(body?.querySelector('img')?.getAttribute('src')).toContain('/output-2');
+      expect(body?.querySelector('[role="alert"]')).toBeNull();
+      expect(
+        container.querySelectorAll('.canvas-image-preview-overlay__thumbnail img'),
+      ).toHaveLength(1);
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+    }
   });
 
   it('does not reserve an empty gallery footer for a single embedded text document', async () => {
@@ -278,29 +342,20 @@ describe('CanvasFullscreenPreviewOverlay', () => {
 });
 
 function galleryRequest(): CanvasFullscreenPreviewRequest {
-  return {
-    nodeId: 'generation-image',
-    initialIndex: 0,
-    items: [previewItem('output-1', 'First image'), previewItem('output-2', 'Second image')],
-  };
-}
-
-function previewItem(outputId: string, title: string) {
-  return {
-    id: `canvas-fullscreen:generation:generation-image:${outputId}`,
-    outputId,
-    role: 'image' as const,
-    previewKind: 'image' as const,
-    title,
-    asset: { kind: 'asset-identity' as const, mediaType: 'image' as const },
-    contentLocator: {
-      file: {
-        authority: 'workspace' as const,
-        path: `neko/generated/${outputId}.png`,
-      },
+  const request = resolveCanvasFullscreenPreviewRequest({
+    id: 'generation-image',
+    type: 'generation',
+    position: { x: 0, y: 0 },
+    size: { width: 240, height: 180 },
+    zIndex: 1,
+    data: {
+      recipe: { kind: 'image', prompt: 'Character sheet', count: 2 },
+      outputs: [output('output-1', 'sha256:first'), output('output-2', 'sha256:second')],
+      selectedOutputId: 'output-1',
     },
-    metadata: {},
-  };
+  });
+  if (!request) throw new Error('Expected a generated Image gallery.');
+  return request;
 }
 
 function output(outputId: string, _digest: string, jobId = 'job-1') {
@@ -350,7 +405,7 @@ function fileNode(nodeId: string, path: string, mediaType: string): CanvasNode {
   };
 }
 
-function createPreviewHost(): {
+function createPreviewHost(unavailableOutputId?: string): {
   readonly port: CanvasWebviewHostPort;
   readonly postMessage: ReturnType<typeof vi.fn>;
 } {
@@ -358,8 +413,18 @@ function createPreviewHost(): {
   const postMessage = vi.fn((message: unknown) => {
     if (!isRecord(message) || message['type'] !== 'preview:resolveResource') return;
     const outputId = String(message['outputId']);
+    if (outputId === unavailableOutputId) {
+      for (const listener of listeners) {
+        listener({
+          type: 'preview:resourceResolved',
+          requestId: message['requestId'],
+          error: 'Output file is unavailable.',
+        });
+      }
+      return;
+    }
     const descriptor = {
-      descriptorId: `descriptor-${outputId}`,
+      descriptorId: `descriptor-${String(message['requestId'])}`,
       sourceFingerprint: `sha256-${outputId}`,
       contentLocator: message['contentLocator'],
       url: `openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/${outputId}`,
@@ -394,10 +459,10 @@ function createDeferredPreviewHost(): {
   readonly resolve: () => void;
 } {
   const listeners = new Set<(message: unknown) => void>();
-  let pendingRequest: Record<string, unknown> | undefined;
+  const pendingRequests: Record<string, unknown>[] = [];
   const postMessage = vi.fn((message: unknown) => {
     if (!isRecord(message) || message['type'] !== 'preview:resolveResource') return;
-    pendingRequest = message;
+    pendingRequests.push(message);
   });
   const port = {
     documentId: 'neko/boards/workspace.nkc',
@@ -412,23 +477,25 @@ function createDeferredPreviewHost(): {
     port,
     postMessage,
     resolve() {
-      if (!pendingRequest) throw new Error('Expected an embedded preview request.');
-      const outputId = String(pendingRequest['outputId']);
-      for (const listener of listeners) {
-        listener({
-          type: 'preview:resourceResolved',
-          requestId: pendingRequest['requestId'],
-          descriptor: {
-            descriptorId: `descriptor-${outputId}`,
-            sourceFingerprint: `sha256-${outputId}`,
-            contentLocator: pendingRequest['contentLocator'],
-            url: `openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/${outputId}`,
-            contentKind: 'image',
-            mediaType: 'image/png',
-            displayName: String(pendingRequest['displayName']),
-            byteLength: 42,
-          },
-        });
+      if (pendingRequests.length === 0) throw new Error('Expected an embedded preview request.');
+      for (const pendingRequest of pendingRequests) {
+        const outputId = String(pendingRequest['outputId']);
+        for (const listener of listeners) {
+          listener({
+            type: 'preview:resourceResolved',
+            requestId: pendingRequest['requestId'],
+            descriptor: {
+              descriptorId: `descriptor-${String(pendingRequest['requestId'])}`,
+              sourceFingerprint: `sha256-${outputId}`,
+              contentLocator: pendingRequest['contentLocator'],
+              url: `openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/${outputId}`,
+              contentKind: 'image',
+              mediaType: 'image/png',
+              displayName: String(pendingRequest['displayName']),
+              byteLength: 42,
+            },
+          });
+        }
       }
     },
   };
@@ -472,4 +539,23 @@ function createTextPreviewHost(): {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function previewRequests(postMessage: ReturnType<typeof vi.fn>): Record<string, unknown>[] {
+  return postMessage.mock.calls.flatMap(([message]) =>
+    isRecord(message) && message['type'] === 'preview:resolveResource' ? [message] : [],
+  );
+}
+
+function expectReleasedPreviewRequests(postMessage: ReturnType<typeof vi.fn>): void {
+  const released = postMessage.mock.calls.flatMap(([message]) =>
+    isRecord(message) && message['type'] === 'preview:releaseResource'
+      ? [message['descriptorId']]
+      : [],
+  );
+  expect(released.sort()).toEqual(
+    previewRequests(postMessage)
+      .map((request) => `descriptor-${String(request['requestId'])}`)
+      .sort(),
+  );
 }

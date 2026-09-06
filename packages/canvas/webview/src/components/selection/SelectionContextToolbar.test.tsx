@@ -705,7 +705,7 @@ describe('SelectionContextToolbar', () => {
     const diagnostic = container.querySelector('[data-material-actions-status="error"]');
     expect(diagnostic?.getAttribute('role')).toBe('alert');
     expect(diagnostic?.getAttribute('title')).toBe('Image action owner is unavailable.');
-    expect(diagnostic?.textContent).toContain('Actions unavailable');
+    expect(diagnostic?.textContent).toContain('Could not load actions');
     expect(container.querySelector('[data-selection-action="node:duplicate"]')).not.toBeNull();
     await act(async () => root.unmount());
     container.remove();
@@ -768,10 +768,164 @@ describe('SelectionContextToolbar', () => {
 
     const diagnostic = toolbar.container.querySelector('[data-material-actions-status="error"]');
     expect(diagnostic?.getAttribute('title')).toBe('Cut target changed before execution.');
+    expect(diagnostic?.textContent).toContain('Edit failed');
     expect(
       toolbar.container.querySelector('[data-selection-action="cut:add-resource"]'),
     ).not.toBeNull();
     await toolbar.dispose();
+  });
+
+  it.each(['another node', 'return to the same node', 'changed content', 'another host'] as const)(
+    'isolates a delayed execution failure after selecting %s',
+    async (change) => {
+      const first = fileNode('first-document', 'first.md');
+      const second = fileNode('second-document', 'second.md');
+      const execution = deferred<CanvasHostSnapshot>();
+      const executeMaterialAction = vi.fn(() => execution.promise);
+      const descriptors = [descriptor('text:edit', 'Edit text', 'handoff')];
+      const host = createMaterialHost(descriptors, executeMaterialAction);
+      const nextHost = createMaterialHost(descriptors);
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const root = createRoot(container);
+      const render = (node: CanvasNode, selectedHost = host): void =>
+        root.render(
+          <CanvasHostProvider host={selectedHost}>
+            <SelectionContextToolbar
+              nodes={[node]}
+              selectedNodeIds={[node.id]}
+              viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
+              viewportSize={{ width: 800, height: 600 }}
+            />
+          </CanvasHostProvider>,
+        );
+      try {
+        await act(async () => render(first));
+        await act(async () => {
+          container
+            .querySelector<HTMLButtonElement>('[data-selection-action="text:edit"]')
+            ?.click();
+        });
+        expect(executeMaterialAction).toHaveBeenCalledWith('text:edit', [first.id], {});
+        await act(async () => {
+          if (change === 'changed content') render(fileNode(first.id, 'changed.md'));
+          else if (change === 'another host') render(first, nextHost);
+          else render(second);
+        });
+        if (change === 'return to the same node') await act(async () => render(first));
+        await act(async () => execution.reject(new Error('Only the previous action failed.')));
+
+        expect(container.querySelector('[role="alert"]')).toBeNull();
+        expect(
+          container.querySelector<HTMLButtonElement>('[data-selection-action="text:edit"]')
+            ?.disabled,
+        ).toBe(false);
+      } finally {
+        await act(async () => root.unmount());
+        container.remove();
+      }
+    },
+  );
+
+  it('does not replace a newer successful execution with an earlier failure', async () => {
+    const node = fileNode('document', 'document.md');
+    const first = deferred<CanvasHostSnapshot>();
+    const executeMaterialAction = vi
+      .fn<CanvasWebviewHostPort['executeMaterialAction']>()
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce(materialActionSnapshot());
+    const toolbar = await renderToolbar(
+      [node],
+      [node.id],
+      [descriptor('text:edit', 'Edit text', 'handoff')],
+      executeMaterialAction,
+    );
+    try {
+      const action = toolbar.container.querySelector<HTMLButtonElement>(
+        '[data-selection-action="text:edit"]',
+      );
+      await act(async () => action?.click());
+      await act(async () => action?.click());
+      expect(executeMaterialAction).toHaveBeenCalledTimes(2);
+      await act(async () => first.reject(new Error('The earlier execution failed.')));
+      expect(toolbar.container.querySelector('[role="alert"]')).toBeNull();
+    } finally {
+      await toolbar.dispose();
+    }
+  });
+
+  it('clears the current execution failure when the user retries the action', async () => {
+    const node = fileNode('document', 'document.md');
+    const executeMaterialAction = vi
+      .fn<CanvasWebviewHostPort['executeMaterialAction']>()
+      .mockRejectedValueOnce(new Error('Document could not be opened.'))
+      .mockResolvedValueOnce(materialActionSnapshot());
+    const toolbar = await renderToolbar(
+      [node],
+      [node.id],
+      [descriptor('text:edit', 'Edit text', 'handoff')],
+      executeMaterialAction,
+    );
+    try {
+      const action = toolbar.container.querySelector<HTMLButtonElement>(
+        '[data-selection-action="text:edit"]',
+      );
+      await act(async () => action?.click());
+      expect(toolbar.container.querySelector('[role="alert"]')?.textContent).toContain(
+        'Edit text failed',
+      );
+      expect(action?.disabled).toBe(false);
+      await act(async () => action?.click());
+      expect(executeMaterialAction).toHaveBeenCalledTimes(2);
+      expect(toolbar.container.querySelector('[role="alert"]')).toBeNull();
+    } finally {
+      await toolbar.dispose();
+    }
+  });
+
+  it('retries failed action resolution for the same selection through its Host', async () => {
+    const node = fileNode('document', 'document.md');
+    const resolved = deferred<readonly CanvasMaterialActionDescriptor[]>();
+    const resolveMaterialActions = vi
+      .fn<CanvasWebviewHostPort['resolveMaterialActions']>()
+      .mockRejectedValueOnce(new Error('Action catalog could not be loaded.'))
+      .mockReturnValueOnce(resolved.promise);
+    const host = { ...createMaterialHost([]), resolveMaterialActions };
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    try {
+      await act(async () => {
+        root.render(
+          <CanvasHostProvider host={host}>
+            <SelectionContextToolbar
+              nodes={[node]}
+              selectedNodeIds={[node.id]}
+              viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
+              viewportSize={{ width: 800, height: 600 }}
+            />
+          </CanvasHostProvider>,
+        );
+      });
+      expect(container.querySelector('[role="alert"]')?.getAttribute('title')).toBe(
+        'Action catalog could not be loaded.',
+      );
+      expect(container.querySelector('[data-selection-action="node:duplicate"]')).not.toBeNull();
+      const retry = container.querySelector<HTMLButtonElement>('[data-material-actions-retry]');
+      expect(retry).not.toBeNull();
+      await act(async () => retry?.click());
+      expect(container.querySelector('[data-material-actions-status="loading"]')).not.toBeNull();
+      expect(container.querySelector('[role="alert"]')).toBeNull();
+      await act(async () => resolved.resolve([descriptor('text:edit', 'Edit text', 'handoff')]));
+      expect(resolveMaterialActions.mock.calls).toEqual([[[node.id]], [[node.id]]]);
+      expect(container.querySelector('[data-material-actions-status="loading"]')).toBeNull();
+      expect(
+        container.querySelector<HTMLButtonElement>('[data-selection-action="text:edit"]')?.disabled,
+      ).toBe(false);
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+    }
   });
 
   it('shows the capability-owner diagnostic for an unavailable Cut action', async () => {
@@ -1122,4 +1276,18 @@ function materialActionSnapshot(): CanvasHostSnapshot {
     authoringCapabilities: { sourceModes: [], generationKinds: [], generationModels: [] },
     generationNodes: [],
   };
+}
+
+function deferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+  readonly reject: (error: Error) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((accept, fail) => {
+    resolve = accept;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
 }

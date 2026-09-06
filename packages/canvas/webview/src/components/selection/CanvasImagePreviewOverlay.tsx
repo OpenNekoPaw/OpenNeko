@@ -24,6 +24,7 @@ import type { PreviewSourceDescriptor } from '../../preview/types';
 
 type CanvasFullscreenPreviewKind = 'image' | 'video' | 'audio' | 'text';
 export type CanvasFullscreenPreviewSource = PreviewSourceDescriptor & {
+  readonly nodeId: string;
   readonly previewKind: CanvasFullscreenPreviewKind;
 };
 type CanvasFullscreenPreviewItems = readonly [
@@ -82,6 +83,7 @@ export function resolveCanvasFullscreenPreviewRequest(
       items: [
         {
           id: `canvas-fullscreen:media:${node.id}`,
+          nodeId: node.id,
           role: previewRole(previewKind),
           previewKind,
           title: node.data.title || basename(node.data.assetPath) || t(`node.${previewKind}`),
@@ -118,6 +120,7 @@ export function resolveCanvasFullscreenPreviewRequest(
       items: [
         {
           id: `canvas-fullscreen:file:${node.id}`,
+          nodeId: node.id,
           role: previewRole(previewKind),
           previewKind,
           title: basename(node.data.title) || basename(node.data.path) || t(`node.${previewKind}`),
@@ -295,7 +298,12 @@ export function CanvasFullscreenPreviewOverlay({
                 aria-label={t('selection.imagePreviewSelect', { index: index + 1 })}
                 onClick={() => selectIndex(index)}
               >
-                <PreviewSurface source={item} surfaceKind="inline" chrome="full-bleed" />
+                <PreviewSurface
+                  source={item}
+                  surfaceKind="inline"
+                  chrome="full-bleed"
+                  feedback="compact"
+                />
                 <span>{index + 1}</span>
               </button>
             ))}
@@ -316,6 +324,7 @@ function generationPreviewSource(
   const previewKind = output.kind;
   return {
     id: `canvas-fullscreen:generation:${node.id}:${output.outputId}`,
+    nodeId: node.id,
     outputId: output.outputId,
     role: previewRole(previewKind),
     previewKind,

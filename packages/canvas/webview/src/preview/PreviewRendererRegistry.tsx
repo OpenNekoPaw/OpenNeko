@@ -192,8 +192,8 @@ function useCanvasPreviewDescriptor(source: PreviewSourceDescriptor): {
 
     return () => {
       disposed = true;
-      unsubscribe();
       if (descriptorId) {
+        unsubscribe();
         host.postMessage({ type: 'preview:releaseResource', descriptorId });
       }
     };
