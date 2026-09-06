@@ -1,4 +1,4 @@
-# Time-based Production Specification
+# 时序媒体制作规格
 
 ## 中文指南
 
@@ -17,21 +17,3 @@
 分析是形成决定的内部证据工作，不建立“来源分析”章节。预处理结果是参考图、首尾帧、蒙版或其他稳定素材；生成结果是 Job 与候选媒体；后期结果是项目修订或母版；交付结果是已验证文件和清单。它们保存在各自 owning capability 的结构化对象中，只有被接受且会被后续复用的稳定引用才进入主文档。
 
 若用户明确只要概念方向，仍使用精简概念结构，不强制展开完整制作规格。若来源证据不足以支撑人物、剧情、场景或片长决定，缩小对应声明或在对话中报告精确缺口，不用空章节和通用分析填充。
-
-## English guidance
-
-Only when the user explicitly requests complete cross-stage production design, deliver one authoritative master document rather than separate analysis, preparation, generation, and post-production explanations. An ordinary work-design request still returns the current creative artifact plus the compact roadmap defined by the main Skill.
-
-Keep only five reusable content groups that form a closed path from source evidence to a verifiable work:
-
-1. **Source-to-decision map** with verified facts, affected creative decisions, and evidence bounds.
-2. **Work design baseline** for plot causality, character goals and continuity, scene functions and spatial relations, visual style, sound, and rhythm.
-3. **Preparation asset package** with exact character, environment and style anchors, key/first/last frames, masks, storyboard or animatic outputs, their source roles, acceptance, and consuming units.
-4. **Generation and production-unit table** with stable IDs, timing, story function, image/action/camera/sound, bound inputs, semantic prompt intent or generation method, expected asset, direct acceptance, repair boundary, and downstream use.
-5. **Finishing, work, and delivery contract** for edit, compositing, grade, sound, titles, review master, clean or stem variants, platform variants, QC, and manifest.
-
-Before delivery, verify that all five production stages and plot, character, scene, style, and sound have a real decision or an explicit not-applicable reason. Empty headings, generic advice, and future recommendations do not count. Every retained item must change an input asset, production unit, finishing action, acceptance criterion, or delivered result.
-
-Analysis is internal evidence work, not a source-analysis section. Prepared references, generation Jobs and candidates, project revisions or masters, and delivered files or manifests remain structured objects owned by their capabilities. Only accepted stable references that downstream work must reuse enter the master document.
-
-If the user explicitly requests concept direction only, keep the concise concept form. If source evidence cannot support a character, plot, scene, or runtime decision, narrow the claim or report the exact gap in conversation instead of adding empty sections or generic analysis.

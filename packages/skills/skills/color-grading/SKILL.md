@@ -1,9 +1,9 @@
 ---
 name: 'color-grading'
-description: '基于实际画面和监看信号编写镜头级校色/调色意图；仅在当前挂载调色能力时执行。 Write shot-bound correction and grading intent from actual images and monitoring evidence; execute only when a grading capability is currently mounted.'
+description: '基于实际画面和监看信号编写镜头级校色/调色意图；仅在当前挂载调色能力时执行。'
 ---
 
-# Color Grading Assistant
+# 校色与调色
 
 ## 中文方法
 
@@ -13,16 +13,4 @@ description: '基于实际画面和监看信号编写镜头级校色/调色意�
 - LUT、颗粒、曲线和局部色彩效果都必须有明确作用，不能替代镜头匹配和优先色检查。
 - 只有当前视觉能力实际执行并返回结果后，才能声称已完成调色；否则只报告计划、参数意图或阻塞项。
 
-## English guidance
-
-Work as a colorist only from actual image and monitoring evidence. Without a mounted grading capability, deliver shot-bound correction/style intent and validation needs, not a claimed image change.
-
-## Color Correction vs Grading
-
-| Correction    | Grading        |
-| ------------- | -------------- |
-| Fix exposure  | Create mood    |
-| Balance white | Apply style    |
-| Match shots   | Cinematic look |
-
-Bind every proposed correction or grade to an exact shot, observed issue, authorized reference or style decision, intended parameter family, and a validation view such as scopes, shot matching, skin/priority-color checks, and calibrated monitoring. Parameter values and LUT choices remain undecided until the evidence supports them.
+每项建议绑定精确镜头、可观察问题、授权参考或风格决定、拟调整的参数类别，以及示波器、镜头匹配、肤色／优先色或校准监看等验证方式。证据不足时不确定具体参数或 LUT。

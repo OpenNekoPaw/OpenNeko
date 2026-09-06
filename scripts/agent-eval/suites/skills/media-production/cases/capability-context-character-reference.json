@@ -59,7 +59,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:214c29ab578b745df9d8156f58f27f90342470b5b0e83f278c50015d0ac23d71"
+        "fingerprint": "sha256:71b62ee9221be3a158958fff815c2513de4dc71dec75824d9f0f008717670466"
       },
       "status": "injected",
       "evidenceRef": "capability-facts"
@@ -79,7 +79,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-preparation",
-        "fingerprint": "sha256:d20b1e82cc099ead56e6f86a761f5d5695b44a3ab8c11fdb64b5311e0ce0400b"
+        "fingerprint": "sha256:dd0861a37c60ff0e1a5857503ad5e102cd503b7207ad1c18e2472acd44a2c1b6"
       },
       "status": "injected",
       "evidenceRef": "capability-facts"
@@ -93,7 +93,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "image",
-        "fingerprint": "sha256:e0c5bf2e39d3636b60d7b7071da96a8c654b7d7cd3db0b990574b4c6b0296462"
+        "fingerprint": "sha256:4f0fba5aa68e9b9413c7f1c1aebe3cdc326a56ad5ec8b4eb09de90a4d815ce26"
       },
       "status": "injected",
       "evidenceRef": "capability-facts"
@@ -107,7 +107,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-selection",
-        "fingerprint": "sha256:df7e861dd2f30de2ccdd07c63d8c5bd20a8689f9d964934882dc3437ee102e96"
+        "fingerprint": "sha256:ec0b3429fa7c4691f8dc9131a8cd1fe09a59a6d7286d3a118bfd3a5ca48f7458"
       },
       "status": "injected",
       "evidenceRef": "capability-facts"

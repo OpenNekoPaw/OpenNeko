@@ -1,0 +1,21 @@
+{
+  "schema": "neko.agent-eval.rubric",
+  "id": "single-view-illustration-preparation",
+  "domain": "media-preparation",
+  "minimumScore": 4,
+  "maximumUncertainty": 0.2,
+  "criteria": [
+    {
+      "id": "intent-and-coverage",
+      "weight": 0.7,
+      "description": "Prepare one portrait side-view illustration prompt and acceptance with source-bound pack/lamp identity. Respect black-white ink target and standalone scope; no mandatory turnaround, animation range or video dependency. Reject: Force a multi-view sheet, refuse for missing rear view, expand into an animation asset batch or force color/3D/widescreen.",
+      "evidenceRefs": ["asset-design-facts"]
+    },
+    {
+      "id": "grounding-and-boundary",
+      "weight": 0.3,
+      "description": "Actual prompts bind the inspected source, preserve evidenced identity, label reconstruction, and give visual checks. Do not claim generated assets, creator adoption or completed video preparation. The explicit English creative-language setting governs generated prompts, negative prompts and acceptance text even though the Skill body is Chinese. Translation must not change the left-side pack, hand lamp, portrait side view, black-and-white ink target or resource identifiers.",
+      "evidenceRefs": ["asset-design-facts"]
+    }
+  ]
+}

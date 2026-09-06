@@ -1,9 +1,9 @@
 ---
 name: 'media-delivery'
-description: '根据明确交付规范验证并导出已完成的媒体项目或母版，包括技术 QC、字幕/音频检查、编码封装和交付清单；不代替上游创作修复。 Validate and export a completed media project or master against an explicit delivery specification, including technical QC, caption/audio checks, encoding, packaging, and manifest creation.'
+description: '根据明确交付规范验证并导出已完成的媒体项目或母版，包括技术 QC、字幕/音频检查、编码封装和交付清单；不代替上游创作修复。'
 ---
 
-# Media Delivery
+# 媒体交付
 
 ## 中文方法
 
@@ -14,7 +14,3 @@ description: '根据明确交付规范验证并导出已完成的媒体项目或
 3. 发现失败时返回精确时间范围、责任能力和所需修复，不在交付阶段静默修改创作事实。
 4. 只有 owning export capability 返回成功结果后才声称已导出，并检查文件存在、媒体类型、基础规格和校验信息。
 5. 交付稳定文件引用、使用的规范、验证结果和清单；多平台版本分别验证，不能由一个成功导出推断其他版本完成。
-
-## English guidance
-
-Start only from an accepted project revision or master. Bind the exact source, target platform, and explicit delivery specification for aspect ratio, resolution, frame rate, duration, color, audio, captions, codec, container, and naming; never replace missing requirements with universal defaults. Use admitted validators to check readability, range, bad frames, sync, caption safety, loudness/peak, and technical conformance, leaving unmeasured items unverified. Route failures to the owning upstream capability without silently changing creative facts. Claim export only from a successful owning export result, then verify file existence, media type, basic specs, and checksum evidence. Return stable delivery references, applied specification, validation results, and manifest.

@@ -1,0 +1,21 @@
+{
+  "schema": "neko.agent-eval.rubric",
+  "id": "explicit-line-art-animation",
+  "domain": "media-preparation",
+  "minimumScore": 4,
+  "maximumUncertainty": 0.2,
+  "criteria": [
+    {
+      "id": "intent-and-coverage",
+      "weight": 0.7,
+      "description": "Honor explicitly selected ink/hatching animation. Prepare consistent side/back character views and carried-lamp grip from source; label unseen rear details as proposed adaptation. No color/3D requirement; no video execution or coverage claims from prose. Reject: Override line-art target with color/3D rendering, require irrelevant full turnarounds, use one silhouette as side/back coverage, or count prompt descriptions as generated references.",
+      "evidenceRefs": ["asset-design-facts"]
+    },
+    {
+      "id": "grounding-and-boundary",
+      "weight": 0.3,
+      "description": "Actual prompts bind the inspected source, preserve evidenced identity, label reconstruction, and give visual checks. Do not claim generated assets, creator adoption or completed video preparation.",
+      "evidenceRefs": ["asset-design-facts"]
+    }
+  ]
+}

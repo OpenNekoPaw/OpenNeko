@@ -43,7 +43,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "content-authoring",
-        "fingerprint": "sha256:af19ee1feb1052856ebf8fe40a9624e6de31a1e3f903f3aa3ed01dd3a7847839"
+        "fingerprint": "sha256:ad75e9d1a13c47ca6057fee8581846a5a932958990bc17535ba2a87be11e2b34"
       },
       "status": "injected",
       "evidenceRef": "composition-facts"
@@ -57,7 +57,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "storyboard",
-        "fingerprint": "sha256:abe11a4e523adc8c63ca4680714a393ed9185eee4d46afa6cfa6c743e9351f91"
+        "fingerprint": "sha256:50ff36cd56facdc7f88b919c71f6c73a4be27d69d29619a01266229e3fdca0a1"
       },
       "status": "injected",
       "evidenceRef": "composition-facts"

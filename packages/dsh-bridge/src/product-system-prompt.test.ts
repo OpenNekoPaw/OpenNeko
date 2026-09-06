@@ -146,7 +146,7 @@ describe('OpenNeko DSH product system prompt', () => {
       'the final response reports the already-written Workspace-relative path',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
-      'narrow the title and content to the proven local scope',
+      'without silently narrowing the user objective',
     );
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
       'Reuse current Canvas nodes, documents, selected references, generation results',
@@ -159,5 +159,16 @@ describe('OpenNeko DSH product system prompt', () => {
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toContain(
       'The Host renders these as summary, document reference, then recommended action',
     );
+  });
+
+  it('preserves analysis scope while leaving image reading methodology to Skills', () => {
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'Concise reporting does not reduce the evidence gathering',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'Existing plans, prompts, and generated candidates do not establish source facts',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('continue the authorized evidence work');
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toMatch(/read_images|16 pages|10–20/u);
   });
 });

@@ -1,7 +1,10 @@
 {
   "schema": "neko.agent-eval.suite",
   "id": "skill.media-preparation",
-  "owner": { "kind": "skill", "id": "media-preparation" },
+  "owner": {
+    "kind": "skill",
+    "id": "media-preparation"
+  },
   "target": {
     "kind": "skill",
     "identity": {
@@ -10,13 +13,15 @@
       "provenance": "builtin",
       "rootId": "builtin-skills",
       "relativePath": "media-preparation",
-      "fingerprint": "sha256:d20b1e82cc099ead56e6f86a761f5d5695b44a3ab8c11fdb64b5311e0ce0400b"
+      "fingerprint": "sha256:dd0861a37c60ff0e1a5857503ad5e102cd503b7207ad1c18e2472acd44a2c1b6"
     }
   },
   "runtimeProfiles": [
     {
       "id": "markdown",
-      "settings": { "outputFormat": "markdown" },
+      "settings": {
+        "outputFormat": "markdown"
+      },
       "configurationHash": "sha256:f949e317ef6531bd9fa4f15b04f4cc038036365bc0a8a8f97dcb229049f0baac"
     }
   ],
@@ -27,8 +32,27 @@
       "configurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915"
     }
   ],
-  "judgeProfiles": [],
+  "judgeProfiles": [
+    {
+      "id": "preparation-judge",
+      "adapter": "openai-chat-completions",
+      "providerId": "configured-judge",
+      "modelId": "gpt-5.4",
+      "endpointEnv": "NEKO_AGENT_EVAL_JUDGE_ENDPOINT",
+      "apiKeyEnv": "NEKO_AGENT_EVAL_JUDGE_API_KEY",
+      "temperature": 0,
+      "maxTokens": 2400,
+      "timeoutMs": 180000
+    }
+  ],
   "fixtures": [
+    {
+      "id": "ordered-story-workspace",
+      "root": "shared-fixtures/ordered-story-workspace",
+      "source": "repository",
+      "digest": "sha256:ab295b2fb6d74d89190d586246759032ef6242851ad327c080ffc2a627bf1bc5",
+      "mutable": true
+    },
     {
       "id": "empty-workspace",
       "root": "shared-fixtures/empty-workspace",
@@ -42,9 +66,22 @@
       "source": "repository",
       "digest": "sha256:e0886a2114d2d964afbde9ae7fad0c7d4fdc73a2f0bf5f50d8c6ee251d79cfb8",
       "mutable": true
+    },
+    {
+      "id": "comic-asset-design-workspace",
+      "root": "shared-fixtures/comic-asset-design-workspace",
+      "source": "repository",
+      "digest": "sha256:31f10393a89b54c3d13c363d17cf6b79fa2afe25e35a6bc359f2e6ab77da8cab",
+      "mutable": true
     }
   ],
   "cases": [
+    {
+      "id": "base-assets-before-six-frames",
+      "file": "cases/base-assets-before-six-frames.json",
+      "group": "regression",
+      "visibility": "public"
+    },
     {
       "id": "submit-ready-video-handoff",
       "file": "cases/submit-ready-video-handoff.json",
@@ -80,10 +117,42 @@
       "file": "cases/early-technical-video-test.json",
       "group": "boundary",
       "visibility": "public"
+    },
+    {
+      "id": "comic-design-assets-not-panel-cleanup",
+      "file": "cases/comic-design-assets-not-panel-cleanup.json",
+      "group": "regression",
+      "visibility": "public"
+    },
+    {
+      "id": "faithful-page-cleanup",
+      "file": "cases/faithful-page-cleanup.json",
+      "group": "boundary",
+      "visibility": "public"
+    },
+    {
+      "id": "explicit-line-art-animation",
+      "file": "cases/explicit-line-art-animation.json",
+      "group": "boundary",
+      "visibility": "public"
+    },
+    {
+      "id": "single-view-illustration-preparation",
+      "file": "cases/single-view-illustration-preparation.json",
+      "group": "boundary",
+      "visibility": "public"
     }
   ],
-  "rubricRefs": [],
-  "baselinePolicy": { "mode": "none" },
+  "rubricRefs": [
+    "rubrics/base-assets-before-six-frames.json",
+    "rubrics/comic-design-assets.json",
+    "rubrics/faithful-page-cleanup.json",
+    "rubrics/explicit-line-art-animation.json",
+    "rubrics/single-view-illustration-preparation.json"
+  ],
+  "baselinePolicy": {
+    "mode": "none"
+  },
   "reportPolicy": {
     "rawRetentionDays": 14,
     "trustedCiRetentionDays": 14,

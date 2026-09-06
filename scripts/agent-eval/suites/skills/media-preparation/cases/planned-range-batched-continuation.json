@@ -19,12 +19,12 @@
       {
         "ref": "batched-preparation-facts",
         "kind": "runtime-fact",
-        "description": "Two canonical turns, full planned-range coverage, bounded static preparation batches, exact remaining gaps, and absent production-video execution.",
+        "description": "Two canonical turns, full planned-range coverage, multi-item per-operation static preparation batches, exact dependency waves, and absent production-video execution.",
         "required": true
       }
     ],
-    "expectedResult": "The first turn builds one per-shot production-input table across SH01-SH04, including story beat, applicable world rules, characters, objects, scenes, composition, static references, image-prompt status and distinct video-motion-intent status. It prepares the highest-reuse, lower-cost static-reference batch instead of a video even though SH01 already has a consumable first frame. The bare continuation updates the same table and handles the next critical static or prompt batch. Each operation stays bounded, while neither one still nor one packet is presented as completing preparation.",
-    "expectedFailure": "Preparing only SH01 without accounting for every planned shot, omitting story or world decisions, omitting per-shot image and video intent status, grouping unanalyzed sibling shots as later work, treating the broad illustration or prior per-shot ready state as complete coverage, skipping to a video packet or video generation, declaring preparation complete after one batch, inventing a global workflow state, or asking what continue means fails."
+    "expectedResult": "The first turn builds one per-shot production-input table across SH01-SH04, including story beat, applicable world rules, characters, objects, scenes, composition, static references, image-prompt status and distinct video-motion-intent status. It prepares every independent item in the highest-reuse, lower-cost static-reference wave as separate bounded operations instead of truncating the batch to its first row or combining materials into one prompt. The bare continuation updates the same table and handles the next dependency wave. Neither one still nor one packet is presented as completing preparation. Reusable assets are designed from source information, not assumed to be finished by cropping the broad illustration; acceptance distinguishes visible design quality from readable files and assigns formats by reference role.",
+    "expectedFailure": "Preparing only SH01 without accounting for every planned shot, omitting story or world decisions, omitting per-shot image and video intent status, returning only the first ready static item, combining distinct character, prop or environment assets into one prompt, grouping unanalyzed sibling shots as later work, treating the broad illustration or prior per-shot ready state as complete coverage, skipping to a video packet or video generation, declaring preparation complete after one batch, inventing a global workflow state, or asking what continue means fails. Treating source cleanup as reusable design completion, forcing all reference sheets to the final video aspect ratio, or treating technical probes as design approval also fails."
   },
   "fixtureRefs": ["creative-planning-workspace"],
   "runtimeProfileId": "markdown",
@@ -33,15 +33,23 @@
     {
       "id": "inventory-and-first-batch",
       "kind": "submit",
-      "prompt": "$media-preparation $image 读取 @screenplay.fountain 和 @station-illustration.svg。以下是当前权威且完整的计划镜头范围：SH01，Mara 在 23:47 的雨夜站台撑开红伞；SH02，无头灯列车驶入并开门；SH03，Mara 收伞走向黄线；SH04，天桥上的 Mara 看见车厢内儿童大小的剪影，红伞留在下方空站台。当前只有 station-illustration.svg，它可直接作为 SH01 视频首帧并覆盖其开放红伞人物状态、站台、列车和总体风格，但不能覆盖收伞状态、天桥空间、儿童剪影或其他镜头构图。先建立覆盖 SH01-SH04 的紧凑逐镜生产输入表，包含剧情节拍、世界规则、人物、物品、场景、构图、静态参考、图像提示词状态和独立的视频运动意图状态，再按复用价值和成本准备第一批静态参考输入；本轮不执行任何生成。明确当前批次、消费镜头、仍缺素材和提示词、唯一下一步，不得把一张图或一个包称为预处理完成。"
+      "prompt": "$media-preparation $image 读取 @screenplay.fountain 和 @station-illustration.svg。以下是当前权威且完整的计划镜头范围：SH01，Mara 在 23:47 的雨夜站台撑开红伞；SH02，无头灯列车驶入并开门；SH03，Mara 收伞走向黄线；SH04，天桥上的 Mara 看见车厢内儿童大小的剪影，红伞留在下方空站台。当前只有 station-illustration.svg，它可直接作为 SH01 视频首帧并覆盖其开放红伞人物状态、站台、列车和总体风格，但不能覆盖收伞状态、天桥空间、儿童剪影或其他镜头构图。先建立覆盖 SH01-SH04 的紧凑逐镜生产输入表，包含剧情节拍、世界规则、人物、物品、场景、构图、静态参考、图像提示词状态和独立的视频运动意图状态，再按复用价值和成本准备第一批静态参考输入；当前同一依赖波次中凡是彼此独立且可由 image 单次有界操作分别消费的缺口都要作为独立批次项列全，不能只准备第一项，也不能合成一个多素材 prompt。本轮不执行任何生成。明确当前批次全部独立项、各自消费镜头、依赖、仍缺素材和提示词、唯一下一依赖批次，不得把一张图或一个包称为预处理完成。"
     },
-    { "id": "first-idle", "kind": "wait-for-idle", "timeoutMs": 180000 },
+    {
+      "id": "first-idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 180000
+    },
     {
       "id": "continue-preparation",
       "kind": "submit",
       "prompt": "继续下一步"
     },
-    { "id": "continued-idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+    {
+      "id": "continued-idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 180000
+    }
   ],
   "assertions": [
     {
@@ -58,7 +66,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-preparation",
-        "fingerprint": "sha256:d20b1e82cc099ead56e6f86a761f5d5695b44a3ab8c11fdb64b5311e0ce0400b"
+        "fingerprint": "sha256:dd0861a37c60ff0e1a5857503ad5e102cd503b7207ad1c18e2472acd44a2c1b6"
       },
       "status": "injected",
       "evidenceRef": "batched-preparation-facts"
@@ -82,10 +90,12 @@
         "图像提示词",
         "视频运动意图",
         "当前批次",
+        "独立",
+        "依赖",
         "消费镜头",
         "静态",
         "仍缺",
-        "下一步"
+        "下一"
       ],
       "evidenceRef": "batched-preparation-facts"
     },
@@ -122,5 +132,8 @@
     }
   ],
   "artifactChecks": [],
-  "budget": { "timeoutMs": 360000, "repetitions": 1 }
+  "budget": {
+    "timeoutMs": 360000,
+    "repetitions": 1
+  }
 }

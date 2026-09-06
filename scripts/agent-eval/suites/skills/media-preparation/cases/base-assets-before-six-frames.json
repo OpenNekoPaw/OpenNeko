@@ -1,0 +1,109 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "base-assets-before-six-frames",
+  "suiteId": "skill.media-preparation",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "$media-preparation 读取 @preparation.md 与 @source.md，盘点当前素材，准备下一批可跨镜复用的静态设计输入。已有六个首帧提示草案是否足够？本轮只在回复中交付准备内容，不生成媒体、不修改文件。",
+    "canonicalPath": [
+      "Desktop Agent input",
+      "builtin media-preparation Skill",
+      "ordered-story-workspace Read",
+      "source-grounded semantic response"
+    ],
+    "observables": [
+      {
+        "ref": "base-assets-facts",
+        "kind": "runtime-fact",
+        "description": "Exact Skill injection, effective model, actual source read and media-call absence; semantic cast/story/asset judgments use the real final answer.",
+        "required": true
+      }
+    ],
+    "expectedResult": "Reuse the complete script evidence and preserve the approved 30-second six-shot scope. Inventory recurring characters, lamp and connected environment separately from shot frames, record all consumers and real absent outputs, prepare role-specific static design intents and dependent view/state work. Six textual frame prompts are not generated or selected assets and shared-identity frames are not an independent generation batch. No video advancement.",
+    "expectedFailure": "Claiming base references or frames exist because prompts or source are present; compiling SH01/SH02/SH03 as independent first-frame production without base designs; inventing canonical unseen helmet face; forcing every reference to film format; refusing all planning because no source image or optional crop tool exists; or executing media fails."
+  },
+  "fixtureRefs": ["ordered-story-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "$media-preparation 读取 @preparation.md 与 @source.md，盘点当前素材，准备下一批可跨镜复用的静态设计输入。已有六个首帧提示草案是否足够？本轮只在回复中交付准备内容，不生成媒体、不修改文件。"
+    },
+    {
+      "id": "idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 240000
+    }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "base-assets-facts"
+    },
+    {
+      "id": "skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-preparation",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-preparation",
+        "fingerprint": "sha256:dd0861a37c60ff0e1a5857503ad5e102cd503b7207ad1c18e2472acd44a2c1b6"
+      },
+      "status": "injected",
+      "evidenceRef": "base-assets-facts"
+    },
+    {
+      "id": "model",
+      "kind": "model",
+      "profileId": "configured-default",
+      "evidenceRef": "base-assets-facts"
+    },
+    {
+      "id": "read-source",
+      "kind": "tool-call",
+      "name": "Read",
+      "status": "success",
+      "expectedArguments": {
+        "file_path": "source.md"
+      },
+      "evidenceRef": "base-assets-facts"
+    },
+    {
+      "id": "no-generation-0",
+      "kind": "tool-call",
+      "name": "GenerateImage",
+      "status": "absent",
+      "evidenceRef": "base-assets-facts"
+    },
+    {
+      "id": "no-generation-1",
+      "kind": "tool-call",
+      "name": "GenerateVideo",
+      "status": "absent",
+      "evidenceRef": "base-assets-facts"
+    },
+    {
+      "id": "no-generation-2",
+      "kind": "tool-call",
+      "name": "openneko_generation",
+      "status": "absent",
+      "evidenceRef": "base-assets-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "rubric": {
+    "kind": "domain-rubric",
+    "ref": "rubrics/base-assets-before-six-frames.json",
+    "judgeProfileId": "preparation-judge"
+  },
+  "budget": {
+    "timeoutMs": 240000,
+    "repetitions": 1
+  }
+}

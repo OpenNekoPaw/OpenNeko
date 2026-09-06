@@ -1,4 +1,4 @@
 interface:
-  display_name: '世界观创作 / World Creator'
-  short_description: '创建证据边界清楚的可评审世界观 / Create reviewable evidence-aware Worlds'
-  default_prompt: '使用 $world-creator，根据我的概念和当前创作权限已授权的参考创建可评审世界观。 / Use $world-creator to create a reviewable World from my concept and authorized references in the current creation authority.'
+  display_name: '世界观创作'
+  short_description: '创建证据边界清楚的可评审世界观'
+  default_prompt: '使用 $world-creator，根据我的概念和当前创作权限已授权的参考创建可评审世界观。'

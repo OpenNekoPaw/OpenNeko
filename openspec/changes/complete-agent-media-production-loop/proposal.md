@@ -5,10 +5,12 @@ OpenNeko 已能完成创意设计、生成候选和局部剪辑操作，但尚�
 ## What Changes
 
 - 让创作者在 Canvas 中比较生成候选，并在明确选择后把稳定素材引用写回 Markdown 镜头行；当前预览候选不自动成为下游事实。
+- 让 Agent Generation 节点直接保留输入素材引用；基于既有生成结果调整时连接前后 Generation 节点，不再为同一素材创建重复 Canvas 节点。
+- 让 Agent 把当前阶段中彼此独立且已就绪的素材作为一个依赖批次执行：每个素材保持一次独立 Generation 调用，整批结果全部结算并检查后再推进下一依赖批次，而不是生成第一张就结束任务。
 - 为 Agent 提供有界的视频总览和指定时间段抽帧，使选片与修复建议建立在真实帧证据上。
 - 让 Agent 通过 Cut 的 canonical authoring path 导入已选素材、调整排列、添加基础转场并形成可评审时间线。
 - 在既有 Cut 导出基础上补齐成片技术 QC 与交付清单，未测量项目保持未验证状态。
-- 保持“简洁整体路线 + 当前阶段产物 + 一个下一步”的人机协作方式，不增加独立审核关卡、批准对象、预算状态或全局生产状态机。
+- 保持“简洁整体路线 + 当前阶段产物 + 一个下一批次或创作者决定”的人机协作方式，不增加批量 Generation API、独立审核关卡、批准对象、预算状态或全局生产状态机。
 
 ## Capabilities
 
@@ -19,7 +21,7 @@ OpenNeko 已能完成创意设计、生成候选和局部剪辑操作，但尚�
 ### Modified Capabilities
 
 - `bounded-agent-visual-inspection`: 将有界瞬态视觉检查扩展到视频总览和指定时间段帧证据。
-- `agent-generation-canvas-projection`: 区分当前预览候选与创作者明确选择后可供下游使用的稳定结果。
+- `agent-generation-canvas-projection`: 保存 Generation 输入素材与前后生成 lineage，并区分当前预览候选与创作者明确选择后可供下游使用的稳定结果。
 - `desktop-cut-node-media-runtime`: 补齐 Agent 可调用的素材组装、基础转场、成片 QC 与交付清单能力，同时保持 Cut 为唯一时间线与导出 owner。
 
 ## Impact

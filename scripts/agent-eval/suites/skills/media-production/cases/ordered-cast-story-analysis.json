@@ -1,0 +1,109 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "ordered-cast-story-analysis",
+  "suiteId": "skill.media-production",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "读取 @source.md，分析完整三章，为后续动画制作整理可复用的人物、出场、剧情、物品和地点依据。不要只给风格或分镜；本轮只在回复中交付分析，不生成素材、不修改文件、不扩展到别的章节。",
+    "canonicalPath": [
+      "Desktop Agent input",
+      "builtin media-production Skill",
+      "ordered-story-workspace Read",
+      "source-grounded semantic response"
+    ],
+    "observables": [
+      {
+        "ref": "ordered-story-facts",
+        "kind": "runtime-fact",
+        "description": "Exact Skill injection, effective model, actual source read and media-call absence; semantic cast/story/asset judgments use the real final answer.",
+        "required": true
+      }
+    ],
+    "expectedResult": "Read the complete available ordered script. Distinguish Lin Qiao / A-Hui as one person, Su He and the unnamed helmeted person as separate identities; retain source-backed first/later appearances, torn-left-sleeve continuity, lamp ownership/use/return and connected route causality. Keep unknown identity and unseen visual details unresolved. Complete the requested three-chapter analysis instead of stopping at cover/style sampling or inventing a PV scope.",
+    "expectedFailure": "Merging similar coats, treating an alias as another person, guessing the helmeted person's name or motive, missing the third-chapter return, claiming pixel inspection of a text-only source, stopping at an arbitrary sample, or substituting generic five-analysis headings for sourced content fails."
+  },
+  "fixtureRefs": ["ordered-story-workspace"],
+  "runtimeProfileId": "ask-markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "读取 @source.md，分析完整三章，为后续动画制作整理可复用的人物、出场、剧情、物品和地点依据。不要只给风格或分镜；本轮只在回复中交付分析，不生成素材、不修改文件、不扩展到别的章节。"
+    },
+    {
+      "id": "idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 240000
+    }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "ordered-story-facts"
+    },
+    {
+      "id": "skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-production",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-production",
+        "fingerprint": "sha256:71b62ee9221be3a158958fff815c2513de4dc71dec75824d9f0f008717670466"
+      },
+      "status": "injected",
+      "evidenceRef": "ordered-story-facts"
+    },
+    {
+      "id": "model",
+      "kind": "model",
+      "profileId": "configured-default",
+      "evidenceRef": "ordered-story-facts"
+    },
+    {
+      "id": "read-source",
+      "kind": "tool-call",
+      "name": "Read",
+      "status": "success",
+      "expectedArguments": {
+        "file_path": "source.md"
+      },
+      "evidenceRef": "ordered-story-facts"
+    },
+    {
+      "id": "no-generation-0",
+      "kind": "tool-call",
+      "name": "GenerateImage",
+      "status": "absent",
+      "evidenceRef": "ordered-story-facts"
+    },
+    {
+      "id": "no-generation-1",
+      "kind": "tool-call",
+      "name": "GenerateVideo",
+      "status": "absent",
+      "evidenceRef": "ordered-story-facts"
+    },
+    {
+      "id": "no-generation-2",
+      "kind": "tool-call",
+      "name": "openneko_generation",
+      "status": "absent",
+      "evidenceRef": "ordered-story-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "rubric": {
+    "kind": "domain-rubric",
+    "ref": "rubrics/ordered-cast-story-analysis.json",
+    "judgeProfileId": "creative-production-judge"
+  },
+  "budget": {
+    "timeoutMs": 240000,
+    "repetitions": 1
+  }
+}

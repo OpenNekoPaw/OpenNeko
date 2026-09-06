@@ -1,0 +1,141 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "canvas-related-batch-grouping",
+  "suiteId": "agent-runtime.creative-media-workflow",
+  "caseGroup": "workflow",
+  "visibility": "public",
+  "execution": {
+    "evidenceLevel": "visible-desktop",
+    "resourceClass": "text",
+    "protected": true,
+    "lifecycleChecks": ["composer-focus", "graceful-close"],
+    "startSurface": "workspace"
+  },
+  "evidenceContract": {
+    "userBehavior": "将明确关联的创作节点连线并归组，不复制已有节点。",
+    "canonicalPath": [
+      "Desktop Agent composer",
+      "openneko_canvas query/apply",
+      "CanvasProjectAuthoringService",
+      "authorized Workspace writer",
+      "boards/story.nkc"
+    ],
+    "observables": [
+      {
+        "ref": "canvas-facts",
+        "kind": "runtime-fact",
+        "description": "真实 query、create_connection、group_nodes 回执以及分组后的节点数量。",
+        "required": true
+      },
+      {
+        "ref": "canvas-file",
+        "kind": "post-check",
+        "description": "由 Canvas codec 验证的持久文档，精确包含两个原节点、一个分组和一条引用边。",
+        "required": true
+      }
+    ],
+    "expectedResult": "文档关联保留，两个节点处于同一分组，节点位置与内容不变，无重复素材节点。",
+    "expectedFailure": "未调用归组、复制来源节点、缺少关系、错误工作区、绕过授权写入或持久文件不匹配均失败。"
+  },
+  "fixtureRefs": ["canvas-authoring-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "只通过 openneko_canvas 处理 boards/story.nkc。先 query 确认已有 brief 节点；用 apply/create_node 创建一个 markdown 节点，content 为 # 素材分析，title 为 素材分析；使用返回的真实 nodeId，创建 brief 指向该节点的 reference 关系，再把 brief 与这个新节点放在名为 第一批设计 的同一分组中，保留节点内容和位置。最后 query 核对。不要重新创建 brief，不要调用 Read、Write、write、shell 或直接编辑 nkc。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "canvas-facts" },
+    {
+      "id": "linked",
+      "kind": "tool-call",
+      "name": "openneko_canvas",
+      "status": "success",
+      "expectedArguments": {
+        "operation": "apply",
+        "input": {
+          "documentPath": "boards/story.nkc",
+          "command": {
+            "kind": "create_connection",
+            "sourceId": "brief",
+            "targetId": "canvas-node-1",
+            "type": "reference"
+          }
+        }
+      },
+      "evidenceRef": "canvas-facts"
+    },
+    {
+      "id": "grouped",
+      "kind": "tool-call",
+      "name": "openneko_canvas",
+      "status": "success",
+      "expectedArguments": {
+        "operation": "apply",
+        "input": {
+          "documentPath": "boards/story.nkc",
+          "command": {
+            "kind": "group_nodes",
+            "nodeIds": ["brief", "canvas-node-1"],
+            "label": "第一批设计"
+          }
+        }
+      },
+      "resultIncludes": { "command": "group_nodes", "nodeType": "group" },
+      "evidenceRef": "canvas-facts"
+    },
+    {
+      "id": "no-duplicates",
+      "kind": "tool-call",
+      "name": "openneko_canvas",
+      "status": "success",
+      "expectedArguments": {
+        "operation": "query",
+        "input": { "documentPath": "boards/story.nkc" }
+      },
+      "resultIncludes": { "nodeCount": 3, "connectionCount": 1 },
+      "evidenceRef": "canvas-facts"
+    },
+    {
+      "id": "no-write",
+      "kind": "tool-call",
+      "name": "write",
+      "status": "absent",
+      "evidenceRef": "canvas-facts"
+    },
+    {
+      "id": "no-shell",
+      "kind": "tool-call",
+      "name": "exec_command",
+      "status": "absent",
+      "evidenceRef": "canvas-facts"
+    },
+    {
+      "id": "terminal",
+      "kind": "terminal-idle",
+      "concerns": ["turnIdle", "continuationQueueIdle"],
+      "evidenceRef": "canvas-facts"
+    },
+    {
+      "id": "lifecycle",
+      "kind": "desktop-lifecycle",
+      "checks": ["composer-focus", "graceful-close"],
+      "evidenceRef": "canvas-facts"
+    }
+  ],
+  "artifactChecks": [
+    {
+      "id": "persisted-group",
+      "kind": "file",
+      "evidenceRef": "canvas-file",
+      "path": "boards/story.nkc",
+      "digest": "sha256:04dcfc35b2ecbe65ea077352e9ace19e47444a786cdb6ddaed318d5d34466c71",
+      "validatorId": "canvas-json"
+    }
+  ],
+  "budget": { "timeoutMs": 300000, "repetitions": 1 }
+}

@@ -1,9 +1,9 @@
 ---
 name: 'storyboard'
-description: '将提示词、文本、剧本、文档、漫画、图像序列或已有分镜探索为灵活 Markdown；仅在明确专业创作意图下创建 canonical 结构化分镜。 Explore source material as flexible Markdown and create canonical structured Storyboards only on explicit professional intent.'
+description: '将提示词、文本、剧本、文档、漫画、图像序列或已有分镜探索为灵活 Markdown；仅在明确专业创作意图下创建 canonical 结构化分镜。'
 ---
 
-# Storyboard
+# 分镜设计
 
 ## 中文方法
 
@@ -15,52 +15,21 @@ description: '将提示词、文本、剧本、文档、漫画、图像序列或
 4. 只有真正执行生成/编辑时才填写对应 prompt；可直接使用的参考图不需要伪造编辑工作。
 5. 电影镜头、跨镜头连续性或授权参考视频迁移，仅按需读取对应 relative reference。
 
-## English guidance
+## 草案与结构化分镜边界
 
-Interpret a prompt, prose, script, document, comic, ordered image sequence, or existing storyboard revision as reviewable visual planning. Use one updateable Markdown scene/shot table for ordinary creator review; materialize the canonical structured Storyboard only when the creator explicitly requests professional structured authoring.
+- 普通多镜草案只维护一份权威表，按当前工作需要保留叙事、画面、动作、摄影、对白、声音、时长、参考、提示词与不确定项。`SC01`、`SH01` 是便于修订与链接结果的文档标签，不是领域状态机；修改时更新原行，不追加平行表。单镜可以直接用文字，不因缺少时长、声音或媒体绑定就伪造数值或拒绝有用草案。
+- 逐镜生产表中的每个 `SHxx` 是一个可独立生成、评审、选用或修复的连续镜头，具有连续时段、空间轴线和机位运动。硬切、蒙太奇或明显换景别应拆为其他行；未拆分时只能称节拍或序列表。
+- 只有明确要求专业结构化创作时才应用经过验证的 `scenes[] -> shots[]`：场景拥有有序镜头，镜头媒体引用仍属于镜头事实。保留稳定场景／镜头标识、来源、叙事、摄影、时长和修订身份。改变意图或顺序时创建新修订，不把结构化分镜扁平化为图库。
+- Markdown 草案及其修改不自动写入结构化生产事实；结构化应用必须得到明确请求并通过验证。评审投影仍区分 `scene`、`shot`、`source`、`imagePrompt`、`videoPrompt`、`duration` 和 `dialogue`，不能把图像与视频意图合成一列。
+- 资源别名必须在声明范围内唯一解析；匹配多个资源时返回绑定诊断，不猜来源。只有行内明确稳定可解析的工作区资源或已准备资产及职责，才算真实绑定；“城市参考”“人物参考”等通用标签只是需求，不证明可执行。临时处理路径、附件顺序与猜测的文件名不能成为来源身份。
 
-## Method
+## 漫画与提示词检查
 
-1. Identify the source profile and preserve source order, scene boundaries, dialogue context, and visual evidence appropriate to that profile.
-2. For an ordinary multi-shot plan or revision, produce one authoritative Markdown table. Use short local row labels such as `SC01` and `SH01` only to make later edits and generated-result links unambiguous; they are document labels, not a new domain model or workflow state. Preserve useful narrative, visual, action, camera, dialogue, sound, duration, reference, source-trace, and uncertainty content without requiring complete production fields.
-3. For explicit professional structured creation or revision, produce stable scene and shot identities, visual intent, narrative context, camera and duration guidance, source trace, and a revision identity, then validate the canonical structure before mutation.
-4. Use stable source references for source and reference media. Temporary processing details are never Storyboard truth.
-5. Invalid, unsupported, or weakly evidenced source claims must remain explicit uncertainties or visible diagnostics. Do not invent production facts merely to fill a table.
-6. Source Markdown never silently creates or rewrites structured production facts. Later edits remain review input until an explicit validated structured apply is requested.
+- 元数据、缩略图、文件名、尺寸或页码不能替代画面证据。确定方向与阅读顺序后，分别识别对白、旁白、可见音效文字、招牌／背景文字和未知文本，只有实际口述内容进入 `dialogue`。
+- 将页面或面板决定为保留、跳过、合并、拆分或仅用于转场；封面、目录、版权页、空白、广告及重复页不默认生成剧情镜头。完整页面可以通过稳定的页／面板定位引用，不冒称已有独立面板文件。
+- 非空提示词必须是可执行的生成／编辑意图，不是分析片段、评审标签或状态。检查模糊引用、指令冲突、内容过载、未分配资源和时长矛盾；探索草案无需强制填写两个提示词。
+- `imagePrompt` 属于镜头，只描述一个静态时刻的主体、外形、环境、构图、机位、风格、光色、参考职责和约束；不包含时长、运镜、转场或连续动作。编辑还要写清保留内容及有序处理意图，实际裁切、重绘等操作必须受当前能力约束。
+- `videoPrompt` 描述下游实际连续生成的单元：起始帧／状态、人物及情绪、主体与机位运动、环境变化、声音或静默、时长、节奏和参考职责。普通生产只覆盖当前 `SHxx`；只有当前能力确实一次消费整个多镜场景时，才用场景级聚合提示词。
+- 视觉说明、机位笔记、动作摘要和状态不能替代提示词。无需图像生成／编辑、参考图可直接使用时，保持 `imagePrompt` 为空，不虚构编辑任务。
 
-## Markdown planning and structured invariants
-
-- A multi-shot Markdown draft uses one table with only the columns the current work needs. Keep the same row labels and update the existing row when the creator revises a shot or a later capability returns a result; do not append a parallel table or turn review status into a second workflow model. A single-shot answer may remain prose. Missing duration, voice, media binding, or production identity is an uncertainty, not a reason to invent values or reject a useful draft.
-- In a per-shot production sheet, one `SHxx` row is one continuous observable take that can be generated, reviewed, selected, or repaired independently. It has one continuous time span, spatial axis, and camera move. An internal hard cut, montage, or switch to a distinct framing starts another `SHxx` row. If the rows have not been decomposed this way, call the artifact a beat or sequence table rather than a per-shot production sheet.
-- Preserve distinct narrative, visual, action, camera, dialogue, sound, duration, reference, image-generation, and video-generation meaning when present. Neither generation prompt is mandatory for an exploratory plan.
-
-- After explicit structured authoring, the canonical artifact is nested `scenes[] -> shots[]`: a scene owns its ordered shots, and a scene cell in a review table never replaces the scene record. Shot media references remain shot facts.
-- A structured review projection keeps distinct `scene`, `shot`, `source`, `imagePrompt`, `videoPrompt`, `duration`, and `dialogue` semantics. Never collapse image and video intent into one generic generation-prompt column.
-- `imagePrompt` is shot-level and only describes an executable image generation or edit task. Include subject/appearance, scene, composition, style/light, reference role, preserved details, ordered edit steps when applicable, and constraints.
-- `videoPrompt` describes the unit the downstream capability will generate continuously. For ordinary per-shot generation it is shot-level and covers only that `SHxx` take: starting state, subject motion, camera motion, environmental change, duration, audio intent or silence, reference roles, and constraints. Use one scene-level aggregate prompt only when the admitted downstream operation truly consumes the whole multi-shot scene in one generation.
-- Visual description, camera notes, action summaries, review states, and diagnostics do not substitute for either prompt. Leave a prompt empty when no generation/edit operation is intended; do not fill it with status codes or analysis fragments.
-- Resource aliases must resolve unambiguously inside their declared scope. If a token matches multiple resources, emit a visible binding diagnostic and do not select or invent a source.
-- A reference is bound only when the row names a stable, resolvable Workspace resource or prepared asset and states its role. A generic label such as “城市参考” or “人物参考” without the actual resource is a requirement, not a binding; do not call the row executable or preparation-ready from it.
-
-## Comic source profile
-
-- Require actual pixel-level visual evidence, OCR, or panel boundaries before claiming panel count, dialogue, action, or camera. Metadata, thumbnails, filenames, dimensions, and page labels alone are not visual evidence. When evidence is unavailable, record the limitation and avoid authoritative panel/shot claims; a partial Markdown review may still preserve known source facts and next evidence needs.
-- Treat source coverage separately from visual style sampling. A few arbitrary inspected pages may support observations about those pages, but cannot establish the whole work's plot coverage, adaptation runtime, episode count, episode mapping, or completed source analysis. For a local duration estimate, deliberately sample a bounded narrative unit or stratified ranges, account for story pages versus covers, contents, blanks, ads, duplicates and other non-story units, then record scenes or beats, dialogue, action, atmosphere, transitions and pacing. This may support a provisional work-specific range with stated method and confidence; page count alone is never a duration conversion rule. Before proposing fixed scale, state why samples represent the intended adaptation range and what remains unreviewed.
-- Determine orientation and reading order before mapping panels. Classify dialogue, narration/caption, visible SFX, signs/background text, and unknown text separately; only spoken dialogue belongs in `dialogue`.
-- Decide keep, skip, merge, split, or transition-only use before creating shots. A page may produce multiple shots, and covers, copyright/contents pages, blanks, ads, duplicates, or pure metadata do not become story shots by default.
-- Build source trace from stable scoped resource identities. Attachment order and guessed filenames are not identity; a full-page source may be referenced by a stable page-plus-panel locator without pretending that a separate panel asset exists.
-
-## Generation-effective prompt checks
-
-- A non-empty prompt must be executable rather than a fragment, review label, or visual-analysis note. State reference purpose and check ambiguous references, conflicting instructions, overloaded content, unassigned resources, and duration mismatch.
-- Image generation prompts describe one static visual state: appearance, environment, composition/camera placement, style/color/light, reference consistency, and constraints. They do not contain duration, camera travel, transitions, or a sequence of changing actions. Image edits additionally state what to preserve and the ordered crop/split/rotate/colorize/redraw/remove-text/inpaint/outpaint/upscale/style-normalization operations.
-- Video prompts describe motion from a defined starting frame or state: source/reference roles, characters and emotion, subject motion, camera motion, environmental change/effects, dialogue/narration/SFX or silence, pacing, duration, and constraints. Keep ordinary per-shot video intent inside one continuous take; split hard cuts or distinct framings into separate shots.
-- When a reference image is directly usable and no image operation is intended, leave `imagePrompt` empty instead of inventing edit work.
-
-Read only the method needed for the current request:
-
-- Cinematic shot decisions: [references/cinematic-shot-design.md](references/cinematic-shot-design.md)
-- Cross-shot visual continuity: [references/visual-continuity.md](references/visual-continuity.md)
-- Authorized reference-video method adaptation: [references/reference-video-analysis.md](references/reference-video-analysis.md)
-
-Default to the smallest reviewable Markdown result supported by the inspected source. A partial review should end with the next evidence boundary, not grow into a complete source-wide document. Only explicit professional structured authoring applies the validated canonical Storyboard; it keeps each scene as a container and each shot as its owned child while preserving revision, prompt intent, and stable media references. Never flatten a canonical Storyboard into a gallery or asset list. Existing structured Storyboard refinement creates a new revision when intent or ordering changes.
+按本次需要读取：[电影化镜头设计](references/cinematic-shot-design.md)、[跨镜头视觉连续性](references/visual-continuity.md)、[参考视频方法迁移](references/reference-video-analysis.md)。

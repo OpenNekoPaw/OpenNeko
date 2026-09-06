@@ -1,0 +1,206 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "execute-independent-image-batch",
+  "suiteId": "skill.media-production",
+  "caseGroup": "workflow",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Execute every independent image material in one ready production batch instead of stopping after the first result.",
+    "canonicalPath": [
+      "creator-established production-input batch",
+      "builtin media-production orchestration",
+      "builtin media-preparation batch compilation",
+      "builtin image per-item method",
+      "three same-turn openneko_generation calls",
+      "three terminal Generation Jobs",
+      "whole-batch result inspection",
+      "terminal idle"
+    ],
+    "observables": [
+      {
+        "ref": "batch-generation-facts",
+        "kind": "runtime-fact",
+        "description": "One canonical turn with three distinct terminal image-generation Tool calls, three Canvas outputs, all required Skill receipts and an all-items result summary.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The Agent keeps each material as one bounded image operation, emits three openneko_generation calls in the same task, waits for every result, checks all three, preserves their distinct item identities and stops before video or creator adoption.",
+    "expectedFailure": "One generation followed by finalization, a single combined multi-material request, a missing batch item, a non-terminal Tool call, fewer than three Canvas outputs, automatic candidate adoption, or premature video generation fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "execute",
+  "modelProfileIds": ["nekoapi-image-purpose"],
+  "steps": [
+    {
+      "id": "execute-ready-batch",
+      "kind": "submit",
+      "prompt": "$media-production $media-preparation $image 当前素材预处理表已有三个彼此独立、同优先级且无结果依赖的可执行图片素材：CHARACTER-ANCHOR（雨衣角色正背面轮廓设定，纯灰背景）、PROP-ANCHOR（关闭与打开的红伞物品设定，纯灰背景）、ENVIRONMENT-ANCHOR（空旷雨夜站台空间设定，无人物）。本次明确要求执行整个就绪批次，不进入视频：每项分别使用一次 image.generate，不要把三个素材合并为一张图或一个 prompt；在每个 request.metadata 中写入对应的 batchItemId；在同一任务内提交全部独立调用，等待全部真实结果，逐项检查是否与各自目标一致，再汇总三个素材结果。不要自动采用候选。"
+    },
+    { "id": "batch-idle", "kind": "wait-for-idle", "timeoutMs": 1200000 }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "batch-generation-facts"
+    },
+    {
+      "id": "media-production-skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-production",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-production",
+        "fingerprint": "sha256:71b62ee9221be3a158958fff815c2513de4dc71dec75824d9f0f008717670466"
+      },
+      "status": "injected",
+      "evidenceRef": "batch-generation-facts"
+    },
+    {
+      "id": "media-preparation-skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-preparation",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-preparation",
+        "fingerprint": "sha256:dd0861a37c60ff0e1a5857503ad5e102cd503b7207ad1c18e2472acd44a2c1b6"
+      },
+      "status": "injected",
+      "evidenceRef": "batch-generation-facts"
+    },
+    {
+      "id": "image-skill",
+      "kind": "skill",
+      "identity": {
+        "name": "image",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "image",
+        "fingerprint": "sha256:4f0fba5aa68e9b9413c7f1c1aebe3cdc326a56ad5ec8b4eb09de90a4d815ce26"
+      },
+      "status": "injected",
+      "evidenceRef": "batch-generation-facts"
+    },
+    {
+      "id": "character-generation",
+      "kind": "tool-call",
+      "name": "openneko_generation",
+      "status": "success",
+      "expectedArguments": {
+        "operation": "submit",
+        "input": {
+          "purpose": "image.generate",
+          "generationType": "text-to-image",
+          "request": { "metadata": { "batchItemId": "CHARACTER-ANCHOR" } }
+        }
+      },
+      "resultIncludes": {
+        "kind": "generation",
+        "phase": "succeeded",
+        "generationType": "text-to-image",
+        "resultLocators": [{ "file": { "authority": "workspace" } }]
+      },
+      "evidenceRef": "batch-generation-facts"
+    },
+    {
+      "id": "prop-generation",
+      "kind": "tool-call",
+      "name": "openneko_generation",
+      "status": "success",
+      "expectedArguments": {
+        "operation": "submit",
+        "input": {
+          "purpose": "image.generate",
+          "generationType": "text-to-image",
+          "request": { "metadata": { "batchItemId": "PROP-ANCHOR" } }
+        }
+      },
+      "resultIncludes": {
+        "kind": "generation",
+        "phase": "succeeded",
+        "generationType": "text-to-image",
+        "resultLocators": [{ "file": { "authority": "workspace" } }]
+      },
+      "evidenceRef": "batch-generation-facts"
+    },
+    {
+      "id": "environment-generation",
+      "kind": "tool-call",
+      "name": "openneko_generation",
+      "status": "success",
+      "expectedArguments": {
+        "operation": "submit",
+        "input": {
+          "purpose": "image.generate",
+          "generationType": "text-to-image",
+          "request": { "metadata": { "batchItemId": "ENVIRONMENT-ANCHOR" } }
+        }
+      },
+      "resultIncludes": {
+        "kind": "generation",
+        "phase": "succeeded",
+        "generationType": "text-to-image",
+        "resultLocators": [{ "file": { "authority": "workspace" } }]
+      },
+      "evidenceRef": "batch-generation-facts"
+    },
+    {
+      "id": "three-generation-calls-in-one-submit",
+      "kind": "process-order",
+      "events": [
+        {
+          "kind": "workflow-step",
+          "stepId": "execute-ready-batch",
+          "method": "message.submit"
+        },
+        { "kind": "tool", "name": "openneko_generation", "status": "success" },
+        { "kind": "tool", "name": "openneko_generation", "status": "success" },
+        { "kind": "tool", "name": "openneko_generation", "status": "success" }
+      ],
+      "evidenceRef": "batch-generation-facts"
+    },
+    {
+      "id": "three-canvas-results",
+      "kind": "canvas-artifact-projection",
+      "status": "projected",
+      "targetKind": "workspace",
+      "minNodeIds": 3,
+      "sourceFingerprintRequired": true,
+      "diagnosticsEmpty": true,
+      "evidenceRef": "batch-generation-facts"
+    },
+    {
+      "id": "all-items-reported",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["CHARACTER-ANCHOR", "PROP-ANCHOR", "ENVIRONMENT-ANCHOR"],
+      "evidenceRef": "batch-generation-facts"
+    },
+    {
+      "id": "not-stopped-after-first",
+      "kind": "final-answer",
+      "mode": "not-contains",
+      "text": ["下一步生成 PROP-ANCHOR", "下一步生成 ENVIRONMENT-ANCHOR", "已生成第一个素材"],
+      "evidenceRef": "batch-generation-facts"
+    },
+    {
+      "id": "terminal",
+      "kind": "terminal-idle",
+      "concerns": ["turnIdle", "continuationQueueIdle"],
+      "evidenceRef": "batch-generation-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 1200000, "repetitions": 1 },
+  "execution": {
+    "evidenceLevel": "hidden-desktop",
+    "resourceClass": "media",
+    "protected": false,
+    "startSurface": "entry"
+  }
+}

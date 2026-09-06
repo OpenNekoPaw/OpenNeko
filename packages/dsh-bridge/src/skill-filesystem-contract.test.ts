@@ -187,7 +187,7 @@ describe('locked DSH filesystem Skill provider contract', () => {
     await provider.dispose();
   });
 
-  it('keeps every builtin Skill and model-readable resource Chinese-first and English-equivalent', async () => {
+  it('loads builtin Chinese guidance once while preserving native identifiers and resources', async () => {
     const skillRoot = resolve(import.meta.dirname, '../../skills/skills');
     const skillEntries = (await readdir(skillRoot, { withFileTypes: true }))
       .filter((entry) => entry.isDirectory())
@@ -203,7 +203,7 @@ describe('locked DSH filesystem Skill provider contract', () => {
       const candidate = candidates.find((item) => item.name === entry.name);
       if (candidate === undefined) throw new Error(`Builtin Skill '${entry.name}' was not found.`);
       expect(candidate.description, `${entry.name} description`).toMatch(/^\p{Script=Han}/u);
-      expect(candidate.description, `${entry.name} description`).toMatch(/[A-Za-z]/u);
+      expect(candidate.description, `${entry.name} description`).not.toMatch(/。\s+[A-Za-z]/u);
       expect(
         candidate.description.length,
         `${entry.name} catalog description length`,
@@ -211,7 +211,13 @@ describe('locked DSH filesystem Skill provider contract', () => {
 
       const definition = await provider.get(candidate, { cwd: skillRoot });
       if (definition === undefined) throw new Error(`Builtin Skill '${entry.name}' did not load.`);
-      expectBilingualGuidance(definition.content, `${entry.name}/SKILL.md`, '中文方法');
+      expectChineseGuidance(definition.content, `${entry.name}/SKILL.md`, '中文方法');
+      const rendered = renderSkillContent(definition);
+      expect(
+        rendered.split(definition.content),
+        `${entry.name} complete body injection`,
+      ).toHaveLength(2);
+      expect(rendered).toContain(`<skill_content name="${entry.name}">`);
 
       const referencesRoot = join(skillRoot, entry.name, 'references');
       const referenceEntries = await readdir(referencesRoot, { withFileTypes: true }).catch(
@@ -223,7 +229,7 @@ describe('locked DSH filesystem Skill provider contract', () => {
       for (const reference of referenceEntries) {
         if (!reference.isFile() || !reference.name.endsWith('.md')) continue;
         const path = join(referencesRoot, reference.name);
-        expectBilingualGuidance(
+        expectChineseGuidance(
           await readFile(path, 'utf8'),
           `${entry.name}/references/${reference.name}`,
           '中文指南',
@@ -239,7 +245,7 @@ describe('locked DSH filesystem Skill provider contract', () => {
       );
       for (const agent of agentEntries) {
         if (!agent.isFile() || !agent.name.endsWith('.yaml')) continue;
-        expectBilingualAgentOverlay(
+        expectChineseAgentOverlay(
           await readFile(join(agentsRoot, agent.name), 'utf8'),
           `${entry.name}/agents/${agent.name}`,
         );
@@ -324,7 +330,7 @@ describe('locked DSH filesystem Skill provider contract', () => {
       '每阶段只记录目标产物、输入依赖和完成条件',
     );
     expect(definitions.get('media-production')).toContain('路线按依赖推进');
-    expect(definitions.get('media-production')).toContain('当前创意阶段必须形成与声明制作范围相称');
+    expect(definitions.get('media-production')).toContain('当前创意阶段必须形成与来源分析范围相称');
     expect(definitions.get('media-production')).toContain('画面分析');
     expect(definitions.get('media-production')).toContain('人物分析');
     expect(definitions.get('media-production')).toContain('剧情分析');
@@ -332,20 +338,16 @@ describe('locked DSH filesystem Skill provider contract', () => {
     expect(definitions.get('media-production')).toContain('分镜转译分析');
     expect(definitions.get('media-production')).toContain('默认不展开预处理提示词');
     expect(definitions.get('media-production')).toContain('仅在用户明确要求');
-    expect(definitions.get('media-production')).toContain('前、中、后各取一批低清联系表');
-    expect(definitions.get('media-production')).toContain('每批最多四张不同页面');
-    expect(definitions.get('media-production')).toContain('高清默认只读取一张最终入选页');
+    expect(definitions.get('media-production')).toContain('openneko_read_images');
+    expect(definitions.get('media-production')).toContain('小图拼装为一张大图');
+    expect(definitions.get('media-production')).not.toContain('没有新决定就停止');
     expect(definitions.get('media-production')).toContain('读取与视觉检查是瞬态证据');
-    expect(definitions.get('media-production')).toContain(
-      '识别目录或章节边界、阅读顺序以及封面、目录、空白、广告、重复等非正文单元',
-    );
-    expect(definitions.get('media-production')).toContain(
-      '缩小为来源覆盖评估、开篇、局部场景或已选序列概念',
-    );
+    expect(definitions.get('media-production')).toContain('真实阅读顺序');
+    expect(definitions.get('media-production')).toContain('不缩小原任务目标');
     expect(definitions.get('media-production')).toContain('来源—决定映射');
     expect(definitions.get('media-production')).toContain('对应行的“依据性质”');
     expect(definitions.get('media-production')).toContain('不创建审批对象、gate、预算授权');
-    expect(definitions.get('media-production')).toContain('只推荐一个能推进整体路线的下一操作');
+    expect(definitions.get('media-production')).toContain('下一批次或创作者决定');
     expect(definitions.get('media-production')).toContain('覆盖当前制作范围的权威镜头表');
     expect(definitions.get('media-production')).toContain('逐镜盘点该范围消费的剧情节拍与世界规则');
     expect(definitions.get('media-production')).toContain('每个镜头必须被具体覆盖');
@@ -354,15 +356,15 @@ describe('locked DSH filesystem Skill provider contract', () => {
     expect(definitions.get('media-production')).toContain('逐镜生成意图缺口');
     expect(definitions.get('storyboard')).toContain('可直接更新的 Markdown 场景/镜头表');
     expect(definitions.get('storyboard')).toContain(
-      'one `SHxx` row is one continuous observable take',
+      '每个 `SHxx` 是一个可独立生成、评审、选用或修复的连续镜头',
     );
-    expect(definitions.get('storyboard')).toContain('A reference is bound only when the row names');
-    expect(definitions.get('storyboard')).toContain('They do not contain duration, camera travel');
+    expect(definitions.get('storyboard')).toContain('只有行内明确稳定可解析的工作区资源');
+    expect(definitions.get('storyboard')).toContain('不包含时长、运镜、转场或连续动作');
     expect(definitions.get('storyboard')).toContain(
-      'they are document labels, not a new domain model or workflow state',
+      '是便于修订与链接结果的文档标签，不是领域状态机',
     );
     expect(definitions.get('media-selection')).toContain('建议本身不等于用户批准或项目写入');
-    expect(definitions.get('media-preparation')).toContain('不能冒充已准备首帧');
+    expect(definitions.get('media-preparation')).toContain('不是视频首帧');
     expect(definitions.get('media-preparation')).toContain('验收不得放宽上游创意合同');
     expect(definitions.get('media-preparation')).toContain('不要求预算估算或预算授权');
     expect(definitions.get('media-preparation')).toContain('不要生成候选调用包');
@@ -384,7 +386,7 @@ describe('locked DSH filesystem Skill provider contract', () => {
     expect(definitions.get('media-preparation')).toContain('图像提示词与视频提示词不能合并');
     expect(definitions.get('media-preparation')).toContain('不等于整个预处理阶段完成');
     expect(definitions.get('media-preparation')).toContain(
-      '内部必须按当前 schema 编译完整 Tool 调用封装',
+      '内部必须按当前 schema 为每项编译完整 Tool 调用封装',
     );
     expect(definitions.get('media-preparation')).toContain('默认面向创作者的交接');
     expect(definitions.get('media-preparation')).toContain('不打印 Tool 名、字段名');
@@ -530,19 +532,18 @@ function rankedCandidate(provider: string, source: string, rank: number): SkillC
   };
 }
 
-function expectBilingualGuidance(
+function expectChineseGuidance(
   content: string,
   path: string,
   chineseHeading: '中文方法' | '中文指南',
 ): void {
   const chineseIndex = content.indexOf(`## ${chineseHeading}`);
-  const englishIndex = content.indexOf('## English guidance');
   expect(chineseIndex, `${path} Chinese guidance`).toBeGreaterThanOrEqual(0);
-  expect(englishIndex, `${path} English guidance`).toBeGreaterThan(chineseIndex);
-  expect(content.slice(chineseIndex, englishIndex), `${path} Chinese content`).toMatch(
-    /\p{Script=Han}/u,
-  );
-  expect(content.slice(englishIndex), `${path} English content`).toMatch(/[A-Za-z]/u);
+  expect(content.slice(chineseIndex), `${path} Chinese content`).toMatch(/\p{Script=Han}/u);
+  expect(content, `${path} duplicate translation`).not.toContain('## English guidance');
+  for (const heading of content.match(/^#+ .+$/gmu) ?? []) {
+    expect(heading, `${path} localized heading`).toMatch(/\p{Script=Han}/u);
+  }
 }
 
 function isMissingPathError(error: unknown): boolean {
@@ -553,7 +554,7 @@ function isMissingPathError(error: unknown): boolean {
   );
 }
 
-function expectBilingualAgentOverlay(content: string, path: string): void {
+function expectChineseAgentOverlay(content: string, path: string): void {
   const interfaceLines = content
     .split('\n')
     .map((line) => line.trim())
@@ -564,8 +565,8 @@ function expectBilingualAgentOverlay(content: string, path: string): void {
       .slice(line.indexOf(':') + 1)
       .trim()
       .replace(/^['"]|['"]$/gu, '');
-    expect(value, `${path} Chinese-first interface value`).toMatch(/^\p{Script=Han}/u);
-    expect(value, `${path} English-equivalent interface value`).toMatch(/[A-Za-z]/u);
+    expect(value, `${path} Chinese interface value`).toMatch(/^\p{Script=Han}/u);
+    expect(value, `${path} duplicate translation`).not.toMatch(/ \/ [A-Za-z]/u);
   }
 }
 

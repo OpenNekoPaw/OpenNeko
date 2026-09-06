@@ -52,7 +52,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:214c29ab578b745df9d8156f58f27f90342470b5b0e83f278c50015d0ac23d71"
+        "fingerprint": "sha256:71b62ee9221be3a158958fff815c2513de4dc71dec75824d9f0f008717670466"
       },
       "status": "injected",
       "evidenceRef": "workspace-creative-continue-facts"
@@ -66,7 +66,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "storyboard",
-        "fingerprint": "sha256:abe11a4e523adc8c63ca4680714a393ed9185eee4d46afa6cfa6c743e9351f91"
+        "fingerprint": "sha256:50ff36cd56facdc7f88b919c71f6c73a4be27d69d29619a01266229e3fdca0a1"
       },
       "status": "injected",
       "evidenceRef": "workspace-creative-continue-facts"
@@ -75,14 +75,33 @@
       "id": "continued-output",
       "kind": "final-answer",
       "mode": "contains",
-      "text": ["Mara", "SC01", "SH01", "画面", "动作", "声音", "screenplay.fountain", "暂定", "下一步"],
+      "text": [
+        "Mara",
+        "SC01",
+        "SH01",
+        "画面",
+        "动作",
+        "声音",
+        "screenplay.fountain",
+        "暂定",
+        "下一步"
+      ],
       "evidenceRef": "workspace-creative-continue-facts"
     },
     {
       "id": "no-restart-or-generation",
       "kind": "final-answer",
       "mode": "not-contains",
-      "text": ["重新分析", "完整制作规格", "审批记录", "工作流状态", "已生成", "已确认", "可执行输入单元", "可提交"],
+      "text": [
+        "重新分析",
+        "完整制作规格",
+        "审批记录",
+        "工作流状态",
+        "已生成",
+        "已确认",
+        "可执行输入单元",
+        "可提交"
+      ],
       "evidenceRef": "workspace-creative-continue-facts"
     },
     {

@@ -1,9 +1,9 @@
 ---
 name: 'subtitle-assistant'
-description: '字幕与说明文字助手；用于创建、编辑、对时、翻译、导入或导出 SRT、VTT 等字幕。 Subtitle and captioning assistant for creating, editing, timing, translating, importing, or exporting subtitles such as SRT and VTT.'
+description: '字幕与说明文字助手；用于创建、编辑、对时、翻译、导入或导出 SRT、VTT 等字幕。'
 ---
 
-# Subtitle Assistant
+# 字幕制作
 
 ## 中文方法
 
@@ -16,40 +16,4 @@ description: '字幕与说明文字助手；用于创建、编辑、对时、翻
 - 用户要创建字幕时，直接交付可复制的字幕文本；当前文件写入能力可用时再保存。
 - 导入时间线必须有当前 Tool schema 支持；否则文件本身可完成，时间线绑定单独标记 blocked。
 
-## English guidance
-
-You are a professional subtitler. Help users create accessible, well-timed captions.
-
-## Delivery contract
-
-Produce actual SRT or VTT cues from available dialogue/transcript, speaker, timing, and target-language evidence. Verify platform constraints at delivery time rather than relying on a universal line-length table.
-
-## Best Practices
-
-### Timing
-
-- Min duration: 1 second
-- Max duration: 7 seconds
-- Reading speed: 20-25 chars/sec
-- Sync with natural pauses
-
-### Line Breaking
-
-- Break at natural pauses
-- Keep phrases together
-- Max 2 lines per subtitle
-- Balance line lengths
-
-### Styling
-
-- White text, black outline
-- Sans-serif font (Arial, Helvetica)
-- Size: 5-7% of screen height
-- Position: Bottom center (safe area)
-
-## Translation Tips
-
-1. **Context matters** - Understand the scene
-2. **Cultural adaptation** - Localize idioms
-3. **Length constraint** - May need to condense
-4. **Reading time** - Account for target language
+可按项目考虑单条 1–7 秒、每秒 20–25 字符等排版起点，实际仍由语言阅读速度与交付规范校准。保持词组完整、行长平衡；白字黑描边、无衬线字体、画高 5–7% 字号和底部安全区只是可选样式，不覆盖项目要求。

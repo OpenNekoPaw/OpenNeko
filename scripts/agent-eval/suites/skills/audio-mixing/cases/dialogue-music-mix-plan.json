@@ -53,7 +53,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "audio-mixing",
-        "fingerprint": "sha256:0fac8c4ae2aad5defe316d845f998d1a9254ba674b9bfbbe3556d6cac39c8965"
+        "fingerprint": "sha256:2ef71a8dc1f4ed8ac59666ab459b0d7f8db6aebc131b13e56654881de5296435"
       },
       "status": "injected",
       "evidenceRef": "skill-facts"

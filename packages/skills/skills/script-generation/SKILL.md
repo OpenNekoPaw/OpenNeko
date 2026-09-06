@@ -1,9 +1,9 @@
 ---
 name: 'script-generation'
-description: '根据用户前提、来源证据与时长约束直接创作或定点修改可拍摄的 Fountain 剧本。 Create or surgically revise shootable Fountain screenplays from the user premise, source evidence, and runtime constraints.'
+description: '根据用户前提、来源证据与时长约束直接创作或定点修改可拍摄的 Fountain 剧本。'
 ---
 
-# Script Generation
+# 剧本创作
 
 ## 中文方法
 
@@ -23,11 +23,3 @@ description: '根据用户前提、来源证据与时长约束直接创作或定
 - 使用现在时、具体名词和动词；动作段落保持可拍摄和可读。
 - 不把分镜号、模型提示词、制作清单或内部项目序列化混入剧本。
 - 不要在剧本前写出整套创作方法；只在用户要求时附上简短创作说明。
-
-## English guidance
-
-The deliverable is screenplay text or a precise screenplay revision, not a screenwriting workflow.
-
-Read the premise, existing screenplay, authoritative character/world facts, and adaptation source. Identify the dramatic change each requested scene must produce, then write visible, audible, performable action and dialogue with intention and conflict. Use genre structures only when the material or user requests them; do not impose a stock template.
-
-Estimate runtime from speech, action, pauses, atmosphere, and editorial rhythm. For revisions, change only scenes, setup, and payoff causally related to the requested issue. Return parseable Fountain. Save through the current file-authoring capability and claim persistence only after its result; otherwise provide complete copyable Fountain and the exact save blocker.

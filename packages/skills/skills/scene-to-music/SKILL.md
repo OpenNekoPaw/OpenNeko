@@ -1,9 +1,9 @@
 ---
 name: 'scene-to-music'
-description: '把已确认的场景节拍编译为配乐结构并生成可观察音乐候选；不负责对白音效、时间线放置或最终混音。 Compile approved scene beats into a score structure and generate observable music candidates, without owning dialogue/SFX, timeline placement, or final mixing.'
+description: '把已确认的场景节拍编译为配乐结构并生成可观察音乐候选；不负责对白音效、时间线放置或最终混音。'
 ---
 
-# Scene-to-Music Assistant
+# 场景配乐
 
 ## 中文方法
 
@@ -15,49 +15,4 @@ description: '把已确认的场景节拍编译为配乐结构并生成可观察
 4. 返回真实音乐候选、生成记录和精确放置意图；时间线导入与片段放置由对应时间线能力处理。
 5. 只有生成结果实际存在时才能声称音乐已生成；没有时间线保存结果时不得声称已放置。
 
-## English guidance
-
-Analyze the timeline and generate background music that matches the scene content and mood.
-
-## Workflow
-
-### Step 1: Analyze the scene
-
-Use available timeline or scene context to infer:
-
-- Overall mood (action, peaceful, dramatic, uplifting, mysterious, etc.)
-- Genre hint (if any visual style clues are present)
-- Duration to match
-
-### Step 2: Build a generation operation
-
-Compile time segments, energy curve, instrumentation or sound material, rhythm, dialogue/SFX exclusions, and duration into a generation prompt based on scene evidence.
-Examples:
-
-- "Cinematic orchestral score, uplifting and adventurous, building tension"
-- "Ambient electronic background, calm and focused, minimal percussion"
-- "Upbeat acoustic guitar, warm and cheerful, light rhythm"
-
-If the user provided explicit preferences (genre, mood, style), prioritize those.
-
-### Step 3: Generate and inspect
-
-When execution is requested, submit a real music generation through the currently admitted capability and inspect the returned track. Prompt text alone is not generated music.
-
-The handoff should preserve:
-
-- Music prompt
-- Target duration
-- Mood or genre hints
-- Placement intent, such as background bed, transition sting, or scene score
-- Any unresolved decision or limitation
-
-### Step 4: Handoff placement
-
-Return the selected result and exact placement intent to the timeline capability. Do not import or place media from this Skill, and do not claim placement without an observed saved timeline result.
-
-## Notes
-
-- Always match music duration to timeline length unless user specifies otherwise
-- If timeline has no elements yet, ask the user to describe the scene mood instead of reading an empty timeline
-- If generation fails, report the limitation and suggest the smallest recoverable next step
+优先遵循用户给出的类型、情绪与风格。交接保留提示词、目标时长、情绪／类型、背景铺底／转场短音／场景配乐等放置用途及未决项；除用户另有要求，音乐时长匹配目标场景。空时间线先取得场景描述；生成失败时报告限制和最小可恢复下一步。

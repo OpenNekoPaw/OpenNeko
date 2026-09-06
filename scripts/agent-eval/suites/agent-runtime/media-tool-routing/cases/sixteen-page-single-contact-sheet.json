@@ -1,0 +1,287 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "sixteen-page-single-contact-sheet",
+  "suiteId": "agent-runtime.media-tool-routing",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Read sixteen consecutive EPUB pages as one contact sheet and inspect the last page at original detail without sorting image filenames.",
+    "canonicalPath": [
+      "visible Desktop submit",
+      "openneko_document read-images",
+      "document-entry ContentLocator",
+      "openneko_read_images contact-sheet overview",
+      "selected original-detail confirmation",
+      "Host-authorized Content bytes",
+      "DSH durable attachment",
+      "native multimodal continuation"
+    ],
+    "observables": [
+      {
+        "ref": "document-image-facts",
+        "kind": "runtime-fact",
+        "description": "Exact model, successful overview and selected-original Content image calls, pixel-only codes, terminal idle state, and absence of runtime errors.",
+        "required": true
+      }
+    ],
+    "expectedResult": "One overview call contains all sixteen distinct exact locators in document reading order (image filenames run in reverse order). Its one image attachment is the overview. The Agent locates the differently colored final page, inspects that page at original detail and reports Q47N.",
+    "expectedFailure": "Six or seven isolated reads instead of the full overview, missing pages, filename sorting, guessing final-page contents, missing selected-original inspection or failed authorization cannot pass."
+  },
+  "fixtureRefs": [
+    "document-overview-workspace"
+  ],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": [
+    "native-vision"
+  ],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "阅读 sixteen-pages.epub 的正文：先确认文档阅读顺序，将全部 16 页的小图拼成一张大图总览，不要拆成多张独立图片来分析。找出背景配色与其余页面不同的那一页，再读取该页原始细节，报告它的正文页序与黑色区域的四位字符。不要生成素材或修改文件。"
+    },
+    {
+      "id": "idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 1200000
+    }
+  ],
+  "assertions": [
+    {
+      "id": "model",
+      "kind": "model",
+      "profileId": "native-vision",
+      "evidenceRef": "document-image-facts"
+    },
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "document-image-facts"
+    },
+    {
+      "id": "document-tool",
+      "kind": "tool-call",
+      "name": "openneko_document",
+      "status": "success",
+      "evidenceRef": "document-image-facts"
+    },
+    {
+      "id": "content-image-overview",
+      "kind": "tool-call",
+      "name": "openneko_read_images",
+      "status": "success",
+      "expectedArguments": {
+        "sources": [
+          {
+            "file": {
+              "authority": "workspace",
+              "path": "sixteen-pages.epub"
+            },
+            "selector": {
+              "kind": "entry",
+              "path": "OEBPS/images/page-16.png"
+            }
+          },
+          {
+            "file": {
+              "authority": "workspace",
+              "path": "sixteen-pages.epub"
+            },
+            "selector": {
+              "kind": "entry",
+              "path": "OEBPS/images/page-15.png"
+            }
+          },
+          {
+            "file": {
+              "authority": "workspace",
+              "path": "sixteen-pages.epub"
+            },
+            "selector": {
+              "kind": "entry",
+              "path": "OEBPS/images/page-14.png"
+            }
+          },
+          {
+            "file": {
+              "authority": "workspace",
+              "path": "sixteen-pages.epub"
+            },
+            "selector": {
+              "kind": "entry",
+              "path": "OEBPS/images/page-13.png"
+            }
+          },
+          {
+            "file": {
+              "authority": "workspace",
+              "path": "sixteen-pages.epub"
+            },
+            "selector": {
+              "kind": "entry",
+              "path": "OEBPS/images/page-12.png"
+            }
+          },
+          {
+            "file": {
+              "authority": "workspace",
+              "path": "sixteen-pages.epub"
+            },
+            "selector": {
+              "kind": "entry",
+              "path": "OEBPS/images/page-11.png"
+            }
+          },
+          {
+            "file": {
+              "authority": "workspace",
+              "path": "sixteen-pages.epub"
+            },
+            "selector": {
+              "kind": "entry",
+              "path": "OEBPS/images/page-10.png"
+            }
+          },
+          {
+            "file": {
+              "authority": "workspace",
+              "path": "sixteen-pages.epub"
+            },
+            "selector": {
+              "kind": "entry",
+              "path": "OEBPS/images/page-9.png"
+            }
+          },
+          {
+            "file": {
+              "authority": "workspace",
+              "path": "sixteen-pages.epub"
+            },
+            "selector": {
+              "kind": "entry",
+              "path": "OEBPS/images/page-8.png"
+            }
+          },
+          {
+            "file": {
+              "authority": "workspace",
+              "path": "sixteen-pages.epub"
+            },
+            "selector": {
+              "kind": "entry",
+              "path": "OEBPS/images/page-7.png"
+            }
+          },
+          {
+            "file": {
+              "authority": "workspace",
+              "path": "sixteen-pages.epub"
+            },
+            "selector": {
+              "kind": "entry",
+              "path": "OEBPS/images/page-6.png"
+            }
+          },
+          {
+            "file": {
+              "authority": "workspace",
+              "path": "sixteen-pages.epub"
+            },
+            "selector": {
+              "kind": "entry",
+              "path": "OEBPS/images/page-5.png"
+            }
+          },
+          {
+            "file": {
+              "authority": "workspace",
+              "path": "sixteen-pages.epub"
+            },
+            "selector": {
+              "kind": "entry",
+              "path": "OEBPS/images/page-4.png"
+            }
+          },
+          {
+            "file": {
+              "authority": "workspace",
+              "path": "sixteen-pages.epub"
+            },
+            "selector": {
+              "kind": "entry",
+              "path": "OEBPS/images/page-3.png"
+            }
+          },
+          {
+            "file": {
+              "authority": "workspace",
+              "path": "sixteen-pages.epub"
+            },
+            "selector": {
+              "kind": "entry",
+              "path": "OEBPS/images/page-2.png"
+            }
+          },
+          {
+            "file": {
+              "authority": "workspace",
+              "path": "sixteen-pages.epub"
+            },
+            "selector": {
+              "kind": "entry",
+              "path": "OEBPS/images/page-1.png"
+            }
+          }
+        ]
+      },
+      "evidenceRef": "document-image-facts"
+    },
+    {
+      "id": "content-image-original",
+      "kind": "tool-call",
+      "name": "openneko_read_image",
+      "status": "success",
+      "expectedArguments": {
+        "source": {
+          "file": {
+            "authority": "workspace",
+            "path": "sixteen-pages.epub"
+          },
+          "selector": {
+            "kind": "entry",
+            "path": "OEBPS/images/page-1.png"
+          }
+        },
+        "detail": "original"
+      },
+      "resultIncludes": {
+        "detail": "original"
+      },
+      "evidenceRef": "document-image-facts"
+    },
+    {
+      "id": "pixel-codes",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": [
+        "16",
+        "Q47N"
+      ],
+      "evidenceRef": "document-image-facts"
+    },
+    {
+      "id": "terminal",
+      "kind": "terminal-idle",
+      "concerns": [
+        "turnIdle",
+        "continuationQueueIdle"
+      ],
+      "evidenceRef": "document-image-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": {
+    "timeoutMs": 1200000,
+    "repetitions": 1
+  }
+}

@@ -50,7 +50,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-production",
-        "fingerprint": "sha256:214c29ab578b745df9d8156f58f27f90342470b5b0e83f278c50015d0ac23d71"
+        "fingerprint": "sha256:71b62ee9221be3a158958fff815c2513de4dc71dec75824d9f0f008717670466"
       },
       "status": "injected",
       "evidenceRef": "workspace-pv-handoff-facts"
@@ -64,7 +64,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "media-preparation",
-        "fingerprint": "sha256:d20b1e82cc099ead56e6f86a761f5d5695b44a3ab8c11fdb64b5311e0ce0400b"
+        "fingerprint": "sha256:dd0861a37c60ff0e1a5857503ad5e102cd503b7207ad1c18e2472acd44a2c1b6"
       },
       "status": "injected",
       "evidenceRef": "workspace-pv-handoff-facts"
@@ -78,7 +78,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "video",
-        "fingerprint": "sha256:b16e96f6a5e9d5db3b90dc5fc5c2ce015c70b3ba273c9d117044e21ed5db8e25"
+        "fingerprint": "sha256:823b83d917b4800211e89fb6bce7bd04ab50f932d2be312799776985a9af893a"
       },
       "status": "injected",
       "evidenceRef": "workspace-pv-handoff-facts"

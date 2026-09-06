@@ -23,13 +23,9 @@
     "expectedResult": "The video Skill calls GenerateVideo and observes its terminal result before finalization.",
     "expectedFailure": "Missing Skill, terminal Tool result, artifact, or terminal idle fails."
   },
-  "fixtureRefs": [
-    "empty-workspace"
-  ],
+  "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "submit",
@@ -52,7 +48,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "video",
-        "fingerprint": "sha256:b16e96f6a5e9d5db3b90dc5fc5c2ce015c70b3ba273c9d117044e21ed5db8e25"
+        "fingerprint": "sha256:823b83d917b4800211e89fb6bce7bd04ab50f932d2be312799776985a9af893a"
       },
       "status": "injected",
       "evidenceRef": "video-facts"
@@ -67,10 +63,7 @@
     {
       "id": "terminal",
       "kind": "terminal-idle",
-      "concerns": [
-        "turnIdle",
-        "continuationQueueIdle"
-      ],
+      "concerns": ["turnIdle", "continuationQueueIdle"],
       "evidenceRef": "video-facts"
     }
   ],

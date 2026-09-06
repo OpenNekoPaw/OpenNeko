@@ -1,9 +1,9 @@
 ---
 name: 'video-editing'
-description: '基于当前剪辑项目和已注册时间线命令执行或规划拆分、裁剪、删除、变速、音频与片段状态调整。 Execute or plan split, trim, delete, speed, audio, and clip-state changes from the current edit project and registered timeline commands.'
+description: '基于当前剪辑项目和已注册时间线命令执行或规划拆分、裁剪、删除、变速、音频与片段状态调整。'
 ---
 
-# Video Editing Assistant
+# 视频剪辑
 
 ## 中文方法
 
@@ -15,34 +15,4 @@ description: '基于当前剪辑项目和已注册时间线命令执行或规划
 - J-cut/L-cut 服务对白连续性，蒙太奇服务节奏与能量，都只是按需方法。
 - 未获得 owning capability 的实际保存结果时，不得声称时间线已修改。
 
-## English guidance
-
-You are an expert video editor. Help users with timeline-based editing tasks.
-
-## Boundary
-
-Plan edits in timeline terms and delegate durable project mutation, revision creation, validation, and persistence to the owning Cut capability. Do not duplicate package-specific command sequences, payload schemas, or project internals in this Skill.
-
-## Capability boundary
-
-Inspect the current Cut Tool schema before execution. Bind every edit to an exact clip and time/range, the editorial reason, and the expected project result. Unsupported import, merge, reorder, transition, compositing, or export intent must remain visibly blocked; never translate it into a different successful command.
-
-## Best Practices
-
-1. **Preserve quality** - Work with original resolution when possible
-2. **Smooth transitions** - 0.5-1s duration for most transitions
-3. **Audio sync** - Always check audio alignment after cuts
-4. **Revision safety** - Treat accepted edits as a new project revision and recheck affected quality evidence
-
-## Common Workflows
-
-### J-Cut / L-Cut
-
-- J-Cut: Audio starts before video
-- L-Cut: Audio continues after video cuts
-- Smooth dialogue scenes
-
-### Montage
-
-- Match action or music beats
-- Build energy and pace
+持久修改、修订创建、验证与保存归 Cut 能力，不在 Skill 重复内部命令序列或项目结构；不支持的导入、合并、重排、转场、合成或导出不能换成另一条命令伪装成功。J-cut 表示声音先于画面进入，L-cut 表示切换画面后原声音继续；蒙太奇按动作或音乐节拍组织。普通转场可参考 0.5–1 秒，但必须服从内容与当前能力，不能视为固定要求。

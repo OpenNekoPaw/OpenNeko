@@ -53,7 +53,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "scene-to-music",
-        "fingerprint": "sha256:c36ea8bcf19694df31e69055134f2946942acdce50b3f089f9cada45c1411e2b"
+        "fingerprint": "sha256:b15076306d2a7d7363a634440d6a93c1a03dc9a0fcbf6578f92066ef3240c875"
       },
       "status": "injected",
       "evidenceRef": "skill-facts"

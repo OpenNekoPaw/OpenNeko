@@ -74,6 +74,45 @@ const entries = [
 await fs.mkdir(dirname(output), { recursive: true });
 await fs.writeFile(output, createStoredZip(entries));
 
+for (const [pageCount, relativeOutput] of [
+  [16, '../document-overview-workspace/sixteen-pages.epub'],
+  [32, '../continuous-overview-workspace/thirty-two-pages.epub'],
+]) {
+  const overviewOutput = resolve(dirname(output), relativeOutput);
+  const overviewPages = Array.from({ length: pageCount }, (_, index) => ({
+    id: index + 1,
+    file: `images/page-${pageCount - index}.png`,
+  }));
+  const overviewEntries = entries.slice(0, 2).concat([
+    [
+      'OEBPS/content.opf',
+      Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="book-id" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Sequential Image Overview</dc:title><dc:language>en</dc:language><dc:identifier id="book-id">urn:uuid:synthetic-overview</dc:identifier></metadata>
+  <manifest><item id="toc" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+  ${overviewPages.map(({ id, file }) => `<item id="p${id}" href="page-${id}.xhtml" media-type="application/xhtml+xml"/><item id="i${id}" href="${file}" media-type="image/png"/>`).join('\n')}
+  </manifest><spine toc="toc">${overviewPages.map(({ id }) => `<itemref idref="p${id}"/>`).join('')}</spine>
+</package>`),
+    ],
+    [
+      'OEBPS/toc.ncx',
+      Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1"><head><meta name="dtb:uid" content="urn:uuid:synthetic-overview"/></head><docTitle><text>Sequential Image Overview</text></docTitle><navMap>${overviewPages.map(({ id }) => `<navPoint id="p${id}" playOrder="${id}"><navLabel><text>Page ${id}</text></navLabel><content src="page-${id}.xhtml"/></navPoint>`).join('')}</navMap></ncx>`),
+    ],
+    ...overviewPages.flatMap(({ id, file }) => [
+      [
+        `OEBPS/page-${id}.xhtml`,
+        Buffer.from(
+          `<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Page ${id}</title></head><body><img src="${file}" alt="Page ${id}"/></body></html>`,
+        ),
+      ],
+      [`OEBPS/${file}`, createSyntheticPng(id === pageCount ? 'Q47N' : 'N7Q4', id === pageCount)],
+    ]),
+  ]);
+  await fs.mkdir(dirname(overviewOutput), { recursive: true });
+  await fs.writeFile(overviewOutput, createStoredZip(overviewEntries));
+}
+
 function createSyntheticPng(code, alternatePalette) {
   const width = 192;
   const height = 128;

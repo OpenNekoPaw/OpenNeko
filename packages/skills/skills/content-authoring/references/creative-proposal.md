@@ -1,4 +1,4 @@
-# Creative Proposal Guide
+# 创意方案指南
 
 ## 中文指南
 
@@ -13,21 +13,3 @@
 用户要求完整制作设计时，仍只生成一份主规格，不按能力阶段拆成多份解释文档。主规格由对应媒体能力提供创作合同、必要的连续性、权威生产单元表和后期/交付合同；准备与生成能力只追加依赖已满足单元的语义化生产交接。实际素材、完整调用、候选、任务状态、失败历史、项目修订和导出回执属于 owning capability 的结构化对象，不复制成文档正文。
 
 不得依据 manifest、页数、目录、封面或任意小样本直接选择全局格式、时长、集数和章节映射。证据不足时，本轮应先成为来源覆盖或体量评估。代表性样本只有在样本、估算方法、不确定性和置信度可见时才支持暂定区间；固定格式还需公开总时长、平均来源负载以及扩写、压缩、省略假设。三个以上可比较项目才使用表格。
-
-## English guidance
-
-Start with the creative goal, one core concept, the narrative or experience spine, and decisive beats. Add visual, action, sound, shot, or text choices when they directly shape those beats. Include model calls, assets, schedule, or risks only when the user requests a production handoff or the current creative decision depends on them. A creative proposal is neither a source-analysis log nor a single technical validation.
-
-Keep source-reading narration, Tool calls, progress, internal checks, and rejected reasoning in conversation or Evaluation evidence. The formal proposal contains only validated content that a creator can review or continue producing.
-
-Give each creative decision one authoritative location. When a beat, shot, or scene table already owns image, action, sound, and acceptance, do not restate them in separate sections. State cross-item rules once and keep local constraints with their item. Append a compact creator-facing semantic handoff only when the user also requests AI production handoff; a pure creative proposal has no generation handoff.
-
-For a concise time-based concept, default to two artifact blocks only: one concept paragraph plus at most four cross-shot invariants, and one authoritative six-to-eight-beat causal sequence. If the user also requests AI production handoff, system orchestration must continue into preparation and generation Skills, which append one semantic handoff for a dependency-ready unit: asset roles, directly usable prompt or operation intent, expected result, acceptance, and downstream use. Keep the complete invocation in the actual Tool call or owning structured object; Content Authoring must not invent or print operations, parameters, locators, or runtime IDs. Do not recreate analysis, evidence, sound, visual, technology, acceptance, or review mini-sections through nested headings or bold field groups.
-
-For complete production design, still create one master specification rather than separate explanatory documents per capability stage. The owning media capabilities provide the creative contract, necessary continuity, authoritative production-unit table, and finishing/delivery contract; preparation and generation capabilities append only semantic production handoffs for units whose dependencies are satisfied. Actual assets, complete invocations, candidates, runtime state, failure history, project revisions, and export receipts remain structured objects owned by their capabilities rather than copied into the document.
-
-Add audience, tone, visual language, narrative beats, shots, assets, variants, schedule, or risks only when the request or production decision needs them. Distinguish supplied source facts from creative assumptions.
-
-Do not choose a source-wide format, runtime, episode count, chapter map, or production scale from a manifest, page count, outline, cover, or arbitrary small sample. When those decisions depend on unreviewed content, make the current deliverable a source-coverage or scale assessment and keep the creative proposal provisional. A deliberately selected representative sample may support a provisional range when the document states the sample, estimation method, uncertainty and confidence. A fixed format should expose the broader evidence and arithmetic that make it plausible, including total runtime, average source load, and material expansion, compression, or omission assumptions.
-
-Use a table for three or more comparable shots, assets, scenes, or deliverables with repeated fields. Prefer prose or a short list for one concept and one next action.

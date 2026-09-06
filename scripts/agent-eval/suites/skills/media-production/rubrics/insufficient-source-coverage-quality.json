@@ -13,19 +13,19 @@
     },
     {
       "id": "coverage-diagnosis",
-      "description": "The Agent correctly identifies that one cover, one contents page and one interior page do not establish narrative coverage. It names story-bearing early, middle and late regions whose findings must each change a distinct creative decision, plus continuous cause-action-consequence evidence for any proposed spine event.",
+      "description": "The Agent correctly identifies that one cover, one contents page and one interior page do not establish narrative coverage. It identifies missing chapter coverage, character appearances, object ownership and continuous cause-action-consequence evidence. Repeated appearances and unchanged equipment still count as continuity evidence; batches need not change distinct creative decisions.",
       "weight": 0.25,
       "evidenceRefs": ["volume-assessment-facts"]
     },
     {
       "id": "no-invented-creative-contract",
-      "description": "The response does not invent a protagonist objective, connected plot, duration, format, episode structure, climax or source-wide theme from the sparse evidence. A late evidence-boundary paragraph cannot rescue an otherwise unsupported treatment.",
+      "description": "The response does not invent a protagonist name, alias, appearance history, objective, connected plot, duration, format, episode structure, climax or source-wide theme from the sparse evidence. Unknown identity keeps a stable provisional label and a precise evidence gap rather than a guessed canonical name. A late evidence-boundary paragraph cannot rescue an otherwise unsupported treatment.",
       "weight": 0.2,
       "evidenceRefs": ["volume-assessment-facts"]
     },
     {
       "id": "precise-next-operation",
-      "description": "The response gives one concise, bounded next source-review operation that would unlock a volume-level decision. It names the decision each early, middle, late or continuous-sequence batch must settle and does not turn the request into exhaustive reading, a page-by-page audit or a generic production checklist.",
+      "description": "The response identifies the unavailable source or precise missing coverage rather than declaring analysis complete. When source access exists, it continues ordered batch overviews with selected original-page inspection until the requested range is covered; when the fixture only supplies an evidence record, it reports that access gap. It does not narrow the user's objective or advance to generation merely because a few images or a fixed number of batches were read.",
       "weight": 0.15,
       "evidenceRefs": ["volume-assessment-facts"]
     },

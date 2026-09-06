@@ -68,6 +68,12 @@
   ],
   "cases": [
     {
+      "id": "canvas-related-batch-grouping",
+      "file": "cases/canvas-related-batch-grouping.json",
+      "group": "workflow",
+      "visibility": "public"
+    },
+    {
       "id": "image-quality-feedback-iteration",
       "file": "cases/image-quality-feedback-iteration.json",
       "group": "workflow",

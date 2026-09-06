@@ -1,8 +1,43 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { assertDesktopEvidenceSupport, createDesktopEvaluationFacts } from './evidence.mjs';
 import { evaluateHardGates } from '../runner/hard-gates.mjs';
 
 describe('Desktop Agent assertion-driven evidence', () => {
+  it('rejects missing or failed overview batches in the continuous-source scenario', () => {
+    const scenario = JSON.parse(
+      readFileSync(
+        new URL(
+          '../suites/skills/media-production/cases/continuous-image-source-coverage.json',
+          import.meta.url,
+        ),
+        'utf8',
+      ),
+    );
+    const assertions = scenario.assertions.filter((item) => item.name === 'openneko_read_images');
+    expect(assertions).toHaveLength(4);
+    const input = dshEvidenceInput(assertions);
+    const event = (assertion, status) =>
+      dshToolEvent({
+        toolCallId: assertion.id,
+        title: assertion.name,
+        status,
+        rawInput: assertion.expectedArguments,
+        result: status === 'failed' ? { error: 'content-read-failed' } : { image: 'overview' },
+      });
+    input.projection.events.push(event(assertions[0], 'completed'));
+    expect(run(input).map((item) => item.status)).toEqual(['pass', 'fail', 'fail', 'fail']);
+    input.projection.events.push(event(assertions[1], 'failed'));
+    expect(run(input).map((item) => item.status)).toEqual(['pass', 'fail', 'fail', 'fail']);
+    input.projection.events.push(
+      ...assertions.slice(1).map((assertion) => ({
+        ...event(assertion, 'completed'),
+        toolCallId: assertion.id + '-corrected',
+      })),
+    );
+    expect(run(input).map((item) => item.status)).toEqual(['pass', 'pass', 'pass', 'pass']);
+  });
+
   it('evaluates an ordinary declarative case without case-id dispatch', () => {
     const input = evidenceInput([
       { id: 'errors', kind: 'runtime-errors-empty', evidenceRef: 'facts' },

@@ -53,7 +53,7 @@
         "provenance": "builtin",
         "rootId": "builtin-skills",
         "relativePath": "video-editing",
-        "fingerprint": "sha256:a25619eefb95fd3ecfc17747c34d12017dbd8b853c68348e8f07c36eb830ad54"
+        "fingerprint": "sha256:82e03324c72dd1dcdc508d3dc66a7b5e32dcb240b9cf7eeaab6ecd35db7958c6"
       },
       "status": "injected",
       "evidenceRef": "skill-facts"

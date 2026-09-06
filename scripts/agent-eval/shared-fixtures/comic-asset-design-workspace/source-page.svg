@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1200" viewBox="0 0 900 1200">
+  <rect width="900" height="1200" fill="#f4f1e9"/>
+  <g fill="none" stroke="#222" stroke-width="4">
+    <rect x="30" y="65" width="840" height="340"/>
+    <rect x="30" y="430" width="395" height="680"/>
+    <rect x="450" y="430" width="420" height="680"/>
+    <path d="M30 380 L420 150 L520 150 L300 405 M520 150 L870 380 M110 65 V330 M760 65 V305 M210 65 V270"/>
+    <path d="M330 65 V315 H590 V180 M470 145 L610 210 L520 310"/>
+    <path d="M55 870 L250 670 L400 870 M470 1050 L650 650 L850 1020 M620 480 V1110"/>
+  </g>
+  <g fill="#333" stroke="#222" stroke-width="5">
+    <circle cx="205" cy="530" r="45"/>
+    <path d="M155 580 H255 L280 800 H140 Z M160 795 L140 1000 L175 1000 L210 820 L240 1000 L275 1000 L250 795"/>
+    <path d="M255 590 L340 740 L310 750 L225 635"/>
+    <rect x="126" y="595" width="32" height="100" fill="#999"/>
+    <circle cx="680" cy="720" r="20"/>
+    <path d="M660 745 H700 L710 850 H650 Z M660 850 L640 915 M700 850 L720 915"/>
+  </g>
+  <g fill="#eee" stroke="#222" stroke-width="4">
+    <path d="M310 720 V680 H355 V720" fill="none"/>
+    <rect x="300" y="720" width="66" height="105"/>
+    <path d="M310 755 H356 M310 790 H356"/>
+    <ellipse cx="580" cy="520" rx="100" ry="50"/>
+  </g>
+  <g fill="#222" font-family="sans-serif" font-size="22">
+    <text x="30" y="40">THE SHAFT — chapter 1</text>
+    <text x="90" y="110">CLANG</text>
+    <text x="525" y="525">THIS WAY</text>
+    <text x="400" y="1160">page 07</text>
+  </g>
+</svg>

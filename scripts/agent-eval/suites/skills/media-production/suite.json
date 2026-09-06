@@ -10,10 +10,15 @@
       "provenance": "builtin",
       "rootId": "builtin-skills",
       "relativePath": "media-production",
-      "fingerprint": "sha256:214c29ab578b745df9d8156f58f27f90342470b5b0e83f278c50015d0ac23d71"
+      "fingerprint": "sha256:71b62ee9221be3a158958fff815c2513de4dc71dec75824d9f0f008717670466"
     }
   },
   "runtimeProfiles": [
+    {
+      "id": "execute",
+      "settings": { "executionMode": "auto" },
+      "configurationHash": "sha256:14bbfefd201fb00c3a3b85b137a6e6ce0badd0db63bc7bf496454b7689ee0460"
+    },
     {
       "id": "plan-markdown",
       "settings": { "executionMode": "plan", "outputFormat": "markdown" },
@@ -26,6 +31,21 @@
     }
   ],
   "modelProfiles": [
+    {
+      "id": "native-vision",
+      "selection": "explicit",
+      "chat": { "providerId": "nekoapi-chat", "modelId": "gpt-5.5" },
+      "configurationHash": "sha256:930c70d9deb59dd74a0b97d009020e5aae62f04593bc76090c20986097c766fe"
+    },
+    {
+      "id": "nekoapi-image-purpose",
+      "selection": "explicit",
+      "chat": { "providerId": "nekoapi-chat", "modelId": "gpt-5.6-luna" },
+      "purposes": {
+        "image.generate": { "providerId": "nekoapi-media", "modelId": "gpt-image-2" }
+      },
+      "configurationHash": "sha256:84106dbcf3b4b105eabd31f2b2b8705f954c486ba789f93093fc68cd23b3d4ce"
+    },
     {
       "id": "configured-default",
       "selection": "configured-default",
@@ -47,6 +67,27 @@
   ],
   "fixtures": [
     {
+      "id": "continuous-overview-workspace",
+      "root": "shared-fixtures/continuous-overview-workspace",
+      "source": "repository",
+      "digest": "sha256:464e79e58e64e2f49bfe70fa17e6d3f82160007f009c6a7ba9997320eb27917f",
+      "mutable": true
+    },
+    {
+      "id": "ordered-story-workspace",
+      "root": "shared-fixtures/ordered-story-workspace",
+      "source": "repository",
+      "digest": "sha256:ab295b2fb6d74d89190d586246759032ef6242851ad327c080ffc2a627bf1bc5",
+      "mutable": true
+    },
+    {
+      "id": "empty-workspace",
+      "root": "shared-fixtures/empty-workspace",
+      "source": "repository",
+      "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081",
+      "mutable": true
+    },
+    {
       "id": "creative-planning-workspace",
       "root": "shared-fixtures/creative-planning-workspace",
       "source": "repository",
@@ -62,6 +103,30 @@
     }
   ],
   "cases": [
+    {
+      "id": "overview-notes-need-grounding",
+      "file": "cases/overview-notes-need-grounding.json",
+      "group": "regression",
+      "visibility": "public"
+    },
+    {
+      "id": "continuous-image-source-coverage",
+      "file": "cases/continuous-image-source-coverage.json",
+      "group": "regression",
+      "visibility": "public"
+    },
+    {
+      "id": "ordered-cast-story-analysis",
+      "file": "cases/ordered-cast-story-analysis.json",
+      "group": "regression",
+      "visibility": "public"
+    },
+    {
+      "id": "execute-independent-image-batch",
+      "file": "cases/execute-independent-image-batch.json",
+      "group": "workflow",
+      "visibility": "public"
+    },
     {
       "id": "time-based-production-specification",
       "file": "cases/time-based-production-specification.json",
@@ -124,6 +189,7 @@
     }
   ],
   "rubricRefs": [
+    "rubrics/ordered-cast-story-analysis.json",
     "rubrics/creative-shot-spine-quality.json",
     "rubrics/creative-media-design-quality.json",
     "rubrics/insufficient-source-coverage-quality.json",
