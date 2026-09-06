@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { IDocumentAccessService } from '@neko/content-domain/document';
 import { createNodeDocumentAccessService } from '@neko/content-domain/document/node';
-import type { ContentRepresentationService } from '@neko/content-domain';
+import type { ContentRepresentationService, ContentReadService } from '@neko/content-domain';
 import { createNodeHostContentReadService } from '@neko/content-domain/node';
 import { resolveWorkspaceContentLocator } from '@neko/assets-node';
 import { createHostAgentContentAccessRuntime } from '../capability/host-content-access-runtime-adapter';
@@ -20,6 +20,59 @@ afterEach(async () => {
 });
 
 describe('HostAgentContentAccessRuntime document representations', () => {
+  it('uses authorized source metadata for full asset reads and isolates unavailable sources', async () => {
+    const locator = { file: { authority: 'workspace' as const, path: 'large.png' } };
+    const missing = { file: { authority: 'workspace' as const, path: 'missing.png' } };
+    const byteLength = 21 * 1024 * 1024;
+    const fingerprint = { strategy: 'mtime-size' as const, value: `1:${byteLength}` };
+    const stat = vi.fn<ContentReadService['stat']>(async (source) =>
+      source === missing
+        ? {
+            status: 'unavailable',
+            locator: source,
+            diagnostic: { code: 'content-not-found' },
+          }
+        : { status: 'ready', locator: source, byteLength, fingerprint },
+    );
+    const read = vi.fn<ContentReadService['read']>(async (source) => ({
+      status: 'ready',
+      locator: source,
+      bytes: new Uint8Array(byteLength),
+      offset: 0,
+      totalByteLength: byteLength,
+      mimeType: 'image/png',
+      fingerprint,
+    }));
+    const runtime = createHostAgentContentAccessRuntime({
+      contentRead: { stat, read },
+      documentAccess: createNodeDocumentAccessService(),
+      resolveDocumentHostFilePath: () => undefined,
+    });
+    const signal = new AbortController().signal;
+    expect(await runtime.loadContentAsset({ locator: missing, signal })).toMatchObject({
+      status: 'failed',
+    });
+    expect(read).not.toHaveBeenCalled();
+    expect(await runtime.loadContentAsset({ locator, signal })).toMatchObject({
+      status: 'ready',
+      sizeBytes: byteLength,
+    });
+    expect(stat).toHaveBeenLastCalledWith(locator, { signal });
+    expect(read).toHaveBeenCalledExactlyOnceWith(locator, { maxBytes: byteLength, signal });
+    read.mockResolvedValueOnce({
+      status: 'ready',
+      locator,
+      bytes: new Uint8Array(1),
+      offset: 0,
+      totalByteLength: 1,
+      fingerprint,
+    });
+    expect(await runtime.loadContentAsset({ locator, signal })).toMatchObject({
+      status: 'failed',
+      diagnostics: [{ code: 'content-size-changed' }],
+    });
+  });
+
   it('preserves the exact decoder failure instead of relabeling it unsupported-source', async () => {
     const documentAccess = {
       supports: () => true,

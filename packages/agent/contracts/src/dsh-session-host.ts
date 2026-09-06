@@ -9,10 +9,6 @@ import {
   type DshAcpContextPressureProjection,
 } from './dsh-acp';
 import { isAgentContextType, type AgentContextPayload } from './agent-context';
-import {
-  AGENT_IMAGE_TRANSPORT_MAX_PAYLOADS,
-  AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES,
-} from './agent-image-transport';
 import type { ModelType } from '@neko/ai-contracts';
 import {
   parseGenerationModelParameterProfile,
@@ -30,7 +26,7 @@ import {
   type ContentLocator,
   type WorkspaceFileContentLocator,
 } from '@neko/content-domain';
-import { decodedBase64ByteLength, requireCanonicalBase64 } from './canonical-base64';
+import { requireCanonicalBase64 } from './canonical-base64';
 import {
   parseAgentEntryTargetBinding,
   type AgentAuthoringBinding,
@@ -39,8 +35,6 @@ import {
 
 export const DSH_SESSION_HOST_CHANNEL = 'openneko:dsh:session';
 export const DSH_SESSION_CHANGED_CHANNEL = 'openneko:dsh:session:changed';
-const DSH_COMPOSER_MAX_SOURCE_BASE64_CHARS =
-  Math.ceil(AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES / 3) * 4;
 
 export type DshSessionUserMessageBlock =
   | { readonly type: 'text'; readonly text: string }
@@ -1006,39 +1000,13 @@ function parseComposerSubmitInput(value: unknown): DshComposerSubmitInput {
     if (!Array.isArray(record.images)) {
       throw new Error('DSH Composer message images must be an array.');
     }
-    if (record.images.length > AGENT_IMAGE_TRANSPORT_MAX_PAYLOADS) {
-      throw new Error(
-        `DSH Composer message images exceed the limit of ${AGENT_IMAGE_TRANSPORT_MAX_PAYLOADS}.`,
-      );
-    }
-    let totalImageBytes = 0;
     const images = record.images.map((candidate, index) => {
       const image = requireRecord(candidate, `DSH Composer image[${index}]`);
       requireExactKeys(image, ['name', 'mimeType', 'data']);
-      if (
-        typeof image.data === 'string' &&
-        image.data.length > DSH_COMPOSER_MAX_SOURCE_BASE64_CHARS
-      ) {
-        throw new Error(
-          `DSH Composer image[${index}] exceeds ${AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES} source bytes.`,
-        );
-      }
       const data = requireCanonicalBase64(
         image.data,
         `DSH Composer image[${index}].data must be canonical base64.`,
       );
-      const sourceBytes = decodedBase64ByteLength(data);
-      if (sourceBytes > AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES) {
-        throw new Error(
-          `DSH Composer image[${index}] exceeds ${AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES} source bytes.`,
-        );
-      }
-      totalImageBytes += sourceBytes;
-      if (totalImageBytes > AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES) {
-        throw new Error(
-          `DSH Composer inline image batch exceeds ${AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES} source bytes.`,
-        );
-      }
       return {
         name: requireIdentity(image.name, `image[${index}].name`),
         mimeType: parseComposerImageMimeType(image.mimeType, index),

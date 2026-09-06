@@ -328,7 +328,7 @@ describe('DSH Session Host contract', () => {
     ).toMatchObject({ projection: { dshSessionId: 'session-1' } });
   });
 
-  it('strictly accepts bounded canonical inline images and rejects malformed batches', () => {
+  it('accepts canonical image batches without a count cap and rejects malformed images', () => {
     const submit = (images: unknown[]) =>
       parseDshSessionHostRequest({
         requestId: 'request-image',
@@ -352,13 +352,13 @@ describe('DSH Session Host contract', () => {
     );
     expect(() =>
       submit(
-        Array.from({ length: 5 }, (_, index) => ({
+        Array.from({ length: 24 }, (_, index) => ({
           name: `clipboard-${index}.png`,
           mimeType: 'image/png',
           data: 'AQID',
         })),
       ),
-    ).toThrow(/limit of 4/u);
+    ).not.toThrow();
   });
 
   it('strictly decodes sender-bound image preview requests and opaque resource results', () => {

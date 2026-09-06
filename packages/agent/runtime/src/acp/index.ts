@@ -23,7 +23,6 @@ export {
   type DshDomainToolHandlers,
 } from './dsh-domain-tool-handlers';
 export {
-  DSH_ACP_PROJECTION_DEFAULT_MAX_EVENTS_PER_SESSION,
   DshAcpProjection,
   type DshAcpProjectedCancelEvent,
   type DshAcpProjectedDiagnosticEvent,
@@ -34,7 +33,6 @@ export {
   type DshAcpProjectedToolEvent,
   type DshAcpProjectedToolStatus,
   type DshAcpProjectedTurnEvent,
-  type DshAcpProjectionOptions,
   type DshAcpProjectionSnapshot,
   type DshAcpProjectionToolSnapshot,
   type DshAcpProjectedTodoItem,

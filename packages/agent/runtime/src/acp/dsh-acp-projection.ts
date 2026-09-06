@@ -10,9 +10,6 @@ import type {
   DshAcpSessionEventNotification,
 } from '@neko/agent-contracts/dsh-acp';
 
-export const DSH_ACP_PROJECTION_DEFAULT_MAX_EVENTS_PER_SESSION = 256;
-const DSH_ACP_PROJECTION_DEFAULT_MAX_ASSISTANT_STREAM_BYTES = 262_144;
-
 export type DshAcpProjectedToolStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
 
 export interface DshAcpProjectedToolEvent {
@@ -135,11 +132,6 @@ export interface DshAcpProjectedTodoItem {
   readonly status: 'pending' | 'in_progress' | 'completed';
 }
 
-export interface DshAcpProjectionOptions {
-  readonly maxEventsPerSession?: number;
-  readonly maxAssistantStreamBytes?: number;
-}
-
 interface AssistantAssemblyState {
   readonly turn: number;
   readonly step: number;
@@ -193,23 +185,6 @@ interface SessionProjectionState {
 
 export class DshAcpProjection {
   private readonly sessions = new Map<string, SessionProjectionState>();
-  private readonly maxEventsPerSession: number;
-  private readonly maxAssistantStreamBytes: number;
-
-  constructor(options: DshAcpProjectionOptions = {}) {
-    const maxEventsPerSession =
-      options.maxEventsPerSession ?? DSH_ACP_PROJECTION_DEFAULT_MAX_EVENTS_PER_SESSION;
-    if (!Number.isSafeInteger(maxEventsPerSession) || maxEventsPerSession <= 0) {
-      throw new Error('DSH ACP projection max events per session must be a positive integer.');
-    }
-    this.maxEventsPerSession = maxEventsPerSession;
-    const maxAssistantStreamBytes =
-      options.maxAssistantStreamBytes ?? DSH_ACP_PROJECTION_DEFAULT_MAX_ASSISTANT_STREAM_BYTES;
-    if (!Number.isSafeInteger(maxAssistantStreamBytes) || maxAssistantStreamBytes <= 0) {
-      throw new Error('DSH ACP assistant stream byte limit must be a positive integer.');
-    }
-    this.maxAssistantStreamBytes = maxAssistantStreamBytes;
-  }
 
   acceptSessionUpdate(notification: SessionNotification): readonly DshAcpProjectedEvent[] {
     const session = this.session(notification.sessionId);
@@ -955,18 +930,6 @@ export class DshAcpProjection {
       (assembly.blocks.get(identity.blockIndex) ?? '') + update.content.text,
     );
     const text = assembleAssistantBlocks(assembly.blocks);
-    if (new TextEncoder().encode(text).length > this.maxAssistantStreamBytes) {
-      session.assistantAssemblies.delete(key);
-      this.removeAssistantAssemblyEvent(session, assembly);
-      return this.record(
-        session,
-        diagnostic(
-          session.sessionId,
-          'ACP_PROJECTION_ASSISTANT_STREAM_OVERFLOW',
-          `DSH assistant stream ${identity.turn}:${identity.step}:${channel} exceeded ${this.maxAssistantStreamBytes} bytes.`,
-        ),
-      );
-    }
     const messageId =
       update.messageId === undefined || update.messageId === null
         ? `dsh:${identity.turn}:${identity.step}:${channel}`
@@ -997,17 +960,6 @@ export class DshAcpProjection {
     if (text.length === 0) {
       if (assembly !== undefined) this.removeAssistantAssemblyEvent(session, assembly);
       return [];
-    }
-    if (new TextEncoder().encode(text).length > this.maxAssistantStreamBytes) {
-      if (assembly !== undefined) this.removeAssistantAssemblyEvent(session, assembly);
-      return this.record(
-        session,
-        diagnostic(
-          session.sessionId,
-          'ACP_PROJECTION_ASSISTANT_STREAM_OVERFLOW',
-          `DSH final assistant message ${turn}:${step}:${channel} exceeded ${this.maxAssistantStreamBytes} bytes.`,
-        ),
-      );
     }
     const event = assistantEvent(session.sessionId, turn, step, channel, messageId, text, 'final');
     if (assembly === undefined) return this.record(session, event);
@@ -1234,15 +1186,6 @@ export class DshAcpProjection {
     session: SessionProjectionState,
     event: DshAcpProjectedEvent,
   ): readonly DshAcpProjectedEvent[] {
-    if (session.events.length >= this.maxEventsPerSession) {
-      return [
-        diagnostic(
-          session.sessionId,
-          'ACP_PROJECTION_OVERFLOW',
-          `Session ${session.sessionId} exceeded ${this.maxEventsPerSession} projected events.`,
-        ),
-      ];
-    }
     session.events.push(event);
     return [event];
   }
@@ -1253,9 +1196,6 @@ export class DshAcpProjection {
     mutate: () => void,
   ): readonly DshAcpProjectedEvent[] {
     const recorded = this.record(session, event);
-    if (recorded.length === 1 && recorded[0]?.kind === 'diagnostic') {
-      return recorded;
-    }
     mutate();
     return recorded;
   }

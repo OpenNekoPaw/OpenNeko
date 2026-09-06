@@ -153,16 +153,28 @@ describe('DshAcpProjection', () => {
     });
   });
 
-  it('fails an overflowing assistant assembly locally and preserves a sibling Session', () => {
-    const projection = new DshAcpProjection({ maxAssistantStreamBytes: 4 });
+  it('preserves large assistant streams and an independent sibling Session', () => {
+    const projection = new DshAcpProjection();
+    const text = 'x'.repeat(300 * 1024);
     projection.acceptSessionEvent(turnEvent('s1', 0, 'turn/start', 0));
     projection.acceptSessionEvent(stepEvent('s1', 1, 'step/start', 0, 0));
     expect(
-      projection.acceptSessionUpdate(assistantChunk('s1', 2, 0, 0, 'text', 0, '12345'))[0],
+      projection.acceptSessionUpdate(assistantChunk('s1', 2, 0, 0, 'text', 0, text))[0],
     ).toMatchObject({
-      kind: 'diagnostic',
-      code: 'ACP_PROJECTION_ASSISTANT_STREAM_OVERFLOW',
+      kind: 'message',
+      text,
     });
+    projection.acceptSessionUpdate(assistantChunk('s1', 3, 0, 0, 'reasoning', 1, text));
+    projection.acceptSessionUpdate(
+      finalAssistantChunk('s1', 4, 0, 0, 'reasoning', 'large', text, 0),
+    );
+    projection.acceptSessionUpdate(finalAssistantChunk('s1', 4, 0, 0, 'text', 'large', text, 1));
+    const messages = projection
+      .snapshot('s1')
+      .events.filter((event) => event.kind === 'message' || event.kind === 'thought');
+    expect(messages).toHaveLength(2);
+    expect(messages.map((event) => event.kind).sort()).toEqual(['message', 'thought']);
+    expect(messages.every((event) => event.state === 'final' && event.text === text)).toBe(true);
 
     projection.acceptSessionEvent(turnEvent('s2', 0, 'turn/start', 0));
     projection.acceptSessionEvent(stepEvent('s2', 1, 'step/start', 0, 0));
@@ -499,22 +511,28 @@ describe('DshAcpProjection', () => {
     });
   });
 
-  it('does not mutate Tool state when the event buffer overflows', () => {
-    const projection = new DshAcpProjection({ maxEventsPerSession: 1 });
+  it('preserves long-running Tool history and terminal state without a count limit', () => {
+    const projection = new DshAcpProjection();
     projection.acceptSessionEvent(turnEvent('s1', 0, 'turn/start', 0));
-
-    const overflow = projection.acceptSessionUpdate(toolCall('s1', 'call-1', 0, 1));
-    expect(overflow[0]).toMatchObject({
-      kind: 'diagnostic',
-      code: 'ACP_PROJECTION_OVERFLOW',
-    });
-    expect(projection.snapshot('s1').tools).toEqual([]);
-
-    const drained = projection.drain('s1');
-    expect(drained.map((event) => event.kind)).toEqual(['turn']);
-    const accepted = projection.acceptSessionUpdate(toolCall('s1', 'call-1', 0, 2));
-    expect(accepted[0]).toMatchObject({ kind: 'tool', toolCallId: 'call-1', turn: 0 });
-    expect(projection.snapshot('s1').tools).toHaveLength(1);
+    for (let index = 0; index < 512; index += 1) {
+      const toolCallId = `call-${index}`;
+      expect(
+        projection.acceptSessionUpdate(toolCall('s1', toolCallId, 0, index * 2 + 1))[0],
+      ).toMatchObject({ kind: 'tool', toolCallId, status: 'pending' });
+      expect(
+        projection.acceptSessionUpdate(
+          toolCallUpdate('s1', toolCallId, 0, index * 2 + 2, { status: 'completed' }),
+        )[0],
+      ).toMatchObject({ kind: 'tool', toolCallId, status: 'completed' });
+    }
+    projection.acceptSessionEvent(turnEvent('s1', 1025, 'turn/end', 0, 'success'));
+    const snapshot = projection.snapshot('s1');
+    expect(snapshot.events).toHaveLength(1026);
+    expect(snapshot.tools).toHaveLength(512);
+    expect(snapshot.tools.every((tool) => tool.terminal && tool.status === 'completed')).toBe(true);
+    expect(snapshot.currentTurn).toBeUndefined();
+    expect(projection.drain('s1')).toEqual(snapshot.events);
+    expect(projection.snapshot('s1').events).toEqual([]);
   });
 
   it('allows a final same-turn tool update after cancel but rejects later frames', () => {
@@ -684,21 +702,33 @@ describe('DshAcpProjection', () => {
     });
   });
 
-  it('returns a local overflow diagnostic and preserves sibling sessions', () => {
-    const projection = new DshAcpProjection({ maxEventsPerSession: 2 });
+  it('keeps active streaming assemblies and invalid-input isolation during long histories', () => {
+    const projection = new DshAcpProjection();
     projection.acceptSessionEvent(turnEvent('s1', 0, 'turn/start', 0));
-    projection.acceptSessionUpdate(toolCall('s1', 'call-1', 0, 1));
-
-    const overflow = projection.acceptSessionUpdate(
-      toolCallUpdate('s1', 'call-1', 0, 2, { status: 'completed' }),
+    projection.acceptSessionEvent(stepEvent('s1', 1, 'step/start', 0, 0));
+    projection.acceptSessionUpdate(assistantChunk('s1', 2, 0, 0, 'text', 0, 'Before'));
+    for (let index = 0; index < 300; index += 1) {
+      projection.acceptSessionUpdate(toolCall('s1', `call-${index}`, 0, index + 3));
+    }
+    expect(
+      projection.acceptSessionUpdate(assistantChunk('s1', 303, 0, 0, 'text', 0, ' after'))[0],
+    ).toMatchObject({ kind: 'message', text: 'Before after', state: 'streaming' });
+    expect(
+      projection.snapshot('s1').events.filter((event) => event.kind === 'message'),
+    ).toHaveLength(1);
+    const invalid = projection.acceptSessionUpdate(
+      toolCallUpdate('s1', 'unknown', 0, 304, { status: 'completed' }),
     );
-    expect(overflow).toHaveLength(1);
-    expect(overflow[0]).toMatchObject({
+    expect(invalid[0]).toMatchObject({
       kind: 'diagnostic',
-      code: 'ACP_PROJECTION_OVERFLOW',
+      code: 'ACP_PROJECTION_UNKNOWN_TOOL',
       sessionId: 's1',
     });
-
+    expect(
+      projection.acceptSessionUpdate(
+        toolCallUpdate('s1', 'call-299', 0, 305, { status: 'failed' }),
+      )[0],
+    ).toMatchObject({ kind: 'tool', status: 'failed' });
     const sibling = projection.acceptSessionUpdate(toolCall('s2', 'call-2', 0, 1));
     expect(sibling[0]).toMatchObject({ kind: 'tool', sessionId: 's2', toolCallId: 'call-2' });
   });

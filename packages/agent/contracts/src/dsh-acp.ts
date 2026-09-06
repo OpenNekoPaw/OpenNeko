@@ -1,4 +1,3 @@
-import { AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES } from './agent-image-transport';
 import { decodedBase64ByteLength, requireCanonicalBase64 } from './canonical-base64';
 import type { DshSkillAuthoringLayout } from './dsh-skill-authoring';
 
@@ -1062,7 +1061,7 @@ export function decodeDshAcpImageAttachmentReadProjection(
     'DSH ACP image attachment data must be canonical base64.',
   );
   const decodedBytes = decodedBase64ByteLength(data);
-  if (decodedBytes !== attachment.bytes || decodedBytes > AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES) {
+  if (decodedBytes !== attachment.bytes) {
     throw new Error(
       `DSH ACP image attachment byte length is invalid: ${decodedBytes}/${attachment.bytes}.`,
     );
@@ -1080,11 +1079,6 @@ export function decodeDshAcpImageAttachmentRefProjection(
     'image attachment reference',
   );
   const bytes = requirePositiveInteger(record.bytes, 'image attachment bytes');
-  if (bytes > AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES) {
-    throw new Error(
-      `DSH ACP image attachment exceeds ${AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES} bytes.`,
-    );
-  }
   return {
     attachmentId: requireNonEmptyString(record.attachmentId, 'attachmentId'),
     mediaType: requireImageAttachmentMediaType(record.mediaType),

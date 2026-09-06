@@ -9,9 +9,6 @@ import { resolveDshDialogueProtocol } from '@neko/host/ai-model-settings-service
 
 const DSH_PI_AI_ROW_ID = 'llm-pi-ai';
 const DSH_CREDENTIAL_ENV_PREFIX = 'OPENNEKO_DSH_PROVIDER_CREDENTIAL_';
-export const OPENNEKO_DSH_REQUEST_IMAGE_PIXEL_BUDGET = 2048 * 2048;
-export const OPENNEKO_DSH_REQUEST_IMAGE_MAX_BYTES = 1024 * 1024;
-export const OPENNEKO_DSH_MAX_REQUEST_IMAGE_BYTES = 6 * 1024 * 1024;
 
 export interface DesktopDshExecutionModel {
   readonly providerId: string;
@@ -43,9 +40,6 @@ interface DshProviderProfile {
   readonly baseURL?: string;
   readonly models: readonly Readonly<Record<string, unknown>>[];
   readonly apiKeyEnv?: string;
-  readonly requestImagePixelBudget: number;
-  readonly requestImageMaxBytes: number;
-  readonly maxRequestImageBytes: number;
 }
 
 export async function createDesktopDshProviderRuntimeProjection(input: {
@@ -161,9 +155,6 @@ export async function createDesktopDshProviderRuntimeProjection(input: {
       ...(protocol === undefined ? {} : { api: protocol }),
       ...(baseURL === undefined ? {} : { baseURL }),
       models: Object.freeze(dshModels),
-      requestImagePixelBudget: OPENNEKO_DSH_REQUEST_IMAGE_PIXEL_BUDGET,
-      requestImageMaxBytes: OPENNEKO_DSH_REQUEST_IMAGE_MAX_BYTES,
-      maxRequestImageBytes: OPENNEKO_DSH_MAX_REQUEST_IMAGE_BYTES,
       ...(credentialEnvironmentName === undefined ? {} : { apiKeyEnv: credentialEnvironmentName }),
     });
     executionModels.set(provider.id, providerExecutionModels);

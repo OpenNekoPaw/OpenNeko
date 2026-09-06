@@ -81,7 +81,7 @@ export interface AgentContentAccessRuntime {
   }): Promise<AgentProviderAssetResult>;
   loadContentAsset(input: {
     readonly locator: ContentLocator;
-    readonly maxBytes: number;
+    readonly maxBytes?: number;
     readonly signal?: AbortSignal;
   }): Promise<AgentProviderAssetResult>;
 }

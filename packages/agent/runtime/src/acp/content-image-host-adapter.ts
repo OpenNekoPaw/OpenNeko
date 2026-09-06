@@ -1,4 +1,3 @@
-import { AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES } from '@neko/agent-contracts';
 import type {
   DshAcpDomainToolRequest,
   DshAcpDomainToolResponse,
@@ -39,7 +38,6 @@ export class ContentImageDshHostAdapter {
       const runtime = typeof this.content === 'function' ? await this.content() : this.content;
       const loaded = await runtime.loadContentAsset({
         locator: decoded.source,
-        maxBytes: AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES,
         ...(signal ? { signal } : {}),
       });
       if (loaded.status !== 'ready' || loaded.bytes === undefined) {

@@ -931,20 +931,17 @@ describe('OpenNeko DSH ACP bridge boundaries', () => {
     expect(source).not.toMatch(/ctx\.tools\.register|registerOpenNekoDomainTools/);
   });
 
-  it('wires Prompt admission through prompt, cancel, close, and connection quiescence', () => {
+  it('delegates Prompt execution without an outer admission queue', () => {
     const source = readPackageFile('src/index.ts');
 
-    expect(source).toContain("from './prompt-admission.js'");
-    expect(source).toContain('const promptAdmission = new PromptAdmission<PromptResponse>()');
-    expect(source).toMatch(/const runPrompt[\s\S]*promptAdmission\.run\(sessionId/u);
+    expect(source).not.toContain('promptAdmission');
+    expect(source).not.toContain('PromptAdmission');
     expect(source).toMatch(
       /async prompt\(params\)[\s\S]*return runPrompt\(params\.sessionId, async \(\) => \{[\s\S]*await admitAcpPrompt/u,
     );
-    expect(source).toMatch(/cancel\(params\)[\s\S]*promptAdmission\.cancel\(params\.sessionId/u);
     expect(source).toMatch(
-      /async closeSession\(params\)[\s\S]*promptAdmission\.cancel\(params\.sessionId/u,
+      /cancel\(params\)[\s\S]*record\.handle\.agent\.cancel\(\{ kind: 'user' \}\)/u,
     );
-    expect(source).toMatch(/const quiesce[\s\S]*promptAdmission\.close\(\)/u);
   });
 
   it('records an actionable command diagnostic when connection teardown interrupts compaction', () => {

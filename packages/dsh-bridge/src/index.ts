@@ -77,12 +77,6 @@ import {
   type DshAcpInputCatalogProjection,
   type DshAcpSessionEventNotification,
 } from '@neko/agent-contracts/dsh-acp';
-import {
-  AGENT_IMAGE_TRANSPORT_MAX_PAYLOADS,
-  AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES,
-  AGENT_IMAGE_TRANSPORT_MAX_TOTAL_BYTES,
-} from '@neko/agent-contracts';
-import { PromptAdmission } from './prompt-admission.js';
 import { OPENNEKO_PRODUCT_SYSTEM_PROMPT } from './product-system-prompt.js';
 import { branchSeedThroughAssistantReply } from './session-branch.js';
 import {
@@ -191,7 +185,6 @@ const COMMAND_CONNECTION_CLOSED_DIAGNOSTIC =
 
 export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
   const owned = new Map<string, OwnedSession>();
-  const promptAdmission = new PromptAdmission<PromptResponse>();
   const preset = config.agentPreset ?? 'standard';
   const virtualCwd = process.cwd();
   const extensionLifecycle = new DshExtensionLifecycle(ctx);
@@ -387,65 +380,64 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
     return projectApprovalOutcome(response.outcome);
   });
 
-  const runPrompt = (
+  const runPrompt = async (
     sessionId: string,
     prepare: () => Promise<PreparedPrompt>,
-  ): Promise<PromptResponse> =>
-    promptAdmission.run(sessionId, async () => {
-      requireOpen();
-      const record = requireOwned(sessionId);
-      if (record.commandAbort !== undefined) {
-        throw RequestError.invalidParams(
-          undefined,
-          `A command is already in flight for this session: ${sessionId}`,
-        );
-      }
-      if (record.inflight !== undefined) {
-        throw RequestError.invalidParams(
-          undefined,
-          'A prompt is already in flight for this session.',
-        );
-      }
-      const inflight: InflightPrompt = {
-        completion: deferred(),
-        turn: undefined,
-        cancelRequested: false,
-        settlementStarted: false,
-        failure: undefined,
-        endReason: undefined,
-      };
-      record.inflight = inflight;
-      let prepared: PreparedPrompt;
-      try {
-        prepared = await prepare();
-      } catch (error) {
-        if (record.inflight === inflight) record.inflight = undefined;
-        throw error;
-      }
-      if (record.inflight !== inflight || inflight.cancelRequested) {
-        settlePrompt(record);
-        return { stopReason: await inflight.completion.promise };
-      }
-      try {
-        record.handle.agent.followup(
-          createUserMessage({
-            content: [...prepared.content],
-            source:
-              prepared.displayContent === undefined
-                ? { kind: 'user' as const }
-                : {
-                    kind: 'user' as const,
-                    opennekoDisplayContent: prepared.displayContent,
-                  },
-          }),
-        );
-      } catch (error) {
-        record.inflight = undefined;
-        throw RequestError.internalError(undefined, `Prompt was not queued: ${errorChain(error)}`);
-      }
+  ): Promise<PromptResponse> => {
+    requireOpen();
+    const record = requireOwned(sessionId);
+    if (record.commandAbort !== undefined) {
+      throw RequestError.invalidParams(
+        undefined,
+        `A command is already in flight for this session: ${sessionId}`,
+      );
+    }
+    if (record.inflight !== undefined) {
+      throw RequestError.invalidParams(
+        undefined,
+        'A prompt is already in flight for this session.',
+      );
+    }
+    const inflight: InflightPrompt = {
+      completion: deferred(),
+      turn: undefined,
+      cancelRequested: false,
+      settlementStarted: false,
+      failure: undefined,
+      endReason: undefined,
+    };
+    record.inflight = inflight;
+    let prepared: PreparedPrompt;
+    try {
+      prepared = await prepare();
+    } catch (error) {
+      if (record.inflight === inflight) record.inflight = undefined;
+      throw error;
+    }
+    if (record.inflight !== inflight || inflight.cancelRequested) {
       settlePrompt(record);
       return { stopReason: await inflight.completion.promise };
-    });
+    }
+    try {
+      record.handle.agent.followup(
+        createUserMessage({
+          content: [...prepared.content],
+          source:
+            prepared.displayContent === undefined
+              ? { kind: 'user' as const }
+              : {
+                  kind: 'user' as const,
+                  opennekoDisplayContent: prepared.displayContent,
+                },
+        }),
+      );
+    } catch (error) {
+      record.inflight = undefined;
+      throw RequestError.internalError(undefined, `Prompt was not queued: ${errorChain(error)}`);
+    }
+    settlePrompt(record);
+    return { stopReason: await inflight.completion.promise };
+  };
 
   const makeAgent = (nextConnection: AcpConnection): AcpAgent => {
     connection = nextConnection;
@@ -552,10 +544,11 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
       async closeSession(params) {
         requireOpen();
         const record = await requireReadyOwned(params.sessionId);
-        promptAdmission.cancel(params.sessionId);
         owned.delete(params.sessionId);
         record.commandAbort?.abort(new Error('DSH Session closed.'));
+        if (record.inflight !== undefined) record.inflight.cancelRequested = true;
         record.handle.agent.cancel({ kind: 'user' });
+        settlePrompt(record);
         await record.handle.agent.whenIdle();
         await record.outputTail;
         await ctx.sessions.flush(record.handle.agent.session);
@@ -606,8 +599,6 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
         });
       },
       cancel(params) {
-        const admission = promptAdmission.cancel(params.sessionId);
-        if (admission === 'queued') return Promise.resolve();
         const record = owned.get(params.sessionId);
         if (record === undefined) return Promise.resolve();
         if (record.inflight !== undefined) record.inflight.cancelRequested = true;
@@ -1021,12 +1012,6 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
             const request = decodeDshAcpImageAttachmentReadRequest(params);
             const record = await requireReadyOwned(request.sessionId);
             const ref = findDisplayedImageAttachment(record, request.attachmentId);
-            if (ref.bytes > AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES) {
-              throw RequestError.invalidParams(
-                undefined,
-                `Image attachment '${request.attachmentId}' exceeds the OpenNeko preview limit.`,
-              );
-            }
             const stored = await ctx.attachments.readImage(ref);
             return {
               attachment: projectImageAttachmentRef(stored.ref),
@@ -1116,7 +1101,6 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
   const quiesce = (): Promise<void> => {
     if (teardown !== undefined) return teardown;
     closed = true;
-    promptAdmission.close();
     const records = [...owned.values()];
     owned.clear();
     for (const record of records) {
@@ -2743,7 +2727,6 @@ export async function admitAcpPrompt(
   let text = '';
   const content: Array<ContentBlock | number> = [];
   const images: Parameters<AttachmentStore['saveImages']>[0][number][] = [];
-  let imageBytes = 0;
   let resourceCount = 0;
   for (const block of prompt) {
     if (block.type === 'text') {
@@ -2764,26 +2747,7 @@ export async function admitAcpPrompt(
       }
       const mediaType = requireImageMediaType(block.mimeType);
       content.push(images.length);
-      if (images.length >= AGENT_IMAGE_TRANSPORT_MAX_PAYLOADS) {
-        throw RequestError.invalidParams(
-          undefined,
-          `DSH Prompt images exceed the limit of ${AGENT_IMAGE_TRANSPORT_MAX_PAYLOADS}.`,
-        );
-      }
       const data = decodeBase64Image(block.data);
-      if (data.byteLength > AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES) {
-        throw RequestError.invalidParams(
-          undefined,
-          `DSH Prompt image exceeds ${AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES} bytes.`,
-        );
-      }
-      imageBytes += data.byteLength;
-      if (imageBytes > AGENT_IMAGE_TRANSPORT_MAX_TOTAL_BYTES) {
-        throw RequestError.invalidParams(
-          undefined,
-          `DSH Prompt images exceed ${AGENT_IMAGE_TRANSPORT_MAX_TOTAL_BYTES} total bytes.`,
-        );
-      }
       images.push({
         data,
         mediaType,
@@ -2845,13 +2809,6 @@ function requireImageMediaType(
 }
 
 function decodeBase64Image(value: string): Uint8Array {
-  const maximumEncodedLength = Math.ceil(AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES / 3) * 4;
-  if (value.length > maximumEncodedLength) {
-    throw RequestError.invalidParams(
-      undefined,
-      `DSH Prompt image exceeds ${AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES} bytes.`,
-    );
-  }
   if (value.length === 0 || value.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/u.test(value)) {
     throw RequestError.invalidParams(undefined, 'Image data must be canonical base64.');
   }

@@ -31,6 +31,21 @@ import {
 } from './dsh-acp';
 
 describe('DSH ACP extension contract', () => {
+  it('accepts large image attachments while preserving exact byte metadata', () => {
+    const bytes = Buffer.alloc(5 * 1024 * 1024, 97);
+    const input = {
+      attachment: {
+        attachmentId: 'large-image',
+        mediaType: 'image/png',
+        bytes: bytes.length,
+        width: 4096,
+        height: 4096,
+      },
+      data: bytes.toString('base64'),
+    };
+    expect(decodeDshAcpImageAttachmentReadProjection(input)).toEqual(input);
+  });
+
   it('decodes exact staged validation and scoped Skill observation payloads', () => {
     expect(
       decodeDshAcpStagedSkillValidationRequest({
@@ -176,7 +191,7 @@ describe('DSH ACP extension contract', () => {
         },
         data: 'YQ==',
       }),
-    ).toThrow(/exceeds/u);
+    ).toThrow(/byte length/u);
   });
 
   it('decodes exact bounded context pressure while allowing unavailable optional fields', () => {

@@ -9,7 +9,6 @@ export * from './agent-ui-contracts';
 export * from './agent-context';
 export * from './agent-file-reference';
 export * from './agent-home';
-export * from './agent-image-transport';
 export * from './agent-availability';
 export * from './canonical-base64';
 export * from './agent-interaction-binding';

@@ -140,10 +140,6 @@ export interface DshAcpApplicationClientOptions {
   readonly createConnection?: (client: Client) => DshAcpConnection;
 }
 
-const MAX_ACTIVE_HOST_TOOL_CALLS = 2;
-const MAX_QUEUED_HOST_TOOL_CALLS_PER_SESSION = 8;
-const MAX_QUEUED_HOST_TOOL_SESSIONS = 32;
-
 interface HostToolCallRecord {
   readonly request: DshAcpDomainToolRequest;
   readonly controller: AbortController;
@@ -173,18 +169,18 @@ export class DshAcpApplicationClient {
 
   static async connect(options: DshAcpApplicationClientOptions): Promise<DshAcpApplicationClient> {
     const virtualCwd = requireAbsoluteVirtualCwd(options.virtualCwd);
-    const admission = new HostToolAdmission(options.handlers);
+    const executions = new HostToolExecutions(options.handlers);
     const projection = options.projection ?? new DshAcpProjection();
-    const protocolClient = createProtocolClient(options.handlers, admission, projection);
+    const protocolClient = createProtocolClient(options.handlers, executions, projection);
     const createConnection =
       options.createConnection ??
       ((client: Client): DshAcpConnection =>
         new ClientSideConnection(() => client, createProtocolStream(options.transport)));
     const connection = createConnection(protocolClient);
     if (connection.signal.aborted) {
-      admission.close();
+      executions.close();
     } else {
-      connection.signal.addEventListener('abort', () => admission.close(), { once: true });
+      connection.signal.addEventListener('abort', () => executions.close(), { once: true });
     }
     const initializeResponse = await connection.initialize({
       protocolVersion: PROTOCOL_VERSION,
@@ -521,7 +517,7 @@ function createProtocolStream(transport: DshAcpByteTransport) {
 
 function createProtocolClient(
   handlers: DshAcpApplicationClientHandlers,
-  admission: HostToolAdmission,
+  executions: HostToolExecutions,
   projection: DshAcpProjection,
 ): Client {
   return {
@@ -556,10 +552,10 @@ function createProtocolClient(
     },
     async extMethod(method, input) {
       if (method === DSH_ACP_EXTENSION_METHODS.executeDomainTool) {
-        return admission.execute(decodeDshAcpDomainToolRequest(input));
+        return executions.execute(decodeDshAcpDomainToolRequest(input));
       }
       if (method === DSH_ACP_EXTENSION_METHODS.cancelDomainTool) {
-        admission.cancel(decodeDshAcpDomainToolCancelRequest(input));
+        executions.cancel(decodeDshAcpDomainToolCancelRequest(input));
         return {};
       }
       throw new Error(`DSH ACP requested unsupported Host extension method ${method}.`);
@@ -619,19 +615,16 @@ function decodeSessionUpdateDelivery(
   return Object.freeze({ replay });
 }
 
-class HostToolAdmission {
+class HostToolExecutions {
   private readonly active = new Map<string, HostToolCallRecord>();
-  private readonly queued = new Map<string, HostToolCallRecord>();
-  private readonly queuesBySession = new Map<string, HostToolCallRecord[]>();
-  private readonly readySessions: string[] = [];
   private closed = false;
 
   constructor(private readonly handlers: DshAcpApplicationClientHandlers) {}
 
   execute(request: DshAcpDomainToolRequest): Promise<DshAcpDomainToolResponse> {
-    if (this.closed) throw new Error('DSH ACP Host Tool admission is closed.');
+    if (this.closed) throw new Error('DSH ACP Host Tool connection is closed.');
     const identity = hostToolIdentity(request);
-    if (this.active.has(identity) || this.queued.has(identity)) {
+    if (this.active.has(identity)) {
       throw new Error(`DSH ACP Host Tool ${identity} is already in flight.`);
     }
     const record: HostToolCallRecord = {
@@ -642,11 +635,7 @@ class HostToolAdmission {
       completion: createHostToolCompletion(),
       cancelled: false,
     };
-    if (this.canStart(request.sessionId)) {
-      this.start(record);
-    } else {
-      this.enqueue(record);
-    }
+    this.start(record);
     return record.completion.promise;
   }
 
@@ -665,16 +654,6 @@ class HostToolAdmission {
       );
       return;
     }
-    const queued = this.queued.get(identity);
-    if (queued !== undefined) {
-      queued.cancelled = true;
-      this.removeQueued(queued);
-      queued.completion.reject(
-        new Error(`DSH ACP Host Tool ${identity} was cancelled before execution.`),
-      );
-      this.schedule();
-      return;
-    }
     throw new Error(`DSH ACP cancel identity is unknown or stale: ${identity}`);
   }
 
@@ -689,37 +668,6 @@ class HostToolAdmission {
       );
     }
     this.active.clear();
-    for (const record of this.queued.values()) {
-      record.cancelled = true;
-      record.completion.reject(
-        new Error(`DSH ACP Host Tool ${record.identity} was cancelled before execution.`),
-      );
-    }
-    this.queued.clear();
-    this.queuesBySession.clear();
-    this.readySessions.length = 0;
-  }
-
-  private canStart(sessionId: string): boolean {
-    return this.active.size < MAX_ACTIVE_HOST_TOOL_CALLS && !this.hasActiveSession(sessionId);
-  }
-
-  private enqueue(record: HostToolCallRecord): void {
-    const sessionId = record.request.sessionId;
-    const queue = this.queuesBySession.get(sessionId);
-    if (queue === undefined) {
-      if (this.queuesBySession.size >= MAX_QUEUED_HOST_TOOL_SESSIONS) {
-        throw new Error('DSH ACP Host Tool queued Session limit exceeded.');
-      }
-      this.queuesBySession.set(sessionId, [record]);
-      if (!this.hasActiveSession(sessionId)) this.readySessions.push(sessionId);
-    } else {
-      if (queue.length >= MAX_QUEUED_HOST_TOOL_CALLS_PER_SESSION) {
-        throw new Error(`DSH ACP Host Tool queue limit exceeded for Session ${sessionId}.`);
-      }
-      queue.push(record);
-    }
-    this.queued.set(record.identity, record);
   }
 
   private start(record: HostToolCallRecord): void {
@@ -743,47 +691,7 @@ class HostToolAdmission {
       record.completion.reject(error);
     } finally {
       this.active.delete(record.identity);
-      const sessionQueue = this.queuesBySession.get(record.request.sessionId);
-      if (!this.closed && sessionQueue !== undefined && sessionQueue.length > 0) {
-        this.readySessions.push(record.request.sessionId);
-      }
-      this.schedule();
     }
-  }
-
-  private schedule(): void {
-    if (this.closed) return;
-    while (this.active.size < MAX_ACTIVE_HOST_TOOL_CALLS && this.readySessions.length > 0) {
-      const sessionId = this.readySessions.shift();
-      if (sessionId === undefined || this.hasActiveSession(sessionId)) continue;
-      const queue = this.queuesBySession.get(sessionId);
-      const record = queue?.shift();
-      if (queue === undefined || record === undefined) continue;
-      if (queue.length === 0) this.queuesBySession.delete(sessionId);
-      this.queued.delete(record.identity);
-      this.start(record);
-    }
-  }
-
-  private removeQueued(record: HostToolCallRecord): void {
-    const queue = this.queuesBySession.get(record.request.sessionId);
-    if (queue === undefined) throw new Error('Queued Host Tool lost its Session queue.');
-    const index = queue.indexOf(record);
-    if (index < 0) throw new Error('Queued Host Tool lost its exact queue identity.');
-    queue.splice(index, 1);
-    this.queued.delete(record.identity);
-    if (queue.length === 0) {
-      this.queuesBySession.delete(record.request.sessionId);
-      const readyIndex = this.readySessions.indexOf(record.request.sessionId);
-      if (readyIndex >= 0) this.readySessions.splice(readyIndex, 1);
-    }
-  }
-
-  private hasActiveSession(sessionId: string): boolean {
-    for (const record of this.active.values()) {
-      if (record.request.sessionId === sessionId) return true;
-    }
-    return false;
   }
 }
 

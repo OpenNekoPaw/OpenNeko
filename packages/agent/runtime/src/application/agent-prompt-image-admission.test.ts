@@ -10,8 +10,30 @@ const imageLocator = {
 };
 
 describe('Agent Prompt image admission', () => {
-  it('admits bounded reference image bytes', async () => {
-    const stat = vi.fn(async () => ({ mimeType: 'image/png' }));
+  it('preserves large inline sources and more than four images for DSH', async () => {
+    const data = Buffer.alloc(21 * 1024 * 1024, 97).toString('base64');
+    const normalizeImage = vi.fn(async (bytes: Uint8Array, mimeType: string) => ({
+      bytes,
+      mimeType,
+    }));
+    const images = Array.from({ length: 8 }, (_, index) => ({
+      name: `image-${index}.png`,
+      mimeType: 'image/png',
+      data: index === 0 ? data : 'AQID',
+    }));
+    const result = await createAdmission({ stat: vi.fn(), read: vi.fn(), normalizeImage }).admit({
+      references: [],
+      images,
+      modelSupportsImageInput: true,
+      referenceBytes: { stat: vi.fn(), read: vi.fn() },
+    });
+    expect(result).toHaveLength(8);
+    expect(result.map((image) => image.data)).toEqual(images.map((image) => image.data));
+    expect(normalizeImage).toHaveBeenCalledTimes(8);
+  });
+
+  it('reads reference image bytes using the exact authorized resource size', async () => {
+    const stat = vi.fn(async () => ({ mimeType: 'image/png', byteLength: 3 }));
     const read = vi.fn(async () => ({
       bytes: new Uint8Array([1, 2, 3]),
       mimeType: 'image/png',
@@ -38,12 +60,27 @@ describe('Agent Prompt image admission', () => {
     ]);
     expect(read).toHaveBeenCalledWith(
       { label: 'board.png', contentLocator: imageLocator },
-      { maxBytes: 20 * 1024 * 1024 },
+      { maxBytes: 3 },
     );
   });
 
+  it('rejects changed reference size before normalizing or publishing the image', async () => {
+    const stat = vi.fn(async () => ({ mimeType: 'image/png', byteLength: 4 }));
+    const read = vi.fn(async () => ({ bytes: new Uint8Array([1, 2, 3]), mimeType: 'image/png' }));
+    const normalizeImage = vi.fn();
+    await expect(
+      createAdmission({ stat, read, normalizeImage }).admit({
+        references: [{ label: 'board.png', contentLocator: imageLocator }],
+        images: [],
+        modelSupportsImageInput: true,
+        referenceBytes: { stat, read },
+      }),
+    ).rejects.toThrow(/changed size/u);
+    expect(normalizeImage).not.toHaveBeenCalled();
+  });
+
   it('rejects before reading bytes when the exact model lacks image input', async () => {
-    const stat = vi.fn(async () => ({ mimeType: 'image/png' }));
+    const stat = vi.fn(async () => ({ mimeType: 'image/png', byteLength: 3 }));
     const read = vi.fn();
     const admission = createAdmission({ stat, read });
 
@@ -106,7 +143,7 @@ describe('Agent Prompt image admission', () => {
   });
 
   it('keeps a non-image reference out of the provider image batch', async () => {
-    const stat = vi.fn(async () => ({ mimeType: 'application/pdf' }));
+    const stat = vi.fn(async () => ({ mimeType: 'application/pdf', byteLength: 3 }));
     const read = vi.fn();
     const admission = createAdmission({ stat, read });
 
@@ -122,7 +159,7 @@ describe('Agent Prompt image admission', () => {
   });
 
   it('rejects a failed authorized read without publishing a partial batch', async () => {
-    const stat = vi.fn(async () => ({ mimeType: 'image/png' }));
+    const stat = vi.fn(async () => ({ mimeType: 'image/png', byteLength: 3 }));
     const read = vi.fn(async () => {
       throw new Error('content-missing');
     });

@@ -30,7 +30,7 @@ describe('provider image normalization', () => {
     await expect(normalizeProviderImage(jpeg, 'image/png')).rejects.toThrow(/does not match/u);
   });
 
-  it('bounds an oversized image to the canonical JPEG payload', async () => {
+  it('preserves source resolution and encoding for DSH image processing', async () => {
     const bytes = await sharp({
       create: { width: 4096, height: 8, channels: 3, background: '#ffffff' },
     })
@@ -40,7 +40,8 @@ describe('provider image normalization', () => {
     const normalized = await normalizeProviderImage(bytes, 'image/png');
     const metadata = await sharp(normalized.bytes).metadata();
 
-    expect(normalized.mimeType).toBe('image/jpeg');
-    expect(Math.max(metadata.width ?? 0, metadata.height ?? 0)).toBeLessThanOrEqual(2048);
+    expect(normalized.mimeType).toBe('image/png');
+    expect(normalized.bytes).toEqual(bytes);
+    expect(metadata.width).toBe(4096);
   });
 });

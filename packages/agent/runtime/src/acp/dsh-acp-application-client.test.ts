@@ -774,6 +774,71 @@ describe('DshAcpApplicationClient', () => {
     expect(handlers.onSessionUpdate).toHaveBeenCalledTimes(1);
   });
 
+  it.each([false, true])(
+    'forwards long session histories and terminal updates (replay: %s)',
+    async (replay) => {
+      const handlers = createHandlers();
+      const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
+      const client = await DshAcpApplicationClient.connect({
+        transport: unusedTransport,
+        virtualCwd: '/virtual/workspace',
+        handlers,
+        createConnection: fixture.createConnection,
+      });
+      const protocolClient = fixture.readProtocolClient();
+      await protocolClient.extNotification?.('openneko/session/event', {
+        sessionId: 'long-session',
+        sequence: 0,
+        time: 1_000,
+        type: 'turn/start',
+        data: { turn: 0 },
+        replay,
+      });
+      for (let index = 0; index < 300; index += 1) {
+        await protocolClient.sessionUpdate?.({
+          sessionId: 'long-session',
+          _meta: { opennekoSequence: index * 2 + 1, opennekoTurn: 0, opennekoReplay: replay },
+          update: {
+            sessionUpdate: 'tool_call',
+            toolCallId: `call-${index}`,
+            title: 'read',
+            status: 'pending',
+          },
+        });
+        await protocolClient.sessionUpdate?.({
+          sessionId: 'long-session',
+          _meta: { opennekoSequence: index * 2 + 2, opennekoTurn: 0, opennekoReplay: replay },
+          update: {
+            sessionUpdate: 'tool_call_update',
+            toolCallId: `call-${index}`,
+            status: 'completed',
+          },
+        });
+      }
+      await protocolClient.extNotification?.('openneko/session/event', {
+        sessionId: 'long-session',
+        sequence: 601,
+        time: 2_000,
+        type: 'turn/end',
+        data: { turn: 0, reason: 'success' },
+        replay,
+      });
+      expect(handlers.onSessionUpdate).toHaveBeenCalledTimes(600);
+      expect(handlers.onSessionUpdate).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({ toolCallId: 'call-299', status: 'completed' }),
+        }),
+        { replay },
+      );
+      expect(handlers.onSessionEvent).toHaveBeenCalledTimes(2);
+      expect(client.projection.snapshot('long-session')).toMatchObject({ currentTurn: undefined });
+      expect(client.projection.snapshot('long-session').events).toHaveLength(602);
+      expect(client.projection.snapshot('long-session').tools.every((tool) => tool.terminal)).toBe(
+        true,
+      );
+    },
+  );
+
   it('does not forward a permission request that the projection cannot correlate', async () => {
     const handlers = createHandlers();
     const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
@@ -915,6 +980,7 @@ describe('DshAcpApplicationClient', () => {
 
   it('cancels the exact inflight Host Tool and rejects a late success', async () => {
     const generation = deferred<DshAcpDomainToolResponse>();
+    const sibling = deferred<DshAcpDomainToolResponse>();
     const handlers = createHandlers();
     const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
     await DshAcpApplicationClient.connect({
@@ -925,7 +991,12 @@ describe('DshAcpApplicationClient', () => {
     });
     const protocolClient = fixture.readProtocolClient();
     let handlerSignal: AbortSignal | undefined;
-    vi.mocked(handlers.executeDomainTool).mockImplementation((_request, signal) => {
+    let siblingSignal: AbortSignal | undefined;
+    vi.mocked(handlers.executeDomainTool).mockImplementation((request, signal) => {
+      if (request.toolCallId === 'call-sibling') {
+        siblingSignal = signal;
+        return sibling.promise;
+      }
       handlerSignal = signal;
       return generation.promise;
     });
@@ -939,6 +1010,15 @@ describe('DshAcpApplicationClient', () => {
       operation: 'submit',
       input: {},
     });
+    const siblingExecution = protocolClient.extMethod?.('openneko/domain-tool/execute', {
+      sessionId: 'session-1',
+      turn: 0,
+      toolCallId: 'call-sibling',
+      sandboxMode: 'workspace-write',
+      tool: 'openneko_generation',
+      operation: 'submit',
+      input: {},
+    });
     await protocolClient.extMethod?.('openneko/domain-tool/cancel', {
       sessionId: 'session-1',
       turn: 0,
@@ -946,8 +1026,14 @@ describe('DshAcpApplicationClient', () => {
     });
 
     expect(handlerSignal?.aborted).toBe(true);
+    expect(siblingSignal?.aborted).toBe(false);
     await expect(execution).rejects.toThrow(/cancelled during execution/);
     generation.resolve({ outcome: 'success', result: { late: true } });
+    sibling.resolve({ outcome: 'success', result: { sibling: true } });
+    await expect(siblingExecution).resolves.toEqual({
+      outcome: 'success',
+      result: { sibling: true },
+    });
   });
 
   it('rejects a stale cancel identity without aborting a sibling call', async () => {
@@ -989,7 +1075,7 @@ describe('DshAcpApplicationClient', () => {
     await expect(execution).resolves.toEqual({ outcome: 'success', result: {} });
   });
 
-  it('rejects duplicate identity and applies bounded fair admission across Sessions', async () => {
+  it('rejects duplicate identity without serializing or limiting independent Host Tools', async () => {
     const generation = deferred<DshAcpDomainToolResponse>();
     const handlers = createHandlers();
     const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
@@ -1050,15 +1136,15 @@ describe('DshAcpApplicationClient', () => {
     const firstB = execute('session-b', 'call-b1');
     const secondA = execute('session-a', 'call-a2');
     const firstC = execute('session-c', 'call-c1');
-    expect(started).toEqual(['call-a1', 'call-b1']);
+    expect(started).toEqual(['call-a1', 'call-b1', 'call-a2', 'call-c1']);
 
     pending.get('call-b1')?.resolve({ outcome: 'success', result: {} });
     await firstB;
-    expect(started).toEqual(['call-a1', 'call-b1', 'call-c1']);
+    expect(started).toHaveLength(4);
 
     pending.get('call-a1')?.resolve({ outcome: 'success', result: {} });
     await firstA;
-    expect(started).toEqual(['call-a1', 'call-b1', 'call-c1', 'call-a2']);
+    expect(started).toHaveLength(4);
 
     pending.get('call-c1')?.resolve({ outcome: 'success', result: {} });
     pending.get('call-a2')?.resolve({ outcome: 'success', result: {} });
@@ -1067,20 +1153,19 @@ describe('DshAcpApplicationClient', () => {
     const active = deferred<DshAcpDomainToolResponse>();
     vi.mocked(handlers.executeDomainTool).mockImplementation(() => active.promise);
 
-    const activeA = execute('session-a', 'call-a0');
-    const activeB = execute('session-b', 'call-b0');
-    const queuedA = Array.from({ length: 8 }, (_, index) =>
-      execute('session-a', `call-a${index + 1}`),
+    vi.mocked(handlers.executeDomainTool).mockClear();
+    const sameSession = Array.from({ length: 16 }, (_, index) =>
+      execute('session-a', `call-a${index}`),
     );
-    await expect(execute('session-a', 'call-a9')).rejects.toThrow(
-      /queue limit exceeded.*session-a/,
+    const otherSessions = Array.from({ length: 40 }, (_, index) =>
+      execute(`session-other-${index}`, `call-other-${index}`),
     );
-    const sibling = execute('session-c', 'call-c0');
+    expect(handlers.executeDomainTool).toHaveBeenCalledTimes(56);
 
     fixture.connection.signal.dispatchEvent(new Event('abort'));
     active.resolve({ outcome: 'success', result: {} });
-    const settled = await Promise.allSettled([activeA, activeB, ...queuedA, sibling]);
-    expect(settled).toHaveLength(11);
+    const settled = await Promise.allSettled([...sameSession, ...otherSessions]);
+    expect(settled).toHaveLength(56);
     expect(settled.every((result) => result.status === 'rejected')).toBe(true);
   });
 

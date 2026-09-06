@@ -1,4 +1,4 @@
-import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment';
+import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment';
 import { describe, expect, it, vi } from 'vitest';
 
 import { admitAcpPrompt } from './index';
@@ -133,18 +133,29 @@ describe('DSH ACP image prompt admission', () => {
     expect(saveImages).toHaveBeenCalledTimes(1);
   });
 
-  it('rejects an oversized image count before persisting any attachment', async () => {
-    const saveImages = vi.fn();
-    await expect(
-      admitAcpPrompt(
-        Array.from({ length: 5 }, () => ({
-          type: 'image' as const,
-          data: 'YQ==',
-          mimeType: 'image/png',
-        })),
-        { saveImages },
-      ),
-    ).rejects.toThrow(/limit of 4/u);
-    expect(saveImages).not.toHaveBeenCalled();
+  it('passes large batches unchanged to the DSH attachment owner', async () => {
+    const data = Buffer.alloc(5 * 1024 * 1024, 97);
+    const saveImages = vi.fn<AttachmentStore['saveImages']>(async (images) =>
+      images.map((image, index) => ({
+        attachmentId: `attachment-${index}` as ImageAttachmentRef['attachmentId'],
+        mediaType: image.mediaType,
+        bytes: image.data.byteLength,
+        width: 4096,
+        height: 4096,
+      })),
+    );
+    const result = await admitAcpPrompt(
+      Array.from({ length: 5 }, () => ({
+        type: 'image' as const,
+        data: data.toString('base64'),
+        mimeType: 'image/png',
+      })),
+      { saveImages },
+    );
+    expect(result).toHaveLength(5);
+    expect(saveImages).toHaveBeenCalledTimes(1);
+    for (const image of saveImages.mock.calls[0]![0]) {
+      expect(Buffer.from(image.data).equals(data)).toBe(true);
+    }
   });
 });

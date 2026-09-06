@@ -1,10 +1,4 @@
-import {
-  AGENT_IMAGE_TRANSPORT_MAX_PAYLOADS,
-  AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES,
-  AGENT_IMAGE_TRANSPORT_MAX_TOTAL_BYTES,
-  requireCanonicalBase64,
-  type DshComposerImageInput,
-} from '@neko/agent-contracts';
+import { requireCanonicalBase64, type DshComposerImageInput } from '@neko/agent-contracts';
 import type { ContentLocator } from '@neko/content-domain';
 
 import { normalizeProviderImage } from '../provider/image-batch-transport';
@@ -19,7 +13,9 @@ export interface AgentPromptReference {
 }
 
 export interface AgentPromptReferenceBytePort {
-  stat(reference: AgentPromptReference): Promise<{ readonly mimeType?: string }>;
+  stat(
+    reference: AgentPromptReference,
+  ): Promise<{ readonly mimeType?: string; readonly byteLength: number }>;
   read(
     reference: AgentPromptReference,
     options: { readonly maxBytes: number },
@@ -69,12 +65,17 @@ export function createAgentPromptImageAdmissionService(options?: {
           mimeType,
           load: async () => {
             const loaded = await input.referenceBytes.read(reference, {
-              maxBytes: AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES,
+              maxBytes: stat.byteLength,
             });
             const loadedMimeType = requireSupportedImageMimeType(loaded.mimeType, reference.label);
             if (loadedMimeType !== mimeType) {
               throw new Error(
                 `Agent Prompt image '${reference.label}' changed MIME while it was read.`,
+              );
+            }
+            if (loaded.bytes.byteLength !== stat.byteLength) {
+              throw new Error(
+                `Agent Prompt image '${reference.label}' changed size while it was read.`,
               );
             }
             return loaded.bytes;
@@ -98,14 +99,8 @@ export function createAgentPromptImageAdmissionService(options?: {
           'The selected Agent model does not support image input. Select an image-capable Agent model and retry.',
         );
       }
-      if (candidates.length > AGENT_IMAGE_TRANSPORT_MAX_PAYLOADS) {
-        throw new Error(
-          `Agent Prompt images exceed the limit of ${AGENT_IMAGE_TRANSPORT_MAX_PAYLOADS}.`,
-        );
-      }
 
       const admitted: AgentPromptImage[] = [];
-      let totalBytes = 0;
       for (const candidate of candidates) {
         const loaded = await candidate.load();
         const normalized = await normalizeImage(loaded, candidate.mimeType);
@@ -113,12 +108,6 @@ export function createAgentPromptImageAdmissionService(options?: {
           normalized.mimeType,
           candidate.label,
         );
-        totalBytes += normalized.bytes.byteLength;
-        if (totalBytes > AGENT_IMAGE_TRANSPORT_MAX_TOTAL_BYTES) {
-          throw new Error(
-            `Agent Prompt images exceed the total payload limit of ${AGENT_IMAGE_TRANSPORT_MAX_TOTAL_BYTES} bytes.`,
-          );
-        }
         admitted.push({
           source: candidate.source,
           data: Buffer.from(normalized.bytes).toString('base64'),
@@ -136,11 +125,6 @@ function decodeCanonicalBase64Image(data: string, label: string): Uint8Array {
     `Agent Prompt image '${label}' must use canonical base64.`,
   );
   const bytes = Buffer.from(canonical, 'base64');
-  if (bytes.byteLength > AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES) {
-    throw new Error(
-      `Agent Prompt image '${label}' exceeds ${AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES} source bytes.`,
-    );
-  }
   return bytes;
 }
 
