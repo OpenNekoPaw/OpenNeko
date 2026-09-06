@@ -9,7 +9,6 @@ import { fileURLToPath } from 'node:url';
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
 const ts = require('typescript');
-const exceptionPath = 'quality/ledgers/package-boundary-exceptions.json';
 const dependencySections = ['dependencies', 'optionalDependencies', 'peerDependencies'];
 const manifestDependencySections = [...dependencySections, 'devDependencies'];
 
@@ -104,45 +103,27 @@ export function inspectNonCanonicalPackageNaming({ path: entryPath, source }) {
   return findings;
 }
 
-export function reconcileBoundaryExceptions(findings, ledger) {
-  const observed = new Map(findings.map((entry) => [fingerprint(entry), entry]));
-  const approved = new Map((ledger.exceptions ?? []).map((entry) => [fingerprint(entry), entry]));
-  return {
-    unapproved: findings.filter((entry) => !approved.has(fingerprint(entry))),
-    staleExceptions: (ledger.exceptions ?? []).filter((entry) => !observed.has(fingerprint(entry))),
-  };
-}
-
-export function inspectApplicationResponsibility({ path: entryPath, responsibility }) {
-  return responsibility === 'business-owner'
-    ? [
-        finding(
-          'business-owner-in-app',
-          entryPath,
-          responsibility,
-          'Application roots may contain boundaries, adapters, composition, and product shell only.',
-        ),
-      ]
-    : [];
-}
-
-export function inspectCanonicalPathFixture({ path: entryPath, replacedPathReturnsSuccess }) {
-  return replacedPathReturnsSuccess
-    ? [
-        finding(
-          'replaced-path-success',
-          entryPath,
-          'replaced-success',
-          'Replaced paths must be deleted, poisoned, or fail-closed.',
-        ),
-      ]
-    : [];
-}
-
 export async function inspectPackageBoundaries(root = repositoryRoot) {
   const catalog = JSON.parse(await readFile(path.join(root, 'quality/package-roles.json'), 'utf8'));
   const packageEntries = await readPackageEntries(root, catalog);
   const findings = packageEntries.flatMap((entry) => inspectPackageManifestBoundary(entry));
+  const applications = (await readdir(path.join(root, 'apps'), { withFileTypes: true }))
+    .filter(
+      (entry) =>
+        entry.isDirectory() && existsSync(path.join(root, 'apps', entry.name, 'package.json')),
+    )
+    .map((entry) => entry.name)
+    .sort();
+  if (JSON.stringify(applications) !== JSON.stringify(['neko-desktop'])) {
+    findings.push(
+      finding(
+        'application-root',
+        'apps',
+        applications.join(', '),
+        'The application composition root is apps/neko-desktop.',
+      ),
+    );
+  }
   const workspaceByName = [...packageEntries].sort(
     (left, right) => right.manifest.name.length - left.manifest.name.length,
   );
@@ -205,61 +186,59 @@ export async function inspectPackageBoundaries(root = repositoryRoot) {
   }
 
   const appEntry = await readApplicationEntry(root);
-  if (appEntry) {
-    findings.push(
-      ...inspectNonCanonicalPackageNaming({
-        path: `${appEntry.path}/package.json`,
-        source: JSON.stringify(appEntry.manifest),
-      }),
-    );
-    const sourceRoot = path.join(root, appEntry.path, 'src');
-    for (const file of await findFiles(sourceRoot, isProductionSource)) {
-      const source = await readFile(file, 'utf8');
-      const relativeFile = repositoryPath(root, file);
-      findings.push(...inspectNonCanonicalPackageNaming({ path: relativeFile, source }));
-      for (const specifier of extractImportSpecifiers(source)) {
-        const target = workspaceByName.find(
-          (candidate) =>
-            specifier === candidate.manifest.name ||
-            specifier.startsWith(`${candidate.manifest.name}/`),
+  findings.push(
+    ...inspectNonCanonicalPackageNaming({
+      path: `${appEntry.path}/package.json`,
+      source: JSON.stringify(appEntry.manifest),
+    }),
+  );
+  const sourceRoot = path.join(root, appEntry.path, 'src');
+  for (const file of await findFiles(sourceRoot, isProductionSource)) {
+    const source = await readFile(file, 'utf8');
+    const relativeFile = repositoryPath(root, file);
+    findings.push(...inspectNonCanonicalPackageNaming({ path: relativeFile, source }));
+    for (const specifier of extractImportSpecifiers(source)) {
+      const target = workspaceByName.find(
+        (candidate) =>
+          specifier === candidate.manifest.name ||
+          specifier.startsWith(`${candidate.manifest.name}/`),
+      );
+      if (target && !declaresDependency(appEntry.manifest, target.manifest.name)) {
+        findings.push(
+          finding(
+            'undeclared-workspace-dependency',
+            relativeFile,
+            target.manifest.name,
+            'Production workspace imports must be declared in the consumer manifest.',
+          ),
         );
-        if (target && !declaresDependency(appEntry.manifest, target.manifest.name)) {
+      }
+      if (target) {
+        const subpath =
+          specifier === target.manifest.name
+            ? '.'
+            : `.${specifier.slice(target.manifest.name.length)}`;
+        if (!isExportedSubpath(target.manifest.exports, subpath)) {
           findings.push(
             finding(
-              'undeclared-workspace-dependency',
-              relativeFile,
-              target.manifest.name,
-              'Production workspace imports must be declared in the consumer manifest.',
-            ),
-          );
-        }
-        if (target) {
-          const subpath =
-            specifier === target.manifest.name
-              ? '.'
-              : `.${specifier.slice(target.manifest.name.length)}`;
-          if (!isExportedSubpath(target.manifest.exports, subpath)) {
-            findings.push(
-              finding(
-                'unexported-package-import',
-                relativeFile,
-                specifier,
-                'Consumers must use an explicitly exported package entry.',
-              ),
-            );
-          }
-        }
-        const privateTarget = resolvePrivateSourceImport(root, file, specifier);
-        if (privateTarget) {
-          findings.push(
-            finding(
-              'private-source-import',
+              'unexported-package-import',
               relativeFile,
               specifier,
-              'Applications must not import workspace package src/* implementation.',
+              'Consumers must use an explicitly exported package entry.',
             ),
           );
         }
+      }
+      const privateTarget = resolvePrivateSourceImport(root, file, specifier);
+      if (privateTarget) {
+        findings.push(
+          finding(
+            'private-source-import',
+            relativeFile,
+            specifier,
+            'Applications must not import workspace package src/* implementation.',
+          ),
+        );
       }
     }
   }
@@ -297,56 +276,11 @@ export async function inspectPackageBoundaries(root = repositoryRoot) {
   const deduplicated = [
     ...new Map(findings.map((entry) => [fingerprint(entry), entry])).values(),
   ].sort(compareFinding);
-  const ledger = await readExceptionLedger(root);
-  const reconciliation = reconcileBoundaryExceptions(deduplicated, ledger);
-  const ledgerFindings = validateExceptionLedger(ledger);
   return {
-    status:
-      reconciliation.unapproved.length === 0 &&
-      reconciliation.staleExceptions.length === 0 &&
-      ledgerFindings.length === 0
-        ? 'passed'
-        : 'failed',
+    status: deduplicated.length === 0 ? 'passed' : 'failed',
     checkedPackages: packageEntries.length,
-    observedFindings: deduplicated,
-    unapproved: reconciliation.unapproved,
-    staleExceptions: reconciliation.staleExceptions,
-    ledgerFindings,
+    findings: deduplicated,
   };
-}
-
-function validateExceptionLedger(ledger) {
-  const findings = [];
-  if (
-    !ledger ||
-    typeof ledger !== 'object' ||
-    Array.isArray(ledger) ||
-    Object.keys(ledger).join('\0') !== 'exceptions'
-  ) {
-    findings.push('exception ledger must contain exactly the exceptions collection');
-  }
-  if (!Array.isArray(ledger.exceptions)) {
-    findings.push('exception ledger exceptions must be an array');
-    return findings;
-  }
-  const seen = new Set();
-  for (const [index, entry] of ledger.exceptions.entries()) {
-    const label = `exceptions[${index}]`;
-    const expectedKeys = ['owner', 'path', 'removalTask', 'rule', 'subject'];
-    const keys = Object.keys(entry).sort();
-    if (keys.join('\0') !== expectedKeys.sort().join('\0')) {
-      findings.push(`${label} must contain exactly ${expectedKeys.join(', ')}`);
-    }
-    for (const key of expectedKeys) {
-      if (typeof entry[key] !== 'string' || entry[key].length === 0) {
-        findings.push(`${label}.${key} must be a non-empty string`);
-      }
-    }
-    const key = fingerprint(entry);
-    if (seen.has(key)) findings.push(`${label} duplicates ${key}`);
-    seen.add(key);
-  }
-  return findings;
 }
 
 async function readPackageEntries(root, catalog) {
@@ -362,18 +296,10 @@ async function readPackageEntries(root, catalog) {
 
 async function readApplicationEntry(root) {
   const appPath = 'apps/neko-desktop';
-  try {
-    return {
-      path: appPath,
-      manifest: JSON.parse(await readFile(path.join(root, appPath, 'package.json'), 'utf8')),
-    };
-  } catch {
-    return undefined;
-  }
-}
-
-async function readExceptionLedger(root) {
-  return JSON.parse(await readFile(path.join(root, exceptionPath), 'utf8'));
+  return {
+    path: appPath,
+    manifest: JSON.parse(await readFile(path.join(root, appPath, 'package.json'), 'utf8')),
+  };
 }
 
 function expectedPackageName(packagePath) {
@@ -478,7 +404,7 @@ function resolveConfigurationTarget(file, target) {
   return undefined;
 }
 
-function extractImportSpecifiers(source) {
+export function extractImportSpecifiers(source) {
   const sourceFile = ts.createSourceFile(
     'boundary-source.tsx',
     source,
@@ -497,11 +423,19 @@ function extractImportSpecifiers(source) {
     } else if (
       ts.isCallExpression(node) &&
       node.arguments.length === 1 &&
-      ts.isStringLiteral(node.arguments[0]) &&
+      ts.isStringLiteralLike(node.arguments[0]) &&
       (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
         (ts.isIdentifier(node.expression) && node.expression.text === 'require'))
     ) {
       specifiers.push(node.arguments[0].text);
+    }
+    if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference) &&
+      node.moduleReference.expression &&
+      ts.isStringLiteralLike(node.moduleReference.expression)
+    ) {
+      specifiers.push(node.moduleReference.expression.text);
     }
     ts.forEachChild(node, visit);
   };
@@ -513,8 +447,9 @@ async function findFiles(root, predicate) {
   let entries;
   try {
     entries = await readdir(root, { withFileTypes: true });
-  } catch {
-    return [];
+  } catch (error) {
+    if (error.code === 'ENOENT') return [];
+    throw error;
   }
   const files = [];
   for (const entry of entries) {

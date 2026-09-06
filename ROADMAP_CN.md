@@ -32,7 +32,7 @@ Chara 与 Interactive World 是独立实验方向，不是当前阶段的承诺�
 - 用户已经在真实项目中以低效方式解决该问题，而不只是表达概念兴趣；
 - 最小原型出现持续创建、再次体验、保存或分享等重复行为；
 - 能定义并验证一条使用真实 owner、模型和持久事实的最小创作—体验闭环；
-- 生产 Tool scope、Skill 指导和 Agent Evaluation 使用同一条 canonical 路径，不能用仅存在于
+- 生产 Tool scope、Skill 指导和 Agent 行为验证 使用同一条 canonical 路径，不能用仅存在于
   fixture 或提示词中的 Assistant/global 创建路径代替真实 Desktop 行为。
 
 Chara 的最小闭环必须覆盖“精确 Project 中创建并填充草稿 → 用户确认不可变版本 → 显式同步或导入

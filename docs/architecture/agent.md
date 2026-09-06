@@ -138,7 +138,7 @@ settings storage 建成平行产品配置。单项能力 decode 失败只隔离�
 依赖该目录的对话 Provider，但现有记录和无关设置保持可用。
 
 Host 是 provider credential authority。Secret 只能通过 Desktop SecretStorage concrete adapter 和受限 Host
-port 解析，不能进入 ACP logs/stdout、DSH Session、Renderer、Evaluation facts 或 domain artifacts。Renderer
+port 解析，不能进入 ACP logs/stdout、DSH Session、Renderer、诊断事实 或 domain artifacts。Renderer
 不得访问 Node/Electron、本地绝对路径、raw cache path、credential 或进程 handle。
 
 ACP stdout 必须保持协议纯净；日志走 stderr 或受控 diagnostic。reverse request、permission 与资源授权必须

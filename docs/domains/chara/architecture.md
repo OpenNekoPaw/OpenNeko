@@ -14,7 +14,7 @@
 | 依赖 | Chara core/application 只依赖 package contracts 和注入 port；不导入 Electron、React、Agent runtime implementation、World/Game 私有实现或本地资源路径。                                                     |
 | 接口 | 使用一个严格 Conversation mode union、精确 Storyline/Version/Node ref、稳定 continuity identity、owner-qualified context/presentation ref；无 optional bag、active identity 或 internal contract version。 |
 | 扩展 | 新 Storyline 内容扩展 node authoring context；新资料/表现类型由真实 owning provider 扩展 public union/registry；不得在 Chara 或 Desktop 添加 wildcard/default adapter。                                    |
-| 测试 | producer codec、application service、Node repository、Agent consumer、Host/Webview、Desktop delegation 和真实 Electron/Agent Evaluation 分层验证，旧路径必须 poison/fail-closed。                          |
+| 测试 | producer codec、application service、Node repository、Agent consumer、Host/Webview、Desktop delegation 和真实 Electron/Agent 行为验证 分层验证，旧路径必须 poison/fail-closed。                          |
 
 ## Owner 与事实模型
 

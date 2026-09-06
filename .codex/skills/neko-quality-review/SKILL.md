@@ -53,10 +53,9 @@ Source of truth:
 
    If a narrower package command is enough, prefer the smallest reliable command and state why.
 
-   For residual/debt and redundancy checks:
+   For unused code and dependency cleanup:
 
    ```bash
-   pnpm check:legacy-debt
    pnpm check:unused
    ```
 
@@ -67,9 +66,9 @@ Source of truth:
    pnpm package:desktop
    ```
 
-   For Agent Evaluation platform, scenario, debug automation protocol, or exported fact-contract changes, run the key-free harness gate documented by the platform. This is not real Agent behavior acceptance. If the change can alter prompt or Skill behavior, capability/tool registration or routing, provider/model selection, AgentSession multi-turn/queue/async/recovery behavior, or Desktop Agent event projection, use `neko-agent-evaluation` to produce focused path-level evidence. Review the recorded blocking condition and residual risk when a real case could not run. Do not infer that scenario assertions passed unless the current runner executed an evaluator for them.
+   For Agent changes, run focused owning-package contract tests and applicable DSH qualification. If the change can alter prompt or Skill behavior, capability/tool routing, provider/model selection, session lifecycle, recovery, or Desktop projection, also manually exercise the real Electron application with the complete application owner and a real provider. User-facing acceptance must start through visible product controls. Record untested behavior, execution blockers, and residual risk explicitly; deterministic tests and final-answer text alone are not real Agent behavior evidence.
 
-   For implemented user-visible UI behavior, use `neko-ui-validation` to derive the affected function inventory and produce focused functional, visual, and adjacent-regression evidence. Treat a failed or blocked UI result as an advisory finding or follow-up, not a blocking code finding, unless the same defect is independently established by a functional, contract, security, or code-gate failure. Renderer/Webview behavior that crosses focus, CSP, media preview, host messaging, native resources, or lifecycle boundaries should still use an isolated Electron Desktop fixture through the production package or controlled app runtime; browser-only evidence cannot prove those boundaries.
+   For implemented user-visible UI behavior, derive the affected function inventory and manually check functional behavior, visual states, and adjacent regressions in the real Electron application. Treat a failed or blocked UI result as an advisory finding or follow-up, not a blocking code finding, unless the same defect is independently established by a functional, contract, security, or code-gate failure. Renderer/Webview behavior that crosses focus, CSP, media preview, host messaging, native resources, or lifecycle boundaries should still use an isolated Electron Desktop fixture through the production package or controlled app runtime; browser-only evidence cannot prove those boundaries.
 
 ## Review Checklist
 
@@ -90,7 +89,7 @@ Always check:
 - Content-path acceptance is path-level acceptance: tests should assert the canonical service/provider/message/adapter was hit and prove direct fs reads, cache-path lookup, package-local path conversion, or Webview URI bypass did not produce a successful result.
 - Async flows handle errors, cancellation, resource disposal, and races.
 - Public contracts include tests or clear validation evidence.
-- Residual/debt terms are scanned and classified. New matches are removed, renamed, or recorded in the appropriate machine-readable debt ledger with owner, replacement, validation, and removal criteria.
+- Boundary checks fail on violations. Any allowed external or user-domain version occurrence has precise ownership and evidence; a debt baseline must not turn violations into success.
 - Redundant code is checked within the package and across adjacent packages: unused exports/files, duplicated helpers, repeated adapters, repeated protocol/message handlers, duplicated components, copied tests, and package-local implementations that should be shared.
 - Cross-cutting behavior includes shared foundation audit evidence: style/theme/i18n/logger/error/config/path/file IO/resource/contract changes reused or updated `@neko/shared`, `@neko/ui`, `@neko/host`, `@neko/content-domain`, `@neko/media`, or the owning domain before adding package-local logic.
 - No package-local parallel design system, theme token set, i18n runtime, logger/error taxonomy, project file IO, cache manager, path resolver, media client, or shared contract copy unless the owning boundary, extraction criteria, and validation command are documented.
@@ -104,10 +103,10 @@ Always check:
 Add domain checks as needed:
 
 - Webview/UX: component reuse audit, layout, theme, focus, keyboard, i18n, and runtime evidence from an isolated Electron Desktop fixture; browser-only screenshots do not count as Desktop IPC/lifecycle acceptance evidence.
-- UI reference review: when run, inspect the `neko-ui-validation` applicability decision, acceptance inventory, authoritative runtime, functional and visual results, adjacent regression evidence, and residual risk. Report findings accurately without making this advisory review a code gate.
+- UI reference review: when run, inspect the manual UI review applicability decision, acceptance inventory, authoritative runtime, functional and visual results, adjacent regression evidence, and residual risk. Report findings accurately without making this advisory review a code gate.
 - Node/media: focused package tests, FFmpeg/ffprobe fixture or smoke, resource disposal, and performance evidence when relevant.
 - Wire/shared: package-owned producer and consumer use the same canonical contract and preserve runtime isolation.
-- Agent/AI: tool contracts, permissions, Journal/traceability, failure recovery, and whether the change triggers `neko-agent-evaluation`. When triggered, check focused canonical-path evidence, forbidden-fallback evidence, assertion support in the current runner, and either a real Desktop complete-session result or an explicit blocking condition with residual risk. Protocol-only, mock-only, or final-text-only results do not count as Agent behavior acceptance.
+- Agent/AI: tool contracts, permissions, traceability, failure recovery, and focused path-level evidence from owning-package tests and the actual Desktop application. Verify exact identities, canonical owner/handler/provider, failure isolation, and either the applicable real-provider result or an explicit execution blocker and coverage gap.
 - Content access/path: canonical locator transfer, bounded Host reads, authorized writes, transparent derived storage, authorized Renderer projection, and path containment.
 - Assets: manifest and locator contracts, path safety, derived projection invalidation, and trust boundaries.
 
@@ -135,4 +134,4 @@ For post-implementation self-review, summarize:
 - Risk level and affected areas.
 - Key architecture/contract decisions.
 - Validation performed.
-- Remaining follow-up, especially engine CLI smoke, `serve` integration, Webview runtime smoke, UX evidence, or performance baselines.
+- Remaining follow-up, especially Electron runtime checks, media integration, UX evidence, or performance measurements.

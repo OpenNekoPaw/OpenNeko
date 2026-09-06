@@ -313,7 +313,7 @@ Capability Host、generic Tool registry、MCP wrapper 或 External Processor。
 
 | 包                          | 主要职责                                                                                              | 关键边界                                                                                                                                                                                                                                           |
 | --------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@neko/agent-*`             | Conversation binding、DSH application/projection、typed Tool bridge、配置契约与管理 UI                | DSH 独占 Agent/Session/Skill/MCP/Plugin runtime authority；OpenNeko runtime host-neutral，宿主与 UI adapter 分离；行为变更需真实 evaluation                                                                                                        |
+| `@neko/agent-*`             | Conversation binding、DSH application/projection、typed Tool bridge、配置契约与管理 UI                | DSH 独占 Agent/Session/Skill/MCP/Plugin runtime authority；OpenNeko runtime host-neutral，宿主与 UI adapter 分离；行为变更需真实 Agent 验证                                                                                                        |
 | `@neko/generation-domain`   | canonical Recipe、生成请求/结果契约、execution port 与 recoverable Job                                | 统一拥有 Recipe/default/validation/request projection；只依赖共享契约；不读取配置或 credential；provider runtime 由现有 Host 注入；不创建独立 Host 或 UI                                                                                           |
 | `@neko/chara-domain`        | 工作区 Character、全局 Character/不可变版本、同步、Dialogue/Room、表现、故事线与记忆                  | Agent Tool 只查询或填充精确 Project 下已有的 fresh CharacterProject；全局首版由显式 global catalog command、同步或单版本 ZIP 导入提交；运行只消费精确全局版本，不存在 installed/adaptation/recovery 生命周期                                       |
 | `@neko/world-domain`        | 工作区 World、全局 World/不可变版本、同步、World Run/Save/branch 与 World Experience                  | Agent Tool 只查询或填充精确 Project 下已有的 fresh WorldProject；全局首版由显式 global catalog command、同步或单版本 ZIP 导入提交；Run/Save 固定精确版本，不存在 installed/adaptation/recovery 生命周期                                            |
@@ -323,7 +323,7 @@ Capability Host、generic Tool registry、MCP wrapper 或 External Processor。
 | `@neko/cut-*`               | Timeline、视频编辑、媒体控制与导出                                                                    | Webview 管时间线交互；Desktop Main 管 editor/export adapter；媒体走 `@neko/media` 窄端口                                                                                                                                                           |
 | `@neko/model-*`             | 模型 contract、临时 3D Reference staging、Three.js runtime 与模型 UI                                  | Domain 独立拥有模型与 Three Reference contract；Webview 只接收授权 Model source；不拥有 Preview session、原始路径或持久 3D 项目                                                                                                                    |
 | `@neko/preview-*`           | 授权只读预览、viewer registry 与媒体 session                                                          | Preview 将授权 descriptor 映射为 Model source，并只通过 `@neko/model-webview` 公开懒加载入口接入；Agent/Generation 直接消费 `@neko/model-domain`                                                                                                   |
-| `@neko/professional-apps-*` | 受产品 profile 约束的专业应用发现、device-local 配置、启动与语义 handoff                              | contracts/node/Webview 分层；Desktop 只实现 sender/OS/path trust adapter；应用检测不安装应用、Skill、MCP、节点或模型；外部工具 API 与任务状态由 DSH MCP 扩展拥有，Generation 不代理 ComfyUI workflow                                                |
+| `@neko/professional-apps-*` | 受产品 profile 约束的专业应用发现、device-local 配置、启动与语义 handoff                              | contracts/node/Webview 分层；Desktop 只实现 sender/OS/path trust adapter；应用检测不安装应用、Skill、MCP、节点或模型；外部工具 API 与任务状态由 DSH MCP 扩展拥有，Generation 不代理 ComfyUI workflow                                               |
 | `apps/neko-desktop`         | Electron 产品组合根                                                                                   | 拥有 Main/preload/renderer 生命周期、typed IPC、安全策略、平台打包与产品验收；领域实现仍由 `@neko/*` 包拥有                                                                                                                                        |
 
 ## Character / World 顶级领域聚合包
@@ -483,7 +483,6 @@ Generation 或 Canvas 自动更新文件的权限。
 ```bash
 pnpm check:deps
 pnpm check:agent-boundaries
-pnpm check:legacy-debt
 pnpm check:unused
 pnpm test
 pnpm build

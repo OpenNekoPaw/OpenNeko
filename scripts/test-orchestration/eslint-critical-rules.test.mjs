@@ -9,7 +9,7 @@ const UNUSED_VARIABLE_RULE = '@typescript-eslint/no-unused-vars';
 const HOOK_ORDER_RULE = 'react-hooks/rules-of-hooks';
 const CONSOLE_RULE = 'no-console';
 const TIMING_ATTACK_RULE = 'security/detect-possible-timing-attacks';
-const FUNCTIONAL_MJS_PATTERN = 'scripts/desktop-functional/**/*.mjs';
+const DESKTOP_MJS_PATTERN = 'scripts/desktop/**/*.mjs';
 const CONSOLE_BOUNDARY_FILES = ['packages/shared/src/logger/console-logger.ts'];
 
 test('critical production ESLint rules remain blocking', () => {
@@ -31,17 +31,13 @@ test('possible timing attacks remain blocking', () => {
   assert.equal(readLastRuleSetting(TIMING_ATTACK_RULE, isSecurityConfig), 'error');
 });
 
-test('Desktop functional MJS sources remain inside the lint gate', async () => {
+test('Desktop development and packaging tools remain inside the lint gate', async () => {
   const ignoredPatterns = eslintConfig.flatMap((config) => config.ignores ?? []);
   const packageJson = JSON.parse(await readFile('package.json', 'utf8'));
 
   assert.equal(ignoredPatterns.includes('**/*.mjs'), false);
-  assert.equal(readLastRuleSetting(CONSOLE_RULE, isFunctionalMjsConfig), 'error');
-  assert.match(packageJson.scripts?.lint ?? '', /scripts\/desktop-functional\/\*\*\/\*\.mjs/u);
-  assert.match(
-    packageJson.scripts?.lint ?? '',
-    /packages\/\*\/webview\/functional\/\*\*\/\*\.mjs/u,
-  );
+  assert.equal(readLastRuleSetting(CONSOLE_RULE, isDesktopMjsConfig), 'error');
+  assert.match(packageJson.scripts?.lint ?? '', /scripts\/desktop\/\*\*\/\*\.mjs/u);
 });
 
 function readLastRuleSetting(ruleName, predicate) {
@@ -72,8 +68,8 @@ function isSecurityConfig(config) {
   return config.rules?.['security/detect-object-injection'] === 'off';
 }
 
-function isFunctionalMjsConfig(config) {
-  return config.files?.includes(FUNCTIONAL_MJS_PATTERN) === true;
+function isDesktopMjsConfig(config) {
+  return config.files?.includes(DESKTOP_MJS_PATTERN) === true;
 }
 
 function isTestConfig(config) {

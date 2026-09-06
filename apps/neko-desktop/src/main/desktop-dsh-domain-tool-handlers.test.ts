@@ -110,10 +110,7 @@ describe('Desktop DSH domain Tool handlers', () => {
   it('reads an EPUB image entry through the Content-owned DSH image path', async () => {
     const root = await createRoot();
     await copyFile(
-      new URL(
-        '../../../../scripts/agent-eval/shared-fixtures/document-image-workspace/synthetic-document.epub',
-        import.meta.url,
-      ),
+      new URL('../../../../scripts/fixtures/documents/synthetic-document.epub', import.meta.url),
       join(root, 'story.epub'),
     );
     const handlers = createDesktopDshDomainToolHandlers({

@@ -46,9 +46,6 @@ importers:
         specifier: ^0.34.5
         version: 0.34.5
     devDependencies:
-      '@electron/asar':
-        specifier: 3.4.1
-        version: 3.4.1
       '@eslint/js':
         specifier: ^9.39.4
         version: 9.39.4
@@ -82,12 +79,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: 4.1.2
         version: 4.1.2(vitest@4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@7.3.6(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0)))
-      '@zip.js/zip.js':
-        specifier: ^2.8.26
-        version: 2.8.26
       dependency-cruiser:
-        specifier: ^16.10.4
-        version: 16.10.4
+        specifier: 17.4.3
+        version: 17.4.3
       eslint:
         specifier: ^9.39.4
         version: 9.39.4(jiti@2.7.0)
@@ -112,9 +106,6 @@ importers:
       prettier:
         specifier: ^3.9.1
         version: 3.9.1
-      smol-toml:
-        specifier: 1.6.1
-        version: 1.6.1
       spdx-expression-parse:
         specifier: 3.0.1
         version: 3.0.1
@@ -314,6 +305,9 @@ importers:
       postcss:
         specifier: 8.5.6
         version: 8.5.6
+      sharp:
+        specifier: ^0.35.3
+        version: 0.35.3(@types/node@24.13.3)
       tailwindcss:
         specifier: 3.4.19
         version: 3.4.19(tsx@4.21.0)(yaml@2.9.0)
@@ -5525,10 +5519,6 @@ packages:
     resolution: {integrity: sha512-yPVavfyCcRhmorC7rWlkHn15b4wDVgVmBA7kV4QVBsF7kv/9TKJAbAXVTxvTnwP8HHKjRCJDClKbciiYS7p0DQ==}
     engines: {node: '>=16'}
 
-  commander@13.1.0:
-    resolution: {integrity: sha512-/rFeCpNJQbhSZjGVwO9RFV3xPqbnERS8MmIQzCtD/zl6gpJuV/bMLuN92oG3F7d8oDEHHRrujSXNUr8fpjntKw==}
-    engines: {node: '>=18'}
-
   commander@14.0.3:
     resolution: {integrity: sha512-H+y0Jo/T1RZ9qPP4Eh1pkcQcLRglraJaSLoyOtHxu6AapkjWVCy2Sit1QQ4x3Dng8qDlSsZEet7g5Pq06MvTgw==}
     engines: {node: '>=20'}
@@ -5705,9 +5695,9 @@ packages:
     resolution: {integrity: sha512-g7nH6P6dyDioJogAAGprGpCtVImJhpPk/roCzdb3fIh61/s/nPsfR6onyMwkCAR/OlC3yBC0lESvUoQEAssIrw==}
     engines: {node: '>= 0.8'}
 
-  dependency-cruiser@16.10.4:
-    resolution: {integrity: sha512-hrxVOjIm8idZ9ZVDGSyyG3SHiNcEUPhL6RTEmO/3wfQWLepH5pA3nuDMMrcJ1DkZztFA7xg3tk8OVO+MmwwH9w==}
-    engines: {node: ^18.17||>=20}
+  dependency-cruiser@17.4.3:
+    resolution: {integrity: sha512-L4GLuAvmXevWnPCIaFfOz6eD92c+yY+pDgVqgufrLDnW3xYA799CSZQlly2r2N13nhAlnZY6VzY7Rx5pHNvk2w==}
+    engines: {node: ^20.12||^22||>=24}
     hasBin: true
 
   dequal@2.0.3:
@@ -5817,6 +5807,10 @@ packages:
 
   enhanced-resolve@5.21.3:
     resolution: {integrity: sha512-QyL119InA+XXEkNLNTPCXPugSvOfhwv0JOlGNzvxs0hZaiHLNvXSpudUWsOlsXGWJh8G6ckCScEkVHfX3kw/2Q==}
+    engines: {node: '>=10.13.0'}
+
+  enhanced-resolve@5.22.1:
+    resolution: {integrity: sha512-6QEuw3zoX1SJQc7b87aBXke/no+mG2bTBgw29gWMQonLmpEkWoCAVkl+M49e48AZlWzxiDzDZzYdp6kobcyLww==}
     engines: {node: '>=10.13.0'}
 
   enhanced-resolve@5.24.3:
@@ -6909,10 +6903,6 @@ packages:
     resolution: {integrity: sha512-qX2bG48pTqYRVmDB37rn/6PT7LcR8T7oAX3bf99u1Tt1nzxYfxkgqDwUwolPlXweM0XzBOBFzSx4kfp7KP1s/w==}
     engines: {node: '>=6'}
 
-  memoize@10.2.0:
-    resolution: {integrity: sha512-DeC6b7QBrZsRs3Y02A6A7lQyzFbsQbqgjI6UW0GigGWV+u1s25TycMr0XHZE4cJce7rY/vyw2ctMQqfDkIhUEA==}
-    engines: {node: '>=18'}
-
   merge-descriptors@2.0.0:
     resolution: {integrity: sha512-Snk314V5ayFLhp3fkUREub6WtjBfPdCPY1Ln8/8munuLuiYhsABgBVWsozAG+MWMbVEvcdcpbi9R7ww22l9Q3g==}
     engines: {node: '>=18'}
@@ -7941,6 +7931,11 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
+  semver@7.8.1:
+    resolution: {integrity: sha512-rkVq3IXh+4FDGch+KwzX3aV9W3kO54GyEgpvBzSyctDA6Xtd7RJQV1xmXbeQp5v7+VzLOfVqiutSE6GICgPFvg==}
+    engines: {node: '>=10'}
+    hasBin: true
+
   semver@7.8.5:
     resolution: {integrity: sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA==}
     engines: {node: '>=10'}
@@ -8201,9 +8196,6 @@ packages:
   tar@6.2.1:
     resolution: {integrity: sha512-DZ4yORTwrbTj/7MZYq2w+/ZFdI6OZ/f9SFHR+71gIVUZhOQPHzVCLpvRnPgyaMpfWxxk/4ONva3GQSyNIKRv6A==}
     engines: {node: '>=10'}
-
-  teamcity-service-messages@0.1.14:
-    resolution: {integrity: sha512-29aQwaHqm8RMX74u2o/h1KbMLP89FjNiMxD9wbF2BbWOnbM+q+d1sCEC+MqCc4QW3NJykn77OMpTFw/xTHIc0w==}
 
   terser@5.49.0:
     resolution: {integrity: sha512-SNiDnXyHSrxVcIOtVbULzcTmniUiwcV7Nwdyj1twVubeTmbjoa8p69KKDpfkdoOavuM4/GRm1+ykI8qqnavHoA==}
@@ -8593,9 +8585,9 @@ packages:
     resolution: {integrity: sha512-6i/00NBjP4yGPs+caKSyRfpTF/8Torsu0MOW3mMzIbhgISFder8i7xbqgHlLMwJrdiN8ndBV3UA1/AfzPSr+jg==}
     engines: {node: '>=10.13.0'}
 
-  watskeburt@4.2.3:
-    resolution: {integrity: sha512-uG9qtQYoHqAsnT711nG5iZc/8M5inSmkGCOp7pFaytKG2aTfIca7p//CjiVzAE4P7hzaYuCozMjNNaLgmhbK5g==}
-    engines: {node: ^18||>=20}
+  watskeburt@5.0.3:
+    resolution: {integrity: sha512-g9CXukMjazlJJVQ3OHzXsnG25KFYgSgKMIyoJrD8ggr0DbS9UNF7OzIqWmmKKBMedkxj3T01uqEaGnn+y7QhMA==}
+    engines: {node: ^20.12||^22.13||>=24.0}
     hasBin: true
 
   wcwidth@1.0.1:
@@ -12547,8 +12539,6 @@ snapshots:
 
   commander@11.1.0: {}
 
-  commander@13.1.0: {}
-
   commander@14.0.3: {}
 
   commander@2.20.3: {}
@@ -12703,30 +12693,26 @@ snapshots:
 
   depd@2.0.0: {}
 
-  dependency-cruiser@16.10.4:
+  dependency-cruiser@17.4.3:
     dependencies:
       acorn: 8.16.0
       acorn-jsx: 5.3.2(acorn@8.16.0)
       acorn-jsx-walk: 2.0.0
       acorn-loose: 8.5.2
       acorn-walk: 8.3.5
-      ajv: 8.20.0
-      commander: 13.1.0
-      enhanced-resolve: 5.21.3
+      commander: 14.0.3
+      enhanced-resolve: 5.22.1
       ignore: 7.0.5
       interpret: 3.1.1
       is-installed-globally: 1.0.0
       json5: 2.2.3
-      memoize: 10.2.0
-      picocolors: 1.1.1
       picomatch: 4.0.4
       prompts: 2.4.2
       rechoir: 0.8.0
       safe-regex: 2.1.1
-      semver: 7.8.0
-      teamcity-service-messages: 0.1.14
+      semver: 7.8.1
       tsconfig-paths-webpack-plugin: 4.2.0
-      watskeburt: 4.2.3
+      watskeburt: 5.0.3
 
   dequal@2.0.3: {}
 
@@ -12848,6 +12834,11 @@ snapshots:
       once: 1.4.0
 
   enhanced-resolve@5.21.3:
+    dependencies:
+      graceful-fs: 4.2.11
+      tapable: 2.3.3
+
+  enhanced-resolve@5.22.1:
     dependencies:
       graceful-fs: 4.2.11
       tapable: 2.3.3
@@ -14225,10 +14216,6 @@ snapshots:
       mimic-fn: 2.1.0
       p-is-promise: 2.1.0
 
-  memoize@10.2.0:
-    dependencies:
-      mimic-function: 5.0.1
-
   merge-descriptors@2.0.0: {}
 
   merge-stream@2.0.0: {}
@@ -15379,6 +15366,8 @@ snapshots:
 
   semver@7.8.0: {}
 
+  semver@7.8.1: {}
+
   semver@7.8.5: {}
 
   send@1.2.1:
@@ -15738,8 +15727,6 @@ snapshots:
       minizlib: 2.1.2
       mkdirp: 1.0.4
       yallist: 4.0.0
-
-  teamcity-service-messages@0.1.14: {}
 
   terser@5.49.0:
     dependencies:
@@ -16184,7 +16171,7 @@ snapshots:
     dependencies:
       graceful-fs: 4.2.11
 
-  watskeburt@4.2.3: {}
+  watskeburt@5.0.3: {}
 
   wcwidth@1.0.1:
     dependencies:

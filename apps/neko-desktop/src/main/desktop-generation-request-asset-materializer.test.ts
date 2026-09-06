@@ -17,10 +17,7 @@ describe('Desktop Generation request asset materializer', () => {
     const root = await mkdtemp(join(tmpdir(), 'openneko-generation-entry-'));
     roots.push(root);
     await copyFile(
-      new URL(
-        '../../../../scripts/agent-eval/shared-fixtures/document-image-workspace/synthetic-document.epub',
-        import.meta.url,
-      ),
+      new URL('../../../../scripts/fixtures/documents/synthetic-document.epub', import.meta.url),
       join(root, 'story.epub'),
     );
     const locator = {

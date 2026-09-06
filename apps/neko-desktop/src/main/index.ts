@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { watch } from 'node:fs';
-import { lstat, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import {
   app,
@@ -78,14 +78,6 @@ import {
   readProjectEntityResources,
   readProjectEntityManagementResources,
 } from '@neko/entity-node';
-import {
-  consumeDesktopFunctionalWorkspaceSelection,
-  resolveDesktopFunctionalCutExport,
-  resolveDesktopFunctionalWorkspace,
-  resolveDesktopFunctionalWindowMode,
-  resolveDesktopFunctionalUserDataRoot,
-  resolveDesktopRuntimeHome,
-} from './desktop-functional-fixture';
 import { createDesktopGenerationExecutionProviderResolver } from './desktop-generation-execution-provider';
 import { createEncryptedDesktopSecretPort } from './encrypted-desktop-secret-port';
 import {
@@ -301,11 +293,6 @@ void bootstrapDesktop().catch((error: unknown) => {
 async function bootstrapDesktop(): Promise<void> {
   registerDesktopOpenNekoScheme();
   app.enableSandbox();
-  const functionalUserDataRoot = resolveDesktopFunctionalUserDataRoot({
-    argv: process.argv,
-    environment: process.env,
-  });
-  if (functionalUserDataRoot) app.setPath('userData', functionalUserDataRoot);
   if (!app.requestSingleInstanceLock()) {
     app.quit();
     return;
@@ -322,12 +309,7 @@ async function startDesktop(): Promise<void> {
   }
 
   const userData = app.getPath('userData');
-  const homedir = resolveDesktopRuntimeHome({
-    systemHome: app.getPath('home'),
-    userDataRoot: userData,
-    argv: process.argv,
-    environment: process.env,
-  });
+  const homedir = app.getPath('home');
   const consoleTransport = new ConsoleTransport();
   const managedLogTransports = new Set<ManagedFileLogTransport>();
   const createManagedLogTransport = (owner: string, filePath: string) => {
@@ -352,20 +334,6 @@ async function startDesktop(): Promise<void> {
   setAgentRootLogger(agentLogger);
   const workspaceLoggers = new Map<string, ILogger>();
   logger.info('Desktop Electron runtime is ready.');
-  const functionalWorkspace = resolveDesktopFunctionalWorkspace({
-    argv: process.argv,
-    environment: process.env,
-    fixtureHome: homedir,
-  });
-  const functionalWorkspacePickerCancellationMarker = functionalWorkspace
-    ? path.join(homedir, '.openneko-functional-cancel-workspace-picker-once')
-    : undefined;
-  const functionalWindowMode = resolveDesktopFunctionalWindowMode(process.argv);
-  const functionalCutExport = resolveDesktopFunctionalCutExport({
-    argv: process.argv,
-    environment: process.env,
-    workspace: functionalWorkspace,
-  });
   const globalStorage = resolveGlobalStorageLayout(homedir);
   const assistantSpaceId = 'assistant-space:local-user';
   const localMetadataStore = createNodeSqliteLocalMetadataStore({ homedir });
@@ -844,7 +812,6 @@ async function startDesktop(): Promise<void> {
       return result.canceled ? undefined : result.filePaths;
     },
     selectExportDestination: async ({ identity, workspacePath, outputName, container }) => {
-      if (functionalCutExport) return functionalCutExport;
       const owner = requireOwnerWindow(identity.windowId);
       const fileName = `${outputName.replace(/\.(?:mp4|mov)$/iu, '')}.${container}`;
       const result = await dialog.showSaveDialog(owner, {
@@ -1436,7 +1403,6 @@ async function startDesktop(): Promise<void> {
       });
     },
     selectGlobalMediaLibrarySource: async (windowId) => {
-      if (functionalWorkspace) return path.join(homedir, 'global-media', 'workspace');
       const owner = requireOwnerWindow(windowId);
       const chinese = app.getLocale().toLocaleLowerCase().startsWith('zh');
       const result = await dialog.showOpenDialog(owner, {
@@ -1452,9 +1418,6 @@ async function startDesktop(): Promise<void> {
       return selectedPath;
     },
     selectGlobalAssetSources: async (windowId) => {
-      if (functionalWorkspace) {
-        return [path.join(functionalWorkspace, 'media', 'frame.png')];
-      }
       const owner = requireOwnerWindow(windowId);
       const chinese = app.getLocale().toLocaleLowerCase().startsWith('zh');
       const result = await dialog.showOpenDialog(owner, {
@@ -2940,27 +2903,13 @@ async function startDesktop(): Promise<void> {
     selectWorkspaceGrant: async (event) => {
       const owner = BrowserWindow.fromWebContents(event.sender);
       if (!owner) throw new Error('Desktop workspace picker requires a registered BrowserWindow.');
-      if (
-        functionalWorkspacePickerCancellationMarker &&
-        (await consumeFunctionalMarker(functionalWorkspacePickerCancellationMarker))
-      ) {
-        return undefined;
-      }
-      const selectedPath =
-        (functionalWorkspace
-          ? await consumeDesktopFunctionalWorkspaceSelection({
-              argv: process.argv,
-              fixtureHome: homedir,
-            })
-          : undefined) ??
-        functionalWorkspace ??
-        (await chooseWorkspaceDirectory(
-          owner,
-          resolveDefaultWorkspacePath(
-            homedir,
-            applicationSettings.current.preferences.defaultWorkspaceLocator,
-          ),
-        ));
+      const selectedPath = await chooseWorkspaceDirectory(
+        owner,
+        resolveDefaultWorkspacePath(
+          homedir,
+          applicationSettings.current.preferences.defaultWorkspaceLocator,
+        ),
+      );
       return selectedPath
         ? { label: path.basename(selectedPath), hostResource: selectedPath }
         : undefined;
@@ -2968,7 +2917,6 @@ async function startDesktop(): Promise<void> {
     selectContentWorkspace: async (event) => {
       const owner = BrowserWindow.fromWebContents(event.sender);
       if (!owner) throw new Error('Desktop workspace picker requires a registered BrowserWindow.');
-      if (functionalWorkspace) return functionalWorkspace;
       const result = await dialog.showOpenDialog(owner, {
         title: 'Open Content Project',
         buttonLabel: 'Open Project',
@@ -3075,7 +3023,7 @@ async function startDesktop(): Promise<void> {
           appHost.applicationIdentity.instanceId,
         );
         sendLifecycleEvent(createdWindow, event);
-        if (functionalWindowMode === 'visible') createdWindow.show();
+        createdWindow.show();
       });
       createdWindow.webContents.on('render-process-gone', (_event, details) => {
         if (shutdownStarted) return;
@@ -3280,16 +3228,6 @@ async function startDesktop(): Promise<void> {
   }
 }
 
-async function consumeFunctionalMarker(markerPath: string): Promise<boolean> {
-  try {
-    await rm(markerPath, { force: false });
-    return true;
-  } catch (error) {
-    if (isMissingPathError(error)) return false;
-    throw error;
-  }
-}
-
 async function chooseWorkspaceDirectory(
   owner: BrowserWindow,
   defaultPath: string,
@@ -3409,10 +3347,6 @@ function readDevelopmentUrl(): string | undefined {
   return typeof MAIN_WINDOW_VITE_DEV_SERVER_URL === 'undefined'
     ? undefined
     : MAIN_WINDOW_VITE_DEV_SERVER_URL;
-}
-
-function isMissingPathError(error: unknown): boolean {
-  return error instanceof Error && Reflect.get(error, 'code') === 'ENOENT';
 }
 
 function portableSnapshotName(displayName: string): string {

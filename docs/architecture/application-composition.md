@@ -226,8 +226,7 @@ audio/video、Preview 与 Agent 展示使用原生 `<audio>` / `<video>`；文�
 
 ## 验证
 
-- `node scripts/check-desktop-only-topology.mjs` 证明只有一个应用根、canonical package root 和无
-  removed-host production path。
+- `pnpm check:package-boundaries` 验证唯一应用根、package identity、public export 和跨包依赖。
 - `pnpm check:application-boundaries` 验证 package-to-app、renderer-to-Node/Electron 和
   Main-to-React 依赖违规。
 - 新增或实质修改 `apps/neko-desktop` 生产模块时，适用的功能 OpenSpec、PR 或交付说明必须说明它为何需要 Application

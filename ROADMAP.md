@@ -37,7 +37,7 @@ direction can become a core navigation, release capability, or current product c
 - users already solve that job inefficiently in real projects rather than merely expressing interest;
 - a minimum prototype produces repeated creation, return experience, save, or sharing behavior; and
 - a smallest creation-to-experience loop works through real owners, models, and durable facts; and
-- production Tool scope, Skill guidance, and Agent Evaluation exercise the same canonical path rather
+- production Tool scope, Skill guidance, and real-provider Agent validation exercise the same canonical path rather
   than substituting an Assistant/global creation path that exists only in fixtures or prompts.
 
 The minimum Chara loop is exact-Project draft creation and filling, user-confirmed immutable version,

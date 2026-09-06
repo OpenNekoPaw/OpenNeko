@@ -50,14 +50,14 @@ OpenSpec 只用于能够独立命名，并改变系统能力边界、核心产�
 | --------------------- | ----------------------------------------------------- |
 | 提交前仓库门禁        | `pnpm gate:local`                                     |
 | 架构与应用边界        | `pnpm check`、`pnpm check:application-boundaries`     |
-| 未使用代码与残留      | `pnpm check:unused`、`pnpm check:legacy-debt`         |
-| Agent 边界与评测平台  | `pnpm check:agent-boundaries`、`pnpm test:agent:eval` |
+| 未使用代码与残留      | `pnpm check:unused`                                   |
+| Agent 边界与真实行为  | `pnpm check:agent-boundaries`；真实 Electron 人工验证 |
 | Desktop headless 路径 | `pnpm test:functional:headless`                       |
-| Desktop 图形化 UI     | `pnpm test:local:ui`                                  |
+| Desktop 图形化 UI     | `pnpm dev:desktop`，人工操作受影响功能                |
 | Desktop 发布包        | `pnpm package:desktop`                                |
 
-真实 API、hidden/visible Desktop、重复 matrix、消融和图形化验收只通过开发者显式本地入口运行，不加入
-GitHub Actions 或通用 CI/gate。UI 视觉结果是参考证据，不替代 contract、安全、功能或代码门禁。
+UI 与真实 Agent 行为由开发者在真实 Electron 中人工验收，不加入 GitHub Actions 或通用 CI/gate。
+自动化测试验证确定性行为、契约和资源生命周期；静态文本断言与截图名称不能证明功能或视觉通过。
 
 ## 交付
 

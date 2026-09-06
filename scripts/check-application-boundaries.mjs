@@ -2,12 +2,16 @@
 
 import { readdir, readFile } from 'node:fs/promises';
 import { dirname, relative, resolve } from 'node:path';
+import { builtinModules } from 'node:module';
+import { extractImportSpecifiers } from './check-package-boundaries.mjs';
 import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const productionRoots = ['apps/neko-desktop/src', 'packages'];
+const nodeModules = new Set(builtinModules.map((name) => name.replace(/^node:/u, '')));
 
 export async function checkApplicationBoundaries(root = repositoryRoot) {
+  const catalog = JSON.parse(await readFile(resolve(root, 'quality/package-roles.json'), 'utf8'));
   const findings = [];
   const files = [];
   for (const sourceRoot of productionRoots) {
@@ -17,7 +21,24 @@ export async function checkApplicationBoundaries(root = repositoryRoot) {
   for (const file of files) {
     const relativeFile = normalize(relative(root, file));
     const source = await readFile(file, 'utf8');
+    const owner = catalog.packages.find((entry) => relativeFile.startsWith(`${entry.path}/src/`));
+    const browserSource =
+      relativeFile.startsWith('apps/neko-desktop/src/renderer/') ||
+      owner?.roles.includes('webview') ||
+      (owner?.runtimes.includes('browser') && !owner.runtimes.includes('node'));
+    const hostSource =
+      relativeFile.startsWith('apps/neko-desktop/src/main/') ||
+      (owner && !owner.runtimes.includes('browser'));
+
     for (const specifier of extractImportSpecifiers(source)) {
+      const target = catalog.packages.find(
+        (entry) =>
+          entry.name && (specifier === entry.name || specifier.startsWith(`${entry.name}/`)),
+      );
+      const nodePackage =
+        target?.roles.includes('node') &&
+        !target.roles.includes('contracts') &&
+        !target.runtimes.includes('browser');
       if (relativeFile.startsWith('packages/') && isApplicationImport(specifier)) {
         findings.push(`${relativeFile}: packages must not import application code (${specifier})`);
       }
@@ -25,16 +46,22 @@ export async function checkApplicationBoundaries(root = repositoryRoot) {
         findings.push(`${relativeFile}: host-neutral packages must not import Electron`);
       }
       if (
-        relativeFile.startsWith('apps/neko-desktop/src/renderer/') &&
-        (specifier === 'electron' || specifier.startsWith('node:'))
+        browserSource &&
+        (specifier === 'electron' ||
+          nodePackage ||
+          specifier.startsWith('node:') ||
+          nodeModules.has(specifier) ||
+          /\/node(?:\/|$)/u.test(specifier))
       ) {
         findings.push(`${relativeFile}: Desktop renderer must remain browser-safe (${specifier})`);
       }
       if (
-        relativeFile.startsWith('apps/neko-desktop/src/main/') &&
-        (specifier === 'react' || specifier.startsWith('react-dom'))
+        hostSource &&
+        (specifier === 'react' ||
+          specifier.startsWith('react/') ||
+          /^react-dom(?:\/|$)/u.test(specifier))
       ) {
-        findings.push(`${relativeFile}: Desktop Main must not depend on React`);
+        findings.push(`${relativeFile}: Host code must not depend on React`);
       }
     }
   }
@@ -62,22 +89,8 @@ async function collectProductionFiles(directory, files) {
   }
 }
 
-function extractImportSpecifiers(source) {
-  return [
-    ...source.matchAll(
-      /\b(?:import|export)\s+(?:type\s+)?(?:[^'"]*?\s+from\s+)?['"]([^'"]+)['"]/gu,
-    ),
-    ...source.matchAll(/\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/gu),
-  ].map((match) => match[1]);
-}
-
 function isApplicationImport(specifier) {
-  return (
-    specifier.startsWith('apps/') ||
-    specifier.includes('/apps/neko-desktop/') ||
-    specifier.includes('/apps/neko-vscode/') ||
-    specifier.includes('/apps/neko-tui/')
-  );
+  return specifier.startsWith('apps/') || /(?:^|\/)apps\//u.test(specifier);
 }
 
 function normalize(value) {

@@ -5,5 +5,5 @@
 
 ## 2. Acceptance
 
-- [ ] 2.1 Prove the concise summary, durable Workspace document, Canvas reference node and recommended operation through deterministic contracts and focused Agent Evaluation, while ordinary answers and failed writes remain non-persistent.
+- [ ] 2.1 Prove the concise summary, durable Workspace document, Canvas reference node and recommended operation through deterministic contracts and focused real-provider Agent validation, while ordinary answers and failed writes remain non-persistent.
 - [ ] 2.2 Promote the accepted capability requirements to canonical documentation and remove the completed proposal artifacts.

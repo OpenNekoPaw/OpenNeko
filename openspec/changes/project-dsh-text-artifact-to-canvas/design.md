@@ -39,7 +39,7 @@ A failed or missing write creates no reference node. Invalid, absolute, escaping
 
 ## Risks / Trade-offs
 
-- [Model may still omit `write`] → Keep one positive natural-language Agent Evaluation case, one ordinary-answer negative case and real-provider Desktop acceptance.
+- [Model may still omit `write`] → Keep one positive natural-language real-provider Agent validation case, one ordinary-answer negative case and real-provider Desktop acceptance.
 - [The file is written but Canvas projection fails] → Preserve the file, report a delivery diagnostic and allow the idempotent Canvas delivery coordinator to retain its existing recovery semantics.
 - [Model-selected filenames may conflict] → DSH observation and write policies remain authoritative; the Agent must not silently overwrite or rename an existing target.
 - [A raw Tool path could be mistaken for a portable locator] → Admit only normalized Workspace-relative text paths, then require Content owner stat/fingerprint before Canvas mutation.

@@ -21,4 +21,4 @@ Agent 的媒体创作路线能够逐轮推进，但当前“继续”会把单�
 
 ## Impact
 
-Agent Skill 包继续拥有媒体创作方法与阶段判断，Storyboard 保持镜头规划语义，Content、Generation、Canvas 与 Cut 继续拥有各自读取、生成、投影和后期事实。Agent Evaluation 需要验证真实 Desktop 会话不会在来源或静态素材覆盖不足时跳到视频生成。
+Agent Skill 包继续拥有媒体创作方法与阶段判断，Storyboard 保持镜头规划语义，Content、Generation、Canvas 与 Cut 继续拥有各自读取、生成、投影和后期事实。Agent 行为验证 需要验证真实 Desktop 会话不会在来源或静态素材覆盖不足时跳到视频生成。
