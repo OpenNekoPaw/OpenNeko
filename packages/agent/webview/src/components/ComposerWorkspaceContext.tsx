@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type {
   AgentAuthoringAuthority,
   AgentAuthoringTargetRef,
@@ -72,6 +73,7 @@ export interface AgentComposerCanvasOption {
 }
 
 export interface AgentComposerCanvasPresentation {
+  readonly creationControl?: ReactNode;
   readonly workspaceId: string;
   readonly defaultTarget: CanvasWorkspaceTurnTarget;
   readonly options: readonly AgentComposerCanvasOption[];

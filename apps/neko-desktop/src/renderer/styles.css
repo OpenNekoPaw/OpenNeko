@@ -4742,6 +4742,10 @@ code {
   color: var(--neko-foreground);
 }
 
+.workspace-quick-create__index-trigger {
+  margin: 0;
+}
+
 .project-main-group__context-actions {
   position: relative;
   z-index: 1;

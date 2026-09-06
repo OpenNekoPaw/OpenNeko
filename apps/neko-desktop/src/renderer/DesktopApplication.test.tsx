@@ -458,6 +458,84 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
+  it('reports document-open failure in the Shell without failing the completed Agent response', async () => {
+    const base = createTextEditorShellProjection();
+    const current = base.window.workbench;
+    const interaction = current.scene.slots.interaction;
+    if (!interaction || interaction.kind !== 'agent') throw new Error('Agent fixture missing.');
+    const scope = { ...interaction.scope, conversationId: 'conversation-1' };
+    const scene = parseDesktopWorkbenchSceneProjection({
+      ...current.scene,
+      context: { ...current.scene.context, scope },
+      slots: { ...current.scene.slots, interaction: { ...interaction, phase: 'session', scope } },
+    });
+    installBridge({
+      projection: {
+        ...base,
+        window: {
+          ...base.window,
+          workbench: createDesktopWindowComposition({
+            workbenchInstanceId: current.workbenchInstanceId,
+            layout: setWorkbenchDisplayMode(current.layout, 'chat-only'),
+            scene,
+          }),
+        },
+      },
+    });
+    const bridge = window.openNekoDesktop.dshSessions;
+    vi.mocked(bridge.openWrittenFile).mockRejectedValueOnce(
+      new Error('Main View capacity reached'),
+    );
+    vi.mocked(bridge.getSnapshot).mockResolvedValue({
+      title: 'Workspace planning',
+      conversationId: 'conversation-1',
+      dshSessionId: 'dsh:conversation-1',
+      todos: [],
+      inbox: { nextTurn: [], nextStep: [] },
+      events: [
+        {
+          kind: 'tool',
+          toolCallId: 'write-1',
+          turn: 1,
+          status: 'completed',
+          title: 'write',
+          writtenFileReference: {
+            title: 'plan.md',
+            contentLocator: { file: { authority: 'workspace', path: 'plan.md' } },
+          },
+        },
+        {
+          kind: 'message',
+          role: 'assistant',
+          turn: 1,
+          step: 0,
+          text: 'Document created.',
+          messageId: 'final-1',
+          state: 'final',
+        },
+      ],
+    });
+    const { container, root } = await renderApplication();
+    const link = await screen.findByRole('button', { name: 'Open document: plan.md' });
+    await act(async () => fireEvent.click(link));
+    await waitFor(() => container.querySelector('.shell-diagnostic') !== null);
+    expect(container.querySelector('.shell-diagnostic')?.textContent).toContain(
+      'Unable to open document: Main View capacity reached',
+    );
+    expect(container.querySelectorAll('[role="alert"]')).toHaveLength(1);
+    expect(screen.getByText('Document created.')).toBeTruthy();
+    expect(bridge.cancel).not.toHaveBeenCalled();
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Dismiss notification' })),
+    );
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    await act(async () => fireEvent.click(link));
+    expect(bridge.openWrittenFile).toHaveBeenCalledTimes(2);
+    expect(bridge.openWrittenFile).toHaveBeenLastCalledWith('conversation-1', 'write-1');
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
   it('opens Settings as an overlay without replacing the current Scene', async () => {
     const assistant = createProjection();
     const getSnapshot = vi.fn(async () => assistant);
@@ -3407,6 +3485,7 @@ function installBridge({
       },
       textEditor: { execute: textEditorExecute, subscribe: vi.fn(() => () => undefined) },
       dshSessions: {
+        openWrittenFile: vi.fn(async () => undefined),
         create: vi.fn(),
         getSnapshot: vi.fn(async (conversationId: string) => ({
           conversationId,

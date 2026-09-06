@@ -208,6 +208,7 @@ export const zhCN = {
   'shell.settingsMetadataRetained':
     '未识别的应用设置元数据已原样保留（{fields}），当前设置仍可使用。',
   'shell.dismissNotification': '关闭通知',
+  'workspace.documentOpenFailed': '无法打开文档：{message}',
   'shell.conversationRecordInvalid':
     '旧会话“{conversationId}”的数据已失效并隔离，已打开新的草稿。其他会话、项目和文件均未修改。',
   'shell.conversationRecordInvalidUnknown':
@@ -449,6 +450,7 @@ export const zhCN = {
   'workspace.quickCreate.name': '名称',
   'workspace.quickCreate.nameRequired': '请输入名称。',
   'workspace.quickCreate.canvas': '新建画布',
+  'workspace.quickCreate.canvasIndex': '新增索引画布',
   'workspace.quickCreate.cut': '新建剪辑文件',
   'workspace.quickCreate.file': '新建文件',
   'workspace.quickCreate.directory': '新建文件夹',

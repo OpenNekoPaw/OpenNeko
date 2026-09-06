@@ -20,9 +20,11 @@ import type {
 
 vi.mock('@neko/ui/i18n/react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@neko/ui/i18n/react')>();
+  const { createDesktopI18n } = await import('./i18n');
+  const { i18nService } = createDesktopI18n('en');
   return {
     ...actual,
-    useTranslation: () => ({ locale: 'en' }),
+    useTranslation: () => ({ locale: 'en', t: i18nService.t.bind(i18nService) }),
   };
 });
 
@@ -322,6 +324,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('DesktopAgentSurface', () => {
@@ -460,6 +463,7 @@ describe('DesktopAgentSurface', () => {
   });
 
   it('opens a projected completed write from the Agent response link', async () => {
+    const onOpenWrittenFile = vi.fn();
     dshSessions.getSnapshot.mockResolvedValueOnce({
       ...projection,
       currentTurn: undefined,
@@ -495,16 +499,16 @@ describe('DesktopAgentSurface', () => {
         agentSurfaceId="surface-1"
         conversationId="conversation-1"
         surfaceKind="workspace"
+        onOpenWrittenFile={onOpenWrittenFile}
       />,
     );
 
     fireEvent.click(await screen.findByRole('button', { name: 'Open document: story-plan.md' }));
     await waitFor(() => {
-      expect(dshSessions.openWrittenFile).toHaveBeenCalledWith(
-        'conversation-1',
-        'tool-write-document',
-      );
+      expect(onOpenWrittenFile).toHaveBeenCalledWith('conversation-1', 'tool-write-document');
     });
+    expect(dshSessions.openWrittenFile).not.toHaveBeenCalled();
+    expect(screen.getByText('Document created.')).toBeTruthy();
   });
 
   it('coalesces stream refreshes without letting an older projection replace the latest', async () => {
@@ -975,6 +979,61 @@ describe('DesktopAgentSurface', () => {
     expect(dshSessions.getComposerConfiguration).toHaveBeenCalledTimes(2);
     expect(dshSessions.create).not.toHaveBeenCalled();
     expect(dshSessions.submit).not.toHaveBeenCalled();
+  });
+
+  it('creates an index Canvas through the supplied action and selects it after catalog refresh', async () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+      },
+    );
+    const target = { workspaceId: 'workspace-1', canvasId: 'Index.nkc' };
+    const onCreateCanvas = vi.fn(async () => {
+      dshSessions.getComposerConfiguration.mockResolvedValue({
+        ...composerConfiguration,
+        context: {
+          ...composerConfiguration.context!,
+          canvas: {
+            ...composerConfiguration.context!.canvas,
+            options: [
+              ...composerConfiguration.context!.canvas.options,
+              { target, label: 'Index.nkc' },
+            ],
+          },
+        },
+      });
+      return target.canvasId;
+    });
+    render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-workspace"
+        agentSurfaceId="surface-draft"
+        surfaceKind="workspace"
+        onCreateCanvas={onCreateCanvas}
+      />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'New index Canvas' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), {
+      target: { value: ' Index ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+    await waitFor(() => {
+      expect(screen.getByRole<HTMLSelectElement>('combobox', { name: 'Canvas index' }).value).toBe(
+        'Index.nkc',
+      );
+    });
+    expect(onCreateCanvas).toHaveBeenCalledExactlyOnceWith('Index');
+    expect(dshSessions.getComposerConfiguration).toHaveBeenLastCalledWith(
+      'workbench-1',
+      'surface-draft',
+    );
+    expect(dshSessions.create).not.toHaveBeenCalled();
+    expect(dshSessions.submit).not.toHaveBeenCalled();
+    expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull();
   });
 
   it('passes the complete Entry context presentation to the retained selector components', async () => {

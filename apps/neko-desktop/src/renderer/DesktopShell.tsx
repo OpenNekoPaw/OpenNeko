@@ -269,6 +269,7 @@ export function projectDesktopShellInteractionLocks(
 }
 
 interface ShellActions {
+  readonly onOpenWrittenFile: (conversationId: string, toolCallId: string) => void;
   readonly onSelectProject: (projectId: string) => void;
   readonly onOpenWorkspaceDirectory: () => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
@@ -294,7 +295,7 @@ interface ShellActions {
     readonly workbench: DesktopWorkbenchLayoutProjection;
     readonly mainGroupId: string;
     readonly submission: WorkspaceQuickCreateSubmission;
-  }) => Promise<void>;
+  }) => Promise<string | undefined>;
   readonly onOpenWorkspaceMainSuggestion: (input: {
     readonly projectId: string;
     readonly workspaceId: string;
@@ -607,6 +608,14 @@ function DesktopApplicationContent(): JSX.Element {
   };
   const actions: ShellActions = {
     onSelectProject: (projectId) => transitionScene({ kind: 'open-project-workspace', projectId }),
+    onOpenWrittenFile: (conversationId, toolCallId) => {
+      setDiagnostic(undefined);
+      void window.openNekoDesktop.dshSessions
+        .openWrittenFile(conversationId, toolCallId)
+        .catch((error: unknown) => {
+          setDiagnostic(t('workspace.documentOpenFailed', { message: describeError(error) }));
+        });
+    },
     onOpenWorkspaceDirectory: () => {
       const finishPending = beginPending('navigation');
       setDiagnostic(undefined);
@@ -734,6 +743,7 @@ function DesktopApplicationContent(): JSX.Element {
         throw new Error(`Desktop Workbench '${input.workbenchInstanceId}' is unavailable.`);
       }
       let retainedDiagnostic: string | undefined;
+      let createdDocumentId: string | undefined;
       await runMutation(
         'workbench',
         async () => {
@@ -751,16 +761,20 @@ function DesktopApplicationContent(): JSX.Element {
               updateWorkbench: (workbenchInstanceId, workbench) =>
                 window.openNekoDesktop.workbench.update(workbenchInstanceId, workbench),
               search: (request) => window.openNekoDesktop.resources.search(request),
+              getResourceSnapshot: (request) =>
+                window.openNekoDesktop.resources.getSnapshot(request),
               execute: (request) => window.openNekoDesktop.resources.execute(request),
               getShellSnapshot: () => window.openNekoDesktop.shell.getSnapshot(),
             },
           );
           retainedDiagnostic = outcome.retainedDiagnostic?.message;
+          createdDocumentId = outcome.createdDocumentId;
           return outcome.projection;
         },
         { rethrow: true },
       );
       if (retainedDiagnostic) setDiagnostic(retainedDiagnostic);
+      return createdDocumentId;
     },
     onOpenWorkspaceMainSuggestion: async (input) => {
       if (projection.window.workbench.workbenchInstanceId !== input.workbenchInstanceId) {
@@ -1509,6 +1523,9 @@ export function DesktopShellView({
 }): JSX.Element {
   const actions: ShellActions = {
     onSelectProject: () => undefined,
+    onOpenWrittenFile: () => {
+      throw new Error('Opening a document requires an interactive Desktop Workspace.');
+    },
     onOpenWorkspaceDirectory: () => undefined,
     onOpenConversation: () => undefined,
     onConversationBranched: () => undefined,
@@ -1976,6 +1993,35 @@ function DesktopSceneWorkbench({
               <DesktopAgentSurface
                 key={agentSurfaceProps.agentSurfaceId}
                 {...agentSurfaceProps}
+                onOpenWrittenFile={interactive ? actions.onOpenWrittenFile : undefined}
+                onCreateCanvas={
+                  workspaceScene && workspaceProject && !workspaceProject.unavailable
+                    ? async (name) => {
+                        const tab = projection.window.tabs.find(
+                          (candidate) => candidate.projectId === workspaceProject.projectId,
+                        );
+                        if (!tab)
+                          throw new Error('Workspace Canvas creation requires a Project View.');
+                        const canvasId = await actions.onQuickCreateWorkspaceContent({
+                          identity: createDesktopResourceBrowserIdentity({
+                            projectId: workspaceProject.projectId,
+                            workspaceId: workspaceProject.workspaceId,
+                            windowId: projection.window.windowId,
+                            projectViewId: tab.viewId,
+                            projectViewInstanceId: tab.viewInstanceId,
+                            rendererSessionId: projection.rendererSessionId,
+                          }),
+                          workbenchInstanceId: activeWorkbench.workbenchInstanceId,
+                          workbench: activeWorkbench.layout,
+                          mainGroupId: activeWorkbench.layout.main.activeGroupId,
+                          submission: { kind: 'canvas', name },
+                        });
+                        if (canvasId === undefined)
+                          throw new Error('Canvas creation returned no document identity.');
+                        return canvasId;
+                      }
+                    : undefined
+                }
                 conversationFeed={
                   roomInteractionOwner ? (
                     <CharacterRoomInteractionFeed
@@ -4132,14 +4178,15 @@ function MainViewGroupSurface({
   const authoringWorkspaceId = authoringAuthority?.workspaceId;
   const authoringWorkspaceGrantId = authoringAuthority?.workspaceGrantId;
   const quickCreate = useCallback(
-    (submission: WorkspaceQuickCreateSubmission) =>
-      actions.onQuickCreateWorkspaceContent({
+    async (submission: WorkspaceQuickCreateSubmission) => {
+      await actions.onQuickCreateWorkspaceContent({
         identity: resourceBrowserIdentity,
         workbenchInstanceId,
         workbench,
         mainGroupId: group.groupId,
         submission,
-      }),
+      });
+    },
     [actions, group.groupId, resourceBrowserIdentity, workbench, workbenchInstanceId],
   );
   const loadWorkspaceCanvases = useCallback(() => {

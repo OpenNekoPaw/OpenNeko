@@ -37,6 +37,10 @@ describe('Desktop Workspace quick creation', () => {
     };
     const calls: string[] = [];
     const ports = createPorts({
+      getResourceSnapshot: vi.fn(async () => {
+        calls.push('resources:snapshot');
+        return resourcesProjection;
+      }),
       updateWorkbench: vi.fn(async (_workbenchInstanceId, next) => {
         calls.push(`workbench:${next.main.activeGroupId}`);
         return shellProjection;
@@ -60,7 +64,7 @@ describe('Desktop Workspace quick creation', () => {
       }),
     });
 
-    await executeDesktopWorkspaceQuickCreation(
+    const outcome = await executeDesktopWorkspaceQuickCreation(
       {
         requestId: 'quick-create-1',
         identity,
@@ -75,10 +79,12 @@ describe('Desktop Workspace quick creation', () => {
 
     expect(calls).toEqual([
       'workbench:main:secondary',
+      'resources:snapshot',
       'search:files:',
       'execute:creative-document.create:canvas',
       'shell:snapshot',
     ]);
+    expect(outcome.createdDocumentId).toBe('Board.nkc');
     expect(ports.execute).toHaveBeenCalledWith(
       expect.objectContaining({
         route: RESOURCE_BROWSER_ROUTES.createCreativeDocument,
@@ -183,6 +189,9 @@ function createPorts(
   overrides: Partial<Mocked<DesktopWorkspaceQuickCreationPorts>> = {},
 ): Mocked<DesktopWorkspaceQuickCreationPorts> {
   return {
+    getResourceSnapshot: vi.fn<DesktopWorkspaceQuickCreationPorts['getResourceSnapshot']>(
+      async () => resourcesProjection,
+    ),
     updateWorkbench: vi.fn<DesktopWorkspaceQuickCreationPorts['updateWorkbench']>(async () =>
       Promise.resolve(shellProjection),
     ),

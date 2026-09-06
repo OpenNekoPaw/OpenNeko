@@ -227,6 +227,7 @@ export const en = {
   'shell.settingsMetadataRetained':
     'Unrecognized application settings metadata was preserved ({fields}). Your settings remain available.',
   'shell.dismissNotification': 'Dismiss notification',
+  'workspace.documentOpenFailed': 'Unable to open document: {message}',
   'shell.conversationRecordInvalid':
     "Saved conversation '{conversationId}' is no longer compatible and was isolated. A new draft is open; other conversations, projects, and files were not changed.",
   'shell.conversationRecordInvalidUnknown':
@@ -485,6 +486,7 @@ export const en = {
   'workspace.quickCreate.name': 'Name',
   'workspace.quickCreate.nameRequired': 'Enter a name.',
   'workspace.quickCreate.canvas': 'New Canvas',
+  'workspace.quickCreate.canvasIndex': 'New index Canvas',
   'workspace.quickCreate.cut': 'New Cut file',
   'workspace.quickCreate.file': 'New File',
   'workspace.quickCreate.directory': 'New Folder',

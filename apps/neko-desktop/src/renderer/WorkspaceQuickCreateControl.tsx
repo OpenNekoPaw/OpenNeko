@@ -15,7 +15,7 @@ export function WorkspaceQuickCreateControl({
 }: {
   readonly disabled?: boolean;
   readonly onCreate: (submission: WorkspaceQuickCreateSubmission) => Promise<void>;
-  readonly variant: 'tab' | 'empty';
+  readonly variant: 'tab' | 'empty' | 'canvas-index';
 }): JSX.Element {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -28,8 +28,8 @@ export function WorkspaceQuickCreateControl({
   const extension = kind === 'canvas' ? '.nkc' : kind === 'cut' ? '.otio' : undefined;
 
   useEffect(() => {
-    if (kind) inputRef.current?.focus();
-  }, [kind]);
+    if (open && kind) inputRef.current?.focus();
+  }, [kind, open]);
 
   const reset = (): void => {
     setKind(undefined);
@@ -39,6 +39,7 @@ export function WorkspaceQuickCreateControl({
   const setPopoverOpen = (next: boolean): void => {
     if (pending && !next) return;
     setOpen(next);
+    if (next && variant === 'canvas-index') setKind('canvas');
     if (!next) reset();
   };
   const submit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
@@ -64,20 +65,32 @@ export function WorkspaceQuickCreateControl({
 
   return (
     <Popover
-      align={variant === 'tab' ? 'start' : 'center'}
+      align={variant === 'empty' ? 'center' : 'start'}
       contentClassName="workspace-quick-create-popover"
       onOpenChange={setPopoverOpen}
       open={open}
       trigger={
-        variant === 'tab' ? (
+        variant !== 'empty' ? (
           <IconButton
-            className="workspace-main-quick-create__tab-trigger"
-            data-workspace-quick-create-trigger="tab"
-            disabled={disabled}
+            className={
+              variant === 'canvas-index'
+                ? 'workspace-main-quick-create__tab-trigger workspace-quick-create__index-trigger'
+                : 'workspace-main-quick-create__tab-trigger'
+            }
+            data-workspace-quick-create-trigger={variant}
+            disabled={disabled || pending}
             icon={<PlusIcon size={15} />}
-            label={t('workspace.quickCreate.open')}
+            label={t(
+              variant === 'canvas-index'
+                ? 'workspace.quickCreate.canvasIndex'
+                : 'workspace.quickCreate.open',
+            )}
             size="xs"
-            title={t('workspace.quickCreate.open')}
+            title={t(
+              variant === 'canvas-index'
+                ? 'workspace.quickCreate.canvasIndex'
+                : 'workspace.quickCreate.open',
+            )}
           />
         ) : (
           <button
@@ -129,12 +142,11 @@ export function WorkspaceQuickCreateControl({
               type="button"
               disabled={pending}
               onClick={() => {
-                setKind(undefined);
-                setName('');
-                setDiagnostic(undefined);
+                if (variant === 'canvas-index') setPopoverOpen(false);
+                else reset();
               }}
             >
-              {t('workspace.quickCreate.back')}
+              {t(variant === 'canvas-index' ? 'common.cancel' : 'workspace.quickCreate.back')}
             </button>
             <button type="submit" disabled={pending}>
               {pending ? t('workspace.quickCreate.creating') : t('workspace.quickCreate.create')}

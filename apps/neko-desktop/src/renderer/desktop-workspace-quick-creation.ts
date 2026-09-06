@@ -2,6 +2,7 @@ import {
   RESOURCE_BROWSER_ROUTES,
   ResourceBrowserOperationRejectedError,
   createResourceBrowserSearchRequest,
+  createResourceBrowserSnapshotRequest,
   parseResourceBrowserIntentRequest,
   type ResourceBrowserDiagnostic,
   type ResourceBrowserIdentity,
@@ -9,6 +10,7 @@ import {
   type ResourceBrowserIntentResult,
   type ResourceBrowserProjection,
   type ResourceBrowserSearchRequest,
+  type ResourceBrowserSnapshotRequest,
 } from '@neko/assets-domain/resource-browser/contract';
 import type { DesktopShellProjection } from '@neko/host/desktop-shell-contract';
 import type { DesktopWorkbenchLayoutProjection } from '@neko/host/desktop-workbench-contract';
@@ -26,6 +28,7 @@ export interface DesktopWorkspaceQuickCreationInput {
 }
 
 export interface DesktopWorkspaceQuickCreationPorts {
+  getResourceSnapshot(request: ResourceBrowserSnapshotRequest): Promise<ResourceBrowserProjection>;
   updateWorkbench(
     workbenchInstanceId: string,
     workbench: DesktopWorkbenchLayoutProjection,
@@ -37,6 +40,7 @@ export interface DesktopWorkspaceQuickCreationPorts {
 
 export interface DesktopWorkspaceQuickCreationOutcome {
   readonly projection: DesktopShellProjection;
+  readonly createdDocumentId?: string;
   readonly retainedDiagnostic?: ResourceBrowserDiagnostic;
 }
 
@@ -49,6 +53,12 @@ export async function executeDesktopWorkspaceQuickCreation(
     await ports.updateWorkbench(input.workbenchInstanceId, targetWorkbench);
   }
 
+  await ports.getResourceSnapshot(
+    createResourceBrowserSnapshotRequest({
+      requestId: `${input.requestId}:snapshot`,
+      identity: input.identity,
+    }),
+  );
   await ports.search(
     createResourceBrowserSearchRequest({
       requestId: `${input.requestId}:files`,
@@ -57,7 +67,8 @@ export async function executeDesktopWorkspaceQuickCreation(
       query: '',
     }),
   );
-  const result = await ports.execute(createWorkspaceQuickCreationRequest(input));
+  const request = createWorkspaceQuickCreationRequest(input);
+  const result = await ports.execute(request);
   if (result.status === 'rejected') {
     throw new ResourceBrowserOperationRejectedError(result.rejection);
   }
@@ -66,6 +77,9 @@ export async function executeDesktopWorkspaceQuickCreation(
     .at(-1);
   return {
     projection: await ports.getShellSnapshot(),
+    ...(request.route === RESOURCE_BROWSER_ROUTES.createCreativeDocument
+      ? { createdDocumentId: request.entryName }
+      : {}),
     ...(retainedDiagnostic ? { retainedDiagnostic } : {}),
   };
 }

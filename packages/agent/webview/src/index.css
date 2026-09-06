@@ -1953,7 +1953,7 @@ body {
   position: relative;
   display: inline-flex;
   width: fit-content;
-  flex: none;
+  flex: 0 1 auto;
   max-width: min(240px, 55%);
   min-width: 0;
   align-items: center;

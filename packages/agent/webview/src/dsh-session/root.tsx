@@ -79,6 +79,7 @@ import './root.css';
 const logger = getLogger('DshAgentView');
 
 export interface DshAgentViewProps {
+  readonly canvasCreationControl?: ReactNode;
   readonly agentSurfaceId: string;
   readonly conversationFeed?: ReactNode;
   readonly conversationId?: string;
@@ -471,6 +472,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   };
   const composer = (
     <DshComposer
+      canvasCreationControl={props.canvasCreationControl}
       key={props.conversationId ?? `draft:${props.agentSurfaceId}`}
       copy={copy}
       agentSurfaceId={props.agentSurfaceId}
@@ -766,6 +768,7 @@ function isCopyShortcut(event: KeyboardEvent): boolean {
 }
 
 function DshComposer({
+  canvasCreationControl,
   agentSurfaceId,
   copy,
   surfaceKind,
@@ -805,6 +808,7 @@ function DshComposer({
   onRemoveWorldLaunch,
   presentation,
 }: {
+  readonly canvasCreationControl?: ReactNode;
   readonly agentSurfaceId: string;
   readonly copy: DshAgentCopy;
   readonly surfaceKind: 'entry' | 'assistant' | 'workspace';
@@ -1220,6 +1224,7 @@ function DshComposer({
                   workspaceLabel: configuration.context.workspaceLabel,
                   showCanvasIndex: true,
                   canvas: {
+                    creationControl: canvasCreationControl,
                     workspaceId: canvasCatalog.workspaceId,
                     defaultTarget: canvasCatalog.defaultTarget,
                     options: canvasCatalog.options.map((option) => ({

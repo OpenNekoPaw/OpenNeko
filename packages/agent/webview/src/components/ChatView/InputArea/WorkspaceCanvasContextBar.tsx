@@ -9,10 +9,6 @@ export interface WorkspaceCanvasContextBarProps {
   readonly showCanvasIndex?: boolean;
 }
 
-/**
- * Composer top rail: stable Workspace label + current Canvas index only.
- * It deliberately does not show read/write status, scope, or permission info.
- */
 export function WorkspaceCanvasContextBar({
   workspaceLabel,
   canvas,
@@ -71,6 +67,7 @@ export function WorkspaceCanvasContextBar({
       ) : showCanvasIndex ? (
         <span className="agent-workspace-canvas-default">{selectedLabel}</span>
       ) : null}
+      {showCanvasIndex ? canvas?.creationControl : null}
       {canvas?.diagnostic ? (
         <span className="agent-workspace-canvas-diagnostic" role="alert">
           {canvas.diagnostic}
