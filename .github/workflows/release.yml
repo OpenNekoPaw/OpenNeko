@@ -75,7 +75,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Fetch locked DSH runtime inputs
-        run: pnpm --dir scripts/dsh-development-runtime fetch --frozen-lockfile
+        run: pnpm --dir scripts/dsh-development-runtime fetch --frozen-lockfile --ignore-workspace --prod --ignore-scripts
 
       - name: Validate release metadata and main ancestry
         run: |

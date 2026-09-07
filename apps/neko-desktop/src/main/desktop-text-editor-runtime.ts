@@ -226,25 +226,25 @@ export class DesktopTextEditorRuntime {
   async execute(windowId: string, value: unknown): Promise<TextEditorHostResult> {
     this.requireActive();
     const request = parseTextEditorHostRequest(value);
-    let binding = this.bindings.get(request.identity.sessionId);
-    if (!binding && request.route === TEXT_EDITOR_HOST_ROUTES.projectionGet) {
-      binding = await this.restoreReleasedCleanSession(windowId, request.identity);
-      return readyResult(request.requestId, binding);
-    }
-    if (!binding && request.route === TEXT_EDITOR_HOST_ROUTES.close) {
-      await this.closeReleasedCleanView(windowId, request.identity);
-      return {
-        requestId: request.requestId,
-        identity: request.identity,
-        status: 'closed',
-      };
-    }
-    if (!binding || request.identity.windowId !== windowId) {
-      throw new Error('Desktop Text Editor session is unavailable.');
-    }
-    await this.attachCurrentRenderer(binding, request.identity);
-    const session = binding.session;
     try {
+      let binding = this.bindings.get(request.identity.sessionId);
+      if (!binding && request.route === TEXT_EDITOR_HOST_ROUTES.projectionGet) {
+        binding = await this.restoreReleasedCleanSession(windowId, request.identity);
+        return readyResult(request.requestId, binding);
+      }
+      if (!binding && request.route === TEXT_EDITOR_HOST_ROUTES.close) {
+        await this.closeReleasedCleanView(windowId, request.identity);
+        return {
+          requestId: request.requestId,
+          identity: request.identity,
+          status: 'closed',
+        };
+      }
+      if (!binding || request.identity.windowId !== windowId) {
+        throw new Error('Desktop Text Editor session is unavailable.');
+      }
+      await this.attachCurrentRenderer(binding, request.identity);
+      const session = binding.session;
       switch (request.route) {
         case TEXT_EDITOR_HOST_ROUTES.projectionGet:
           return readyResult(request.requestId, binding);
@@ -328,7 +328,7 @@ export class DesktopTextEditorRuntime {
       if (!(error instanceof TextDocumentError)) throw error;
       return {
         requestId: request.requestId,
-        identity: binding.runtimeIdentity,
+        identity: request.identity,
         status: 'rejected',
         diagnostic: error.diagnostic,
       };
