@@ -13,6 +13,7 @@ describe('macOS Forge trust configuration', () => {
     const trust = resolveMacOSForgeTrust();
     assert.equal(trust.osxSign.identity, '-');
     assert.equal(trust.osxSign.identityValidation, false);
+    assert.equal(trust.osxSign.continueOnError, false);
     assert.equal(trust.osxSign.ignore, preservePackagedDshRuntimeSignature);
     assert.equal(trust.osxNotarize, undefined);
     assert.equal(Object.isFrozen(trust.osxSign), false);
