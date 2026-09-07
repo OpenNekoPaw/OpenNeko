@@ -2,7 +2,7 @@
   "name": "@neko/assets-domain",
   "private": true,
   "description": "Desktop resource browser and media library copy contracts",
-  "license": "AGPL-3.0-or-later",
+  "license": "MIT",
   "exports": {
     "./asset-center": "./src/asset-center/index.ts",
     "./asset-center/contract": "./src/asset-center/contract.ts",

@@ -5,7 +5,7 @@
 [English](./README.md)
 
 ![Status](https://img.shields.io/badge/Status-Alpha-orange)
-[![License](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue)](./LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-blue)](./LICENSE)
 
 OpenNeko 是一款 Agent 驱动的桌面创作应用，将对话、项目文件、素材与画布放在同一个工作区。
 你可以与 Agent 讨论想法、分析参考资料、生成内容，再在画布、文档编辑器和视频时间线中继续创作。
@@ -69,4 +69,4 @@ pnpm dev:desktop
 
 ## License
 
-OpenNeko 使用 GNU Affero General Public License v3.0 or later，详见 [LICENSE](./LICENSE)。
+OpenNeko 使用 MIT 许可证，详见 [LICENSE](./LICENSE)。

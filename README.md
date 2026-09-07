@@ -5,7 +5,7 @@
 [中文](./README_CN.md)
 
 ![Status](https://img.shields.io/badge/Status-Alpha-orange)
-[![License](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue)](./LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-blue)](./LICENSE)
 
 OpenNeko is an Agent-driven desktop app that brings conversations, project files, assets, and a canvas into one workspace.
 Discuss ideas with an Agent, analyze references, generate content, and continue creating in the canvas, text editor, or video timeline.
@@ -69,4 +69,4 @@ Contributions grounded in real creative workflows are welcome, including reprodu
 
 ## License
 
-OpenNeko is licensed under the GNU Affero General Public License v3.0 or later. See [LICENSE](./LICENSE).
+OpenNeko is licensed under the MIT License. See [LICENSE](./LICENSE).
