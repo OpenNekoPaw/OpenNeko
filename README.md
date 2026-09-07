@@ -1,45 +1,47 @@
 # OpenNeko
 
-> An Agent-driven content creation platform
+> A local-first AI workspace, from conversation to creation
 
 [中文](./README_CN.md)
 
 ![Status](https://img.shields.io/badge/Status-Alpha-orange)
 [![License](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue)](./LICENSE)
 
-OpenNeko is a local-first desktop app for managing projects and content while bringing Agents,
-media libraries, and creative tools into one workspace.
+OpenNeko is an Agent-driven desktop app that brings conversations, project files, assets, and a canvas into one workspace.
+Discuss ideas with an Agent, analyze references, generate content, and continue creating in the canvas, text editor, or video timeline.
 
-![OpenNeko Desktop: project and conversation workspace](./docs/assets/openneko-desktop.png)
+![OpenNeko conversation entry: switch between conversation and creation, choose a model, and describe your idea](./docs/assets/openneko-conversation.png)
 
-With OpenNeko, you can:
+_Start from the conversation or creation mode. The screenshot shows the development build, where Character and World are experimental features._
 
-- choose Conversation or Creation from Agent Entry while keeping the existing sidebar navigation;
-- organize content in a Project and invoke currently released creative capabilities;
-- manage source material and generated results, then continue working in the Canvas or video timeline;
-- keep project files local, preview or export results, and hand work off to professional tools.
+## What You Can Do
 
-## Current Capabilities
+| Capability                | Purpose                                                                                                   |
+| ------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Conversation and creation | Start an everyday conversation or select a project for the Agent to work with                             |
+| Projects and works        | Organize local project files and find and open creative content in the project browser                    |
+| Creative Agent            | Analyze references, plan tasks, use tools, and generate content with your configured models               |
+| Assets and canvas         | Arrange reference images, documents, and generated results on a canvas, connect them, and preview content |
+| Documents and media       | Edit text and preview common documents, images, audio/video, and supported 3D models                      |
+| Video timeline            | Arrange, preview, and export lightweight audio/video projects                                             |
+| Models and extensions     | Configure cloud or local AI services and manage personal Skills and OpenNeko extensions                   |
 
-| Capability                | What you can do                                                                      |
-| ------------------------- | ------------------------------------------------------------------------------------ |
-| Conversation and Creation | Start an ordinary conversation or add an exact Project to the composer               |
-| Project workspace         | Manage content and released creative capabilities in one local context               |
-| Experimental records      | Preserve Chara/World project facts without exposing their Release capability entries |
-| Creative Agent            | Chat under the current authority, plan tasks, use tools, and generate content        |
-| Tools and APIs            | Configure cloud or local AI APIs and let the Agent use supported local tools         |
-| Skills and extensions     | Manage personal Skills and OpenNeko extensions                                       |
-| Media Library/Canvas      | Organize assets, documents, generated results, and structure                         |
-| Video timeline            | Arrange, preview, and export lightweight audio/video projects                        |
-| Content preview           | View common documents, images, audio/video, and supported 3D models                  |
+Project files stay local. AI conversation, generation, and understanding depend on your configured services, model access, and network availability. When you use a cloud model, relevant inputs are sent to the selected service.
 
-Available generation and understanding features depend on your configured APIs, model access, and local services.
+<details>
+<summary>Explore the creative workspace: Agent, canvas, and project browser</summary>
+
+![OpenNeko creative workspace: Agent conversation on the left, an asset and document canvas in the center, and the project browser on the right](./docs/assets/openneko-desktop.png)
+
+Connect Agent conversations, reference material, generated results, and creative documents within one project.
+
+</details>
 
 ## Project Status
 
 - **Alpha**: currently intended for source-based previews and product validation; interfaces and project formats may change.
 - **Platform**: Apple Silicon macOS only; distributed DMGs are not Developer ID signed or Apple notarized.
-- **Product focus**: Release builds focus on Agent, Project, content, assets, and media creation. Chara/World provide only bounded, exact-Project experiments in Development; Release hides their entries while preserving code and user data, and does not offer a global Assistant Creator or complete World Experience.
+- **Product focus**: Agents, projects, content, assets, and media creation. Character (Chara) and World currently have experimental entries only in development builds; complete character assistant creation and world experiences are not available yet.
 - **In development**: the complete end-to-end workflow, stable release channel, and professional-tool integrations.
 
 ## Start From Source
@@ -52,6 +54,9 @@ pnpm install
 pnpm build
 pnpm dev:desktop
 ```
+
+After launching, configure AI services and models in Settings at the bottom left. Then start a conversation or select a project to begin creating.
+Model configuration is stored in `~/.neko/config.toml`. See [Contributing](./CONTRIBUTING.md) for development and validation details.
 
 ## Learn More
 
