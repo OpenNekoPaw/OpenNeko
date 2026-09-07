@@ -38,6 +38,11 @@ overrides:
 
 packageExtensionsChecksum: sha256-Xb+ny2e8YMBWHTGBSWbQ/jdU1VwPvzSGzvO6c4kT1rY=
 
+patchedDependencies:
+  '@electron/osx-sign@1.3.3':
+    hash: fe464068a52cb6dc827996f0748e81ac1a4d0a3bf100509332c2c34e4a4eb672
+    path: patches/@electron__osx-sign@1.3.3.patch
+
 importers:
 
   .:
@@ -9999,7 +10004,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@electron/osx-sign@1.3.3':
+  '@electron/osx-sign@1.3.3(patch_hash=fe464068a52cb6dc827996f0748e81ac1a4d0a3bf100509332c2c34e4a4eb672)':
     dependencies:
       compare-version: 0.1.2
       debug: 4.4.3
@@ -10015,7 +10020,7 @@ snapshots:
       '@electron/asar': 3.4.1
       '@electron/get': 3.1.0
       '@electron/notarize': 2.5.0
-      '@electron/osx-sign': 1.3.3
+      '@electron/osx-sign': 1.3.3(patch_hash=fe464068a52cb6dc827996f0748e81ac1a4d0a3bf100509332c2c34e4a4eb672)
       '@electron/universal': 2.0.3
       '@electron/windows-sign': 1.2.2
       '@malept/cross-spawn-promise': 2.0.0
