@@ -536,6 +536,90 @@ describe('DesktopTextEditorRuntime', () => {
     restoredRuntime.dispose();
   });
 
+  it('isolates failed clean restores and retries the exact file after it becomes available', async () => {
+    const root = await createWorkspace('notes/missing.md', '# Original\n');
+    await writeFile(path.join(root, 'notes/sibling.md'), '# Sibling\n');
+    let workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    const shell = createShell(
+      root,
+      () => workbench,
+      (next) => {
+        workbench = next;
+      },
+    );
+    const originalRuntime = new DesktopTextEditorRuntime({
+      shell,
+      referenceCatalog: emptyReferenceCatalog(),
+      media: emptyMediaService(),
+    });
+    const opened = await originalRuntime.open({
+      identity: resourceIdentity,
+      item: textItem('notes/missing.md'),
+    });
+    if (opened.status !== 'ready') throw new Error('Expected a ready Text Editor.');
+    originalRuntime.dispose();
+    await rm(path.join(root, 'notes/missing.md'));
+    const savedWorkbench = workbench;
+    const watchFile = vi.fn<DesktopTextEditorWatchFile>(() => ({ close: vi.fn() }));
+    const runtime = new DesktopTextEditorRuntime({
+      shell,
+      referenceCatalog: emptyReferenceCatalog(),
+      media: emptyMediaService(),
+      watchFile,
+    });
+    try {
+      const request = {
+        route: TEXT_EDITOR_HOST_ROUTES.projectionGet,
+        requestId: 'restore-missing',
+        identity: opened.identity,
+      };
+      await expect(runtime.execute('window-other', request)).rejects.toThrow(
+        'session is unavailable',
+      );
+      for (const requestId of ['restore-missing', 'retry-missing']) {
+        await expect(runtime.execute('window-1', { ...request, requestId })).resolves.toEqual({
+          requestId,
+          identity: opened.identity,
+          status: 'rejected',
+          diagnostic: { code: 'text-document-read-failed', severity: 'error' },
+        });
+      }
+      expect(workbench).toBe(savedWorkbench);
+      expect(watchFile).not.toHaveBeenCalled();
+      await expect(readFile(path.join(root, 'notes/missing.md'))).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+
+      const sibling = await runtime.open({
+        identity: resourceIdentity,
+        item: textItem('notes/sibling.md'),
+      });
+      if (sibling.status !== 'ready') throw new Error('Expected a ready sibling.');
+      expect(sibling.projection.source).toBe('# Sibling\n');
+      await writeFile(path.join(root, 'notes/missing.md'), '# Repaired\n');
+      const repaired = await runtime.execute('window-1', {
+        ...request,
+        requestId: 'retry-repaired',
+      });
+      expect(repaired).toMatchObject({
+        status: 'ready',
+        identity: { documentId: opened.identity.documentId, viewId: opened.identity.viewId },
+        projection: { source: '# Repaired\n', dirty: false },
+      });
+      expect(repaired.identity.sessionId).not.toBe(opened.identity.sessionId);
+      expect(watchFile).toHaveBeenCalledTimes(2);
+      await expect(
+        runtime.execute('window-1', {
+          ...request,
+          requestId: 'sibling-still-ready',
+          identity: sibling.identity,
+        }),
+      ).resolves.toMatchObject({ status: 'ready', projection: { source: '# Sibling\n' } });
+    } finally {
+      runtime.dispose();
+    }
+  });
+
   it('closes a released clean View without reopening its deleted Workspace file', async () => {
     const root = await createWorkspace('notes/deleted.md', '# Deleted\n');
     let workbench = createDefaultDesktopWorkbenchLayout('window-1');

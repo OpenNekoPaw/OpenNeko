@@ -19,6 +19,39 @@ const originalIdentity: TextEditorRuntimeIdentity = {
 };
 
 describe('Desktop Text Editor renderer host runtime', () => {
+  it('surfaces a rejected restore and retains its exact identity for retry', async () => {
+    const execute = vi.fn<OpenNekoDesktopTextEditorBridge['textEditor']['execute']>();
+    execute.mockResolvedValueOnce({
+      requestId: 'restore-failed',
+      identity: originalIdentity,
+      status: 'rejected',
+      diagnostic: { code: 'text-document-read-failed', severity: 'error' },
+    });
+    const restoredIdentity = { ...originalIdentity, sessionId: 'text-document:repaired' };
+    execute.mockResolvedValueOnce({
+      requestId: 'restore-repaired',
+      identity: restoredIdentity,
+      status: 'ready',
+      projection: projection(restoredIdentity.sessionId),
+    });
+    const bridge = {
+      textEditor: {
+        execute,
+        executeClipboardCommand: vi.fn(),
+        subscribe: vi.fn(() => () => undefined),
+      },
+    } satisfies OpenNekoDesktopTextEditorBridge;
+    const runtime = createElectronTextEditorHostRuntime({ bridge, identity: originalIdentity });
+    await expect(runtime.project()).rejects.toThrow('text-document-read-failed');
+    await expect(runtime.project()).resolves.toMatchObject({
+      sessionId: restoredIdentity.sessionId,
+    });
+    expect(execute.mock.calls.map(([request]) => request.identity)).toEqual([
+      originalIdentity,
+      originalIdentity,
+    ]);
+  });
+
   it('adopts a restored projection identity for every subsequent command', async () => {
     const restoredIdentity = { ...originalIdentity, sessionId: 'text-document:new' };
     const execute = vi.fn(async (request: TextEditorHostRequest) => ({
