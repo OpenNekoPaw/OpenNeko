@@ -19,5 +19,5 @@
   "devDependencies": {
     "@types/node": "^24.0.0"
   },
-  "license": "AGPL-3.0-or-later"
+  "license": "MIT"
 }

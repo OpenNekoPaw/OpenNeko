@@ -21,7 +21,7 @@
     "react-dom": "^18.2.0",
     "vitest": "^4.1.2"
   },
-  "license": "AGPL-3.0-or-later",
+  "license": "MIT",
   "dependencies": {
     "@milkdown/core": "7.22.0",
     "@milkdown/preset-commonmark": "7.22.0",
