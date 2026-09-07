@@ -12,7 +12,7 @@ Discuss ideas with an Agent, analyze references, generate content, and continue 
 
 ![OpenNeko conversation entry: switch between conversation and creation, choose a model, and describe your idea](./docs/assets/openneko-conversation.png)
 
-_Start from the conversation or creation mode. The screenshot shows the development build, where Character and World are experimental features._
+_Start in conversation or creation mode, choose a model, and describe what you want to create._
 
 ## What You Can Do
 
