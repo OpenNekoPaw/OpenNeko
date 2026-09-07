@@ -27,6 +27,7 @@ import type {} from '@deepseek-ai/cordis-plugin-loader';
 import { createUserMessage, errorChain, type ContentBlock } from '@deepseek-ai/dsh-llm';
 import { supportedProtocols } from '@deepseek-ai/dsh-llm-pi-ai';
 import { SessionId, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session';
+import { isAppendSurfaceEvent, isReplacementSurfaceEvent } from '@deepseek-ai/dsh-session/surface';
 import type {} from '@deepseek-ai/dsh-session-persistence';
 import type {} from '@deepseek-ai/dsh-workspace';
 import {
@@ -277,10 +278,10 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
     if (standardNotifications.length > 0) {
       for (const notification of standardNotifications) await notify(notification);
     } else {
-      await connection.extNotification(
-        'openneko/session/event',
-        projectExtensionSessionEvent(sessionId, event, replay),
-      );
+      const notification = projectExtensionSessionEvent(sessionId, event, replay);
+      if (notification !== undefined) {
+        await connection.extNotification('openneko/session/event', notification);
+      }
     }
     await publishContextPressure(requireOwned(sessionId));
   };
@@ -1881,6 +1882,8 @@ export function projectSessionEvent(
   event: SessionEvent,
   options: { readonly replay?: boolean } = {},
 ): readonly SessionNotification[] {
+  // Compaction replacements belong to the model surface, not the human transcript.
+  if (isReplacementSurfaceEvent(event)) return [];
   if (options.replay === true && event.type === 'assistant/chunk') return [];
   return projectSessionEventNotifications(sessionId, event).map((notification) => ({
     ...notification,
@@ -1986,7 +1989,8 @@ export function projectExtensionSessionEvent(
   sessionId: string,
   event: SessionEvent,
   replay: boolean,
-): DshAcpSessionEventNotification & Record<string, unknown> {
+): (DshAcpSessionEventNotification & Record<string, unknown>) | undefined {
+  if (isReplacementSurfaceEvent(event)) return undefined;
   return {
     sessionId,
     sequence: event.seq,
@@ -2277,6 +2281,7 @@ function findDisplayedImageAttachment(
   attachmentId: string,
 ): ImageAttachmentRef {
   for (const event of record.handle.agent.session.events) {
+    if (!isAppendSurfaceEvent(event)) continue;
     if (event.type === 'user/message' && event.data.source.kind === 'user') {
       const display = readOpenNekoDisplayContent(event.data.source)?.find(
         (block) => block.type === 'image' && block.attachmentId === attachmentId,

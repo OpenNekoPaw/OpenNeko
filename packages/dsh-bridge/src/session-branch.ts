@@ -1,4 +1,5 @@
 import type { SessionEvent } from '@deepseek-ai/dsh-session';
+import { isAppendSurfaceEvent } from '@deepseek-ai/dsh-session/surface';
 
 export function branchSeedThroughAssistantReply(
   events: readonly SessionEvent[],
@@ -7,7 +8,9 @@ export function branchSeedThroughAssistantReply(
   if (messageId.trim().length === 0) throw new Error('Assistant message identity is required.');
   const matches = events.filter(
     (event): event is SessionEvent<'assistant/message'> =>
-      event.type === 'assistant/message' && event.data.message.id === messageId,
+      isAppendSurfaceEvent(event) &&
+      event.type === 'assistant/message' &&
+      event.data.message.id === messageId,
   );
   if (matches.length !== 1 || matches[0] === undefined) {
     throw new Error(
