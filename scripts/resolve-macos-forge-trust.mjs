@@ -9,6 +9,8 @@ export function resolveMacOSForgeTrust() {
     osxSign: {
       identity: '-',
       identityValidation: false,
+      // Packager otherwise hides signing failures in Forge's quiet mode.
+      continueOnError: false,
       ignore: preservePackagedDshRuntimeSignature,
       optionsForFile: () => ({ additionalArguments: ['--options', '0'], hardenedRuntime: false }),
     },
