@@ -251,6 +251,22 @@ describe('Canvas material contracts', () => {
         executionPayload: { target: new Date() },
       }),
     ).toBe(false);
+    expect(
+      isCanvasMaterialActionDescriptor({
+        ...descriptor,
+        executionPayload: undefined,
+        unavailable: {
+          code: 'media-audio-stream-unavailable',
+          message: 'This video has no audio stream.',
+        },
+      }),
+    ).toBe(true);
+    expect(
+      isCanvasMaterialActionDescriptor({
+        ...descriptor,
+        unavailable: { code: 'unknown-owner', message: 'Unknown diagnostic code.' },
+      }),
+    ).toBe(false);
     expect(isCanvasMaterialActionIntent(intent)).toBe(true);
     expect(isCanvasMaterialActionIntent({ ...intent, selectedNodeIds: [] })).toBe(false);
   });

@@ -1,25 +1,8 @@
 # Quality Inputs
 
-This directory stores machine-readable quality gate inputs for repository scripts and CI jobs.
+Machine-readable inputs for repository checks live here. Each input must have an active consuming
+script; remove obsolete entries together with their consumers. These files do not prove that a
+product feature works and must not store reports, implementation history, or test outcomes.
 
-Human-readable architecture constraints and development policy live in `docs/architecture/`. Files here are data ledgers consumed by repeatable checks, not long-form documentation or implementation logs.
-
-## Contents
-
-| Path                                       | Purpose                                                                                        |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| `agent-extension-surface.json`             | Audited Skill, composition package, marketplace, MCP, and Host capability boundaries.          |
-| `ledgers/neko-shared-public-surface.json`  | Canonical minimal Shared exports.                                                              |
-| `ledgers/package-boundary-exceptions.json` | Exact, expiring exceptions for current package identity, export, and source-alias rules.       |
-| `local-metadata-runtime-matrix.json`       | Supported SQLite Host, OS, architecture, and minimum runtime matrix.                           |
-| `package-roles.json`                       | Complete workspace package role, runtime, product-status, and architecture-state catalog.      |
-| `package-product-status.json`              | Supported production entries plus exact expiring declarations for non-literal runtime edges.   |
-| `skill-development-history/history.json`   | Immutable, evidence-linked local Skill development checkpoints; excludes Market release state. |
-
-## Rules
-
-- Keep quality inputs deterministic and machine-readable.
-- Adding a Shared responsibility needs architecture review proving that no owning domain or focused infrastructure package is appropriate.
-- Update the consuming script and validation command when moving or renaming a quality input.
-- Keep stable policy explanations in `docs/architecture/development-quality.md`; link to this directory for concrete CI input data.
-- Do not store one-off command output, implementation journals, or dated status snapshots here.
+Development policy and architecture constraints belong in
+[`docs/architecture/development-quality.md`](../docs/architecture/development-quality.md).

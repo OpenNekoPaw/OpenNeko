@@ -7,7 +7,11 @@ import type {
   MarkdownCanvasNode,
   MediaCanvasNode,
 } from '@neko/canvas-domain';
-import { createNodeConnectionEndpoint, createPortConnectionEndpoint } from '@neko/canvas-domain';
+import {
+  createCanvasPlaybackPlan,
+  createNodeConnectionEndpoint,
+  createPortConnectionEndpoint,
+} from '@neko/canvas-domain';
 import { canCreateCanvasConnection, useCanvasStore } from '../canvasStore';
 import { useHistoryStore } from '../historyStore';
 import { useCanvasOperationStore } from '../canvasOperationStore';
@@ -426,6 +430,178 @@ describe('canvasStore canonical workspace', () => {
     }
 
     expect(useCanvasStore.getState().canvasData?.connections).toHaveLength(4);
+  });
+
+  it('atomically replaces the linear playback sequence and preserves unrelated connections', () => {
+    const reference = connection('reference', 'first', 'third', 'reference');
+    const oldSequence = connection('old-sequence', 'third', 'first', 'sequence');
+    useCanvasStore
+      .getState()
+      .setCanvasData(
+        canvas(
+          [media('first', 0, 0), media('second', 320, 0), media('third', 640, 0)],
+          [reference, oldSequence],
+        ),
+      );
+
+    const result = useCanvasStore.getState().replacePlaybackSequenceGraph({
+      nodeIds: ['first', 'second', 'third'],
+      edges: [
+        { sourceNodeId: 'first', targetNodeId: 'second' },
+        { sourceNodeId: 'second', targetNodeId: 'third' },
+      ],
+    });
+
+    expect(result).toEqual({ ok: true, changed: true });
+    const next = useCanvasStore.getState().canvasData;
+    expect(next?.playback?.entryIds).toEqual(['first']);
+    expect(next?.connections.filter((item) => item.type === 'sequence')).toEqual([
+      expect.objectContaining({ sourceId: 'first', targetId: 'second' }),
+      expect.objectContaining({ sourceId: 'second', targetId: 'third' }),
+    ]);
+    expect(next?.connections).toContain(reference);
+    expect(useHistoryStore.getState().undoStack).toHaveLength(1);
+
+    useCanvasStore.getState().undo();
+    expect(useCanvasStore.getState().canvasData?.connections).toEqual([reference, oldSequence]);
+    expect(useCanvasStore.getState().canvasData?.playback).toBeUndefined();
+  });
+
+  it('rejects invalid playback sequence identities without changing Canvas data', () => {
+    const data = canvas([media('first', 0, 0), media('second', 320, 0)]);
+    useCanvasStore.getState().setCanvasData(data);
+
+    expect(
+      useCanvasStore.getState().replacePlaybackSequenceGraph({
+        nodeIds: ['first', 'first'],
+        edges: [],
+      }),
+    ).toEqual({ ok: false, reason: 'duplicate-node' });
+    expect(
+      useCanvasStore.getState().replacePlaybackSequenceGraph({
+        nodeIds: ['first', 'missing'],
+        edges: [],
+      }),
+    ).toEqual({ ok: false, reason: 'missing-node' });
+    expect(
+      useCanvasStore.getState().replacePlaybackSequenceGraph({
+        nodeIds: ['first', 'second'],
+        edges: [
+          { sourceNodeId: 'first', targetNodeId: 'second' },
+          { sourceNodeId: 'first', targetNodeId: 'second' },
+        ],
+      }),
+    ).toEqual({ ok: false, reason: 'duplicate-edge' });
+    expect(useCanvasStore.getState().canvasData).toEqual(data);
+    expect(useHistoryStore.getState().undoStack).toEqual([]);
+  });
+
+  it('commits multiple starts, branches and merges as one playback graph', () => {
+    useCanvasStore
+      .getState()
+      .setCanvasData(
+        canvas([
+          media('start-a', 0, 0),
+          media('start-b', 0, 240),
+          media('choice-a', 320, 0),
+          media('choice-b', 320, 240),
+          media('end', 640, 120),
+        ]),
+      );
+
+    const result = useCanvasStore.getState().replacePlaybackSequenceGraph({
+      nodeIds: ['start-a', 'start-b', 'choice-a', 'choice-b', 'end'],
+      edges: [
+        { sourceNodeId: 'start-a', targetNodeId: 'choice-a' },
+        { sourceNodeId: 'start-a', targetNodeId: 'choice-b' },
+        { sourceNodeId: 'start-b', targetNodeId: 'choice-b' },
+        { sourceNodeId: 'choice-a', targetNodeId: 'end' },
+        { sourceNodeId: 'choice-b', targetNodeId: 'end' },
+      ],
+    });
+
+    expect(result).toEqual({ ok: true, changed: true });
+    const next = useCanvasStore.getState().canvasData;
+    expect(next?.playback?.entryIds).toEqual(['start-a', 'start-b']);
+    expect(next?.connections.map((item) => [item.sourceId, item.targetId, item.type])).toEqual([
+      ['start-a', 'choice-a', 'sequence'],
+      ['start-a', 'choice-b', 'sequence'],
+      ['start-b', 'choice-b', 'sequence'],
+      ['choice-a', 'end', 'sequence'],
+      ['choice-b', 'end', 'sequence'],
+    ]);
+    const edgeOrderByPair = Object.fromEntries(
+      (next?.connections ?? []).map((item) => [
+        `${item.sourceId}->${item.targetId}`,
+        next?.playback?.edgeOverrides?.[item.id]?.order,
+      ]),
+    );
+    expect(edgeOrderByPair).toEqual({
+      'start-a->choice-a': 0,
+      'start-a->choice-b': 1,
+      'start-b->choice-b': 2,
+      'choice-a->end': 3,
+      'choice-b->end': 4,
+    });
+    expect(useHistoryStore.getState().undoStack).toHaveLength(1);
+
+    const reordered = useCanvasStore.getState().replacePlaybackSequenceGraph({
+      nodeIds: ['start-a', 'start-b', 'choice-b', 'choice-a', 'end'],
+      edges: [
+        { sourceNodeId: 'start-a', targetNodeId: 'choice-b' },
+        { sourceNodeId: 'start-a', targetNodeId: 'choice-a' },
+        { sourceNodeId: 'start-b', targetNodeId: 'choice-b' },
+        { sourceNodeId: 'choice-b', targetNodeId: 'end' },
+        { sourceNodeId: 'choice-a', targetNodeId: 'end' },
+      ],
+    });
+
+    expect(reordered).toEqual({ ok: true, changed: true });
+    const reorderedData = useCanvasStore.getState().canvasData;
+    if (!reorderedData) throw new Error('Expected reordered Canvas data.');
+    const reorderedEdgeOrderByPair = Object.fromEntries(
+      (reorderedData?.connections ?? []).map((item) => [
+        `${item.sourceId}->${item.targetId}`,
+        reorderedData?.playback?.edgeOverrides?.[item.id]?.order,
+      ]),
+    );
+    expect(reorderedEdgeOrderByPair).toEqual({
+      'start-a->choice-a': 1,
+      'start-a->choice-b': 0,
+      'start-b->choice-b': 2,
+      'choice-a->end': 4,
+      'choice-b->end': 3,
+    });
+    expect(
+      createCanvasPlaybackPlan({ canvas: reorderedData }).transitions.map((transition) => [
+        transition.sourceNodeId,
+        transition.targetNodeId,
+      ]),
+    ).toEqual([
+      ['start-a', 'choice-b'],
+      ['start-a', 'choice-a'],
+      ['start-b', 'choice-b'],
+      ['choice-b', 'end'],
+      ['choice-a', 'end'],
+    ]);
+    expect(useHistoryStore.getState().undoStack).toHaveLength(2);
+  });
+
+  it('rejects cyclic playback graphs without changing Canvas data', () => {
+    const data = canvas([media('first', 0, 0), media('second', 320, 0)]);
+    useCanvasStore.getState().setCanvasData(data);
+
+    expect(
+      useCanvasStore.getState().replacePlaybackSequenceGraph({
+        nodeIds: ['first', 'second'],
+        edges: [
+          { sourceNodeId: 'first', targetNodeId: 'second' },
+          { sourceNodeId: 'second', targetNodeId: 'first' },
+        ],
+      }),
+    ).toEqual({ ok: false, reason: 'cycle' });
+    expect(useCanvasStore.getState().canvasData).toEqual(data);
+    expect(useHistoryStore.getState().undoStack).toEqual([]);
   });
 
   it('normalizes undersized canonical nodes at store boundaries', () => {

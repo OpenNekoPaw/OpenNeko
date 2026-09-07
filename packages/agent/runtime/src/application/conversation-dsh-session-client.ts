@@ -17,6 +17,7 @@ import type {
   DshAcpPermissionPresetProjection,
   DshAcpCommandExecuteProjection,
   DshAcpSkillInvokeProjection,
+  DshAcpSessionBranchProjection,
 } from '@neko/agent-contracts/dsh-acp';
 
 import type { ConversationDshSessionBindingService } from './conversation-dsh-session-binding';
@@ -38,6 +39,10 @@ export interface ConversationDshSessionAcpClient {
   prompt(input: PromptRequest): Promise<PromptResponse>;
   cancel(sessionId: string): Promise<void>;
   setSessionContext(input: { readonly sessionId: string; readonly text: string }): Promise<void>;
+  branchSession(input: {
+    readonly sessionId: string;
+    readonly messageId: string;
+  }): Promise<DshAcpSessionBranchProjection>;
   readPermissionPresets(sessionId?: string): Promise<DshAcpPermissionPresetProjection>;
   readInputCatalog(
     input: { readonly sessionId: string } | { readonly cwd: string },

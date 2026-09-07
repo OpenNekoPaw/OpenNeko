@@ -7,6 +7,8 @@ import {
   planCanvasCompositeCreation,
   planCanvasConnectionCreation,
   planCanvasNodeCreation,
+  planCanvasNodeGrouping,
+  applyCanvasHeadlessAuthoringOperations,
   validateCanvasDurableResourceIdentity,
 } from '../canvasHeadlessAuthoring';
 
@@ -20,6 +22,56 @@ function emptyCanvas(): CanvasData {
 }
 
 describe('canvasHeadlessAuthoring canonical planner', () => {
+  it('groups exact existing nodes and appends a later batch without moving or cloning content', () => {
+    const generateId = ids();
+    let canvas = emptyCanvas();
+    for (let index = 0; index < 3; index++) {
+      canvas = planCanvasNodeCreation(
+        { canvasData: canvas, generateId },
+        {
+          type: 'markdown',
+          position: { x: index * 500, y: 200 },
+          data: { content: `frame ${index}` },
+        },
+      ).canvasData;
+    }
+    const original = canvas.nodes;
+    const group = planCanvasNodeGrouping(
+      { canvasData: canvas, generateId },
+      { nodeIds: [original[0]!.id, original[1]!.id], label: '第一批' },
+    );
+    canvas = applyCanvasHeadlessAuthoringOperations(canvas, group.operations);
+    const append = planCanvasNodeGrouping(
+      { canvasData: canvas },
+      { nodeIds: [original[2]!.id], groupId: group.group.id },
+    );
+    canvas = applyCanvasHeadlessAuthoringOperations(canvas, append.operations);
+    expect(canvas.nodes).toHaveLength(4);
+    expect(append.group.container?.childIds).toEqual(original.map((node) => node.id));
+    for (const node of original)
+      expect(canvas.nodes.find((entry) => entry.id === node.id)).toEqual({
+        ...node,
+        parentId: group.group.id,
+      });
+    expect(() =>
+      planCanvasNodeGrouping({ canvasData: canvas }, { nodeIds: [original[0]!.id] }),
+    ).toThrow('another group');
+    expect(() =>
+      planCanvasNodeGrouping({ canvasData: canvas }, { nodeIds: ['missing'] }),
+    ).toThrow();
+    expect(() =>
+      planCanvasNodeGrouping(
+        { canvasData: canvas },
+        { nodeIds: [group.group.id], groupId: group.group.id },
+      ),
+    ).toThrow();
+    expect(() =>
+      planCanvasNodeGrouping(
+        { canvasData: canvas },
+        { nodeIds: [original[0]!.id, original[0]!.id] },
+      ),
+    ).toThrow('distinct');
+  });
   it('preserves a portable ContentLocator when creating durable media nodes', () => {
     const created = planCanvasNodeCreation(
       { canvasData: emptyCanvas(), generateId: () => 'media-locator-node' },
@@ -396,5 +448,55 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
         },
       ),
     ).toThrow(/no writable binding in headless mode/);
+  });
+
+  it('updates a generation selection only to an existing output identity', () => {
+    const canvas: CanvasData = {
+      ...emptyCanvas(),
+      nodes: [
+        {
+          id: 'generation-1',
+          type: 'generation',
+          position: { x: 0, y: 0 },
+          size: { width: 320, height: 180 },
+          zIndex: 1,
+          data: {
+            recipe: {
+              kind: 'prompt',
+              prompt: 'Draft a scene',
+              model: {
+                purpose: 'canvas.prompt',
+                providerId: 'provider-1',
+                modelId: 'model-1',
+              },
+            },
+            outputs: [
+              {
+                outputId: 'output-1',
+                jobRef: { kind: 'generation', jobId: 'job-1' },
+                locator: {
+                  file: { authority: 'workspace', path: 'neko/generated/prompt/output-1.md' },
+                },
+                kind: 'prompt',
+                recipeInputFingerprint: 'sha256:recipe-1',
+              },
+            ],
+          },
+        },
+      ],
+    };
+
+    expect(
+      planCanvasBlockUpdate(
+        { canvasData: canvas },
+        { nodeId: 'generation-1', path: '/selectedOutputId', value: 'output-1' },
+      ).result,
+    ).toMatchObject({ changed: true, data: { selectedOutputId: 'output-1' } });
+    expect(() =>
+      planCanvasBlockUpdate(
+        { canvasData: canvas },
+        { nodeId: 'generation-1', path: '/selectedOutputId', value: 'missing-output' },
+      ),
+    ).toThrow(/requires canonical node data/u);
   });
 });

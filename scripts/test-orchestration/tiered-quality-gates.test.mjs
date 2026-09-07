@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, readFile } from 'node:fs/promises';
+import { access, readdir, readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 import { parse } from 'yaml';
 
@@ -61,6 +61,43 @@ describe('development/main quality gate orchestration', () => {
     await assert.rejects(access('turbo.json'));
     for (const command of Object.values(scripts)) {
       assert.doesNotMatch(command, /\bturbo\b/u);
+    }
+  });
+
+  it('keeps explicit local runtime commands unreachable from CI and code gates', async () => {
+    const { scripts } = JSON.parse(await readFile('package.json', 'utf8'));
+    const workflowNames = (await readdir('.github/workflows')).filter((name) =>
+      /\.ya?ml$/u.test(name),
+    );
+    const workflows = await Promise.all(
+      workflowNames.map((name) => readFile(`.github/workflows/${name}`, 'utf8')),
+    );
+    const roots = [
+      'check:ci',
+      'gate:local',
+      'gate:remote',
+      'ci:local',
+      'ci:remote',
+      ...Object.keys(scripts).filter((name) =>
+        workflows.some((source) => referencesScript(source, name)),
+      ),
+    ];
+    const reachable = collectReachableScripts(scripts, roots);
+    const localCommands = Object.keys(scripts).filter(
+      (name) => name === 'dev:desktop' || name.startsWith('test:local:'),
+    );
+    for (const name of localCommands) {
+      assert.equal(
+        reachable.has(name),
+        false,
+        `${name} must run only through an explicit local invocation`,
+      );
+    }
+    for (const workflow of workflows) {
+      assert.doesNotMatch(
+        workflow,
+        /test:local:|run-desktop-openneko-qualification\.mjs|OPENNEKO_MEDIA_QUALIFICATION_ROOT/u,
+      );
     }
   });
 
@@ -134,4 +171,28 @@ function findRunStep(job, stepName) {
   const step = job?.steps?.find((candidate) => candidate.name === stepName);
   assert.equal(typeof step?.run, 'string', `missing run step: ${stepName}`);
   return step.run.replaceAll(/\s+/gu, ' ').replaceAll('"', '').trim();
+}
+
+function collectReachableScripts(scripts, roots) {
+  const reachable = new Set();
+  const pending = [...roots];
+  while (pending.length > 0) {
+    const scriptName = pending.shift();
+    assert.equal(typeof scripts[scriptName], 'string', `missing root script: ${scriptName}`);
+    if (reachable.has(scriptName)) continue;
+    reachable.add(scriptName);
+
+    for (const candidate of Object.keys(scripts)) {
+      if (referencesScript(scripts[scriptName], candidate)) pending.push(candidate);
+    }
+  }
+  return reachable;
+}
+
+function referencesScript(command, scriptName) {
+  const escaped = scriptName.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  return new RegExp(
+    `(?:^|[\\s;&|])(?:pnpm(?:\\s+run)?|npm\\s+run|yarn)\\s+${escaped}(?=\\s|$|[;&|])`,
+    'u',
+  ).test(command);
 }

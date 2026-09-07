@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
-  CANVAS_WORKSPACE_BOARD_PATH,
+  CANVAS_DEFAULT_DOCUMENT_PATH,
   CanvasHostVisibleEffectError,
   CanvasHostRuntimeSession,
   createCanvasHostPresentationSnapshotStore,
@@ -13,18 +13,25 @@ import {
   type CanvasHostRuntimeIdentity,
   type CanvasHostSnapshot,
   type CanvasMaterialActionResolution,
+  type CanvasMaterialActionAvailability,
   type CanvasMaterialActionTarget,
   type CanvasTextFilePreviewResult,
   type CanvasGenerationApplicationPort,
   type CanvasGenerationModelOption,
+  type CanvasWorkspaceTurnTarget,
   createCanvasMaterialActionOwner,
 } from '@neko/canvas-domain';
 import type { NekoHostPorts } from '@neko/host/ports';
-import { contentLocatorKey, type ContentLocator } from '@neko/content-domain';
+import {
+  contentLocatorKey,
+  type ContentLocator,
+  type WorkspaceFileContentLocator,
+} from '@neko/content-domain';
 import { createNodeHostContentReadService } from '@neko/content-domain/node';
 import {
+  isLoadableNkcResult,
   loadNkc,
-  saveNkc,
+  saveLoadableNkc,
   type CanvasData,
   type CanvasMaterialAuthoringRequest,
   type CanvasMediaLibraryCopyConflictPolicy,
@@ -35,6 +42,7 @@ import type { DesktopCanvasViewGrant } from '@neko/host/desktop-shell-service';
 import type { DesktopWorkbenchLayoutProjection } from '@neko/host/desktop-workbench-contract';
 import {
   CanvasMaterialAuthoringService,
+  CanvasAudioExtractionService,
   CanvasMediaLibraryCopyService,
   CanvasTextFilePreviewService,
   type CanvasExternalSource,
@@ -118,7 +126,7 @@ export interface DesktopCanvasGlobalMediaLibraryCopySelection {
 
 export class DesktopCanvasRuntime {
   private readonly sessions = new Map<string, DesktopCanvasSessionEntry>();
-  private readonly workspaceBoardOperationTails = new Map<string, Promise<void>>();
+  private readonly documentOperationTails = new Map<string, Promise<void>>();
   private readonly previewLeases = new Map<string, DesktopCanvasPreviewLeaseEntry>();
   private readonly presentationSnapshots = createCanvasHostPresentationSnapshotStore();
   private readonly materialAuthoring: CanvasMaterialAuthoringService;
@@ -174,17 +182,13 @@ export class DesktopCanvasRuntime {
       readonly resolveAddToCut?: (input: {
         readonly identity: CanvasHostRuntimeIdentity;
         readonly target: CanvasMaterialActionTarget;
-      }) => Promise<Readonly<Record<string, unknown>> | undefined>;
+      }) => Promise<CanvasMaterialActionAvailability>;
       readonly addToCut?: (input: {
         readonly identity: CanvasHostRuntimeIdentity;
         readonly target: CanvasMaterialActionTarget;
         readonly executionPayload: Readonly<Record<string, unknown>>;
       }) => Promise<void>;
-      readonly separateAudioInCut?: (input: {
-        readonly identity: CanvasHostRuntimeIdentity;
-        readonly target: CanvasMaterialActionTarget;
-        readonly executionPayload: Readonly<Record<string, unknown>>;
-      }) => Promise<void>;
+      readonly audioExtraction?: CanvasAudioExtractionService;
       readonly requestProjectMediaLibraryCopy?: (input: {
         readonly identity: CanvasHostRuntimeIdentity;
         readonly workspace: DesktopCanvasViewGrant['workspace'];
@@ -337,17 +341,18 @@ export class DesktopCanvasRuntime {
     return (await this.requireSession(windowId, identity)).session.subscribe(listener);
   }
 
-  async coordinateWorkspaceBoardMutation<TResult>(
-    workspaceId: string,
+  async coordinateCanvasDocumentMutation<TResult>(
+    target: CanvasWorkspaceTurnTarget,
     operation: () => Promise<TResult>,
   ): Promise<TResult> {
-    return this.enqueueWorkspaceBoardOperation(workspaceId, async () => {
+    const documentId = canvasTargetDocumentId(target);
+    return this.enqueueDocumentOperation(target.workspaceId, documentId, async () => {
       this.requireActive();
       const entries = [...this.sessions.values()]
         .filter(
           (entry) =>
-            entry.workspace.workspaceId === workspaceId &&
-            entry.identity.documentId === CANVAS_WORKSPACE_BOARD_PATH,
+            entry.workspace.workspaceId === target.workspaceId &&
+            entry.identity.documentId === documentId,
         )
         .sort((left, right) => sessionKey(left.identity).localeCompare(sessionKey(right.identity)));
       if (entries.length === 0) return operation();
@@ -357,7 +362,7 @@ export class DesktopCanvasRuntime {
         .map((snapshot) => JSON.stringify(snapshot.canvas));
       if (new Set(dirtyDocuments).size > 1) {
         throw new CanvasHostVisibleEffectError(
-          'workspace-board-open-session-conflict: Open Workspace Board views contain divergent unsaved changes.',
+          'canvas-open-session-conflict: Open Canvas views contain divergent unsaved changes.',
         );
       }
 
@@ -368,7 +373,7 @@ export class DesktopCanvasRuntime {
         if (!entry) {
           const value = await operation();
           const first = entries[0];
-          if (!first) throw new Error('Workspace Board session coordination lost its target.');
+          if (!first) throw new Error('Canvas session coordination lost its target.');
           return {
             value,
             canvas: await this.loadDocument(first.documentPath, first.workspace.displayName),
@@ -425,6 +430,7 @@ export class DesktopCanvasRuntime {
     this.releasePreviewLeases(() => true);
     this.presentationSnapshots.clear();
     this.materialAuthoring.dispose();
+    await this.options.audioExtraction?.dispose();
     await this.options.generation?.dispose();
   }
 
@@ -449,16 +455,13 @@ export class DesktopCanvasRuntime {
     identity: CanvasHostRuntimeIdentity,
   ): Promise<DesktopCanvasSessionEntry> {
     this.requireActive();
-    // Grant resolution may flush pending Agent deliveries through the Workspace Board
-    // coordinator. Resolve it before entering the Board queue so that opening the
+    // Grant resolution may flush pending Agent deliveries through the Canvas
+    // coordinator. Resolve it before entering the document queue so that opening the
     // Canvas never waits on a nested mutation scheduled behind itself.
     const grant = await this.options.shell.resolveCanvasViewGrant(windowId, identity);
-    if (identity.documentId === CANVAS_WORKSPACE_BOARD_PATH) {
-      return this.enqueueWorkspaceBoardOperation(identity.workspaceId, () =>
-        this.requireSessionSerial(windowId, identity, grant),
-      );
-    }
-    return this.requireSessionSerial(windowId, identity, grant);
+    return this.enqueueDocumentOperation(identity.workspaceId, identity.documentId, () =>
+      this.requireSessionSerial(windowId, identity, grant),
+    );
   }
 
   private async requireSessionSerial(
@@ -470,7 +473,7 @@ export class DesktopCanvasRuntime {
     const existing = this.sessions.get(key);
     if (existing) return existing;
     const documentPath =
-      identity.documentId === CANVAS_WORKSPACE_BOARD_PATH
+      identity.documentId === CANVAS_DEFAULT_DOCUMENT_PATH
         ? this.options.host.paths.join(grant.workspace.workspacePath, identity.documentId)
         : await resolveWorkspaceContentLocator(grant.workspace, {
             file: { authority: 'workspace', path: identity.documentId },
@@ -487,7 +490,7 @@ export class DesktopCanvasRuntime {
     const openInCut = this.options.openInCut;
     const resolveAddToCut = this.options.resolveAddToCut;
     const addToCut = this.options.addToCut;
-    const separateAudioInCut = this.options.separateAudioInCut;
+    const audioExtraction = this.options.audioExtraction;
     const requestProjectMediaLibraryCopy = this.options.requestProjectMediaLibraryCopy;
     const requestGlobalMediaLibraryCopy = this.options.requestGlobalMediaLibraryCopy;
     const generation = this.options.generation;
@@ -497,7 +500,7 @@ export class DesktopCanvasRuntime {
             identity: requestIdentity,
             workspace: grant.workspace,
             locator,
-            ...(locator.file.authority === 'workspace' && locator.selector === undefined
+            ...(isDirectHostFileLocator(locator)
               ? {
                   absolutePath: await this.resolveContentPath(
                     requestIdentity.projectId,
@@ -535,8 +538,7 @@ export class DesktopCanvasRuntime {
       ...(this.options.host.external?.revealPath
         ? {
             resolveReveal: async ({ target }: { readonly target: CanvasMaterialActionTarget }) =>
-              target.locator.file.authority === 'workspace' &&
-              target.locator.selector === undefined,
+              isDirectHostFileLocator(target.locator),
             reveal: ({ identity: requestIdentity, target }) =>
               revealEffect(requestIdentity, target.locator),
           }
@@ -567,8 +569,11 @@ export class DesktopCanvasRuntime {
             }: {
               readonly identity: CanvasHostRuntimeIdentity;
               readonly target: CanvasMaterialActionTarget;
-            }) =>
-              resolveCut({
+            }) => {
+              if (!isDirectHostFileLocator(target.locator)) {
+                return false;
+              }
+              return resolveCut({
                 identity: requestIdentity,
                 target,
                 absolutePath: await this.resolveContentPath(
@@ -576,7 +581,8 @@ export class DesktopCanvasRuntime {
                   grant.workspace,
                   target.locator,
                 ),
-              }),
+              });
+            },
             openInCut: async ({
               identity: requestIdentity,
               target,
@@ -613,24 +619,34 @@ export class DesktopCanvasRuntime {
               readonly target: CanvasMaterialActionTarget;
               readonly executionPayload: Readonly<Record<string, unknown>>;
             }) => addToCut({ identity: requestIdentity, target, executionPayload }),
-            ...(separateAudioInCut
-              ? {
-                  separateAudioInCut: ({
-                    identity: requestIdentity,
-                    target,
-                    executionPayload,
-                  }: {
-                    readonly identity: CanvasHostRuntimeIdentity;
-                    readonly target: CanvasMaterialActionTarget;
-                    readonly executionPayload: Readonly<Record<string, unknown>>;
-                  }) =>
-                    separateAudioInCut({
-                      identity: requestIdentity,
-                      target,
-                      executionPayload,
-                    }),
-                }
-              : {}),
+          }
+        : {}),
+      ...(audioExtraction
+        ? {
+            resolveSeparateAudio: ({
+              identity: requestIdentity,
+              target,
+            }: {
+              readonly identity: CanvasHostRuntimeIdentity;
+              readonly target: CanvasMaterialActionTarget;
+            }) =>
+              audioExtraction.resolveAvailability({
+                projectId: requestIdentity.projectId,
+                workspace: grant.workspace,
+                source: target.locator,
+              }),
+            separateAudio: async ({
+              identity: requestIdentity,
+              target,
+            }: {
+              readonly identity: CanvasHostRuntimeIdentity;
+              readonly target: CanvasMaterialActionTarget;
+            }) =>
+              audioExtraction.extract({
+                projectId: requestIdentity.projectId,
+                workspace: grant.workspace,
+                source: target.locator,
+              }),
           }
         : {}),
       ...(requestProjectMediaLibraryCopy || requestGlobalMediaLibraryCopy
@@ -714,6 +730,7 @@ export class DesktopCanvasRuntime {
     const session = new CanvasHostRuntimeSession({
       identity,
       initialCanvas,
+      createGenerationNodeIdentity: () => `generation-${randomUUID()}`,
       presentationSnapshots: this.presentationSnapshots,
       resolveGenerationModels: () =>
         this.options.resolveGenerationModels?.({ workspace: grant.workspace }) ?? [],
@@ -815,7 +832,7 @@ export class DesktopCanvasRuntime {
         revealResource: ({ identity: requestIdentity, locator }) =>
           revealEffect(requestIdentity, locator),
         executeMaterialAction: async ({
-          canvas: _canvas,
+          canvas,
           identity: requestIdentity,
           descriptor,
           action,
@@ -830,7 +847,15 @@ export class DesktopCanvasRuntime {
           if (result.generationProjection) {
             throw new Error('Historical Canvas material regeneration is no longer supported.');
           }
-          return {};
+          if (!result.authoringRequest) return {};
+          return {
+            canvas: await this.materialAuthoring.author({
+              canvas,
+              identity: requestIdentity,
+              workspace: grant.workspace,
+              request: result.authoringRequest,
+            }),
+          };
         },
       },
     });
@@ -843,7 +868,7 @@ export class DesktopCanvasRuntime {
       externalChangeQueue: Promise.resolve(),
       generationReattachmentScheduled: false,
     };
-    if (identity.documentId !== CANVAS_WORKSPACE_BOARD_PATH) {
+    if (identity.documentId !== CANVAS_DEFAULT_DOCUMENT_PATH) {
       const watchFile = this.options.watchFile;
       if (watchFile) {
         entry.watcher = watchFile(
@@ -901,26 +926,28 @@ export class DesktopCanvasRuntime {
     workspace: DesktopCanvasViewGrant['workspace'],
     locator: ContentLocator,
   ): Promise<string> {
-    if (locator.file.authority === 'workspace' && locator.selector === undefined) {
+    if (isDirectHostFileLocator(locator)) {
       return resolveWorkspaceContentLocator(workspace, { file: locator.file });
     }
     throw new Error('Canvas material has no directly resolvable Host file path.');
   }
 
-  private enqueueWorkspaceBoardOperation<TResult>(
+  private enqueueDocumentOperation<TResult>(
     workspaceId: string,
+    documentId: string,
     operation: () => Promise<TResult>,
   ): Promise<TResult> {
-    const previous = this.workspaceBoardOperationTails.get(workspaceId) ?? Promise.resolve();
+    const operationKey = JSON.stringify([workspaceId, documentId]);
+    const previous = this.documentOperationTails.get(operationKey) ?? Promise.resolve();
     const result = previous.then(operation);
     const tail = result.then(
       () => undefined,
       () => undefined,
     );
-    this.workspaceBoardOperationTails.set(workspaceId, tail);
+    this.documentOperationTails.set(operationKey, tail);
     void tail.then(() => {
-      if (this.workspaceBoardOperationTails.get(workspaceId) === tail) {
-        this.workspaceBoardOperationTails.delete(workspaceId);
+      if (this.documentOperationTails.get(operationKey) === tail) {
+        this.documentOperationTails.delete(operationKey);
       }
     });
     return result;
@@ -944,7 +971,7 @@ export class DesktopCanvasRuntime {
       throw error;
     }
     const loaded = loadNkc(await this.options.host.files.readText(documentPath));
-    if (!loaded.validation.valid) {
+    if (!isLoadableNkcResult(loaded)) {
       const diagnostics = loaded.validation.errors
         .slice(0, 3)
         .map((diagnostic) => `${diagnostic.field}: ${diagnostic.message}`)
@@ -962,7 +989,7 @@ export class DesktopCanvasRuntime {
     await this.options.host.files.createDirectory(directory);
     const temporaryPath = `${documentPath}.${randomUUID()}.tmp`;
     try {
-      await this.options.host.files.writeText(temporaryPath, saveNkc(canvas));
+      await this.options.host.files.writeText(temporaryPath, saveLoadableNkc(canvas));
       await this.options.host.files.rename(temporaryPath, documentPath);
     } catch (error: unknown) {
       await this.options.host.files
@@ -975,6 +1002,16 @@ export class DesktopCanvasRuntime {
   private requireActive(): void {
     if (this.disposed) throw new Error('Canvas runtime is disposed.');
   }
+}
+
+function isDirectHostFileLocator(
+  locator: ContentLocator,
+): locator is WorkspaceFileContentLocator & { readonly selector?: undefined } {
+  return locator.file.authority === 'workspace' && locator.selector === undefined;
+}
+
+function canvasTargetDocumentId(target: CanvasWorkspaceTurnTarget): string {
+  return target.canvasId;
 }
 
 function createWorkspaceReferenceRequest(input: {

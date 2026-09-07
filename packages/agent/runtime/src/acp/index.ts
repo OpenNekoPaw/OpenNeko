@@ -6,7 +6,7 @@ export {
   type DshAcpConnection,
   type DshAcpSessionUpdateDelivery,
 } from './dsh-acp-application-client';
-export { CanvasDshHostAdapter } from './canvas-host-adapter';
+export { CanvasDshHostAdapter, type CanvasDshAuthoringPort } from './canvas-host-adapter';
 export { CutDshHostAdapter } from './cut-host-adapter';
 export {
   GenerationDshHostAdapter,
@@ -23,19 +23,19 @@ export {
   type DshDomainToolHandlers,
 } from './dsh-domain-tool-handlers';
 export {
-  DSH_ACP_PROJECTION_DEFAULT_MAX_EVENTS_PER_SESSION,
   DshAcpProjection,
   type DshAcpProjectedCancelEvent,
   type DshAcpProjectedDiagnosticEvent,
+  type DshAcpProjectedDisplayBlock,
   type DshAcpProjectedEvent,
   type DshAcpProjectedMessageEvent,
   type DshAcpProjectedPermissionEvent,
   type DshAcpProjectedToolEvent,
   type DshAcpProjectedToolStatus,
   type DshAcpProjectedTurnEvent,
-  type DshAcpProjectionOptions,
   type DshAcpProjectionSnapshot,
   type DshAcpProjectionToolSnapshot,
+  type DshAcpProjectedTodoItem,
 } from './dsh-acp-projection';
 export type {
   RequestPermissionRequest as DshAcpPermissionRequest,

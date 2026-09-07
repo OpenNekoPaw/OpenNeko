@@ -6,6 +6,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   MilkdownRichSurface,
   type MilkdownRichSurfaceActions,
+  type MilkdownRichSurfaceSelectionActions,
   type MilkdownRichSurfaceState,
 } from './milkdown-rich-surface';
 
@@ -93,6 +94,56 @@ describe('MilkdownRichSurface', () => {
       expect(container?.querySelector('.ProseMirror')?.getAttribute('aria-readonly')).toBe('true');
       expect(container?.textContent).toContain('script.md#Scene 2');
     });
+  });
+
+  it.each([
+    {
+      label: 'editable',
+      source: '# 可编辑标题\n\n可编辑正文',
+      expectedState: 'ready' as const,
+      expectedText: '可编辑正文',
+      readOnly: 'false',
+    },
+    {
+      label: 'source-preserving read-only',
+      source: '查看 [[script.md#Scene 2]] 和 ![[cover.png]]。',
+      expectedState: 'unavailable' as const,
+      expectedText: 'script.md#Scene 2',
+      readOnly: 'true',
+    },
+  ])('selects and copies all Rich text while $label', async (fixture) => {
+    let selectionActions: MilkdownRichSurfaceSelectionActions | undefined;
+    const states: MilkdownRichSurfaceState[] = [];
+    ({ root, container } = createTestRoot());
+    await act(async () => {
+      root?.render(
+        <MilkdownRichSurface
+          value={fixture.source}
+          ariaLabel="Selectable Markdown"
+          readOnly={false}
+          onChange={() => undefined}
+          onSelectionActions={(actions) => {
+            selectionActions = actions;
+          }}
+          onStateChange={(state) => states.push(state)}
+        />,
+      );
+    });
+
+    await vi.waitFor(() => {
+      expect(states.at(-1)).toBe(fixture.expectedState);
+      expect(selectionActions).toBeDefined();
+    });
+    const rich = container?.querySelector<HTMLElement>('.ProseMirror');
+    expect(rich?.getAttribute('aria-readonly')).toBe(fixture.readOnly);
+    expect(rich?.tabIndex).toBe(0);
+
+    await act(async () => {
+      expect(selectionActions?.selectAll()).toBe(true);
+    });
+    const copied = dispatchCopy(rich ?? undefined);
+    expect(copied.get('text/plain')).toContain(fixture.expectedText);
+    expect(copied.get('text/html')).toBeTruthy();
   });
 
   it('reveals the exact first, middle and last heading', async () => {
@@ -189,6 +240,21 @@ function selectedHeadingText(): string | undefined {
   const anchorElement =
     anchorNode instanceof Element ? anchorNode : (anchorNode?.parentElement ?? undefined);
   return anchorElement?.closest('h1, h2, h3, h4, h5, h6')?.textContent ?? undefined;
+}
+
+function dispatchCopy(target: HTMLElement | undefined): ReadonlyMap<string, string> {
+  if (!target) throw new Error('Rich Surface copy fixture requires ProseMirror.');
+  const copied = new Map<string, string>();
+  const event = new Event('copy', { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'clipboardData', {
+    value: {
+      clearData: () => copied.clear(),
+      setData: (format: string, value: string) => copied.set(format, value),
+    },
+  });
+  target.dispatchEvent(event);
+  expect(event.defaultPrevented).toBe(true);
+  return copied;
 }
 
 function rect(): DOMRect {

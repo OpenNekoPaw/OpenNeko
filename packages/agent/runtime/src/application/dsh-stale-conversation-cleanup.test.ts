@@ -31,8 +31,14 @@ describe('persistent stale DSH Conversation cleanup', () => {
     const fixture = await createFixture();
     const stale = record('/workspace/stale');
     const sibling = record('/workspace/sibling');
-    await fixture.catalog.reserve(stale);
-    await fixture.catalog.reserve(sibling);
+    await fixture.catalog.reserve(stale, {
+      workspaceId: stale.context.workspaceId,
+      canvasId: 'stale.nkc',
+    });
+    await fixture.catalog.reserve(sibling, {
+      workspaceId: sibling.context.workspaceId,
+      canvasId: 'sibling.nkc',
+    });
     await fixture.bindings.bind({
       conversationId: stale.conversationId,
       dshSessionId: 'dsh-session-stale',
@@ -51,6 +57,12 @@ describe('persistent stale DSH Conversation cleanup', () => {
     await expect(fixture.contexts.readContext(stale.conversationId)).resolves.toBeUndefined();
     await expect(fixture.bindings.get(stale.conversationId)).resolves.toBeUndefined();
     await expect(fixture.catalog.get(sibling.conversationId)).resolves.toEqual(sibling);
+    await expect(
+      fixture.store.transaction(
+        { mode: 'read', ownership: 'state', operation: 'inspect-retained-canvas-selections' },
+        ({ sql }) => sql.all('SELECT * FROM agent_conversation_canvas_selection'),
+      ),
+    ).resolves.toEqual([{ conversation_id: sibling.conversationId, canvas_id: 'sibling.nkc' }]);
     await expect(fixture.bindings.get(sibling.conversationId)).resolves.toEqual({
       conversationId: sibling.conversationId,
       dshSessionId: 'dsh-session-sibling',

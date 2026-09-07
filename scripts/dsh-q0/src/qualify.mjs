@@ -64,7 +64,7 @@ class QualificationClient {
       throw new Error(`DSH Q0 received an unexpected extension request: ${method}`);
     }
     this.domainToolRequests.push(params);
-    if (params.tool === 'openneko.generation' && params.operation === 'describe') {
+    if (params.tool === 'openneko_generation' && params.operation === 'describe') {
       return {
         outcome: 'success',
         result: {
@@ -80,7 +80,7 @@ class QualificationClient {
         jobId: params.input?.jobId,
       };
     }
-    if (params.tool === 'openneko.canvas' && params.operation === 'query') {
+    if (params.tool === 'openneko_canvas' && params.operation === 'query') {
       return {
         outcome: 'success',
         result: {
@@ -563,7 +563,7 @@ async function qualify() {
         (request) =>
           request.sessionId !== session.sessionId ||
           request.turn !== 0 ||
-          request.tool !== 'openneko.q0-host-tool' ||
+          request.tool !== 'openneko_q0_host_tool' ||
           typeof request.toolCallId !== 'string',
       )
     ) {
@@ -617,7 +617,7 @@ async function qualify() {
         (request) =>
           request.sessionId !== session.sessionId ||
           request.turn !== 0 ||
-          request.tool !== 'openneko.q0-host-tool' ||
+          request.tool !== 'openneko_q0_host_tool' ||
           typeof request.toolCallId !== 'string',
       )
     ) {
@@ -760,10 +760,10 @@ async function qualify() {
     const skillRequest = w2Client.domainToolRequests[2];
     const skillPermission = w2Client.permissions[0];
     if (
-      generationRequest?.tool !== 'openneko.generation' ||
+      generationRequest?.tool !== 'openneko_generation' ||
       generationRequest.operation !== 'describe' ||
       generationRequest.input?.jobId !== 'w2-job' ||
-      canvasRequest?.tool !== 'openneko.canvas' ||
+      canvasRequest?.tool !== 'openneko_canvas' ||
       canvasRequest.operation !== 'query' ||
       canvasRequest.input?.documentPath !== 'boards/w2.nkc' ||
       skillRequest?.tool !== 'CreateSkill' ||
@@ -917,7 +917,7 @@ async function qualify() {
     process.stdout.write(
       `${JSON.stringify({
         qualified: true,
-        dsh: '0.1.0-rc.8',
+        dsh: '0.1.1-rc.2',
         acp: '0.25.1',
         protocolVersion: third.initializeResponse.protocolVersion,
         sessionId: 'redacted',

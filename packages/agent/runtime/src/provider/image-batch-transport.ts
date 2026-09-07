@@ -1,8 +1,5 @@
-import {
-  AGENT_IMAGE_TRANSPORT_MAX_LONG_EDGE,
-  AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES,
-  AGENT_IMAGE_TRANSPORT_MAX_SOURCE_IMAGES,
-} from '@neko/agent-contracts';
+const CONTACT_SHEET_EDGE = 2048;
+const OVERVIEW_GROUP_SIZE = 5;
 
 const CONTACT_SHEET_LABEL_HEIGHT = 40;
 const CONTACT_SHEET_MARGIN = 8;
@@ -45,30 +42,7 @@ export async function normalizeProviderImage(
   if (metadata.width === undefined || metadata.height === undefined) {
     throw new Error('Provider image dimensions are unavailable.');
   }
-  if (
-    bytes.byteLength <= AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES &&
-    metadata.width <= AGENT_IMAGE_TRANSPORT_MAX_LONG_EDGE &&
-    metadata.height <= AGENT_IMAGE_TRANSPORT_MAX_LONG_EDGE
-  ) {
-    return { bytes, mimeType: detectedMimeType };
-  }
-  const normalized = await sharp(bytes)
-    .rotate()
-    .resize({
-      width: AGENT_IMAGE_TRANSPORT_MAX_LONG_EDGE,
-      height: AGENT_IMAGE_TRANSPORT_MAX_LONG_EDGE,
-      fit: 'inside',
-      withoutEnlargement: true,
-    })
-    .flatten({ background: '#ffffff' })
-    .jpeg({ quality: 82 })
-    .toBuffer();
-  if (normalized.byteLength > AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES) {
-    throw new Error(
-      `Normalized provider image is ${normalized.byteLength} bytes; maximum is ${AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES}.`,
-    );
-  }
-  return { bytes: normalized, mimeType: 'image/jpeg' };
+  return { bytes, mimeType: detectedMimeType };
 }
 
 function mimeTypeForSharpFormat(
@@ -103,7 +77,7 @@ export async function composeProviderImageBatches(
   sources: readonly ProviderImageBatchSource[],
   layout: ProviderImageBatchLayout,
 ): Promise<readonly ProviderImageBatchResult[]> {
-  const groupSize = layout === 'overview' ? AGENT_IMAGE_TRANSPORT_MAX_SOURCE_IMAGES : 4;
+  const groupSize = layout === 'overview' ? OVERVIEW_GROUP_SIZE : 4;
   const batches: ProviderImageBatchResult[] = [];
   for (let start = 0; start < sources.length; start += groupSize) {
     const group = sources.slice(start, start + groupSize);
@@ -121,8 +95,8 @@ async function composeContactSheet(sources: readonly ProviderImageBatchSource[])
   const sharp = (await import('sharp')).default;
   const columns = Math.ceil(Math.sqrt(sources.length));
   const rows = Math.ceil(sources.length / columns);
-  const cellWidth = Math.floor(AGENT_IMAGE_TRANSPORT_MAX_LONG_EDGE / columns);
-  const cellHeight = Math.floor(AGENT_IMAGE_TRANSPORT_MAX_LONG_EDGE / rows);
+  const cellWidth = Math.floor(CONTACT_SHEET_EDGE / columns);
+  const cellHeight = Math.floor(CONTACT_SHEET_EDGE / rows);
   const composites = await Promise.all(
     sources.map(async (source, index) => {
       const tileWidth = Math.max(1, cellWidth - CONTACT_SHEET_MARGIN * 2);
@@ -162,8 +136,8 @@ async function composeContactSheet(sources: readonly ProviderImageBatchSource[])
   );
   const sheet = await sharp({
     create: {
-      width: AGENT_IMAGE_TRANSPORT_MAX_LONG_EDGE,
-      height: AGENT_IMAGE_TRANSPORT_MAX_LONG_EDGE,
+      width: CONTACT_SHEET_EDGE,
+      height: CONTACT_SHEET_EDGE,
       channels: 3,
       background: '#f3f3f3',
     },
@@ -171,12 +145,7 @@ async function composeContactSheet(sources: readonly ProviderImageBatchSource[])
     .composite(composites.flat())
     .jpeg({ quality: 82 })
     .toBuffer();
-  if (sheet.byteLength <= AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES) return sheet;
-  const reduced = await sharp(sheet).jpeg({ quality: 68 }).toBuffer();
-  if (reduced.byteLength <= AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES) return reduced;
-  throw new Error(
-    `Contact sheet is ${reduced.byteLength} bytes; maximum is ${AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES}.`,
-  );
+  return sheet;
 }
 
 function createTileLabelSvg(

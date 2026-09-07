@@ -6,7 +6,7 @@ import type { CutExportTaskSnapshot } from './export-tasks';
 import type { CutExportSettings } from './media-ports';
 import type { TimelineItemView } from './projection';
 
-export const CUT_DSH_TOOL_NAME = 'openneko.cut' as const;
+export const CUT_DSH_TOOL_NAME = 'openneko_cut' as const;
 export const CUT_DSH_TOOL_OPERATIONS = [
   'query',
   'apply',

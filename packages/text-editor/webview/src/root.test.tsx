@@ -60,6 +60,45 @@ afterEach(() => {
 });
 
 describe('TextEditorRoot', () => {
+  it('opens an editor-scoped context menu and routes clipboard commands through the Host', async () => {
+    const runtime = createRuntime(textProjection('markdown', '# Draft\n'));
+    const rendered = await renderEditor(runtime, 'zh-cn');
+    const view = editorView(rendered.container);
+    view.dispatch({ selection: { anchor: 0, head: 7 } });
+
+    await act(async () => {
+      view.contentDOM.dispatchEvent(
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 120,
+          clientY: 80,
+        }),
+      );
+      await settle();
+    });
+
+    const menu = document.querySelector<HTMLElement>('.neko-text-editor-edit-menu');
+    expect(menu?.getAttribute('role')).toBe('menu');
+    expect(menu?.textContent).toContain('剪切');
+    expect(menu?.textContent).toContain('复制');
+    expect(menu?.textContent).toContain('粘贴');
+    expect(menu?.querySelectorAll('.neko-menu-item-icon')).toHaveLength(6);
+    expect(menu?.querySelector('.codicon-clippy')).not.toBeNull();
+    expect(menu?.querySelector('.codicon-selection')).not.toBeNull();
+    const copy = [...(menu?.querySelectorAll('button') ?? [])].find((button) =>
+      button.textContent?.includes('复制'),
+    );
+    if (!copy) throw new Error('Text Editor context menu requires a Copy action.');
+    await act(async () => {
+      copy.click();
+      await settle();
+    });
+    expect(runtime.executeClipboardCommand).toHaveBeenCalledWith('copy');
+    expect(document.querySelector('.neko-text-editor-edit-menu')).toBeNull();
+    await unmount(rendered.root);
+  });
+
   it('keeps one CodeMirror instance while accepted edits, undo and redo use revisioned commands', async () => {
     const runtime = createRuntime(textProjection('markdown', '# Draft\n'));
     const rendered = await renderEditor(runtime);
@@ -526,7 +565,45 @@ describe('TextEditorRoot', () => {
     expect(rendered.container.querySelector('.ProseMirror')?.getAttribute('aria-readonly')).toBe(
       'true',
     );
+    const rich = rendered.container.querySelector<HTMLElement>('.ProseMirror');
+    if (!rich) throw new Error('Read-only Rich selection fixture requires ProseMirror.');
+    expect(rich.tabIndex).toBe(0);
+    await act(async () => {
+      rich.focus();
+      rich.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          bubbles: true,
+          cancelable: true,
+          code: 'KeyA',
+          key: 'a',
+          metaKey: true,
+        }),
+      );
+      await settle();
+    });
+    const copied = dispatchCopy(rich);
+    expect(copied.get('text/plain')).toContain('cover.png');
     expect(runtime.applyEdits).not.toHaveBeenCalled();
+
+    await act(async () => {
+      rich.dispatchEvent(
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 100,
+          clientY: 90,
+        }),
+      );
+      await settle();
+    });
+    const menuButtons = [
+      ...document.querySelectorAll<HTMLButtonElement>('.neko-text-editor-edit-menu button'),
+    ];
+    expect(menuButtons.find((button) => button.textContent?.includes('剪切'))?.disabled).toBe(true);
+    expect(menuButtons.find((button) => button.textContent?.includes('复制'))?.disabled).toBe(
+      false,
+    );
+    expect(menuButtons.find((button) => button.textContent?.includes('粘贴'))?.disabled).toBe(true);
 
     await clickText(rendered.container, '打开源码');
     expect(editorView(rendered.container).state.doc.toString()).toBe(source);
@@ -980,7 +1057,9 @@ function createRuntime(initial: TextDocumentProjection) {
     }),
   );
   const releaseMarkdownMedia = vi.fn(async (_request: ReleaseTextEditorMarkdownMediaRequest) => {});
+  const executeClipboardCommand = vi.fn(async () => {});
   return {
+    executeClipboardCommand,
     project: vi.fn(async () => current),
     applyEdits,
     formatJson,
@@ -1005,6 +1084,7 @@ function createRuntime(initial: TextDocumentProjection) {
     searchMarkdownReferences: typeof searchMarkdownReferences;
     prepareMarkdownMedia: typeof prepareMarkdownMedia;
     releaseMarkdownMedia: typeof releaseMarkdownMedia;
+    executeClipboardCommand: typeof executeClipboardCommand;
     emit(projection: TextDocumentProjection): void;
   };
 }
@@ -1219,6 +1299,20 @@ function applyChanges(source: string, changes: readonly TextDocumentChange[]): s
     cursor = change.to;
   }
   return result + source.slice(cursor);
+}
+
+function dispatchCopy(target: HTMLElement): ReadonlyMap<string, string> {
+  const copied = new Map<string, string>();
+  const event = new Event('copy', { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'clipboardData', {
+    value: {
+      clearData: () => copied.clear(),
+      setData: (format: string, value: string) => copied.set(format, value),
+    },
+  });
+  target.dispatchEvent(event);
+  expect(event.defaultPrevented).toBe(true);
+  return copied;
 }
 
 async function replaceRichParagraphText(rich: HTMLElement, value: string): Promise<void> {

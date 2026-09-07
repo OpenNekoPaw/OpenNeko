@@ -45,6 +45,12 @@ describe('Extension management styles', () => {
     expect(styles).toMatch(
       /\[role='dialog'\]\.professional-application-detail-overlay\s*\{[^}]*width:\s*min\(760px,/u,
     );
+    expect(styles).toMatch(
+      /\.extension-detail-overlay__skill-content\s*\{[^}]*max-height:\s*260px;[^}]*overflow:\s*auto/u,
+    );
+    expect(styles).toMatch(
+      /\.extension-detail-overlay__technical\s*\{[^}]*border-top:[^}]*padding-top:/u,
+    );
   });
 
   it('aligns Skill, MCP and professional application card density and lifecycle treatment', () => {

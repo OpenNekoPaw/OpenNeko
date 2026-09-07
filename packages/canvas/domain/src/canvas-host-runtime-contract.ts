@@ -4,6 +4,10 @@ import {
   type ContentLocator,
 } from '@neko/content-domain';
 import {
+  parseGenerationModelParameterProfile,
+  type GenerationModelParameterProfile,
+} from '@neko/generation-domain';
+import {
   isCanvasMaterialActionDescriptor,
   isCanvasMaterialActionIntent,
   isCanvasMaterialAuthoringRequest,
@@ -11,7 +15,7 @@ import {
   type CanvasMaterialActionIntent,
   type CanvasMaterialAuthoringRequest,
 } from './types/canvas-material-contracts';
-import { isValidNkc } from './nkc/codec';
+import { isLoadableNkc } from './nkc/codec';
 import { type CanvasData } from './types/canvas';
 import {
   CANVAS_GENERATION_PURPOSES,
@@ -75,6 +79,7 @@ export interface CanvasGenerationModelOption {
   readonly label: string;
   readonly providerLabel: string;
   readonly isDefault: boolean;
+  readonly parameterProfile?: GenerationModelParameterProfile;
 }
 
 export interface CanvasHostSnapshot {
@@ -155,11 +160,6 @@ export type CanvasHostIntent =
       readonly type: 'select-generation-output';
       readonly nodeId: string;
       readonly outputId: string;
-    }
-  | {
-      readonly type: 'author-generation-text';
-      readonly nodeId: string;
-      readonly text: string;
     }
   | {
       readonly type: 'preview-resource' | 'reveal-resource';
@@ -318,8 +318,8 @@ export function parseCanvasHostSnapshot(value: unknown): CanvasHostSnapshot {
     'generationNodes',
   ]);
   const canvas = record['canvas'];
-  if (!isValidNkc(canvas)) {
-    throw invalidPayload('Canvas Host snapshot does not contain a valid .nkc document.');
+  if (!isLoadableNkc(canvas)) {
+    throw invalidPayload('Canvas Host snapshot does not contain a loadable .nkc document.');
   }
   return {
     identity: parseCanvasHostRuntimeIdentity(record['identity']),
@@ -463,8 +463,8 @@ function parseCanvasHostIntent(value: unknown): CanvasHostIntent {
   if (type === 'replace-document') {
     requireExactKeys(record, ['type', 'canvas', 'removedNodeIds']);
     const canvas = record['canvas'];
-    if (!isValidNkc(canvas)) {
-      throw invalidPayload('Canvas Host replace-document intent requires valid .nkc data.');
+    if (!isLoadableNkc(canvas)) {
+      throw invalidPayload('Canvas Host replace-document intent requires loadable .nkc data.');
     }
     return {
       type,
@@ -575,17 +575,6 @@ function parseCanvasHostIntent(value: unknown): CanvasHostIntent {
       ),
     };
   }
-  if (type === 'author-generation-text') {
-    requireExactKeys(record, ['type', 'nodeId', 'text']);
-    return {
-      type,
-      nodeId: requireOpaqueIdentity(
-        record['nodeId'],
-        'Canvas Generation node identity is invalid.',
-      ),
-      text: requireString(record['text'], 'Canvas Generation authored text is invalid.'),
-    };
-  }
   if (type === 'preview-resource' || type === 'reveal-resource') {
     return { type, locator: requireContentLocator(record['locator']) };
   }
@@ -688,7 +677,12 @@ function parseCanvasHostAuthoringCapabilities(value: unknown): CanvasHostAuthori
 
 function parseCanvasGenerationModelOption(value: unknown): CanvasGenerationModelOption {
   const record = requireRecord(value, 'Canvas Host Generation model option must be an object.');
-  requireExactKeys(record, ['binding', 'label', 'providerLabel', 'isDefault']);
+  requireExactKeys(
+    record,
+    record['parameterProfile'] === undefined
+      ? ['binding', 'label', 'providerLabel', 'isDefault']
+      : ['binding', 'label', 'providerLabel', 'isDefault', 'parameterProfile'],
+  );
   const binding = requireRecord(
     record['binding'],
     'Canvas Host Generation model binding must be an object.',
@@ -718,6 +712,9 @@ function parseCanvasGenerationModelOption(value: unknown): CanvasGenerationModel
       record['isDefault'],
       'Canvas Host Generation default-model marker is required.',
     ),
+    ...(record['parameterProfile'] === undefined
+      ? {}
+      : { parameterProfile: parseGenerationModelParameterProfile(record['parameterProfile']) }),
   };
 }
 

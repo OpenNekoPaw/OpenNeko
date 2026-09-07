@@ -17,6 +17,14 @@ import { createDesktopI18n } from './i18n';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
+class TestResizeObserver {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+}
+
+Object.assign(globalThis, { ResizeObserver: TestResizeObserver });
+
 const dialogueCapabilities = {
   status: 'available',
   providers: [
@@ -26,11 +34,69 @@ const dialogueCapabilities = {
       source: 'catalog',
       settingsNamespace: 'llm-pi-ai',
       settingsPath: ['providers', 'openai'],
+      providerType: 'openai',
+      defaultApiUrl: '',
+      connectionKind: 'direct',
+      requiresApiKey: true,
     },
   ],
   protocols: ['openai-completions', 'openai-responses', 'anthropic-messages'],
   diagnostics: [],
 } as const;
+
+const generationCapabilities = [
+  {
+    id: 'generation-minimax-h3',
+    displayName: 'MiniMax H3',
+    suggestedProviderId: 'minimax-media',
+    providerType: 'minimax',
+    defaultApiUrl: 'https://api.minimaxi.com/v2',
+    requiresApiUrl: true,
+    connectionKind: 'direct',
+    supportLevel: 'verified',
+    requiresApiKey: true,
+    allowCustomModels: false,
+    supportedModelTypes: ['video'],
+    modelTemplates: [
+      {
+        id: 'minimax-h3',
+        providerType: 'minimax',
+        apiName: 'MiniMax-H3',
+        displayName: 'MiniMax H3',
+        type: 'video',
+        capabilities: ['text_to_video', 'video.generate', 'image_to_video', 'video_to_video'],
+      },
+    ],
+  },
+  {
+    id: 'generation-bytedance-seedance',
+    displayName: 'ByteDance Ark / Seedance',
+    suggestedProviderId: 'bytedance-media',
+    providerType: 'bytedance',
+    defaultApiUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+    requiresApiUrl: true,
+    connectionKind: 'direct',
+    supportLevel: 'verified',
+    requiresApiKey: true,
+    allowCustomModels: false,
+    supportedModelTypes: ['image', 'video'],
+    modelTemplates: [],
+  },
+  {
+    id: 'generation-newapi',
+    displayName: 'Custom NewAPI Media',
+    suggestedProviderId: 'newapi-media',
+    providerType: 'newapi',
+    defaultApiUrl: '',
+    requiresApiUrl: true,
+    connectionKind: 'gateway',
+    supportLevel: 'custom',
+    requiresApiKey: true,
+    allowCustomModels: true,
+    supportedModelTypes: ['image', 'video', 'audio', 'music'],
+    modelTemplates: [],
+  },
+] as const;
 
 describe('Desktop Settings surfaces', () => {
   afterEach(() => {
@@ -130,6 +196,7 @@ describe('Desktop Settings surfaces', () => {
   it('shows provider groups directly while keeping provider editing on demand', async () => {
     const projection = {
       dialogueCapabilities,
+      generationCapabilities,
       providers: [
         {
           id: 'deepseek',
@@ -150,6 +217,7 @@ describe('Desktop Settings surfaces', () => {
           apiName: 'deepseek-chat',
           displayName: 'DeepSeek Dialogue',
           type: 'llm' as const,
+          capabilities: ['chat', 'llm.chat', 'streaming'],
           enabled: true,
         },
         {
@@ -158,6 +226,7 @@ describe('Desktop Settings surfaces', () => {
           apiName: 'image-model',
           displayName: 'Image Model',
           type: 'image' as const,
+          capabilities: ['text_to_image', 'image.generate'],
           enabled: true,
         },
         {
@@ -166,6 +235,7 @@ describe('Desktop Settings surfaces', () => {
           apiName: 'audio-model',
           displayName: 'Audio Model',
           type: 'audio' as const,
+          capabilities: ['text_to_audio', 'audio.generate'],
           enabled: true,
         },
       ],
@@ -243,6 +313,7 @@ describe('Desktop Settings surfaces', () => {
   it('projects a local Ollama provider as dialogue-only without a credential field', async () => {
     const projection = {
       dialogueCapabilities,
+      generationCapabilities,
       providers: [
         {
           id: 'ollama-local',
@@ -260,10 +331,11 @@ describe('Desktop Settings surfaces', () => {
       defaults: {},
     };
     const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
+    const saveModel = vi.fn(async () => response);
     const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
       get: async () => projection,
       saveProvider: async () => response,
-      saveModel: async () => response,
+      saveModel,
       deleteProvider: async () => response,
       deleteModel: async () => response,
       setDefault: async () => response,
@@ -290,12 +362,43 @@ describe('Desktop Settings surfaces', () => {
     expect(container.querySelector('.desktop-settings__model-editor option')?.textContent).toBe(
       'Dialogue',
     );
+    const modelEditor = container.querySelector<HTMLElement>('.desktop-settings__model-editor');
+    if (!modelEditor) throw new Error('Ollama fixture requires a model editor.');
+    expect(modelEditor.textContent).not.toContain('Model ID');
+    expect(
+      [...modelEditor.querySelectorAll<HTMLElement>('[data-model-field]')].map((field) =>
+        field.getAttribute('data-model-field'),
+      ),
+    ).toEqual(['type', 'capabilities', 'api-name', 'display-name']);
+    const apiModelNameLabel = [...modelEditor.querySelectorAll('label')].find(
+      (label) => label.querySelector(':scope > span')?.textContent === 'API model name',
+    );
+    const apiModelNameInput = apiModelNameLabel?.querySelector<HTMLInputElement>('input');
+    if (!apiModelNameInput) throw new Error('Ollama fixture requires an API model name field.');
+    await act(async () => {
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      if (!setValue) throw new Error('HTMLInputElement value setter is unavailable.');
+      setValue.call(apiModelNameInput, 'qwen2.5-7b');
+      apiModelNameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () =>
+      modelEditor.querySelector<HTMLButtonElement>('button.desktop-settings__action')?.click(),
+    );
+    expect(saveModel).toHaveBeenCalledWith({
+      providerId: 'ollama-local',
+      apiName: 'qwen2.5-7b',
+      displayName: 'qwen2.5-7b',
+      type: 'llm',
+      capabilities: ['chat', 'llm.chat', 'streaming'],
+      enabled: true,
+    });
     await act(async () => root.unmount());
   });
 
   it('keeps the selected Provider identity aligned with API and credential fields', async () => {
     const projection = {
       dialogueCapabilities,
+      generationCapabilities,
       providers: [
         {
           id: 'deepseek-chat',
@@ -372,7 +475,16 @@ describe('Desktop Settings surfaces', () => {
     expect(container.querySelector<HTMLInputElement>('input[type="url"]')?.value).toBe(
       'https://www.nekoapi.com/v1',
     );
-    expect(container.querySelector<HTMLSelectElement>('select')?.value).toBe('openai-responses');
+    expect(
+      [...container.querySelectorAll<HTMLSelectElement>('select')].some(
+        (select) => select.value === 'openai-responses',
+      ),
+    ).toBe(true);
+    const providerType = [...container.querySelectorAll<HTMLSelectElement>('select')].find(
+      (select) => [...select.options].some((option) => option.value === 'newapi'),
+    );
+    if (!providerType) throw new Error('Custom Provider type selector is unavailable.');
+    await setSelectValue(providerType, 'newapi');
     const nekoKey = container.querySelector<HTMLInputElement>('input[type="password"]');
     expect(nekoKey?.value).toBe('');
     if (!nekoKey) throw new Error('Neko API Provider requires an API Key field.');
@@ -387,10 +499,12 @@ describe('Desktop Settings surfaces', () => {
       {
         id: 'neko-chat',
         displayName: 'Neko API Chat',
-        type: 'generic',
+        type: 'newapi',
         apiUrl: 'https://www.nekoapi.com/v1',
+        connectionKind: 'direct',
         protocol: 'openai-responses',
         supportedModelFamilies: ['dialogue'],
+        requiresApiKey: true,
         enabled: true,
       },
       'neko-draft-key',
@@ -398,8 +512,171 @@ describe('Desktop Settings surfaces', () => {
     await act(async () => root.unmount());
   });
 
+  it('edits authoritative capability tags for an existing custom dialogue model', async () => {
+    const projection = {
+      dialogueCapabilities,
+      generationCapabilities,
+      providers: [
+        {
+          id: 'nekoapi-chat',
+          displayName: 'Neko API Chat',
+          type: 'generic' as const,
+          apiUrl: 'https://api.example.test',
+          protocol: 'openai-responses' as const,
+          connectionKind: 'direct' as const,
+          enabled: true,
+          supportedModelFamilies: ['dialogue'] as const,
+          credentialStatus: 'configured' as const,
+        },
+      ],
+      models: [
+        {
+          id: 'gpt-5.6-sol',
+          providerId: 'nekoapi-chat',
+          apiName: 'gpt-5.6-sol',
+          displayName: 'GPT 5.6 SOL',
+          type: 'llm' as const,
+          capabilities: ['chat', 'llm.chat', 'streaming'],
+          enabled: true,
+        },
+      ],
+      defaults: {},
+    };
+    const response = { requestId: 'fixture', projection, runtimeEffect: 'pending' as const };
+    const saveModel = vi.fn(async () => response);
+    const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
+      get: async () => projection,
+      saveProvider: async () => response,
+      saveModel,
+      deleteProvider: async () => response,
+      deleteModel: async () => response,
+      setDefault: async () => response,
+    };
+    const { container, root } = await renderSettings({
+      aiModelSettings,
+      initialSection: 'agent',
+    });
+    await act(async () => Promise.resolve());
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('.desktop-settings__provider-card-main')?.click(),
+    );
+    await act(async () => findButton(container, 'Edit').click());
+
+    const editor = container.querySelector<HTMLElement>('.desktop-settings__model-editor');
+    if (!editor) throw new Error('Custom model capability fixture requires an editor.');
+    expect(editor.textContent).not.toContain('Model ID');
+    const capabilityTrigger = editor.querySelector<HTMLButtonElement>(
+      '[data-model-capability-trigger="true"]',
+    );
+    if (!capabilityTrigger) throw new Error('Custom model capability fixture requires a trigger.');
+    expect(capabilityTrigger.textContent).toContain('Streaming');
+    await act(async () => capabilityTrigger.click());
+    const capabilityOption = (label: string): HTMLButtonElement => {
+      const option = [
+        ...document.querySelectorAll<HTMLButtonElement>('[data-model-capability]'),
+      ].find((candidate) => candidate.textContent?.includes(label));
+      if (!option) throw new Error(`Missing model capability option '${label}'.`);
+      return option;
+    };
+    expect(capabilityOption('Streaming').getAttribute('aria-checked')).toBe('true');
+    expect(capabilityOption('Vision input').getAttribute('aria-checked')).toBe('false');
+    expect(capabilityOption('Tool calling').getAttribute('aria-checked')).toBe('false');
+    await act(async () => capabilityOption('Vision input').click());
+    await act(async () => capabilityOption('Tool calling').click());
+    expect(capabilityTrigger.textContent).toContain('Vision input · Tool calling +1');
+    await act(async () => capabilityTrigger.click());
+    expect(document.querySelector('.desktop-settings__model-capability-menu')).toBeNull();
+    await act(async () =>
+      editor.querySelector<HTMLButtonElement>('button.desktop-settings__action')?.click(),
+    );
+
+    expect(saveModel).toHaveBeenCalledWith({
+      existingId: 'gpt-5.6-sol',
+      providerId: 'nekoapi-chat',
+      apiName: 'gpt-5.6-sol',
+      displayName: 'GPT 5.6 SOL',
+      type: 'llm',
+      capabilities: ['chat', 'llm.chat', 'streaming', 'vision', 'function_calling'],
+      enabled: true,
+    });
+    await act(async () => root.unmount());
+  });
+
+  it('restores the required broad capability when saving an incomplete custom image model', async () => {
+    const projection = {
+      dialogueCapabilities,
+      generationCapabilities,
+      providers: [
+        {
+          id: 'newapi-media',
+          displayName: 'Custom NewAPI Media',
+          type: 'newapi' as const,
+          apiUrl: 'https://api.example.test/media',
+          connectionKind: 'gateway' as const,
+          enabled: true,
+          supportedModelFamilies: ['generation'] as const,
+          credentialStatus: 'configured' as const,
+        },
+      ],
+      models: [
+        {
+          id: 'incomplete-image',
+          providerId: 'newapi-media',
+          apiName: 'incomplete-image',
+          displayName: 'Incomplete Image',
+          type: 'image' as const,
+          capabilities: ['text_to_image'] as const,
+          enabled: true,
+        },
+      ],
+      defaults: {},
+    };
+    const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
+    const saveModel = vi.fn(async () => response);
+    const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
+      get: async () => projection,
+      saveProvider: async () => response,
+      saveModel,
+      deleteProvider: async () => response,
+      deleteModel: async () => response,
+      setDefault: async () => response,
+    };
+    const { container, root } = await renderSettings({
+      aiModelSettings,
+      initialSection: 'agent',
+    });
+    await act(async () => Promise.resolve());
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('.desktop-settings__provider-card-main')?.click(),
+    );
+    await act(async () => findButton(container, 'Edit').click());
+
+    const editor = container.querySelector<HTMLElement>('.desktop-settings__model-editor');
+    if (!editor) throw new Error('Incomplete image model fixture requires an editor.');
+    await act(async () =>
+      editor.querySelector<HTMLButtonElement>('button.desktop-settings__action')?.click(),
+    );
+
+    expect(saveModel).toHaveBeenCalledWith({
+      existingId: 'incomplete-image',
+      providerId: 'newapi-media',
+      apiName: 'incomplete-image',
+      displayName: 'Incomplete Image',
+      type: 'image',
+      capabilities: ['text_to_image', 'image.generate'],
+      enabled: true,
+    });
+    await act(async () => root.unmount());
+  });
+
   it('creates dialogue Providers from the live DSH catalog without a local preset', async () => {
-    const projection = { dialogueCapabilities, providers: [], models: [], defaults: {} };
+    const projection = {
+      dialogueCapabilities,
+      generationCapabilities,
+      providers: [],
+      models: [],
+      defaults: {},
+    };
     const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
     const saveProvider = vi.fn(async () => response);
     const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
@@ -424,6 +701,7 @@ describe('Desktop Settings surfaces', () => {
     expect([...providerSelector.options].map((option) => option.textContent)).toEqual([
       'OpenAI',
       'Add provider',
+      'Local OpenAI-compatible provider',
     ]);
     expect(
       [...container.querySelectorAll<HTMLInputElement>('.desktop-settings__editor input')].find(
@@ -437,6 +715,9 @@ describe('Desktop Settings surfaces', () => {
       )?.textContent,
     ).toContain('DSH catalog default');
 
+    const dialogueApiKey = container.querySelector<HTMLInputElement>('input[type="password"]');
+    if (!dialogueApiKey) throw new Error('DSH Provider form requires an API-key input.');
+    await setInputValue(dialogueApiKey, 'openai-secret');
     await act(async () => findButton(container, 'Save').click());
     expect(saveProvider).toHaveBeenCalledWith(
       {
@@ -444,7 +725,79 @@ describe('Desktop Settings surfaces', () => {
         displayName: 'OpenAI',
         type: 'openai',
         apiUrl: '',
+        connectionKind: 'direct',
         supportedModelFamilies: ['dialogue'],
+        requiresApiKey: true,
+        enabled: true,
+      },
+      'openai-secret',
+    );
+    await act(async () => root.unmount());
+  });
+
+  it('creates a local keyless custom dialogue Provider with an explicit type and DSH protocol', async () => {
+    const projection = {
+      dialogueCapabilities,
+      generationCapabilities,
+      providers: [],
+      models: [],
+      defaults: {},
+    };
+    const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
+    const saveProvider = vi.fn(async () => response);
+    const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
+      get: async () => projection,
+      saveProvider,
+      saveModel: async () => response,
+      deleteProvider: async () => response,
+      deleteModel: async () => response,
+      setDefault: async () => response,
+    };
+    const { container, root } = await renderSettings({
+      aiModelSettings,
+      initialSection: 'agent',
+    });
+    await act(async () => Promise.resolve());
+    await act(async () => findButton(container, 'Add dialogue provider').click());
+
+    const providerPreset = container.querySelector<HTMLSelectElement>(
+      '.desktop-settings__editor select',
+    );
+    if (!providerPreset) throw new Error('Provider preset selector is unavailable.');
+    await setSelectValue(providerPreset, 'dsh-custom-local');
+
+    const providerId = container.querySelector<HTMLInputElement>(
+      'input[placeholder="For example, acme-gateway"]',
+    );
+    const apiUrl = container.querySelector<HTMLInputElement>('input[type="url"]');
+    if (!providerId || !apiUrl) throw new Error('Local Provider identity fields are unavailable.');
+    await setInputValue(providerId, 'local-oneapi');
+    await setInputValue(apiUrl, 'http://127.0.0.1:8000/v1');
+
+    const providerType = [...container.querySelectorAll<HTMLSelectElement>('select')].find(
+      (select) => [...select.options].some((option) => option.value === 'oneapi'),
+    );
+    if (!providerType) throw new Error('Custom Provider type selector is unavailable.');
+    await setSelectValue(providerType, 'oneapi');
+
+    expect(container.querySelector('input[type="password"]')).toBeNull();
+    expect(
+      [...container.querySelectorAll<HTMLSelectElement>('select')].map((select) => select.value),
+    ).toEqual(
+      expect.arrayContaining(['dsh-custom-local', 'oneapi', 'local', 'none', 'openai-completions']),
+    );
+
+    await act(async () => findButton(container, 'Save').click());
+    expect(saveProvider).toHaveBeenCalledWith(
+      {
+        id: 'local-oneapi',
+        displayName: 'Local OpenAI-compatible provider',
+        type: 'oneapi',
+        apiUrl: 'http://127.0.0.1:8000/v1',
+        connectionKind: 'local',
+        protocol: 'openai-completions',
+        supportedModelFamilies: ['dialogue'],
+        requiresApiKey: false,
         enabled: true,
       },
       undefined,
@@ -455,6 +808,7 @@ describe('Desktop Settings surfaces', () => {
   it('requires explicit confirmation before deleting an empty configured provider', async () => {
     const projection = {
       dialogueCapabilities,
+      generationCapabilities,
       providers: [
         {
           id: 'custom-empty',
@@ -500,7 +854,7 @@ describe('Desktop Settings surfaces', () => {
     await act(async () => findButton(container, 'Confirm delete').click());
     expect(deleteProvider).toHaveBeenCalledWith('custom-empty');
     expect(container.textContent).toContain(
-      'Configuration saved. DSH will refresh after the active task finishes, then new conversations will use the latest model catalog.',
+      'Configuration saved. Open conversations stay unchanged; reopened and new conversations use the latest model catalog.',
     );
     await act(async () => root.unmount());
   });
@@ -526,10 +880,12 @@ describe('Desktop Settings surfaces', () => {
     }));
     const projection = {
       dialogueCapabilities,
+      generationCapabilities,
       providers,
       models: [
         modelFixture('chat-model', 'chat', 'llm'),
         modelFixture('image-model', 'media', 'image'),
+        modelFixture('music-model', 'media', 'music'),
         modelFixture('hybrid-chat', 'hybrid', 'llm'),
         modelFixture('hybrid-video', 'hybrid', 'video'),
       ],
@@ -566,7 +922,13 @@ describe('Desktop Settings surfaces', () => {
   });
 
   it('prefills the official MiniMax generation Provider before model configuration', async () => {
-    const projection = { dialogueCapabilities, providers: [], models: [], defaults: {} };
+    const projection = {
+      dialogueCapabilities,
+      generationCapabilities,
+      providers: [],
+      models: [],
+      defaults: {},
+    };
     const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
     const saveProvider = vi.fn(async () => response);
     const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
@@ -606,6 +968,9 @@ describe('Desktop Settings surfaces', () => {
     );
     expect(container.querySelectorAll('.desktop-settings__model-editor')).toHaveLength(0);
     expect(saveProvider).not.toHaveBeenCalled();
+    const generationApiKey = container.querySelector<HTMLInputElement>('input[type="password"]');
+    if (!generationApiKey) throw new Error('Generation Provider form requires an API-key input.');
+    await setInputValue(generationApiKey, 'minimax-secret');
     await act(async () => findButton(container, 'Save').click());
     expect(saveProvider).toHaveBeenCalledWith(
       {
@@ -613,11 +978,13 @@ describe('Desktop Settings surfaces', () => {
         displayName: 'MiniMax H3',
         type: 'minimax',
         apiUrl: 'https://api.minimaxi.com/v2',
+        connectionKind: 'direct',
         presetId: 'generation-minimax-h3',
         supportedModelFamilies: ['generation'],
+        requiresApiKey: true,
         enabled: true,
       },
-      undefined,
+      'minimax-secret',
     );
     await act(async () => root.unmount());
   });
@@ -625,6 +992,7 @@ describe('Desktop Settings surfaces', () => {
   it('adds MiniMax H3 through its canonical model template', async () => {
     const projection = {
       dialogueCapabilities,
+      generationCapabilities,
       providers: [
         {
           id: 'minimax-media',
@@ -665,15 +1033,26 @@ describe('Desktop Settings surfaces', () => {
     expect(modelEditor.textContent).toContain('MiniMax H3 · MiniMax-H3');
     expect(modelEditor.querySelectorAll('select')).toHaveLength(2);
     expect(modelEditor.querySelector<HTMLSelectElement>('select')?.value).toBe('minimax-h3');
+    const capabilityTrigger = modelEditor.querySelector<HTMLButtonElement>(
+      '[data-model-capability-trigger="true"]',
+    );
+    if (!capabilityTrigger) throw new Error('MiniMax fixture requires a capability selector.');
+    expect(capabilityTrigger.textContent).toContain('Text to video · Image to video +1');
+    await act(async () => capabilityTrigger.click());
+    const capabilityOptions = [
+      ...document.querySelectorAll<HTMLButtonElement>('[data-model-capability]'),
+    ];
+    expect(capabilityOptions).toHaveLength(4);
+    expect(capabilityOptions.every((option) => option.disabled)).toBe(true);
     const save = modelEditor.querySelector<HTMLButtonElement>('button.desktop-settings__action');
     if (!save) throw new Error('MiniMax model fixture requires a save action.');
     await act(async () => save.click());
     expect(saveModel).toHaveBeenCalledWith({
-      id: 'minimax-media-minimax-h3',
       providerId: 'minimax-media',
       apiName: 'MiniMax-H3',
       displayName: 'MiniMax H3',
       type: 'video',
+      capabilities: ['text_to_video', 'video.generate', 'image_to_video', 'video_to_video'],
       enabled: true,
       templateId: 'minimax-h3',
     });
@@ -761,13 +1140,45 @@ function findButtonContaining(container: HTMLElement, label: string): HTMLButton
   return button;
 }
 
-function modelFixture(id: string, providerId: string, type: 'llm' | 'image' | 'video' | 'audio') {
+async function setInputValue(input: HTMLInputElement, value: string): Promise<void> {
+  await act(async () => {
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    if (!setValue) throw new Error('HTMLInputElement value setter is unavailable.');
+    setValue.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+async function setSelectValue(select: HTMLSelectElement, value: string): Promise<void> {
+  await act(async () => {
+    const setValue = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+    if (!setValue) throw new Error('HTMLSelectElement value setter is unavailable.');
+    setValue.call(select, value);
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}
+
+function modelFixture(
+  id: string,
+  providerId: string,
+  type: 'llm' | 'image' | 'video' | 'audio' | 'music',
+) {
   return {
     id,
     providerId,
     apiName: id,
     displayName: id,
     type,
+    capabilities:
+      type === 'llm'
+        ? (['chat', 'llm.chat', 'streaming'] as const)
+        : type === 'image'
+          ? (['text_to_image', 'image.generate'] as const)
+          : type === 'video'
+            ? (['text_to_video', 'video.generate'] as const)
+            : type === 'audio'
+              ? (['text_to_audio', 'audio.generate'] as const)
+              : (['text_to_music', 'audio.music.generate'] as const),
     enabled: true,
   } as const;
 }

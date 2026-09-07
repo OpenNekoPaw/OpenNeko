@@ -56,8 +56,7 @@ function detectExplicitAiConfig(input: AiProviderSourceInput): ExplicitAiConfigS
   const isExplicit =
     hasNonEmptyArray(raw.providers) ||
     hasNonEmptyArray(raw.models) ||
-    hasNonEmptyRecord(raw.defaultModels) ||
-    hasNonEmptyRecord(raw.defaultModelPurposes);
+    hasNonEmptyRecord(raw.defaultModels);
   if (!isExplicit) return { isExplicit: false };
 
   const invalidDiagnostic = isExplicitAiAvailabilityDiagnostic(input.configDiagnostic)

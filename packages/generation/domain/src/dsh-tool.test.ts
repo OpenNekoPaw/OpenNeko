@@ -10,9 +10,12 @@ import type { GenerationJobSnapshot } from './job/contracts';
 
 describe('Generation DSH tool contract', () => {
   it('owns the exact model-facing operation envelope and camelCase request fields', () => {
-    expect(GENERATION_DSH_TOOL_PARAMETERS.input.oneOf).toHaveLength(6);
+    expect(GENERATION_DSH_TOOL_PARAMETERS.input.oneOf).toHaveLength(5);
     const videoSubmitSchema = GENERATION_DSH_TOOL_PARAMETERS.input.oneOf.find(
       (candidate) => candidate.title === 'video submit input',
+    );
+    const imageSubmitSchema = GENERATION_DSH_TOOL_PARAMETERS.input.oneOf.find(
+      (candidate) => candidate.title === 'image submit input',
     );
     expect(videoSubmitSchema).toMatchObject({
       properties: {
@@ -36,13 +39,28 @@ describe('Generation DSH tool contract', () => {
     expect(serialized).toContain('aspectRatio');
     expect(serialized).toContain('purpose');
     expect(serialized).toContain('lifecycleMode');
+    expect(serialized).toContain('image-edit');
+    expect(serialized).toContain('video-edit');
+    expect(serialized).not.toContain('text-to-music');
+    expect(imageSubmitSchema).toMatchObject({
+      properties: {
+        request: {
+          properties: {
+            operation: { enum: ['generate', 'edit', 'inpaint', 'style-transfer'] },
+          },
+        },
+      },
+    });
+    expect(serialized).not.toContain('prepare-for-timeline');
     expect(serialized).not.toContain('negative_prompt');
     expect(serialized).not.toContain('aspect_ratio');
     expect(serialized).not.toContain('anyOf');
+    expect(serialized).toContain('schema presence alone does not mean the model supports it');
+    expect(serialized).toContain('generationType must match the request');
   });
 
-  it('exposes model-bound submit, Host-bound ComfyUI submit and describe', () => {
-    expect(GENERATION_DSH_TOOL_NAME).toBe('openneko.generation');
+  it('exposes model-bound submit and describe', () => {
+    expect(GENERATION_DSH_TOOL_NAME).toBe('openneko_generation');
     expect(
       decodeGenerationDshToolInput('submit', {
         purpose: 'image.generate',
@@ -63,28 +81,90 @@ describe('Generation DSH tool contract', () => {
       operation: 'describe',
       input: { jobId: 'job-1' },
     });
-    expect(
-      decodeGenerationDshToolInput('submit-comfyui', {
-        lifecycleMode: 'detached',
-        workflow: { '3': { class_type: 'KSampler', inputs: { seed: 42 } } },
-        outputKind: 'image',
-        inputBindings: [],
-      }),
-    ).toEqual({
-      operation: 'submit-comfyui',
-      input: {
-        lifecycleMode: 'detached',
-        workflow: { '3': { class_type: 'KSampler', inputs: { seed: 42 } } },
-        outputKind: 'image',
-        inputBindings: [],
-      },
-    });
     expect(() => decodeGenerationDshToolInput('cancel', { jobId: 'job-1' })).toThrow(
-      /must be one of submit, submit-comfyui, describe/,
+      /must be one of submit, describe/,
     );
     expect(() =>
       decodeGenerationDshToolInput('describe', { jobId: 'job-1', include: 'result' }),
     ).toThrow(/input.include is not supported/);
+  });
+
+  it('accepts one explicit first-frame locator and rejects an empty selector', () => {
+    const input = {
+      purpose: 'video.generate',
+      generationType: 'image-to-video',
+      lifecycleMode: 'linked',
+      request: {
+        prompt: 'A slow upward push',
+        operation: 'generate-from-image',
+        duration: 6,
+        aspectRatio: '16:9',
+        inputs: [
+          {
+            type: 'image',
+            role: 'first-frame',
+            locator: {
+              file: { authority: 'workspace', path: 'neko/generated/image/first-frame.png' },
+            },
+            mimeType: 'image/png',
+          },
+        ],
+      },
+    } as const;
+
+    expect(decodeGenerationDshToolInput('submit', input)).toEqual({
+      operation: 'submit',
+      input,
+    });
+    expect(() =>
+      decodeGenerationDshToolInput('submit', {
+        ...input,
+        request: {
+          ...input.request,
+          inputs: [
+            {
+              ...input.request.inputs[0],
+              locator: {
+                ...input.request.inputs[0].locator,
+                selector: {},
+              },
+            },
+          ],
+        },
+      }),
+    ).toThrow(/generation type contract/);
+  });
+
+  it('accepts an EPUB entry as the source of an image edit and rejects outpaint', () => {
+    const input = {
+      purpose: 'image.edit',
+      generationType: 'image-edit',
+      lifecycleMode: 'linked',
+      request: {
+        prompt: 'Recompose the architecture into one wide environment frame.',
+        operation: 'edit',
+        editInstruction: 'Remove page layout and characters while preserving the architecture.',
+        aspectRatio: '16:9',
+        width: 2048,
+        height: 1152,
+        quality: 'high',
+        referenceImageLocator: {
+          file: { authority: 'workspace', path: 'neko/assets/Blame/volume-01.epub' },
+          selector: { kind: 'entry', path: 'image/page-1.jpg' },
+        },
+      },
+    } as const;
+
+    expect(decodeGenerationDshToolInput('submit', input)).toEqual({
+      operation: 'submit',
+      input,
+    });
+    expect(() =>
+      decodeGenerationDshToolInput('submit', {
+        ...input,
+        request: { ...input.request, operation: 'outpaint' },
+      }),
+    ).toThrow(/generation type contract/);
   });
 
   it('rejects semantic negatives before any Job is created', () => {
@@ -105,33 +185,21 @@ describe('Generation DSH tool contract', () => {
       }),
     ).toThrow(/generation type contract/);
     expect(() =>
-      decodeGenerationDshToolInput('submit-comfyui', {
+      decodeGenerationDshToolInput('submit', {
+        purpose: 'audio.music.generate',
+        generationType: 'text-to-music',
         lifecycleMode: 'detached',
-        endpoint: 'http://127.0.0.1:8188',
-        workflow: { '3': {} },
-        outputKind: 'image',
-        inputBindings: [],
+        request: { prompt: 'score' },
       }),
-    ).toThrow(/input.endpoint is not supported/);
+    ).toThrow(/generation type contract/);
     expect(() =>
-      decodeGenerationDshToolInput('submit-comfyui', {
+      decodeGenerationDshToolInput('submit', {
+        purpose: 'image.generate',
+        generationType: 'image-edit',
         lifecycleMode: 'detached',
-        workflow: { '3': { class_type: 'LoadImage', inputs: { image: 'source.png' } } },
-        outputKind: 'image',
-        inputBindings: [
-          {
-            nodeId: '3',
-            inputName: 'image',
-            contentLocator: { file: { authority: 'workspace', path: 'source.png' } },
-          },
-          {
-            nodeId: '3',
-            inputName: 'image',
-            contentLocator: { file: { authority: 'workspace', path: 'other.png' } },
-          },
-        ],
+        request: { prompt: 'edit' },
       }),
-    ).toThrow(/duplicate exact node input/);
+    ).toThrow(/purpose does not match/);
     expect(() =>
       decodeGenerationDshToolInput('submit', {
         purpose: 'image.generate',
@@ -193,5 +261,42 @@ describe('Generation DSH tool contract', () => {
     });
     expect(projectGenerationJobSnapshot(snapshot)).not.toHaveProperty('request');
     expect(projectGenerationJobSnapshot(snapshot)).not.toHaveProperty('providerTask');
+  });
+
+  it('projects visible parameter adjustments without exposing the generation request', () => {
+    const snapshot: GenerationJobSnapshot = {
+      ref: { kind: 'generation', jobId: 'job-video' },
+      phase: 'pending',
+      createdAt: 1,
+      updatedAt: 1,
+      lifecycleMode: 'detached',
+      request: {
+        providerId: 'minimax-provider',
+        modelId: 'minimax-h3',
+        generationType: 'image-to-video',
+        parameterAdjustments: [
+          { parameter: 'resolution', reason: 'invalid' },
+          { parameter: 'fps', reason: 'unsupported' },
+        ],
+        request: {
+          prompt: 'A slow upward push',
+          providerId: 'minimax-provider',
+          modelId: 'minimax-h3',
+          duration: 6,
+          resolution: '768P',
+          aspectRatio: '16:9',
+        },
+      },
+      progress: { stage: 'queued', percent: 0 },
+    };
+
+    expect(projectGenerationJobSnapshot(snapshot)).toMatchObject({
+      jobId: 'job-video',
+      parameterAdjustments: [
+        { parameter: 'resolution', reason: 'invalid' },
+        { parameter: 'fps', reason: 'unsupported' },
+      ],
+    });
+    expect(projectGenerationJobSnapshot(snapshot)).not.toHaveProperty('request');
   });
 });

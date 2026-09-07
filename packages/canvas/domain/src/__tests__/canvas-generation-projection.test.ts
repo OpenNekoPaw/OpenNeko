@@ -38,9 +38,58 @@ describe('Canvas Generation Job projection', () => {
       expect.objectContaining({
         sourceId: 'source-node',
         targetId: 'generation:generation-1',
-        type: 'derived-from',
+        type: 'reference',
       }),
     ]);
+  });
+
+  it('places automatic Generation nodes beside their sources without overlapping the Canvas', () => {
+    let canvas = emptyWithSource();
+    for (let index = 1; index <= 7; index += 1) {
+      canvas = project(
+        canvas,
+        snapshot({
+          ref: { kind: 'generation', jobId: `generation-${index}` },
+          submissionId: `submission-${index}`,
+          recipeInputFingerprint: `recipe-input-${index}`,
+        }),
+      );
+    }
+
+    const generations = canvas.nodes.filter((node) => node.type === 'generation');
+    const source = canvas.nodes.find((node) => node.id === 'source-node')!;
+    expect(generations).toHaveLength(7);
+    expect(generations[0]!.position.x).toBeGreaterThanOrEqual(
+      source.position.x + source.size.width,
+    );
+    for (const [index, node] of canvas.nodes.entries()) {
+      expect(
+        canvas.nodes.slice(index + 1).every((candidate) => !rectanglesOverlap(node, candidate)),
+      ).toBe(true);
+    }
+  });
+
+  it('places regeneration beside the prior Generation node when no input node is repeated', () => {
+    const initial = project(
+      emptyWithSource(),
+      snapshot({ phase: 'pending', position: { x: 480, y: 260 } }),
+    );
+    const regenerated = project(
+      initial,
+      snapshot({
+        ref: { kind: 'generation', jobId: 'generation-2' },
+        regenerateOf: { kind: 'generation', jobId: 'generation-1' },
+        inputNodeIds: [],
+        submissionId: 'submission-2',
+        recipeInputFingerprint: 'recipe-input-2',
+      }),
+    );
+
+    const previous = regenerated.nodes.find((node) => node.id === 'generation:generation-1')!;
+    const next = regenerated.nodes.find((node) => node.id === 'generation:generation-2')!;
+    expect(next.position.x).toBeGreaterThanOrEqual(previous.position.x + previous.size.width);
+    expect(next.position.y).toBe(previous.position.y);
+    expect(rectanglesOverlap(previous, next)).toBe(false);
   });
 
   it('uses the Generation JobRef as the durable run identity when Agent submission metadata is absent', () => {
@@ -195,6 +244,7 @@ function snapshot(
     phase: 'pending',
     title: 'Generate concept frame',
     inputNodeIds: ['source-node'],
+    inputMaterials: [],
     mediaKind: 'image',
     summary: { prompt: 'Create a concept frame', model: 'fixture-model' },
     recipe: {
@@ -223,4 +273,16 @@ function emptyWithSource(): CanvasData {
     generateId: () => 'source-node',
   });
   return canvas;
+}
+
+function rectanglesOverlap(
+  left: CanvasData['nodes'][number],
+  right: CanvasData['nodes'][number],
+): boolean {
+  return !(
+    left.position.x + left.size.width <= right.position.x ||
+    right.position.x + right.size.width <= left.position.x ||
+    left.position.y + left.size.height <= right.position.y ||
+    right.position.y + right.size.height <= left.position.y
+  );
 }

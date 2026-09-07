@@ -29,13 +29,13 @@ describe('OpenNeko Cut DSH plugin', () => {
 
     apply(ctx as never);
     if (definition === undefined) throw new Error('Cut DSH Tool was not registered.');
-    expect(definition.name).toBe('openneko.cut');
+    expect(definition.name).toBe('openneko_cut');
     await expect(
       definition.execute({ operation: 'query', input: { documentPath: 'cuts/story.otio' } }, {}),
     ).resolves.toEqual({ documentPath: 'cuts/story.otio' });
     expect(execute).toHaveBeenCalledWith(
       {
-        tool: 'openneko.cut',
+        tool: 'openneko_cut',
         operation: 'query',
         input: { documentPath: 'cuts/story.otio' },
       },

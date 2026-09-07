@@ -3,20 +3,31 @@ import { loadNkc, saveNkc } from '../../nkc';
 import type { CanvasData, GenerationCanvasNode } from '../canvas';
 import {
   applyCanvasGenerationOutputs,
-  authorCanvasGeneratedText,
   beginCanvasGenerationRun,
   bindCanvasGenerationJob,
   createCanvasGenerationNodeData,
   isCanvasGenerationNodeData,
   isCanvasGenerationRecipe,
-  purposeForCanvasGenerationRecipe,
   selectCanvasGenerationOutput,
   updateCanvasGenerationRecipe,
 } from '../canvas-generation-node';
 
 describe('Canvas Generation Node contract', () => {
   it('round-trips canonical Recipe, run, output, and selection facts without runtime state', () => {
-    const node = generationNode();
+    const node: GenerationCanvasNode = {
+      ...generationNode(),
+      data: {
+        ...generationNode().data,
+        inputMaterials: [
+          {
+            mediaKind: 'image',
+            locator: {
+              file: { authority: 'workspace', path: 'neko/generated/image/reference.png' },
+            },
+          },
+        ],
+      },
+    };
     const canvas: CanvasData = {
       name: 'Generation',
       nodes: [node],
@@ -30,6 +41,61 @@ describe('Canvas Generation Node contract', () => {
     expect(JSON.stringify(loaded.data)).not.toMatch(
       /schemaVersion|contractVersion|providerTask|runtimeUrl|runtimePath|credential|phase/,
     );
+  });
+
+  it('rejects duplicate embedded input material identities', () => {
+    const material = {
+      mediaKind: 'image' as const,
+      locator: { file: { authority: 'workspace' as const, path: 'reference.png' } },
+    };
+    expect(
+      isCanvasGenerationNodeData({
+        ...createCanvasGenerationNodeData('image'),
+        inputMaterials: [material, material],
+      }),
+    ).toBe(false);
+  });
+
+  it('loads persisted image Recipes whose selected model uses standard or HD quality names', () => {
+    for (const quality of ['standard', 'hd'] as const) {
+      const loaded = loadNkc(
+        JSON.stringify({
+          name: 'Persisted image generation',
+          nodes: [
+            {
+              ...generationNode(),
+              data: {
+                recipe: {
+                  kind: 'image',
+                  prompt: 'A wide environment frame',
+                  model: {
+                    purpose: 'image.generate',
+                    providerId: 'image-provider',
+                    modelId: 'image-model',
+                  },
+                  width: 1920,
+                  height: 1080,
+                  aspectRatio: '16:9',
+                  quality,
+                },
+                latestRun: {
+                  recipeInputFingerprint: 'recipe-fingerprint',
+                  jobRef: { kind: 'generation', jobId: 'generation-job' },
+                },
+                outputs: [],
+              },
+            },
+          ],
+          connections: [],
+        }),
+      );
+
+      expect(loaded.validation.errors).toEqual([]);
+      expect(loaded.data.nodes[0]).toMatchObject({
+        type: 'generation',
+        data: { recipe: { kind: 'image', quality } },
+      });
+    }
   });
 
   it('keeps valid sibling content visible when one Generation Node is invalid', () => {
@@ -116,7 +182,7 @@ describe('Canvas Generation Node contract', () => {
     expect(applied.data.outputs).toHaveLength(1);
   });
 
-  it('derives editable prompt text without rewriting the immutable generated output', () => {
+  it('keeps generated Prompt content locator-backed without an inline authored body', () => {
     const jobRef = { kind: 'generation' as const, jobId: 'job-text' };
     const initial = {
       recipe: {
@@ -138,35 +204,34 @@ describe('Canvas Generation Node contract', () => {
     };
     expect(isCanvasGenerationNodeData(initial)).toBe(true);
 
-    const authored = authorCanvasGeneratedText(initial, 'Edited scene');
-    expect(authored.authoredText).toEqual({
-      text: 'Edited scene',
-      sourceOutputId: 'text-output',
-    });
-    expect(authored.outputs).toEqual(initial.outputs);
-    expect(selectCanvasGenerationOutput(authored, 'text-output').authoredText).toBeUndefined();
-  });
-
-  it('requires the distinct music purpose without introducing another node kind', () => {
-    const musicRecipe = {
-      kind: 'audio' as const,
-      prompt: 'slow ambient score',
-      isMusic: true,
-      model: {
-        purpose: 'audio.music.generate' as const,
-        providerId: 'provider-1',
-        modelId: 'music-model',
-      },
-    };
-
-    expect(purposeForCanvasGenerationRecipe(musicRecipe)).toBe('audio.music.generate');
-    expect(isCanvasGenerationRecipe(musicRecipe)).toBe(true);
     expect(
-      isCanvasGenerationRecipe({
-        ...musicRecipe,
-        model: { ...musicRecipe.model, purpose: 'audio.generate' },
+      isCanvasGenerationNodeData({
+        ...initial,
+        authoredText: { text: 'Edited scene', sourceOutputId: 'text-output' },
       }),
     ).toBe(false);
+    expect(selectCanvasGenerationOutput(initial, 'text-output')).toEqual(initial);
+  });
+
+  it('does not invent video parameters when the selected model has no verified profile', () => {
+    const model = {
+      purpose: 'video.generate' as const,
+      providerId: 'custom-provider',
+      modelId: 'custom-video-model',
+    };
+
+    expect(createCanvasGenerationNodeData('video', model)).toEqual({
+      recipe: { kind: 'video', prompt: '', model },
+      outputs: [],
+    });
+    expect(
+      isCanvasGenerationRecipe({
+        kind: 'video',
+        prompt: 'A city at night',
+        model,
+        generateAudio: true,
+      }),
+    ).toBe(true);
   });
 });
 

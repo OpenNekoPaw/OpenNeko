@@ -1,14 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { CanvasDshHostAdapter } from './canvas-host-adapter';
+import { CanvasDshHostAdapter, type CanvasDshAuthoringPort } from './canvas-host-adapter';
 import { GenerationDshHostAdapter } from './generation-host-adapter';
 import type { DshAcpDomainToolRequest } from '@neko/agent-contracts/dsh-acp';
 import type { GenerationJobSnapshot, PurposeGenerationJobPort } from '@neko/generation-domain/job';
-import {
-  CanvasProjectAuthoringError,
-  type CanvasProjectAuthoringService,
-  type CanvasProjectSnapshot,
-} from '@neko/canvas-domain';
+import { CanvasProjectAuthoringError, type CanvasProjectSnapshot } from '@neko/canvas-domain';
 
 describe('DSH Host adapters for the W2 domain Tool slice', () => {
   it('denies read-only Generation and Canvas mutations before resolving their services', async () => {
@@ -20,7 +16,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     await expect(
       generation.execute(
         request(
-          'openneko.generation',
+          'openneko_generation',
           'submit',
           {
             purpose: 'image.generate',
@@ -38,9 +34,12 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     await expect(
       canvas.execute(
         request(
-          'openneko.canvas',
-          'create-node',
-          { documentPath: 'boards/story.nkc', node: { type: 'markdown' } },
+          'openneko_canvas',
+          'apply',
+          {
+            documentPath: 'boards/story.nkc',
+            command: { kind: 'create_node', node: { type: 'markdown', content: '' } },
+          },
           'read-only',
         ),
       ),
@@ -62,7 +61,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     jobs.observeGeneration.mockReturnValue(snapshots(submitted, succeeded));
 
     const response = await adapter.execute(
-      request('openneko.generation', 'submit', {
+      request('openneko_generation', 'submit', {
         purpose: 'image.generate',
         generationType: 'text-to-image',
         lifecycleMode: 'detached',
@@ -100,55 +99,40 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     });
   });
 
-  it('routes Host-bound ComfyUI submission through the same Generation lifecycle without model bindings', async () => {
-    const resolvePurposeJobs = vi.fn();
-    const workflowSnapshot: GenerationJobSnapshot = {
-      ref: { kind: 'generation', jobId: 'comfyui-job-1' },
+  it('returns model parameter adjustments with the settled Generation facts', async () => {
+    const jobs = createGenerationJobs();
+    const submitted = createVideoGenerationSnapshot();
+    const succeeded: GenerationJobSnapshot = {
+      ...submitted,
       phase: 'succeeded',
-      createdAt: 1,
-      updatedAt: 2,
-      lifecycleMode: 'detached',
-      request: {
-        generationType: 'workflow',
-        providerId: 'comfyui',
-        request: {
-          endpoint: 'http://127.0.0.1:8188',
-          clientId: 'openneko-host-owned',
-          workflow: { '3': { class_type: 'KSampler', inputs: { seed: 42 } } },
-          outputKind: 'image',
-          inputBindings: [],
-        },
-      },
+      updatedAt: 3,
       progress: { stage: 'completed', percent: 100 },
       resultLocators: [
-        { file: { authority: 'workspace', path: 'neko/generated/image/exact.png' } },
+        { file: { authority: 'workspace', path: 'neko/generated/job-video/video.mp4' } },
       ],
     };
-    const submit = vi.fn(async () => ({
-      snapshot: workflowSnapshot,
-      jobs: { observeGeneration: vi.fn() },
-    }));
-    const adapter = new GenerationDshHostAdapter(resolvePurposeJobs, undefined, undefined, {
-      submit,
-    });
+    jobs.submitGeneration.mockResolvedValue(submitted);
+    jobs.observeGeneration.mockReturnValue(snapshots(submitted, succeeded));
+    const adapter = new GenerationDshHostAdapter(jobs);
 
-    const response = await adapter.execute(
-      request('openneko.generation', 'submit-comfyui', {
-        lifecycleMode: 'detached',
-        workflow: { '3': { class_type: 'KSampler', inputs: { seed: 42 } } },
-        outputKind: 'image',
-        inputBindings: [],
-      }),
-    );
-
-    expect(response).toMatchObject({ outcome: 'success', jobId: 'comfyui-job-1' });
-    expect(submit).toHaveBeenCalledWith({
-      lifecycleMode: 'detached',
-      workflow: { '3': { class_type: 'KSampler', inputs: { seed: 42 } } },
-      outputKind: 'image',
-      inputBindings: [],
+    await expect(
+      adapter.execute(
+        request('openneko_generation', 'submit', {
+          purpose: 'video.generate',
+          generationType: 'image-to-video',
+          lifecycleMode: 'detached',
+          request: { prompt: 'A slow upward push' },
+        }),
+      ),
+    ).resolves.toMatchObject({
+      outcome: 'success',
+      result: {
+        parameterAdjustments: [
+          { parameter: 'resolution', reason: 'invalid' },
+          { parameter: 'fps', reason: 'unsupported' },
+        ],
+      },
     });
-    expect(resolvePurposeJobs).not.toHaveBeenCalled();
   });
 
   it('projects each distinct Generation lifecycle snapshot through the exact Tool request', async () => {
@@ -165,7 +149,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     const adapter = new GenerationDshHostAdapter(jobs, undefined, { project });
     jobs.submitGeneration.mockResolvedValue(submitted);
     jobs.observeGeneration.mockReturnValue(snapshots(submitted, running, succeeded));
-    const toolRequest = request('openneko.generation', 'submit', {
+    const toolRequest = request('openneko_generation', 'submit', {
       purpose: 'image.generate',
       generationType: 'text-to-image',
       lifecycleMode: 'detached',
@@ -203,7 +187,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
 
     await expect(
       adapter.execute(
-        request('openneko.generation', 'submit', {
+        request('openneko_generation', 'submit', {
           purpose: 'image.generate',
           generationType: 'text-to-image',
           lifecycleMode: 'detached',
@@ -241,7 +225,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
 
       await expect(
         adapter.execute(
-          request('openneko.generation', 'submit', {
+          request('openneko_generation', 'submit', {
             purpose: 'image.generate',
             generationType: 'text-to-image',
             lifecycleMode: 'detached',
@@ -267,7 +251,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
 
     await expect(
       adapter.execute(
-        request('openneko.generation', 'submit', {
+        request('openneko_generation', 'submit', {
           purpose: 'image.generate',
           generationType: 'text-to-image',
           lifecycleMode: 'detached',
@@ -299,7 +283,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
 
     await expect(
       adapter.execute(
-        request('openneko.generation', 'submit', {
+        request('openneko_generation', 'submit', {
           purpose: 'image.generate',
           generationType: 'text-to-image',
           lifecycleMode: 'detached',
@@ -334,7 +318,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     });
 
     const response = adapter.execute(
-      request('openneko.generation', 'submit', {
+      request('openneko_generation', 'submit', {
         purpose: 'image.generate',
         generationType: 'text-to-image',
         lifecycleMode: 'detached',
@@ -366,7 +350,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     jobs.describeGeneration.mockResolvedValue(createGenerationSnapshot());
 
     const response = await adapter.execute(
-      request('openneko.generation', 'describe', {
+      request('openneko_generation', 'describe', {
         jobId: 'job-1',
       }),
     );
@@ -385,7 +369,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
 
     await expect(
       adapter.execute(
-        request('openneko.generation', 'submit', {
+        request('openneko_generation', 'submit', {
           purpose: '',
           generationType: 'text-to-image',
           lifecycleMode: 'detached',
@@ -396,7 +380,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
       outcome: 'failure',
       diagnostic: { code: 'GENERATION_DSH_TOOL_INVALID_INPUT' },
     });
-    await expect(adapter.execute(request('openneko.unknown', 'submit', {}))).resolves.toMatchObject(
+    await expect(adapter.execute(request('openneko_unknown', 'submit', {}))).resolves.toMatchObject(
       {
         outcome: 'failure',
         diagnostic: { code: 'GENERATION_DSH_TOOL_MISMATCH' },
@@ -405,7 +389,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     expect(jobs.submitGeneration).not.toHaveBeenCalled();
   });
 
-  it('keeps the Canvas fingerprint internal and rejects stale CAS mutations locally', async () => {
+  it('keeps Canvas freshness inside the owning Host port and projects mutation failures', async () => {
     const service = createCanvasService();
     const adapter = new CanvasDshHostAdapter(service);
     const snapshot = createCanvasSnapshot();
@@ -416,7 +400,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     );
 
     const queryResponse = await adapter.execute(
-      request('openneko.canvas', 'query', {
+      request('openneko_canvas', 'query', {
         documentPath: 'boards/story.nkc',
       }),
     );
@@ -424,15 +408,30 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
       outcome: 'success',
       result: {
         documentPath: 'boards/story.nkc',
+        name: 'Story',
         nodeCount: 1,
         connectionCount: 0,
+        nodes: [
+          {
+            nodeId: 'node-1',
+            nodeType: 'markdown',
+            parentId: null,
+            title: null,
+            data: { content: '' },
+            targetableFields: ['/content', '/title'],
+          },
+        ],
+        connections: [],
+        missingNodeIds: [],
+        nodesTruncated: false,
+        connectionsTruncated: false,
       },
     });
 
     const staleResponse = await adapter.execute(
-      request('openneko.canvas', 'create-node', {
+      request('openneko_canvas', 'apply', {
         documentPath: 'boards/story.nkc',
-        node: { type: 'markdown' },
+        command: { kind: 'create_node', node: { type: 'markdown', content: '# Opening' } },
       }),
     );
     expect(staleResponse).toMatchObject({
@@ -441,8 +440,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     });
     expect(service.createNode).toHaveBeenCalledWith({
       documentPath: 'boards/story.nkc',
-      expectedFingerprint: { strategy: 'sha256', value: 'fingerprint' },
-      node: { type: 'markdown' },
+      node: { type: 'markdown', data: { content: '# Opening' } },
     });
   });
 
@@ -461,11 +459,12 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
         position: { x: 1, y: 2 },
         size: { width: 100, height: 50 },
         zIndex: 2,
+        data: { content: '# Opening' },
       },
     });
 
     await adapter.execute(
-      request('openneko.canvas', 'query', {
+      request('openneko_canvas', 'query', {
         documentPath: 'boards/story.nkc',
       }),
       controller.signal,
@@ -476,18 +475,113 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     });
 
     await adapter.execute(
-      request('openneko.canvas', 'create-node', {
+      request('openneko_canvas', 'apply', {
         documentPath: 'boards/story.nkc',
-        node: { type: 'markdown' },
+        command: { kind: 'create_node', node: { type: 'markdown', content: '# Opening' } },
       }),
       controller.signal,
     );
     expect(service.createNode).toHaveBeenCalledWith({
       documentPath: 'boards/story.nkc',
-      expectedFingerprint: { strategy: 'sha256', value: 'fingerprint' },
-      node: { type: 'markdown' },
+      node: { type: 'markdown', data: { content: '# Opening' } },
       signal: controller.signal,
     });
+  });
+
+  it('routes Canvas update_node and create_connection through the exact owning port', async () => {
+    const service = createCanvasService();
+    const adapter = new CanvasDshHostAdapter(service);
+    const snapshot = createCanvasSnapshot();
+    service.updateNode.mockResolvedValue({ ...snapshot, node: snapshot.canvas.nodes[0]! });
+    service.createConnection.mockResolvedValue({
+      ...snapshot,
+      connection: {
+        id: 'connection-1',
+        sourceId: 'node-1',
+        targetId: 'node-2',
+        type: 'sequence',
+        sourceEndpoint: { nodeId: 'node-1', scope: 'node' },
+        targetEndpoint: { nodeId: 'node-2', scope: 'node' },
+      },
+    });
+
+    await expect(
+      adapter.execute(
+        request('openneko_canvas', 'apply', {
+          documentPath: 'boards/story.nkc',
+          command: {
+            kind: 'update_node',
+            nodeId: 'node-1',
+            path: '/content',
+            value: '# Revised',
+          },
+        }),
+      ),
+    ).resolves.toMatchObject({
+      outcome: 'success',
+      result: { command: 'update_node', nodeId: 'node-1' },
+    });
+    expect(service.updateNode).toHaveBeenCalledWith({
+      documentPath: 'boards/story.nkc',
+      request: { nodeId: 'node-1', path: '/content', value: '# Revised' },
+    });
+
+    await expect(
+      adapter.execute(
+        request('openneko_canvas', 'apply', {
+          documentPath: 'boards/story.nkc',
+          command: {
+            kind: 'create_connection',
+            sourceId: 'node-1',
+            targetId: 'node-2',
+            type: 'sequence',
+          },
+        }),
+      ),
+    ).resolves.toMatchObject({
+      outcome: 'success',
+      result: { command: 'create_connection', connectionId: 'connection-1' },
+    });
+    expect(service.createConnection).toHaveBeenCalledWith({
+      documentPath: 'boards/story.nkc',
+      connection: { sourceId: 'node-1', targetId: 'node-2', type: 'sequence' },
+    });
+  });
+
+  it('routes grouping only through the exact authorized Canvas owner', async () => {
+    const service = createCanvasService();
+    const snapshot = createCanvasSnapshot();
+    vi.mocked(service.groupNodes).mockResolvedValue({
+      ...snapshot,
+      node: snapshot.canvas.nodes[0]!,
+    });
+    const adapter = new CanvasDshHostAdapter(service);
+    const input = {
+      documentPath: snapshot.documentPath,
+      command: { kind: 'group_nodes', nodeIds: ['node-1'], label: '设计批次' },
+    };
+    expect(await adapter.execute(request('openneko_canvas', 'apply', input))).toMatchObject({
+      outcome: 'success',
+      result: { command: 'group_nodes', nodeId: 'node-1' },
+    });
+    expect(service.groupNodes).toHaveBeenCalledExactlyOnceWith({
+      documentPath: snapshot.documentPath,
+      request: input.command,
+    });
+    expect(
+      await adapter.execute(
+        request('openneko_canvas', 'apply', {
+          ...input,
+          command: { ...input.command, nodeIds: [] },
+        }),
+      ),
+    ).toMatchObject({ outcome: 'failure', diagnostic: { code: 'CANVAS_DSH_TOOL_INVALID_INPUT' } });
+    expect(service.groupNodes).toHaveBeenCalledTimes(1);
+    expect(
+      await adapter.execute(request('openneko_canvas', 'apply', input, 'read-only')),
+    ).toMatchObject({ outcome: 'failure', diagnostic: { code: 'DSH_DOMAIN_TOOL_READ_ONLY' } });
+    expect(service.groupNodes).toHaveBeenCalledTimes(1);
+    expect(service.createNode).not.toHaveBeenCalled();
   });
 
   it('does not wrap domain Tools in MCP or use a wildcard Host tool registry', async () => {
@@ -566,16 +660,47 @@ function createSucceededGenerationSnapshot(): GenerationJobSnapshot {
   };
 }
 
+function createVideoGenerationSnapshot(): GenerationJobSnapshot {
+  return {
+    ref: { kind: 'generation', jobId: 'job-video' },
+    phase: 'pending',
+    createdAt: 1,
+    updatedAt: 2,
+    lifecycleMode: 'detached',
+    request: {
+      providerId: 'minimax-provider',
+      modelId: 'minimax-h3',
+      generationType: 'image-to-video',
+      parameterAdjustments: [
+        { parameter: 'resolution', reason: 'invalid' },
+        { parameter: 'fps', reason: 'unsupported' },
+      ],
+      request: {
+        prompt: 'A slow upward push',
+        providerId: 'minimax-provider',
+        modelId: 'minimax-h3',
+        duration: 6,
+        resolution: '768P',
+        aspectRatio: '16:9',
+      },
+    },
+    progress: { stage: 'queued', percent: 0 },
+  };
+}
+
 async function* snapshots(
   ...values: readonly GenerationJobSnapshot[]
 ): AsyncIterable<GenerationJobSnapshot> {
   yield* values;
 }
 
-function createCanvasService(): Pick<CanvasProjectAuthoringService, 'query' | 'createNode'> {
+function createCanvasService(): CanvasDshAuthoringPort {
   return {
+    groupNodes: vi.fn(),
     query: vi.fn(),
     createNode: vi.fn(),
+    updateNode: vi.fn(),
+    createConnection: vi.fn(),
   } as never;
 }
 
@@ -592,6 +717,7 @@ function createCanvasSnapshot(): CanvasProjectSnapshot {
           position: { x: 0, y: 0 },
           size: { width: 100, height: 50 },
           zIndex: 1,
+          data: { content: '' },
         },
       ],
       connections: [],

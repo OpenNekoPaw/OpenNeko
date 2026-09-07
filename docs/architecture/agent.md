@@ -62,6 +62,10 @@ DSH Session 保存 harness transcript、model context、turn/call lineage、Inbo
 OpenNeko catalog 只保存用户可管理的 Conversation metadata、Workspace/domain binding、DSH Session
 reference、权限/信任和领域 artifact/Job reference；不得复制完整 transcript 或把 projection 变成第二事实源。
 
+Composer 的画布选择由 Agent application 按精确 Conversation 持久保存，重开从同一记录恢复；
+创建分支时继承源会话当前选择，父子会话后续独立修改。草稿选择属于可恢复 presentation，首次提交时
+与 Conversation 一起保存。已提交消息的画布目标按精确 turn 冻结，不受后续选择、导航或分支操作影响。
+
 Session 不可解析、binding 丢失或 DSH 不可用时，只将对应 Conversation 标记为不可执行并显示明确
 diagnostic。不得创建空 Session、选择其他 reader、覆盖用户数据、停止 sibling Conversation，或让局部错误
 导致应用启动失败。
@@ -120,7 +124,7 @@ no-replace 发布，再由当前 DSH catalog 观察结果；不得覆盖、合�
 
 ## 附件、媒体 Tool 与模型
 
-ACP content block 是 Desktop 到 DSH 的唯一消息输入协议。Composer 图片通过 Host 授权和 DSH attachment admission 后以 DSH 原生 image block 进入 exact Session；运行中发现的文档图片通过 `openneko.read_image` Tool 返回同一原生 image block。当前 DSH 只原生持久化 PNG、JPEG、WebP 与 GIF；音频、视频、文档和其他文件在公开 block/lifecycle 补齐前，只能由 owning media/content Tool 生成有界、带来源的文本、metadata、转写或采样表示，不把 raw path、bearer URL 或旧多模态 packet 写入 Session。
+ACP content block 是 Desktop 到 DSH 的唯一消息输入协议。Composer 图片通过 Host 授权和 DSH attachment admission 后以 DSH 原生 image block 进入 exact Session；运行中发现的文档图片先通过 `openneko_read_images` 把一至四个 exact ContentLocator 合成为单张有界联系表，仅对已选定页面通过 `openneko_read_image` 返回原始细节。成功完成的 content Tool 以已校验输入为 authority，把去重源文档和 exact 原图引用立即投影到本回合获准 Canvas；联系表附件只作为 Tool 内预览，不成为 Canvas 节点或第二事实来源。可移植 UTF-8 文本由 DSH 原生 `read`、`write` 和 `edit` 在 exact Session cwd 与有效 sandbox 下读写，最终 assistant message 只报告已经完成的文件操作，不携带供 Host 二次发布的文档 bytes，也不触发终态 Canvas 投影。Canvas `.nkc`、Cut `.otio` 和其他受保护结构化项目仍只能通过 owning domain capability 访问。DSH Session 的标准 Tool-result pruning 与 qualified compaction 管理后续模型上下文；OpenNeko 不复制文件或图片上下文，也不实现第二压缩器。DSH attachment 原生持久化 PNG、JPEG、WebP 与 GIF；音频、视频、打包文档和其他非文本文件继续由 owning media/content Tool 生成有界、带来源的表示或产物，不把 raw path、bearer URL 或旧多模态 packet 写入 Session。
 
 当前 Agent 模型是媒体语义理解的唯一 LLM authority。附件或 Tool 结果所需模态受支持时由同一模型继续处理；不支持时只拒绝当前 submit 或 Tool call，并明确提示切换模型。产品不配置第二媒体分析模型，不隐式切换 provider/model，也不允许 Tool 用隐藏模型伪造成功。Generation 媒体模型/参数继续由 `@neko/generation-domain` owner 独立管理；未来专用 ASR/OCR/安全审核模型只能属于对应 Tool/service 的显式能力与审批边界。
 
@@ -134,7 +138,7 @@ settings storage 建成平行产品配置。单项能力 decode 失败只隔离�
 依赖该目录的对话 Provider，但现有记录和无关设置保持可用。
 
 Host 是 provider credential authority。Secret 只能通过 Desktop SecretStorage concrete adapter 和受限 Host
-port 解析，不能进入 ACP logs/stdout、DSH Session、Renderer、Evaluation facts 或 domain artifacts。Renderer
+port 解析，不能进入 ACP logs/stdout、DSH Session、Renderer、诊断事实 或 domain artifacts。Renderer
 不得访问 Node/Electron、本地绝对路径、raw cache path、credential 或进程 handle。
 
 ACP stdout 必须保持协议纯净；日志走 stderr 或受控 diagnostic。reverse request、permission 与资源授权必须
@@ -151,6 +155,14 @@ Processor 或第二套 Capability runtime。
 System Prompt 只负责通用行为、安全、工具发现与失败处理。领域 operation/schema/validation/diagnostic 由
 owning capability/Tool contract 注入；Skill 只负责方法论和创作语义。Prompt/Skill 不得补偿 runtime、Tool、
 provider、permission 或 artifact owner 的缺陷。
+
+多阶段内容创作先从当前 Workspace 事实形成一条简洁整体路线，只记录必要阶段的目标产物、输入依赖和
+完成条件；当前由创作者评审的阶段承担详细设计，后续阶段不得提前扩写为未经验证的制作说明。当前阶段
+可以包含一个由多个独立有界 Tool call 组成的依赖就绪批次；Agent 在同一任务中等待并检查整批终态，
+再继续无歧义的下一依赖波次。只有创作者选择、实质创意分歧、权限或成本确认、能力阻塞以及请求完成才
+结束自动推进。每个媒体操作仍由对应 owning Skill 与 Tool 独立执行，单项失败只阻塞其依赖项，当前预览
+和 Agent 检查不构成创作者采用。用户直接继续或修改当前内容，不建立批量领域 Job、跨领域审批对象、
+独立审核关卡、预算状态或全局生产状态机。Canvas、Generation、Cut 与 Content 仍分别拥有各自事实和副作用。
 
 领域输出格式、创作表、Canvas/Cut plan 与 profile 规则不得进入默认 Prompt。Skill 可以描述领域流程和
 公开工具方法，但不能声明执行成功；只读 validator 负责明确 profile 的 correctness，未注册规则不得被

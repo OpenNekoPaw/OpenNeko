@@ -1,4 +1,5 @@
 import {
+  CANVAS_AUDIO_NODE_MIN_SIZE,
   CANVAS_DEFAULT_CONTAINER_MIN_SIZE,
   CANVAS_DEFAULT_NODE_MIN_SIZE,
   CANVAS_NODE_MIN_SIZES,
@@ -31,12 +32,27 @@ export function resolveNodeMinSize(node: NodeSizingInput): NodeSize {
   if (node.type === 'media' && hasImageMediaType(node.data) && node.size) {
     return resolveCanvasImageNodeMinSize(node.size);
   }
+  if (hasAudioPresentation(node)) {
+    return { ...CANVAS_AUDIO_NODE_MIN_SIZE };
+  }
   const knownSize = NODE_TYPE_MIN_SIZES[node.type];
   if (knownSize) {
     return knownSize;
   }
 
   return node.container ? DEFAULT_CONTAINER_MIN_SIZE : DEFAULT_NODE_MIN_SIZE;
+}
+
+function hasAudioPresentation(node: NodeSizingInput): boolean {
+  if (typeof node.data !== 'object' || node.data === null) return false;
+  if (node.type === 'media') {
+    return 'mediaType' in node.data && node.data.mediaType === 'audio';
+  }
+  if (node.type !== 'generation' || !('recipe' in node.data)) return false;
+  const recipe = node.data.recipe;
+  return (
+    typeof recipe === 'object' && recipe !== null && 'kind' in recipe && recipe.kind === 'audio'
+  );
 }
 
 function hasImageMediaType(data: unknown): boolean {

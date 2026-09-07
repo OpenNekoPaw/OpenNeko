@@ -23,6 +23,7 @@ const config: ForgeConfig = {
       fileURLToPath(new URL('./.dsh-runtime-stage/dsh-runtime', import.meta.url)),
     ],
     executableName: 'OpenNeko',
+    icon: fileURLToPath(new URL('./resources/app-icon', import.meta.url)),
     name: 'OpenNeko',
     osxSign: macOSForgeTrust.osxSign,
   },

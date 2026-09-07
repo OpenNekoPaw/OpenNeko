@@ -24,6 +24,7 @@ export {
 } from './navigation';
 export {
   CopyIcon,
+  BranchIcon,
   CheckIcon,
   DownloadIcon,
   OpenIcon,

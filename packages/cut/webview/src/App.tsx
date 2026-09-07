@@ -7,7 +7,7 @@ import type {
   TimelineClipView,
   TimelineView,
 } from '@neko/cut-domain';
-import { isCutUserDiagnostic } from '@neko/cut-domain';
+import { isCutUserDiagnostic, resolveTimelinePlaybackEndSeconds } from '@neko/cut-domain';
 import { usePersistedResize, useResizable } from '@neko/ui/hooks';
 import { useFocusedWebviewRoot } from '@neko/ui/keyboard';
 import { ResizeHandle } from '@neko/ui/primitives';
@@ -27,6 +27,7 @@ import {
   applyPreviewPlaybackAdvance,
   finishPreviewPlaybackSegment,
   previewPreparationLeadSeconds,
+  resolvePreviewPlaybackStartSeconds,
   shouldAcceptPreviewReady,
   type PreviewPlaybackAdvance,
   type PreviewPlaybackSegment,
@@ -952,6 +953,14 @@ function App() {
       presentationActions.reportDiagnostic({ code: 'project-not-open' });
       return;
     }
+    const previewStartSeconds = resolvePreviewPlaybackStartSeconds(
+      playheadSeconds,
+      resolveTimelinePlaybackEndSeconds(view),
+    );
+    if (previewStartSeconds === undefined) {
+      presentationActions.reportDiagnostic(previewFailureDiagnostic('startup'));
+      return;
+    }
     const attempt = previewFailureGate.begin();
     previewAttemptRef.current = attempt;
     try {
@@ -970,10 +979,11 @@ function App() {
     activatingPreviewRequestIdRef.current = undefined;
     activePreviewHostRequestIdRef.current = undefined;
     waitingPreviewBoundaryRef.current = undefined;
-    const playheadVideoClip = findVideoClipAtTime(view, playheadSeconds);
+    presentationActions.seek(previewStartSeconds);
+    const playheadVideoClip = findVideoClipAtTime(view, previewStartSeconds);
     requestedPreviewModeRef.current = 'playing';
     requestedPreviewRequestIdRef.current = controller.startPreview(
-      playheadSeconds,
+      previewStartSeconds,
       playheadVideoClip?.clipId === activeVideoClipIdRef.current
         ? activeVideoClipIdRef.current
         : undefined,
@@ -1000,7 +1010,7 @@ function App() {
         return;
       }
     }
-    if (!view || targetSeconds >= view.durationSeconds) return;
+    if (!view || targetSeconds >= resolveTimelinePlaybackEndSeconds(view)) return;
     const attempt = previewFailureGate.begin();
     previewAttemptRef.current = attempt;
     requestedPreviewModeRef.current = 'paused';

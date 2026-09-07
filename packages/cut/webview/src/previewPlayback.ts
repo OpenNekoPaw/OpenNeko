@@ -40,6 +40,22 @@ export type PreviewPlaybackAdvance =
   | { readonly kind: 'segment-boundary'; readonly playheadSeconds: number }
   | { readonly kind: 'timeline-end'; readonly playheadSeconds: number };
 
+export function resolvePreviewPlaybackStartSeconds(
+  playheadSeconds: number,
+  playbackEndSeconds: number,
+): number | undefined {
+  if (
+    !Number.isFinite(playheadSeconds) ||
+    playheadSeconds < 0 ||
+    !Number.isFinite(playbackEndSeconds) ||
+    playbackEndSeconds < 0
+  ) {
+    throw new Error('Cut preview playback bounds must be non-negative finite numbers.');
+  }
+  if (playbackEndSeconds === 0) return undefined;
+  return playheadSeconds >= playbackEndSeconds ? 0 : playheadSeconds;
+}
+
 export function advancePreviewPlayback(
   segment: PreviewPlaybackSegment,
   wallNowMilliseconds: number,

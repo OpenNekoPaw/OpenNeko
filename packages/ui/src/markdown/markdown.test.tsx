@@ -32,6 +32,7 @@ describe('@neko/ui markdown primitives', () => {
     act(() => {
       root.unmount();
     });
+    vi.restoreAllMocks();
     host.remove();
   });
 
@@ -175,6 +176,7 @@ describe('@neko/ui markdown primitives', () => {
   });
 
   it('keeps safe external links navigable and renders GFM tables', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     act(() => {
       root.render(
         <MarkdownDocumentView
@@ -193,6 +195,7 @@ describe('@neko/ui markdown primitives', () => {
     ).toBe('2');
     expect(host.querySelector<HTMLTableElement>('table')?.className).toContain('min-w-[40rem]');
     expect(host.querySelector<HTMLTableElement>('table')?.getAttribute('style')).toBeNull();
+    expect(consoleError.mock.calls.flat().join('\n')).not.toContain('unique "key" prop');
   });
 
   it('gives wide read-only tables a column-aware local scroll presentation', () => {

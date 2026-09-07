@@ -1,8 +1,11 @@
 # agent-storage-authority Specification
 
 ## Purpose
+
 Separate OpenNeko Conversation records and bindings from DSH Session/transcript authority while isolating invalid local records.
+
 ## Requirements
+
 ### Requirement: Agent configuration authorities are separated
 
 UI-managed runtime selections SHALL use an Agent-owned stable state repository. User-editable
@@ -30,13 +33,22 @@ environment fallback or alternate import path may combine these authorities.
 
 DSH Sessions SHALL remain authoritative for transcript and branch facts. Conversation catalog,
 leases, checkpoints and task state MAY use Agent-owned stable state/cache repositories, but MUST be
-scoped by exact conversation/session/request identity without writer epochs or schema versions.
+scoped by exact conversation/session/request identity without writer epochs or schema versions. A
+branched child SHALL receive one independent OpenNeko Conversation catalog record that inherits the
+source Conversation's exact owner context and binds only to the DSH-owned child Session; OpenNeko MUST
+NOT persist a transcript copy or a second branch graph.
 
 #### Scenario: Two conversations run concurrently
 
 - **WHEN** each conversation commits operational state
 - **THEN** each session owner serializes its own writes
 - **AND** neither operation targets active conversation state or a shared generation counter
+
+#### Scenario: A DSH child Session becomes a Conversation
+
+- **WHEN** DSH creates a child Session from a valid completed source turn
+- **THEN** OpenNeko publishes one new Conversation record with the source owner context and one exact child binding
+- **AND** DSH remains the only owner of the child's transcript prefix and parent lineage
 
 ### Requirement: Agent projections are rebuildable but not fallback authorities
 

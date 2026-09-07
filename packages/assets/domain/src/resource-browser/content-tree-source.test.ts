@@ -76,6 +76,56 @@ describe('Resource Browser content tree source', () => {
     expect(entries.map((entry) => entry.label)).toEqual(['visible.png']);
   });
 
+  it('isolates non-portable package-owned paths while preserving matching content siblings', async () => {
+    const readDirectory = vi.fn(async (directory: string) => {
+      switch (directory) {
+        case '/workspace':
+          return [{ name: 'neko', type: 'directory' as const }];
+        case '/workspace/neko':
+          return [
+            { name: 'generated', type: 'directory' as const },
+            { name: 'worlds', type: 'directory' as const },
+          ];
+        case '/workspace/neko/generated':
+          return [{ name: 'release-notes.md', type: 'file' as const }];
+        case '/workspace/neko/worlds':
+          return [{ name: 'world-project:city', type: 'directory' as const }];
+        case '/workspace/neko/worlds/world-project:city':
+          throw new Error('A non-portable World fact directory must not be traversed.');
+        default:
+          return [];
+      }
+    });
+
+    const entries = await searchResourceBrowserContentTree({
+      absoluteRoot: '/workspace',
+      locatorPrefix: '',
+      query: 'e',
+      limit: 20,
+      rootDepth: -1,
+      excludedDirectoryNames: new Set(),
+      files: {
+        readDirectory,
+        stat: vi.fn(async () => ({ sizeBytes: 4, modifiedAtMs: 20 })),
+      },
+      joinAbsolutePath: (directory, childName) => `${directory}/${childName}`,
+      relativePath: (root, target) => target.slice(root.length + 1),
+      classify: () => ({
+        include: true,
+        mediaType: 'file',
+        capabilities: ['read'],
+      }),
+    });
+
+    expect(entries.map((entry) => entry.locator)).toEqual([
+      { file: { authority: 'workspace', path: 'neko' } },
+      { file: { authority: 'workspace', path: 'neko/generated' } },
+      { file: { authority: 'workspace', path: 'neko/worlds' } },
+      { file: { authority: 'workspace', path: 'neko/generated/release-notes.md' } },
+    ]);
+    expect(readDirectory).not.toHaveBeenCalledWith('/workspace/neko/worlds/world-project:city');
+  });
+
   it('does not inspect owner-declared excluded paths beside canonical siblings', async () => {
     const stat = vi.fn(async () => ({ sizeBytes: 4, modifiedAtMs: 20 }));
     const readDirectory = vi.fn(async (directory: string) => {

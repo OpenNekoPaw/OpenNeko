@@ -1,7 +1,7 @@
 import type { SessionMode } from '@neko/agent-contracts';
 import type { IconProps } from '@neko/ui/icons';
 import { CameraIcon, PlayIcon, VolumeIcon } from '@neko/ui/icons';
-import type { GenCategory } from './types';
+import type { MediaModelCategory } from './types';
 
 type ComposerIconProps = Pick<IconProps, 'className' | 'size' | 'strokeWidth'>;
 
@@ -60,15 +60,38 @@ function MediaAudioIcon(props: ComposerIconProps) {
   );
 }
 
+function MediaMusicIcon({ className, size = 14, strokeWidth = 1.8 }: ComposerIconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M9 18V5l10-2v13" />
+      <circle cx="6" cy="18" r="3" />
+      <circle cx="16" cy="16" r="3" />
+    </svg>
+  );
+}
+
 export function MediaCategoryIcon({
   category,
   ...props
-}: ComposerIconProps & { category: GenCategory }) {
+}: ComposerIconProps & { category: MediaModelCategory }) {
   if (category === 'image') {
     return <MediaImageIcon {...props} />;
   }
   if (category === 'video') {
     return <MediaVideoIcon {...props} />;
+  }
+  if (category === 'music') {
+    return <MediaMusicIcon {...props} />;
   }
   return <MediaAudioIcon {...props} />;
 }

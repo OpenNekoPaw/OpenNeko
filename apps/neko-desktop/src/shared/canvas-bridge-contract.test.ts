@@ -133,8 +133,13 @@ describe('Desktop Canvas workspace index catalog contract', () => {
           requestId: 'r1',
           catalog: {
             workspaceId: 'ws2',
-            defaultTarget: { kind: 'workspace-board', workspaceId: 'ws2' },
-            options: [{ target: { kind: 'workspace-board', workspaceId: 'ws2' }, label: 'Board' }],
+            defaultTarget: { workspaceId: 'ws2', canvasId: 'neko/boards/workspace.nkc' },
+            options: [
+              {
+                target: { workspaceId: 'ws2', canvasId: 'neko/boards/workspace.nkc' },
+                label: 'workspace.nkc',
+              },
+            ],
             diagnostics: [],
           },
         },

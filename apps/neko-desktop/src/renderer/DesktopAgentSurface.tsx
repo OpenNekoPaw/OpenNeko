@@ -12,28 +12,47 @@ import type {
   DshSessionHostProjection,
 } from '@neko/agent-contracts/dsh-session-host';
 import type { DshRuntimeHostProjection } from '@neko/agent-contracts/dsh-runtime-host';
-import type { CharacterDialogueHandoffIntent } from '@neko/agent-contracts';
+import type {
+  CharacterCreationHandoffIntent,
+  CharacterDialogueHandoffIntent,
+  ProjectTemplateHandoffIntent,
+  WorldCreationHandoffIntent,
+} from '@neko/agent-contracts';
 import {
   DshAgentView,
   type DshEntryContextPresentation,
 } from '@neko/agent-webview/dsh-session/root';
+import {
+  useDshComposerPresentationSnapshotStore,
+  type DshComposerCanvasSelectionScope,
+} from '@neko/agent-webview/dsh-session/presentation-snapshot';
+import { WorkspaceQuickCreateControl } from './WorkspaceQuickCreateControl';
 
 const desktopAgentSurfaceLogger = new ConsoleLogger('DesktopAgentSurface');
 
 export interface DesktopAgentSurfaceProps {
+  readonly onCreateCanvas?: (name: string) => Promise<string>;
   readonly agentSurfaceId: string;
   readonly workbenchInstanceId: string;
   readonly sceneId: string;
   readonly conversationId?: string;
   readonly surfaceKind: 'entry' | 'assistant' | 'workspace';
   readonly entryContext?: DshEntryContextPresentation;
+  readonly characterCreationHandoff?: CharacterCreationHandoffIntent;
+  readonly onCharacterCreationHandoffConsumed?: (intentId: string) => void;
   readonly characterDialogueHandoff?: CharacterDialogueHandoffIntent;
   readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
+  readonly projectTemplateHandoff?: ProjectTemplateHandoffIntent;
+  readonly onProjectTemplateHandoffConsumed?: (intentId: string) => void;
+  readonly worldCreationHandoff?: WorldCreationHandoffIntent;
+  readonly onWorldCreationHandoffConsumed?: (intentId: string) => void;
   readonly conversationFeed?: ReactNode;
   readonly messageAuthorPresentation?: {
     readonly assistant?: ReactNode;
     readonly user?: ReactNode;
   };
+  readonly onConversationBranched?: (conversationId: string) => void;
+  readonly onOpenWrittenFile?: (conversationId: string, toolCallId: string) => void;
 }
 
 type DesktopAgentSurfaceState =
@@ -47,14 +66,23 @@ type DesktopAgentSurfaceState =
 
 export function DesktopAgentSurface({
   agentSurfaceId,
+  characterCreationHandoff,
   characterDialogueHandoff,
   conversationFeed,
   conversationId,
   entryContext,
   messageAuthorPresentation,
+  onCharacterCreationHandoffConsumed,
   onCharacterDialogueHandoffConsumed,
+  onConversationBranched,
+  onOpenWrittenFile,
+  onCreateCanvas,
+  onProjectTemplateHandoffConsumed,
+  onWorldCreationHandoffConsumed,
+  projectTemplateHandoff,
   sceneId,
   surfaceKind,
+  worldCreationHandoff,
   workbenchInstanceId,
 }: DesktopAgentSurfaceProps): JSX.Element {
   const [state, setState] = useState<DesktopAgentSurfaceState>({ kind: 'loading' });
@@ -68,6 +96,11 @@ export function DesktopAgentSurface({
   const [mentionDiagnostic, setMentionDiagnostic] = useState<string>();
   const [operationError, setOperationError] = useState<string>();
   const [configuring, setConfiguring] = useState(false);
+  const composerSnapshots = useDshComposerPresentationSnapshotStore();
+  const [createdDraftCanvas, setCreatedDraftCanvas] = useState<{
+    readonly scope: DshComposerCanvasSelectionScope;
+    readonly canvasId: string;
+  }>();
   const submissionCount = useRef(0);
   const refreshSequence = useRef(0);
   const composerRefreshSequence = useRef(0);
@@ -138,6 +171,8 @@ export function DesktopAgentSurface({
     let active = true;
     let refreshInFlight = false;
     let refreshPending = false;
+    let preparationInFlight = false;
+    let preparationPending = false;
     const requestRefresh = (): void => {
       refreshPending = true;
       if (refreshInFlight) {
@@ -156,25 +191,39 @@ export function DesktopAgentSurface({
         }
       })();
     };
+    const requestPreparation = (): void => {
+      preparationPending = true;
+      if (preparationInFlight) return;
+      preparationInFlight = true;
+      void (async () => {
+        try {
+          while (active && preparationPending) {
+            preparationPending = false;
+            const projection = await window.openNekoDesktop.dshRuntime.prepareSession();
+            if (!active) return;
+            setRuntime(projection);
+            if (projection.status !== 'running') return;
+            await refreshComposerConfiguration();
+            if (conversationId) requestRefresh();
+          }
+        } catch (error) {
+          if (active) setState({ kind: 'error', message: describeError(error) });
+        } finally {
+          preparationInFlight = false;
+        }
+      })();
+    };
     setComposerConfiguration(undefined);
     setComposerConfigurationError(undefined);
-    void refreshComposerConfiguration();
     if (conversationId) {
       setState({ kind: 'loading' });
-      requestRefresh();
-    } else {
-      void window.openNekoDesktop.dshRuntime.getStatus().then(
-        (projection) => {
-          if (active) setRuntime(projection);
-        },
-        (error: unknown) => {
-          if (active) setState({ kind: 'error', message: describeError(error) });
-        },
-      );
     }
+    requestPreparation();
     const unsubscribeSession = conversationId
       ? window.openNekoDesktop.dshSessions.subscribe((event) => {
-          if (event.conversationId === conversationId) requestRefresh();
+          if (event.conversationId !== conversationId) return;
+          if (event.composerChanged) void refreshComposerConfiguration();
+          else requestRefresh();
         })
       : () => undefined;
     const unsubscribePermissions = conversationId
@@ -185,7 +234,9 @@ export function DesktopAgentSurface({
     const unsubscribeRuntime = window.openNekoDesktop.dshRuntime.subscribe((projection) => {
       if (!active) return;
       setRuntime(projection);
-      if (projection.status === 'running') requestRefresh();
+      if (projection.status !== 'running') return;
+      if (conversationId) requestRefresh();
+      else if (projection.sessionConfigurationPending === true) requestPreparation();
     });
     return () => {
       active = false;
@@ -234,7 +285,7 @@ export function DesktopAgentSurface({
   };
 
   const selectMediaModel = async (
-    category: 'image' | 'video' | 'audio',
+    category: 'image' | 'video' | 'audio' | 'music',
     modelOptionId: string,
   ): Promise<void> => {
     if (configuring) return;
@@ -293,6 +344,48 @@ export function DesktopAgentSurface({
       submissionCount.current = Math.max(0, submissionCount.current - 1);
       setSubmitting(submissionCount.current > 0);
     }
+  };
+
+  const selectCanvas = async (canvasId: string): Promise<void> => {
+    if (effectiveConversationId === undefined)
+      throw new Error('Canvas selection requires a Conversation.');
+    const requestedSceneId = sceneId;
+    const sequence = ++composerRefreshSequence.current;
+    setConfiguring(true);
+    try {
+      const configuration = await window.openNekoDesktop.dshSessions.selectComposerCanvas(
+        workbenchInstanceId,
+        agentSurfaceId,
+        effectiveConversationId,
+        canvasId,
+      );
+      if (
+        requestedSceneId === activeSceneId.current &&
+        sequence === composerRefreshSequence.current
+      ) {
+        setComposerConfiguration(configuration);
+        setComposerConfigurationError(undefined);
+      }
+    } finally {
+      if (requestedSceneId === activeSceneId.current) setConfiguring(false);
+    }
+  };
+
+  const branchReply = async (messageId: string): Promise<void> => {
+    const sourceConversationId =
+      conversationId ?? (state.kind === 'ready' ? state.projection.conversationId : undefined);
+    if (sourceConversationId === undefined) {
+      throw new Error('DSH Conversation branch requires an active Conversation.');
+    }
+    setOperationError(undefined);
+    const projection = await window.openNekoDesktop.dshSessions.branch(
+      sourceConversationId,
+      messageId,
+    );
+    if (projection.conversationId === sourceConversationId) {
+      throw new Error('DSH Conversation branch returned the source Conversation.');
+    }
+    onConversationBranched?.(projection.conversationId);
   };
 
   const removeQueuedMessage = async (messageId: string): Promise<void> => {
@@ -437,6 +530,19 @@ export function DesktopAgentSurface({
 
   const effectiveConversationId =
     conversationId ?? (state.kind === 'ready' ? state.projection.conversationId : undefined);
+  useEffect(() => {
+    const catalog = composerConfiguration?.context?.canvas;
+    if (
+      createdDraftCanvas === undefined ||
+      catalog?.workspaceId !== createdDraftCanvas.scope.workspaceId ||
+      !catalog.options.some(
+        (option) => option.target.canvasId === createdDraftCanvas.canvasId && !option.disabled,
+      )
+    )
+      return;
+    composerSnapshots.select(createdDraftCanvas.scope, createdDraftCanvas.canvasId);
+    setCreatedDraftCanvas(undefined);
+  }, [composerConfiguration, composerSnapshots, createdDraftCanvas]);
   const resolveImageAttachmentPreview = useCallback(
     async (attachmentId: string) => {
       if (effectiveConversationId === undefined) {
@@ -449,25 +555,6 @@ export function DesktopAgentSurface({
     },
     [effectiveConversationId],
   );
-  const openTerminalArtifact = useCallback(
-    async (messageId: string) => {
-      if (effectiveConversationId === undefined) {
-        setOperationError('Opening a persisted document requires an exact Conversation.');
-        return;
-      }
-      setOperationError(undefined);
-      try {
-        await window.openNekoDesktop.dshSessions.openTerminalArtifact(
-          effectiveConversationId,
-          messageId,
-        );
-      } catch (error) {
-        setOperationError(describeError(error));
-      }
-    },
-    [effectiveConversationId],
-  );
-
   useEffect(
     () => () => {
       if (effectiveConversationId === undefined) return;
@@ -485,12 +572,36 @@ export function DesktopAgentSurface({
 
   return (
     <DshAgentView
+      canvasCreationControl={
+        onCreateCanvas && composerWorkspaceId ? (
+          <WorkspaceQuickCreateControl
+            key={composerWorkspaceId}
+            variant="canvas-index"
+            onCreate={async ({ name }) => {
+              const scope = {
+                agentSurfaceId,
+                workspaceId: composerWorkspaceId,
+              };
+              const canvasId = await onCreateCanvas(name);
+              if (effectiveConversationId === undefined) {
+                setCreatedDraftCanvas({ scope, canvasId });
+                await refreshComposerConfiguration();
+              } else {
+                await selectCanvas(canvasId);
+              }
+            }}
+          />
+        ) : undefined
+      }
       agentSurfaceId={agentSurfaceId}
       conversationFeed={conversationFeed}
       conversationId={effectiveConversationId}
       surfaceKind={surfaceKind}
       entryContext={entryContext}
+      initialCharacterCreationHandoff={characterCreationHandoff}
       initialCharacterDialogueHandoff={characterDialogueHandoff}
+      initialProjectTemplateHandoff={projectTemplateHandoff}
+      initialWorldCreationHandoff={worldCreationHandoff}
       draft={draft}
       composerConfiguration={composerConfiguration}
       composerConfigurationError={composerConfigurationError}
@@ -505,7 +616,10 @@ export function DesktopAgentSurface({
       runtime={runtime}
       submitting={submitting}
       onCancelPermission={(permission) => void cancelPermission(permission)}
+      onCharacterCreationHandoffConsumed={onCharacterCreationHandoffConsumed}
       onCharacterDialogueHandoffConsumed={onCharacterDialogueHandoffConsumed}
+      onProjectTemplateHandoffConsumed={onProjectTemplateHandoffConsumed}
+      onWorldCreationHandoffConsumed={onWorldCreationHandoffConsumed}
       onCancelTurn={() => void cancelTurn()}
       onDecidePermission={(permission, optionId) => void decidePermission(permission, optionId)}
       onDraftChange={(value) => {
@@ -517,6 +631,7 @@ export function DesktopAgentSurface({
       onMediaModelChange={(category, modelOptionId) =>
         void selectMediaModel(category, modelOptionId)
       }
+      onCanvasSelect={selectCanvas}
       onPermissionPresetChange={(permissionPresetId) =>
         void selectPermissionPreset(permissionPresetId)
       }
@@ -525,7 +640,12 @@ export function DesktopAgentSurface({
       onRestartRuntime={() => void restartRuntime()}
       onRequestMentions={(filter) => void requestMentions(filter)}
       onMaterializeAsset={materializeAsset}
-      onOpenTerminalArtifact={(messageId) => void openTerminalArtifact(messageId)}
+      onBranchReply={branchReply}
+      onOpenWrittenFile={
+        onOpenWrittenFile && effectiveConversationId !== undefined
+          ? (toolCallId) => onOpenWrittenFile(effectiveConversationId, toolCallId)
+          : undefined
+      }
       onResolveImageAttachmentPreview={resolveImageAttachmentPreview}
       onSubmit={submit}
     />

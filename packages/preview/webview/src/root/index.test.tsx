@@ -47,6 +47,18 @@ describe('PreviewRoot', () => {
     expect(rootStyles).toMatch(/\.neko-preview-root__viewer\s*\{[^}]*position:\s*relative;/u);
   });
 
+  it('keeps compact audio waveform and transport controls on two rows', () => {
+    expect(rootStyles).toMatch(
+      /\.neko-preview-lightweight-audio__player\s*\{[^}]*grid-template-rows:\s*minmax\(0, 1fr\) auto;/u,
+    );
+    expect(rootStyles).toMatch(
+      /\.neko-preview-lightweight-audio__controls\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto minmax\(0, 1fr\);/u,
+    );
+    expect(rootStyles).toMatch(
+      /\.neko-preview-lightweight-audio__button\.is-primary\s*\{[^}]*grid-column:\s*2;/u,
+    );
+  });
+
   it('registers image, video, audio, text, document and model viewers explicitly', () => {
     expect(getRegisteredPreviewContentKinds()).toEqual([
       'image',
@@ -559,6 +571,70 @@ describe('PreviewRoot', () => {
 
     await act(async () => root.unmount());
     expect(pause).toHaveBeenCalled();
+  });
+
+  it('plays and pauses inline compact video without native controls or autoplay', async () => {
+    let paused = true;
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(function (
+      this: HTMLMediaElement,
+    ) {
+      paused = false;
+      this.dispatchEvent(new Event('play'));
+      return Promise.resolve();
+    });
+    const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(function (
+      this: HTMLMediaElement,
+    ) {
+      paused = true;
+      this.dispatchEvent(new Event('pause'));
+    });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        withPreviewSnapshots(
+          <LightweightPreview
+            locale="en"
+            mediaPlayback="inline"
+            descriptor={{
+              descriptorId: 'descriptor-video-inline',
+              sourceFingerprint: 'fingerprint-inline',
+              contentLocator: previewContentLocator,
+              url: 'openneko://resource/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+              contentKind: 'video',
+              mediaType: 'video/mp4',
+              displayName: 'inline.mp4',
+              byteLength: 42,
+            }}
+          />,
+        ),
+      );
+      await import('../video/VideoPlayer');
+    });
+
+    const video = container.querySelector('video');
+    if (!video) throw new Error('Inline video was not rendered.');
+    Object.defineProperty(video, 'paused', { configurable: true, get: () => paused });
+    const toggle = container.querySelector<HTMLButtonElement>(
+      '[data-testid="preview-video-toggle-playback"]',
+    );
+    expect(video?.controls).toBe(false);
+    expect(video?.autoplay).toBe(false);
+    expect(play).not.toHaveBeenCalled();
+    expect(toggle?.getAttribute('aria-label')).toBe('Play (Space)');
+
+    await act(async () => toggle?.click());
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(toggle?.getAttribute('aria-label')).toBe('Pause (Space)');
+
+    await act(async () => toggle?.click());
+    expect(pause).toHaveBeenCalledTimes(1);
+    expect(toggle?.getAttribute('aria-label')).toBe('Play (Space)');
+
+    await act(async () => root.unmount());
+    container.remove();
   });
 
   it('keeps controlled video source failures distinct from play rejection', async () => {

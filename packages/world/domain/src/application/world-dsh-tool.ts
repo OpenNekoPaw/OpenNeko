@@ -10,7 +10,7 @@ import type {
 } from './world-durable-catalog';
 import { isFreshWorldCreationTarget, type WorldAuthoringService } from './world-authoring-service';
 
-export const WORLD_DSH_TOOL_NAME = 'openneko.world' as const;
+export const WORLD_DSH_TOOL_NAME = 'openneko_world' as const;
 export const WORLD_DSH_TOOL_OPERATIONS = ['query', 'fill-draft'] as const;
 export const WORLD_DSH_MAX_PROJECTED_VERSIONS = 32;
 

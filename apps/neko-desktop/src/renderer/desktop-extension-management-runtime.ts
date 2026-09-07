@@ -2,6 +2,7 @@ import type {
   AgentExtensionManagementProjection,
   AgentExtensionManagementRuntime,
   AgentExtensionManagementSessionIdentity,
+  AgentManagedSkillDetail,
 } from '@neko/agent-contracts/extension-management';
 import {
   createAgentExtensionManagementHostRequest,
@@ -24,6 +25,24 @@ export class DesktopExtensionManagementRuntime implements AgentExtensionManageme
   async getSnapshot(): Promise<AgentExtensionManagementProjection> {
     this.requireActive();
     return this.execute({ route: 'snapshot.get' });
+  }
+
+  async getSkillDetail(input: {
+    readonly name: string;
+    readonly source: string;
+  }): Promise<AgentManagedSkillDetail> {
+    this.requireActive();
+    const request = createAgentExtensionManagementHostRequest({
+      requestId: crypto.randomUUID(),
+      identity: this.identity,
+      route: 'skill.detail.get',
+      ...input,
+    });
+    const result = await this.bridge.extensionManagement.execute(request);
+    if (result.route !== 'skill.detail.get') {
+      throw new Error('Desktop Extension Management returned the wrong Skill detail route.');
+    }
+    return result.detail;
   }
 
   async addSkill(): Promise<AgentExtensionManagementProjection> {
@@ -71,7 +90,7 @@ export class DesktopExtensionManagementRuntime implements AgentExtensionManageme
   }
 
   private async execute(
-    input: AgentExtensionManagementRequestInput,
+    input: Exclude<AgentExtensionManagementRequestInput, { readonly route: 'skill.detail.get' }>,
   ): Promise<AgentExtensionManagementProjection> {
     this.requireActive();
     const request = createAgentExtensionManagementHostRequest({
@@ -79,6 +98,10 @@ export class DesktopExtensionManagementRuntime implements AgentExtensionManageme
       identity: this.identity,
       ...input,
     });
-    return (await this.bridge.extensionManagement.execute(request)).projection;
+    const result = await this.bridge.extensionManagement.execute(request);
+    if (result.route === 'skill.detail.get') {
+      throw new Error('Desktop Extension Management returned Skill detail for a catalog request.');
+    }
+    return result.projection;
   }
 }

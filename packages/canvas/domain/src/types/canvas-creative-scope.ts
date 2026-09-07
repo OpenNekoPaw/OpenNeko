@@ -118,7 +118,7 @@ export function validateCanvasBoardRef(
             {
               code: 'unsafe-board-ref',
               severity: 'error',
-              message: 'Canvas board references must use workspace-relative durable paths.',
+              message: 'Related Canvas references must use workspace-relative durable paths.',
             },
           ]
         : [];
@@ -128,7 +128,7 @@ export function validateCanvasBoardRef(
             {
               code: 'unsafe-board-ref',
               severity: 'error',
-              message: 'Canvas board references must not persist runtime or local-only URIs.',
+              message: 'Related Canvas references must not persist runtime or local-only URIs.',
             },
           ]
         : [];

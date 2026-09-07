@@ -165,6 +165,34 @@ describe('DshAcpApplicationClient', () => {
     );
   });
 
+  it('reads one exact Skill body and fingerprint on demand', async () => {
+    const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
+    fixture.connection.extMethod = vi.fn(async () => ({
+      name: 'review',
+      description: 'Review drafts.',
+      source: 'user-dsh',
+      provider: 'filesystem',
+      userInvocable: true,
+      modelInvocable: true,
+      content: '# Review',
+      fingerprint: `sha256:${'b'.repeat(64)}`,
+    }));
+    const client = await DshAcpApplicationClient.connect({
+      transport: unusedTransport,
+      virtualCwd: '/virtual/workspace',
+      handlers: createHandlers(),
+      createConnection: fixture.createConnection,
+    });
+
+    await expect(
+      client.readSkillDetail({ name: 'review', source: 'user-dsh' }),
+    ).resolves.toMatchObject({ content: '# Review' });
+    expect(fixture.connection.extMethod).toHaveBeenCalledWith(
+      'openneko/extensions/skill/detail/read',
+      { name: 'review', source: 'user-dsh' },
+    );
+  });
+
   it('uses private extension methods for isolated staged validation and exact scoped observation', async () => {
     const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
     fixture.connection.extMethod = vi.fn(async (method) => {
@@ -248,6 +276,25 @@ describe('DshAcpApplicationClient', () => {
     );
   });
 
+  it('branches one exact Session assistant reply through the canonical extension', async () => {
+    const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
+    fixture.connection.extMethod = vi.fn(async () => ({ sessionId: 'session-branch' }));
+    const client = await DshAcpApplicationClient.connect({
+      transport: unusedTransport,
+      virtualCwd: '/virtual/workspace',
+      handlers: createHandlers(),
+      createConnection: fixture.createConnection,
+    });
+
+    await expect(
+      client.branchSession({ sessionId: 'session-1', messageId: 'assistant-1' }),
+    ).resolves.toEqual({ sessionId: 'session-branch' });
+    expect(fixture.connection.extMethod).toHaveBeenCalledWith('openneko/session/branch', {
+      sessionId: 'session-1',
+      messageId: 'assistant-1',
+    });
+  });
+
   it('reads the canonical input catalog with and without an exact Session identity', async () => {
     const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
     fixture.connection.extMethod = vi.fn(async (method) => {
@@ -300,6 +347,10 @@ describe('DshAcpApplicationClient', () => {
         prompt: [{ type: 'text', text: 'next' }],
         displayContent: [{ type: 'text', text: 'next' }],
         contextText: 'workspace context',
+        configuration: {
+          model: '["openai","gpt-5",8192]',
+          permissionPresetId: 'workspace-write',
+        },
       }),
     ).resolves.toEqual({ nextTurn: [], nextStep: [] });
     expect(fixture.connection.extMethod).toHaveBeenCalledWith('openneko/session/inbox/enqueue', {
@@ -307,6 +358,10 @@ describe('DshAcpApplicationClient', () => {
       prompt: [{ type: 'text', text: 'next' }],
       displayContent: [{ type: 'text', text: 'next' }],
       contextText: 'workspace context',
+      configuration: {
+        model: '["openai","gpt-5",8192]',
+        permissionPresetId: 'workspace-write',
+      },
     });
   });
 
@@ -486,7 +541,7 @@ describe('DshAcpApplicationClient', () => {
       turn: 0,
       toolCallId: 'call-generation',
       sandboxMode: 'workspace-write',
-      tool: 'openneko.generation',
+      tool: 'openneko_generation',
       operation: 'submit',
       input: {},
     });
@@ -504,7 +559,7 @@ describe('DshAcpApplicationClient', () => {
       turn: 0,
       toolCallId: 'call-content-image',
       sandboxMode: 'read-only',
-      tool: 'openneko.read_image',
+      tool: 'openneko_read_image',
       operation: 'read-chunk',
       input: {
         source: {
@@ -519,7 +574,7 @@ describe('DshAcpApplicationClient', () => {
       turn: 0,
       toolCallId: 'call-canvas',
       sandboxMode: 'read-only',
-      tool: 'openneko.canvas',
+      tool: 'openneko_canvas',
       operation: 'query',
       input: {},
     });
@@ -528,7 +583,7 @@ describe('DshAcpApplicationClient', () => {
       turn: 0,
       toolCallId: 'call-cut',
       sandboxMode: 'read-only',
-      tool: 'openneko.cut',
+      tool: 'openneko_cut',
       operation: 'query',
       input: {},
     });
@@ -570,13 +625,13 @@ describe('DshAcpApplicationClient', () => {
         turn: 0,
         toolCallId: 'call-domain-extension',
         sandboxMode: 'read-only',
-        tool: 'openneko.domain-extension',
+        tool: 'openneko_domain_extension',
         operation: 'query',
         input: {},
       }),
     ).resolves.toEqual({ outcome: 'success', result: {} });
     expect(handlers.executeDomainTool).toHaveBeenCalledWith(
-      expect.objectContaining({ tool: 'openneko.domain-extension' }),
+      expect.objectContaining({ tool: 'openneko_domain_extension' }),
       expect.any(AbortSignal),
     );
     await expect(protocolClient.extMethod?.('unknown/execute', {})).rejects.toThrow(
@@ -719,6 +774,71 @@ describe('DshAcpApplicationClient', () => {
     expect(handlers.onSessionUpdate).toHaveBeenCalledTimes(1);
   });
 
+  it.each([false, true])(
+    'forwards long session histories and terminal updates (replay: %s)',
+    async (replay) => {
+      const handlers = createHandlers();
+      const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
+      const client = await DshAcpApplicationClient.connect({
+        transport: unusedTransport,
+        virtualCwd: '/virtual/workspace',
+        handlers,
+        createConnection: fixture.createConnection,
+      });
+      const protocolClient = fixture.readProtocolClient();
+      await protocolClient.extNotification?.('openneko/session/event', {
+        sessionId: 'long-session',
+        sequence: 0,
+        time: 1_000,
+        type: 'turn/start',
+        data: { turn: 0 },
+        replay,
+      });
+      for (let index = 0; index < 300; index += 1) {
+        await protocolClient.sessionUpdate?.({
+          sessionId: 'long-session',
+          _meta: { opennekoSequence: index * 2 + 1, opennekoTurn: 0, opennekoReplay: replay },
+          update: {
+            sessionUpdate: 'tool_call',
+            toolCallId: `call-${index}`,
+            title: 'read',
+            status: 'pending',
+          },
+        });
+        await protocolClient.sessionUpdate?.({
+          sessionId: 'long-session',
+          _meta: { opennekoSequence: index * 2 + 2, opennekoTurn: 0, opennekoReplay: replay },
+          update: {
+            sessionUpdate: 'tool_call_update',
+            toolCallId: `call-${index}`,
+            status: 'completed',
+          },
+        });
+      }
+      await protocolClient.extNotification?.('openneko/session/event', {
+        sessionId: 'long-session',
+        sequence: 601,
+        time: 2_000,
+        type: 'turn/end',
+        data: { turn: 0, reason: 'success' },
+        replay,
+      });
+      expect(handlers.onSessionUpdate).toHaveBeenCalledTimes(600);
+      expect(handlers.onSessionUpdate).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({ toolCallId: 'call-299', status: 'completed' }),
+        }),
+        { replay },
+      );
+      expect(handlers.onSessionEvent).toHaveBeenCalledTimes(2);
+      expect(client.projection.snapshot('long-session')).toMatchObject({ currentTurn: undefined });
+      expect(client.projection.snapshot('long-session').events).toHaveLength(602);
+      expect(client.projection.snapshot('long-session').tools.every((tool) => tool.terminal)).toBe(
+        true,
+      );
+    },
+  );
+
   it('does not forward a permission request that the projection cannot correlate', async () => {
     const handlers = createHandlers();
     const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
@@ -790,8 +910,77 @@ describe('DshAcpApplicationClient', () => {
     expect(handlers.onSessionEvent).not.toHaveBeenCalled();
   });
 
+  it('forwards an accepted terminal event before reporting its projection diagnostic', async () => {
+    const handlers = createHandlers();
+    const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
+    await DshAcpApplicationClient.connect({
+      transport: unusedTransport,
+      virtualCwd: '/virtual/workspace',
+      handlers,
+      createConnection: fixture.createConnection,
+    });
+    const protocolClient = fixture.readProtocolClient();
+
+    await protocolClient.extNotification?.('openneko/session/event', {
+      sessionId: 's1',
+      sequence: 0,
+      time: 1_000,
+      type: 'turn/start',
+      data: { turn: 0 },
+      replay: false,
+    });
+    await protocolClient.extNotification?.('openneko/session/event', {
+      sessionId: 's1',
+      sequence: 1,
+      time: 1_001,
+      type: 'step/start',
+      data: { turn: 0, step: 0 },
+      replay: false,
+    });
+    await protocolClient.sessionUpdate?.({
+      sessionId: 's1',
+      _meta: {
+        opennekoSequence: 2,
+        opennekoTurn: 0,
+        opennekoStep: 0,
+        opennekoBlockIndex: 0,
+        opennekoMessagePhase: 'delta',
+        opennekoReplay: false,
+      },
+      update: {
+        sessionUpdate: 'agent_message_chunk',
+        messageId: 'dsh:0:0:text',
+        content: { type: 'text', text: 'Partial' },
+      },
+    });
+    await protocolClient.extNotification?.('openneko/session/event', {
+      sessionId: 's1',
+      sequence: 3,
+      time: 1_003,
+      type: 'step/end',
+      data: { turn: 0, step: 0 },
+      replay: false,
+    });
+    vi.mocked(handlers.onSessionEvent).mockClear();
+
+    const terminal = {
+      sessionId: 's1',
+      sequence: 4,
+      time: 1_004,
+      type: 'turn/end',
+      data: { turn: 0, reason: { kind: 'completed' } },
+      replay: false,
+    } as const;
+    await expect(
+      protocolClient.extNotification?.('openneko/session/event', terminal),
+    ).rejects.toThrow(/ACP_PROJECTION_UNSETTLED_ASSISTANT_STREAM/u);
+    expect(handlers.onSessionEvent).toHaveBeenCalledOnce();
+    expect(handlers.onSessionEvent).toHaveBeenCalledWith(terminal);
+  });
+
   it('cancels the exact inflight Host Tool and rejects a late success', async () => {
     const generation = deferred<DshAcpDomainToolResponse>();
+    const sibling = deferred<DshAcpDomainToolResponse>();
     const handlers = createHandlers();
     const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
     await DshAcpApplicationClient.connect({
@@ -802,7 +991,12 @@ describe('DshAcpApplicationClient', () => {
     });
     const protocolClient = fixture.readProtocolClient();
     let handlerSignal: AbortSignal | undefined;
-    vi.mocked(handlers.executeDomainTool).mockImplementation((_request, signal) => {
+    let siblingSignal: AbortSignal | undefined;
+    vi.mocked(handlers.executeDomainTool).mockImplementation((request, signal) => {
+      if (request.toolCallId === 'call-sibling') {
+        siblingSignal = signal;
+        return sibling.promise;
+      }
       handlerSignal = signal;
       return generation.promise;
     });
@@ -812,7 +1006,16 @@ describe('DshAcpApplicationClient', () => {
       turn: 0,
       toolCallId: 'call-cancel',
       sandboxMode: 'workspace-write',
-      tool: 'openneko.generation',
+      tool: 'openneko_generation',
+      operation: 'submit',
+      input: {},
+    });
+    const siblingExecution = protocolClient.extMethod?.('openneko/domain-tool/execute', {
+      sessionId: 'session-1',
+      turn: 0,
+      toolCallId: 'call-sibling',
+      sandboxMode: 'workspace-write',
+      tool: 'openneko_generation',
       operation: 'submit',
       input: {},
     });
@@ -823,8 +1026,14 @@ describe('DshAcpApplicationClient', () => {
     });
 
     expect(handlerSignal?.aborted).toBe(true);
+    expect(siblingSignal?.aborted).toBe(false);
     await expect(execution).rejects.toThrow(/cancelled during execution/);
     generation.resolve({ outcome: 'success', result: { late: true } });
+    sibling.resolve({ outcome: 'success', result: { sibling: true } });
+    await expect(siblingExecution).resolves.toEqual({
+      outcome: 'success',
+      result: { sibling: true },
+    });
   });
 
   it('rejects a stale cancel identity without aborting a sibling call', async () => {
@@ -849,7 +1058,7 @@ describe('DshAcpApplicationClient', () => {
       turn: 0,
       toolCallId: 'call-canvas',
       sandboxMode: 'read-only',
-      tool: 'openneko.canvas',
+      tool: 'openneko_canvas',
       operation: 'query',
       input: {},
     });
@@ -866,7 +1075,7 @@ describe('DshAcpApplicationClient', () => {
     await expect(execution).resolves.toEqual({ outcome: 'success', result: {} });
   });
 
-  it('rejects duplicate identity and applies bounded fair admission across Sessions', async () => {
+  it('rejects duplicate identity without serializing or limiting independent Host Tools', async () => {
     const generation = deferred<DshAcpDomainToolResponse>();
     const handlers = createHandlers();
     const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
@@ -884,7 +1093,7 @@ describe('DshAcpApplicationClient', () => {
       turn: 0,
       toolCallId: 'call-duplicate',
       sandboxMode: 'workspace-write',
-      tool: 'openneko.generation',
+      tool: 'openneko_generation',
       operation: 'submit',
       input: {},
     });
@@ -894,7 +1103,7 @@ describe('DshAcpApplicationClient', () => {
         turn: 0,
         toolCallId: 'call-duplicate',
         sandboxMode: 'workspace-write',
-        tool: 'openneko.generation',
+        tool: 'openneko_generation',
         operation: 'submit',
         input: {},
       }),
@@ -918,7 +1127,7 @@ describe('DshAcpApplicationClient', () => {
         turn: 0,
         toolCallId,
         sandboxMode: 'workspace-write',
-        tool: 'openneko.generation',
+        tool: 'openneko_generation',
         operation: 'submit',
         input: {},
       });
@@ -927,15 +1136,15 @@ describe('DshAcpApplicationClient', () => {
     const firstB = execute('session-b', 'call-b1');
     const secondA = execute('session-a', 'call-a2');
     const firstC = execute('session-c', 'call-c1');
-    expect(started).toEqual(['call-a1', 'call-b1']);
+    expect(started).toEqual(['call-a1', 'call-b1', 'call-a2', 'call-c1']);
 
     pending.get('call-b1')?.resolve({ outcome: 'success', result: {} });
     await firstB;
-    expect(started).toEqual(['call-a1', 'call-b1', 'call-c1']);
+    expect(started).toHaveLength(4);
 
     pending.get('call-a1')?.resolve({ outcome: 'success', result: {} });
     await firstA;
-    expect(started).toEqual(['call-a1', 'call-b1', 'call-c1', 'call-a2']);
+    expect(started).toHaveLength(4);
 
     pending.get('call-c1')?.resolve({ outcome: 'success', result: {} });
     pending.get('call-a2')?.resolve({ outcome: 'success', result: {} });
@@ -944,20 +1153,19 @@ describe('DshAcpApplicationClient', () => {
     const active = deferred<DshAcpDomainToolResponse>();
     vi.mocked(handlers.executeDomainTool).mockImplementation(() => active.promise);
 
-    const activeA = execute('session-a', 'call-a0');
-    const activeB = execute('session-b', 'call-b0');
-    const queuedA = Array.from({ length: 8 }, (_, index) =>
-      execute('session-a', `call-a${index + 1}`),
+    vi.mocked(handlers.executeDomainTool).mockClear();
+    const sameSession = Array.from({ length: 16 }, (_, index) =>
+      execute('session-a', `call-a${index}`),
     );
-    await expect(execute('session-a', 'call-a9')).rejects.toThrow(
-      /queue limit exceeded.*session-a/,
+    const otherSessions = Array.from({ length: 40 }, (_, index) =>
+      execute(`session-other-${index}`, `call-other-${index}`),
     );
-    const sibling = execute('session-c', 'call-c0');
+    expect(handlers.executeDomainTool).toHaveBeenCalledTimes(56);
 
     fixture.connection.signal.dispatchEvent(new Event('abort'));
     active.resolve({ outcome: 'success', result: {} });
-    const settled = await Promise.allSettled([activeA, activeB, ...queuedA, sibling]);
-    expect(settled).toHaveLength(11);
+    const settled = await Promise.allSettled([...sameSession, ...otherSessions]);
+    expect(settled).toHaveLength(56);
     expect(settled.every((result) => result.status === 'rejected')).toBe(true);
   });
 
@@ -982,7 +1190,7 @@ describe('DshAcpApplicationClient', () => {
       turn: 0,
       toolCallId: 'call-connection-close',
       sandboxMode: 'workspace-write',
-      tool: 'openneko.generation',
+      tool: 'openneko_generation',
       operation: 'submit',
       input: {},
     });

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type React from 'react';
-import type { ReactNode, Ref } from 'react';
+import type { ReactNode } from 'react';
 import { useResizable } from '../hooks';
 import { ResizeHandle } from '../primitives';
 import { cn } from '../utils';
@@ -56,7 +56,6 @@ export interface WorkbenchEditorTabsProps {
   readonly onSelect: (id: string) => void;
   readonly onClose?: (id: string) => void;
   readonly onReorder?: (sourceId: string, targetId: string) => void;
-  readonly contextActionsRef?: Ref<HTMLDivElement>;
 }
 
 export interface WorkbenchPanelHeaderProps {
@@ -582,7 +581,6 @@ export function WorkbenchActivityBar({
 export function WorkbenchEditorTabs({
   activeId,
   className,
-  contextActionsRef,
   emptyLabel,
   label,
   onClose,
@@ -672,9 +670,6 @@ export function WorkbenchEditorTabs({
           </button>
         )}
       </div>
-      {contextActionsRef ? (
-        <div className="neko-workbench-editor-tabs__context-actions" ref={contextActionsRef} />
-      ) : null}
     </div>
   );
 }

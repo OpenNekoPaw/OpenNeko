@@ -6,12 +6,12 @@ import {
   nodeViewCtx,
   parserCtx,
   prosePluginsCtx,
-  rootAttrsCtx,
   rootCtx,
   serializerCtx,
 } from '@milkdown/core';
 import { commonmark } from '@milkdown/preset-commonmark';
 import { gfm, tableCellSchema, tableHeaderSchema } from '@milkdown/preset-gfm';
+import { selectAll } from '@milkdown/prose/commands';
 import { history, redo, undo } from '@milkdown/prose/history';
 import { keymap } from '@milkdown/prose/keymap';
 import { Plugin, TextSelection } from '@milkdown/prose/state';
@@ -26,6 +26,10 @@ export interface MilkdownRichSurfaceActions {
   readonly redo: () => boolean;
   readonly focus: () => void;
   readonly revealHeading: (headingIndex: number) => boolean;
+}
+
+export interface MilkdownRichSurfaceSelectionActions {
+  readonly selectAll: () => boolean;
 }
 
 export interface MilkdownRichSurfaceExtensions {
@@ -44,13 +48,15 @@ export interface MilkdownRichSurfaceProps {
   readonly onChange: (source: string) => void;
   readonly onFocus?: () => void;
   readonly onActions?: (actions: MilkdownRichSurfaceActions | undefined) => void;
+  readonly onSelectionActions?: (actions: MilkdownRichSurfaceSelectionActions | undefined) => void;
   readonly onStateChange?: (state: MilkdownRichSurfaceState, failure?: string) => void;
   readonly createExtensions?: (readSource: () => string) => MilkdownRichSurfaceExtensions;
 }
 
 type ReadyState = Exclude<MilkdownRichSurfaceState, 'loading' | 'error'>;
 
-interface MilkdownRichSurfaceController extends MilkdownRichSurfaceActions {
+interface MilkdownRichSurfaceController
+  extends MilkdownRichSurfaceActions, MilkdownRichSurfaceSelectionActions {
   readonly reconcile: (source: string) => ReadyState | false;
   readonly destroy: () => Promise<void>;
 }
@@ -65,18 +71,25 @@ export function MilkdownRichSurface({
   onChange,
   onFocus,
   onActions,
+  onSelectionActions,
   onStateChange,
   createExtensions,
 }: MilkdownRichSurfaceProps): ReactElement {
   const mount = useRef<HTMLDivElement>(null);
   const controller = useRef<MilkdownRichSurfaceController>();
   const latestValue = useRef(value);
-  const callbacks = useRef({ onChange, onFocus, onActions, onStateChange });
+  const callbacks = useRef({
+    onChange,
+    onFocus,
+    onActions,
+    onSelectionActions,
+    onStateChange,
+  });
   const attempt = useRef(0);
   const [state, setState] = useState<MilkdownRichSurfaceState>('loading');
 
   latestValue.current = value;
-  callbacks.current = { onChange, onFocus, onActions, onStateChange };
+  callbacks.current = { onChange, onFocus, onActions, onSelectionActions, onStateChange };
 
   useEffect(() => {
     const root = mount.current;
@@ -111,6 +124,7 @@ export function MilkdownRichSurface({
           publishState('error', 'markdown-rich-reconciliation-failed');
           return;
         }
+        callbacks.current.onSelectionActions?.(result.controller);
         callbacks.current.onActions?.(
           nextState === 'ready' && !readOnly ? result.controller : undefined,
         );
@@ -125,6 +139,7 @@ export function MilkdownRichSurface({
       disposed = true;
       attempt.current += 1;
       callbacks.current.onActions?.(undefined);
+      callbacks.current.onSelectionActions?.(undefined);
       const current = controller.current;
       controller.current = undefined;
       if (current) void current.destroy();
@@ -142,10 +157,12 @@ export function MilkdownRichSurface({
     const nextState = current.reconcile(value);
     if (!nextState) {
       callbacks.current.onActions?.(undefined);
+      callbacks.current.onSelectionActions?.(undefined);
       setState('error');
       callbacks.current.onStateChange?.('error', 'markdown-rich-reconciliation-failed');
       return;
     }
+    callbacks.current.onSelectionActions?.(current);
     callbacks.current.onActions?.(nextState === 'ready' && !readOnly ? current : undefined);
     setState(nextState);
     callbacks.current.onStateChange?.(nextState);
@@ -195,8 +212,10 @@ async function createMilkdownRichSurfaceController({
     .config((ctx) => {
       ctx.set(rootCtx, root);
       ctx.set(defaultValueCtx, source);
-      ctx.set(rootAttrsCtx, { 'aria-label': ariaLabel });
-      ctx.set(editorViewOptionsCtx, { editable: () => false });
+      ctx.set(editorViewOptionsCtx, {
+        attributes: { 'aria-label': ariaLabel, tabindex: '0' },
+        editable: () => false,
+      });
       ctx.update(nodeViewCtx, (views) => [
         ...views,
         ['table', createMarkdownTableNodeView] as [string, NodeViewConstructor],
@@ -251,6 +270,13 @@ async function createMilkdownRichSurfaceController({
   root.addEventListener('focusin', onFocus);
 
   const controller: MilkdownRichSurfaceController = {
+    selectAll: () =>
+      editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        const handled = selectAll(view.state, view.dispatch);
+        if (handled) view.focus();
+        return handled;
+      }),
     undo: () =>
       editor.action((ctx) => undo(ctx.get(editorViewCtx).state, ctx.get(editorViewCtx).dispatch)),
     redo: () =>

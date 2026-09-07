@@ -1,4 +1,5 @@
 import type { ContentLocator } from '@neko/content-domain';
+import type { ImageGenerationQuality } from './contracts';
 import type { GenerationJobRequest } from './job/contracts';
 
 export const GENERATION_RECIPE_KINDS = ['prompt', 'image', 'audio', 'video'] as const;
@@ -8,7 +9,6 @@ export const GENERATION_RECIPE_PURPOSES = [
   'canvas.prompt',
   'image.generate',
   'audio.generate',
-  'audio.music.generate',
   'video.generate',
 ] as const;
 export type GenerationRecipePurpose = (typeof GENERATION_RECIPE_PURPOSES)[number];
@@ -36,15 +36,13 @@ export interface ImageGenerationRecipe extends GenerationRecipeBase<'image'> {
   readonly height?: number;
   readonly aspectRatio?: string;
   readonly count?: number;
-  readonly quality?: 'standard' | 'hd';
+  readonly quality?: ImageGenerationQuality;
   readonly style?: string;
 }
 
 export interface AudioGenerationRecipe extends GenerationRecipeBase<'audio'> {
   readonly negativePrompt?: string;
   readonly duration?: number;
-  readonly isMusic?: boolean;
-  readonly genre?: string;
   readonly format?: 'mp3' | 'wav' | 'flac';
 }
 
@@ -54,8 +52,12 @@ export interface VideoGenerationRecipe extends GenerationRecipeBase<'video'> {
   readonly resolution?: string;
   readonly fps?: number;
   readonly aspectRatio?: string;
+  readonly generateAudio?: boolean;
   readonly motionStrength?: number;
   readonly cameraMovement?: string;
+  readonly cameraAngle?: string;
+  readonly shotScale?: string;
+  readonly editInstruction?: string;
 }
 
 export type GenerationRecipe =
@@ -70,7 +72,7 @@ export type GenerationRecipeResolvedInput =
     }
   | {
       readonly kind: 'image' | 'audio' | 'video';
-      readonly sourceNodeId: string;
+      readonly sourceNodeId?: string;
       readonly locator: ContentLocator;
     };
 
@@ -96,11 +98,9 @@ export function purposeForGenerationRecipeKind(
 }
 
 export function purposeForGenerationRecipe(
-  recipe: Pick<GenerationRecipe, 'kind'> & Partial<Pick<AudioGenerationRecipe, 'isMusic'>>,
+  recipe: Pick<GenerationRecipe, 'kind'>,
 ): GenerationRecipePurpose {
-  return recipe.kind === 'audio' && recipe.isMusic
-    ? 'audio.music.generate'
-    : purposeForGenerationRecipeKind(recipe.kind);
+  return purposeForGenerationRecipeKind(recipe.kind);
 }
 
 export function createGenerationRecipe(
@@ -127,7 +127,7 @@ export function createGenerationRecipe(
         width: 1024,
         height: 1024,
         count: 1,
-        quality: 'standard',
+        quality: 'auto',
         ...(model ? { model } : {}),
       };
     case 'audio':
@@ -135,7 +135,6 @@ export function createGenerationRecipe(
         kind,
         prompt: '',
         duration: 10,
-        isMusic: false,
         format: 'mp3',
         ...(model ? { model } : {}),
       };
@@ -158,13 +157,7 @@ export function isGenerationRecipe(value: unknown): value is GenerationRecipe {
     return false;
   }
   const model = value['model'];
-  if (
-    model !== undefined &&
-    !isGenerationRecipeModelBinding(model, {
-      kind: value['kind'],
-      ...(typeof value['isMusic'] === 'boolean' ? { isMusic: value['isMusic'] } : {}),
-    })
-  ) {
+  if (model !== undefined && !isGenerationRecipeModelBinding(model, { kind: value['kind'] })) {
     return false;
   }
   switch (value['kind']) {
@@ -181,6 +174,10 @@ export function isGenerationRecipe(value: unknown): value is GenerationRecipe {
         isOptionalNonEmptyString(value['aspectRatio']) &&
         isOptionalPositiveInteger(value['count']) &&
         (value['quality'] === undefined ||
+          value['quality'] === 'auto' ||
+          value['quality'] === 'low' ||
+          value['quality'] === 'medium' ||
+          value['quality'] === 'high' ||
           value['quality'] === 'standard' ||
           value['quality'] === 'hd') &&
         isOptionalNonEmptyString(value['style'])
@@ -189,8 +186,6 @@ export function isGenerationRecipe(value: unknown): value is GenerationRecipe {
       return (
         isOptionalString(value['negativePrompt']) &&
         isOptionalPositiveNumber(value['duration']) &&
-        (value['isMusic'] === undefined || typeof value['isMusic'] === 'boolean') &&
-        isOptionalNonEmptyString(value['genre']) &&
         (value['format'] === undefined ||
           value['format'] === 'mp3' ||
           value['format'] === 'wav' ||
@@ -203,8 +198,12 @@ export function isGenerationRecipe(value: unknown): value is GenerationRecipe {
         isOptionalNonEmptyString(value['resolution']) &&
         isOptionalPositiveNumber(value['fps']) &&
         isOptionalNonEmptyString(value['aspectRatio']) &&
+        (value['generateAudio'] === undefined || typeof value['generateAudio'] === 'boolean') &&
         isOptionalRange(value['motionStrength'], 0, 1) &&
-        isOptionalNonEmptyString(value['cameraMovement'])
+        isOptionalNonEmptyString(value['cameraMovement']) &&
+        isOptionalNonEmptyString(value['cameraAngle']) &&
+        isOptionalNonEmptyString(value['shotScale']) &&
+        isOptionalNonEmptyString(value['editInstruction'])
       );
   }
 }
@@ -271,8 +270,14 @@ export function projectGenerationRecipeRequest(
           ...(recipe.resolution === undefined ? {} : { resolution: recipe.resolution }),
           ...(recipe.fps === undefined ? {} : { fps: recipe.fps }),
           ...(recipe.aspectRatio === undefined ? {} : { aspectRatio: recipe.aspectRatio }),
+          ...(recipe.generateAudio === undefined ? {} : { generateAudio: recipe.generateAudio }),
           ...(recipe.motionStrength === undefined ? {} : { motionStrength: recipe.motionStrength }),
           ...(recipe.cameraMovement === undefined ? {} : { cameraMovement: recipe.cameraMovement }),
+          ...(recipe.cameraAngle === undefined ? {} : { cameraAngle: recipe.cameraAngle }),
+          ...(recipe.shotScale === undefined ? {} : { shotScale: recipe.shotScale }),
+          ...(recipe.editInstruction === undefined
+            ? {}
+            : { editInstruction: recipe.editInstruction }),
           ...(video
             ? {
                 inputs: [
@@ -294,15 +299,13 @@ export function projectGenerationRecipeRequest(
         throw new Error('The selected Audio Recipe does not support an audio reference input.');
       }
       return {
-        generationType: recipe.isMusic ? 'text-to-music' : 'text-to-audio',
+        generationType: 'text-to-audio',
         ...binding,
         request: {
           prompt,
           ...binding,
           ...(recipe.negativePrompt === undefined ? {} : { negativePrompt: recipe.negativePrompt }),
           ...(recipe.duration === undefined ? {} : { duration: recipe.duration }),
-          ...(recipe.isMusic === undefined ? {} : { isMusic: recipe.isMusic }),
-          ...(recipe.genre === undefined ? {} : { genre: recipe.genre }),
           ...(recipe.format === undefined ? {} : { format: recipe.format }),
         },
       };
@@ -322,7 +325,7 @@ function uniqueLocator(
 
 function isGenerationRecipeModelBinding(
   value: unknown,
-  recipe: Pick<GenerationRecipe, 'kind'> & Partial<Pick<AudioGenerationRecipe, 'isMusic'>>,
+  recipe: Pick<GenerationRecipe, 'kind'>,
 ): value is GenerationRecipeModelBinding {
   return (
     isRecord(value) &&
@@ -394,14 +397,7 @@ const IMAGE_RECIPE_KEYS = new Set([
   'quality',
   'style',
 ]);
-const AUDIO_RECIPE_KEYS = new Set([
-  ...BASE_RECIPE_KEYS,
-  'negativePrompt',
-  'duration',
-  'isMusic',
-  'genre',
-  'format',
-]);
+const AUDIO_RECIPE_KEYS = new Set([...BASE_RECIPE_KEYS, 'negativePrompt', 'duration', 'format']);
 const VIDEO_RECIPE_KEYS = new Set([
   ...BASE_RECIPE_KEYS,
   'negativePrompt',
@@ -409,6 +405,10 @@ const VIDEO_RECIPE_KEYS = new Set([
   'resolution',
   'fps',
   'aspectRatio',
+  'generateAudio',
   'motionStrength',
   'cameraMovement',
+  'cameraAngle',
+  'shotScale',
+  'editInstruction',
 ]);

@@ -188,7 +188,7 @@ export class DocumentContentAccessRuntime {
     input: DocumentContentAccessInput,
   ): Promise<DocumentReadyOutput> {
     if (!input.source.selector) {
-      throw new Error('openneko.document targeted read requires source.selector.');
+      throw new Error('openneko_document targeted read requires source.selector.');
     }
     const locator = await this.resolveReaderLocator(source, input.source.selector);
     const result = await this.deps.documentAccess.readRange(source, {
@@ -205,7 +205,7 @@ export class DocumentContentAccessRuntime {
     stableSource: DocumentSourceRef,
     input: DocumentContentAccessInput,
   ): Promise<DocumentReadyOutput> {
-    if (!input.cursor) throw new Error('openneko.document continue mode requires a cursor.');
+    if (!input.cursor) throw new Error('openneko_document continue mode requires a cursor.');
     const containerSource = documentContainerLocator(input.source);
     const hostFilePath = await this.deps.resolveHostFilePath(containerSource);
     if (!hostFilePath) throw new Error('Document source is unavailable.');

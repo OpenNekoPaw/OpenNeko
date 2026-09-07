@@ -255,7 +255,7 @@ describe('Desktop Canvas material action owner', () => {
     expect(resolveCut).not.toHaveBeenCalled();
   });
 
-  it('contributes Text Editor only for an admitted referenced document target', async () => {
+  it('uses Text Editor instead of Preview for admitted referenced and generated text', async () => {
     const textTarget: CanvasMaterialActionTarget = {
       nodeId: 'notes-1',
       mediaKind: 'document',
@@ -270,14 +270,21 @@ describe('Desktop Canvas material action owner', () => {
     };
     const resolveEditText = vi.fn(async () => true);
     const editText = vi.fn(async () => undefined);
-    const owner = createCanvasMaterialActionOwner({ resolveEditText, editText });
+    const preview = vi.fn(async () => undefined);
+    const owner = createCanvasMaterialActionOwner({ preview, resolveEditText, editText });
 
     const descriptors = await owner.resolve({ identity, targets: [textTarget] });
-    await expect(owner.resolve({ identity, targets: [generatedTextTarget] })).resolves.toEqual([]);
+    const generatedDescriptors = await owner.resolve({
+      identity,
+      targets: [generatedTextTarget],
+    });
 
     expect(descriptors.map((descriptor) => descriptor.id)).toEqual([CANVAS_EDIT_TEXT_ACTION_ID]);
-    expect(resolveEditText).toHaveBeenCalledTimes(1);
-    const descriptor = descriptors[0];
+    expect(generatedDescriptors.map((descriptor) => descriptor.id)).toEqual([
+      CANVAS_EDIT_TEXT_ACTION_ID,
+    ]);
+    expect(resolveEditText).toHaveBeenCalledTimes(2);
+    const descriptor = generatedDescriptors[0];
     if (!descriptor) throw new Error('Text Editor descriptor is missing.');
     await owner.execute({
       identity,
@@ -289,12 +296,13 @@ describe('Desktop Canvas material action owner', () => {
           canvasSessionId: identity.sessionId,
         },
         actionId: descriptor.id,
-        selectedNodeIds: [textTarget.nodeId],
+        selectedNodeIds: [generatedTextTarget.nodeId],
         payload: {},
       },
-      targets: [textTarget],
+      targets: [generatedTextTarget],
     });
-    expect(editText).toHaveBeenCalledWith({ identity, target: textTarget });
+    expect(editText).toHaveBeenCalledWith({ identity, target: generatedTextTarget });
+    expect(preview).not.toHaveBeenCalled();
   });
 
   it('contributes Add to Cut only for audio/video and preserves the exact owner payload', async () => {
@@ -311,7 +319,10 @@ describe('Desktop Canvas material action owner', () => {
         documentId: 'edits/sequence.otio',
       },
     } as const;
-    const resolveAddToCut = vi.fn(async () => executionPayload);
+    const resolveAddToCut = vi.fn(async () => ({
+      status: 'available' as const,
+      executionPayload,
+    }));
     const addToCut = vi.fn(async () => undefined);
     const owner = createCanvasMaterialActionOwner({ resolveAddToCut, addToCut });
 
@@ -346,25 +357,25 @@ describe('Desktop Canvas material action owner', () => {
     await expect(owner.resolve({ identity, targets: [target] })).resolves.toEqual([]);
   });
 
-  it('contributes and dispatches Cut-owned Video audio separation with the exact target payload', async () => {
+  it('derives an audio authoring request without a Cut target or payload', async () => {
     const videoTarget: CanvasMaterialActionTarget = {
       nodeId: 'video-1',
       mediaKind: 'video',
       origin: 'generated',
       locator: { file: { authority: 'workspace', path: 'neko/generated/video-output-1.mp4' } },
     };
-    const executionPayload = {
-      target: {
-        kind: 'existing-cut',
-        viewId: 'cut-view-1',
-        documentId: 'edits/sequence.otio',
+    const separateAudio = vi.fn(async () => ({
+      locator: {
+        file: {
+          authority: 'workspace' as const,
+          path: 'neko/derived/audio/video-output-1-audio.m4a',
+        },
       },
-    } as const;
-    const separateAudioInCut = vi.fn(async () => undefined);
+      title: 'video-output-1-audio.m4a',
+    }));
     const owner = createCanvasMaterialActionOwner({
-      resolveAddToCut: async () => executionPayload,
-      addToCut: async () => undefined,
-      separateAudioInCut,
+      resolveSeparateAudio: async () => ({ status: 'available' }),
+      separateAudio,
     });
 
     const descriptors = await owner.resolve({ identity, targets: [videoTarget] });
@@ -373,27 +384,128 @@ describe('Desktop Canvas material action owner', () => {
     );
     if (!descriptor) throw new Error('Video audio-separation descriptor is missing.');
 
-    await owner.execute({
-      identity,
-      descriptor,
-      action: {
+    expect(descriptor).toMatchObject({ ownerId: 'media', effect: 'derive' });
+    expect(descriptor).not.toHaveProperty('executionPayload');
+    await expect(
+      owner.execute({
+        identity,
+        descriptor,
+        action: {
+          identity: {
+            projectId: identity.projectId,
+            canvasId: identity.documentId,
+            canvasSessionId: identity.sessionId,
+          },
+          actionId: descriptor.id,
+          selectedNodeIds: [videoTarget.nodeId],
+          payload: {},
+        },
+        targets: [videoTarget],
+      }),
+    ).resolves.toEqual({
+      authoringRequest: {
+        kind: 'derived-output-commit',
         identity: {
           projectId: identity.projectId,
           canvasId: identity.documentId,
           canvasSessionId: identity.sessionId,
         },
-        actionId: descriptor.id,
-        selectedNodeIds: [videoTarget.nodeId],
-        payload: executionPayload,
+        locator: {
+          file: {
+            authority: 'workspace',
+            path: 'neko/derived/audio/video-output-1-audio.m4a',
+          },
+        },
+        mediaKind: 'audio',
+        title: 'video-output-1-audio.m4a',
+        sourceNodeIds: [videoTarget.nodeId],
       },
-      targets: [videoTarget],
+    });
+    expect(separateAudio).toHaveBeenCalledWith({ identity, target: videoTarget });
+  });
+
+  it('keeps Cut editing available while disabling audio separation for a silent video', async () => {
+    const videoTarget: CanvasMaterialActionTarget = {
+      nodeId: 'silent-video',
+      mediaKind: 'video',
+      origin: 'generated',
+      locator: { file: { authority: 'workspace', path: 'neko/generated/silent.mp4' } },
+    };
+    const executionPayload = {
+      target: { kind: 'new-cut-draft', workbenchInstanceId: 'workbench-1' },
+    } as const;
+    const diagnostic = {
+      code: 'media-audio-stream-unavailable',
+      message: 'This video does not contain an audio stream to separate.',
+    } as const;
+    const owner = createCanvasMaterialActionOwner({
+      resolveAddToCut: async () => ({ status: 'available', executionPayload }),
+      addToCut: async () => undefined,
+      resolveSeparateAudio: async () => ({ status: 'unavailable', diagnostic }),
+      separateAudio: async () => {
+        throw new Error('Unavailable audio extraction must not execute.');
+      },
     });
 
-    expect(separateAudioInCut).toHaveBeenCalledWith({
-      identity,
-      target: videoTarget,
-      executionPayload,
+    const descriptors = await owner.resolve({ identity, targets: [videoTarget] });
+    expect(descriptors).toEqual([
+      expect.objectContaining({
+        id: CANVAS_ADD_TO_CUT_ACTION_ID,
+        executionPayload,
+      }),
+      expect.objectContaining({
+        id: CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID,
+        unavailable: diagnostic,
+      }),
+    ]);
+    expect(descriptors[0]).not.toHaveProperty('unavailable');
+    expect(descriptors[1]).not.toHaveProperty('executionPayload');
+  });
+
+  it('projects a fail-visible Cut diagnostic and refuses unavailable execution', async () => {
+    const videoTarget: CanvasMaterialActionTarget = {
+      nodeId: 'video-unavailable',
+      mediaKind: 'video',
+      origin: 'referenced',
+      locator: { file: { authority: 'workspace', path: 'media/unavailable.mp4' } },
+    };
+    const diagnostic = {
+      code: 'cut-canvas-source-stale',
+      message: 'The Canvas View is stale.',
+    } as const;
+    const addToCut = vi.fn(async () => undefined);
+    const owner = createCanvasMaterialActionOwner({
+      resolveAddToCut: async () => ({ status: 'unavailable', diagnostic }),
+      addToCut,
     });
+
+    const descriptors = await owner.resolve({ identity, targets: [videoTarget] });
+    expect(descriptors).toEqual([
+      expect.objectContaining({
+        id: CANVAS_ADD_TO_CUT_ACTION_ID,
+        unavailable: diagnostic,
+      }),
+    ]);
+    const unavailable = descriptors[0];
+    if (!unavailable) throw new Error('Unavailable Cut descriptor is missing.');
+    await expect(
+      owner.execute({
+        identity,
+        descriptor: unavailable,
+        action: {
+          identity: {
+            projectId: identity.projectId,
+            canvasId: identity.documentId,
+            canvasSessionId: identity.sessionId,
+          },
+          actionId: unavailable.id,
+          selectedNodeIds: [videoTarget.nodeId],
+          payload: {},
+        },
+        targets: [videoTarget],
+      }),
+    ).rejects.toThrow(diagnostic.message);
+    expect(addToCut).not.toHaveBeenCalled();
   });
 
   it('exposes explicit project/global Media Library copies and never an Asset promotion action', async () => {
@@ -444,6 +556,7 @@ function generationProjection(jobId: string): CanvasGenerationProjectionSnapshot
     phase: 'running',
     title: 'Regenerate image',
     inputNodeIds: [generatedTarget.nodeId],
+    inputMaterials: [],
     mediaKind: 'image',
     summary: {
       prompt: 'Cold industrial corridor',

@@ -8,7 +8,7 @@ import type {
   MarkdownCanvasNode,
   MediaCanvasNode,
 } from '@neko/canvas-domain';
-import { resolveCanvasTextFilePreviewKind } from '@neko/canvas-domain';
+import { CANVAS_EDIT_TEXT_ACTION_ID, resolveCanvasTextFilePreviewKind } from '@neko/canvas-domain';
 import { FileIcon, toCodiconClassName, type CodiconName } from '@neko/ui/icons';
 import { MarkdownDocumentView } from '@neko/ui/markdown';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -167,7 +167,7 @@ export function MediaNode({
               source={previewSource}
               surfaceKind="inline"
               chrome="full-bleed"
-              audioLayout={mediaType === 'audio' ? 'node-card' : undefined}
+              mediaPlayback={mediaType === 'video' ? 'inline' : undefined}
             />
           )}
         </div>
@@ -278,6 +278,14 @@ export function FileNode({
     ...(node.data.mediaType ? { mediaType: node.data.mediaType } : {}),
   });
   const [preview, setPreview] = useState<CanvasFilePreviewPresentation>();
+  const activate =
+    contentLocator && eligibleKind && host
+      ? () => void host.executeMaterialAction(CANVAS_EDIT_TEXT_ACTION_ID, [node.id], {})
+      : contentLocator && isFullscreenPreviewFile(node.data) && onFullscreenPreview
+        ? () => onFullscreenPreview(node.id)
+        : contentLocator && onOpen
+          ? () => onOpen(contentLocator)
+          : undefined;
 
   useEffect(() => {
     const currentContentLocator = contentLocatorRef.current;
@@ -309,16 +317,18 @@ export function FileNode({
       presentation="foundational"
       opaqueSurface
       className={eligibleKind ? 'canvas-text-reference-node' : undefined}
-      onActivate={
-        contentLocator && isFullscreenPreviewFile(node.data) && onFullscreenPreview
-          ? () => onFullscreenPreview(node.id)
-          : contentLocator && onOpen
-            ? () => onOpen(contentLocator)
-            : undefined
-      }
+      onActivate={activate}
       nodeLabel={{
         icon: <FileIcon size={13} strokeWidth={1.6} aria-hidden="true" />,
         text: fileName,
+        ...(activate === undefined
+          ? {}
+          : {
+              action: {
+                ariaLabel: t('node.openFile', { name: fileName }),
+                onActivate: activate,
+              },
+            }),
       }}
     >
       <div
@@ -345,13 +355,7 @@ function isFullscreenPreviewMediaKind(value: unknown): value is 'image' | 'video
 }
 
 function isFullscreenPreviewFile(data: FileCanvasNode['data']): boolean {
-  if (isFullscreenPreviewMediaKind(data.mediaKind)) return true;
-  return Boolean(
-    resolveCanvasTextFilePreviewKind({
-      path: data.path || data.title,
-      ...(data.mediaType ? { mediaType: data.mediaType } : {}),
-    }),
-  );
+  return isFullscreenPreviewMediaKind(data.mediaKind);
 }
 
 function CanvasFileNodeContent({

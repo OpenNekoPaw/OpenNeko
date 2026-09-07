@@ -84,7 +84,7 @@ describe('buildCanvasNode', () => {
       unsupportedPrompt: 'must not survive',
     });
 
-    expect(node.size.height).toBe(60);
+    expect(node.size).toEqual({ width: 240, height: 100 });
     expect(node.data).not.toHaveProperty('unsupportedPrompt');
     expect((node.data as Record<string, unknown>).duration).toBeUndefined();
   });
@@ -108,7 +108,7 @@ describe('buildCanvasNode', () => {
 
     expect(prompt.size).toEqual({ width: 120, height: 80 });
     expect(image.size).toEqual({ width: 120, height: 90 });
-    expect(audio.size).toEqual({ width: 120, height: 60 });
+    expect(audio.size).toEqual({ width: 240, height: 100 });
   });
 
   it('rejects unsupported node types at the authoring boundary', () => {

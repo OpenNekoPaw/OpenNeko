@@ -25,6 +25,8 @@ import {
   type CanvasTextFilePreviewResult,
 } from './canvas-text-file-preview';
 import {
+  isCanvasGenerationNodeData,
+  canvasGenerationInputPreviewId,
   purposeForCanvasGenerationKind,
   type CanvasGenerationRunBinding,
 } from './types/canvas-generation-node';
@@ -36,7 +38,6 @@ import {
 import {
   applyCanvasGenerationNodeOutputs,
   attachCanvasGenerationReference,
-  authorCanvasGenerationNodeText,
   createCanvasGenerationNode,
   requireCanvasGenerationNode,
   selectCanvasGenerationNodeOutput,
@@ -48,6 +49,7 @@ import type {
   CanvasGenerationRuntimeProjection,
 } from './canvas-generation-application-port';
 import type { CanvasHostPresentationSnapshotStore } from './canvas-host-presentation-snapshot';
+import { createCanvasHeadlessAuthoringIdFactory } from './utils/canvasHeadlessAuthoring';
 
 export interface CanvasHostRuntimeSessionEffects {
   readonly readTextFilePreview?: (input: {
@@ -144,6 +146,7 @@ export interface CanvasHostRuntimeSessionOptions {
   readonly commandHistoryLimit?: number;
   readonly documentHistoryLimit?: number;
   readonly autosaveDelayMs?: number;
+  readonly createGenerationNodeIdentity?: () => string;
 }
 
 /**
@@ -184,6 +187,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
   private readonly commandHistoryLimit: number;
   private readonly documentHistoryLimit: number;
   private readonly autosaveDelayMs: number;
+  private readonly createGenerationNodeIdentity: () => string;
 
   constructor(private readonly options: CanvasHostRuntimeSessionOptions) {
     this.identity = { ...options.identity };
@@ -195,6 +199,15 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     this.commandHistoryLimit = options.commandHistoryLimit ?? 200;
     this.documentHistoryLimit = options.documentHistoryLimit ?? 50;
     this.autosaveDelayMs = options.autosaveDelayMs ?? DEFAULT_AUTOSAVE_DELAY_MS;
+    this.createGenerationNodeIdentity =
+      options.createGenerationNodeIdentity ??
+      createCanvasHeadlessAuthoringIdFactory({
+        prefix: 'generation',
+        existingIds: [
+          ...this.canvas.nodes.map((node) => node.id),
+          ...this.canvas.connections.map((connection) => connection.id),
+        ],
+      });
     if (!Number.isSafeInteger(this.commandHistoryLimit) || this.commandHistoryLimit < 1) {
       throw new Error('Canvas Host command history limit must be a positive safe integer.');
     }
@@ -225,12 +238,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
       }
       const result = await operation();
       this.canvas = cloneCanvas(result.canvas);
-      const projectedNodeIds = new Set(
-        result.canvas.nodes.filter((node) => node.type === 'generation').map((node) => node.id),
-      );
-      for (const nodeId of this.generationNodes.keys()) {
-        if (!projectedNodeIds.has(nodeId)) this.generationNodes.delete(nodeId);
-      }
+      this.reconcileGenerationProjections();
       this.dirty = false;
       this.cancelAutosave();
       this.undoStack.length = 0;
@@ -265,6 +273,18 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     const node = this.canvas.nodes.find((candidate) => candidate.id === input.nodeId);
     if (!node) throw new Error(`Canvas preview resource node "${input.nodeId}" is stale.`);
     if (node.type === 'generation') {
+      if (!isCanvasGenerationNodeData(node.data)) {
+        throw new Error(`Canvas Generation node "${node.id}" is unavailable.`);
+      }
+      if (input.outputId === canvasGenerationInputPreviewId(input.locator)) {
+        const material = node.data.inputMaterials?.find((candidate) =>
+          contentLocatorsEqual(candidate.locator, input.locator),
+        );
+        if (!material || material.mediaKind !== input.contentKind) {
+          throw new Error(`Canvas Generation input reference on "${node.id}" is stale.`);
+        }
+        return;
+      }
       const output = node.data.outputs.find((candidate) => candidate.outputId === input.outputId);
       if (!output || !contentLocatorsEqual(output.locator, input.locator)) {
         throw new Error(`Canvas preview resource output "${input.outputId}" is stale.`);
@@ -357,42 +377,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
   }
 
   async reattachGenerationNodes(): Promise<void> {
-    await this.enqueueOperation(async () => {
-      if (this.disposed) return;
-      const generation = this.options.effects.generation;
-      if (!generation) return;
-      for (const node of this.canvas.nodes) {
-        if (node.type !== 'generation' || !node.data.latestRun) continue;
-        try {
-          const result = await generation.resumeNode({
-            canvas: cloneCanvas(this.canvas),
-            identity: { ...this.identity },
-            nodeId: node.id,
-            run: node.data.latestRun,
-            persistCanvas: (canvas) => this.persistCanvas(canvas),
-          });
-          if (this.disposed) return;
-          this.canvas = cloneCanvas(result.canvas);
-          this.generationNodes.set(node.id, result.projection);
-          this.commitProjectionChange();
-          this.startGenerationObservation(node.id);
-        } catch (error) {
-          if (this.disposed) return;
-          this.generationNodes.set(node.id, {
-            nodeId: node.id,
-            recipeInputFingerprint: node.data.latestRun.recipeInputFingerprint,
-            ...generationRuntimeIdentity(node.data.latestRun),
-            phase: 'outcome-unknown',
-            diagnostic: {
-              code: 'canvas-generation-reattach-failed',
-              message:
-                error instanceof Error ? error.message : 'Canvas Generation reattachment failed.',
-            },
-          });
-          this.commitProjectionChange();
-        }
-      }
-    });
+    await this.enqueueOperation(() => this.reattachGenerationNodesSerial());
   }
 
   private async executeIntentSerial(
@@ -457,8 +442,10 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
       if (previous) {
         this.redoStack.push(cloneCanvas(this.canvas));
         this.canvas = previous;
+        this.reconcileGenerationProjections();
         this.commitStateChange(true, request.commandId);
         this.scheduleAutosave();
+        await this.reattachGenerationNodesSerial();
       }
       return this.accepted(request);
     }
@@ -467,8 +454,10 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
       if (next) {
         this.pushHistory(this.undoStack, this.canvas);
         this.canvas = next;
+        this.reconcileGenerationProjections();
         this.commitStateChange(true, request.commandId);
         this.scheduleAutosave();
+        await this.reattachGenerationNodesSerial();
       }
       return this.accepted(request);
     }
@@ -513,13 +502,20 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
       const purpose = purposeForCanvasGenerationKind(intent.kind);
       const defaultModel = this.options
         .resolveGenerationModels?.()
-        .find((option) => option.isDefault && option.binding.purpose === purpose)?.binding;
+        .find((option) => option.isDefault && option.binding.purpose === purpose);
       const next = createCanvasGenerationNode({
         canvas: this.canvas,
-        nodeId: nextGenerationNodeId(this.canvas),
+        nodeId: this.requireAvailableGenerationNodeIdentity(),
         kind: intent.kind,
         position: intent.position ?? { x: 100, y: 100 },
-        ...(defaultModel ? { defaultModel } : {}),
+        ...(defaultModel
+          ? {
+              defaultModel: defaultModel.binding,
+              ...(defaultModel.parameterProfile
+                ? { parameterProfile: defaultModel.parameterProfile }
+                : {}),
+            }
+          : {}),
       });
       this.commitCanvas(next, request.commandId);
       return this.accepted(request);
@@ -589,17 +585,6 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
         });
         this.generationNodes.set(intent.nodeId, result.projection);
       }
-      return this.accepted(request);
-    }
-    if (intent.type === 'author-generation-text') {
-      this.commitCanvas(
-        authorCanvasGenerationNodeText({
-          canvas: this.canvas,
-          nodeId: intent.nodeId,
-          text: intent.text,
-        }),
-        request.commandId,
-      );
       return this.accepted(request);
     }
     if (intent.type === 'run-generation-node') {
@@ -711,6 +696,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     this.pushHistory(this.undoStack, this.canvas);
     this.redoStack.length = 0;
     this.canvas = cloneCanvas(nextCanvas);
+    this.reconcileGenerationProjections();
     this.commitStateChange(dirty, originCommandId);
     if (dirty) this.scheduleAutosave();
     else this.cancelAutosave();
@@ -866,8 +852,8 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
         nodeId,
         run,
       })) {
-        await this.enqueueOperation(async () => {
-          if (this.disposed) return;
+        const accepted = await this.enqueueOperation(async () => {
+          if (this.disposed || !this.isCurrentGenerationRun(nodeId, run)) return false;
           const previous = this.generationNodes.get(nodeId);
           this.generationNodes.set(
             nodeId,
@@ -894,11 +880,13 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
             this.dirty = false;
           }
           this.commitProjectionChange();
+          return true;
         });
+        if (!accepted) return;
       }
     } catch (error) {
       await this.enqueueOperation(() => {
-        if (this.disposed) return;
+        if (this.disposed || !this.isCurrentGenerationRun(nodeId, run)) return;
         this.generationNodes.set(nodeId, {
           nodeId,
           recipeInputFingerprint: run.recipeInputFingerprint,
@@ -915,6 +903,90 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     } finally {
       this.observedGenerationRuns.delete(generationRunKey(run));
     }
+  }
+
+  private reconcileGenerationProjections(): void {
+    for (const [nodeId, projection] of this.generationNodes) {
+      const node = this.canvas.nodes.find((candidate) => candidate.id === nodeId);
+      if (
+        !node ||
+        node.type !== 'generation' ||
+        !isCanvasGenerationNodeData(node.data) ||
+        !node.data.latestRun ||
+        !generationProjectionMatchesRun(projection, node.data.latestRun)
+      ) {
+        this.generationNodes.delete(nodeId);
+      }
+    }
+  }
+
+  private async reattachGenerationNodesSerial(): Promise<void> {
+    if (this.disposed) return;
+    const generation = this.options.effects.generation;
+    if (!generation) return;
+    for (const node of this.canvas.nodes) {
+      if (
+        node.type !== 'generation' ||
+        !isCanvasGenerationNodeData(node.data) ||
+        !node.data.latestRun
+      ) {
+        continue;
+      }
+      const current = this.generationNodes.get(node.id);
+      if (current && generationProjectionMatchesRun(current, node.data.latestRun)) continue;
+      try {
+        const result = await generation.resumeNode({
+          canvas: cloneCanvas(this.canvas),
+          identity: { ...this.identity },
+          nodeId: node.id,
+          run: node.data.latestRun,
+          persistCanvas: (canvas) => this.persistCanvas(canvas),
+        });
+        if (this.disposed || !this.isCurrentGenerationRun(node.id, node.data.latestRun)) return;
+        this.canvas = cloneCanvas(result.canvas);
+        this.generationNodes.set(node.id, result.projection);
+        this.commitProjectionChange();
+        this.startGenerationObservation(node.id);
+      } catch (error) {
+        if (this.disposed || !this.isCurrentGenerationRun(node.id, node.data.latestRun)) return;
+        this.generationNodes.set(node.id, {
+          nodeId: node.id,
+          recipeInputFingerprint: node.data.latestRun.recipeInputFingerprint,
+          ...generationRuntimeIdentity(node.data.latestRun),
+          phase: 'outcome-unknown',
+          diagnostic: {
+            code: 'canvas-generation-reattach-failed',
+            message:
+              error instanceof Error ? error.message : 'Canvas Generation reattachment failed.',
+          },
+        });
+        this.commitProjectionChange();
+      }
+    }
+  }
+
+  private isCurrentGenerationRun(nodeId: string, run: CanvasGenerationRunBinding): boolean {
+    const node = this.canvas.nodes.find((candidate) => candidate.id === nodeId);
+    return (
+      node?.type === 'generation' &&
+      isCanvasGenerationNodeData(node.data) &&
+      node.data.latestRun !== undefined &&
+      generationRunsEqual(node.data.latestRun, run)
+    );
+  }
+
+  private requireAvailableGenerationNodeIdentity(): string {
+    const nodeId = this.createGenerationNodeIdentity();
+    if (nodeId.length === 0 || nodeId !== nodeId.trim()) {
+      throw new Error('Canvas Generation node identity allocator returned an invalid identity.');
+    }
+    if (
+      this.canvas.nodes.some((node) => node.id === nodeId) ||
+      this.canvas.connections.some((connection) => connection.id === nodeId)
+    ) {
+      throw new Error(`Canvas Generation node identity "${nodeId}" already exists.`);
+    }
+    return nodeId;
   }
 
   private commitProjectionChange(): void {
@@ -1108,15 +1180,30 @@ function cloneSnapshot(snapshot: CanvasHostSnapshot): CanvasHostSnapshot {
   };
 }
 
-function nextGenerationNodeId(canvas: CanvasData): string {
-  const existing = new Set(canvas.nodes.map((node) => node.id));
-  let sequence = 1;
-  while (existing.has(`generation-${sequence}`)) sequence += 1;
-  return `generation-${sequence}`;
-}
-
 function generationRunKey(run: CanvasGenerationRunBinding): string {
   return run.jobRef ? `job:${run.jobRef.jobId}` : `submission:${run.submissionId}`;
+}
+
+function generationProjectionMatchesRun(
+  projection: CanvasGenerationRuntimeProjection,
+  run: CanvasGenerationRunBinding,
+): boolean {
+  return (
+    projection.recipeInputFingerprint === run.recipeInputFingerprint &&
+    projection.submissionId === run.submissionId &&
+    projection.jobRef?.jobId === run.jobRef?.jobId
+  );
+}
+
+function generationRunsEqual(
+  left: CanvasGenerationRunBinding,
+  right: CanvasGenerationRunBinding,
+): boolean {
+  return (
+    left.recipeInputFingerprint === right.recipeInputFingerprint &&
+    left.submissionId === right.submissionId &&
+    left.jobRef?.jobId === right.jobRef?.jobId
+  );
 }
 
 function generationRuntimeIdentity(

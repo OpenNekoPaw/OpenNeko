@@ -17,7 +17,9 @@ import {
   TextDocumentError,
   TextDocumentSession,
   parseTextEditorHostRequest,
+  parseTextEditorClipboardCommandRequest,
   sameTextEditorRuntimeIdentity,
+  type TextEditorClipboardCommandRequest,
   type TextEditorMarkdownReferenceCatalog,
   type TextEditorHostResult,
   type TextEditorProjectionEvent,
@@ -125,12 +127,12 @@ export class DesktopTextEditorRuntime {
         projectId: project.projectId,
         workspaceId: input.workspaceId,
         windowId: input.windowId,
-        viewId: 'agent-terminal-artifact',
+        viewId: 'workspace-text-editor',
         viewInstanceId: tab.viewInstanceId,
         rendererSessionId: input.rendererSessionId,
       },
       item: {
-        resourceId: `agent-terminal-artifact:${input.contentLocator.file.path}`,
+        resourceId: `workspace-text-file:${input.contentLocator.file.path}`,
         source: 'files',
         kind: 'document',
         label: input.displayLabel,
@@ -331,6 +333,20 @@ export class DesktopTextEditorRuntime {
         diagnostic: error.diagnostic,
       };
     }
+  }
+
+  authorizeClipboardCommand(windowId: string, value: unknown): TextEditorClipboardCommandRequest {
+    this.requireActive();
+    const request = parseTextEditorClipboardCommandRequest(value);
+    const binding = this.bindings.get(request.identity.sessionId);
+    if (
+      !binding ||
+      binding.runtimeIdentity.windowId !== windowId ||
+      !sameTextEditorRuntimeIdentity(binding.runtimeIdentity, request.identity)
+    ) {
+      throw new Error('Desktop Text Editor clipboard command has no current owner-bound session.');
+    }
+    return request;
   }
 
   async subscribe(

@@ -7,10 +7,20 @@ import {
   decodeCreateDshSkillResult,
 } from '@neko/agent-contracts/dsh-skill-authoring';
 import type { Context } from '@deepseek-ai/cordis';
-import { defineTool, type JsonValue, type ToolRunContext } from '@deepseek-ai/dsh-tools';
+import type { FileSystem } from '@deepseek-ai/dsh-fs';
+import {
+  defineTool,
+  type JsonValue,
+  type ToolExecution,
+  type ToolRunContext,
+} from '@deepseek-ai/dsh-tools';
+import { extname, posix as portablePath } from 'node:path';
 
 export const name = 'openneko-agent-tools';
-export const inject = ['opennekoHostTools', 'tools'];
+export const inject = ['fs', 'opennekoHostTools', 'tools'];
+
+const NATIVE_TEXT_FILE_TOOLS = new Set(['read', 'write', 'edit']);
+const PROTECTED_STRUCTURED_PROJECT_EXTENSIONS = new Set(['.nkc', '.otio']);
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -68,6 +78,76 @@ export function apply(ctx: Context): void {
       }),
     'openneko-agent-tools-approval',
   );
+  ctx.effect(
+    () =>
+      ctx.on('tools/pre-execute', async (execution, next) => {
+        const denial = await nativeTextFileDenial(ctx.fs, execution);
+        return denial === undefined ? next() : { kind: 'deny', reason: denial };
+      }),
+    'openneko-native-text-file-policy',
+  );
+}
+
+export async function nativeTextFileDenial(
+  fs: Pick<FileSystem, 'contains' | 'resolve'>,
+  execution: Pick<ToolExecution, 'agent' | 'arguments' | 'name' | 'signal'>,
+): Promise<string | undefined> {
+  if (!NATIVE_TEXT_FILE_TOOLS.has(execution.name)) return undefined;
+  const cwd = execution.agent?.session.header.cwd;
+  if (cwd === undefined) {
+    return `DSH ${execution.name} requires an exact Session Workspace.`;
+  }
+  const filePath = readFilePath(execution.arguments);
+  if (filePath === undefined) {
+    return `DSH ${execution.name} requires one non-empty file_path.`;
+  }
+  if (execution.name === 'write' && !isNormalizedWorkspaceRelativePath(filePath)) {
+    return 'DSH write requires a normalized Workspace-relative file_path.';
+  }
+
+  let workspace;
+  let target;
+  try {
+    [workspace, target] = await Promise.all([
+      fs.resolve(cwd, { signal: execution.signal }),
+      fs.resolve(filePath, { cwd, signal: execution.signal }),
+    ]);
+  } catch (error) {
+    return `DSH ${execution.name} could not resolve the requested Workspace path: ${errorMessage(error)}`;
+  }
+  if (!fs.contains(workspace, target)) {
+    return `DSH ${execution.name} denied a path outside the exact Session Workspace.`;
+  }
+  const extension = extname(target.displayPath).toLocaleLowerCase('en-US');
+  if (PROTECTED_STRUCTURED_PROJECT_EXTENSIONS.has(extension)) {
+    return `DSH ${execution.name} denied protected structured project format '${extension}'. Use its owning domain capability.`;
+  }
+  return undefined;
+}
+
+function readFilePath(args: unknown): string | undefined {
+  if (typeof args !== 'object' || args === null || Array.isArray(args)) return undefined;
+  const value = Reflect.get(args, 'file_path');
+  if (typeof value !== 'string' || value.trim().length === 0) return undefined;
+  return value;
+}
+
+function isNormalizedWorkspaceRelativePath(filePath: string): boolean {
+  const segments = filePath.split('/');
+  return (
+    !filePath.includes('\\') &&
+    !filePath.includes('\0') &&
+    !filePath.startsWith('~') &&
+    !portablePath.isAbsolute(filePath) &&
+    portablePath.normalize(filePath) === filePath &&
+    filePath !== '..' &&
+    !filePath.startsWith('../') &&
+    !segments.some((segment) => segment.length === 0 || segment.includes(':'))
+  );
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function toDshJsonValue(value: DshAcpJsonValue): JsonValue {

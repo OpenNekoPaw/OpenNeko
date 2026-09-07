@@ -22,8 +22,10 @@ describe('Desktop AI model settings contract', () => {
           displayName: 'DeepSeek',
           type: 'generic',
           apiUrl: 'https://api.deepseek.com/v1',
+          connectionKind: 'direct',
           protocol: 'openai-chat',
           supportedModelFamilies: ['dialogue'],
+          requiresApiKey: true,
           enabled: true,
         },
         apiKey: 'transient-secret',
@@ -41,11 +43,36 @@ describe('Desktop AI model settings contract', () => {
           displayName: 'Future Provider',
           type: 'generic',
           apiUrl: '',
+          connectionKind: 'direct',
           supportedModelFamilies: ['dialogue'],
+          requiresApiKey: true,
           enabled: true,
         },
       }),
     ).toMatchObject({ provider: { id: 'future-provider', apiUrl: '' } });
+  });
+
+  it('carries explicit custom-model capabilities and rejects duplicates', () => {
+    const request = {
+      requestId: 'request-model-capabilities',
+      operation: 'save-model' as const,
+      model: {
+        existingId: 'gpt-sol',
+        providerId: 'nekoapi-chat',
+        apiName: 'gpt-5.6-sol',
+        displayName: 'GPT 5.6 SOL',
+        type: 'llm' as const,
+        capabilities: ['chat', 'llm.chat', 'vision', 'function_calling', 'streaming'],
+        enabled: true,
+      },
+    };
+    expect(createDesktopAiModelSettingsRequest(request)).toEqual(request);
+    expect(() =>
+      createDesktopAiModelSettingsRequest({
+        ...request,
+        model: { ...request.model, capabilities: ['chat', 'chat'] },
+      }),
+    ).toThrow(/duplicates/u);
   });
 
   it('rejects a secret-bearing projection', () => {
@@ -56,6 +83,7 @@ describe('Desktop AI model settings contract', () => {
           runtimeEffect: 'unchanged',
           projection: {
             dialogueCapabilities,
+            generationCapabilities: [],
             providers: [
               {
                 id: 'deepseek',
@@ -100,6 +128,7 @@ describe('Desktop AI model settings contract', () => {
           runtimeEffect: 'unchanged',
           projection: {
             dialogueCapabilities,
+            generationCapabilities: [],
             providers: [
               {
                 id: 'deepseek',
@@ -133,9 +162,11 @@ describe('Desktop AI model settings contract', () => {
           displayName: 'Ollama Local',
           type: 'ollama',
           apiUrl: 'http://localhost:11434/api',
+          connectionKind: 'local',
           protocol: 'ollama',
           presetId: 'dialogue-ollama',
           supportedModelFamilies: ['dialogue'],
+          requiresApiKey: false,
           enabled: true,
         },
       }),
@@ -159,7 +190,9 @@ describe('Desktop AI model settings contract', () => {
       displayName: 'Invalid families',
       type: 'generic' as const,
       apiUrl: 'https://example.test/v1',
+      connectionKind: 'direct' as const,
       protocol: 'openai-chat' as const,
+      requiresApiKey: true,
       enabled: true,
     };
     expect(() =>
@@ -188,8 +221,10 @@ describe('Desktop AI model settings contract', () => {
           displayName: 'MiniMax H3',
           type: 'minimax',
           apiUrl: 'https://api.minimaxi.com/v2',
+          connectionKind: 'direct',
           presetId: 'generation-minimax-h3',
           supportedModelFamilies: ['generation'],
+          requiresApiKey: true,
           enabled: true,
         },
       }),

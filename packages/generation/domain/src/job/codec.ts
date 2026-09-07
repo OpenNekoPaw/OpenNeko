@@ -19,8 +19,12 @@ import type {
   ImageGenerationRequest,
   VideoGenerationRequest,
 } from '../contracts';
+import { isImageOperationId, isVideoOperationId } from '../domain-contracts';
+import {
+  IMAGE_GENERATION_PARAMETER_IDS,
+  VIDEO_GENERATION_PARAMETER_IDS,
+} from '../model-parameter-profile';
 import type { PromptGenerationRequest } from '../execution';
-import type { ComfyUiWorkflowGenerationRequest } from '../comfyui/index';
 
 const JOB_PHASES: ReadonlySet<string> = new Set([
   'pending',
@@ -48,7 +52,7 @@ const VIDEO_GENERATION_TYPES: ReadonlySet<string> = new Set([
   'video-to-video',
   'video-edit',
 ]);
-const AUDIO_GENERATION_TYPES: ReadonlySet<string> = new Set(['text-to-audio', 'text-to-music']);
+const AUDIO_GENERATION_TYPES: ReadonlySet<string> = new Set(['text-to-audio']);
 
 export function encodeGenerationJobSnapshot(snapshot: GenerationJobSnapshot): string {
   if (!isGenerationJobSnapshot(snapshot)) {
@@ -96,7 +100,26 @@ export function decodeSubmitPurposeGenerationJobInput(
   ) {
     throw new Error('Generation submission request violates its generation type contract.');
   }
+  if (value['purpose'] !== purposeForGenerationType(value['generationType'])) {
+    throw new Error('Generation submission purpose does not match its generation type.');
+  }
   return value as SubmitPurposeGenerationJobInput;
+}
+
+function purposeForGenerationType(value: unknown): string | undefined {
+  if (value === 'prompt') return 'canvas.prompt';
+  if (value === 'image-edit') return 'image.edit';
+  if (value === 'text-to-image' || value === 'image-to-image') return 'image.generate';
+  if (
+    value === 'text-to-video' ||
+    value === 'image-to-video' ||
+    value === 'video-to-video' ||
+    value === 'video-edit'
+  ) {
+    return 'video.generate';
+  }
+  if (value === 'text-to-audio') return 'audio.generate';
+  return undefined;
 }
 
 function isGenerationJobSnapshot(value: unknown): value is GenerationJobSnapshot {
@@ -158,16 +181,22 @@ function isGenerationJobRequest(value: unknown): value is GenerationJobRequest {
   }
   const generationType = value['generationType'];
   const request = value['request'];
+  const parameterAdjustments = value['parameterAdjustments'];
   if (typeof generationType !== 'string') return false;
-  if (generationType === 'workflow') {
-    return (
-      value['providerId'] === 'comfyui' &&
-      value['modelId'] === undefined &&
-      hasOnlyKeys(value, COMFYUI_JOB_REQUEST_KEYS) &&
-      isComfyUiWorkflowRequest(request)
-    );
+  if (
+    !isNonEmptyString(value['modelId']) ||
+    !hasOnlyKeys(value, MODEL_JOB_REQUEST_KEYS) ||
+    (parameterAdjustments !== undefined &&
+      (!Array.isArray(parameterAdjustments) ||
+        !parameterAdjustments.every(isGenerationParameterAdjustment)))
+  ) {
+    return false;
   }
-  if (!isNonEmptyString(value['modelId']) || !hasOnlyKeys(value, MODEL_JOB_REQUEST_KEYS)) {
+  if (
+    parameterAdjustments !== undefined &&
+    !VIDEO_GENERATION_TYPES.has(generationType) &&
+    !IMAGE_GENERATION_TYPES.has(generationType)
+  ) {
     return false;
   }
   if (generationType === 'prompt') return isPromptRequest(request);
@@ -177,42 +206,22 @@ function isGenerationJobRequest(value: unknown): value is GenerationJobRequest {
   return false;
 }
 
-function isComfyUiWorkflowRequest(value: unknown): value is ComfyUiWorkflowGenerationRequest {
+function isGenerationParameterAdjustment(value: unknown): boolean {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, GENERATION_PARAMETER_ADJUSTMENT_KEYS) ||
+    typeof value['parameter'] !== 'string' ||
+    typeof value['reason'] !== 'string'
+  ) {
+    return false;
+  }
+  if (IMAGE_GENERATION_PARAMETER_ID_SET.has(value['parameter'])) {
+    return value['reason'] === 'invalid';
+  }
   return (
-    isRecord(value) &&
-    hasOnlyKeys(value, COMFYUI_WORKFLOW_REQUEST_KEYS) &&
-    isNonEmptyString(value['endpoint']) &&
-    isNonEmptyString(value['clientId']) &&
-    value['outputKind'] === 'image' &&
-    isJsonObject(value['workflow']) &&
-    Object.keys(value['workflow']).length > 0 &&
-    Array.isArray(value['inputBindings']) &&
-    value['inputBindings'].every(isComfyUiInputBinding) &&
-    new Set(
-      value['inputBindings'].map((binding) => `${binding['nodeId']}\0${binding['inputName']}`),
-    ).size === value['inputBindings'].length
+    VIDEO_GENERATION_PARAMETER_ID_SET.has(value['parameter']) &&
+    VIDEO_GENERATION_PARAMETER_ADJUSTMENT_REASONS.has(value['reason'])
   );
-}
-
-function isComfyUiInputBinding(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    hasOnlyKeys(value, COMFYUI_INPUT_BINDING_KEYS) &&
-    isNonEmptyString(value['nodeId']) &&
-    isNonEmptyString(value['inputName']) &&
-    isContentLocator(value['contentLocator'])
-  );
-}
-
-function isJsonObject(value: unknown): value is Readonly<Record<string, unknown>> {
-  return isRecord(value) && Object.values(value).every(isJsonValue);
-}
-
-function isJsonValue(value: unknown): boolean {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
-  if (typeof value === 'number') return Number.isFinite(value);
-  if (Array.isArray(value)) return value.every(isJsonValue);
-  return isJsonObject(value);
 }
 
 function isPromptRequest(value: unknown): value is PromptGenerationRequest {
@@ -240,6 +249,7 @@ function isImageRequest(value: unknown): value is ImageGenerationRequest {
   return (
     isMediaRequestBase(value) &&
     hasOnlyKeys(value, IMAGE_REQUEST_KEYS) &&
+    (value['operation'] === undefined || isImageOperationId(value['operation'])) &&
     optionalNumbersAreFinite(value, [
       'width',
       'height',
@@ -281,6 +291,7 @@ function isVideoRequest(value: unknown): value is VideoGenerationRequest {
   return (
     isMediaRequestBase(value) &&
     hasOnlyKeys(value, VIDEO_REQUEST_KEYS) &&
+    (value['operation'] === undefined || isVideoOperationId(value['operation'])) &&
     optionalNumbersAreFinite(value, ['duration', 'fps', 'motionStrength']) &&
     (value['generateAudio'] === undefined || typeof value['generateAudio'] === 'boolean') &&
     (value['inputs'] === undefined ||
@@ -311,8 +322,7 @@ function isAudioRequest(value: unknown): value is AudioGenerationRequest {
   return (
     isMediaRequestBase(value) &&
     hasOnlyKeys(value, AUDIO_REQUEST_KEYS) &&
-    optionalNumbersAreFinite(value, ['duration']) &&
-    (value['isMusic'] === undefined || typeof value['isMusic'] === 'boolean')
+    optionalNumbersAreFinite(value, ['duration'])
   );
 }
 
@@ -334,7 +344,6 @@ function isMediaRequestBase(value: unknown): value is Record<string, unknown> & 
       'cameraMovement',
       'cameraAngle',
       'shotScale',
-      'genre',
       'format',
     ]) &&
     (value['metadata'] === undefined || isRecord(value['metadata']))
@@ -455,16 +464,25 @@ const PURPOSE_GENERATION_REQUEST_KEYS = new Set([
   'lifecycleMode',
   'request',
 ]);
-const MODEL_JOB_REQUEST_KEYS = new Set(['providerId', 'modelId', 'generationType', 'request']);
-const COMFYUI_JOB_REQUEST_KEYS = new Set(['providerId', 'generationType', 'request']);
-const COMFYUI_WORKFLOW_REQUEST_KEYS = new Set([
-  'endpoint',
-  'clientId',
-  'workflow',
-  'outputKind',
-  'inputBindings',
+const MODEL_JOB_REQUEST_KEYS = new Set([
+  'providerId',
+  'modelId',
+  'parameterAdjustments',
+  'generationType',
+  'request',
 ]);
-const COMFYUI_INPUT_BINDING_KEYS = new Set(['nodeId', 'inputName', 'contentLocator']);
+const GENERATION_PARAMETER_ADJUSTMENT_KEYS = new Set(['parameter', 'reason']);
+const IMAGE_GENERATION_PARAMETER_ID_SET: ReadonlySet<string> = new Set(
+  IMAGE_GENERATION_PARAMETER_IDS,
+);
+const VIDEO_GENERATION_PARAMETER_ID_SET: ReadonlySet<string> = new Set(
+  VIDEO_GENERATION_PARAMETER_IDS,
+);
+const VIDEO_GENERATION_PARAMETER_ADJUSTMENT_REASONS: ReadonlySet<string> = new Set([
+  'unsupported',
+  'invalid',
+  'missing-required',
+]);
 const GENERATION_JOB_SNAPSHOT_KEYS = new Set([
   'ref',
   'submissionId',
@@ -501,8 +519,6 @@ const IMAGE_REQUEST_KEYS = new Set([
   'cameraReference',
   'panoramaReference',
   'editInstruction',
-  'outpaintExpansion',
-  'splitOptions',
 ]);
 const VIDEO_REQUEST_KEYS = new Set([
   ...BASE_REQUEST_KEYS,
@@ -520,13 +536,7 @@ const VIDEO_REQUEST_KEYS = new Set([
   'editInstruction',
 ]);
 const VIDEO_INPUT_KEYS = new Set(['type', 'role', 'locator', 'mimeType']);
-const AUDIO_REQUEST_KEYS = new Set([
-  ...BASE_REQUEST_KEYS,
-  'duration',
-  'isMusic',
-  'genre',
-  'format',
-]);
+const AUDIO_REQUEST_KEYS = new Set([...BASE_REQUEST_KEYS, 'duration', 'format']);
 const IP_ADAPTER_REFERENCE_KEYS = new Set(['imageLocator', 'mimeType', 'strength', 'mode']);
 const PANORAMA_ORIENTATION_KEYS = new Set(['yawDeg', 'pitchDeg', 'fieldOfViewDeg']);
 const THREE_REFERENCE_IDENTITY_KEYS = new Set(['sessionId', 'requestId']);

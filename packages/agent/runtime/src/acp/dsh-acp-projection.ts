@@ -2,15 +2,13 @@ import type {
   ContentBlock as AcpContentBlock,
   RequestPermissionRequest,
   SessionNotification,
+  ToolCallContent,
 } from '@agentclientprotocol/sdk';
 import type {
   DshAcpContextPressureNotification,
   DshAcpContextPressureProjection,
   DshAcpSessionEventNotification,
 } from '@neko/agent-contracts/dsh-acp';
-
-export const DSH_ACP_PROJECTION_DEFAULT_MAX_EVENTS_PER_SESSION = 256;
-const DSH_ACP_PROJECTION_DEFAULT_MAX_ASSISTANT_STREAM_BYTES = 262_144;
 
 export type DshAcpProjectedToolStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
 
@@ -22,6 +20,7 @@ export interface DshAcpProjectedToolEvent {
   readonly turnStartedAt?: number;
   readonly status: DshAcpProjectedToolStatus;
   readonly title?: string;
+  readonly content?: readonly DshAcpProjectedDisplayBlock[];
   readonly rawInput?: unknown;
   readonly rawOutput?: unknown;
 }
@@ -76,9 +75,11 @@ export interface DshAcpProjectedCommandEvent {
   readonly text?: string;
 }
 
-export type DshAcpProjectedUserMessageBlock =
+export type DshAcpProjectedDisplayBlock =
   | { readonly type: 'text'; readonly text: string }
   | { readonly type: 'resource_link'; readonly name: string; readonly uri: string };
+
+export type DshAcpProjectedUserMessageBlock = DshAcpProjectedDisplayBlock;
 
 export type DshAcpProjectedMessageEvent =
   | {
@@ -126,9 +127,9 @@ export interface DshAcpProjectionToolSnapshot {
   readonly terminal: boolean;
 }
 
-export interface DshAcpProjectionOptions {
-  readonly maxEventsPerSession?: number;
-  readonly maxAssistantStreamBytes?: number;
+export interface DshAcpProjectedTodoItem {
+  readonly content: string;
+  readonly status: 'pending' | 'in_progress' | 'completed';
 }
 
 interface AssistantAssemblyState {
@@ -145,6 +146,7 @@ interface ToolProjectionState {
   status: DshAcpProjectedToolStatus;
   terminal: boolean;
   title: string | undefined;
+  content: readonly DshAcpProjectedDisplayBlock[] | undefined;
   rawInput: unknown;
   rawOutput: unknown;
   permissionRequest: RequestPermissionRequest | undefined;
@@ -164,6 +166,7 @@ interface SessionProjectionState {
   lastEventFrameCount: number;
   lastContextPressureSequence: number | undefined;
   contextPressure: DshAcpContextPressureProjection | undefined;
+  todos: readonly DshAcpProjectedTodoItem[];
   currentTurn: number | undefined;
   readonly turnStartedAt: Map<number, number>;
   readonly openSteps: Set<string>;
@@ -182,23 +185,6 @@ interface SessionProjectionState {
 
 export class DshAcpProjection {
   private readonly sessions = new Map<string, SessionProjectionState>();
-  private readonly maxEventsPerSession: number;
-  private readonly maxAssistantStreamBytes: number;
-
-  constructor(options: DshAcpProjectionOptions = {}) {
-    const maxEventsPerSession =
-      options.maxEventsPerSession ?? DSH_ACP_PROJECTION_DEFAULT_MAX_EVENTS_PER_SESSION;
-    if (!Number.isSafeInteger(maxEventsPerSession) || maxEventsPerSession <= 0) {
-      throw new Error('DSH ACP projection max events per session must be a positive integer.');
-    }
-    this.maxEventsPerSession = maxEventsPerSession;
-    const maxAssistantStreamBytes =
-      options.maxAssistantStreamBytes ?? DSH_ACP_PROJECTION_DEFAULT_MAX_ASSISTANT_STREAM_BYTES;
-    if (!Number.isSafeInteger(maxAssistantStreamBytes) || maxAssistantStreamBytes <= 0) {
-      throw new Error('DSH ACP assistant stream byte limit must be a positive integer.');
-    }
-    this.maxAssistantStreamBytes = maxAssistantStreamBytes;
-  }
 
   acceptSessionUpdate(notification: SessionNotification): readonly DshAcpProjectedEvent[] {
     const session = this.session(notification.sessionId);
@@ -323,9 +309,25 @@ export class DshAcpProjection {
         },
         () => {
           session.currentTurn = turn;
+          session.todos = [];
           session.turnStartedAt.set(turn, notification.time);
         },
       );
+    }
+    if (notification.type === 'todo/write') {
+      const todos = readTodos(notification.data);
+      if (todos === undefined) {
+        return this.record(
+          session,
+          diagnostic(
+            session.sessionId,
+            'ACP_PROJECTION_INVALID_TODOS',
+            'DSH todo/write must contain unique concrete items with canonical statuses.',
+          ),
+        );
+      }
+      session.todos = todos;
+      return [];
     }
     if (notification.type === 'step/start' || notification.type === 'step/end') {
       const identity = readTurnStep(notification.data);
@@ -410,6 +412,7 @@ export class DshAcpProjection {
           ),
         );
       }
+      const reason = readTurnEndReason(notification.data);
       const unsettledAssemblies = [...session.assistantAssemblies.entries()].filter(([key]) =>
         key.startsWith(`${turn}:`),
       );
@@ -426,14 +429,22 @@ export class DshAcpProjection {
           phase: 'end',
           startedAt,
           completedAt: notification.time,
-          reason: readTurnEndReason(notification.data),
+          reason,
         },
         () => {
           session.endedTurns.add(turn);
           if (session.currentTurn === turn) session.currentTurn = undefined;
         },
       );
-      if (completed[0]?.kind === 'diagnostic' || unsettledAssemblies.length === 0) return completed;
+      if (
+        completed[0]?.kind === 'diagnostic' ||
+        unsettledAssemblies.length === 0 ||
+        reason === 'aborted' ||
+        reason === 'error' ||
+        reason === 'interrupted'
+      ) {
+        return completed;
+      }
       return [
         ...completed,
         ...this.record(
@@ -628,6 +639,7 @@ export class DshAcpProjection {
       status: 'pending',
       terminal: false,
       title: request.toolCall.title ?? undefined,
+      content: projectToolCallContent(request.toolCall.content),
       rawInput: request.toolCall.rawInput,
       rawOutput: undefined,
       permissionRequest: request,
@@ -717,6 +729,7 @@ export class DshAcpProjection {
       sessionId,
       currentTurn: session.currentTurn,
       contextPressure: session.contextPressure,
+      todos: session.todos,
       events: [...session.events],
       tools: [...session.tools.values()].map((tool) => ({
         toolCallId: tool.toolCallId,
@@ -794,6 +807,7 @@ export class DshAcpProjection {
       status: update.status ?? 'pending',
       terminal: false,
       title: update.title,
+      content: projectToolCallContent(update.content),
       rawInput: update.rawInput,
       rawOutput: undefined,
       permissionRequest: undefined,
@@ -808,6 +822,7 @@ export class DshAcpProjection {
         ...(turnStartedAt === undefined ? {} : { turnStartedAt }),
         status: tool.status,
         title: tool.title,
+        ...(tool.content === undefined ? {} : { content: tool.content }),
         rawInput: tool.rawInput,
       },
       () => {
@@ -915,18 +930,6 @@ export class DshAcpProjection {
       (assembly.blocks.get(identity.blockIndex) ?? '') + update.content.text,
     );
     const text = assembleAssistantBlocks(assembly.blocks);
-    if (new TextEncoder().encode(text).length > this.maxAssistantStreamBytes) {
-      session.assistantAssemblies.delete(key);
-      this.removeAssistantAssemblyEvent(session, assembly);
-      return this.record(
-        session,
-        diagnostic(
-          session.sessionId,
-          'ACP_PROJECTION_ASSISTANT_STREAM_OVERFLOW',
-          `DSH assistant stream ${identity.turn}:${identity.step}:${channel} exceeded ${this.maxAssistantStreamBytes} bytes.`,
-        ),
-      );
-    }
     const messageId =
       update.messageId === undefined || update.messageId === null
         ? `dsh:${identity.turn}:${identity.step}:${channel}`
@@ -957,17 +960,6 @@ export class DshAcpProjection {
     if (text.length === 0) {
       if (assembly !== undefined) this.removeAssistantAssemblyEvent(session, assembly);
       return [];
-    }
-    if (new TextEncoder().encode(text).length > this.maxAssistantStreamBytes) {
-      if (assembly !== undefined) this.removeAssistantAssemblyEvent(session, assembly);
-      return this.record(
-        session,
-        diagnostic(
-          session.sessionId,
-          'ACP_PROJECTION_ASSISTANT_STREAM_OVERFLOW',
-          `DSH final assistant message ${turn}:${step}:${channel} exceeded ${this.maxAssistantStreamBytes} bytes.`,
-        ),
-      );
     }
     const event = assistantEvent(session.sessionId, turn, step, channel, messageId, text, 'final');
     if (assembly === undefined) return this.record(session, event);
@@ -1061,6 +1053,8 @@ export class DshAcpProjection {
       );
     }
     const status = update.status ?? tool.status;
+    const content =
+      update.content === undefined ? tool.content : projectToolCallContent(update.content);
     const terminal = status === 'completed' || status === 'failed';
     const cancelled =
       session.cancelledTurns.has(tool.turn) ||
@@ -1096,6 +1090,7 @@ export class DshAcpProjection {
         ...(turnStartedAt === undefined ? {} : { turnStartedAt }),
         status,
         title: tool.title,
+        ...(content === undefined ? {} : { content }),
         rawInput: tool.rawInput,
         rawOutput: update.rawOutput,
       },
@@ -1103,6 +1098,7 @@ export class DshAcpProjection {
         tool.status = status;
         tool.terminal = terminal;
         if (update.title !== undefined && update.title !== null) tool.title = update.title;
+        tool.content = content;
         if (update.rawInput !== undefined) tool.rawInput = update.rawInput;
         if (update.rawOutput !== undefined) tool.rawOutput = update.rawOutput;
         session.tools.set(key, tool);
@@ -1120,6 +1116,7 @@ export class DshAcpProjection {
         lastEventFrameCount: 1,
         lastContextPressureSequence: undefined,
         contextPressure: undefined,
+        todos: [],
         currentTurn: undefined,
         turnStartedAt: new Map(),
         openSteps: new Set(),
@@ -1189,15 +1186,6 @@ export class DshAcpProjection {
     session: SessionProjectionState,
     event: DshAcpProjectedEvent,
   ): readonly DshAcpProjectedEvent[] {
-    if (session.events.length >= this.maxEventsPerSession) {
-      return [
-        diagnostic(
-          session.sessionId,
-          'ACP_PROJECTION_OVERFLOW',
-          `Session ${session.sessionId} exceeded ${this.maxEventsPerSession} projected events.`,
-        ),
-      ];
-    }
     session.events.push(event);
     return [event];
   }
@@ -1208,9 +1196,6 @@ export class DshAcpProjection {
     mutate: () => void,
   ): readonly DshAcpProjectedEvent[] {
     const recorded = this.record(session, event);
-    if (recorded.length === 1 && recorded[0]?.kind === 'diagnostic') {
-      return recorded;
-    }
     mutate();
     return recorded;
   }
@@ -1220,8 +1205,46 @@ export interface DshAcpProjectionSnapshot {
   readonly sessionId: string;
   readonly currentTurn: number | undefined;
   readonly contextPressure: DshAcpContextPressureProjection | undefined;
+  readonly todos: readonly DshAcpProjectedTodoItem[];
   readonly events: readonly DshAcpProjectedEvent[];
   readonly tools: readonly DshAcpProjectionToolSnapshot[];
+}
+
+function readTodos(value: unknown): readonly DshAcpProjectedTodoItem[] | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const entries = Object.entries(value);
+  if (entries.length !== 1 || entries[0]?.[0] !== 'todos' || !Array.isArray(entries[0][1])) {
+    return undefined;
+  }
+  const seen = new Set<string>();
+  const todos: DshAcpProjectedTodoItem[] = [];
+  for (const candidate of entries[0][1]) {
+    if (typeof candidate !== 'object' || candidate === null || Array.isArray(candidate)) {
+      return undefined;
+    }
+    const fields = Object.entries(candidate);
+    if (
+      fields.length !== 2 ||
+      !fields.some(([key]) => key === 'content') ||
+      !fields.some(([key]) => key === 'status')
+    ) {
+      return undefined;
+    }
+    const content = Reflect.get(candidate, 'content');
+    const status = Reflect.get(candidate, 'status');
+    if (
+      typeof content !== 'string' ||
+      content.length === 0 ||
+      content.trim() !== content ||
+      seen.has(content) ||
+      (status !== 'pending' && status !== 'in_progress' && status !== 'completed')
+    ) {
+      return undefined;
+    }
+    seen.add(content);
+    todos.push({ content, status });
+  }
+  return Object.freeze(todos);
 }
 
 function sameContextPressure(
@@ -1304,6 +1327,19 @@ function projectUserMessageBlock(
       : { type: 'resource_link', name: block.name, uri: block.uri };
   }
   return undefined;
+}
+
+function projectToolCallContent(
+  content: readonly ToolCallContent[] | null | undefined,
+): readonly DshAcpProjectedDisplayBlock[] | undefined {
+  if (content === undefined) return undefined;
+  if (content === null) return [];
+  const projected = content.flatMap((item) => {
+    if (item.type !== 'content') return [];
+    const block = projectUserMessageBlock(item.content);
+    return block === undefined ? [] : [block];
+  });
+  return projected;
 }
 
 function readOpenNekoSequenceFrame(notification: SessionNotification): SequenceFrameResult {

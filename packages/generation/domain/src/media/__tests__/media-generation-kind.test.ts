@@ -1,7 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { resolveImageGenerationType, resolveVideoGenerationType } from '../media-generation-kind';
+import {
+  resolveImageGenerationType,
+  resolveMediaModelType,
+  resolveVideoGenerationType,
+} from '../media-generation-kind';
 
 describe('media generation type resolution', () => {
+  it.each([
+    ['text-to-image', 'image'],
+    ['image-to-image', 'image'],
+    ['image-edit', 'image'],
+    ['text-to-video', 'video'],
+    ['image-to-video', 'video'],
+    ['video-to-video', 'video'],
+    ['video-edit', 'video'],
+    ['text-to-audio', 'audio'],
+  ] as const)('maps %s to the configured %s model type', (generationType, modelType) => {
+    expect(resolveMediaModelType(generationType)).toBe(modelType);
+  });
+
   it('uses text-to-image without reference inputs', () => {
     expect(resolveImageGenerationType({ prompt: 'paint a cat' })).toBe('text-to-image');
   });
@@ -15,6 +32,18 @@ describe('media generation type resolution', () => {
     ).toBe('image-to-image');
   });
 
+  it('uses image-edit for an explicit edit operation', () => {
+    expect(
+      resolveImageGenerationType({
+        prompt: 'make the sky darker',
+        operation: 'edit',
+        referenceImageLocator: {
+          file: { authority: 'workspace', path: 'references/image.png' },
+        },
+      }),
+    ).toBe('image-edit');
+  });
+
   it('uses image-to-image for a stable ControlNet locator', () => {
     expect(
       resolveImageGenerationType({
@@ -22,6 +51,50 @@ describe('media generation type resolution', () => {
         controlImageLocator: { file: { authority: 'workspace', path: 'controls/lineart.png' } },
       }),
     ).toBe('image-to-image');
+  });
+
+  it.each([
+    {
+      label: 'IP adapter reference',
+      request: {
+        prompt: 'keep the subject',
+        ipAdapterRefs: [
+          {
+            imageLocator: { file: { authority: 'workspace' as const, path: 'subject.png' } },
+            mode: 'subject' as const,
+          },
+        ],
+      },
+    },
+    {
+      label: 'panorama reference',
+      request: {
+        prompt: 'match the environment',
+        panoramaReference: {
+          imageLocator: { file: { authority: 'workspace' as const, path: 'panorama.png' } },
+          orientation: { yawDeg: 0, pitchDeg: 0, fieldOfViewDeg: 90 },
+          identity: { sessionId: 'session-1', requestId: 'request-1' },
+        },
+      },
+    },
+  ])('uses image-to-image for a stable $label', ({ request }) => {
+    expect(resolveImageGenerationType(request)).toBe('image-to-image');
+  });
+
+  it.each([
+    {
+      label: 'mask',
+      request: {
+        prompt: 'replace the masked region',
+        maskLocator: { file: { authority: 'workspace' as const, path: 'mask.png' } },
+      },
+    },
+    {
+      label: 'edit instruction',
+      request: { prompt: 'revise the image', editInstruction: 'make the sky darker' },
+    },
+  ])('uses image-edit for an explicit $label', ({ request }) => {
+    expect(resolveImageGenerationType(request)).toBe('image-edit');
   });
 
   it('uses text-to-video without reference inputs', () => {
@@ -56,5 +129,21 @@ describe('media generation type resolution', () => {
         ],
       }),
     ).toBe('video-to-video');
+  });
+
+  it('uses video-edit for an explicit transform operation', () => {
+    expect(
+      resolveVideoGenerationType({
+        prompt: 'restyle',
+        operation: 'transform',
+        inputs: [
+          {
+            type: 'video',
+            role: 'reference-video',
+            locator: { file: { authority: 'workspace', path: 'videos/source.mp4' } },
+          },
+        ],
+      }),
+    ).toBe('video-edit');
   });
 });

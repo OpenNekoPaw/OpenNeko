@@ -43,8 +43,7 @@ export async function runOpenNekoQualification(options = {}) {
     resolve(
       repositoryRoot,
       'reports',
-      'desktop-functional',
-      'replace-desktop-media-scheme-with-http-resource-gateway',
+      'media-runtime',
       `${new Date().toISOString().replaceAll(':', '-')}-openneko`,
       'report.json',
     );

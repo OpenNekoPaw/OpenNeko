@@ -53,37 +53,95 @@ describe('Generation Job codec', () => {
     expect(decodeGenerationJobSnapshot(encodeGenerationJobSnapshot(value))).toEqual(value);
   });
 
-  it('round-trips a ComfyUI workflow/input snapshot without inventing a model binding', () => {
+  it('round-trips visible video parameter adjustments', () => {
     const value: GenerationJobSnapshot = {
       ...snapshot(),
       request: {
-        generationType: 'workflow',
-        providerId: 'comfyui',
+        generationType: 'image-to-video',
+        providerId: 'minimax-provider',
+        modelId: 'minimax-h3',
+        parameterAdjustments: [
+          { parameter: 'resolution', reason: 'invalid' },
+          { parameter: 'fps', reason: 'unsupported' },
+        ],
         request: {
-          endpoint: 'http://127.0.0.1:8188',
-          clientId: 'openneko-job-1',
-          workflow: { '3': { class_type: 'LoadImage', inputs: { image: 'source.png' } } },
-          outputKind: 'image',
-          inputBindings: [
+          prompt: 'A slow upward push',
+          providerId: 'minimax-provider',
+          modelId: 'minimax-h3',
+          duration: 6,
+          resolution: '768P',
+          aspectRatio: '16:9',
+          inputs: [
             {
-              nodeId: '3',
-              inputName: 'image',
-              contentLocator: {
-                file: { authority: 'workspace', path: 'references/source.png' },
-              },
+              type: 'image',
+              role: 'first-frame',
+              locator: { file: { authority: 'workspace', path: 'shots/SH01.png' } },
             },
           ],
         },
       },
     };
 
-    const decoded = decodeGenerationJobSnapshot(encodeGenerationJobSnapshot(value));
+    expect(decodeGenerationJobSnapshot(encodeGenerationJobSnapshot(value))).toEqual(value);
+  });
 
-    expect(decoded).toEqual(value);
-    expect('modelId' in decoded.request).toBe(false);
-    expect(decoded.request.generationType).toBe('workflow');
-    if (decoded.request.generationType !== 'workflow') throw new Error('Expected workflow Job.');
-    expect(Object.isFrozen(decoded.request.request.workflow)).toBe(true);
+  it('round-trips visible image parameter adjustments', () => {
+    const value: GenerationJobSnapshot = {
+      ...snapshot(),
+      request: {
+        generationType: 'image-edit',
+        providerId: 'image-provider',
+        modelId: 'gpt-image-2',
+        parameterAdjustments: [
+          { parameter: 'size', reason: 'invalid' },
+          { parameter: 'quality', reason: 'invalid' },
+        ],
+        request: {
+          prompt: 'Recompose the source frame.',
+          providerId: 'image-provider',
+          modelId: 'gpt-image-2',
+          operation: 'edit',
+          referenceImageLocator: {
+            file: { authority: 'workspace', path: 'references/source.png' },
+          },
+          count: 1,
+          quality: 'auto',
+        },
+      },
+    };
+
+    expect(decodeGenerationJobSnapshot(encodeGenerationJobSnapshot(value))).toEqual(value);
+  });
+
+  it('rejects parameter adjustments on a non-media Job', () => {
+    expect(() =>
+      decodeGenerationJobSnapshot(
+        JSON.stringify({
+          ...snapshot(),
+          request: {
+            generationType: 'prompt',
+            providerId: 'provider-1',
+            modelId: 'text-model',
+            parameterAdjustments: [{ parameter: 'fps', reason: 'unsupported' }],
+            request: { prompt: 'Write a scene.' },
+          },
+        }),
+      ),
+    ).toThrow(expect.objectContaining({ code: 'generation-job-persistence-invalid' }));
+  });
+
+  it('rejects unsupported reasons for image parameter adjustments', () => {
+    expect(() =>
+      decodeGenerationJobSnapshot(
+        JSON.stringify({
+          ...snapshot(),
+          request: {
+            ...snapshot().request,
+            parameterAdjustments: [{ parameter: 'size', reason: 'unsupported' }],
+          },
+        }),
+      ),
+    ).toThrow(expect.objectContaining({ code: 'generation-job-persistence-invalid' }));
   });
 
   it.each([

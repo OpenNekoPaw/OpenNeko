@@ -33,9 +33,9 @@ describe('OpenNeko Document DSH plugin', () => {
     };
 
     apply(ctx as never);
-    const definition = definitions.find((candidate) => candidate.name === 'openneko.document');
+    const definition = definitions.find((candidate) => candidate.name === 'openneko_document');
     if (!definition) throw new Error('Document DSH Tool was not registered.');
-    expect(definition.name).toBe('openneko.document');
+    expect(definition.name).toBe('openneko_document');
     expect(definition.parameters).toMatchObject({
       properties: {
         operation: { enum: ['read', 'continue', 'read-images'] },
@@ -53,7 +53,7 @@ describe('OpenNeko Document DSH plugin', () => {
     );
     expect(execute).toHaveBeenCalledWith(
       {
-        tool: 'openneko.document',
+        tool: 'openneko_document',
         operation: 'read',
         input: {
           source: { file: { authority: 'workspace', path: 'neko/assets/Books/book.pdf' } },
@@ -72,7 +72,7 @@ describe('OpenNeko Document DSH plugin', () => {
     );
     expect(execute).toHaveBeenLastCalledWith(
       {
-        tool: 'openneko.document',
+        tool: 'openneko_document',
         operation: 'read',
         input: { source: selectedSource, mode: 'content', maxChars: 4_000 },
       },
@@ -109,6 +109,7 @@ describe('OpenNeko Document DSH plugin', () => {
   it('reads a Content locator into a durable DSH image result', async () => {
     const definitions: Array<{
       readonly name: string;
+      readonly description: string;
       readonly output: { readonly render: (args: unknown, value: never) => unknown };
       readonly execute: (args: unknown, execution: unknown) => Promise<unknown>;
       readonly isConcurrencySafe?: (args: unknown) => boolean;
@@ -156,8 +157,9 @@ describe('OpenNeko Document DSH plugin', () => {
     };
 
     apply(ctx as never);
-    const definition = definitions.find((candidate) => candidate.name === 'openneko.read_image');
+    const definition = definitions.find((candidate) => candidate.name === 'openneko_read_image');
     if (!definition) throw new Error('Content image DSH Tool was not registered.');
+    expect(definition.description).toContain('never pass a chapter, XHTML, HTML');
     expect(definition.isConcurrencySafe?.({ source })).toBe(false);
     const execution = {
       signal: new AbortController().signal,
@@ -191,7 +193,8 @@ describe('OpenNeko Document DSH plugin', () => {
         },
       },
     ]);
-  });
+    expect(result).toMatchObject({ source, detail: 'original' });
+  }, 10_000);
 
   it('rejects a text-only current model before reading Content bytes', async () => {
     const definitions: Array<{
@@ -217,7 +220,7 @@ describe('OpenNeko Document DSH plugin', () => {
     };
 
     apply(ctx as never);
-    const definition = definitions.find((candidate) => candidate.name === 'openneko.read_image');
+    const definition = definitions.find((candidate) => candidate.name === 'openneko_read_image');
     if (!definition) throw new Error('Content image DSH Tool was not registered.');
     await expect(
       definition.execute(
@@ -241,7 +244,7 @@ describe('OpenNeko Document DSH plugin', () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it('fits a dimension-only oversized EPUB cover into the active attachment limit', async () => {
+  it('uses a bounded overview before preserving the selected original detail', async () => {
     const definitions: Array<{
       readonly name: string;
       readonly execute: (args: unknown, execution: unknown) => Promise<unknown>;
@@ -302,28 +305,262 @@ describe('OpenNeko Document DSH plugin', () => {
     };
 
     apply(ctx as never);
-    const definition = definitions.find((candidate) => candidate.name === 'openneko.read_image');
+    const definition = definitions.find((candidate) => candidate.name === 'openneko_read_image');
     if (!definition) throw new Error('Content image DSH Tool was not registered.');
-    const result = (await definition.execute(
-      { source },
-      {
-        signal: new AbortController().signal,
-        agent: {
-          options: { provider: 'provider', model: 'vision-model' },
-          session: { requestHeader: () => undefined },
-        },
+    const execution = {
+      signal: new AbortController().signal,
+      agent: {
+        options: { provider: 'provider', model: 'vision-model' },
+        session: { requestHeader: () => undefined },
       },
-    )) as {
+    };
+    const overview = (await definition.execute({ source, detail: 'overview' }, execution)) as {
       readonly source: unknown;
+      readonly detail: string;
+      readonly image: { readonly width: number; readonly height: number };
+    };
+    const original = (await definition.execute({ source, detail: 'original' }, execution)) as {
+      readonly source: unknown;
+      readonly detail: string;
       readonly image: { readonly width: number; readonly height: number };
     };
 
-    expect(result.source).toEqual(source);
-    expect(result.image).toMatchObject({ width: 1399, height: 2000 });
-    const saved = attachments.saveImage.mock.calls[0]?.[0];
-    const savedMetadata = await sharp(saved?.data).metadata();
-    expect(savedMetadata).toMatchObject({ format: 'jpeg', width: 1399, height: 2000 });
+    expect(overview).toMatchObject({
+      source,
+      detail: 'overview',
+      image: { width: 537, height: 768 },
+    });
+    expect(original).toMatchObject({
+      source,
+      detail: 'original',
+      image: { width: 1399, height: 2000 },
+    });
+    const overviewSaved = attachments.saveImage.mock.calls[0]?.[0];
+    const overviewMetadata = await sharp(overviewSaved?.data).metadata();
+    expect(overviewMetadata).toMatchObject({ format: 'jpeg', width: 537, height: 768 });
+    const originalSaved = attachments.saveImage.mock.calls[1]?.[0];
+    const originalMetadata = await sharp(originalSaved?.data).metadata();
+    expect(originalMetadata).toMatchObject({ format: 'jpeg', width: 1399, height: 2000 });
     expect(sourceBytes).toEqual(originalSourceBytes);
+  });
+
+  it.each([
+    [1, 1024, 4_000_000],
+    [2, 1024, 4_000_000],
+    [3, 1024, 4_000_000],
+    [4, 1024, 4_000_000],
+    [5, 1024, 4_000_000],
+    [10, 1024, 4_000_000],
+    [16, 4096, 20_000_000],
+    [8, 2048, 20_000_000],
+    [16, 4096, 1_000_000],
+  ])(
+    'returns %i authorized images as ONE sheet within dimension %i and pixel %i limits',
+    async (count, dimensionLimit, pixelLimit) => {
+      const definitions: Array<{
+        readonly name: string;
+        readonly description: string;
+        readonly output: { readonly render: (args: unknown, value: never) => unknown };
+        readonly execute: (args: unknown, execution: unknown) => Promise<unknown>;
+        readonly isConcurrencySafe?: (args: unknown) => boolean;
+      }> = [];
+      const sources = Array.from({ length: count }, (_, index) => ({
+        file: { authority: 'workspace' as const, path: 'books/blame.epub' },
+        selector: { kind: 'entry' as const, path: `image/page-${index + 1}.jpg` },
+      }));
+      const images = await Promise.all(
+        sources.map(
+          async (_source, index) =>
+            new Uint8Array(
+              await sharp({
+                create: {
+                  width: 360 + index * 20,
+                  height: 520,
+                  channels: 3,
+                  background: { r: 30 + index * 10, g: 40, b: 50 },
+                },
+              })
+                .jpeg()
+                .toBuffer(),
+            ),
+        ),
+      );
+      const attachments = attachmentStore(4 * 1024 * 1024, {
+        maxImageDimension: dimensionLimit,
+        maxImagePixels: pixelLimit,
+      });
+      const execute = vi.fn(
+        async (request: {
+          readonly input: { readonly source: (typeof sources)[number]; readonly offset: number };
+        }) => {
+          const sourceIndex = sources.findIndex(
+            (source) => source.selector.path === request.input.source.selector.path,
+          );
+          if (sourceIndex < 0) throw new Error('Unexpected source.');
+          const image = images[sourceIndex]!;
+          const offset = request.input.offset;
+          const bytes = image.slice(
+            offset,
+            Math.min(offset + CONTENT_IMAGE_DSH_CHUNK_BYTES, image.byteLength),
+          );
+          return {
+            outcome: 'success' as const,
+            result: {
+              source: sources[sourceIndex],
+              offset,
+              totalBytes: image.byteLength,
+              mimeType: 'image/jpeg',
+              data: Buffer.from(bytes).toString('base64'),
+            },
+          };
+        },
+      );
+      const ctx = {
+        effect: (register: () => () => void) => register(),
+        inject: (_services: readonly string[], callback: (child: unknown) => void) => callback(ctx),
+        get: (service: string) =>
+          service === 'llm'
+            ? { resolveModelInfo: vi.fn(async () => ({ inputModalities: ['text', 'image'] })) }
+            : undefined,
+        attachments,
+        tools: {
+          register: vi.fn((value) => {
+            definitions.push(value);
+            return () => undefined;
+          }),
+        },
+        opennekoHostTools: { execute },
+      };
+
+      apply(ctx as never);
+      const definition = definitions.find((candidate) => candidate.name === 'openneko_read_images');
+      if (!definition) throw new Error('Content image overview DSH Tool was not registered.');
+      expect(definition.description).toContain('never pass chapter, XHTML, HTML');
+      expect(definition.isConcurrencySafe?.({ sources })).toBe(false);
+      const result = (await definition.execute(
+        { sources },
+        {
+          signal: new AbortController().signal,
+          agent: {
+            options: { provider: 'provider', model: 'vision-model' },
+            session: { requestHeader: () => undefined },
+          },
+        },
+      )) as {
+        readonly slots: readonly { readonly label: string; readonly source: unknown }[];
+        readonly image: { readonly width: number; readonly height: number };
+      };
+
+      expect(execute).toHaveBeenCalledTimes(count);
+      expect(result.slots).toEqual(
+        sources.map((source, index) => ({
+          label: String(index + 1),
+          source,
+        })),
+      );
+      const columns = Math.ceil(Math.sqrt(count));
+      const rows = Math.ceil(count / columns);
+      const width = Math.min(768 * columns, dimensionLimit, Math.floor(Math.sqrt(pixelLimit)));
+      const height = Math.floor((width * rows) / columns);
+      expect(result.image).toMatchObject({ width, height });
+      expect(width * height).toBeLessThanOrEqual(pixelLimit);
+      expect(attachments.saveImage).toHaveBeenCalledTimes(1);
+      const saved = attachments.saveImage.mock.calls[0]?.[0];
+      expect(saved).toMatchObject({
+        mediaType: 'image/jpeg',
+        name: 'openneko-image-overview.jpg',
+      });
+      expect(await sharp(saved?.data).metadata()).toMatchObject({
+        format: 'jpeg',
+        width,
+        height,
+      });
+      const pixels = await sharp(saved?.data).removeAlpha().raw().toBuffer();
+      const cellWidth = Math.floor(width / columns);
+      const cellHeight = Math.floor(height / rows);
+      for (let index = 0; index < count; index += 1) {
+        const x = (index % columns) * cellWidth + Math.floor(cellWidth / 2);
+        const y = Math.floor(index / columns) * cellHeight + Math.floor(cellHeight / 2);
+        expect(Math.abs(pixels[(y * width + x) * 3]! - (30 + index * 10))).toBeLessThan(6);
+      }
+      const rendered = definition.output.render({}, result as never) as readonly unknown[];
+      expect(rendered).toHaveLength(2);
+      expect(rendered[0]).toMatchObject({ type: 'text' });
+      expect(rendered[1]).toMatchObject({ type: 'image' });
+    },
+  );
+
+  it('fails an overview batch before publishing a partial contact sheet', async () => {
+    const definitions: Array<{
+      readonly name: string;
+      readonly execute: (args: unknown, execution: unknown) => Promise<unknown>;
+    }> = [];
+    const sources = Array.from({ length: 16 }, (_, index) => ({
+      file: { authority: 'workspace' as const, path: 'books/blame.epub' },
+      selector: { kind: 'entry' as const, path: `image/page-${index + 1}.jpg` },
+    }));
+    const image = new Uint8Array(
+      await sharp({
+        create: { width: 64, height: 64, channels: 3, background: '#222' },
+      })
+        .jpeg()
+        .toBuffer(),
+    );
+    const attachments = attachmentStore(1024 * 1024);
+    const execute = vi.fn(
+      async (request: { readonly input: { readonly source: (typeof sources)[number] } }) =>
+        request.input.source.selector.path === 'image/page-16.jpg'
+          ? {
+              outcome: 'failure' as const,
+              diagnostic: { code: 'content-denied', message: 'Image is not authorized.' },
+            }
+          : {
+              outcome: 'success' as const,
+              result: {
+                source: request.input.source,
+                offset: 0,
+                totalBytes: image.byteLength,
+                mimeType: 'image/jpeg',
+                data: Buffer.from(image).toString('base64'),
+              },
+            },
+    );
+    const ctx = {
+      effect: (register: () => () => void) => register(),
+      inject: (_services: readonly string[], callback: (child: unknown) => void) => callback(ctx),
+      get: (service: string) =>
+        service === 'llm'
+          ? { resolveModelInfo: vi.fn(async () => ({ inputModalities: ['text', 'image'] })) }
+          : undefined,
+      attachments,
+      tools: {
+        register: vi.fn((value) => {
+          definitions.push(value);
+          return () => undefined;
+        }),
+      },
+      opennekoHostTools: { execute },
+    };
+
+    apply(ctx as never);
+    const definition = definitions.find((candidate) => candidate.name === 'openneko_read_images');
+    if (!definition) throw new Error('Content image overview DSH Tool was not registered.');
+    const execution = {
+      signal: new AbortController().signal,
+      agent: {
+        options: { provider: 'provider', model: 'vision-model' },
+        session: { requestHeader: () => undefined },
+      },
+    };
+    await expect(definition.execute({ sources }, execution)).rejects.toThrow(
+      'Content image overview slot 16 failed: content-denied',
+    );
+    expect(execute).toHaveBeenCalledTimes(16);
+    expect(attachments.saveImage).not.toHaveBeenCalled();
+    await expect(definition.execute({ sources: [sources[0]] }, execution)).resolves.toMatchObject({
+      slots: [{ label: '1', source: sources[0] }],
+    });
+    expect(attachments.saveImage).toHaveBeenCalledTimes(1);
   });
 
   it('does not contain a direct filesystem or legacy Pi path', async () => {

@@ -57,6 +57,7 @@ describe('Desktop Text Editor Markdown media host runtime', () => {
     const bridge = {
       textEditor: {
         execute,
+        executeClipboardCommand: vi.fn(async (request) => ({ ...request, status: 'executed' })),
         subscribe: vi.fn(() => () => undefined),
       },
     } satisfies OpenNekoDesktopTextEditorBridge;

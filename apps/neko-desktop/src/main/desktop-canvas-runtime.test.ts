@@ -5,6 +5,8 @@ import * as path from 'node:path';
 import {
   createCanvasGenerationNode,
   createCanvasHostIntentRequest,
+  createDefaultCanvasWorkspaceTarget,
+  createCanvasWorkspaceTarget,
   type CanvasGenerationApplicationPort,
   type CanvasHostIntent,
   type CanvasHostRuntimeIdentity,
@@ -18,6 +20,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { DesktopCanvasRuntime } from './desktop-canvas-runtime';
+import { CanvasAudioExtractionService } from '@neko/canvas-node';
 import {
   CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID,
   CANVAS_ADD_TO_CUT_ACTION_ID,
@@ -41,6 +44,68 @@ afterEach(async () => {
 });
 
 describe('DesktopCanvasRuntime', () => {
+  it('opens a Canvas with unavailable Generation content and preserves it while saving siblings', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-node-local-'));
+    roots.push(workspacePath);
+    const identity = createIdentity();
+    const unavailableData = {
+      recipe: { kind: 'image', prompt: '' },
+      outputs: [],
+      phase: 'running',
+    };
+    await writeFixtureFile(
+      workspacePath,
+      identity.documentId,
+      JSON.stringify({
+        name: 'Node-local failure',
+        nodes: [
+          {
+            id: 'note-1',
+            type: 'markdown',
+            position: { x: 0, y: 0 },
+            size: { width: 280, height: 180 },
+            zIndex: 0,
+            data: { content: 'available sibling' },
+          },
+          {
+            id: 'generation-invalid',
+            type: 'generation',
+            position: { x: 320, y: 0 },
+            size: { width: 240, height: 180 },
+            zIndex: 1,
+            data: unavailableData,
+          },
+        ],
+        connections: [],
+      }),
+    );
+    const runtime = createRuntime(workspacePath, identity);
+
+    const opened = await runtime.getSnapshot('window-1', identity);
+    expect(opened.canvas.nodes.map((node) => node.id)).toEqual(['note-1', 'generation-invalid']);
+    const changed = await executeAcceptedIntent(
+      runtime,
+      identity,
+      opened,
+      'rename-sibling-canvas',
+      {
+        type: 'replace-document',
+        canvas: { ...opened.canvas, name: 'Sibling edit saved' },
+        removedNodeIds: [],
+      },
+    );
+    await executeAcceptedIntent(runtime, identity, changed, 'save-sibling-edit', { type: 'save' });
+
+    const persisted = JSON.parse(
+      await readFile(path.join(workspacePath, identity.documentId), 'utf8'),
+    ) as { name: string; nodes: Array<{ id: string; data: unknown }> };
+    expect(persisted.name).toBe('Sibling edit saved');
+    expect(persisted.nodes.find((node) => node.id === 'generation-invalid')?.data).toEqual(
+      unavailableData,
+    );
+    await runtime.dispose();
+  });
+
   it('returns the document snapshot before resuming persisted Generation runs', async () => {
     const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-progressive-'));
     roots.push(workspacePath);
@@ -633,6 +698,83 @@ describe('DesktopCanvasRuntime', () => {
     await runtime.dispose();
   });
 
+  it('keeps document-entry File actions local when Cut requires a direct Host path', async () => {
+    const workspacePath = await mkdtemp(
+      path.join(tmpdir(), 'openneko-canvas-document-entry-file-actions-'),
+    );
+    roots.push(workspacePath);
+    const identity = createIdentity();
+    const locator = {
+      file: { authority: 'workspace' as const, path: 'books/story.epub' },
+      selector: { kind: 'entry' as const, path: 'OPS/chapter.xhtml' },
+    };
+    await writeFixtureFile(
+      workspacePath,
+      identity.documentId,
+      JSON.stringify({
+        name: 'Document entry file actions',
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        nodes: [
+          {
+            id: 'document-entry-file',
+            type: 'file',
+            position: { x: 40, y: 60 },
+            size: { width: 240, height: 160 },
+            zIndex: 1,
+            data: {
+              path: 'OPS/chapter.xhtml',
+              title: 'Chapter',
+              mediaKind: 'document',
+              contentLocator: locator,
+            },
+          },
+        ],
+        connections: [],
+      }),
+    );
+    const resolveCut = vi.fn(async () => {
+      throw new Error('Document entry must not enter direct Cut path resolution.');
+    });
+    const runtime = new DesktopCanvasRuntime({
+      shell: {
+        resolveCanvasViewGrant: vi.fn(async (): Promise<DesktopCanvasViewGrant> => ({
+          identity,
+          workspace: {
+            workspaceId: 'workspace-1',
+            workspacePath,
+            displayName: 'Fixture',
+            locator: { kind: 'relative', value: '.' },
+          },
+        })),
+      },
+      host: createElectronNekoHostPorts({
+        homedir: workspacePath,
+        nekoHome: path.join(workspacePath, '.neko-home'),
+        workspaceRoot: workspacePath,
+        logger: new ConsoleLogger('DesktopCanvasDocumentEntryFileActionsTest'),
+      }),
+      globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
+      previewResource: vi.fn(async () => undefined),
+      resolveCut,
+      openInCut: vi.fn(async () => undefined),
+    });
+
+    const resolution = await runtime.resolveMaterialActions('window-1', {
+      requestId: 'resolve-document-entry-file-actions',
+      identity,
+      selectedNodeIds: ['document-entry-file'],
+    });
+
+    expect(resolution.descriptors).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: CANVAS_PREVIEW_ACTION_ID })]),
+    );
+    expect(resolution.descriptors).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: CANVAS_OPEN_IN_CUT_ACTION_ID })]),
+    );
+    expect(resolveCut).not.toHaveBeenCalled();
+    await runtime.dispose();
+  });
+
   it('routes an explicit project Media Library copy without mutating the Canvas source locator', async () => {
     const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-library-action-'));
     const linkedLibraryPath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-library-target-'));
@@ -864,6 +1006,7 @@ describe('DesktopCanvasRuntime', () => {
     const identity = createIdentity();
     const resolveEditText = vi.fn(async () => true);
     const editText = vi.fn(async () => undefined);
+    const previewResource = vi.fn(async () => undefined);
     const runtime = new DesktopCanvasRuntime({
       shell: {
         resolveCanvasViewGrant: vi.fn(async (): Promise<DesktopCanvasViewGrant> => ({
@@ -883,6 +1026,7 @@ describe('DesktopCanvasRuntime', () => {
         logger: new ConsoleLogger('DesktopCanvasEditTextActionTest'),
       }),
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
+      previewResource,
       resolveEditText,
       editText,
     });
@@ -945,10 +1089,11 @@ describe('DesktopCanvasRuntime', () => {
 
     expect(action.status).toBe('accepted');
     expect(editText).toHaveBeenCalledWith({ identity, target: expectedTarget });
+    expect(previewResource).not.toHaveBeenCalled();
     await runtime.dispose();
   });
 
-  it('offers Add to Cut for video with the exact owner-projected target payload', async () => {
+  it('keeps Cut handoff and Canvas audio derivation as independent video actions', async () => {
     const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-add-cut-action-'));
     roots.push(workspacePath);
     await writeFixtureFile(workspacePath, 'media/clip.mp4', 'video');
@@ -963,9 +1108,21 @@ describe('DesktopCanvasRuntime', () => {
         sessionId: 'cut-session:cut-view-1:view-instance-1',
       },
     } as const;
-    const resolveAddToCut = vi.fn(async () => executionPayload);
+    const resolveAddToCut = vi.fn(async () => ({
+      status: 'available' as const,
+      executionPayload,
+    }));
     const addToCut = vi.fn(async () => undefined);
-    const separateAudioInCut = vi.fn(async () => undefined);
+    const probe = vi.fn(async () => availableVideoProbe());
+    const transcode = vi.fn(async (_sourcePath: string, outputPath: string) => {
+      await writeFile(outputPath, 'derived-audio');
+    });
+    const disposeMedia = vi.fn(async () => undefined);
+    const audioExtraction = new CanvasAudioExtractionService({
+      globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
+      media: { probe, transcode, dispose: disposeMedia },
+      createId: () => 'audio-output-1',
+    });
     const runtime = new DesktopCanvasRuntime({
       shell: {
         resolveCanvasViewGrant: vi.fn(async (): Promise<DesktopCanvasViewGrant> => ({
@@ -987,7 +1144,7 @@ describe('DesktopCanvasRuntime', () => {
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
       resolveAddToCut,
       addToCut,
-      separateAudioInCut,
+      audioExtraction,
     });
     await runtime.getSnapshot('window-1', identity);
     const authored = await runtime.executeIntent(
@@ -1024,13 +1181,14 @@ describe('DesktopCanvasRuntime', () => {
       }),
       expect.objectContaining({
         id: CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID,
-        ownerId: 'cut',
-        executionPayload,
+        ownerId: 'media',
       }),
     ]);
     expect(
       resolution.descriptors.some((descriptor) => descriptor.id === CANVAS_OPEN_IN_CUT_ACTION_ID),
     ).toBe(false);
+    expect(resolution.descriptors[1]).not.toHaveProperty('executionPayload');
+    expect(probe).toHaveBeenCalledWith(await realpath(path.join(workspacePath, 'media/clip.mp4')));
 
     const action = await runtime.executeIntent(
       'window-1',
@@ -1073,23 +1231,42 @@ describe('DesktopCanvasRuntime', () => {
             identity: materialIdentity(identity),
             actionId: CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID,
             selectedNodeIds: [node.id],
-            payload: executionPayload,
+            payload: {},
           },
         },
       }),
     );
 
-    expect(separate.status).toBe('accepted');
-    expect(separateAudioInCut).toHaveBeenCalledWith({
-      identity,
-      target: expect.objectContaining({
-        nodeId: node.id,
-        mediaKind: 'video',
-        locator: { file: { authority: 'workspace', path: 'media/clip.mp4' } },
-      }),
-      executionPayload,
+    if (separate.status !== 'accepted') throw new Error(separate.diagnostic.message);
+    expect(separate.snapshot.canvas.nodes).toHaveLength(2);
+    expect(separate.snapshot.canvas.nodes[1]).toMatchObject({
+      type: 'media',
+      position: {
+        x: node.position.x + node.size.width + 40,
+        y: node.position.y,
+      },
+      data: {
+        mediaType: 'audio',
+        title: 'clip-audio.m4a',
+        contentLocator: {
+          file: {
+            authority: 'workspace',
+            path: 'neko/derived/audio/clip-audio-audio-output-1.m4a',
+          },
+        },
+      },
     });
+    expect(separate.snapshot.canvas.connections).toEqual([
+      expect.objectContaining({ sourceId: node.id, type: 'derived-from' }),
+    ]);
+    expect(
+      await readFile(
+        path.join(workspacePath, 'neko/derived/audio/clip-audio-audio-output-1.m4a'),
+        'utf8',
+      ),
+    ).toBe('derived-audio');
     await runtime.dispose();
+    expect(disposeMedia).toHaveBeenCalledOnce();
   });
 
   it('projects Cut actions for the exact selected output of a Video Generation node', async () => {
@@ -1097,6 +1274,7 @@ describe('DesktopCanvasRuntime', () => {
       path.join(tmpdir(), 'openneko-canvas-generated-video-actions-'),
     );
     roots.push(workspacePath);
+    await writeFixtureFile(workspacePath, 'neko/generated/video-output-1.mp4', 'video');
     const identity = createIdentity();
     const documentPath = path.join(workspacePath, identity.documentId);
     await mkdir(path.dirname(documentPath), { recursive: true });
@@ -1138,7 +1316,18 @@ describe('DesktopCanvasRuntime', () => {
         workbenchInstanceId: 'workbench-1',
       },
     } as const;
-    const resolveAddToCut = vi.fn(async () => executionPayload);
+    const resolveAddToCut = vi.fn(async () => ({
+      status: 'available' as const,
+      executionPayload,
+    }));
+    const audioExtraction = new CanvasAudioExtractionService({
+      globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
+      media: {
+        probe: vi.fn(async () => availableVideoProbe()),
+        transcode: vi.fn(async () => undefined),
+        dispose: vi.fn(async () => undefined),
+      },
+    });
     const runtime = new DesktopCanvasRuntime({
       shell: {
         resolveCanvasViewGrant: vi.fn(async (): Promise<DesktopCanvasViewGrant> => ({
@@ -1160,7 +1349,7 @@ describe('DesktopCanvasRuntime', () => {
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
       resolveAddToCut,
       addToCut: vi.fn(async () => undefined),
-      separateAudioInCut: vi.fn(async () => undefined),
+      audioExtraction,
     });
 
     const resolution = await runtime.resolveMaterialActions('window-1', {
@@ -1171,7 +1360,7 @@ describe('DesktopCanvasRuntime', () => {
 
     expect(resolution.descriptors).toEqual([
       expect.objectContaining({ id: CANVAS_ADD_TO_CUT_ACTION_ID, ownerId: 'cut' }),
-      expect.objectContaining({ id: CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID, ownerId: 'cut' }),
+      expect.objectContaining({ id: CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID, ownerId: 'media' }),
     ]);
     expect(resolveAddToCut).toHaveBeenCalledWith({
       identity,
@@ -1586,6 +1775,9 @@ describe('DesktopCanvasRuntime', () => {
 
     expect(result.status).toBe('accepted');
     if (result.status !== 'accepted') throw new Error(result.diagnostic.message);
+    expect(result.snapshot.canvas.nodes[0]?.id).toMatch(
+      /^generation-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
+    );
     expect(result.snapshot.canvas.nodes).toEqual([
       expect.objectContaining({
         type: 'generation',
@@ -1598,7 +1790,7 @@ describe('DesktopCanvasRuntime', () => {
             width: 1024,
             height: 1024,
             count: 1,
-            quality: 'standard',
+            quality: 'auto',
           },
           outputs: [],
         }),
@@ -2437,8 +2629,8 @@ describe('DesktopCanvasRuntime', () => {
     expect((await runtime.getSnapshot('window-1', first)).canvas.name).toBe('First');
   });
 
-  it('projects committed Workspace Board mutations into the clean open session and blocks dirty sessions', async () => {
-    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-board-live-'));
+  it('projects committed Canvas mutations into the clean open session and blocks dirty sessions', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-live-'));
     roots.push(workspacePath);
     const identity = createIdentity();
     const documentPath = path.join(workspacePath, identity.documentId);
@@ -2492,27 +2684,30 @@ describe('DesktopCanvasRuntime', () => {
       }),
     );
 
-    await runtime.coordinateWorkspaceBoardMutation('workspace-1', async () => {
-      await writeFile(
-        documentPath,
-        JSON.stringify({
-          name: 'Agent delivery',
-          viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
-          nodes: [
-            {
-              id: 'agent-output',
-              type: 'media',
-              position: { x: 40, y: 60 },
-              size: { width: 240, height: 160 },
-              zIndex: 1,
-              data: { assetPath: 'output.png', mediaType: 'image' },
-            },
-          ],
-          connections: [],
-        }),
-      );
-      return undefined;
-    });
+    await runtime.coordinateCanvasDocumentMutation(
+      createDefaultCanvasWorkspaceTarget('workspace-1'),
+      async () => {
+        await writeFile(
+          documentPath,
+          JSON.stringify({
+            name: 'Agent delivery',
+            viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+            nodes: [
+              {
+                id: 'agent-output',
+                type: 'media',
+                position: { x: 40, y: 60 },
+                size: { width: 240, height: 160 },
+                zIndex: 1,
+                data: { assetPath: 'output.png', mediaType: 'image' },
+              },
+            ],
+            connections: [],
+          }),
+        );
+        return undefined;
+      },
+    );
 
     expect((await runtime.getSnapshot('window-1', identity)).canvas.name).toBe('Agent delivery');
     expect((await runtime.getSnapshot('window-1', secondIdentity)).canvas.name).toBe(
@@ -2566,7 +2761,10 @@ describe('DesktopCanvasRuntime', () => {
     );
     const mutation = vi.fn(async () => undefined);
     await expect(
-      runtime.coordinateWorkspaceBoardMutation('workspace-1', mutation),
+      runtime.coordinateCanvasDocumentMutation(
+        createDefaultCanvasWorkspaceTarget('workspace-1'),
+        mutation,
+      ),
     ).resolves.toBeUndefined();
     expect(mutation).toHaveBeenCalledOnce();
     expect(JSON.parse(await readFile(documentPath, 'utf8'))).toMatchObject({
@@ -2576,8 +2774,63 @@ describe('DesktopCanvasRuntime', () => {
     await runtime.dispose();
   });
 
-  it('rejects a stale Canvas save that omits authoritative Board nodes without removal evidence', async () => {
-    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-board-save-'));
+  it('projects an Agent mutation into the exact open Canvas without reopening it', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-exact-live-'));
+    roots.push(workspacePath);
+    const identity = { ...createIdentity(), documentId: 'blame-PV.nkc' };
+    const documentPath = path.join(workspacePath, identity.documentId);
+    await writeFile(
+      documentPath,
+      JSON.stringify({
+        name: 'BLAME PV',
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        nodes: [],
+        connections: [],
+      }),
+    );
+    const runtime = createRuntime(workspacePath, identity);
+    await runtime.getSnapshot('window-1', identity);
+    const projectionEvents: CanvasHostSnapshot[] = [];
+    await runtime.subscribe('window-1', identity, (event) => {
+      projectionEvents.push(event.snapshot);
+    });
+
+    await runtime.coordinateCanvasDocumentMutation(
+      createCanvasWorkspaceTarget(identity.workspaceId, identity.documentId),
+      async () => {
+        await writeFile(
+          documentPath,
+          JSON.stringify({
+            name: 'BLAME PV',
+            viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+            nodes: [
+              {
+                id: 'agent-output',
+                type: 'markdown',
+                position: { x: 40, y: 60 },
+                size: { width: 320, height: 180 },
+                zIndex: 1,
+                data: { content: '# Agent output' },
+              },
+            ],
+            connections: [],
+          }),
+        );
+        return undefined;
+      },
+    );
+
+    expect((await runtime.getSnapshot('window-1', identity)).canvas.nodes).toEqual([
+      expect.objectContaining({ id: 'agent-output' }),
+    ]);
+    expect(projectionEvents.at(-1)?.canvas.nodes).toEqual([
+      expect.objectContaining({ id: 'agent-output' }),
+    ]);
+    await runtime.dispose();
+  });
+
+  it('rejects a stale Canvas save that omits authoritative nodes without removal evidence', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-save-'));
     roots.push(workspacePath);
     const identity = createIdentity();
     const documentPath = path.join(workspacePath, identity.documentId);
@@ -2626,8 +2879,8 @@ describe('DesktopCanvasRuntime', () => {
     const staleSave = await runtime.executeIntent(
       'window-1',
       createCanvasHostIntentRequest({
-        requestId: 'stale-board-save',
-        commandId: 'stale-board-save',
+        requestId: 'stale-canvas-save',
+        commandId: 'stale-canvas-save',
         identity,
         intent: { type: 'save' },
       }),
@@ -2646,8 +2899,8 @@ describe('DesktopCanvasRuntime', () => {
     await runtime.executeIntent(
       'window-1',
       createCanvasHostIntentRequest({
-        requestId: 'explicit-board-removal-evidence',
-        commandId: 'explicit-board-removal-evidence',
+        requestId: 'explicit-canvas-removal-evidence',
+        commandId: 'explicit-canvas-removal-evidence',
         identity,
         intent: {
           type: 'replace-document',
@@ -2659,8 +2912,8 @@ describe('DesktopCanvasRuntime', () => {
     const explicitRemoval = await runtime.executeIntent(
       'window-1',
       createCanvasHostIntentRequest({
-        requestId: 'explicit-board-removal',
-        commandId: 'explicit-board-removal',
+        requestId: 'explicit-canvas-removal',
+        commandId: 'explicit-canvas-removal',
         identity,
         intent: { type: 'save' },
       }),
@@ -2670,12 +2923,15 @@ describe('DesktopCanvasRuntime', () => {
     await runtime.dispose();
   });
 
-  it('resolves a Workspace grant before entering the Board mutation queue', async () => {
-    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-board-open-'));
+  it('resolves a Workspace grant before entering the Canvas mutation queue', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-open-'));
     roots.push(workspacePath);
     const identity = createIdentity();
     const resolveCanvasViewGrant = vi.fn(async (): Promise<DesktopCanvasViewGrant> => {
-      await runtime.coordinateWorkspaceBoardMutation(identity.workspaceId, async () => undefined);
+      await runtime.coordinateCanvasDocumentMutation(
+        createDefaultCanvasWorkspaceTarget(identity.workspaceId),
+        async () => undefined,
+      );
       return {
         identity,
         workspace: {
@@ -2692,7 +2948,7 @@ describe('DesktopCanvasRuntime', () => {
         homedir: workspacePath,
         nekoHome: path.join(workspacePath, '.neko-home'),
         workspaceRoot: workspacePath,
-        logger: new ConsoleLogger('DesktopCanvasBoardOpenTest'),
+        logger: new ConsoleLogger('DesktopCanvasOpenTest'),
       }),
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
     });
@@ -2970,6 +3226,29 @@ async function bindProjectMediaLibrary(
     connectionId: libraryId,
     expectedBindingFingerprint: null,
   });
+}
+
+function availableVideoProbe() {
+  return {
+    durationSeconds: 5,
+    formatName: 'mov,mp4',
+    video: {
+      streamIndex: 0,
+      codecName: 'h264',
+      width: 1280,
+      height: 720,
+      framesPerSecond: 30,
+      color: {},
+    },
+    audioStreams: [
+      {
+        streamIndex: 1,
+        codecName: 'aac',
+        sampleRate: 48_000,
+        channels: 2,
+      },
+    ],
+  };
 }
 
 async function writeFixtureFile(

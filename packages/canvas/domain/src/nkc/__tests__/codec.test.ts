@@ -3,7 +3,14 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { loadNkc, saveNkc, isValidNkc } from '../codec';
+import {
+  isLoadableNkc,
+  isLoadableNkcResult,
+  loadNkc,
+  saveLoadableNkc,
+  saveNkc,
+  isValidNkc,
+} from '../codec';
 import type { CanvasData } from '../../types/canvas';
 
 // =============================================================================
@@ -256,6 +263,51 @@ describe('loadNkc', () => {
     );
     expect(sibling.validation.valid).toBe(true);
     expect(sibling.data.name).toBe('Sibling');
+  });
+
+  it('loads and preserves a document whose only failure is unavailable node content', () => {
+    const document = {
+      name: 'Unavailable node content',
+      nodes: [
+        {
+          id: 'note-1',
+          type: 'markdown',
+          position: { x: 0, y: 0 },
+          size: { width: 240, height: 160 },
+          zIndex: 0,
+          data: { content: 'still visible' },
+        },
+        {
+          id: 'generation-1',
+          type: 'generation',
+          position: { x: 280, y: 0 },
+          size: { width: 240, height: 160 },
+          zIndex: 1,
+          data: { recipe: { kind: 'image', prompt: '' }, outputs: [], phase: 'running' },
+        },
+      ],
+      connections: [],
+    };
+    const loaded = loadNkc(JSON.stringify(document));
+
+    expect(loaded.validation.valid).toBe(false);
+    expect(isLoadableNkcResult(loaded)).toBe(true);
+    expect(isLoadableNkc(loaded.data)).toBe(true);
+    expect(JSON.parse(saveLoadableNkc(loaded.data))).toEqual(document);
+  });
+
+  it('does not load a document with an unprojectable node shell', () => {
+    const loaded = loadNkc(
+      JSON.stringify({
+        name: 'Broken geometry',
+        nodes: [{ id: 'broken', type: 'markdown', data: { content: 'unsafe' } }],
+        connections: [],
+      }),
+    );
+
+    expect(isLoadableNkcResult(loaded)).toBe(false);
+    expect(isLoadableNkc(loaded.data)).toBe(false);
+    expect(() => saveLoadableNkc(loaded.data)).toThrow('loadable document validation failed');
   });
 });
 

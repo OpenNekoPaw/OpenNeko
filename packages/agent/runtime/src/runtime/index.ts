@@ -52,8 +52,6 @@ export {
   type AgentTurnProjectType,
 } from './turn/agent-turn-context';
 
-export type { AgentFlatPurposeModelRefs } from '@neko/agent-contracts';
-
 export {
   AGENT_DOCUMENT_CONTEXT_INTENTS,
   AGENT_RETRY_CREATION_MESSAGE,

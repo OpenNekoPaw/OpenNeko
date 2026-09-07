@@ -46,7 +46,7 @@ module.exports = {
         path: rolePathPattern('webview'),
       },
       to: {
-        path: '^(?:electron|vscode)$',
+        path: '^electron$',
       },
     },
 
@@ -73,15 +73,15 @@ module.exports = {
       to: { path: rolePathPattern('runtime') },
     },
 
-    // ── Rule 4: Character and Quality domain ownership ────────────
+    // ── Rule 4: Character and Agent domain ownership ────────────
     {
       name: 'chara-no-agent-runtime-implementation',
       comment:
-        'neko-chara may consume Agent contracts, but must not depend on Agent runtime, platform, Webview, or provider implementations',
+        'Character packages may consume Agent contracts, but must not depend on Agent runtime, Webview, or provider implementations',
       severity: 'error',
       from: { path: '^packages/chara/' },
       to: {
-        path: '^packages/(?:agent/(?:runtime|webview)|ai/sdk|platform)/',
+        path: '^packages/(?:agent/(?:runtime|webview)|ai/sdk)/',
       },
     },
     {
@@ -122,6 +122,5 @@ module.exports = {
         highlightFocused: true,
       },
     },
-    progress: { type: 'performance-log' },
   },
 };

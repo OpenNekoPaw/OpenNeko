@@ -4,11 +4,13 @@ import type {
   PromptGenerationRequest,
   PromptGenerationResult,
 } from '../execution';
+import type { GenerationExecutionProviderResolver } from '../execution-provider';
 
 export interface PromptGenerationConfigPort {
-  getProvider(id: string): ProviderConfig | undefined;
   getModel(id: string): ModelConfig | undefined;
 }
+
+export type PromptExecutionProviderResolver = GenerationExecutionProviderResolver;
 
 export interface PromptCompletionPort {
   complete(input: {
@@ -24,6 +26,7 @@ export interface PromptCompletionPort {
 export class PromptGenerationService implements PromptGenerationExecutionPort {
   constructor(
     private readonly config: PromptGenerationConfigPort,
+    private readonly providers: GenerationExecutionProviderResolver,
     private readonly completion: PromptCompletionPort,
   ) {}
 
@@ -34,8 +37,8 @@ export class PromptGenerationService implements PromptGenerationExecutionPort {
     },
     options: { readonly signal?: AbortSignal } = {},
   ): Promise<PromptGenerationResult> {
-    const provider = this.config.getProvider(request.providerId);
-    if (!provider || provider.enabled === false) {
+    const provider = await this.providers.resolveProvider(request.providerId);
+    if (!provider) {
       throw new Error(`Prompt Generation provider '${request.providerId}' is unavailable.`);
     }
     const model = this.config.getModel(request.modelId);

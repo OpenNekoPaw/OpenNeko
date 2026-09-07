@@ -6,9 +6,11 @@ import type {
   TextEditorMarkdownMediaProjection,
   TextEditorMarkdownReferenceSearchRequest,
   TextEditorMarkdownReferenceSearchResult,
+  TextEditorClipboardCommand,
 } from '@neko/text-editor-domain';
 
 export interface TextEditorHostRuntime {
+  executeClipboardCommand(command: TextEditorClipboardCommand): Promise<void>;
   project(): Promise<TextDocumentProjection>;
   applyEdits(command: ApplyTextDocumentEditsCommand): Promise<TextDocumentProjection>;
   formatJson(input: {

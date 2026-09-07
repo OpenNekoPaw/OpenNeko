@@ -91,6 +91,78 @@ describe('Conversation DSH Session publication', () => {
     ).resolves.toEqual({ conversationId, dshSessionId: 'dsh-session-new' });
   });
 
+  it('publishes a DSH-owned branch as a new Conversation with inherited context', async () => {
+    const order: string[] = [];
+    const catalog = memoryCatalog(order);
+    const store = memoryBindingStore(order);
+    const client = clientWith({
+      order,
+      onLoad: async (dshSessionId) => {
+        await expect(store.getByDshSessionId(dshSessionId)).resolves.toMatchObject({
+          dshSessionId,
+        });
+      },
+    });
+    const application = createConversationDshSessionApplication({
+      client,
+      store,
+      catalog,
+      staleConversations: memoryStaleCleanup(catalog, store),
+      conversationIdentitySeed: '/workspace/branch',
+      activity: idleActivity(),
+      lookupCwd: testLookupCwd(),
+    });
+    const context = {
+      kind: 'workspace' as const,
+      workspaceId: 'workspace:one',
+      workspaceGrantId: 'grant:one',
+    };
+    const source = await application.publication.publish({
+      title: 'Source',
+      context,
+      canvasSelection: { workspaceId: context.workspaceId, canvasId: 'neko/boards/initial.nkc' },
+    });
+
+    await catalog.selectCanvas(source.conversationId, {
+      workspaceId: context.workspaceId,
+      canvasId: 'neko/boards/story.nkc',
+    });
+    const branch = await application.branchConversation({
+      sourceConversationId: source.conversationId,
+      messageId: 'assistant-1',
+    });
+
+    await expect(catalog.readCanvasSelection(branch.conversationId)).resolves.toBe(
+      'neko/boards/story.nkc',
+    );
+    await catalog.selectCanvas(source.conversationId, {
+      workspaceId: context.workspaceId,
+      canvasId: 'neko/boards/parent.nkc',
+    });
+    await expect(catalog.readCanvasSelection(branch.conversationId)).resolves.toBe(
+      'neko/boards/story.nkc',
+    );
+    expect(branch.conversationId).not.toBe(source.conversationId);
+    expect(branch.dshSessionId).toBe('dsh-session-branch');
+    expect(client.branchSession).toHaveBeenCalledWith({
+      sessionId: source.dshSessionId,
+      messageId: 'assistant-1',
+    });
+    expect(client.loadSession).toHaveBeenCalledWith({
+      sessionId: 'dsh-session-branch',
+      cwd: '/workspace',
+      mcpServers: [],
+    });
+    await expect(application.catalog.get(branch.conversationId)).resolves.toMatchObject({
+      title: 'Source',
+      context,
+    });
+    expect(store.records.get(branch.conversationId)).toEqual({
+      conversationId: branch.conversationId,
+      dshSessionId: 'dsh-session-branch',
+    });
+  });
+
   it('does not expose a transient missing-binding record while publication is still running', async () => {
     const catalog = memoryCatalog([]);
     const store = memoryBindingStore([]);
@@ -403,9 +475,17 @@ function memoryCatalog(order: string[]): DshConversationCatalogStore & {
   readonly records: DshConversationCatalogRecord[];
 } {
   const records: DshConversationCatalogRecord[] = [];
+  const canvasSelections = new Map<string, string>();
   return {
     records,
-    async reserve(record) {
+    async readCanvasSelection(conversationId) {
+      return canvasSelections.get(conversationId);
+    },
+    async selectCanvas(conversationId, target) {
+      canvasSelections.set(conversationId, target.canvasId);
+    },
+    async reserve(record, canvasSelection) {
+      if (canvasSelection) canvasSelections.set(record.conversationId, canvasSelection.canvasId);
       order.push('catalog-reserve');
       records.push(record);
     },
@@ -492,6 +572,7 @@ function clientWith(options: {
   readonly order?: string[];
   readonly createError?: Error;
   readonly onCreate?: () => Promise<void>;
+  readonly onLoad?: (dshSessionId: string) => Promise<void>;
   readonly onResume?: (dshSessionId: string) => Promise<void>;
 }) {
   const order = options.order ?? [];
@@ -505,13 +586,22 @@ function clientWith(options: {
       if (options.createError) throw options.createError;
       return { sessionId: 'dsh-session-new' };
     },
+    branchSession: vi.fn(async () => {
+      order.push('session-branch');
+      sessionIds.add('dsh-session-branch');
+      return { sessionId: 'dsh-session-branch' };
+    }),
     async listSessions() {
       order.push('session-list');
       return {
         sessions: [...sessionIds].map((sessionId) => ({ sessionId, cwd: '/workspace' })),
       };
     },
-    loadSession: vi.fn(async () => ({})),
+    loadSession: vi.fn(async (input: { readonly sessionId: string }) => {
+      order.push('session-load');
+      await options.onLoad?.(input.sessionId);
+      return {};
+    }),
     async resumeSession(input: { readonly sessionId: string }) {
       order.push('session-resume');
       await options.onResume?.(input.sessionId);

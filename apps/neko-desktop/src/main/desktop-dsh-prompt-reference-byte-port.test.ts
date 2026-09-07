@@ -36,7 +36,7 @@ describe('Desktop DSH Prompt reference byte port', () => {
     });
     const reference = { label: 'board.png', contentLocator: imageLocator };
 
-    await expect(port.stat(reference)).resolves.toEqual({ mimeType: 'image/png' });
+    await expect(port.stat(reference)).resolves.toEqual({ mimeType: 'image/png', byteLength: 3 });
     await expect(port.read(reference, { maxBytes: 1024 })).resolves.toEqual({
       bytes: new Uint8Array([1, 2, 3]),
       mimeType: 'image/png',

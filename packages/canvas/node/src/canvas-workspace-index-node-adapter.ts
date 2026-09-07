@@ -1,6 +1,6 @@
 import path from 'node:path';
 import {
-  CANVAS_WORKSPACE_BOARD_PATH,
+  CANVAS_DEFAULT_DOCUMENT_PATH,
   loadNkc,
   projectCanvasWorkspaceTurnSummary,
   type CanvasWorkspaceIndexReadPort,
@@ -37,7 +37,7 @@ export function createCanvasWorkspaceIndexNodeAdapter(
             continue;
           }
           if (entry.type !== 'file' || entry.name.endsWith('.nkc') === false) continue;
-          if (relativePath === CANVAS_WORKSPACE_BOARD_PATH) continue;
+          if (relativePath === CANVAS_DEFAULT_DOCUMENT_PATH) continue;
           identities.push(relativePath);
         }
       }

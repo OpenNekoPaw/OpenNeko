@@ -46,8 +46,8 @@ describe('model option presentation i18n', () => {
       ],
       [
         'audio',
-        ['text_to_audio', 'audio.tts', 'audio.asr', 'text_to_music'],
-        ['音频', '文生音频', '语音合成', '语音识别', '文生音乐'],
+        ['text_to_audio', 'audio.tts', 'audio.asr'],
+        ['音频', '文生音频', '语音合成', '语音识别'],
       ],
     ];
 

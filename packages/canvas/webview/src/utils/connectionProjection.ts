@@ -327,11 +327,18 @@ export function createSequenceEdgeSyncPlan(
   connections: readonly CanvasConnection[],
   orderedNodeIds: readonly string[],
 ): SequenceEdgeSyncPlan {
-  const expectedEdges = orderedNodeIds.slice(0, -1).map((sourceId, index) => ({
-    sourceId,
-    targetId: orderedNodeIds[index + 1]!,
-    order: index,
-  }));
+  const expectedEdges = orderedNodeIds.slice(0, -1).flatMap((sourceId, index) => {
+    const targetId = orderedNodeIds[index + 1];
+    return targetId ? [{ sourceId, targetId, order: index }] : [];
+  });
+  return createSequenceGraphSyncPlan(connections, orderedNodeIds, expectedEdges);
+}
+
+export function createSequenceGraphSyncPlan(
+  connections: readonly CanvasConnection[],
+  orderedNodeIds: readonly string[],
+  expectedEdges: readonly { sourceId: string; targetId: string; order: number }[],
+): SequenceEdgeSyncPlan {
   const sequenceConnections = connections.filter((connection) => connection.type === 'sequence');
   const matchedConnectionIds: string[] = [];
   const missingEdges: Array<{ sourceId: string; targetId: string; order: number }> = [];
@@ -351,13 +358,15 @@ export function createSequenceEdgeSyncPlan(
   const expectedKeys = new Set(
     expectedEdges.map((edge) => `${edge.sourceId}\u0000${edge.targetId}`),
   );
+  const matchedConnectionIdSet = new Set(matchedConnectionIds);
   const orderedNodeIdSet = new Set(orderedNodeIds);
   const staleConnectionIds = sequenceConnections
     .filter(
       (connection) =>
         orderedNodeIdSet.has(connection.sourceId) &&
         orderedNodeIdSet.has(connection.targetId) &&
-        !expectedKeys.has(`${connection.sourceId}\u0000${connection.targetId}`),
+        (!expectedKeys.has(`${connection.sourceId}\u0000${connection.targetId}`) ||
+          !matchedConnectionIdSet.has(connection.id)),
     )
     .map((connection) => connection.id);
 

@@ -1800,6 +1800,17 @@ export class DesktopAppHost {
     return result;
   }
 
+  authorizeTextEditorClipboardCommand(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): import('@neko/text-editor-domain').TextEditorClipboardCommandRequest {
+    this.requireActive();
+    const window = this.windows.resolveSender(sender);
+    const runtime = this.textEditor;
+    if (!runtime) throw new Error('Desktop Text Editor runtime is unavailable.');
+    return runtime.authorizeClipboardCommand(window.windowId, payload);
+  }
+
   async readCanvasWorkspaceIndexCatalog(
     sender: Parameters<DesktopAppHost['executeCanvasIntent']>[0],
     payload: unknown,

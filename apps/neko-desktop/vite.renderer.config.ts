@@ -5,7 +5,6 @@ import { readFileSync, readdirSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { DESKTOP_RENDERER_CSP_NONCE } from './src/shared/vite-development-security';
 
-const functionalFixtureHome = process.env['OPENNEKO_DESKTOP_FUNCTIONAL_HOME'];
 const workspacePackagesRoot = path.resolve(import.meta.dirname, '../../packages');
 export const DESKTOP_RENDERER_CANONICAL_WORKSPACE_ENTRIES =
   discoverWorkspacePublicEntries(workspacePackagesRoot);
@@ -121,9 +120,6 @@ function parseWorkspacePackageManifest(manifestPath: string): {
 
 export default defineConfig({
   plugins: [createWorkspacePublicEntryCanonicalizationPlugin(), react(), createEpubJsPatchPlugin()],
-  ...(functionalFixtureHome
-    ? { cacheDir: path.join(functionalFixtureHome, 'vite-renderer-cache') }
-    : {}),
   html: {
     cspNonce: DESKTOP_RENDERER_CSP_NONCE,
   },

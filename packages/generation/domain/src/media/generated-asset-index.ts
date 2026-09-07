@@ -149,21 +149,6 @@ function isPathlessGeneratedAsset(value: unknown): boolean {
         isFiniteNumber(value['height']) &&
         isFiniteNumber(value['fps'])
       );
-    case 'generated-storyboard':
-      return (
-        Array.isArray(value['scenes']) &&
-        value['scenes'].every(
-          (scene) =>
-            isRecord(scene) &&
-            isFiniteNumber(scene['sceneIndex']) &&
-            typeof scene['heading'] === 'string' &&
-            Array.isArray(scene['shots']) &&
-            scene['shots'].every(
-              (shot) =>
-                isRecord(shot) && shot['type'] === 'generated-image' && isGeneratedImageShape(shot),
-            ),
-        )
-      );
     default:
       return false;
   }
@@ -194,9 +179,7 @@ function isGeneratedAssetLifecycleConsistent(asset: Record<string, unknown>): bo
   );
 }
 
-function generatedAssetMediaKind(
-  value: unknown,
-): 'image' | 'audio' | 'video' | 'storyboard' | undefined {
+function generatedAssetMediaKind(value: unknown): 'image' | 'audio' | 'video' | undefined {
   switch (value) {
     case 'generated-image':
       return 'image';
@@ -204,8 +187,6 @@ function generatedAssetMediaKind(
       return 'audio';
     case 'generated-video':
       return 'video';
-    case 'generated-storyboard':
-      return 'storyboard';
     default:
       return undefined;
   }

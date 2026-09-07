@@ -298,6 +298,7 @@ export function InputArea({
   // Global configuration from context (model, modes, compression, skills)
   const {
     sessionMode,
+    modelCatalogStatus,
     selectedModel,
     availableModels,
     onModelSelect,
@@ -312,6 +313,7 @@ export function InputArea({
     mediaModelCallCount,
     mediaModelSelection,
     availableMediaModels,
+    mediaModelParameterProfiles,
     mediaModelOptOutEnabled,
     onMediaModelSelect,
     inputCatalog,
@@ -328,7 +330,6 @@ export function InputArea({
     conversationKind,
     genParams,
     onGenParamsChange,
-    isBusy = false,
   } = useInputAreaContext();
   const { t } = useTranslation();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1309,16 +1310,18 @@ export function InputArea({
                   {inputAreaProjection.showModelConfig ? (
                     <ComposerConfigMenu
                       activeMode={sessionMode}
+                      modelCatalogStatus={modelCatalogStatus}
                       availableModels={availableModels}
                       selectedModel={selectedModel}
                       onModelSelect={onModelSelect}
                       mediaModelSelection={mediaModelSelection}
                       availableMediaModels={availableMediaModels}
+                      mediaModelParameterProfiles={mediaModelParameterProfiles}
                       mediaModelOptOutEnabled={mediaModelOptOutEnabled}
                       onMediaModelSelect={onMediaModelSelect}
                       genParams={genParams}
                       onGenParamsChange={onGenParamsChange}
-                      disabled={isBusy || modelConfigurationLocked}
+                      disabled={modelConfigurationLocked}
                       disabledReason={
                         modelConfigurationPolicy?.status === 'locked'
                           ? modelConfigurationPolicy.reason

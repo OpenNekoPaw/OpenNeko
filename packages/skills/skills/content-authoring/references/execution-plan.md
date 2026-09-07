@@ -1,13 +1,7 @@
-# Execution Plan Guide
+# 执行计划指南
 
 ## 中文指南
 
-说明目标结果、已验证当前状态、下一批可执行步骤和完成证据。步骤必须能够行动或检查，不把假想未来工作拆成庞大任务表；owner、日期、依赖、回滚和完整验证矩阵只在协作或执行风险需要时加入。三个以上重复工作项可用稳定字段表格，主要关系是先后顺序时优先编号列表。
+只在用户明确要求执行计划时使用。计划必须整理已经由领域方法定义的工作，不得用“准备素材”“生成内容”“质量检查”等阶段名称伪造可执行性。对每个近期工作项，保留已知输入或来源绑定、当前实际能力、直接产物与使用该产物的后续对象。任何一项缺失时，将其写成明确阻塞或待决策项，不称为“可执行步骤”。
 
-## English guidance
-
-Show the target outcome, verified current state, the next executable batch of steps, and completion evidence.
-
-Keep steps at a level that can be acted on or checked. Do not decompose hypothetical future work into a large task inventory. Add owners, dates, dependencies, rollback, or a full validation matrix only when coordination or execution risk requires them.
-
-Use a table for three or more repeated work items with stable fields. Use an ordered list when sequence is the main relationship.
+保持步骤可行动、可检查，不将假想未来工作展开成庞大任务清单。只有协作或执行风险需要时才加入负责人、日期、回退与完整验证矩阵。三项以上重复工作适合表格，主要表达顺序时用有序列表。

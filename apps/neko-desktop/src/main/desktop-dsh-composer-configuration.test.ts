@@ -1,14 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import type {
-  AgentModelPurpose,
-  AssistantConfigState,
-  AssistantSettingsSnapshot,
-  ConfigManager,
-} from '@neko/host/settings';
+import type { AssistantConfigState, AssistantSettingsSnapshot } from '@neko/host/settings';
+import type { ModelType } from '@neko/ai-contracts';
 import {
-  createCanvasWorkspaceBoardTarget,
+  createDefaultCanvasWorkspaceTarget,
   createCanvasWorkspaceContextCatalog,
-  createExactCanvasTarget,
+  createCanvasWorkspaceTarget,
+  type CanvasWorkspaceContextCatalog,
 } from '@neko/canvas-domain';
 
 import { createDesktopDshComposerConfiguration } from './desktop-dsh-composer-configuration';
@@ -33,6 +30,7 @@ describe('Desktop DSH composer configuration', () => {
     const setPermissionPreset = vi.fn(async (_conversationId: string, permissionPresetId: string) =>
       permissionPresets(permissionPresetId),
     );
+    const selectionOwner = conversationCanvasSelection();
     const service = createDesktopDshComposerConfiguration({
       resolveSurface: vi.fn(async () => ({
         windowId: 'window-1',
@@ -51,6 +49,7 @@ describe('Desktop DSH composer configuration', () => {
         })),
       },
       canvas: canvasIndex(),
+      canvasSelection: selectionOwner,
       workspaceGrants: {
         restore: restoreWorkspace,
       },
@@ -74,13 +73,12 @@ describe('Desktop DSH composer configuration', () => {
       },
     });
 
-    await expect(
-      service.project({
-        windowId: 'window-1',
-        workbenchInstanceId: 'workbench-1',
-        agentSurfaceId: 'surface-1',
-      }),
-    ).resolves.toMatchObject({
+    const projected = await service.project({
+      windowId: 'window-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'surface-1',
+    });
+    expect(projected).toMatchObject({
       selectedModelOptionId: 'deepseek-official:deepseek-v4',
       selectedMediaModelOptionIds: { image: 'nekoapi-media:gpt-image-2' },
       permissionPresetId: 'workspace-write',
@@ -90,6 +88,30 @@ describe('Desktop DSH composer configuration', () => {
         { id: 'danger-full-access', label: 'danger-full-access', selectable: true },
       ],
     });
+    expect(projected.models.find((model) => model.category === 'image')?.parameterProfile).toEqual(
+      expect.objectContaining({
+        kind: 'image',
+        controls: expect.objectContaining({
+          size: expect.objectContaining({
+            defaultValue: 'auto',
+            values: expect.arrayContaining([
+              { id: 'auto' },
+              { id: '1536x1024', width: 1536, height: 1024, aspectRatio: '3:2' },
+            ]),
+          }),
+          quality: expect.objectContaining({ values: ['auto', 'low', 'medium', 'high'] }),
+        }),
+      }),
+    );
+    expect(projected.models.find((model) => model.category === 'video')?.parameterProfile).toEqual(
+      expect.objectContaining({
+        kind: 'video',
+        controls: expect.objectContaining({
+          resolution: expect.objectContaining({ values: ['768P', '2K'] }),
+          duration: expect.objectContaining({ min: 4, max: 15, step: 1 }),
+        }),
+      }),
+    );
     expect(restoreWorkspace).toHaveBeenCalledWith('window-1', 'grant-1', 'workspace-1');
     expect(readConversationInputCatalog).toHaveBeenCalledWith('conversation-1');
     await expect(
@@ -103,10 +125,14 @@ describe('Desktop DSH composer configuration', () => {
         canvas: {
           workspaceId: 'workspace-1',
           options: [
-            { target: { kind: 'workspace-board', workspaceId: 'workspace-1' } },
             {
               target: {
-                kind: 'exact-canvas',
+                workspaceId: 'workspace-1',
+                canvasId: 'neko/boards/workspace.nkc',
+              },
+            },
+            {
+              target: {
                 workspaceId: 'workspace-1',
                 canvasId: 'neko/boards/story.nkc',
               },
@@ -126,14 +152,7 @@ describe('Desktop DSH composer configuration', () => {
       selectedProviderId: 'openai',
       selectedModelId: 'gpt-5',
     });
-    expect(setSessionConfigOption).toHaveBeenCalledWith(
-      'conversation-1',
-      'model',
-      '["openai","gpt-5-api",8192]',
-    );
-    expect(setSessionConfigOption.mock.invocationCallOrder[0]).toBeLessThan(
-      workspaceConfig.setAssistantSettings.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
-    );
+    expect(setSessionConfigOption).not.toHaveBeenCalled();
     expect(applicationConfig.setAssistantSettings).not.toHaveBeenCalled();
 
     await expect(
@@ -144,6 +163,26 @@ describe('Desktop DSH composer configuration', () => {
         permissionPresetId: 'danger-full-access',
       }),
     ).resolves.toMatchObject({ permissionPresetId: 'danger-full-access' });
+    expect(setPermissionPreset).not.toHaveBeenCalled();
+
+    await expect(
+      service.bindTurnConfiguration('conversation-1', 'window-1', true),
+    ).resolves.toEqual({
+      supportsImageInput: false,
+      configuration: {
+        model: '["openai","gpt-5-api",8192]',
+        permissionPresetId: 'danger-full-access',
+      },
+    });
+    expect(setSessionConfigOption).not.toHaveBeenCalled();
+    expect(setPermissionPreset).not.toHaveBeenCalled();
+
+    await service.bindTurnConfiguration('conversation-1', 'window-1', false);
+    expect(setSessionConfigOption).toHaveBeenCalledWith(
+      'conversation-1',
+      'model',
+      '["openai","gpt-5-api",8192]',
+    );
     expect(setPermissionPreset).toHaveBeenCalledWith('conversation-1', 'danger-full-access');
 
     await service.selectMediaModel({
@@ -153,8 +192,42 @@ describe('Desktop DSH composer configuration', () => {
       category: 'image',
       modelOptionId: 'nekoapi-media:gpt-image-2',
     });
-    expect(workspaceConfig.setDefaultModelPurposeRefs).toHaveBeenCalledWith({
-      'image.generate': { providerId: 'nekoapi-media', modelId: 'gpt-image-2' },
+    expect(workspaceConfig.setDefaultModelRef).toHaveBeenCalledWith('image', {
+      providerId: 'nekoapi-media',
+      modelId: 'gpt-image-2',
+    });
+    await expect(
+      service.selectMediaModel({
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+        category: 'video',
+        modelOptionId: 'minimax-media:minimax-h3',
+      }),
+    ).resolves.toMatchObject({
+      selectedMediaModelOptionIds: {
+        image: 'nekoapi-media:gpt-image-2',
+        video: 'minimax-media:minimax-h3',
+      },
+    });
+    expect(workspaceConfig.setDefaultModelRef).toHaveBeenLastCalledWith('video', {
+      providerId: 'minimax-media',
+      modelId: 'minimax-h3',
+    });
+    await expect(
+      service.selectMediaModel({
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+        category: 'music',
+        modelOptionId: 'nekoapi-media:suno-v4',
+      }),
+    ).resolves.toMatchObject({
+      selectedMediaModelOptionIds: { music: 'nekoapi-media:suno-v4' },
+    });
+    expect(workspaceConfig.setDefaultModelRef).toHaveBeenLastCalledWith('music', {
+      providerId: 'nekoapi-media',
+      modelId: 'suno-v4',
     });
     await expect(
       service.selectMediaModel({
@@ -165,6 +238,27 @@ describe('Desktop DSH composer configuration', () => {
         modelOptionId: 'nekoapi-media:gpt-image-2',
       }),
     ).rejects.toThrow(/Composer video model/u);
+    const selectionRequest = {
+      windowId: 'window-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'surface-1',
+      conversationId: 'conversation-1',
+      canvasId: 'neko/boards/story.nkc',
+    };
+    await expect(
+      service.selectCanvas({ ...selectionRequest, conversationId: 'conversation-other' }),
+    ).rejects.toThrow(/authorized Conversation/u);
+    expect(selectionOwner.select).not.toHaveBeenCalled();
+    await expect(service.selectCanvas(selectionRequest)).resolves.toMatchObject({
+      context: {
+        canvasSelection: { conversationId: 'conversation-1', canvasId: 'neko/boards/story.nkc' },
+      },
+    });
+    expect(selectionOwner.select).toHaveBeenCalledWith(
+      'conversation-1',
+      expect.objectContaining({ workspaceId: 'workspace-1' }),
+      'neko/boards/story.nkc',
+    );
   });
 
   it('reads the DSH pre-turn catalog for a Draft without requiring a Conversation', async () => {
@@ -191,6 +285,7 @@ describe('Desktop DSH composer configuration', () => {
       })),
       contexts: { readContext: vi.fn(async () => undefined) },
       canvas: canvasIndex(),
+      canvasSelection: conversationCanvasSelection(),
       workspaceGrants: {
         restore: vi.fn(async () => {
           throw new Error('Workspace resolution must not run.');
@@ -265,6 +360,7 @@ describe('Desktop DSH composer configuration', () => {
       resolveSurface: vi.fn(async () => ({ windowId: 'window-1', binding })),
       contexts: { readContext: vi.fn(async () => undefined) },
       canvas: canvasIndex(),
+      canvasSelection: conversationCanvasSelection(),
       workspaceGrants: {
         restore: vi.fn(async () => ({
           workspace: {
@@ -325,6 +421,7 @@ describe('Desktop DSH composer configuration', () => {
       })),
       contexts: { readContext: vi.fn(async () => undefined) },
       canvas: canvasIndex(),
+      canvasSelection: conversationCanvasSelection(),
       workspaceGrants: {
         restore: vi.fn(async () => {
           throw new Error('Workspace resolution must not run.');
@@ -370,6 +467,7 @@ describe('Desktop DSH composer configuration', () => {
       })),
       contexts: { readContext: vi.fn(async () => undefined) },
       canvas: canvasIndex(),
+      canvasSelection: conversationCanvasSelection(),
       workspaceGrants: {
         restore: vi.fn(async () => {
           throw new Error('Workspace resolution must not run.');
@@ -499,6 +597,7 @@ describe('Desktop DSH composer configuration', () => {
       })),
       contexts: { readContext: vi.fn(async () => undefined) },
       canvas: canvasIndex(),
+      canvasSelection: conversationCanvasSelection(),
       workspaceGrants: {
         restore: vi.fn(async () => ({
           workspace: {
@@ -624,6 +723,7 @@ describe('Desktop DSH composer configuration', () => {
       })),
       contexts: { readContext: vi.fn(async () => undefined) },
       canvas: canvasIndex(),
+      canvasSelection: conversationCanvasSelection(),
       workspaceGrants: {
         restore: vi.fn(async () => {
           throw new Error('Workspace resolution must not run.');
@@ -657,6 +757,8 @@ describe('Desktop DSH composer configuration', () => {
     expect(projected.models.map((model) => model.id)).toEqual([
       'openai:gpt-5',
       'nekoapi-media:gpt-image-2',
+      'minimax-media:minimax-h3',
+      'nekoapi-media:suno-v4',
     ]);
     expect(projected.selectedModelOptionId).toBeUndefined();
     expect(projected.diagnostic).toBe('The selected chat model is not executable by DSH.');
@@ -670,6 +772,65 @@ describe('Desktop DSH composer configuration', () => {
       }),
     ).rejects.toThrow(/not executable by the current DSH runtime/u);
     expect(config.setAssistantSettings).not.toHaveBeenCalled();
+  });
+
+  it('retains the exact open-Session model binding until the DSH runtime is reset', async () => {
+    const config = createConfig();
+    const setSessionConfigOption = vi.fn(async () => ({ configOptions: [] }));
+    const service = createDesktopDshComposerConfiguration({
+      resolveSurface: vi.fn(async () => ({
+        windowId: 'window-1',
+        binding: { kind: 'assistant' as const, assistantSpaceId: 'assistant-1', baseGrantIds: [] },
+        conversationId: 'conversation-1',
+      })),
+      contexts: {
+        readContext: vi.fn(async () => ({
+          kind: 'assistant' as const,
+          assistantSpaceId: 'assistant-1',
+          baseGrantIds: [],
+        })),
+      },
+      canvas: canvasIndex(),
+      canvasSelection: conversationCanvasSelection(),
+      workspaceGrants: {
+        restore: vi.fn(async () => {
+          throw new Error('Workspace resolution must not run.');
+        }),
+      },
+      configuration: { getApplicationConfig: () => config, getWorkspaceConfig: () => config },
+      sessions: {
+        setSessionConfigOption,
+        readInputCatalog: vi.fn(async () => ({ commands: [], skills: [], skillsComplete: true })),
+      },
+      preTurnInputCatalog: emptyInputCatalogReader(),
+      lookupCwd: fixedCwdLookup(),
+      executionCatalog: createExecutionCatalog(),
+      resourceBrowser: unavailableResourceBrowser(),
+      assets: unavailableAssets(),
+      entities: unavailableEntities(),
+      permissions: {
+        read: vi.fn(async () => permissionPresets('workspace-write')),
+        set: vi.fn(async () => permissionPresets('workspace-write')),
+      },
+    });
+
+    await expect(service.applyConversation('conversation-1', 'window-1')).resolves.toEqual({
+      supportsImageInput: false,
+    });
+    expect(setSessionConfigOption).toHaveBeenCalledOnce();
+
+    config.getEffectiveAgentWorkspaceConfigSnapshot.mockReturnValue({
+      blockingDiagnostic: { message: 'Selected model was removed.' },
+    });
+    await expect(service.applyConversation('conversation-1', 'window-1')).resolves.toEqual({
+      supportsImageInput: false,
+    });
+    expect(setSessionConfigOption).toHaveBeenCalledOnce();
+
+    service.resetSessionExecutions();
+    await expect(service.applyConversation('conversation-1', 'window-1')).rejects.toThrow(
+      'Selected model was removed.',
+    );
   });
 });
 
@@ -707,11 +868,11 @@ function canvasIndex() {
         workspaceId,
         options: [
           {
-            target: createCanvasWorkspaceBoardTarget(workspaceId),
-            label: 'Workspace Board',
+            target: createDefaultCanvasWorkspaceTarget(workspaceId),
+            label: 'workspace.nkc',
           },
           {
-            target: createExactCanvasTarget(workspaceId, 'neko/boards/story.nkc'),
+            target: createCanvasWorkspaceTarget(workspaceId, 'neko/boards/story.nkc'),
             label: 'story.nkc',
             index: {
               canvasId: 'neko/boards/story.nkc',
@@ -768,27 +929,66 @@ function permissionPresets(currentValue: string) {
 
 function createConfig() {
   let state = createState();
+  let defaultRefs: Partial<
+    Record<ModelType, { readonly providerId: string; readonly modelId: string }>
+  > = {
+    image: { providerId: 'nekoapi-media', modelId: 'gpt-image-2' },
+  };
   return {
     getAssistantConfigState: vi.fn(() => state),
+    getDefaultModelRef: vi.fn((type: ModelType) => defaultRefs[type]),
+    getProvider: vi.fn((providerId: string) => {
+      const base = {
+        id: providerId,
+        name: providerId,
+        displayName: providerId,
+        apiUrl: 'https://provider.example.test',
+        enabled: true,
+      };
+      if (providerId === 'nekoapi-media') return { ...base, type: 'newapi' as const };
+      if (providerId === 'minimax-media') return { ...base, type: 'minimax' as const };
+      if (providerId === 'deepseek-official' || providerId === 'openai') {
+        return { ...base, type: 'openai' as const };
+      }
+      return undefined;
+    }),
+    getModel: vi.fn((modelId: string) => {
+      const models = {
+        'deepseek-v4': {
+          providerId: 'deepseek-official',
+          name: 'deepseek-v4',
+          capabilities: ['chat'],
+        },
+        'gpt-5': { providerId: 'openai', name: 'gpt-5', capabilities: ['chat'] },
+        'gpt-image-2': {
+          providerId: 'nekoapi-media',
+          name: 'gpt-image-2-pro-all',
+          capabilities: ['image.generate'],
+        },
+        'minimax-h3': {
+          providerId: 'minimax-media',
+          name: 'MiniMax-H3',
+          capabilities: ['video.generate'],
+        },
+        'suno-v4': {
+          providerId: 'nekoapi-media',
+          name: 'suno-v4',
+          capabilities: ['audio.music.generate'],
+        },
+      };
+      const model = models[modelId as keyof typeof models];
+      return model === undefined ? undefined : { id: modelId, ...model, enabled: true };
+    }),
     getEffectiveAgentWorkspaceConfigSnapshot: vi.fn(() => ({})),
     setAssistantSettings: vi.fn(async (updates: Partial<AssistantSettingsSnapshot>) => {
       state = { ...state, ...updates };
     }),
-    setDefaultModelPurposeRefs: vi.fn(
-      async (updates: Parameters<ConfigManager['setDefaultModelPurposeRefs']>[0]) => {
-        const defaultMediaModels = { ...state.defaultMediaModels };
-        for (const [purpose, ref] of Object.entries(updates) as [
-          AgentModelPurpose,
-          NonNullable<(typeof updates)[AgentModelPurpose]> | undefined,
-        ][]) {
-          if (!ref) continue;
-          const category = purpose.replace('.generate', '');
-          if (category !== 'image' && category !== 'video' && category !== 'audio') {
-            throw new Error(`Unexpected media purpose '${purpose}'.`);
-          }
-          defaultMediaModels[category] = `${ref.providerId}:${ref.modelId}`;
-        }
-        state = { ...state, defaultMediaModels };
+    setDefaultModelRef: vi.fn(
+      async (
+        type: ModelType,
+        ref: { readonly providerId: string; readonly modelId: string } | undefined,
+      ) => {
+        defaultRefs = { ...defaultRefs, [type]: ref };
       },
     ),
   };
@@ -835,8 +1035,38 @@ function createState(): AssistantConfigState {
         category: 'image',
         capabilities: ['image.generate'],
       },
+      {
+        id: 'minimax-media:minimax-h3',
+        label: 'MiniMax H3',
+        providerId: 'minimax-media',
+        modelId: 'minimax-h3',
+        providerLabel: 'MiniMax',
+        category: 'video',
+        capabilities: ['video.generate', 'image_to_video'],
+      },
+      {
+        id: 'nekoapi-media:suno-v4',
+        label: 'Suno V4',
+        providerId: 'nekoapi-media',
+        modelId: 'suno-v4',
+        providerLabel: 'NekoAPI Media',
+        category: 'music',
+        capabilities: ['audio.music.generate', 'text_to_music'],
+      },
     ],
     modelGroups: [],
-    defaultMediaModels: { image: 'nekoapi-media:gpt-image-2' },
+    defaultMediaModels: {
+      image: 'nekoapi-media:gpt-image-2',
+      video: 'minimax-media:minimax-h3',
+    },
+  };
+}
+
+function conversationCanvasSelection() {
+  return {
+    project: vi.fn(async (conversationId: string, canvas: CanvasWorkspaceContextCatalog) => ({
+      canvasSelection: { conversationId, canvasId: canvas.defaultTarget.canvasId },
+    })),
+    select: vi.fn(async () => undefined),
   };
 }

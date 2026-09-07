@@ -8,7 +8,6 @@ import {
   GENERATION_DSH_TOOL_NAME,
   decodeGenerationDshToolInput,
   projectGenerationJobSnapshot,
-  type GenerationDshToolComfyUiSubmitInput,
 } from '@neko/generation-domain';
 import {
   GENERATION_JOB_KIND,
@@ -24,13 +23,6 @@ type GenerationDshJobPort = Pick<
   PurposeGenerationJobPort,
   'submitGeneration' | 'describeGeneration' | 'observeGeneration'
 >;
-
-export interface GenerationDshComfyUiSubmitter {
-  submit(input: GenerationDshToolComfyUiSubmitInput): Promise<{
-    readonly snapshot: GenerationJobSnapshot;
-    readonly jobs: Pick<PurposeGenerationJobPort, 'observeGeneration'>;
-  }>;
-}
 
 export interface GenerationDshLifecycleProjectionOutcome {
   readonly status: 'accepted' | 'blocked';
@@ -54,7 +46,6 @@ export class GenerationDshHostAdapter {
     private readonly jobs: GenerationDshJobPort | (() => Promise<GenerationDshJobPort>),
     toolName: string = GENERATION_DSH_TOOL_NAME,
     private readonly lifecycleProjection?: GenerationDshLifecycleProjectionPort,
-    private readonly comfyUi?: GenerationDshComfyUiSubmitter,
   ) {
     if (toolName !== GENERATION_DSH_TOOL_NAME) {
       throw new Error(`Generation Host adapter must use exactly ${GENERATION_DSH_TOOL_NAME}.`);
@@ -85,26 +76,6 @@ export class GenerationDshHostAdapter {
     );
     if (permissionFailure !== undefined) return permissionFailure;
     try {
-      if (decoded.operation === 'submit-comfyui') {
-        if (!this.comfyUi) {
-          return failure(
-            'GENERATION_DSH_COMFYUI_UNAVAILABLE',
-            'ComfyUI workflow submission is not composed for this Host.',
-          );
-        }
-        const submitted = await this.comfyUi.submit(decoded.input);
-        await this.projectLifecycleSnapshot(request, submitted.snapshot);
-        const terminal = isGenerationToolSettled(submitted.snapshot.phase)
-          ? submitted.snapshot
-          : await observeGenerationSettlement(
-              submitted.jobs,
-              submitted.snapshot.ref,
-              (snapshot) => this.projectLifecycleSnapshot(request, snapshot),
-              submitted.snapshot,
-              signal,
-            );
-        return generationSettlementResponse(terminal);
-      }
       const jobs = typeof this.jobs === 'function' ? await this.jobs() : this.jobs;
       if (decoded.operation === 'submit') {
         const submitted = await jobs.submitGeneration(decoded.input);
@@ -154,6 +125,14 @@ function generationFactsJson(
     stage: facts.stage,
     lifecycleMode: facts.lifecycleMode,
     generationType: facts.generationType,
+    ...(facts.parameterAdjustments === undefined
+      ? {}
+      : {
+          parameterAdjustments: facts.parameterAdjustments.map((adjustment) => ({
+            parameter: adjustment.parameter,
+            reason: adjustment.reason,
+          })),
+        }),
     createdAt: facts.createdAt,
     updatedAt: facts.updatedAt,
     ...(facts.failure === undefined

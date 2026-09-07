@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createCanvasWorkspaceBoardTarget, createExactCanvasTarget } from '@neko/canvas-domain';
+import {
+  createDefaultCanvasWorkspaceTarget,
+  createCanvasWorkspaceTarget,
+} from '@neko/canvas-domain';
 
 import { createDshConversationTurnContextResolver } from './dsh-conversation-turn-context';
 
@@ -79,7 +82,7 @@ describe('DSH Conversation turn context', () => {
   });
   it('resolves the exact durable Workspace and canonical Board context', async () => {
     const resolveTurnContext = vi.fn(async (_workspaceId: string, target: unknown) => ({
-      target: target as ReturnType<typeof createCanvasWorkspaceBoardTarget>,
+      target: target as ReturnType<typeof createDefaultCanvasWorkspaceTarget>,
     }));
     const resolver = createDshConversationTurnContextResolver({
       contexts: {
@@ -98,17 +101,34 @@ describe('DSH Conversation turn context', () => {
     });
 
     const prompt = await resolver.resolve('conversation-1');
-    expect(prompt).toContain('Workspace Board');
-    expect(prompt).toContain('Workspace reviewable Markdown admission');
-    expect(prompt).toContain('reviewable-markdown');
-    expect(prompt).toContain('active Skill may require a stricter creative structure');
+    expect(prompt).toContain('default Workspace Canvas');
+    expect(prompt).toContain('this turn is bound to Workspace "workspace-1"');
+    expect(prompt).toContain('Workspace portable text authoring');
+    expect(prompt).toContain('even when the user does not literally say "save" or "write a file"');
+    expect(prompt).toContain('Create the document with DSH `write`');
+    expect(prompt).toContain('without overwriting or silently renaming it');
+    expect(prompt).toContain(
+      'automatic projection of that Workspace locator as a Canvas reference node and for the Host-rendered direct-open file reference',
+    );
+    expect(prompt).toContain('do not call a Canvas Tool to copy or embed the document');
+    expect(prompt).toContain(
+      'Do not add a saved-file or document-path section, repeat the written file title or Workspace-relative path',
+    );
+    expect(prompt).not.toContain(
+      'return only a concise summary, the verified Workspace-relative file path',
+    );
+    expect(prompt).toContain(
+      'do not substitute the complete document body as a persistence fallback',
+    );
+    expect(prompt).not.toContain('neko:artifact');
+    expect(prompt).not.toContain('neko:next-action');
     expect(resolveTurnContext).toHaveBeenCalledWith(
       'workspace-1',
-      createCanvasWorkspaceBoardTarget('workspace-1'),
+      createDefaultCanvasWorkspaceTarget('workspace-1'),
     );
   });
 
-  it('does not admit durable Markdown artifacts outside Workspace context', async () => {
+  it('does not inject a terminal document publication protocol outside Workspace context', async () => {
     const resolver = createDshConversationTurnContextResolver({
       contexts: {
         readContext: async () => ({
@@ -122,13 +142,14 @@ describe('DSH Conversation turn context', () => {
     });
 
     const prompt = await resolver.resolve('conversation-assistant');
-    expect(prompt).not.toContain('Workspace reviewable Markdown admission');
-    expect(prompt).not.toContain('reviewable-markdown');
+    expect(prompt).not.toContain('Workspace portable text authoring');
+    expect(prompt).not.toContain('neko:artifact');
+    expect(prompt).not.toContain('neko:next-action');
   });
 
   it('resolves the selected exact Canvas and rejects a cross-Workspace target', async () => {
     const resolveTurnContext = vi.fn(async (_workspaceId: string, target: unknown) => ({
-      target: target as ReturnType<typeof createExactCanvasTarget>,
+      target: target as ReturnType<typeof createCanvasWorkspaceTarget>,
       summary: {
         canvasId: 'neko/boards/story.nkc',
         name: 'story.nkc',
@@ -150,7 +171,7 @@ describe('DSH Conversation turn context', () => {
       },
       canvas: { resolveTurnContext },
     });
-    const target = createExactCanvasTarget('workspace-1', 'neko/boards/story.nkc');
+    const target = createCanvasWorkspaceTarget('workspace-1', 'neko/boards/story.nkc');
 
     await expect(resolver.resolve('conversation-1', [], [], target)).resolves.toContain(
       'story.nkc',
@@ -162,7 +183,7 @@ describe('DSH Conversation turn context', () => {
         'conversation-1',
         [],
         [],
-        createExactCanvasTarget('workspace-2', 'neko/boards/other.nkc'),
+        createCanvasWorkspaceTarget('workspace-2', 'neko/boards/other.nkc'),
       ),
     ).rejects.toThrow(/does not match Conversation Workspace/u);
     expect(resolveTurnContext).toHaveBeenCalledTimes(1);

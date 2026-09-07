@@ -7,9 +7,6 @@
 - id: tool-jobs
   disabled: true
 
-- id: tool-fs
-  disabled: true
-
 - id: tool-fs-search
   disabled: true
 
@@ -25,13 +22,7 @@
 - id: plan-mode
   disabled: true
 
-- id: compaction-basic
-  disabled: true
-
 - id: command-compact
-  disabled: true
-
-- id: tool-result-pruner
   disabled: true
 
 - id: tool-subagent-control

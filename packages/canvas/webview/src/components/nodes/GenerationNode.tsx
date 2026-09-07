@@ -1,4 +1,5 @@
 import {
+  CANVAS_EDIT_TEXT_ACTION_ID,
   selectedCanvasGenerationOutput,
   type CanvasGenerationOutputBinding,
   type CanvasGenerationRuntimeProjection,
@@ -26,7 +27,7 @@ export function GenerationNode({
   const projection = host?.getGenerationProjection(node.id);
   const selected = selectedCanvasGenerationOutput(node.data);
   const title = generationContentLabel(recipe.kind);
-  const textOutput = node.data.authoredText?.text ?? projection?.text;
+  const textOutput = projection?.text;
   const active =
     projection?.phase === 'binding' ||
     projection?.phase === 'pending' ||
@@ -55,8 +56,12 @@ export function GenerationNode({
       opaqueSurface
       className="canvas-generation-node-frame"
       onActivate={
-        selected && onFullscreenPreview
-          ? () => onFullscreenPreview(node.id, selected.outputId)
+        selected
+          ? recipe.kind === 'prompt' && host
+            ? () => void host.executeMaterialAction(CANVAS_EDIT_TEXT_ACTION_ID, [node.id], {})
+            : onFullscreenPreview
+              ? () => onFullscreenPreview(node.id, selected.outputId)
+              : undefined
           : undefined
       }
       nodeLabel={{
@@ -105,7 +110,7 @@ export function GenerationNode({
                   source={previewSource}
                   surfaceKind="inline"
                   chrome="full-bleed"
-                  audioLayout={recipe.kind === 'audio' ? 'node-card' : undefined}
+                  mediaPlayback={recipe.kind === 'video' ? 'inline' : undefined}
                 />
                 {active ? <ActivityScan /> : null}
               </div>
@@ -230,7 +235,11 @@ function GenerationStatus({
       title={projection.diagnostic?.message}
     >
       <span>{label}</span>
-      {elapsed ? <span aria-label={t('generation.elapsed')}>{elapsed}</span> : null}
+      {elapsed ? (
+        <span aria-label={t('generation.elapsed')}>
+          {t('generation.elapsedValue', { elapsed })}
+        </span>
+      ) : null}
       {percent !== undefined ? <span>{Math.round(percent)}%</span> : null}
       {active && percent !== undefined ? (
         <span className="canvas-generation-node__progress" aria-hidden="true">

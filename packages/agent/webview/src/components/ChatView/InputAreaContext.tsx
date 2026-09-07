@@ -18,13 +18,21 @@ import type {
 import type { ConversationKind } from '@neko/agent-contracts';
 import type { ChatModelOption } from '@neko/ai-contracts';
 import type { AgentContextPayload } from '@neko/agent-contracts';
-import type { SlashCommand, MentionItem, GenCategory, GenerationParams } from './InputArea/types';
-export type MediaCategory = 'image' | 'video' | 'audio';
+import type {
+  SlashCommand,
+  MentionItem,
+  GenCategory,
+  GenerationParams,
+  MediaModelParameterProfile,
+  MediaModelCategory,
+} from './InputArea/types';
+export type MediaCategory = MediaModelCategory;
 
 export interface MediaModelSelection {
   image: string;
   video: string;
   audio: string;
+  music: string;
 }
 
 export interface InputAreaContextValue {
@@ -39,6 +47,9 @@ export interface InputAreaContextValue {
   // Media Models (per-category selection)
   mediaModelSelection: MediaModelSelection;
   availableMediaModels: ChatModelOption[];
+  mediaModelParameterProfiles: Readonly<
+    Partial<Record<MediaModelCategory, MediaModelParameterProfile>>
+  >;
   mediaModelOptOutEnabled?: boolean;
   onMediaModelSelect: (category: MediaCategory, modelId: string) => void;
   // Session mode (top-level workflow routing)
@@ -74,11 +85,14 @@ export interface InputAreaContextValue {
   onRemoveContextChip: (id: string) => void;
   /** Ambient canvas selection — auto-injected from canvas, non-removable. */
   ambientNodes?: AmbientCanvasNode[];
-  // Generation params (shown in top bar, fed into tool calls)
+  // Generation parameters shown for the selected model profile.
   genCategory: GenCategory;
   genParams: GenerationParams;
   onGenCategoryChange: (cat: GenCategory) => void;
-  onGenParamsChange: (partial: Partial<GenerationParams>) => void;
+  onGenParamsChange: <Category extends MediaModelCategory>(
+    category: Category,
+    partial: Partial<GenerationParams[Category]>,
+  ) => void;
 }
 
 const InputAreaContext = createContext<InputAreaContextValue | null>(null);
@@ -96,6 +110,7 @@ export function InputAreaProvider({
       onModelSelect: value.onModelSelect,
       mediaModelSelection: value.mediaModelSelection,
       availableMediaModels: value.availableMediaModels,
+      mediaModelParameterProfiles: value.mediaModelParameterProfiles,
       mediaModelOptOutEnabled: value.mediaModelOptOutEnabled,
       onMediaModelSelect: value.onMediaModelSelect,
       sessionMode: value.sessionMode,
@@ -134,6 +149,7 @@ export function InputAreaProvider({
       value.onModelSelect,
       value.mediaModelSelection,
       value.availableMediaModels,
+      value.mediaModelParameterProfiles,
       value.mediaModelOptOutEnabled,
       value.onMediaModelSelect,
       value.sessionMode,

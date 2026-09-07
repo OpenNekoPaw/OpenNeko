@@ -1,19 +1,30 @@
 import {
+  canvasGenerationInputPreviewId,
+  conformCanvasImageGenerationRecipeToProfile,
+  conformCanvasVideoGenerationRecipeToProfile,
   createCanvasGenerationNodeData,
+  isCanvasGenerationNodeData,
   purposeForCanvasGenerationRecipe,
   inferCanvasMediaType,
   selectedCanvasGenerationOutput,
   type CanvasConnection,
   type CanvasGenerationModelBinding,
   type CanvasGenerationModelOption,
-  type CanvasGenerationPurpose,
   type CanvasGenerationRecipe,
+  type CanvasImageGenerationQuality,
+  type CanvasImageGenerationSizeParameterControl,
   type CanvasMaterialMediaKind,
   type CanvasNode,
   type CanvasViewport,
   type GenerationCanvasNode,
 } from '@neko/canvas-domain';
-import { CONTENT_LOCATOR_DRAG_MIME, parseContentLocatorDragData } from '@neko/content-domain';
+import {
+  CONTENT_LOCATOR_DRAG_MIME,
+  contentLocatorKey,
+  parseContentLocatorDragData,
+  type ContentLocator,
+} from '@neko/content-domain';
+import { aspectRatioPreviewSize } from '@neko/ui/creative';
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -35,6 +46,8 @@ import {
 import { createPortal } from 'react-dom';
 import { useOptionalCanvasHost } from '../../host-runtime';
 import { t } from '../../i18n';
+import { PreviewSurface } from '../../preview/PreviewRendererRegistry';
+import type { PreviewSourceDescriptor } from '../../preview/types';
 import { resolveSelectionToolbarTop } from './selectionAttachmentGeometry';
 
 interface SelectionGenerationInputPanelProps {
@@ -63,7 +76,9 @@ export function SelectionGenerationInputPanel({
     selectedNodeIds.length === 1
       ? nodes.find(
           (candidate): candidate is GenerationCanvasNode =>
-            candidate.id === selectedNodeIds[0] && candidate.type === 'generation',
+            candidate.id === selectedNodeIds[0] &&
+            candidate.type === 'generation' &&
+            isCanvasGenerationNodeData(candidate.data),
         )
       : undefined;
   if (hidden || !selectedNode) return null;
@@ -129,6 +144,10 @@ function GenerationInputPanel({
     modelBindingsEqual(option.binding, recipe.model),
   );
   const modelBindingUnavailable = recipe.model !== undefined && selectedModel === undefined;
+  const modelParameterProfileUnavailable =
+    (recipe.kind === 'image' || recipe.kind === 'video') &&
+    selectedModel !== undefined &&
+    selectedModel.parameterProfile?.kind !== recipe.kind;
   const selectedOutput = selectedCanvasGenerationOutput(node.data);
   const active =
     projection?.phase === 'binding' ||
@@ -141,16 +160,44 @@ function GenerationInputPanel({
     recipe.kind,
     measuredHeight,
   );
-  const references = useMemo(
-    () =>
-      connections
-        .filter((connection) => connection.targetId === node.id)
-        .map((connection) => ({
-          connection,
-          source: nodes.find((candidate) => candidate.id === connection.sourceId),
-        })),
-    [connections, node.id, nodes],
-  );
+  const references = useMemo(() => {
+    const connected = connections
+      .filter((connection) => connection.targetId === node.id && connection.type === 'reference')
+      .map((connection, index) => {
+        const source = nodes.find((candidate) => candidate.id === connection.sourceId);
+        return {
+          key: connection.id,
+          label: source ? referenceLabel(source) : t('generation.referenceMissing'),
+          role:
+            connection.targetEndpoint?.portId ?? t('generation.reference', { number: index + 1 }),
+          locator: source ? referenceLocator(source) : undefined,
+          previewSource: source ? imageReferencePreviewSource(source) : undefined,
+        };
+      });
+    const connectedLocatorKeys = new Set(
+      connected.flatMap((reference) =>
+        reference.locator ? [contentLocatorKey(reference.locator)] : [],
+      ),
+    );
+    const embedded = (node.data.inputMaterials ?? []).flatMap((material, index) => {
+      const locatorKey = contentLocatorKey(material.locator);
+      if (connectedLocatorKeys.has(locatorKey)) return [];
+      const label = contentLocatorLabel(material.locator);
+      return [
+        {
+          key: `embedded:${locatorKey}`,
+          label,
+          role: t('generation.reference', { number: connected.length + index + 1 }),
+          locator: material.locator,
+          previewSource:
+            material.mediaKind === 'image'
+              ? imageMaterialPreviewSource(node.id, material.locator, label)
+              : undefined,
+        },
+      ];
+    });
+    return [...connected, ...embedded];
+  }, [connections, node.data.inputMaterials, node.id, nodes]);
   useEffect(() => {
     const panel = panelRef.current;
     if (!panel) return;
@@ -207,15 +254,61 @@ function GenerationInputPanel({
     setRecipe(configuredDefaultRecipe);
     void commitRecipe(configuredDefaultRecipe).catch(reportFailure);
   }, [commitRecipe, configuredDefaultRecipe]);
+  useEffect(() => {
+    if ((recipe.kind !== 'image' && recipe.kind !== 'video') || !selectedModel) return;
+    const result =
+      recipe.kind === 'image' && selectedModel.parameterProfile?.kind === 'image'
+        ? conformCanvasImageGenerationRecipeToProfile(recipe, selectedModel.parameterProfile)
+        : recipe.kind === 'video' && selectedModel.parameterProfile?.kind === 'video'
+          ? conformCanvasVideoGenerationRecipeToProfile(recipe, selectedModel.parameterProfile)
+          : {
+              recipe: {
+                ...createCanvasGenerationNodeData(recipe.kind, selectedModel.binding).recipe,
+                prompt: recipe.prompt,
+              },
+              adjustments: [],
+            };
+    const next = result.recipe;
+    if (recipesEqual(recipe, next)) return;
+    setRecipe(next);
+    void commitRecipe(next)
+      .then(() => {
+        if (result.adjustments.length > 0) {
+          setLocalDiagnostic(t('generation.parametersAdjusted', { model: selectedModel.label }));
+        }
+      })
+      .catch(reportFailure);
+  }, [commitRecipe, recipe, selectedModel]);
 
   const commitOnBlur = (): void => {
     void commitRecipe(recipe).catch(reportFailure);
   };
 
   const selectModel = (option: CanvasGenerationModelOption): void => {
-    const next = { ...recipe, model: option.binding } as CanvasGenerationRecipe;
+    const candidate: CanvasGenerationRecipe = { ...recipe, model: option.binding };
+    const result =
+      candidate.kind === 'image' && option.parameterProfile?.kind === 'image'
+        ? conformCanvasImageGenerationRecipeToProfile(candidate, option.parameterProfile)
+        : candidate.kind === 'video'
+          ? option.parameterProfile?.kind === 'video'
+            ? conformCanvasVideoGenerationRecipeToProfile(candidate, option.parameterProfile)
+            : {
+                recipe: {
+                  ...createCanvasGenerationNodeData('video', option.binding).recipe,
+                  prompt: candidate.prompt,
+                },
+                adjustments: [],
+              }
+          : { recipe: candidate, adjustments: [] };
+    const next = result.recipe;
     setRecipe(next);
-    void commitRecipe(next).catch(reportFailure);
+    void commitRecipe(next)
+      .then(() => {
+        if (result.adjustments.length > 0) {
+          setLocalDiagnostic(t('generation.parametersAdjusted', { model: option.label }));
+        }
+      })
+      .catch(reportFailure);
   };
 
   const runOrCancel = async (): Promise<void> => {
@@ -270,17 +363,6 @@ function GenerationInputPanel({
       onMouseDown={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
     >
-      {recipe.kind === 'audio' ? (
-        <AudioModeTabs
-          recipe={recipe}
-          generationModels={generationModels}
-          onChange={(next) => {
-            setRecipe(next);
-            void commitRecipe(next).catch(reportFailure);
-          }}
-        />
-      ) : null}
-
       <div
         className="selection-generation-input-panel__references"
         data-canvas-generation-reference-zone="true"
@@ -350,15 +432,29 @@ function GenerationInputPanel({
         </ComposerPopover>
         <div className="selection-generation-input-panel__reference-list">
           {references.length > 0 ? (
-            references.map(({ connection, source }, index) => (
-              <span key={connection.id} className="selection-generation-input-panel__reference">
-                {source ? referenceLabel(source) : t('generation.referenceMissing')}
-                <small>
-                  {connection.targetEndpoint?.portId ??
-                    t('generation.reference', { number: index + 1 })}
-                </small>
-              </span>
-            ))
+            references.map(({ key, label, previewSource, role }) => {
+              return previewSource ? (
+                <figure
+                  key={key}
+                  className="selection-generation-input-panel__reference-preview"
+                  data-canvas-generation-reference-preview="image"
+                  title={`${label} · ${role}`}
+                >
+                  <PreviewSurface
+                    source={previewSource}
+                    surfaceKind="inline"
+                    chrome="full-bleed"
+                    feedback="compact"
+                  />
+                  <figcaption>{label}</figcaption>
+                </figure>
+              ) : (
+                <span key={key} className="selection-generation-input-panel__reference">
+                  {label}
+                  <small>{role}</small>
+                </span>
+              );
+            })
           ) : (
             <span className="selection-generation-input-panel__empty-reference">
               <strong>{t('generation.references')}</strong>
@@ -371,11 +467,7 @@ function GenerationInputPanel({
       <textarea
         aria-label={t('generation.prompt')}
         className="selection-generation-input-panel__prompt"
-        placeholder={
-          recipe.kind === 'audio' && recipe.isMusic
-            ? t('generation.musicPromptPlaceholder')
-            : t('generation.promptPlaceholder')
-        }
+        placeholder={t('generation.promptPlaceholder')}
         value={recipe.prompt}
         onChange={(event) => {
           const prompt = event.currentTarget.value;
@@ -396,11 +488,12 @@ function GenerationInputPanel({
           <span className="selection-generation-input-panel__control-divider" aria-hidden="true" />
           <KindParameters
             recipe={recipe}
+            parameterProfile={selectedModel?.parameterProfile}
             onChange={setRecipe}
             onCommit={commitRecipe}
             onFailure={reportFailure}
           />
-          {recipe.kind === 'image' ? (
+          {recipe.kind === 'image' && selectedModel?.parameterProfile?.kind !== 'image' ? (
             <>
               <span
                 className="selection-generation-input-panel__control-divider"
@@ -447,14 +540,6 @@ function GenerationInputPanel({
         </button>
       </div>
 
-      {projection?.recipeStale ? (
-        <div
-          className="selection-generation-input-panel__warning"
-          data-canvas-generation-recipe-stale="true"
-        >
-          {t('generation.recipeStale')}
-        </div>
-      ) : null}
       {!recipe.model && availableModels.length === 0 ? (
         <div className="selection-generation-input-panel__warning" role="status">
           {t('generation.noModelsForPurpose')}
@@ -463,6 +548,11 @@ function GenerationInputPanel({
       {modelBindingUnavailable ? (
         <div className="selection-generation-input-panel__diagnostic" role="alert">
           {t('generation.modelUnavailable')}
+        </div>
+      ) : null}
+      {modelParameterProfileUnavailable ? (
+        <div className="selection-generation-input-panel__diagnostic" role="alert">
+          {t('generation.parameterProfileUnavailable')}
         </div>
       ) : null}
       {(localDiagnostic ?? projection?.diagnostic?.message) ? (
@@ -545,65 +635,15 @@ function GenerationModelSelector({
   );
 }
 
-function AudioModeTabs({
-  recipe,
-  generationModels,
-  onChange,
-}: {
-  readonly recipe: Extract<CanvasGenerationRecipe, { readonly kind: 'audio' }>;
-  readonly generationModels: readonly CanvasGenerationModelOption[];
-  readonly onChange: (recipe: Extract<CanvasGenerationRecipe, { readonly kind: 'audio' }>) => void;
-}) {
-  const changeMode = (isMusic: boolean): void => {
-    if ((recipe.isMusic ?? false) === isMusic) return;
-    const requiredPurpose: CanvasGenerationPurpose = isMusic
-      ? 'audio.music.generate'
-      : 'audio.generate';
-    const { model, ...withoutModel } = recipe;
-    const defaultModel = generationModels.find(
-      (option) => option.binding.purpose === requiredPurpose && option.isDefault,
-    )?.binding;
-    onChange({
-      ...withoutModel,
-      isMusic,
-      ...(model?.purpose === requiredPurpose
-        ? { model }
-        : defaultModel
-          ? { model: defaultModel }
-          : {}),
-    });
-  };
-  return (
-    <div className="selection-generation-input-panel__mode-tabs" role="tablist">
-      <button
-        type="button"
-        role="tab"
-        aria-selected={!recipe.isMusic}
-        className={!recipe.isMusic ? 'active' : undefined}
-        onClick={() => changeMode(false)}
-      >
-        {t('generation.audioMode')}
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={recipe.isMusic === true}
-        className={recipe.isMusic ? 'active' : undefined}
-        onClick={() => changeMode(true)}
-      >
-        {t('generation.musicMode')}
-      </button>
-    </div>
-  );
-}
-
 function KindParameters({
   recipe,
+  parameterProfile,
   onChange,
   onCommit,
   onFailure,
 }: {
   readonly recipe: CanvasGenerationRecipe;
+  readonly parameterProfile: CanvasGenerationModelOption['parameterProfile'];
   readonly onChange: (recipe: CanvasGenerationRecipe) => void;
   readonly onCommit: (recipe: CanvasGenerationRecipe) => Promise<void>;
   readonly onFailure: (error: unknown) => void;
@@ -613,7 +653,7 @@ function KindParameters({
     onChange(next);
     void onCommit(next).catch(onFailure);
   };
-  const content = parameterContent(recipe, apply);
+  const content = parameterContent(recipe, parameterProfile, apply);
   const summary = parameterSummary(recipe);
   if (!content) return null;
   return (
@@ -841,6 +881,7 @@ function ComposerPopover({
 
 function parameterContent(
   recipe: CanvasGenerationRecipe,
+  parameterProfile: CanvasGenerationModelOption['parameterProfile'],
   apply: (next: CanvasGenerationRecipe) => void,
 ): ReactNode {
   switch (recipe.kind) {
@@ -863,93 +904,90 @@ function parameterContent(
           />
         </div>
       );
-    case 'image':
+    case 'image': {
+      if (parameterProfile?.kind !== 'image') return null;
+      const { controls } = parameterProfile;
       return (
         <div className="selection-generation-input-panel__parameter-content">
-          <OptionGroup
-            label={t('generation.aspectRatio')}
-            value={recipe.aspectRatio}
-            options={[
-              '1:1',
-              '16:9',
-              '9:16',
-              '3:4',
-              '4:3',
-              '3:2',
-              '2:3',
-              '5:4',
-              '4:5',
-              '21:9',
-              '2:1',
-              '1:2',
-              '3:1',
-              '1:3',
-            ]}
-            format={(value) => value ?? t('generation.auto')}
-            visualRatio
-            layout="ratio"
-            onSelect={(aspectRatio) =>
-              apply(withImageResolution({ ...recipe, aspectRatio }, imageResolutionEdge(recipe)))
-            }
-          />
-          <OptionGroup
-            label={t('generation.resolution')}
-            value={imageResolutionEdge(recipe)}
-            options={[1024, 2048, 4096]}
-            format={(value) => `${(value ?? 1024) / 1024}K`}
-            layout="equal"
-            onSelect={(edge) => apply(withImageResolution(recipe, edge))}
+          <OptionGroup<string>
+            label={t('generation.imageSize')}
+            value={selectedImageSizeId(recipe, controls.size)}
+            options={controls.size.values.map((option) => option.id)}
+            format={(id) => formatImageSizeOption(controls.size, id)}
+            layout="image-size"
+            onSelect={(id) => apply(applyImageSizeOption(recipe, controls.size, id))}
           />
           <OptionGroup
             label={t('generation.quality')}
-            value={recipe.quality}
-            options={[undefined, 'standard', 'hd'] as const}
-            format={(value) =>
-              value === 'standard'
-                ? t('generation.qualityMedium')
-                : value === 'hd'
-                  ? t('generation.qualityHigh')
-                  : t('generation.qualityLow')
-            }
+            value={recipe.quality ?? controls.quality.defaultValue ?? 'auto'}
+            options={controls.quality.values}
+            format={formatImageQuality}
             layout="compact"
-            onSelect={(quality) => apply({ ...recipe, quality })}
+            onSelect={(quality) => apply({ ...recipe, quality: parseImageQuality(quality) })}
           />
         </div>
       );
-    case 'video':
+    }
+    case 'video': {
+      if (parameterProfile?.kind !== 'video') return null;
+      const { controls } = parameterProfile;
       return (
         <div className="selection-generation-input-panel__parameter-content">
-          <OptionGroup
-            label={t('generation.aspectRatio')}
-            value={recipe.aspectRatio}
-            options={[undefined, '16:9', '9:16', '1:1', '4:3', '3:4', '21:9']}
-            format={(value) => value ?? t('generation.auto')}
-            visualRatio
-            onSelect={(aspectRatio) => apply({ ...recipe, aspectRatio })}
-          />
-          <OptionGroup
-            label={t('generation.resolution')}
-            value={recipe.resolution}
-            options={[undefined, '480p', '720p', '1080p']}
-            format={(value) => value ?? t('generation.auto')}
-            onSelect={(resolution) => apply({ ...recipe, resolution })}
-          />
-          <OptionGroup
-            label={t('generation.duration')}
-            value={recipe.duration}
-            options={[undefined, 5, 10, 15]}
-            format={(value) => (value ? `${value}s` : t('generation.auto'))}
-            onSelect={(duration) => apply({ ...recipe, duration })}
-          />
-          <OptionGroup
-            label={t('generation.frameRate')}
-            value={recipe.fps}
-            options={[undefined, 24, 30, 60]}
-            format={(value) => (value ? `${value} fps` : t('generation.auto'))}
-            onSelect={(fps) => apply({ ...recipe, fps })}
-          />
+          {controls.aspectRatio ? (
+            <OptionGroup<string | undefined>
+              label={t('generation.aspectRatio')}
+              value={recipe.aspectRatio}
+              options={stringControlOptions(controls.aspectRatio)}
+              format={(value) => value ?? t('generation.auto')}
+              visualRatio
+              onSelect={(aspectRatio) => apply({ ...recipe, aspectRatio })}
+            />
+          ) : null}
+          {controls.resolution ? (
+            <OptionGroup<string | undefined>
+              label={t('generation.resolution')}
+              value={recipe.resolution}
+              options={stringControlOptions(controls.resolution)}
+              format={(value) => value ?? t('generation.auto')}
+              onSelect={(resolution) => apply({ ...recipe, resolution })}
+            />
+          ) : null}
+          {controls.duration ? (
+            <OptionGroup<number | undefined>
+              label={t('generation.duration')}
+              value={recipe.duration}
+              options={integerControlOptions(controls.duration)}
+              format={(value) => (value ? `${value}s` : t('generation.auto'))}
+              onSelect={(duration) => apply({ ...recipe, duration })}
+            />
+          ) : null}
+          {controls.fps ? (
+            <OptionGroup<number | undefined>
+              label={t('generation.frameRate')}
+              value={recipe.fps}
+              options={integerControlOptions(controls.fps)}
+              format={(value) => (value ? `${value} fps` : t('generation.auto'))}
+              onSelect={(fps) => apply({ ...recipe, fps })}
+            />
+          ) : null}
+          {controls.generateAudio ? (
+            <OptionGroup<boolean | undefined>
+              label={t('generation.generateAudio')}
+              value={recipe.generateAudio}
+              options={controls.generateAudio.required ? [false, true] : [undefined, false, true]}
+              format={(value) =>
+                value === undefined
+                  ? t('generation.auto')
+                  : value
+                    ? t('generation.enabled')
+                    : t('generation.disabled')
+              }
+              onSelect={(generateAudio) => apply({ ...recipe, generateAudio })}
+            />
+          ) : null}
         </div>
       );
+    }
     case 'audio':
       return (
         <div className="selection-generation-input-panel__parameter-content">
@@ -967,23 +1005,45 @@ function parameterContent(
             format={(value) => value?.toUpperCase() ?? t('generation.auto')}
             onSelect={(format) => apply({ ...recipe, format })}
           />
-          {recipe.isMusic ? (
-            <label className="selection-generation-input-panel__text-parameter">
-              <span>{t('generation.genre')}</span>
-              <input
-                aria-label={t('generation.genre')}
-                value={recipe.genre ?? ''}
-                placeholder={t('generation.genrePlaceholder')}
-                onChange={(event) => onChangeAudioGenre(recipe, event.currentTarget.value, apply)}
-              />
-            </label>
-          ) : null}
         </div>
       );
   }
 }
 
-function OptionGroup<T extends string | number | undefined>({
+function parseImageQuality(quality: string): CanvasImageGenerationQuality {
+  if (
+    quality === 'auto' ||
+    quality === 'low' ||
+    quality === 'medium' ||
+    quality === 'high' ||
+    quality === 'standard' ||
+    quality === 'hd'
+  ) {
+    return quality;
+  }
+  throw new Error(`Unsupported image quality '${quality}'.`);
+}
+
+function formatImageQuality(quality: string): string {
+  switch (quality) {
+    case 'auto':
+      return t('generation.auto');
+    case 'low':
+      return t('generation.qualityLow');
+    case 'medium':
+      return t('generation.qualityMedium');
+    case 'high':
+      return t('generation.qualityHigh');
+    case 'standard':
+      return t('generation.qualityStandard');
+    case 'hd':
+      return t('generation.qualityHd');
+    default:
+      throw new Error(`Unsupported image quality '${quality}'.`);
+  }
+}
+
+function OptionGroup<T extends string | number | boolean | undefined>({
   label,
   value,
   options,
@@ -998,7 +1058,7 @@ function OptionGroup<T extends string | number | undefined>({
   readonly format: (value: T) => string;
   readonly onSelect: (value: T) => void;
   readonly visualRatio?: boolean;
-  readonly layout?: 'ratio' | 'equal' | 'compact';
+  readonly layout?: 'ratio' | 'equal' | 'compact' | 'image-size';
 }) {
   return (
     <fieldset
@@ -1019,7 +1079,7 @@ function OptionGroup<T extends string | number | undefined>({
             {visualRatio && typeof option === 'string' ? (
               <span
                 className="selection-generation-input-panel__ratio"
-                style={ratioStyle(option)}
+                style={aspectRatioPreviewSize(option)}
               />
             ) : null}
             {format(option)}
@@ -1028,14 +1088,6 @@ function OptionGroup<T extends string | number | undefined>({
       </div>
     </fieldset>
   );
-}
-
-function onChangeAudioGenre(
-  recipe: Extract<CanvasGenerationRecipe, { readonly kind: 'audio' }>,
-  value: string,
-  apply: (next: CanvasGenerationRecipe) => void,
-): void {
-  apply({ ...recipe, genre: value.trim() ? value : undefined });
 }
 
 function parameterSummary(recipe: CanvasGenerationRecipe): string {
@@ -1048,15 +1100,11 @@ function parameterSummary(recipe: CanvasGenerationRecipe): string {
         .filter(Boolean)
         .join(' · ');
     case 'image': {
-      const resolutionEdge = imageResolutionEdge(recipe);
       return [
-        recipe.aspectRatio ?? t('generation.auto'),
-        resolutionEdge ? `${resolutionEdge / 1024}K` : undefined,
-        recipe.quality === 'hd'
-          ? t('generation.qualityHigh')
-          : recipe.quality === 'standard'
-            ? t('generation.qualityMedium')
-            : t('generation.qualityLow'),
+        recipe.width && recipe.height
+          ? `${recipe.aspectRatio ?? ''} · ${recipe.width}×${recipe.height}`
+          : t('generation.auto'),
+        formatImageQuality(recipe.quality ?? 'auto'),
       ]
         .filter(Boolean)
         .join(' · ');
@@ -1069,7 +1117,7 @@ function parameterSummary(recipe: CanvasGenerationRecipe): string {
       );
     case 'audio':
       return [
-        recipe.isMusic ? t('generation.musicMode') : t('generation.audioMode'),
+        t('generation.audioMode'),
         recipe.duration && `${recipe.duration}s`,
         recipe.format?.toUpperCase(),
       ]
@@ -1078,43 +1126,44 @@ function parameterSummary(recipe: CanvasGenerationRecipe): string {
   }
 }
 
-function imageResolutionEdge(
+function selectedImageSizeId(
   recipe: Extract<CanvasGenerationRecipe, { readonly kind: 'image' }>,
-): number | undefined {
-  return recipe.width && recipe.height ? Math.max(recipe.width, recipe.height) : undefined;
+  control: CanvasImageGenerationSizeParameterControl,
+): string {
+  return (
+    control.values.find(
+      (option) =>
+        option.width === recipe.width &&
+        option.height === recipe.height &&
+        option.aspectRatio === recipe.aspectRatio,
+    )?.id ?? control.defaultValue
+  );
 }
 
-function withImageResolution(
+function applyImageSizeOption(
   recipe: Extract<CanvasGenerationRecipe, { readonly kind: 'image' }>,
-  edge: number | undefined,
+  control: CanvasImageGenerationSizeParameterControl,
+  id: string,
 ): Extract<CanvasGenerationRecipe, { readonly kind: 'image' }> {
-  if (!edge) {
-    const { width: _width, height: _height, ...withoutResolution } = recipe;
-    return withoutResolution;
-  }
-  const [widthRatio, heightRatio] = parseRatio(recipe.aspectRatio);
-  const landscape = widthRatio >= heightRatio;
+  const option = control.values.find((candidate) => candidate.id === id);
+  if (!option) throw new Error(`Unsupported image size '${id}'.`);
+  const { width: _width, height: _height, aspectRatio: _aspectRatio, ...withoutImageSize } = recipe;
   return {
-    ...recipe,
-    width: landscape ? edge : roundToEight((edge * widthRatio) / heightRatio),
-    height: landscape ? roundToEight((edge * heightRatio) / widthRatio) : edge,
+    ...withoutImageSize,
+    ...(option.width === undefined ? {} : { width: option.width }),
+    ...(option.height === undefined ? {} : { height: option.height }),
+    ...(option.aspectRatio === undefined ? {} : { aspectRatio: option.aspectRatio }),
   };
 }
 
-function parseRatio(value: string | undefined): readonly [number, number] {
-  if (!value) return [1, 1];
-  const [width, height] = value.split(':').map(Number);
-  return width && height ? [width, height] : [1, 1];
-}
-
-function roundToEight(value: number): number {
-  return Math.max(8, Math.round(value / 8) * 8);
-}
-
-function ratioStyle(value: string): { readonly width: number; readonly height: number } {
-  const [width, height] = parseRatio(value);
-  const scale = 18 / Math.max(width, height);
-  return { width: Math.max(5, width * scale), height: Math.max(5, height * scale) };
+function formatImageSizeOption(
+  control: CanvasImageGenerationSizeParameterControl,
+  id: string,
+): string {
+  const option = control.values.find((candidate) => candidate.id === id);
+  if (!option) throw new Error(`Unsupported image size '${id}'.`);
+  if (option.width === undefined || option.height === undefined) return t('generation.auto');
+  return `${option.aspectRatio} · ${option.width}×${option.height}`;
 }
 
 function modelBindingsEqual(
@@ -1151,6 +1200,71 @@ function referenceLabel(node: CanvasNode): string {
     case 'job':
       return node.id;
   }
+}
+
+function imageReferencePreviewSource(node: CanvasNode): PreviewSourceDescriptor | undefined {
+  if (node.type === 'media') {
+    if (node.data.mediaType !== 'image' || !node.data.contentLocator) return undefined;
+    return {
+      id: `canvas-generation-reference:${node.id}`,
+      nodeId: node.id,
+      outputId: node.id,
+      role: 'source-image',
+      title: referenceLabel(node),
+      contentLocator: node.data.contentLocator,
+    };
+  }
+  if (node.type === 'file') {
+    if (node.data.mediaKind !== 'image' || !node.data.contentLocator) return undefined;
+    return {
+      id: `canvas-generation-reference:${node.id}`,
+      nodeId: node.id,
+      outputId: node.id,
+      role: 'source-image',
+      title: referenceLabel(node),
+      contentLocator: node.data.contentLocator,
+    };
+  }
+  if (node.type === 'generation') {
+    const output = selectedCanvasGenerationOutput(node.data);
+    if (!output || output.kind !== 'image') return undefined;
+    return {
+      id: `canvas-generation-reference:${node.id}:${output.outputId}`,
+      nodeId: node.id,
+      outputId: output.outputId,
+      role: 'generation-candidate',
+      title: referenceLabel(node),
+      contentLocator: output.locator,
+    };
+  }
+  return undefined;
+}
+
+function referenceLocator(node: CanvasNode): ContentLocator | undefined {
+  if (node.type === 'media' || node.type === 'file') return node.data.contentLocator;
+  if (node.type === 'generation') return selectedCanvasGenerationOutput(node.data)?.locator;
+  return undefined;
+}
+
+function imageMaterialPreviewSource(
+  generationNodeId: string,
+  locator: ContentLocator,
+  title: string,
+): PreviewSourceDescriptor {
+  const locatorKey = contentLocatorKey(locator);
+  return {
+    id: `canvas-generation-input:${generationNodeId}:${locatorKey}`,
+    nodeId: generationNodeId,
+    outputId: canvasGenerationInputPreviewId(locator),
+    role: 'source-image',
+    title,
+    contentLocator: locator,
+  };
+}
+
+function contentLocatorLabel(locator: ContentLocator): string {
+  const selectedPath = locator.selector?.kind === 'entry' ? locator.selector.path : undefined;
+  return basename(selectedPath ?? locator.file.path);
 }
 
 function referenceSourceKind(
@@ -1227,7 +1341,6 @@ export function resolveUntouchedRecipeConfiguredDefault(
     node.data.latestRun ||
     node.data.outputs.length > 0 ||
     node.data.selectedOutputId ||
-    node.data.authoredText ||
     connections.some((connection) => connection.targetId === node.id) ||
     !isUntouchedGenerationRecipe(node.data.recipe)
   ) {
@@ -1236,9 +1349,36 @@ export function resolveUntouchedRecipeConfiguredDefault(
   const purpose = purposeForCanvasGenerationRecipe(node.data.recipe);
   const defaultModel = models.find(
     (option) => option.isDefault && option.binding.purpose === purpose,
-  )?.binding;
+  );
   if (!defaultModel) return undefined;
-  return createCanvasGenerationNodeData(node.data.recipe.kind, defaultModel).recipe;
+  return createCanvasGenerationNodeData(
+    node.data.recipe.kind,
+    defaultModel.binding,
+    defaultModel.parameterProfile,
+  ).recipe;
+}
+
+function stringControlOptions(control: {
+  readonly required: boolean;
+  readonly values: readonly string[];
+}): readonly (string | undefined)[] {
+  return control.required ? control.values : [undefined, ...control.values];
+}
+
+function integerControlOptions(control: {
+  readonly required: boolean;
+  readonly min: number;
+  readonly max: number;
+  readonly step: number;
+  readonly suggestedValues?: readonly number[];
+}): readonly (number | undefined)[] {
+  const values =
+    control.suggestedValues ??
+    Array.from(
+      { length: Math.floor((control.max - control.min) / control.step) + 1 },
+      (_, index) => control.min + index * control.step,
+    );
+  return control.required ? values : [undefined, ...values];
 }
 
 function isUntouchedGenerationRecipe(recipe: CanvasGenerationRecipe): boolean {
@@ -1257,7 +1397,7 @@ function isUntouchedGenerationRecipe(recipe: CanvasGenerationRecipe): boolean {
         (recipe.width === undefined || recipe.width === 1024) &&
         (recipe.height === undefined || recipe.height === 1024) &&
         (recipe.count === undefined || recipe.count === 1) &&
-        (recipe.quality === undefined || recipe.quality === 'standard')
+        (recipe.quality === undefined || recipe.quality === 'auto')
       );
     case 'video':
       return (
@@ -1271,9 +1411,7 @@ function isUntouchedGenerationRecipe(recipe: CanvasGenerationRecipe): boolean {
       );
     case 'audio':
       return (
-        recipe.isMusic !== true &&
         !recipe.negativePrompt?.trim() &&
-        !recipe.genre?.trim() &&
         (recipe.duration === undefined || recipe.duration === 10) &&
         (recipe.format === undefined || recipe.format === 'mp3')
       );
@@ -1370,9 +1508,9 @@ function resolveGenerationInputPanelMetrics(
 ): { readonly width: number; readonly minHeight: number; readonly panelHeight: number } {
   const viewportWidth = Math.max(0, viewportSize.width);
   const edgeInset = 16;
-  const width = Math.min(620, Math.max(280, viewportWidth - edgeInset * 2));
+  const width = Math.min(520, Math.max(280, viewportWidth - edgeInset * 2));
   const minHeight =
-    viewportWidth <= 520 ? (kind === 'audio' ? 300 : 246) : kind === 'audio' ? 280 : 246;
+    viewportWidth <= 520 ? (kind === 'audio' ? 264 : 224) : kind === 'audio' ? 244 : 210;
   return { width, minHeight, panelHeight: Math.max(minHeight, measuredPanelHeight ?? 0) };
 }
 

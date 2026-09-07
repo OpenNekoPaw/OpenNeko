@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   TEXT_EDITOR_HOST_ROUTES,
+  parseTextEditorClipboardCommandRequest,
+  parseTextEditorClipboardCommandResult,
   parseTextEditorHostRequest,
   parseTextEditorHostResult,
   parseTextEditorProjectionEvent,
@@ -19,6 +21,40 @@ const runtimeIdentity = {
 };
 
 describe('Text Editor Desktop bridge', () => {
+  it('decodes only exact owner-bound clipboard commands and results', () => {
+    expect(
+      parseTextEditorClipboardCommandRequest({ identity: runtimeIdentity, command: 'copy' }),
+    ).toEqual({ identity: runtimeIdentity, command: 'copy' });
+    expect(
+      parseTextEditorClipboardCommandResult({
+        identity: runtimeIdentity,
+        command: 'paste',
+        status: 'executed',
+      }),
+    ).toEqual({ identity: runtimeIdentity, command: 'paste', status: 'executed' });
+
+    expect(() =>
+      parseTextEditorClipboardCommandRequest({
+        identity: runtimeIdentity,
+        command: 'delete',
+      }),
+    ).toThrow('clipboard command is invalid');
+    expect(() =>
+      parseTextEditorClipboardCommandRequest({
+        identity: runtimeIdentity,
+        command: 'copy',
+        rawPath: '/Users/private/readme.md',
+      }),
+    ).toThrow('unsupported fields');
+    expect(() =>
+      parseTextEditorClipboardCommandResult({
+        identity: runtimeIdentity,
+        command: 'copy',
+        status: 'ignored',
+      }),
+    ).toThrow('result status is invalid');
+  });
+
   it('decodes exact sequenced edits without a raw path', () => {
     expect(
       parseTextEditorHostRequest({

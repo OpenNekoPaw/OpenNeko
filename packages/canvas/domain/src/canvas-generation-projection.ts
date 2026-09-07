@@ -1,13 +1,16 @@
 import {
   contentLocatorKey,
+  isContentLocator,
   isWorkspaceFileContentLocator,
   validateContentLocator,
+  type ContentLocator,
   type WorkspaceFileContentLocator,
 } from '@neko/content-domain';
 import {
   isCanvasMaterialGenerationContext,
   type CanvasConnection,
   type CanvasData,
+  type CanvasNode,
   type GenerationCanvasNode,
   type CanvasMaterialGenerationContext,
 } from './types/canvas';
@@ -20,9 +23,17 @@ import {
 import type { JobFailureSummary, JobPhase } from '@neko/shared/job-lifecycle';
 import {
   isCanvasGenerationRecipe,
+  type CanvasGenerationInputMaterialBinding,
   type CanvasGenerationOutputBinding,
   type CanvasGenerationRecipe,
 } from './types/canvas-generation-node';
+import { resolveCanvasGenerationNodeDefaultSize } from './canvas-node-sizing';
+import { findAvailableCanvasNodePosition } from './utils/canvasNodePlacement';
+
+const GENERATION_LAYOUT_ORIGIN = { x: 120, y: 120 } as const;
+const GENERATION_SOURCE_GAP = 32;
+
+export type CanvasGenerationProjectionInputMaterial = CanvasGenerationInputMaterialBinding;
 
 export interface CanvasGenerationProjectionSnapshot {
   readonly ref: CanvasGenerationJobRef;
@@ -31,6 +42,7 @@ export interface CanvasGenerationProjectionSnapshot {
   readonly phase: JobPhase;
   readonly title: string;
   readonly inputNodeIds: readonly string[];
+  readonly inputMaterials: readonly CanvasGenerationProjectionInputMaterial[];
   readonly mediaKind: CanvasMaterialMediaKind;
   readonly summary: CanvasMaterialGenerationContext;
   readonly recipe: CanvasGenerationRecipe;
@@ -65,11 +77,11 @@ export function projectGenerationSnapshotToCanvas(
 }
 
 /**
- * Projects an Agent-owned Generation Job into an already-authorized Workspace Board target.
- * Exact target admission is owned by the Workspace Board delivery boundary, so this projection
+ * Projects an Agent-owned Generation Job into an already-authorized Canvas target.
+ * Exact target admission is owned by the Canvas delivery boundary, so this projection
  * deliberately has no active Canvas identity fallback.
  */
-export function projectGenerationSnapshotToWorkspaceBoard(
+export function projectGenerationSnapshotToCanvasDelivery(
   input: CanvasWorkspaceGenerationProjectionInput,
 ): CanvasData {
   return projectGenerationSnapshot(input.canvas, input.snapshot);
@@ -79,17 +91,31 @@ function projectGenerationSnapshot(
   inputCanvas: CanvasData,
   snapshot: CanvasGenerationProjectionSnapshot,
 ): CanvasData {
-  assertProjectionSnapshot(inputCanvas, snapshot);
   const existing = findGenerationNode(inputCanvas, snapshot.ref);
+  const matchedInputNodeIds = findExistingInputNodeIds(inputCanvas, snapshot.inputMaterials).filter(
+    (nodeId) => nodeId !== existing?.id,
+  );
+  const inputNodeIds = uniqueStrings([...snapshot.inputNodeIds, ...matchedInputNodeIds]);
+  const position = resolveGenerationNodePosition(inputCanvas, snapshot, existing, inputNodeIds);
+  const effectiveSnapshot = {
+    ...snapshot,
+    inputNodeIds,
+    position,
+  };
+  assertProjectionSnapshot(inputCanvas, effectiveSnapshot);
   if (existing?.data.outputs.length && snapshot.phase !== 'succeeded') {
     throw new Error('A non-succeeded Generation Job must not project result artifacts.');
   }
   if (snapshot.phase === 'succeeded' && !snapshot.resultLocators?.length) {
     throw new Error('A succeeded Generation Job requires at least one committed result locator.');
   }
-  const outputs = createOutputBindings(snapshot);
-  const canvas = upsertGenerationNode(inputCanvas, snapshot, existing, outputs);
-  return projectJobLineage(canvas, snapshot, requireGenerationNode(canvas, snapshot.ref));
+  const outputs = createOutputBindings(effectiveSnapshot);
+  const canvas = upsertGenerationNode(inputCanvas, effectiveSnapshot, existing, outputs);
+  return projectJobLineage(
+    canvas,
+    effectiveSnapshot,
+    requireGenerationNode(canvas, effectiveSnapshot.ref),
+  );
 }
 
 export function isCanvasGenerationProjectionSnapshot(
@@ -101,6 +127,14 @@ export function isCanvasGenerationProjectionSnapshot(
   if (
     !Array.isArray(value['inputNodeIds']) ||
     !value['inputNodeIds'].every((nodeId) => typeof nodeId === 'string' && nodeId.trim())
+  ) {
+    return false;
+  }
+  if (
+    !Array.isArray(value['inputMaterials']) ||
+    !value['inputMaterials'].every(isProjectionInputMaterial) ||
+    new Set(value['inputMaterials'].map((material) => contentLocatorKey(material.locator))).size !==
+      value['inputMaterials'].length
   ) {
     return false;
   }
@@ -175,6 +209,13 @@ function assertProjectionSnapshot(
   if (snapshot.retryOf && snapshot.regenerateOf) {
     throw new Error('Canvas Generation projection cannot be both a retry and a regeneration.');
   }
+  if (
+    !snapshot.inputMaterials.every(isProjectionInputMaterial) ||
+    new Set(snapshot.inputMaterials.map((material) => contentLocatorKey(material.locator))).size !==
+      snapshot.inputMaterials.length
+  ) {
+    throw new Error('Canvas Generation projection input materials are invalid or duplicated.');
+  }
   const nodeIds = new Set(canvas.nodes.map((node) => node.id));
   for (const nodeId of snapshot.inputNodeIds) {
     if (!nodeId.trim() || !nodeIds.has(nodeId)) {
@@ -210,6 +251,9 @@ function upsertGenerationNode(
               ...node,
               data: {
                 recipe: snapshot.recipe,
+                ...(snapshot.inputMaterials.length > 0
+                  ? { inputMaterials: snapshot.inputMaterials }
+                  : {}),
                 latestRun: generationRun(snapshot),
                 outputs: [...merged.values()],
                 ...(selectedOutputId ? { selectedOutputId } : {}),
@@ -224,9 +268,10 @@ function upsertGenerationNode(
     { canvasData: canvas, generateId: () => generationNodeId(snapshot.ref) },
     {
       type: 'generation',
-      position: snapshot.position ?? jobPosition(canvas),
+      position: requireProjectionPosition(snapshot),
       data: {
         recipe: snapshot.recipe,
+        ...(snapshot.inputMaterials.length > 0 ? { inputMaterials: snapshot.inputMaterials } : {}),
         latestRun: generationRun(snapshot),
         outputs,
         ...(selectedOutput ? { selectedOutputId: selectedOutput.outputId } : {}),
@@ -240,9 +285,33 @@ function projectJobLineage(
   snapshot: CanvasGenerationProjectionSnapshot,
   job: GenerationCanvasNode,
 ): CanvasData {
-  const edges: Array<readonly [string, string]> = [
-    ...snapshot.inputNodeIds.map((nodeId) => [nodeId, job.id] as const),
-  ];
+  let connections = canvas.connections;
+  for (const sourceId of snapshot.inputNodeIds) {
+    const source = canvas.nodes.find((node) => node.id === sourceId);
+    if (!source) {
+      throw new Error(`Canvas Generation input node "${sourceId}" does not exist.`);
+    }
+    const connection =
+      source.type === 'generation'
+        ? derivedFromConnection(sourceId, job.id)
+        : referenceConnection(sourceId, job.id);
+    if (
+      connections.some(
+        (candidate) =>
+          candidate.type === connection.type &&
+          candidate.sourceId === sourceId &&
+          candidate.targetId === job.id,
+      )
+    ) {
+      continue;
+    }
+    if (connections.some((candidate) => candidate.id === connection.id)) {
+      throw new Error(`Canvas Generation input relation identity "${connection.id}" is occupied.`);
+    }
+    connections = [...connections, connection];
+  }
+
+  const edges: Array<readonly [string, string]> = [];
   if (snapshot.retryOf) {
     const previous = findGenerationNode(canvas, snapshot.retryOf);
     if (!previous) {
@@ -262,7 +331,6 @@ function projectJobLineage(
     edges.unshift([previous.id, job.id]);
   }
 
-  let connections = canvas.connections;
   for (const [sourceId, targetId] of edges) {
     if (
       connections.some(
@@ -281,6 +349,17 @@ function projectJobLineage(
     connections = [...connections, connection];
   }
   return connections === canvas.connections ? canvas : { ...canvas, connections };
+}
+
+function referenceConnection(sourceId: string, targetId: string): CanvasConnection {
+  return {
+    id: `generation-reference:${encodeURIComponent(sourceId)}:${encodeURIComponent(targetId)}`,
+    sourceId,
+    targetId,
+    type: 'reference',
+    sourceEndpoint: { nodeId: sourceId, scope: 'node' },
+    targetEndpoint: { nodeId: targetId, scope: 'port', portId: 'reference' },
+  };
 }
 
 function derivedFromConnection(sourceId: string, targetId: string): CanvasConnection {
@@ -353,8 +432,98 @@ function generationNodeId(ref: CanvasGenerationJobRef): string {
   return `generation:${encodeURIComponent(ref.jobId)}`;
 }
 
-function jobPosition(canvas: CanvasData): { readonly x: number; readonly y: number } {
-  return { x: 120 + (canvas.nodes.length % 3) * 36, y: 120 };
+function requireProjectionPosition(
+  snapshot: CanvasGenerationProjectionSnapshot,
+): CanvasNode['position'] {
+  if (!snapshot.position) {
+    throw new Error('Canvas Generation projection requires a resolved node position.');
+  }
+  return snapshot.position;
+}
+
+function resolveGenerationNodePosition(
+  canvas: CanvasData,
+  snapshot: CanvasGenerationProjectionSnapshot,
+  existing: GenerationCanvasNode | undefined,
+  inputNodeIds: readonly string[],
+): CanvasNode['position'] {
+  if (snapshot.position) return snapshot.position;
+  if (existing) return existing.position;
+
+  const sourceNodes = uniqueNodes([
+    ...inputNodeIds.map((nodeId) => requireCanvasNode(canvas, nodeId)),
+    ...(snapshot.retryOf ? [requireGenerationNode(canvas, snapshot.retryOf)] : []),
+    ...(snapshot.regenerateOf ? [requireGenerationNode(canvas, snapshot.regenerateOf)] : []),
+  ]);
+  const preferred =
+    sourceNodes.length > 0
+      ? {
+          x:
+            Math.max(...sourceNodes.map((node) => node.position.x + node.size.width)) +
+            GENERATION_SOURCE_GAP,
+          y: Math.min(...sourceNodes.map((node) => node.position.y)),
+        }
+      : GENERATION_LAYOUT_ORIGIN;
+  return findAvailableCanvasNodePosition(
+    preferred,
+    resolveCanvasGenerationNodeDefaultSize(snapshot.recipe.kind),
+    canvas.nodes.filter((node) => node.parentId === undefined),
+  );
+}
+
+function requireCanvasNode(canvas: CanvasData, nodeId: string): CanvasNode {
+  const node = canvas.nodes.find((candidate) => candidate.id === nodeId);
+  if (!node) throw new Error(`Canvas Generation input node "${nodeId}" does not exist.`);
+  return node;
+}
+
+function uniqueNodes(nodes: readonly CanvasNode[]): readonly CanvasNode[] {
+  return [...new Map(nodes.map((node) => [node.id, node])).values()];
+}
+
+function findExistingInputNodeIds(
+  canvas: CanvasData,
+  inputMaterials: readonly CanvasGenerationProjectionInputMaterial[],
+): readonly string[] {
+  return inputMaterials.flatMap((material) => {
+    const existing = findContentNode(canvas, material.locator);
+    return existing ? [existing.id] : [];
+  });
+}
+
+function findContentNode(canvas: CanvasData, locator: ContentLocator): CanvasNode | undefined {
+  const identity = contentLocatorKey(locator);
+  return canvas.nodes
+    .filter((node) => {
+      if (node.type === 'generation') {
+        return node.data.outputs.some((output) => contentLocatorKey(output.locator) === identity);
+      }
+      const candidate = 'contentLocator' in node.data ? node.data.contentLocator : undefined;
+      return isContentLocator(candidate) && contentLocatorKey(candidate) === identity;
+    })
+    .sort(
+      (left, right) =>
+        contentNodeRank(left) - contentNodeRank(right) || left.id.localeCompare(right.id),
+    )[0];
+}
+
+function contentNodeRank(node: CanvasNode): number {
+  return node.type === 'generation' ? 0 : node.type === 'media' || node.type === 'file' ? 1 : 2;
+}
+
+function uniqueStrings(values: readonly string[]): readonly string[] {
+  return [...new Set(values)];
+}
+
+function isProjectionInputMaterial(
+  value: unknown,
+): value is CanvasGenerationProjectionInputMaterial {
+  if (!isRecord(value)) return false;
+  const mediaKind = value['mediaKind'];
+  return (
+    isContentLocator(value['locator']) &&
+    (mediaKind === 'image' || mediaKind === 'audio' || mediaKind === 'video')
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

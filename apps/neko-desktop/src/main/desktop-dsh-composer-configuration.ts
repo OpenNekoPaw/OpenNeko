@@ -2,6 +2,7 @@ import {
   DSH_ACP_MODEL_CONFIG_ID,
   encodeDshAcpModelConfiguration,
   type DshAcpPermissionPresetProjection,
+  type DshAcpTurnConfiguration,
 } from '@neko/agent-contracts/dsh-acp';
 import type {
   DshComposerContextProjection,
@@ -22,8 +23,10 @@ import type {
   AgentConversationContextAuthorityPort,
   ConversationDshSessionBoundClient,
   DshSessionLookupCwdPort,
+  createDshConversationCanvasSelection,
 } from '@neko/agent-runtime/application';
 import type { ConfigManager } from '@neko/host/settings';
+import { resolveGenerationModelParameterProfile } from '@neko/generation-domain';
 import type { DesktopDshExecutionCatalog } from './desktop-dsh-provider-runtime';
 
 interface ComposerSurfaceScope {
@@ -41,7 +44,12 @@ interface ComposerSurfaceIdentity {
 
 type ComposerConfigManager = Pick<
   ConfigManager,
-  'getAssistantConfigState' | 'setAssistantSettings' | 'setDefaultModelPurposeRefs'
+  | 'getAssistantConfigState'
+  | 'getDefaultModelRef'
+  | 'getModel'
+  | 'getProvider'
+  | 'setAssistantSettings'
+  | 'setDefaultModelRef'
 > & {
   getEffectiveAgentWorkspaceConfigSnapshot(): Pick<
     ReturnType<ConfigManager['getEffectiveAgentWorkspaceConfigSnapshot']>,
@@ -53,6 +61,7 @@ export function createDesktopDshComposerConfiguration(options: {
   resolveSurface(input: ComposerSurfaceIdentity): Promise<ComposerSurfaceScope>;
   readonly contexts: Pick<AgentConversationContextAuthorityPort, 'readContext'>;
   readonly canvas: Pick<CanvasWorkspaceIndexService, 'readCatalog'>;
+  readonly canvasSelection: ReturnType<typeof createDshConversationCanvasSelection>;
   readonly workspaceGrants: {
     restore(
       windowId: string,
@@ -109,9 +118,12 @@ export function createDesktopDshComposerConfiguration(options: {
   };
 }) {
   let mentionRequestSequence = 0;
+  const executionByConversation = new Map<string, { readonly supportsImageInput: boolean }>();
+  const selectedPermissionByConversation = new Map<string, string>();
   const resolveConfiguration = async (
     binding: AgentConversationContext,
     windowId: string,
+    conversationId?: string,
   ): Promise<{
     readonly config: ComposerConfigManager;
     readonly context?: DshComposerContextProjection;
@@ -135,6 +147,9 @@ export function createDesktopDshComposerConfiguration(options: {
         workspaceId: resolution.workspace.workspaceId,
         workspaceLabel: resolution.workspace.displayName,
         canvas,
+        ...(conversationId === undefined
+          ? { canvasSelection: null }
+          : await options.canvasSelection.project(conversationId, canvas)),
       },
     };
   };
@@ -143,13 +158,17 @@ export function createDesktopDshComposerConfiguration(options: {
     conversationId: string,
     config: ComposerConfigManager,
   ): Promise<{ readonly supportsImageInput: boolean }> => {
+    const existing = executionByConversation.get(conversationId);
+    if (existing !== undefined) return existing;
     const effective = requireEffectiveConfiguration(config, options.executionCatalog);
     await options.sessions.setSessionConfigOption(
       conversationId,
       DSH_ACP_MODEL_CONFIG_ID,
       encodeDshAcpModelConfiguration(effective.model),
     );
-    return { supportsImageInput: effective.supportsImageInput };
+    const execution = Object.freeze({ supportsImageInput: effective.supportsImageInput });
+    executionByConversation.set(conversationId, execution);
+    return execution;
   };
 
   const readInputCatalog = async (
@@ -162,14 +181,61 @@ export function createDesktopDshComposerConfiguration(options: {
         })
       : options.sessions.readInputCatalog(conversationId);
 
+  const readPermissionProjection = async (
+    conversationId: string | undefined,
+  ): Promise<DshAcpPermissionPresetProjection> => {
+    const projection = await options.permissions.read(conversationId);
+    if (conversationId === undefined) return projection;
+    const selected = selectedPermissionByConversation.get(conversationId);
+    return selected === undefined ? projection : { ...projection, currentValue: selected };
+  };
+
   return Object.freeze({
-    async project(input: ComposerSurfaceIdentity): Promise<DshComposerConfigurationProjection> {
+    async selectCanvas(
+      input: ComposerSurfaceIdentity & {
+        readonly conversationId: string;
+        readonly canvasId: string;
+      },
+    ): Promise<DshComposerConfigurationProjection> {
       const scope = await options.resolveSurface(input);
-      const resolved = await resolveConfiguration(scope.binding, scope.windowId);
+      if (scope.conversationId !== input.conversationId) {
+        throw new Error('Canvas selection does not match the authorized Conversation Surface.');
+      }
+      const resolved = await resolveConfiguration(
+        scope.binding,
+        scope.windowId,
+        scope.conversationId,
+      );
+      if (resolved.context === undefined)
+        throw new Error('Canvas selection requires a Workspace Conversation.');
+      await options.canvasSelection.select(
+        input.conversationId,
+        resolved.context.canvas,
+        input.canvasId,
+      );
       return projectConfiguration(
         resolved.config,
         options.executionCatalog,
-        await options.permissions.read(scope.conversationId),
+        await readPermissionProjection(scope.conversationId),
+        {
+          ...resolved.context,
+          canvasSelection: { conversationId: input.conversationId, canvasId: input.canvasId },
+          canvasSelectionDiagnostic: undefined,
+        },
+        await readInputCatalog(scope.conversationId, scope.binding),
+      );
+    },
+    async project(input: ComposerSurfaceIdentity): Promise<DshComposerConfigurationProjection> {
+      const scope = await options.resolveSurface(input);
+      const resolved = await resolveConfiguration(
+        scope.binding,
+        scope.windowId,
+        scope.conversationId,
+      );
+      return projectConfiguration(
+        resolved.config,
+        options.executionCatalog,
+        await readPermissionProjection(scope.conversationId),
         resolved.context,
         await readInputCatalog(scope.conversationId, scope.binding),
       );
@@ -269,7 +335,11 @@ export function createDesktopDshComposerConfiguration(options: {
       input: ComposerSurfaceIdentity & { readonly modelOptionId: string },
     ): Promise<DshComposerConfigurationProjection> {
       const scope = await options.resolveSurface(input);
-      const resolved = await resolveConfiguration(scope.binding, scope.windowId);
+      const resolved = await resolveConfiguration(
+        scope.binding,
+        scope.windowId,
+        scope.conversationId,
+      );
       const config = resolved.config;
       const state = config.getAssistantConfigState();
       const matches = state.chatModelOptions.filter((model) => model.id === input.modelOptionId);
@@ -286,18 +356,6 @@ export function createDesktopDshComposerConfiguration(options: {
           `Composer model '${selected.providerId}/${selected.modelId}' is not executable by the current DSH runtime.`,
         );
       }
-      if (scope.conversationId !== undefined) {
-        const state = config.getAssistantConfigState();
-        await options.sessions.setSessionConfigOption(
-          scope.conversationId,
-          DSH_ACP_MODEL_CONFIG_ID,
-          encodeDshAcpModelConfiguration({
-            providerId: execution.providerId,
-            modelId: execution.apiModelName,
-            maxTokens: state.maxTokens,
-          }),
-        );
-      }
       await config.setAssistantSettings({
         selectedProviderId: selected.providerId,
         selectedModelId: selected.modelId,
@@ -305,7 +363,7 @@ export function createDesktopDshComposerConfiguration(options: {
       return projectConfiguration(
         config,
         options.executionCatalog,
-        await options.permissions.read(scope.conversationId),
+        await readPermissionProjection(scope.conversationId),
         resolved.context,
         await readInputCatalog(scope.conversationId, scope.binding),
       );
@@ -315,17 +373,21 @@ export function createDesktopDshComposerConfiguration(options: {
       input: ComposerSurfaceIdentity & { readonly permissionPresetId: string },
     ): Promise<DshComposerConfigurationProjection> {
       const scope = await options.resolveSurface(input);
-      const resolved = await resolveConfiguration(scope.binding, scope.windowId);
+      const resolved = await resolveConfiguration(
+        scope.binding,
+        scope.windowId,
+        scope.conversationId,
+      );
       const current = await options.permissions.read(scope.conversationId);
       if (!current.options.some((option) => option.value === input.permissionPresetId)) {
         throw new Error(
           `DSH permission preset '${input.permissionPresetId}' is not advertised by the runtime.`,
         );
       }
-      const projection =
-        scope.conversationId === undefined
-          ? { ...current, currentValue: input.permissionPresetId }
-          : await options.permissions.set(scope.conversationId, input.permissionPresetId);
+      if (scope.conversationId !== undefined) {
+        selectedPermissionByConversation.set(scope.conversationId, input.permissionPresetId);
+      }
+      const projection = { ...current, currentValue: input.permissionPresetId };
       return projectConfiguration(
         resolved.config,
         options.executionCatalog,
@@ -337,12 +399,16 @@ export function createDesktopDshComposerConfiguration(options: {
 
     async selectMediaModel(
       input: ComposerSurfaceIdentity & {
-        readonly category: 'image' | 'video' | 'audio';
+        readonly category: 'image' | 'video' | 'audio' | 'music';
         readonly modelOptionId: string;
       },
     ): Promise<DshComposerConfigurationProjection> {
       const scope = await options.resolveSurface(input);
-      const resolved = await resolveConfiguration(scope.binding, scope.windowId);
+      const resolved = await resolveConfiguration(
+        scope.binding,
+        scope.windowId,
+        scope.conversationId,
+      );
       const config = resolved.config;
       const state = config.getAssistantConfigState();
       const matches = state.chatModelOptions.filter(
@@ -356,16 +422,14 @@ export function createDesktopDshComposerConfiguration(options: {
       const selected = matches[0];
       if (!selected)
         throw new Error(`Composer media model '${input.modelOptionId}' is unavailable.`);
-      await config.setDefaultModelPurposeRefs({
-        [mediaPurpose(input.category)]: {
-          providerId: selected.providerId,
-          modelId: selected.modelId,
-        },
+      await config.setDefaultModelRef(input.category, {
+        providerId: selected.providerId,
+        modelId: selected.modelId,
       });
       return projectConfiguration(
         config,
         options.executionCatalog,
-        await options.permissions.read(scope.conversationId),
+        await readPermissionProjection(scope.conversationId),
         resolved.context,
         await readInputCatalog(scope.conversationId, scope.binding),
       );
@@ -379,21 +443,53 @@ export function createDesktopDshComposerConfiguration(options: {
       if (binding === undefined) {
         throw new Error(`Conversation '${conversationId}' has no authoritative domain context.`);
       }
-      const resolved = await resolveConfiguration(binding, windowId);
+      const resolved = await resolveConfiguration(binding, windowId, conversationId);
       return apply(conversationId, resolved.config);
     },
 
-    async readConversationExecution(
+    async bindTurnConfiguration(
       conversationId: string,
       windowId: string,
-    ): Promise<{ readonly supportsImageInput: boolean }> {
+      running: boolean,
+    ): Promise<{
+      readonly supportsImageInput: boolean;
+      readonly configuration: DshAcpTurnConfiguration;
+    }> {
       const binding = await options.contexts.readContext(conversationId);
       if (binding === undefined) {
         throw new Error(`Conversation '${conversationId}' has no authoritative domain context.`);
       }
-      const resolved = await resolveConfiguration(binding, windowId);
+      const resolved = await resolveConfiguration(binding, windowId, conversationId);
       const effective = requireEffectiveConfiguration(resolved.config, options.executionCatalog);
-      return { supportsImageInput: effective.supportsImageInput };
+      const permissions = await readPermissionProjection(conversationId);
+      if (!permissions.options.some((option) => option.value === permissions.currentValue)) {
+        throw new Error(
+          `DSH permission preset '${permissions.currentValue}' is not advertised by the runtime.`,
+        );
+      }
+      const model = encodeDshAcpModelConfiguration(effective.model);
+      if (!running) {
+        await options.sessions.setSessionConfigOption(
+          conversationId,
+          DSH_ACP_MODEL_CONFIG_ID,
+          model,
+        );
+        await options.permissions.set(conversationId, permissions.currentValue);
+      }
+      const execution = Object.freeze({ supportsImageInput: effective.supportsImageInput });
+      executionByConversation.set(conversationId, execution);
+      return {
+        ...execution,
+        configuration: Object.freeze({
+          model,
+          permissionPresetId: permissions.currentValue,
+        }),
+      };
+    },
+
+    resetSessionExecutions(): void {
+      executionByConversation.clear();
+      selectedPermissionByConversation.clear();
     },
   });
 }
@@ -428,14 +524,6 @@ function projectMentionMediaType(
   return kind === 'file' ? 'text' : undefined;
 }
 
-function mediaPurpose(
-  category: 'image' | 'video' | 'audio',
-): 'image.generate' | 'video.generate' | 'audio.generate' {
-  if (category === 'image') return 'image.generate';
-  if (category === 'video') return 'video.generate';
-  return 'audio.generate';
-}
-
 function projectConfiguration(
   config: ComposerConfigManager,
   executionCatalog: DesktopDshExecutionCatalog,
@@ -450,7 +538,7 @@ function projectConfiguration(
         (model.category !== undefined && model.category !== 'llm') ||
         executionCatalog.resolve(model.providerId, model.modelId) !== undefined,
     )
-    .map(projectModel);
+    .map((model) => projectModel(config, model));
   const modelIds = new Set<string>();
   for (const model of models) {
     if (modelIds.has(model.id)) throw new Error(`Composer model '${model.id}' is duplicated.`);
@@ -467,7 +555,7 @@ function projectConfiguration(
   return {
     models,
     ...(selected === undefined ? {} : { selectedModelOptionId: selected.id }),
-    selectedMediaModelOptionIds: { ...state.defaultMediaModels },
+    selectedMediaModelOptionIds: projectSelectedMediaModelOptionIds(config, models),
     permissionPresetId: permissionPresets.currentValue,
     permissionPresets: permissionPresets.options.map((option) => ({
       id: option.value,
@@ -482,6 +570,31 @@ function projectConfiguration(
       : {}),
     ...(diagnostic === undefined ? {} : { diagnostic }),
   };
+}
+
+function projectSelectedMediaModelOptionIds(
+  config: Pick<ConfigManager, 'getDefaultModelRef'>,
+  models: readonly DshComposerModelOption[],
+): DshComposerConfigurationProjection['selectedMediaModelOptionIds'] {
+  const result: Partial<Record<'image' | 'video' | 'audio' | 'music', string>> = {};
+  for (const category of ['image', 'video', 'audio', 'music'] as const) {
+    const ref = config.getDefaultModelRef(category);
+    if (!ref) continue;
+    const matches = models.filter(
+      (model) =>
+        model.category === category &&
+        model.providerId === ref.providerId &&
+        model.modelId === ref.modelId,
+    );
+    const [match] = matches;
+    if (matches.length !== 1 || !match) {
+      throw new Error(
+        `Composer ${category} default model '${ref.providerId}/${ref.modelId}' must resolve to exactly one model option.`,
+      );
+    }
+    result[category] = match.id;
+  }
+  return result;
 }
 
 function requireEffectiveConfiguration(
@@ -523,15 +636,29 @@ function requireEffectiveConfiguration(
   };
 }
 
-function projectModel(model: {
-  readonly id: string;
-  readonly label: string;
-  readonly providerId: string;
-  readonly modelId: string;
-  readonly providerLabel?: string;
-  readonly category?: 'llm' | 'image' | 'video' | 'audio';
-  readonly capabilities?: readonly string[];
-}): DshComposerModelOption {
+function projectModel(
+  config: Pick<ConfigManager, 'getModel' | 'getProvider'>,
+  model: {
+    readonly id: string;
+    readonly label: string;
+    readonly providerId: string;
+    readonly modelId: string;
+    readonly providerLabel?: string;
+    readonly category?: 'llm' | 'image' | 'video' | 'audio' | 'music';
+    readonly capabilities?: readonly string[];
+  },
+): DshComposerModelOption {
+  const configuredModel = config.getModel(model.modelId);
+  const provider = config.getProvider(model.providerId);
+  if (!configuredModel || !provider) {
+    throw new Error(
+      `Composer model '${model.providerId}/${model.modelId}' has no configured model and provider.`,
+    );
+  }
+  const parameterProfile = resolveGenerationModelParameterProfile({
+    providerType: provider.type,
+    modelName: configuredModel.name,
+  });
   return {
     id: model.id,
     label: model.label,
@@ -540,5 +667,6 @@ function projectModel(model: {
     providerLabel: model.providerLabel ?? model.providerId,
     category: model.category ?? 'llm',
     capabilities: [...(model.capabilities ?? [])],
+    ...(parameterProfile === undefined ? {} : { parameterProfile }),
   };
 }

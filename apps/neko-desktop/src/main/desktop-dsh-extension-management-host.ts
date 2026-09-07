@@ -13,6 +13,7 @@ export class DesktopDshExtensionManagementHost {
         readonly client: Pick<
           DesktopDshAgentClient,
           | 'readExtensions'
+          | 'readSkillDetail'
           | 'setSkillEnabled'
           | 'removeSkill'
           | 'addMcp'
@@ -40,6 +41,20 @@ export class DesktopDshExtensionManagementHost {
     const window = this.options.windows.resolveSender(sender);
     if (window.windowId !== request.identity.windowId) {
       throw new Error('DSH extension management request does not match its sender-bound window.');
+    }
+    if (request.route === 'skill.detail.get') {
+      const detail = await this.options.runtime.client.readSkillDetail({
+        name: request.name,
+        source: request.source,
+      });
+      return {
+        requestId: request.requestId,
+        route: request.route,
+        detail: {
+          id: `dsh-skill:${detail.source}:${detail.name}`,
+          ...detail,
+        },
+      };
     }
     switch (request.route) {
       case 'snapshot.get':

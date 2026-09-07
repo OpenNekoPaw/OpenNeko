@@ -1,0 +1,135 @@
+import { randomUUID } from 'node:crypto';
+import { lstat } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
+import {
+  createEmptyCanvasData,
+  loadNkc,
+  saveNkc,
+  type CanvasWorkspaceProjectionRequest,
+  type CanvasWorkspaceLoadedDocument,
+  type CanvasWorkspaceMutationPort,
+} from '@neko/canvas-domain';
+import type { NekoHostPorts } from '@neko/host/ports';
+
+export interface CanvasWorkspaceNodeMutationOptions {
+  readonly workspace: AssetWorkspaceResolution;
+  readonly host: Pick<NekoHostPorts, 'files'>;
+  readonly createIdentity?: () => string;
+}
+
+export class CanvasWorkspaceNodeMutation implements CanvasWorkspaceMutationPort {
+  private readonly createIdentity: () => string;
+
+  constructor(private readonly options: CanvasWorkspaceNodeMutationOptions) {
+    this.createIdentity = options.createIdentity ?? randomUUID;
+  }
+
+  coordinate<TResult>(
+    _target: CanvasWorkspaceProjectionRequest['target'],
+    operation: () => Promise<TResult>,
+  ): Promise<TResult> {
+    return operation();
+  }
+
+  async loadLatest(input: {
+    readonly documentUri: string;
+    readonly createIfMissing: boolean;
+  }): Promise<CanvasWorkspaceLoadedDocument> {
+    const documentPath = this.requireDocumentPath(input.documentUri);
+    try {
+      const file = await this.options.host.files.stat(documentPath);
+      if (file.type !== 'file') throw new Error('Canvas target is not a file.');
+    } catch (error) {
+      if (!isMissingPathError(error) || !input.createIfMissing) throw error;
+      return {
+        documentUri: input.documentUri,
+        canvasData: createEmptyCanvasData(`${this.options.workspace.displayName} Canvas`),
+        exists: false,
+      };
+    }
+    const loaded = loadNkc(await this.options.host.files.readText(documentPath));
+    if (!loaded.validation.valid) {
+      throw new Error('Canvas document is invalid and was not modified.');
+    }
+    return { documentUri: input.documentUri, canvasData: loaded.data, exists: true };
+  }
+
+  async saveAtomic(input: {
+    readonly documentUri: string;
+    readonly canvasData: CanvasWorkspaceLoadedDocument['canvasData'];
+    readonly assertWriter?: () => Promise<void>;
+  }): Promise<void> {
+    const documentPath = this.requireDocumentPath(input.documentUri);
+    const directory = path.dirname(documentPath);
+    const temporaryPath = `${documentPath}.${this.createIdentity()}.tmp`;
+    await input.assertWriter?.();
+    await this.assertWritablePath(documentPath);
+    await this.options.host.files.createDirectory(directory);
+    await this.assertWritablePath(documentPath);
+    await this.assertWritablePath(temporaryPath);
+    try {
+      await this.options.host.files.writeText(temporaryPath, saveNkc(input.canvasData));
+      await input.assertWriter?.();
+      await this.assertWritablePath(documentPath);
+      await this.options.host.files.rename(temporaryPath, documentPath);
+    } catch (error) {
+      await this.options.host.files
+        .delete(temporaryPath, { idempotent: true })
+        .catch(() => undefined);
+      throw error;
+    }
+  }
+
+  private async assertWritablePath(targetPath: string): Promise<void> {
+    const workspacePath = path.resolve(this.options.workspace.workspacePath);
+    const relative = path.relative(workspacePath, path.resolve(targetPath));
+    const segments = relative.split(path.sep).filter(Boolean);
+    let current = workspacePath;
+    await assertNotSymbolicLink(current);
+    for (const segment of segments) {
+      current = path.join(current, segment);
+      await assertNotSymbolicLink(current);
+    }
+  }
+
+  private requireDocumentPath(documentUri: string): string {
+    let candidate: string;
+    try {
+      candidate = fileURLToPath(documentUri);
+    } catch {
+      throw new Error('Canvas mutation requires a local file document URI.');
+    }
+    const workspacePath = path.resolve(this.options.workspace.workspacePath);
+    const resolved = path.resolve(candidate);
+    const relative = path.relative(workspacePath, resolved);
+    if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
+      throw new Error('Canvas mutation target escapes the authorized Workspace.');
+    }
+    if (relative.endsWith('.nkc') === false) {
+      throw new Error('Canvas mutation target must be a workspace-relative .nkc document.');
+    }
+    return resolved;
+  }
+}
+
+async function assertNotSymbolicLink(targetPath: string): Promise<void> {
+  try {
+    if ((await lstat(targetPath)).isSymbolicLink()) {
+      throw new Error('Canvas symbolic-link targets are read-only.');
+    }
+  } catch (error) {
+    if (isMissingPathError(error)) return;
+    throw error;
+  }
+}
+
+function isMissingPathError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (Reflect.get(error, 'code') === 'ENOENT' || Reflect.get(error, 'code') === 'ENOTDIR')
+  );
+}

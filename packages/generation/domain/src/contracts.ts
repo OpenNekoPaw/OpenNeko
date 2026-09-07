@@ -3,14 +3,8 @@ import type {
   ThreeReferenceMediaOutputIdentity,
   ThreeReferencePanoramaOrientation,
 } from '@neko/model-domain';
-import type { ModelConfig, ProviderConfig } from '@neko/ai-contracts';
 import type { ContentLocator } from '@neko/content-domain';
-import type {
-  ImageOperationId,
-  ImageOutpaintExpansion,
-  ImageSplitProfileOptions,
-  VideoOperationId,
-} from '@neko/generation-domain';
+import type { ImageOperationId, VideoOperationId } from '@neko/generation-domain';
 
 // =============================================================================
 // Generation Types
@@ -27,9 +21,7 @@ export type MediaGenerationType =
   | 'image-to-video'
   | 'video-to-video'
   | 'video-edit'
-  | 'text-to-audio'
-  | 'text-to-music'
-  | 'workflow';
+  | 'text-to-audio';
 
 /**
  * Media task status
@@ -40,6 +32,8 @@ export type MediaOperationStatus = 'pending' | 'processing' | 'completed' | 'fai
  * Media output type
  */
 export type MediaOutputType = 'image' | 'video' | 'audio';
+
+export type ImageGenerationQuality = 'auto' | 'low' | 'medium' | 'high' | 'standard' | 'hd';
 
 // =============================================================================
 // ControlNet & IP-Adapter Types
@@ -112,7 +106,7 @@ export interface ImageGenerationRequest extends MediaGenerationRequestBase {
   /** Inpaint strength 0.0–1.0 (only meaningful when maskLocator is set) */
   inpaintStrength?: number;
   /** Image quality setting */
-  quality?: 'standard' | 'hd';
+  quality?: ImageGenerationQuality;
   /** Style preset */
   style?: string;
   /** Stable ControlNet conditioning image location, materialized before provider execution. */
@@ -129,10 +123,6 @@ export interface ImageGenerationRequest extends MediaGenerationRequestBase {
   panoramaReference?: GenerationPanoramaReference;
   /** Natural language instruction for edit (e.g., "make it night time") */
   editInstruction?: string;
-  /** Explicit outpaint canvas expansion; required for the canonical outpaint operation. */
-  outpaintExpansion?: ImageOutpaintExpansion;
-  /** Explicit split profile and profile-specific options. */
-  splitOptions?: ImageSplitProfileOptions;
 }
 
 /**
@@ -227,10 +217,6 @@ export interface MaterializedVideoGenerationRequest extends Omit<VideoGeneration
 export interface AudioGenerationRequest extends MediaGenerationRequestBase {
   /** Audio duration in seconds */
   duration?: number;
-  /** Whether this is music generation */
-  isMusic?: boolean;
-  /** Music genre (for music generation) */
-  genre?: string;
   /** Audio format */
   format?: 'mp3' | 'wav' | 'flac';
 }
@@ -262,13 +248,13 @@ export interface MediaOutput {
 }
 
 // =============================================================================
-// Adapter Interfaces
+// Provider Task Observation
 // =============================================================================
 
 /**
- * Result from media adapter operations
+ * Current state returned by an asynchronous AI SDK provider model.
  */
-export interface MediaAdapterResult {
+export interface GenerationProviderTaskObservation {
   /** External task ID from the platform */
   externalTaskId?: string;
   /** Current task status */
@@ -278,7 +264,7 @@ export interface MediaAdapterResult {
   /** Generated outputs */
   outputs?: MediaOutput[];
   /** Error information */
-  error?: MediaAdapterError;
+  error?: GenerationProviderTaskError;
   /** Estimated completion time */
   estimatedCompletionTime?: Date;
   /** Platform-specific metadata */
@@ -286,9 +272,9 @@ export interface MediaAdapterResult {
 }
 
 /**
- * Error from media adapter
+ * Error reported for one exact provider task.
  */
-export interface MediaAdapterError {
+export interface GenerationProviderTaskError {
   /** Error code */
   code: string;
   /** Error message */
@@ -297,50 +283,4 @@ export interface MediaAdapterError {
   retryable: boolean;
   /** Retry delay in milliseconds (if retryable) */
   retryAfterMs?: number;
-}
-
-/**
- * Media adapter interface
- */
-export interface MediaAdapter {
-  /** Adapter type identifier */
-  readonly type: string;
-
-  /** Supported generation types */
-  getSupportedTypes(): MediaGenerationType[];
-
-  /** Check if adapter supports the given generation type */
-  supportsType(type: MediaGenerationType): boolean;
-}
-
-export interface MediaImageSubmitter {
-  generateImage(
-    request: MaterializedImageGenerationRequest,
-    model: ModelConfig,
-    provider: ProviderConfig,
-  ): Promise<MediaAdapterResult>;
-}
-
-export interface MediaVideoSubmitter {
-  generateVideo(
-    request: MaterializedVideoGenerationRequest,
-    model: ModelConfig,
-    provider: ProviderConfig,
-  ): Promise<MediaAdapterResult>;
-}
-
-export interface MediaAudioSubmitter {
-  generateAudio(
-    request: AudioGenerationRequest,
-    model: ModelConfig,
-    provider: ProviderConfig,
-  ): Promise<MediaAdapterResult>;
-}
-
-export interface MediaTaskDescriber {
-  getTaskStatus(externalTaskId: string, provider: ProviderConfig): Promise<MediaAdapterResult>;
-}
-
-export interface MediaTaskCanceller {
-  cancelTask(externalTaskId: string, provider: ProviderConfig): Promise<void>;
 }

@@ -3,8 +3,9 @@
 当前宿主：Electron Desktop
 
 OpenNeko 当前只有一个客户端目标：Electron Desktop。`apps/neko-desktop` 当前组合
-Agent、Assets/Entity、Canvas、Cut、Preview、Generation、共享与媒体能力。保留在 workspace
-但没有 Desktop consumer 的 Chara、Search、Quality 和媒体比较 Tools 不属于当前产品能力。
+Agent、Assets/Entity、Canvas、Cut、Preview、Generation、共享与媒体能力，并在 Development 中组合
+Chara/World 有界实验 Surface。Chara/World 的 Release 入口保持 unavailable；保留在 workspace 但没有
+Desktop consumer 的 Search、Quality 和媒体比较 Tools 不属于当前产品能力。
 
 ## OpenNeko Desktop
 
@@ -44,9 +45,10 @@ Gatekeeper 接受资格，这些能力仍需独立验收。
 - `@neko/ui` 和一级 Webview package 只提供 browser-safe React UI。
 - Agent、Assets、Canvas、Cut、Preview 和 Generation 由各自 owning package 拥有 contract、
   runtime/node adapter 或 UI；Desktop 通过 public entry 显式注入。
-- `@neko/chara-domain` 和 `@neko/search-domain` 仍是保留 package；
-  接入前必须建立真实 Desktop composition、产品入口和路径级验收，不能因 package 存在而
-  宣称能力可用。
+- `@neko/chara-*` 和 `@neko/world-*` 已有 Development-only Desktop consumer，但只表示有界实验路径；
+  Release 晋级前必须完成真实产品闭环和路径级验收，不能因 package 或实验 Surface 存在而宣称能力完善。
+- `@neko/search-domain` 仍是没有 Desktop consumer 的保留 package；接入前必须建立真实 Desktop
+  composition、产品入口和路径级验收。
 - 未来新增另一应用宿主必须先建立独立 OpenSpec 和真实 adapter 需求；当前不保留
   speculative multi-host registry。
 

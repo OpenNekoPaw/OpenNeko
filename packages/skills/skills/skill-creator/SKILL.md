@@ -1,10 +1,10 @@
 ---
 name: skill-creator
-description: '使用 DSH 原生布局、frontmatter、调用策略和可选资源创建或改进可复用 Skill；用于 Skill 设计、编写、验证与评审。 Create or refine reusable DSH Skills with native layouts, frontmatter, invocation policy, and optional resources.'
-whenToUse: '用于 DSH Skill 编写和 package 评审；普通一次性任务不需要此 Skill。 Use for DSH Skill authoring and package review; ordinary one-off tasks do not require it.'
+description: '使用 DSH 原生布局、frontmatter、调用策略和可选资源创建或改进可复用 Skill；用于 Skill 设计、编写、验证与评审。'
+whenToUse: '用于 DSH Skill 编写和 package 评审；普通一次性任务不需要此 Skill。'
 ---
 
-# Skill Creator
+# Skill 编写
 
 ## 中文方法
 
@@ -16,29 +16,6 @@ whenToUse: '用于 DSH Skill 编写和 package 评审；普通一次性任务不
 4. 同时定义正向和负向真实请求，按需要验证发现、加载、scope、调用策略和复杂行为。
 5. 目录/flat、多 Skill 组合及四种 model/user 调用组合均有效；不得强制主 Skill、固定数量、artifact 前置或通过正文授予 Tool 权限。
 
-## English guidance
+flat Skill 的资源共享所属根目录，应使用避免冲突的相对路径。仅按预期语义保留受支持的 `whenToUse`、`metadata`、`disable-model-invocation` 和 `user-invocable` 字段。开放性任务优先描述结果与判断条件，易错的确定性工作才提供精确步骤或脚本。
 
-Create focused reusable guidance that changes an Agent's decisions without constraining unrelated work. Preserve the user's intended task and rely on current Tool catalogs, schemas, permissions, and Host authority for execution.
-
-## Choose the package
-
-Use one of the native filesystem layouts:
-
-- directory bundle: `<name>/SKILL.md`, with optional relative resources;
-- flat Skill: `<name>.md`; any relative resources share that Skill root, so use collision-safe paths and preserve unrelated entries.
-
-The Markdown frontmatter requires `name` and `description`. Use a lowercase kebab-case name and a short description that distinguishes both capability and trigger. Preserve supported optional `whenToUse`, `metadata`, `disable-model-invocation`, and `user-invocable` only when their semantics are intended. Do not add a manifest or private OpenNeko schema.
-
-Keep shared purpose, essential judgment, and routing in the main body. Put substantial conditional procedures, schemas, examples, or domain variants in relative resources and link them where the Agent should read them. Do not create placeholder directories or duplicate instructions.
-
-## Author and validate
-
-1. Identify realistic requests that should and should not use the Skill.
-2. Write the smallest body that improves those tasks. Prefer outcome criteria for open-ended work and exact steps or scripts only for fragile deterministic work.
-3. Inspect existing package resources before updating them; preserve unrelated user content.
-4. Validate the package through the available DSH-native authoring or filesystem path, then confirm the exact scoped catalog discovers and loads the intended definition.
-5. Forward-test observable behavior when the change is complex enough to justify it.
-
-Directory and flat layouts, all model/user invocation-policy combinations, and composition with multiple applicable Skills are valid. Do not impose a primary Skill, a fixed Skill count, an artifact-profile prerequisite, or Tool permission through Skill prose.
-
-Report the created or changed package, validation evidence, and unresolved uncertainty. Do not claim publication, discovery, or execution until the corresponding runtime result confirms it.
+通过当前可用的 DSH 原生编写或文件系统入口验证，并确认精确作用域内的目录发现与加载结果。报告变更包、验证证据和剩余不确定性；没有对应运行结果，不声称已发布、已发现或已执行。

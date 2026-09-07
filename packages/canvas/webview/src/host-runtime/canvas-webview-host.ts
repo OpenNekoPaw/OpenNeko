@@ -13,7 +13,7 @@ import {
   type CanvasGenerationRuntimeProjection,
   type CanvasTextFilePreviewResult,
 } from '@neko/canvas-domain';
-import { isValidNkc, type CanvasData, type CanvasViewport } from '@neko/canvas-domain';
+import { isLoadableNkc, type CanvasData, type CanvasViewport } from '@neko/canvas-domain';
 import type { ContentLocator } from '@neko/content-domain';
 import type {
   CanvasMaterialActionDescriptor,
@@ -72,7 +72,6 @@ export interface CanvasWebviewHostPort extends CanvasHostMessagePort {
   runGenerationNode(nodeId: string): Promise<CanvasHostSnapshot>;
   cancelGenerationNode(nodeId: string): Promise<CanvasHostSnapshot>;
   selectGenerationOutput(nodeId: string, outputId: string): Promise<CanvasHostSnapshot>;
-  authorGenerationText(nodeId: string, text: string): Promise<CanvasHostSnapshot>;
   getGenerationProjection(nodeId: string): CanvasGenerationRuntimeProjection | undefined;
   projectContent(
     locator: CanvasReferencedContentLocator,
@@ -114,7 +113,6 @@ export function createCanvasWebviewHost(
   let commandSequence = 0;
   let materialActionRequestSequence = 0;
   let textFilePreviewRequestSequence = 0;
-  let currentMaterialActionRequestId: string | undefined;
   let initialSnapshotRequest: Promise<CanvasHostSnapshot> | undefined;
   let initialSnapshotFailure: unknown;
   let runtimeEventObserved = false;
@@ -196,6 +194,9 @@ export function createCanvasWebviewHost(
           emit({ type: 'canvas.saveFailed', diagnostic: event.diagnostic });
         } else if (wasDirty && !event.snapshot.dirty) {
           emit({ type: 'canvas.saveSucceeded' });
+        }
+        if (snapshotContainsPendingRemoval(event.snapshot, pendingRemovedNodeIds)) {
+          return;
         }
         if (event.originCommandId && localCommandIds.has(event.originCommandId)) {
           adoptLocalSnapshot(event.snapshot);
@@ -444,9 +445,12 @@ export function createCanvasWebviewHost(
     },
     async resolveMaterialActions(selectedNodeIds) {
       await waitForOperationQueueToSettle();
+      if (selectedNodeIds.some((nodeId) => pendingRemovedNodeIds.has(nodeId))) return [];
+      const current = snapshot ?? (await runtime.getSnapshot());
+      const currentNodeIds = new Set(current.canvas.nodes.map((node) => node.id));
+      if (selectedNodeIds.some((nodeId) => !currentNodeIds.has(nodeId))) return [];
       materialActionRequestSequence += 1;
       const requestId = `canvas-webview-material-actions:${materialActionRequestSequence}`;
-      currentMaterialActionRequestId = requestId;
       const resolution = await runtime.resolveMaterialActions(
         createCanvasMaterialActionResolutionRequest({
           requestId,
@@ -454,9 +458,6 @@ export function createCanvasWebviewHost(
           selectedNodeIds: [...selectedNodeIds],
         }),
       );
-      if (currentMaterialActionRequestId !== requestId) {
-        throw new Error('Canvas material action resolution was superseded by another request.');
-      }
       if (!areJsonValuesEqual(selectedNodeIds, resolution.selectedNodeIds)) {
         throw new Error('Canvas material action resolution returned another selection.');
       }
@@ -557,13 +558,6 @@ export function createCanvasWebviewHost(
         return next;
       });
     },
-    async authorGenerationText(nodeId, text) {
-      return queueOperation(async () => {
-        const next = await executeIntent({ type: 'author-generation-text', nodeId, text });
-        publishSnapshot(next);
-        return next;
-      });
-    },
     getGenerationProjection(nodeId) {
       return snapshot?.generationNodes.find((projection) => projection.nodeId === nodeId);
     },
@@ -606,6 +600,21 @@ export function createCanvasWebviewHost(
   };
 }
 
+function snapshotContainsPendingRemoval(
+  snapshot: CanvasHostSnapshot,
+  pendingRemovedNodeIds: ReadonlySet<string>,
+): boolean {
+  if (pendingRemovedNodeIds.size === 0) return false;
+  return (
+    snapshot.canvas.nodes.some((node) => pendingRemovedNodeIds.has(node.id)) ||
+    snapshot.canvas.connections.some(
+      (connection) =>
+        pendingRemovedNodeIds.has(connection.sourceId) ||
+        pendingRemovedNodeIds.has(connection.targetId),
+    )
+  );
+}
+
 function applyContentNodeDelta(
   value: Record<string, unknown>,
   pendingRemovedNodeIds: Set<string>,
@@ -643,8 +652,8 @@ function mergeCanvasStatus(previous: CanvasData, value: unknown): CanvasData {
     nodes: value['nodes'],
     connections: value['connections'],
   };
-  if (!isValidNkc(next)) {
-    throw new Error('Canvas status does not contain a valid .nkc document.');
+  if (!isLoadableNkc(next)) {
+    throw new Error('Canvas status does not contain a loadable .nkc document.');
   }
   return next;
 }

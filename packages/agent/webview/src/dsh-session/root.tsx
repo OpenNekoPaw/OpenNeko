@@ -15,7 +15,10 @@ import type {
 } from '@neko/agent-contracts/dsh-session-host';
 import type {
   AgentContextPayload,
+  CharacterCreationHandoffIntent,
   CharacterDialogueHandoffIntent,
+  ProjectTemplateHandoffIntent,
+  WorldCreationHandoffIntent,
   AgentCharacterDialogueTargetOption,
   AgentInputCatalogEntry,
   AgentWorldExperienceTargetOption,
@@ -34,10 +37,14 @@ import type {
   SelectedCharacterLaunch,
   SelectedWorldLaunch,
 } from '../components/ChatView/InputArea/types';
+import { DEFAULT_GENERATION_PARAMS } from '../components/ChatView/InputArea/types';
 import { resolveAgentInputInvocationIntent } from '../components/ChatView/InputArea/slash-command-catalog';
-import type { AgentComposerWorkspacePresentation } from '../components/ComposerWorkspaceContext';
+import type {
+  AgentComposerAuthoringCreationContext,
+  AgentComposerWorkspacePresentation,
+  AgentComposerWorkspaceTarget,
+} from '../components/ComposerWorkspaceContext';
 import { AuthoringTargetSelector } from '../components/ChatView/AuthoringTargetSelector';
-import type { DshEntryProjectSelection } from '../components/ChatView/AuthoringTargetSelector';
 import { CharacterDialogueTargetSelector } from '../components/ChatView/CharacterDialogueTargetSelector';
 import { HomeExperienceQuickActions } from '../components/ChatView/HomeExperienceQuickActions';
 import { WorldExperienceTargetSelector } from '../components/ChatView/WorldExperienceTargetSelector';
@@ -53,27 +60,34 @@ import {
   SuccessIcon,
   WarningIcon,
 } from '@neko/ui';
-import { FileIcon } from '@neko/ui/icons';
+import { BranchIcon, CheckIcon, CopyIcon, FileIcon } from '@neko/ui/icons';
 import { useTranslation as useUiTranslation } from '@neko/ui/i18n/react';
 import { AgentPresentationI18nProvider, useTranslation } from '../i18n/I18nContext';
 import { projectContentLocatorPath } from '../presenters/content-locator-presenter';
 import { projectPathReferenceToken } from '../presenters/reference-token-presenter';
 import {
   useDshComposerCanvasSelection,
-  useDshComposerPresentationSnapshotStore,
   type DshComposerCanvasSelectionScope,
 } from './presentation-snapshot';
+import { projectDshTranscriptPresentation, type ToolEvent } from './transcript-presentation';
+import { getLogger } from '../utils/logger';
 
 import '../index.css';
 import './root.css';
 
+const logger = getLogger('DshAgentView');
+
 export interface DshAgentViewProps {
+  readonly canvasCreationControl?: ReactNode;
   readonly agentSurfaceId: string;
   readonly conversationFeed?: ReactNode;
   readonly conversationId?: string;
   readonly surfaceKind: 'entry' | 'assistant' | 'workspace';
   readonly entryContext?: DshEntryContextPresentation;
+  readonly initialCharacterCreationHandoff?: CharacterCreationHandoffIntent;
   readonly initialCharacterDialogueHandoff?: CharacterDialogueHandoffIntent;
+  readonly initialProjectTemplateHandoff?: ProjectTemplateHandoffIntent;
+  readonly initialWorldCreationHandoff?: WorldCreationHandoffIntent;
   readonly composerConfiguration?: DshComposerConfigurationProjection;
   readonly composerConfigurationError?: string;
   readonly mentionItems?: readonly DshComposerMentionProjection[];
@@ -96,10 +110,11 @@ export interface DshAgentViewProps {
   readonly onDraftChange: (value: string) => void;
   readonly onModelChange: (modelOptionId: string) => void;
   readonly onMediaModelChange?: (
-    category: 'image' | 'video' | 'audio',
+    category: 'image' | 'video' | 'audio' | 'music',
     modelOptionId: string,
   ) => void;
   readonly onPermissionPresetChange: (permissionPresetId: string) => void;
+  readonly onCanvasSelect: (canvasId: string) => Promise<void>;
   readonly onRemoveQueuedMessage?: (messageId: string) => void;
   readonly onSendQueuedMessageNow?: (messageId: string) => void;
   readonly onRestartRuntime: () => void;
@@ -110,8 +125,12 @@ export interface DshAgentViewProps {
   readonly onResolveImageAttachmentPreview?: (
     attachmentId: string,
   ) => Promise<DshImageAttachmentPreviewHostResult['preview']>;
-  readonly onOpenTerminalArtifact?: (messageId: string) => void;
+  readonly onOpenWrittenFile?: (toolCallId: string) => void;
+  readonly onBranchReply?: (messageId: string) => Promise<void>;
+  readonly onCharacterCreationHandoffConsumed?: (intentId: string) => void;
   readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
+  readonly onProjectTemplateHandoffConsumed?: (intentId: string) => void;
+  readonly onWorldCreationHandoffConsumed?: (intentId: string) => void;
   readonly onSubmit: (
     target: DshConversationCreationTarget,
     input: DshComposerSubmitInput,
@@ -122,7 +141,13 @@ export interface DshEntryContextPresentation {
   readonly workspace: Pick<
     Extract<AgentComposerWorkspacePresentation, { readonly kind: 'entry' }>,
     'projects'
-  >;
+  > &
+    Partial<
+      Pick<
+        Extract<AgentComposerWorkspacePresentation, { readonly kind: 'entry' }>,
+        'onSelectProject' | 'loadAuthoringCatalog' | 'onCreateAuthoringTarget'
+      >
+    >;
   readonly experimentalCreative?: {
     readonly loadCharacterTargets: () => Promise<
       DshEntryTargetCatalog<AgentCharacterDialogueTargetOption>
@@ -149,13 +174,26 @@ export function DshAgentView(props: DshAgentViewProps): JSX.Element {
 
 function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   const { locale } = useTranslation();
-  const { initialCharacterDialogueHandoff, onCharacterDialogueHandoffConsumed, surfaceKind } =
-    props;
+  const {
+    initialCharacterCreationHandoff,
+    initialCharacterDialogueHandoff,
+    initialProjectTemplateHandoff,
+    initialWorldCreationHandoff,
+    onCharacterCreationHandoffConsumed,
+    onCharacterDialogueHandoffConsumed,
+    onProjectTemplateHandoffConsumed,
+    onWorldCreationHandoffConsumed,
+    onDraftChange,
+    surfaceKind,
+  } = props;
+  const agentViewRef = useRef<HTMLDivElement>(null);
   const copy = locale === 'zh-cn' ? ZH_COPY : EN_COPY;
   const [entryExperience, setEntryExperience] = useState<'assistant' | 'authoring'>('assistant');
   const [entryDetail, setEntryDetail] = useState<'project' | 'character' | 'world'>('character');
   const [entryDetailExpanded, setEntryDetailExpanded] = useState(true);
-  const [entryWorkspaceTarget, setEntryWorkspaceTarget] = useState<DshEntryProjectSelection>();
+  const [entryWorkspaceTarget, setEntryWorkspaceTarget] = useState<AgentComposerWorkspaceTarget>();
+  const [entryCreationOnlyKind, setEntryCreationOnlyKind] =
+    useState<AgentComposerAuthoringCreationContext['targetKind']>();
   const [entryCharacterTargets, setEntryCharacterTargets] = useState<
     readonly AgentCharacterDialogueTargetOption[]
   >([]);
@@ -176,13 +214,21 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   >('companion');
   const [entryWorldLaunch, setEntryWorldLaunch] = useState<SelectedWorldLaunch>();
   const [entryContextDiagnostic, setEntryContextDiagnostic] = useState<string>();
-  const composerPresentationSnapshots = useDshComposerPresentationSnapshotStore();
-  const previousConversationIdRef = useRef(props.conversationId);
   const adoptedCharacterHandoffRef = useRef<string>();
-  const canvasWorkspaceId = props.composerConfiguration?.context?.canvas.workspaceId;
+  const adoptedCharacterCreationHandoffRef = useRef<string>();
+  const adoptedProjectTemplateHandoffRef = useRef<string>();
+  const adoptedWorldCreationHandoffRef = useRef<string>();
   const conversationTitle = props.projection?.title ?? copy.newConversation;
   const runtimeReady = props.runtime?.status === 'running';
   const hasEvents = (props.projection?.events.length ?? 0) > 0;
+  const transcriptItems = useMemo(
+    () => projectDshTranscriptPresentation(props.projection?.events ?? []),
+    [props.projection?.events],
+  );
+  const writtenFileReferencesByTurn = useMemo(
+    () => indexWrittenFileReferences(props.projection?.events ?? []),
+    [props.projection?.events],
+  );
   const activeTurnStart = findActiveTurnStart(props.projection);
   const showEmptyState =
     props.conversationId === undefined && !hasEvents && !props.conversationFeed;
@@ -204,6 +250,111 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
       ? 'agent-workspace-initial-center-group'
       : 'agent-entry-center-group';
   useEffect(() => {
+    const agentView = agentViewRef.current;
+    if (agentView === null) {
+      throw new Error('Agent Webview root is unavailable for clipboard handling.');
+    }
+    const ownerDocument = agentView.ownerDocument;
+    const handleCopy = (event: ClipboardEvent): void => {
+      if (event.defaultPrevented) return;
+      const selectedText = resolveAgentSelectedText(agentView, event.target);
+      if (selectedText === undefined || event.clipboardData === null) return;
+      event.clipboardData.setData('text/plain', selectedText);
+      event.preventDefault();
+    };
+    const handleCopyShortcut = (event: KeyboardEvent): void => {
+      if (!isCopyShortcut(event) || event.defaultPrevented) return;
+      const selectedText = resolveAgentSelectedText(agentView, event.target);
+      const clipboard = ownerDocument.defaultView?.navigator.clipboard;
+      if (selectedText === undefined || clipboard?.writeText === undefined) return;
+      event.preventDefault();
+      void clipboard.writeText(selectedText).catch((error: unknown) => {
+        logger.warn('Agent Webview could not write the selected text to the clipboard.', {
+          error,
+        });
+      });
+    };
+    ownerDocument.addEventListener('copy', handleCopy);
+    ownerDocument.addEventListener('keydown', handleCopyShortcut);
+    return () => {
+      ownerDocument.removeEventListener('copy', handleCopy);
+      ownerDocument.removeEventListener('keydown', handleCopyShortcut);
+    };
+  }, []);
+  useEffect(() => {
+    const handoff = initialCharacterCreationHandoff;
+    if (
+      handoff === undefined ||
+      surfaceKind !== 'entry' ||
+      adoptedCharacterCreationHandoffRef.current === handoff.intentId
+    ) {
+      return;
+    }
+    adoptedCharacterCreationHandoffRef.current = handoff.intentId;
+    setEntryExperience('authoring');
+    setEntryDetail('project');
+    setEntryDetailExpanded(true);
+    setEntryWorkspaceTarget(undefined);
+    setEntryCharacterLaunches([]);
+    setEntryWorldLaunch(undefined);
+    setEntryCreationOnlyKind('character-project');
+    if (handoff.entry === 'character-kit') onDraftChange('$character-creator ');
+    onCharacterCreationHandoffConsumed?.(handoff.intentId);
+  }, [
+    initialCharacterCreationHandoff,
+    onCharacterCreationHandoffConsumed,
+    onDraftChange,
+    surfaceKind,
+  ]);
+  useEffect(() => {
+    const handoff = initialWorldCreationHandoff;
+    if (
+      handoff === undefined ||
+      surfaceKind !== 'entry' ||
+      adoptedWorldCreationHandoffRef.current === handoff.intentId
+    ) {
+      return;
+    }
+    adoptedWorldCreationHandoffRef.current = handoff.intentId;
+    setEntryExperience('authoring');
+    setEntryDetail('project');
+    setEntryDetailExpanded(true);
+    setEntryWorkspaceTarget(undefined);
+    setEntryCharacterLaunches([]);
+    setEntryWorldLaunch(undefined);
+    setEntryCreationOnlyKind('world-project');
+    if (handoff.entry === 'world-bible') onDraftChange('$world-creator ');
+    onWorldCreationHandoffConsumed?.(handoff.intentId);
+  }, [initialWorldCreationHandoff, onDraftChange, onWorldCreationHandoffConsumed, surfaceKind]);
+  useEffect(() => {
+    const handoff = initialProjectTemplateHandoff;
+    if (
+      handoff === undefined ||
+      surfaceKind !== 'entry' ||
+      adoptedProjectTemplateHandoffRef.current === handoff.intentId
+    ) {
+      return;
+    }
+    adoptedProjectTemplateHandoffRef.current = handoff.intentId;
+    setEntryExperience('authoring');
+    setEntryDetail('project');
+    setEntryDetailExpanded(true);
+    setEntryWorkspaceTarget({
+      label: handoff.label,
+      context: {
+        kind: 'workspace',
+        workspaceId: handoff.binding.workspaceId,
+        workspaceGrantId: handoff.binding.workspaceGrantId,
+      },
+      authority: handoff.binding.authority,
+    });
+    setEntryCharacterLaunches([]);
+    setEntryWorldLaunch(undefined);
+    setEntryCreationOnlyKind(undefined);
+    onDraftChange(handoff.template === 'storyboard' ? '$storyboard ' : '$media-production ');
+    onProjectTemplateHandoffConsumed?.(handoff.intentId);
+  }, [initialProjectTemplateHandoff, onDraftChange, onProjectTemplateHandoffConsumed, surfaceKind]);
+  useEffect(() => {
     const handoff = initialCharacterDialogueHandoff;
     if (
       handoff === undefined ||
@@ -219,6 +370,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
     setEntryCharacterConversationMode(handoff.binding.mode);
     setEntryWorldLaunch(undefined);
     setEntryWorkspaceTarget(undefined);
+    setEntryCreationOnlyKind(undefined);
     setEntryCharacterLaunches(
       handoff.binding.participants.map((participant, index) => ({
         globalCharacterId: participant.globalCharacterId,
@@ -255,33 +407,6 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
     };
   }, [entryDetail, entryDetailExpanded, props.entryContext?.experimentalCreative]);
   useEffect(() => {
-    const previousConversationId = previousConversationIdRef.current;
-    previousConversationIdRef.current = props.conversationId;
-    if (
-      previousConversationId !== undefined ||
-      props.conversationId === undefined ||
-      canvasWorkspaceId === undefined
-    ) {
-      return;
-    }
-    composerPresentationSnapshots.transferIfAbsent(
-      {
-        agentSurfaceId: props.agentSurfaceId,
-        workspaceId: canvasWorkspaceId,
-      },
-      {
-        agentSurfaceId: props.agentSurfaceId,
-        conversationId: props.conversationId,
-        workspaceId: canvasWorkspaceId,
-      },
-    );
-  }, [
-    canvasWorkspaceId,
-    composerPresentationSnapshots,
-    props.agentSurfaceId,
-    props.conversationId,
-  ]);
-  useEffect(() => {
     const experimentalCreative = props.entryContext?.experimentalCreative;
     if (!entryDetailExpanded || entryDetail !== 'world' || !experimentalCreative) {
       return;
@@ -317,6 +442,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   };
   const composer = (
     <DshComposer
+      canvasCreationControl={props.canvasCreationControl}
       key={props.conversationId ?? `draft:${props.agentSurfaceId}`}
       copy={copy}
       agentSurfaceId={props.agentSurfaceId}
@@ -338,6 +464,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
       onModelChange={props.onModelChange}
       onMediaModelChange={props.onMediaModelChange}
       onPermissionPresetChange={props.onPermissionPresetChange}
+      onCanvasSelect={props.onCanvasSelect}
       onRemoveQueuedMessage={props.onRemoveQueuedMessage}
       onSendQueuedMessageNow={props.onSendQueuedMessageNow}
       onRequestMentions={props.onRequestMentions}
@@ -371,6 +498,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
 
   return (
     <div
+      ref={agentViewRef}
       className="dsh-agent-view agent-chat-view flex h-full min-h-0 flex-1 flex-col overflow-hidden"
       data-agent-surface={props.agentSurfaceId}
       data-agent-surface-kind={props.surfaceKind}
@@ -405,6 +533,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
                     throw new Error(`Unsupported Entry experience '${value}'.`);
                   }
                   setEntryExperience(value);
+                  setEntryCreationOnlyKind(undefined);
                   setEntryDetail(value === 'authoring' ? 'project' : 'character');
                   setEntryDetailExpanded(true);
                   setEntryContextDiagnostic(undefined);
@@ -453,11 +582,22 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
               >
                 {entryExperience === 'authoring' ? (
                   <AuthoringTargetSelector
-                    projects={props.entryContext.workspace.projects}
+                    presentation={props.entryContext.workspace}
                     selected={entryWorkspaceTarget}
                     pending={props.submitting}
-                    onChange={(target) => {
+                    creationOnlyKind={entryCreationOnlyKind}
+                    onCancelCreation={() => {
+                      setEntryCreationOnlyKind(undefined);
+                      setEntryExperience('assistant');
+                      setEntryDetail('character');
+                      setEntryWorkspaceTarget(undefined);
+                      setEntryContextDiagnostic(undefined);
+                    }}
+                    onChange={async (target) => {
                       setEntryWorkspaceTarget(target);
+                      if (target?.target !== undefined) {
+                        setEntryCreationOnlyKind(undefined);
+                      }
                       setEntryContextDiagnostic(undefined);
                     }}
                   />
@@ -495,16 +635,42 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
             aria-live="polite"
           >
             {props.conversationFeed}
-            {props.projection?.events.map((event, index) => (
-              <DshSessionEvent
-                copy={copy}
-                event={event}
-                key={eventKey(event, index)}
-                messageAuthorPresentation={props.messageAuthorPresentation}
-                onOpenTerminalArtifact={props.onOpenTerminalArtifact}
-                onResolveImageAttachmentPreview={props.onResolveImageAttachmentPreview}
-              />
-            ))}
+            {transcriptItems.map((item) =>
+              item.kind === 'tool-group' ? (
+                <DshToolActivity
+                  active={props.projection?.currentTurn === item.turn}
+                  copy={copy}
+                  hasProcessNote={item.hasProcessNote}
+                  key={`tool-group:${props.conversationId}:${props.projection?.dshSessionId}:${item.turn}:${item.sourceIndex}`}
+                  onResolveImageAttachmentPreview={props.onResolveImageAttachmentPreview}
+                  tools={item.tools}
+                />
+              ) : item.kind === 'progress-note' ? (
+                <DshProgressNote
+                  copy={copy}
+                  event={item.event}
+                  key={`progress:${item.event.turn}:${item.event.step}:${item.event.messageId}`}
+                />
+              ) : (
+                <DshSessionEvent
+                  copy={copy}
+                  event={item.event}
+                  key={eventKey(item.event, item.sourceIndex)}
+                  messageAuthorPresentation={props.messageAuthorPresentation}
+                  onOpenWrittenFile={props.onOpenWrittenFile}
+                  onBranchReply={props.onBranchReply}
+                  onResolveImageAttachmentPreview={props.onResolveImageAttachmentPreview}
+                  writtenFileReferences={
+                    item.event.kind === 'message' && item.event.role === 'assistant'
+                      ? writtenFileReferencesByTurn.get(item.event.turn)
+                      : undefined
+                  }
+                />
+              ),
+            )}
+            {props.projection && props.projection.todos.length > 0 ? (
+              <DshPlanPanel copy={copy} todos={props.projection.todos} />
+            ) : null}
             {activeTurnStart ? (
               <DshActiveTurnStatus
                 copy={copy}
@@ -527,7 +693,53 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   );
 }
 
+function resolveAgentSelectedText(
+  agentView: HTMLElement,
+  eventTarget: EventTarget | null,
+): string | undefined {
+  if (
+    (eventTarget instanceof HTMLInputElement || eventTarget instanceof HTMLTextAreaElement) &&
+    agentView.contains(eventTarget)
+  ) {
+    const selectionStart = eventTarget.selectionStart;
+    const selectionEnd = eventTarget.selectionEnd;
+    if (selectionStart === null || selectionEnd === null || selectionStart === selectionEnd) {
+      return undefined;
+    }
+    return eventTarget.value.slice(selectionStart, selectionEnd);
+  }
+
+  const selection = agentView.ownerDocument.getSelection();
+  if (selection === null || selection.isCollapsed || selection.rangeCount === 0) {
+    return undefined;
+  }
+  const selectedRange = selection.getRangeAt(0);
+  if (!selectedRange.intersectsNode(agentView)) return undefined;
+
+  const agentRange = agentView.ownerDocument.createRange();
+  agentRange.selectNodeContents(agentView);
+  const constrainedRange = selectedRange.cloneRange();
+  if (selectedRange.compareBoundaryPoints(Range.START_TO_START, agentRange) < 0) {
+    constrainedRange.setStart(agentRange.startContainer, agentRange.startOffset);
+  }
+  if (selectedRange.compareBoundaryPoints(Range.END_TO_END, agentRange) > 0) {
+    constrainedRange.setEnd(agentRange.endContainer, agentRange.endOffset);
+  }
+  const selectedText = constrainedRange.toString();
+  return selectedText.length > 0 ? selectedText : undefined;
+}
+
+function isCopyShortcut(event: KeyboardEvent): boolean {
+  return (
+    event.key.toLocaleLowerCase() === 'c' &&
+    (event.metaKey || event.ctrlKey) &&
+    !event.altKey &&
+    !event.shiftKey
+  );
+}
+
 function DshComposer({
+  canvasCreationControl,
   agentSurfaceId,
   copy,
   surfaceKind,
@@ -548,6 +760,7 @@ function DshComposer({
   onModelChange,
   onMediaModelChange,
   onPermissionPresetChange,
+  onCanvasSelect,
   onRemoveQueuedMessage,
   onSendQueuedMessageNow,
   onRequestMentions,
@@ -567,6 +780,7 @@ function DshComposer({
   onRemoveWorldLaunch,
   presentation,
 }: {
+  readonly canvasCreationControl?: ReactNode;
   readonly agentSurfaceId: string;
   readonly copy: DshAgentCopy;
   readonly surfaceKind: 'entry' | 'assistant' | 'workspace';
@@ -586,10 +800,11 @@ function DshComposer({
   readonly onDraftChange: (value: string) => void;
   readonly onModelChange: (modelOptionId: string) => void;
   readonly onMediaModelChange?: (
-    category: 'image' | 'video' | 'audio',
+    category: 'image' | 'video' | 'audio' | 'music',
     modelOptionId: string,
   ) => void;
   readonly onPermissionPresetChange: (permissionPresetId: string) => void;
+  readonly onCanvasSelect: (canvasId: string) => Promise<void>;
   readonly onRemoveQueuedMessage?: (messageId: string) => void;
   readonly onSendQueuedMessageNow?: (messageId: string) => void;
   readonly onRequestMentions?: (filter: string) => void;
@@ -603,7 +818,7 @@ function DshComposer({
   readonly entryExperience: 'assistant' | 'authoring';
   readonly entryContextAvailable: boolean;
   readonly experimentalCreativeContextAvailable: boolean;
-  readonly entryWorkspaceTarget?: DshEntryProjectSelection;
+  readonly entryWorkspaceTarget?: AgentComposerWorkspaceTarget;
   readonly selectedCharacterLaunches: readonly SelectedCharacterLaunch[];
   readonly entryCharacterConversationMode: 'companion' | 'narrative';
   readonly onEntryCharacterConversationModeChange: (mode: 'companion' | 'narrative') => void;
@@ -627,31 +842,76 @@ function DshComposer({
     category: model.category,
     capabilities: model.capabilities,
   }));
-  const generationParams: GenerationParams = {
-    ratio: '16:9',
-    resolution: '1080p',
-    videoDuration: 'auto',
-    videoFps: 24,
-    audioDuration: 'auto',
-    audioType: 'sfx',
-  };
+  const [generationParams, setGenerationParams] =
+    useState<GenerationParams>(DEFAULT_GENERATION_PARAMS);
+  const mediaModelParameterProfiles = useMemo(() => {
+    const selected = configuration?.selectedMediaModelOptionIds ?? {};
+    return Object.fromEntries(
+      (['image', 'video', 'audio', 'music'] as const).flatMap((category) => {
+        const modelOptionId = selected[category];
+        const model = configuration?.models.find(
+          (candidate) => candidate.id === modelOptionId && candidate.category === category,
+        );
+        return model?.parameterProfile === undefined
+          ? []
+          : ([[category, model.parameterProfile]] as const);
+      }),
+    );
+  }, [configuration]);
   const configurationDiagnostic = configurationError ?? configuration?.diagnostic;
   const canvasCatalog = configuration?.context?.canvas;
-  const canvasSelectionScope: DshComposerCanvasSelectionScope | undefined =
-    canvasCatalog === undefined
-      ? undefined
-      : {
-          agentSurfaceId,
-          workspaceId: canvasCatalog.workspaceId,
-          ...(conversationId === undefined ? {} : { conversationId }),
-        };
-  const [effectiveSelectedCanvasId, selectCanvasId] =
+  const canvasSelectionScope: DshComposerCanvasSelectionScope | undefined = useMemo(
+    () =>
+      canvasCatalog === undefined || conversationId !== undefined
+        ? undefined
+        : {
+            agentSurfaceId,
+            workspaceId: canvasCatalog.workspaceId,
+          },
+    [agentSurfaceId, canvasCatalog, conversationId],
+  );
+  const [draftSelectedCanvasId, selectDraftCanvasId] =
     useDshComposerCanvasSelection(canvasSelectionScope);
-  const selectedCanvasOption = canvasCatalog?.options.find((option) => {
-    const optionId =
-      option.target.kind === 'workspace-board' ? 'workspace-board' : option.target.canvasId;
-    return optionId === effectiveSelectedCanvasId;
-  });
+  const conversationSelection = configuration?.context?.canvasSelection;
+  const storedSelectedCanvasId =
+    conversationId === undefined
+      ? draftSelectedCanvasId
+      : conversationSelection?.conversationId === conversationId
+        ? conversationSelection.canvasId
+        : undefined;
+  const storedSelectedCanvasOption = canvasCatalog?.options.find(
+    (option) => option.target.canvasId === storedSelectedCanvasId,
+  );
+  const defaultCanvasOption = canvasCatalog?.options.find(
+    (option) => option.target.canvasId === canvasCatalog.defaultTarget.canvasId,
+  );
+  const selectedCanvasOption =
+    storedSelectedCanvasOption ?? (conversationId === undefined ? defaultCanvasOption : undefined);
+  const effectiveSelectedCanvasId =
+    selectedCanvasOption?.target.canvasId ?? storedSelectedCanvasId ?? '';
+  useEffect(() => {
+    if (
+      canvasSelectionScope === undefined ||
+      canvasCatalog === undefined ||
+      storedSelectedCanvasOption !== undefined ||
+      defaultCanvasOption === undefined
+    ) {
+      return;
+    }
+    logger.warn('DSH composer Canvas selection is unavailable; resetting the local snapshot.', {
+      workspaceId: canvasCatalog.workspaceId,
+      canvasId: storedSelectedCanvasId,
+      defaultCanvasId: defaultCanvasOption.target.canvasId,
+    });
+    selectDraftCanvasId(defaultCanvasOption.target.canvasId);
+  }, [
+    canvasCatalog,
+    canvasSelectionScope,
+    defaultCanvasOption,
+    selectDraftCanvasId,
+    storedSelectedCanvasId,
+    storedSelectedCanvasOption,
+  ]);
   const canvasSelectionDiagnostic =
     canvasCatalog === undefined ||
     (selectedCanvasOption !== undefined && selectedCanvasOption.disabled !== true)
@@ -692,7 +952,13 @@ function DshComposer({
   );
   const submitTarget = (): DshConversationCreationTarget => {
     if (entryExperience === 'authoring' && entryWorkspaceTarget !== undefined) {
-      return { kind: 'project', projectId: entryWorkspaceTarget.projectId };
+      return {
+        kind: 'authoring',
+        workspaceId: entryWorkspaceTarget.context.workspaceId,
+        workspaceGrantId: entryWorkspaceTarget.context.workspaceGrantId,
+        authority: entryWorkspaceTarget.authority ?? failMissingAuthoringAuthority(),
+        target: entryWorkspaceTarget.target ?? null,
+      };
     }
     if (selectedWorldLaunch !== undefined) {
       throw new Error(
@@ -817,8 +1083,10 @@ function DshComposer({
         image: configuration?.selectedMediaModelOptionIds.image ?? 'none',
         video: configuration?.selectedMediaModelOptionIds.video ?? 'none',
         audio: configuration?.selectedMediaModelOptionIds.audio ?? 'none',
+        music: configuration?.selectedMediaModelOptionIds.music ?? 'none',
       }}
       availableMediaModels={models.filter((model) => model.category !== 'llm')}
+      mediaModelParameterProfiles={mediaModelParameterProfiles}
       mediaModelOptOutEnabled={false}
       onMediaModelSelect={onMediaModelChange ?? (() => undefined)}
       sessionMode="agent"
@@ -847,7 +1115,12 @@ function DshComposer({
       genCategory="image"
       genParams={generationParams}
       onGenCategoryChange={() => undefined}
-      onGenParamsChange={() => undefined}
+      onGenParamsChange={(category, partial) =>
+        setGenerationParams((current) => ({
+          ...current,
+          [category]: { ...current[category], ...partial },
+        }))
+      }
     >
       <div className="dsh-composer-adapter" data-dsh-adapter="input-area">
         <InputArea
@@ -916,7 +1189,7 @@ function DshComposer({
                       : { description: preset.description }),
                   })),
                   onChange: onPermissionPresetChange,
-                  disabled: currentTurn !== undefined || submitting,
+                  disabled: false,
                 }
           }
           submissionBlocked={submissionBlocked}
@@ -927,22 +1200,17 @@ function DshComposer({
             configurationDiagnostic
           }
           workspaceCanvas={
-            configuration?.context
+            configuration?.context && canvasCatalog
               ? {
                   workspaceLabel: configuration.context.workspaceLabel,
                   showCanvasIndex: true,
                   canvas: {
-                    workspaceId: configuration.context.canvas.workspaceId,
-                    defaultTarget: configuration.context.canvas.defaultTarget,
-                    options: configuration.context.canvas.options.map((option) => ({
-                      id:
-                        option.target.kind === 'workspace-board'
-                          ? 'workspace-board'
-                          : option.target.canvasId,
-                      label:
-                        option.target.kind === 'workspace-board'
-                          ? t('chat.input.workspaceCanvas.board')
-                          : option.label,
+                    creationControl: canvasCreationControl,
+                    workspaceId: canvasCatalog.workspaceId,
+                    defaultTarget: canvasCatalog.defaultTarget,
+                    options: canvasCatalog.options.map((option) => ({
+                      id: option.target.canvasId,
+                      label: option.label,
                       target: option.target,
                       ...(option.summary === undefined ? {} : { summary: option.summary }),
                       ...(option.disabled === undefined ? {} : { disabled: option.disabled }),
@@ -951,18 +1219,18 @@ function DshComposer({
                     selectedId: effectiveSelectedCanvasId,
                     loading: false,
                     ...(canvasSelectionDiagnostic === undefined &&
-                    configuration.context.canvas.diagnostics.length === 0
+                    configuration.context.canvasSelectionDiagnostic === undefined &&
+                    canvasCatalog.diagnostics.length === 0
                       ? {}
                       : {
                           diagnostic:
                             canvasSelectionDiagnostic ??
-                            configuration.context.canvas.diagnostics.join(' '),
+                            configuration.context.canvasSelectionDiagnostic ??
+                            canvasCatalog.diagnostics.join(' '),
                         }),
                     onSelect: async (optionId) => {
-                      const option = configuration.context?.canvas.options.find((candidate) =>
-                        candidate.target.kind === 'workspace-board'
-                          ? optionId === 'workspace-board'
-                          : candidate.target.canvasId === optionId,
+                      const option = canvasCatalog.options.find(
+                        (candidate) => candidate.target.canvasId === optionId,
                       );
                       if (option === undefined || option.disabled === true) {
                         setInputDiagnostic(
@@ -970,8 +1238,13 @@ function DshComposer({
                         );
                         return;
                       }
-                      selectCanvasId(optionId);
-                      setInputDiagnostic(undefined);
+                      try {
+                        if (conversationId === undefined) selectDraftCanvasId(optionId);
+                        else await onCanvasSelect(optionId);
+                        setInputDiagnostic(undefined);
+                      } catch (error) {
+                        setInputDiagnostic(describeError(error));
+                      }
                     },
                   },
                 }
@@ -1154,13 +1427,14 @@ type DshImagePreviewState =
     }
   | { readonly status: 'unavailable'; readonly diagnostic: string };
 
-function UserMessageImageAttachment({
+function DshImageAttachment({
   block,
   copy,
   onResolve,
 }: {
   readonly block: Extract<
-    import('@neko/agent-contracts/dsh-session-host').DshSessionUserMessageBlock,
+    | import('@neko/agent-contracts/dsh-session-host').DshSessionUserMessageBlock
+    | import('@neko/agent-contracts/dsh-session-host').DshSessionToolContentBlock,
     { readonly type: 'image' }
   >;
   readonly copy: DshAgentCopy;
@@ -1301,18 +1575,44 @@ function assertImagePreviewMatches(
   }
 }
 
+function DshProgressNote({
+  copy,
+  event,
+}: {
+  readonly copy: DshAgentCopy;
+  readonly event: Extract<
+    DshSessionHostEvent,
+    { readonly kind: 'message'; readonly role: 'assistant' }
+  >;
+}): JSX.Element {
+  return (
+    <div className="agent-message-list-item py-0.5" data-agent-progress-note={event.state}>
+      <div className="agent-transcript-rail">
+        <div className="agent-turn-progress ml-7">
+          <span className="agent-turn-progress__label">{copy.processNote}</span>
+          <MarkdownDocumentView className="markdown-content" value={event.text} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DshSessionEvent({
   copy,
   event,
   messageAuthorPresentation,
-  onOpenTerminalArtifact,
+  onOpenWrittenFile,
+  onBranchReply,
   onResolveImageAttachmentPreview,
+  writtenFileReferences,
 }: {
   readonly copy: DshAgentCopy;
   readonly event: DshSessionHostEvent;
   readonly messageAuthorPresentation?: DshAgentViewProps['messageAuthorPresentation'];
-  readonly onOpenTerminalArtifact?: DshAgentViewProps['onOpenTerminalArtifact'];
+  readonly onOpenWrittenFile?: DshAgentViewProps['onOpenWrittenFile'];
+  readonly onBranchReply?: DshAgentViewProps['onBranchReply'];
   readonly onResolveImageAttachmentPreview?: DshAgentViewProps['onResolveImageAttachmentPreview'];
+  readonly writtenFileReferences?: readonly WrittenFileLink[];
 }): JSX.Element | null {
   if (event.kind === 'thought') {
     return (
@@ -1375,15 +1675,22 @@ function DshSessionEvent({
                       data-agent-message-state={event.state}
                     >
                       <MarkdownDocumentView className="markdown-content" value={event.text} />
-                      {event.artifact === undefined ? null : (
-                        <TerminalArtifactReference
-                          artifact={event.artifact}
+                      {event.state === 'final' && writtenFileReferences?.length ? (
+                        <WrittenFileReferences
                           copy={copy}
-                          messageId={event.messageId}
-                          onOpen={onOpenTerminalArtifact}
+                          links={writtenFileReferences}
+                          onOpen={onOpenWrittenFile}
                         />
-                      )}
+                      ) : null}
                     </div>
+                    {event.state === 'final' ? (
+                      <AssistantReplyActions
+                        copy={copy}
+                        messageId={event.messageId}
+                        onBranch={onBranchReply}
+                        text={event.text}
+                      />
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -1393,7 +1700,15 @@ function DshSessionEvent({
       </div>
     );
   }
-  if (event.kind === 'tool') return <DshToolEvent copy={copy} event={event} />;
+  if (event.kind === 'tool') {
+    return (
+      <DshToolEvent
+        copy={copy}
+        event={event}
+        onResolveImageAttachmentPreview={onResolveImageAttachmentPreview}
+      />
+    );
+  }
   if (event.kind === 'command') return <DshCommandEvent copy={copy} event={event} />;
   if (event.kind === 'turn' && event.phase === 'start') return null;
   const diagnostic = event.kind === 'diagnostic';
@@ -1427,42 +1742,55 @@ function DshSessionEvent({
   );
 }
 
-function TerminalArtifactReference({
-  artifact,
+interface WrittenFileLink {
+  readonly toolCallId: string;
+  readonly reference: NonNullable<ToolEvent['writtenFileReference']>;
+}
+
+function indexWrittenFileReferences(
+  events: readonly DshSessionHostEvent[],
+): ReadonlyMap<number, readonly WrittenFileLink[]> {
+  const references = new Map<number, WrittenFileLink[]>();
+  const seen = new Set<string>();
+  for (const event of events) {
+    if (event.kind !== 'tool' || event.writtenFileReference === undefined) continue;
+    if (seen.has(event.toolCallId)) continue;
+    seen.add(event.toolCallId);
+    const links = references.get(event.turn) ?? [];
+    links.push({ toolCallId: event.toolCallId, reference: event.writtenFileReference });
+    references.set(event.turn, links);
+  }
+  return references;
+}
+
+function WrittenFileReferences({
   copy,
-  messageId,
+  links,
   onOpen,
 }: {
-  readonly artifact: NonNullable<
-    Extract<
-      DshSessionHostEvent,
-      { readonly kind: 'message'; readonly role: 'assistant' }
-    >['artifact']
-  >;
   readonly copy: DshAgentCopy;
-  readonly messageId: string;
-  readonly onOpen?: DshAgentViewProps['onOpenTerminalArtifact'];
+  readonly links: readonly WrittenFileLink[];
+  readonly onOpen?: DshAgentViewProps['onOpenWrittenFile'];
 }): JSX.Element {
-  const path = projectContentLocatorPath(artifact.contentLocator);
-  const openLabel = copy.openPersistedDocument.replace('{title}', artifact.title);
   return (
-    <div
-      className="agent-terminal-artifact-reference"
-      data-agent-terminal-artifact="reviewable-markdown"
-    >
-      <button
-        type="button"
-        className="agent-terminal-artifact-link"
-        title={`${artifact.title}\n${path}`}
-        aria-label={openLabel}
-        disabled={onOpen === undefined}
-        onClick={onOpen === undefined ? undefined : () => onOpen(messageId)}
-      >
-        <span className="agent-terminal-artifact-icon" aria-hidden="true">
-          <FileIcon size={14} strokeWidth={1.7} />
-        </span>
-        <span className="agent-terminal-artifact-title">{artifact.title}</span>
-      </button>
+    <div className="agent-written-file-references" data-agent-written-file-references="true">
+      {links.map(({ toolCallId, reference }) => {
+        const path = projectContentLocatorPath(reference.contentLocator);
+        return (
+          <button
+            type="button"
+            className="agent-written-file-link"
+            title={`${reference.title}\n${path}`}
+            aria-label={copy.openWrittenFile.replace('{title}', reference.title)}
+            disabled={onOpen === undefined}
+            key={toolCallId}
+            onClick={onOpen === undefined ? undefined : () => onOpen(toolCallId)}
+          >
+            <FileIcon size={14} strokeWidth={1.7} aria-hidden="true" />
+            <span>{reference.title}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -1476,7 +1804,21 @@ function UserMessageContent({
   readonly copy: DshAgentCopy;
   readonly onResolveImageAttachmentPreview?: DshAgentViewProps['onResolveImageAttachmentPreview'];
 }): JSX.Element {
-  const primaryBlocks = content.filter((block) => block.type !== 'image');
+  const nonImageBlocks = content.filter((block) => block.type !== 'image');
+  let firstTrailingReference = nonImageBlocks.length;
+  while (
+    firstTrailingReference > 0 &&
+    nonImageBlocks[firstTrailingReference - 1]?.type === 'resource'
+  ) {
+    firstTrailingReference -= 1;
+  }
+  const primaryBlocks = nonImageBlocks.slice(0, firstTrailingReference);
+  const referenceBlocks = nonImageBlocks
+    .slice(firstTrailingReference)
+    .filter(
+      (block): block is Extract<DshSessionUserMessageBlock, { readonly type: 'resource' }> =>
+        block.type === 'resource',
+    );
   const imageBlocks = content.filter(
     (block): block is Extract<DshSessionUserMessageBlock, { readonly type: 'image' }> =>
       block.type === 'image',
@@ -1489,15 +1831,30 @@ function UserMessageContent({
             block.type === 'text' ? (
               <span key={`text:${index}`}>{block.text}</span>
             ) : (
-              <UserMessageResourceToken key={`resource:${index}:${block.label}`} block={block} />
+              <UserMessageResourceToken
+                key={`resource:${index}:${block.label}`}
+                block={block}
+                variant="inline"
+              />
             ),
           )}
+        </div>
+      ) : null}
+      {referenceBlocks.length > 0 ? (
+        <div className="agent-user-prompt-references" data-agent-reference-row="true">
+          {referenceBlocks.map((block, index) => (
+            <UserMessageResourceToken
+              key={`reference:${index}:${block.label}`}
+              block={block}
+              variant="attached"
+            />
+          ))}
         </div>
       ) : null}
       {imageBlocks.length > 0 ? (
         <div className="agent-message-image-grid">
           {imageBlocks.map((block, index) => (
-            <UserMessageImageAttachment
+            <DshImageAttachment
               key={`image:${index}:${block.attachment.attachmentId}`}
               block={block}
               copy={copy}
@@ -1512,11 +1869,13 @@ function UserMessageContent({
 
 function UserMessageResourceToken({
   block,
+  variant,
 }: {
   readonly block: Extract<
     DshSessionHostEvent,
     { readonly kind: 'message'; readonly role: 'user' }
   >['content'][number] & { readonly type: 'resource' };
+  readonly variant: 'attached' | 'inline';
 }): JSX.Element {
   const projection = projectPathReferenceToken({
     path: projectContentLocatorPath(block.contentLocator),
@@ -1529,9 +1888,84 @@ function UserMessageResourceToken({
       title={projection.title}
       meta={projection.meta}
       thumbnailSrc={projection.thumbnailSrc}
-      variant="attached"
-      className="agent-user-resource-token"
+      variant={variant}
+      className={variant === 'attached' ? 'agent-user-resource-token' : undefined}
     />
+  );
+}
+
+function AssistantReplyActions({
+  copy,
+  messageId,
+  onBranch,
+  text,
+}: {
+  readonly copy: DshAgentCopy;
+  readonly messageId: string;
+  readonly onBranch?: DshAgentViewProps['onBranchReply'];
+  readonly text: string;
+}): JSX.Element {
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [branchState, setBranchState] = useState<'idle' | 'pending' | 'failed'>('idle');
+  const copyLabel =
+    copyState === 'copied'
+      ? copy.copiedReply
+      : copyState === 'failed'
+        ? copy.copyReplyFailed
+        : copy.copyReply;
+  const branchLabel = branchState === 'pending' ? copy.branchingReply : copy.branchReply;
+  const copyReply = async (): Promise<void> => {
+    try {
+      if (navigator.clipboard?.writeText === undefined) {
+        throw new Error('Clipboard API is unavailable.');
+      }
+      await navigator.clipboard.writeText(text);
+      setCopyState('copied');
+    } catch {
+      setCopyState('failed');
+    }
+  };
+  const branchReply = async (): Promise<void> => {
+    if (onBranch === undefined) return;
+    setBranchState('pending');
+    try {
+      await onBranch(messageId);
+    } catch {
+      setBranchState('failed');
+    }
+  };
+  return (
+    <div className="agent-reply-action-stack">
+      <div className="agent-reply-actions" aria-label={copy.replyActions}>
+        <button
+          aria-label={copyLabel}
+          title={copyLabel}
+          type="button"
+          onClick={() => void copyReply()}
+        >
+          {copyState === 'copied' ? <CheckIcon size={15} /> : <CopyIcon size={15} />}
+        </button>
+        {onBranch === undefined ? null : (
+          <button
+            aria-label={branchLabel}
+            disabled={branchState === 'pending'}
+            title={branchLabel}
+            type="button"
+            onClick={() => void branchReply()}
+          >
+            <BranchIcon size={15} />
+          </button>
+        )}
+        <span className="sr-only" aria-live="polite">
+          {copyState === 'idle' ? '' : copyLabel}
+        </span>
+      </div>
+      {branchState === 'failed' ? (
+        <p className="agent-reply-action-error" role="alert">
+          {copy.branchReplyFailed}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -1592,15 +2026,210 @@ function formatTurnDuration(copy: DshAgentCopy, durationMs: number): string {
     .replace('{seconds}', String(seconds).padStart(2, '0'));
 }
 
+function DshPlanPanel({
+  copy,
+  todos,
+}: {
+  readonly copy: DshAgentCopy;
+  readonly todos: DshSessionHostProjection['todos'];
+}): JSX.Element {
+  const hasIncomplete = todos.some((todo) => todo.status !== 'completed');
+  const [expanded, setExpanded] = useState(hasIncomplete);
+  useEffect(() => {
+    if (!hasIncomplete) setExpanded(false);
+  }, [hasIncomplete]);
+  const completedCount = todos.filter((todo) => todo.status === 'completed').length;
+  const complete = completedCount === todos.length;
+  const tone = complete ? 'is-success' : 'is-info';
+  const status = copy.planProgress
+    .replace('{completed}', String(completedCount))
+    .replace('{total}', String(todos.length));
+
+  return (
+    <div className="agent-message-list-item py-0.5" data-agent-plan={tone}>
+      <div className="agent-transcript-rail">
+        <div className="agent-turn-activity ml-7">
+          <div className={`agent-inline-card ${tone}`}>
+            <button
+              aria-expanded={expanded}
+              className="agent-inline-header flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[11px] transition-colors"
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+            >
+              {complete ? (
+                <SuccessIcon className="h-3 w-3 shrink-0 text-[var(--agent-success)]" />
+              ) : (
+                <LoadingIcon className="h-3 w-3 shrink-0 text-[var(--agent-info)]" />
+              )}
+              <span className="shrink-0 font-medium text-[var(--agent-fg)]">{copy.plan}</span>
+              <span className="min-w-0 flex-1 truncate text-[10px] text-[var(--agent-fg-secondary)]">
+                {status}
+              </span>
+              <ChevronDownIcon
+                className={`h-3 w-3 shrink-0 text-[var(--agent-fg-secondary)] transition-transform ${expanded ? 'rotate-180' : ''}`}
+              />
+            </button>
+            {expanded ? (
+              <ol className="agent-plan-list border-t border-[var(--agent-divider)]">
+                {todos.map((todo, index) => (
+                  <li className="agent-plan-item" key={todo.content}>
+                    <span
+                      aria-label={copy.planStatus[todo.status]}
+                      className={`agent-plan-status is-${todo.status}`}
+                    >
+                      {todo.status === 'completed' ? (
+                        <SuccessIcon />
+                      ) : todo.status === 'in_progress' ? (
+                        <LoadingIcon />
+                      ) : (
+                        <span>{index + 1}</span>
+                      )}
+                    </span>
+                    <span className="agent-plan-content">{todo.content}</span>
+                  </li>
+                ))}
+              </ol>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DshToolActivity({
+  active,
+  copy,
+  hasProcessNote,
+  onResolveImageAttachmentPreview,
+  tools,
+}: {
+  readonly active: boolean;
+  readonly copy: DshAgentCopy;
+  readonly hasProcessNote: boolean;
+  readonly onResolveImageAttachmentPreview?: DshAgentViewProps['onResolveImageAttachmentPreview'];
+  readonly tools: readonly ToolEvent[];
+}): JSX.Element {
+  const [expanded, setExpanded] = useState(false);
+  const completedCount = tools.filter((tool) => tool.status === 'completed').length;
+  const failedCount = tools.filter((tool) => tool.status === 'failed').length;
+  const running = tools.some((tool) => tool.status === 'pending' || tool.status === 'in_progress');
+  const tone = failedCount > 0 ? 'is-danger' : running ? 'is-info' : 'is-success';
+  const status =
+    failedCount > 0
+      ? copy.workProgressFailed
+          .replace('{failed}', String(failedCount))
+          .replace('{completed}', String(completedCount))
+          .replace('{total}', String(tools.length))
+      : running
+        ? copy.workProgressRunning
+            .replace('{completed}', String(completedCount))
+            .replace('{total}', String(tools.length))
+        : copy.workProgressCompleted.replace('{total}', String(tools.length));
+  const icon =
+    failedCount > 0 ? (
+      <ErrorIcon className="h-3 w-3 shrink-0 text-[var(--agent-danger)]" />
+    ) : running ? (
+      <LoadingIcon className="h-3 w-3 shrink-0 text-[var(--agent-info)]" />
+    ) : (
+      <SuccessIcon className="h-3 w-3 shrink-0 text-[var(--agent-success)]" />
+    );
+
+  return (
+    <div className="agent-message-list-item py-0.5">
+      <div className="agent-transcript-rail">
+        <div className="agent-turn-activity ml-7" data-agent-tool-activity={tone}>
+          <div className={`agent-inline-card ${tone}`}>
+            <button
+              aria-expanded={expanded}
+              className="agent-inline-header flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[11px] transition-colors"
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+            >
+              {icon}
+              <span className="shrink-0 font-medium text-[var(--agent-fg)]">
+                {copy.workProgress}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[10px] text-[var(--agent-fg-secondary)]">
+                {status}
+              </span>
+              <ChevronDownIcon
+                className={`h-3 w-3 shrink-0 text-[var(--agent-fg-secondary)] transition-transform ${expanded ? 'rotate-180' : ''}`}
+              />
+            </button>
+            {active && !hasProcessNote ? (
+              <p className="agent-tool-activity-note">{copy.processNoteUnavailable}</p>
+            ) : null}
+            {expanded ? (
+              <div className="agent-tool-activity-list border-t border-[var(--agent-divider)] px-2 py-2">
+                {tools.map((tool) => (
+                  <DshToolEvent
+                    copy={copy}
+                    embedded
+                    event={tool}
+                    key={`${tool.turn}:${tool.toolCallId}`}
+                    onResolveImageAttachmentPreview={onResolveImageAttachmentPreview}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DshToolImageGrid({
+  copy,
+  onResolve,
+  tool,
+}: {
+  readonly copy: DshAgentCopy;
+  readonly onResolve?: DshAgentViewProps['onResolveImageAttachmentPreview'];
+  readonly tool: ToolEvent;
+}): JSX.Element | null {
+  const images = (tool.content ?? []).filter(
+    (
+      block,
+    ): block is Extract<
+      import('@neko/agent-contracts/dsh-session-host').DshSessionToolContentBlock,
+      { readonly type: 'image' }
+    > => block.type === 'image',
+  );
+  if (images.length === 0) return null;
+  return (
+    <div
+      className="agent-message-image-grid agent-tool-image-grid"
+      data-agent-tool-images={tool.toolCallId}
+    >
+      {images.map((block, index) => (
+        <DshImageAttachment
+          block={block}
+          copy={copy}
+          key={`${block.attachment.attachmentId}:${index}`}
+          onResolve={onResolve}
+        />
+      ))}
+    </div>
+  );
+}
+
 function DshToolEvent({
   copy,
   event,
+  embedded = false,
+  onResolveImageAttachmentPreview,
 }: {
   readonly copy: DshAgentCopy;
   readonly event: Extract<DshSessionHostEvent, { readonly kind: 'tool' }>;
+  readonly embedded?: boolean;
+  readonly onResolveImageAttachmentPreview?: DshAgentViewProps['onResolveImageAttachmentPreview'];
 }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
-  const expandable = event.rawInput !== undefined || event.rawOutput !== undefined;
+  const hasImages = (event.content ?? []).some((block) => block.type === 'image');
+  const expandable = event.rawInput !== undefined || event.rawOutput !== undefined || hasImages;
+  const title = projectToolEventTitle(event);
   const tone =
     event.status === 'failed'
       ? 'is-danger'
@@ -1618,41 +2247,58 @@ function DshToolEvent({
       <CodeIcon className="h-3 w-3 shrink-0 text-[var(--agent-info)]" />
     );
 
+  const card = (
+    <div className={`agent-inline-card ${tone}`} data-agent-tool-call-id={event.toolCallId}>
+      <button
+        aria-expanded={expandable ? expanded : undefined}
+        className="agent-inline-header flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[11px] transition-colors"
+        disabled={!expandable}
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+      >
+        {icon}
+        <span className="min-w-0 max-w-[70%] truncate font-medium text-[var(--agent-fg)]">
+          {title}
+        </span>
+        <span className="flex-1 truncate font-mono text-[10px] text-[var(--agent-fg-secondary)]">
+          {copy.toolStatus[event.status]}
+        </span>
+        {expandable ? (
+          <ChevronDownIcon
+            className={`h-3 w-3 shrink-0 text-[var(--agent-fg-secondary)] transition-transform ${expanded ? 'rotate-180' : ''}`}
+          />
+        ) : null}
+      </button>
+      {expanded ? (
+        <div className="agent-tool-details border-t border-[var(--agent-divider)] px-3 py-2 text-[10px]">
+          <ToolPayload copy={copy} label={copy.input} value={event.rawInput} />
+          <ToolPayload copy={copy} label={copy.output} value={event.rawOutput} />
+          <DshToolImageGrid copy={copy} onResolve={onResolveImageAttachmentPreview} tool={event} />
+        </div>
+      ) : null}
+    </div>
+  );
+  if (embedded) return <div className="agent-turn-activity-item">{card}</div>;
   return (
     <div className="agent-message-list-item py-0.5">
       <div className="agent-transcript-rail">
-        <div className="agent-turn-activity ml-7">
-          <div className={`agent-inline-card ${tone}`} data-agent-tool-call-id={event.toolCallId}>
-            <button
-              className="agent-inline-header flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[11px] transition-colors"
-              disabled={!expandable}
-              type="button"
-              onClick={() => setExpanded((value) => !value)}
-            >
-              {icon}
-              <span className="min-w-0 max-w-[70%] truncate font-medium text-[var(--agent-fg)]">
-                {event.title ?? event.toolCallId}
-              </span>
-              <span className="flex-1 truncate font-mono text-[10px] text-[var(--agent-fg-secondary)]">
-                {copy.toolStatus[event.status]}
-              </span>
-              {expandable ? (
-                <ChevronDownIcon
-                  className={`h-3 w-3 shrink-0 text-[var(--agent-fg-secondary)] transition-transform ${expanded ? 'rotate-180' : ''}`}
-                />
-              ) : null}
-            </button>
-            {expanded ? (
-              <div className="border-t border-[var(--agent-divider)] px-3 py-2 text-[10px]">
-                <ToolPayload copy={copy} label={copy.input} value={event.rawInput} />
-                <ToolPayload copy={copy} label={copy.output} value={event.rawOutput} />
-              </div>
-            ) : null}
-          </div>
-        </div>
+        <div className="agent-turn-activity ml-7">{card}</div>
       </div>
     </div>
   );
+}
+
+function projectToolEventTitle(event: ToolEvent): string {
+  const title = event.title ?? event.toolCallId;
+  if (title !== 'skill' || !isToolInputRecord(event.rawInput)) return title;
+  const skillName = event.rawInput['name'];
+  return typeof skillName === 'string' && skillName.trim().length > 0
+    ? `skill · ${skillName.trim()}`
+    : title;
+}
+
+function isToolInputRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function DshCommandEvent({
@@ -1900,9 +2546,15 @@ interface DshAgentCopy {
   readonly copiedPayload: string;
   readonly copyPayload: string;
   readonly copyPayloadFailed: string;
+  readonly copyReply: string;
+  readonly copiedReply: string;
+  readonly copyReplyFailed: string;
+  readonly branchReply: string;
+  readonly branchingReply: string;
+  readonly branchReplyFailed: string;
+  readonly replyActions: string;
   readonly attach: string;
   readonly attachmentsUnavailable: string;
-  readonly board: string;
   readonly chooseCharacter: string;
   readonly chooseProject: string;
   readonly chooseWorld: string;
@@ -1927,9 +2579,14 @@ interface DshAgentCopy {
   readonly modelRequired: string;
   readonly loading: string;
   readonly output: string;
-  readonly openPersistedDocument: string;
+  readonly openWrittenFile: string;
   readonly permissions: string;
+  readonly plan: string;
+  readonly planProgress: string;
+  readonly planStatus: Readonly<Record<'pending' | 'in_progress' | 'completed', string>>;
   readonly placeholder: string;
+  readonly processNote: string;
+  readonly processNoteUnavailable: string;
   readonly restartRuntime: string;
   readonly restartingRuntime: string;
   readonly runtimeUnavailableTitle: string;
@@ -1943,6 +2600,10 @@ interface DshAgentCopy {
   readonly turnElapsed: string;
   readonly turnEnded: string;
   readonly turnInProgress: string;
+  readonly workProgress: string;
+  readonly workProgressCompleted: string;
+  readonly workProgressFailed: string;
+  readonly workProgressRunning: string;
   readonly you: string;
   readonly youAvatar: string;
   readonly unavailable: string;
@@ -1962,10 +2623,16 @@ const EN_COPY: DshAgentCopy = {
   copiedPayload: 'Copied',
   copyPayload: 'Copy',
   copyPayloadFailed: 'Copy failed',
+  copyReply: 'Copy reply',
+  copiedReply: 'Reply copied',
+  copyReplyFailed: 'Copy reply failed',
+  branchReply: 'Branch conversation',
+  branchingReply: 'Branching conversation…',
+  branchReplyFailed: 'Could not branch from this reply.',
+  replyActions: 'Reply actions',
   attach: 'Add context',
   attachmentsUnavailable:
     'Attachments are unavailable until the authorized resource picker is connected.',
-  board: 'Board',
   chooseCharacter: 'Choose character',
   chooseProject: 'Choose project',
   chooseWorld: 'Choose world',
@@ -1987,12 +2654,18 @@ const EN_COPY: DshAgentCopy = {
   loadingConfiguration: 'Loading model configuration…',
   loading: 'Loading DSH session…',
   output: 'Result',
-  openPersistedDocument: 'Open document: {title}',
+  openWrittenFile: 'Open document: {title}',
   model: 'Model',
   newConversation: 'New conversation',
   modelRequired: 'Select a configured model before sending.',
   permissions: 'Pending permissions',
+  plan: 'Creative plan',
+  planProgress: '{completed}/{total} steps completed',
+  planStatus: { pending: 'Pending', in_progress: 'In progress', completed: 'Completed' },
   placeholder: 'Ask the DSH Agent…',
+  processNote: 'Progress update',
+  processNoteUnavailable:
+    'The model provided no additional progress update. Expand this section to inspect the current Tool status.',
   restartRuntime: 'Restart DSH',
   restartingRuntime: 'Restarting DSH runtime…',
   runtimeUnavailableTitle: 'DSH runtime unavailable',
@@ -2004,13 +2677,17 @@ const EN_COPY: DshAgentCopy = {
     completed: 'Completed',
     failed: 'Failed',
   },
-  thought: 'Reasoning',
+  thought: 'Model reasoning summary',
   turnDuration: 'Ran for {duration}',
   durationSeconds: '{seconds}s',
   durationMinutesSeconds: '{minutes}m {seconds}s',
   turnElapsed: '{duration} elapsed',
   turnEnded: 'Turn {turn} ended',
   turnInProgress: 'Turn {turn} in progress',
+  workProgress: 'Work progress',
+  workProgressCompleted: '{total} operations completed',
+  workProgressFailed: '{failed} failed · {completed}/{total} completed',
+  workProgressRunning: '{completed}/{total} operations completed',
   you: 'You',
   youAvatar: 'ME',
   unavailable: 'Unavailable',
@@ -2030,9 +2707,15 @@ const ZH_COPY: DshAgentCopy = {
   copiedPayload: '已复制',
   copyPayload: '复制',
   copyPayloadFailed: '复制失败',
+  copyReply: '复制回复',
+  copiedReply: '已复制回复',
+  copyReplyFailed: '复制回复失败',
+  branchReply: '从此处创建分支',
+  branchingReply: '正在创建分支…',
+  branchReplyFailed: '无法从此回复创建分支。',
+  replyActions: '回复操作',
   attach: '添加上下文',
   attachmentsUnavailable: '授权资源选择器接入前，附件上下文暂不可用。',
-  board: '画板',
   chooseCharacter: '选择角色',
   chooseProject: '选择项目',
   chooseWorld: '选择世界',
@@ -2054,25 +2737,34 @@ const ZH_COPY: DshAgentCopy = {
   loadingConfiguration: '正在加载模型配置…',
   loading: '正在加载 DSH 会话…',
   output: '结果',
-  openPersistedDocument: '打开文档：{title}',
+  openWrittenFile: '打开文档：{title}',
   model: '模型',
   newConversation: '新会话',
   modelRequired: '发送前请选择已配置的模型。',
   permissions: '待处理权限',
+  plan: '创作步骤',
+  planProgress: '{completed}/{total} 步已完成',
+  planStatus: { pending: '待处理', in_progress: '进行中', completed: '已完成' },
   placeholder: '向 DSH Agent 提问…',
+  processNote: '过程说明',
+  processNoteUnavailable: '模型未提供额外的过程说明；可展开查看当前工具状态。',
   restartRuntime: '重启 DSH',
   restartingRuntime: '正在重启 DSH 运行时…',
   runtimeUnavailableTitle: 'DSH 运行时不可用',
   send: '发送消息',
   selectModel: '选择模型',
   toolStatus: { pending: '等待中', in_progress: '运行中', completed: '已完成', failed: '失败' },
-  thought: '思考过程',
+  thought: '模型推理摘要',
   turnDuration: '用时 {duration}',
   durationSeconds: '{seconds}秒',
   durationMinutesSeconds: '{minutes}分{seconds}秒',
   turnElapsed: '已用时 {duration}',
   turnEnded: '回合 {turn} 已结束',
   turnInProgress: '回合 {turn} 处理中',
+  workProgress: '工作进度',
+  workProgressCompleted: '{total} 项操作已完成',
+  workProgressFailed: '{failed} 项失败 · {completed}/{total} 项完成',
+  workProgressRunning: '{completed}/{total} 项操作已完成',
   you: '你',
   youAvatar: '我',
   unavailable: '不可用',
@@ -2082,6 +2774,10 @@ const ZH_COPY: DshAgentCopy = {
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function failMissingAuthoringAuthority(): never {
+  throw new Error('Agent authoring selection is missing its exact Project authority.');
 }
 
 function projectCatalogDiagnostic(diagnostics: readonly string[]): string | undefined {

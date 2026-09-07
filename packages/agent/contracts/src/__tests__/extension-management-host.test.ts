@@ -84,12 +84,12 @@ describe('DSH extension management contract', () => {
       identity,
       route: 'snapshot.get',
     });
-    expect(
-      parseAgentExtensionManagementHostResult(
-        { requestId: request.requestId, route: request.route, projection: projection() },
-        request,
-      ).projection.mcp,
-    ).toEqual([]);
+    const result = parseAgentExtensionManagementHostResult(
+      { requestId: request.requestId, route: request.route, projection: projection() },
+      request,
+    );
+    if (result.route === 'skill.detail.get') throw new Error('Unexpected Skill detail result.');
+    expect(result.projection.mcp).toEqual([]);
     expect(() =>
       parseAgentExtensionManagementHostResult(
         {
@@ -100,6 +100,39 @@ describe('DSH extension management contract', () => {
         request,
       ),
     ).toThrow('owner identity is stale');
+  });
+
+  it('accepts exact on-demand Skill detail without adding content to the catalog projection', () => {
+    const request = createAgentExtensionManagementHostRequest({
+      requestId: 'request-detail',
+      identity,
+      route: 'skill.detail.get',
+      name: 'storyboard',
+      source: 'bundled',
+    });
+    expect(
+      parseAgentExtensionManagementHostResult(
+        {
+          requestId: request.requestId,
+          route: request.route,
+          detail: {
+            id: 'dsh-skill:bundled:storyboard',
+            name: 'storyboard',
+            description: 'Create a storyboard.',
+            source: 'bundled',
+            provider: 'openneko-builtin',
+            userInvocable: true,
+            modelInvocable: true,
+            content: '# Storyboard',
+            fingerprint: `sha256:${'a'.repeat(64)}`,
+          },
+        },
+        request,
+      ),
+    ).toMatchObject({
+      route: 'skill.detail.get',
+      detail: { name: 'storyboard', content: '# Storyboard' },
+    });
   });
 
   it('rejects Plugin inventory from the Skill/MCP-only projection', () => {

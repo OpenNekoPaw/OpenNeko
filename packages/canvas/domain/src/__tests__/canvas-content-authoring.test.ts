@@ -305,6 +305,7 @@ describe('Canvas ContentLocator authoring', () => {
         locator: { file: { authority: 'workspace', path: 'media/source.png' } },
         title: 'source.png',
         mediaKind: 'image',
+        position: { x: 640, y: 320 },
       },
       generateId: () => 'source-node',
     });
@@ -325,6 +326,7 @@ describe('Canvas ContentLocator authoring', () => {
     expect(derived.nodes[0]).toEqual(originalSource);
     expect(derived.nodes[1]).toMatchObject({
       id: 'derived-node',
+      position: { x: 800, y: 320 },
       data: {
         contentLocator: {
           file: { authority: 'workspace', path: 'neko/derived/crop/source-cropped.png' },
@@ -340,6 +342,33 @@ describe('Canvas ContentLocator authoring', () => {
       sourceEndpoint: { nodeId: 'source-node', scope: 'node' },
       targetEndpoint: { nodeId: 'derived-node', scope: 'node' },
     });
+  });
+
+  it('keeps an explicit derivative position authoritative', () => {
+    const source = projectResolvedCanvasMaterialToCanvas({
+      canvas: createEmptyCanvasData('Fixture'),
+      material: {
+        locator: { file: { authority: 'workspace', path: 'media/source.mp4' } },
+        title: 'source.mp4',
+        mediaKind: 'video',
+        position: { x: 640, y: 320 },
+      },
+      generateId: () => 'source-node',
+    });
+
+    const derived = projectDerivedCanvasMaterialToCanvas({
+      canvas: source,
+      material: {
+        locator: { file: { authority: 'workspace', path: 'neko/derived/audio/source.m4a' } },
+        title: 'source.m4a',
+        mediaKind: 'audio',
+        position: { x: 240, y: 180 },
+      },
+      sourceNodeIds: ['source-node'],
+      generateId: () => 'derived-node',
+    });
+
+    expect(derived.nodes[1]?.position).toEqual({ x: 240, y: 180 });
   });
 
   it('commits an AI derivative with Generation evidence without mutating its referenced source', () => {

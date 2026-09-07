@@ -15,10 +15,15 @@ import {
 import {
   createDshDomainToolHandlers,
   enforceDshDomainToolEffect,
+  type CanvasDshAuthoringPort,
   type DshDomainToolHandlers,
   type GenerationDshLifecycleProjectionOutcome,
 } from '@neko/agent-runtime/acp';
-import { CanvasProjectAuthoringService } from '@neko/canvas-domain';
+import {
+  CanvasProjectAuthoringService,
+  createCanvasWorkspaceTarget,
+  type CanvasWorkspaceTurnTarget,
+} from '@neko/canvas-domain';
 import {
   createNodeHostContentReadService,
   createNodeDocumentAccessService,
@@ -28,13 +33,12 @@ import { createNodeDocumentLowLevelAccess } from '@neko/content-domain/document/
 import { join } from 'node:path';
 import { CutProjectAuthoringService } from '@neko/cut-domain';
 import type { CutExportApplicationService } from '@neko/cut-node';
+import { resolveGenerationModelParameterProfile } from '@neko/generation-domain';
 import {
   createPurposeGenerationJobPort,
   type GenerationApplicationRuntime,
   type GenerationJobSnapshot,
 } from '@neko/generation-domain/job';
-import { createHash } from 'node:crypto';
-import type { ProfessionalApplicationBindingRepository } from '@neko/professional-apps-node';
 import type { DesktopWorkspaceGrantAuthorityPort } from '@neko/host/desktop-workspace-grant-authority';
 import type { ConfigManager, WorkspaceConfigManagerAuthority } from '@neko/host/settings';
 import type { CharacterDshAuthoringService } from '@neko/chara-domain/application';
@@ -61,6 +65,10 @@ export function createDesktopDshDomainToolHandlers(options: {
   readonly bindings: Pick<ConversationDshSessionBindingStore, 'getByDshSessionId'>;
   readonly contexts: Pick<AgentConversationContextAuthorityPort, 'readContext'>;
   readonly workspaceGrants: Pick<DesktopWorkspaceGrantAuthorityPort, 'resolveAuthorizedWorkspace'>;
+  readonly coordinateCanvasMutation: <TResult>(
+    target: CanvasWorkspaceTurnTarget,
+    operation: () => Promise<TResult>,
+  ) => Promise<TResult>;
   readonly generationRuntime: Pick<GenerationApplicationRuntime, 'getJobs'>;
   readonly generationProjection: DesktopDshGenerationProjectionPort;
   readonly configuration: Pick<
@@ -72,9 +80,6 @@ export function createDesktopDshDomainToolHandlers(options: {
     readonly root: string;
   };
   readonly skillAuthoring?: Pick<DshSkillAuthoringService, 'create'>;
-  readonly comfyUi?: {
-    readonly bindings: Pick<ProfessionalApplicationBindingRepository, 'get' | 'getEnabled'>;
-  };
   readonly cutRuntime?: {
     resolveExportService(input: {
       readonly workspaceId: string;
@@ -146,7 +151,6 @@ export function createDesktopDshDomainToolHandlers(options: {
       }),
     };
   };
-  const comfyUi = options.comfyUi;
   const domainTools = createDshDomainToolHandlers({
     contexts,
     skillAuthoring: options.skillAuthoring,
@@ -159,40 +163,6 @@ export function createDesktopDshDomainToolHandlers(options: {
           bindings: purposeBindings(resolved.config),
         });
       },
-      ...(comfyUi
-        ? {
-            submitComfyUi: async ({ context, request, submission }) => {
-              const binding = await comfyUi.bindings.get('comfyui');
-              const enabled = binding ? await comfyUi.bindings.getEnabled('comfyui') : false;
-              if (!binding?.endpoint || !enabled) {
-                throw Object.assign(
-                  new Error(
-                    'ComfyUI must be added, enabled and configured with an explicit loopback endpoint.',
-                  ),
-                  { code: 'GENERATION_DSH_COMFYUI_UNCONFIGURED' },
-                );
-              }
-              const resolved = await resolveGenerationOwner(context);
-              const clientDigest = createHash('sha256')
-                .update(`${request.sessionId}\0${request.turn}\0${request.toolCallId}`)
-                .digest('hex')
-                .slice(0, 24);
-              const snapshot = await resolved.jobs.submitGeneration({
-                lifecycleMode: submission.lifecycleMode,
-                generationType: 'workflow',
-                providerId: 'comfyui',
-                request: {
-                  endpoint: binding.endpoint,
-                  clientId: `openneko-${clientDigest}`,
-                  workflow: submission.workflow,
-                  outputKind: submission.outputKind,
-                  inputBindings: submission.inputBindings,
-                },
-              });
-              return { snapshot, jobs: resolved.jobs };
-            },
-          }
-        : {}),
     },
     canvas: {
       resolveService: async (context) => {
@@ -201,7 +171,7 @@ export function createDesktopDshDomainToolHandlers(options: {
           workspaceContext.binding.workspaceGrantId,
           workspaceContext.binding.workspaceId,
         );
-        return new CanvasProjectAuthoringService({
+        const authoring = new CanvasProjectAuthoringService({
           contentRead: createNodeHostContentReadService({
             workspaceRoot: resolution.workspace.workspacePath,
           }),
@@ -209,6 +179,57 @@ export function createDesktopDshDomainToolHandlers(options: {
             workspaceRoot: resolution.workspace.workspacePath,
           }),
         });
+        const coordinateMutation = async <TResult>(
+          input: { readonly documentPath: string; readonly signal?: AbortSignal },
+          mutate: (
+            expectedFingerprint: Awaited<ReturnType<typeof authoring.query>>['fingerprint'],
+          ) => Promise<TResult>,
+        ): Promise<TResult> =>
+          options.coordinateCanvasMutation(
+            createCanvasWorkspaceTarget(resolution.workspace.workspaceId, input.documentPath),
+            async () => {
+              const current = await authoring.query({
+                documentPath: input.documentPath,
+                ...(input.signal === undefined ? {} : { signal: input.signal }),
+              });
+              return mutate(current.fingerprint);
+            },
+          );
+        const service: CanvasDshAuthoringPort = {
+          query: authoring.query.bind(authoring),
+          groupNodes: (input) =>
+            coordinateMutation(input, (expectedFingerprint) =>
+              authoring.groupNodes({ ...input, expectedFingerprint }),
+            ),
+          createNode: (input) =>
+            coordinateMutation(input, (expectedFingerprint) =>
+              authoring.createNode({
+                documentPath: input.documentPath,
+                expectedFingerprint,
+                node: input.node,
+                ...(input.signal === undefined ? {} : { signal: input.signal }),
+              }),
+            ),
+          updateNode: (input) =>
+            coordinateMutation(input, (expectedFingerprint) =>
+              authoring.updateBlock({
+                documentPath: input.documentPath,
+                expectedFingerprint,
+                request: input.request,
+                ...(input.signal === undefined ? {} : { signal: input.signal }),
+              }),
+            ),
+          createConnection: (input) =>
+            coordinateMutation(input, (expectedFingerprint) =>
+              authoring.createConnection({
+                documentPath: input.documentPath,
+                expectedFingerprint,
+                connection: input.connection,
+                ...(input.signal === undefined ? {} : { signal: input.signal }),
+              }),
+            ),
+        };
+        return service;
       },
     },
     cut: {
@@ -350,10 +371,33 @@ export function createDesktopDshDomainToolHandlers(options: {
   });
 }
 
-function purposeBindings(config: Pick<ConfigManager, 'resolveModelRefForPurpose'>) {
+function purposeBindings(
+  config: Pick<ConfigManager, 'resolveModelRefForPurpose' | 'getProvider' | 'getModel'>,
+) {
   return {
     resolveGenerationBinding(purpose: string) {
-      return config.resolveModelRefForPurpose(purpose);
+      const binding = config.resolveModelRefForPurpose(purpose);
+      if (!binding) return undefined;
+      const provider = config.getProvider(binding.providerId);
+      const model = config.getModel(binding.modelId);
+      if (!provider || !model) {
+        throw new Error(
+          `Generation binding ${binding.providerId}/${binding.modelId} is unavailable.`,
+        );
+      }
+      const parameterProfile =
+        purpose === 'image.generate' || purpose === 'image.edit' || purpose === 'video.generate'
+          ? resolveGenerationModelParameterProfile({
+              providerType: provider.type,
+              modelName: model.name,
+            })
+          : undefined;
+      return {
+        ...binding,
+        providerType: provider.type,
+        modelCapabilities: model.capabilities,
+        ...(parameterProfile === undefined ? {} : { parameterProfile }),
+      };
     },
   };
 }

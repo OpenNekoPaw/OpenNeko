@@ -17,10 +17,15 @@ const identity = {
   dshSessionId: 'dsh-session-1',
 };
 
-const workspaceBoardTarget = {
-  kind: 'workspace-board' as const,
+const defaultCanvasTarget = {
   workspaceId: 'workspace-1',
+  canvasId: 'neko/boards/workspace.nkc',
 };
+
+const turnConfiguration = {
+  model: '["openai","gpt-5",8192]',
+  permissionPresetId: 'workspace-write',
+} as const;
 
 describe('Desktop DSH Session Host', () => {
   it('publishes and submits the first message through one sender-bound create command', async () => {
@@ -42,7 +47,13 @@ describe('Desktop DSH Session Host', () => {
           workbenchInstanceId: 'workbench-1',
           agentSurfaceId: 'surface-1',
           permissionPresetId: 'workspace-write',
-          target: { kind: 'project', projectId: 'project-1' },
+          target: {
+            kind: 'authoring',
+            workspaceId: 'workspace-1',
+            workspaceGrantId: 'grant-1',
+            authority: { kind: 'project', projectId: 'project-1' },
+            target: null,
+          },
           initialInput: {
             kind: 'message',
             text: 'Create in project',
@@ -61,7 +72,13 @@ describe('Desktop DSH Session Host', () => {
       workbenchInstanceId: 'workbench-1',
       agentSurfaceId: 'surface-1',
       permissionPresetId: 'workspace-write',
-      target: { kind: 'project', projectId: 'project-1' },
+      target: {
+        kind: 'authoring',
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'grant-1',
+        authority: { kind: 'project', projectId: 'project-1' },
+        target: null,
+      },
       initialInput: {
         kind: 'message',
         text: 'Create in project',
@@ -329,6 +346,19 @@ describe('Desktop DSH Session Host', () => {
     const prompt = vi.fn(async () => ({ stopReason: 'end_turn' as const }));
     const applyConversation = vi.fn(async () => ({ supportsImageInput: false }));
     const projection = new DshAcpProjection();
+    projection.acceptSessionEvent({
+      sessionId: identity.dshSessionId,
+      sequence: 0,
+      time: 1_100,
+      type: 'todo/write',
+      data: {
+        todos: [
+          { content: 'Inspect source evidence', status: 'completed' },
+          { content: 'Define the PV structure', status: 'in_progress' },
+        ],
+      },
+      replay: false,
+    });
     projection.acceptSessionUpdate({
       sessionId: identity.dshSessionId,
       _meta: { opennekoSequence: 1, opennekoTurn: 0 },
@@ -366,6 +396,10 @@ describe('Desktop DSH Session Host', () => {
       prompt.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
     );
     expect(result.stopReason).toBe('end_turn');
+    expect(result.projection.todos).toEqual([
+      { content: 'Inspect source evidence', status: 'completed' },
+      { content: 'Define the PV structure', status: 'in_progress' },
+    ]);
     expect(result.projection.events).toEqual([
       {
         kind: 'tool',
@@ -395,7 +429,6 @@ describe('Desktop DSH Session Host', () => {
       contentLocator: { file: { authority: 'workspace' as const, path: 'books/draft.epub' } },
     };
     const canvasTurnTarget = {
-      kind: 'exact-canvas' as const,
       workspaceId: 'workspace-1',
       canvasId: 'neko/boards/story.nkc',
     };
@@ -437,7 +470,6 @@ describe('Desktop DSH Session Host', () => {
     });
     const host = createHost({ prompt, turnCanvasTargets: targets });
     const canvasTurnTarget = {
-      kind: 'exact-canvas' as const,
       workspaceId: 'workspace-1',
       canvasId: 'neko/boards/story.nkc',
     };
@@ -473,11 +505,11 @@ describe('Desktop DSH Session Host', () => {
         request('submit', {
           input: {
             kind: 'message',
-            text: 'Analyze the Board',
+            text: 'Analyze the Canvas',
             references: [],
             images: [],
             contextPayloads: [],
-            canvasTurnTarget: workspaceBoardTarget,
+            canvasTurnTarget: defaultCanvasTarget,
           },
         }),
       ),
@@ -487,7 +519,7 @@ describe('Desktop DSH Session Host', () => {
     );
   });
 
-  it('enqueues an ordinary message into the exact running DSH Session without reconfiguring it', async () => {
+  it('binds configuration to an ordinary message without reconfiguring the running Turn', async () => {
     const projection = new DshAcpProjection();
     projection.acceptSessionEvent({
       sessionId: identity.dshSessionId,
@@ -503,11 +535,13 @@ describe('Desktop DSH Session Host', () => {
     }));
     const prompt = vi.fn(async () => ({ stopReason: 'end_turn' as const }));
     const applyConversation = vi.fn(async () => ({ supportsImageInput: false }));
-    const readConversationExecution = vi.fn(async () => ({ supportsImageInput: false }));
+    const bindTurnConfiguration = vi.fn(async () => ({
+      supportsImageInput: false,
+      configuration: turnConfiguration,
+    }));
     const setSessionContext = vi.fn(async () => undefined);
     const resolve = vi.fn(async () => 'OpenNeko exact Canvas context');
     const canvasTurnTarget = {
-      kind: 'exact-canvas' as const,
       workspaceId: 'workspace-1',
       canvasId: 'neko/boards/story.nkc',
     };
@@ -516,7 +550,7 @@ describe('Desktop DSH Session Host', () => {
       enqueueInboxMessage,
       prompt,
       applyConversation,
-      readConversationExecution,
+      bindTurnConfiguration,
       setSessionContext,
       promptContext: { resolve },
     });
@@ -540,9 +574,10 @@ describe('Desktop DSH Session Host', () => {
       prompt: [{ type: 'text', text: 'next request' }],
       displayContent: [{ type: 'text', text: 'next request' }],
       contextText: 'OpenNeko exact Canvas context',
+      configuration: turnConfiguration,
     });
     expect(resolve).toHaveBeenCalledWith(identity.conversationId, [], [], canvasTurnTarget);
-    expect(readConversationExecution).toHaveBeenCalledWith(identity.conversationId, 'window-1');
+    expect(bindTurnConfiguration).toHaveBeenCalledWith(identity.conversationId, 'window-1', true);
     expect(prompt).not.toHaveBeenCalled();
     expect(applyConversation).not.toHaveBeenCalled();
     expect(setSessionContext).not.toHaveBeenCalled();
@@ -573,7 +608,10 @@ describe('Desktop DSH Session Host', () => {
       projection,
       enqueueInboxMessage,
       admitPromptImages,
-      readConversationExecution: vi.fn(async () => ({ supportsImageInput: true })),
+      bindTurnConfiguration: vi.fn(async () => ({
+        supportsImageInput: true,
+        configuration: turnConfiguration,
+      })),
     });
 
     await host.execute(
@@ -601,18 +639,17 @@ describe('Desktop DSH Session Host', () => {
       ],
       displayContent: [{ type: 'image', name: 'clipboard.png' }],
       contextText: 'OpenNeko test context',
+      configuration: turnConfiguration,
     });
   });
 
   it('prioritizes the exact Canvas admission before delegating inbox send-now', async () => {
     const targets = createDshTurnCanvasTargetOwner();
     const first = targets.admit(identity.dshSessionId, {
-      kind: 'exact-canvas',
       workspaceId: 'workspace-1',
       canvasId: 'boards/first.nkc',
     });
     const selected = targets.admit(identity.dshSessionId, {
-      kind: 'exact-canvas',
       workspaceId: 'workspace-1',
       canvasId: 'boards/selected.nkc',
     });
@@ -650,12 +687,10 @@ describe('Desktop DSH Session Host', () => {
   it('restores Canvas admission order when inbox send-now rejects', async () => {
     const targets = createDshTurnCanvasTargetOwner();
     const first = targets.admit(identity.dshSessionId, {
-      kind: 'exact-canvas',
       workspaceId: 'workspace-1',
       canvasId: 'boards/first.nkc',
     });
     const selected = targets.admit(identity.dshSessionId, {
-      kind: 'exact-canvas',
       workspaceId: 'workspace-1',
       canvasId: 'boards/selected.nkc',
     });
@@ -889,6 +924,221 @@ describe('Desktop DSH Session Host', () => {
         ],
       },
     ]);
+  });
+
+  it('projects Tool result images and resolves their exact Conversation preview lazily', async () => {
+    const projection = new DshAcpProjection();
+    const attachment = {
+      attachmentId: 'attachment-tool-overview',
+      mediaType: 'image/jpeg' as const,
+      bytes: 4,
+      width: 640,
+      height: 480,
+    };
+    projection.acceptSessionUpdate({
+      sessionId: identity.dshSessionId,
+      _meta: { opennekoSequence: 0, opennekoTurn: 0 },
+      update: {
+        sessionUpdate: 'tool_call',
+        toolCallId: 'tool-read-images',
+        title: 'openneko_read_images',
+        status: 'pending',
+      },
+    });
+    projection.acceptSessionUpdate({
+      sessionId: identity.dshSessionId,
+      _meta: { opennekoSequence: 1, opennekoTurn: 0 },
+      update: {
+        sessionUpdate: 'tool_call_update',
+        toolCallId: 'tool-read-images',
+        status: 'completed',
+        content: [
+          { type: 'content', content: { type: 'text', text: 'A–D overview' } },
+          {
+            type: 'content',
+            content: {
+              type: 'resource_link',
+              name: 'openneko-image-overview.jpg',
+              uri: `openneko-dsh-attachment:${encodeURIComponent(JSON.stringify(attachment))}`,
+              mimeType: 'image/jpeg',
+            },
+          },
+        ],
+      },
+    });
+    const readImageAttachment = vi.fn(async () => ({ attachment, data: 'YWJjZA==' }));
+    let readResource: ((signal: AbortSignal) => Promise<Uint8Array>) | undefined;
+    const projectImagePreview = vi.fn(
+      (input: { readonly read: (signal: AbortSignal) => Promise<Uint8Array> }) => {
+        readResource = input.read;
+        return {
+          url: 'openneko://resource/lease-tool/image',
+          mediaType: 'image/jpeg' as const,
+          byteLength: 4,
+          width: 640,
+          height: 480,
+        };
+      },
+    );
+    const host = createHost({ projection, readImageAttachment, projectImagePreview });
+
+    const result = requireSessionResult(
+      await host.execute(
+        { webContentsId: 1, frameUrl: 'openneko://app' },
+        request('submit', {
+          input: {
+            kind: 'message',
+            text: 'continue',
+            references: [],
+            images: [],
+            contextPayloads: [],
+          },
+        }),
+      ),
+    );
+
+    expect(result.projection.events).toContainEqual({
+      kind: 'tool',
+      turn: 0,
+      toolCallId: 'tool-read-images',
+      title: 'openneko_read_images',
+      status: 'completed',
+      content: [
+        { type: 'text', text: 'A–D overview' },
+        {
+          type: 'image',
+          label: 'openneko-image-overview.jpg',
+          attachment: {
+            attachmentId: 'attachment-tool-overview',
+            mediaType: 'image/jpeg',
+            byteLength: 4,
+            width: 640,
+            height: 480,
+          },
+        },
+      ],
+    });
+
+    await host.execute(
+      { webContentsId: 1, frameUrl: 'openneko://app' },
+      {
+        requestId: 'request-tool-image-preview',
+        operation: 'image-preview',
+        windowId: 'window-1',
+        rendererSessionId: 'renderer-1',
+        conversationId: identity.conversationId,
+        attachmentId: 'attachment-tool-overview',
+      },
+    );
+    expect(readImageAttachment).not.toHaveBeenCalled();
+    await readResource?.(new AbortController().signal);
+    expect(readImageAttachment).toHaveBeenCalledWith(
+      identity.conversationId,
+      'attachment-tool-overview',
+    );
+  });
+
+  it('projects and opens only the exact completed DSH text write reference', async () => {
+    const projection = new DshAcpProjection();
+    projection.acceptSessionEvent({
+      sessionId: identity.dshSessionId,
+      sequence: 0,
+      time: 1_000,
+      type: 'turn/start',
+      data: { turn: 1 },
+      replay: false,
+    });
+    projection.acceptSessionUpdate({
+      sessionId: identity.dshSessionId,
+      _meta: { opennekoSequence: 1, opennekoTurn: 1 },
+      update: {
+        sessionUpdate: 'tool_call',
+        toolCallId: 'tool-write-document',
+        title: 'write',
+        status: 'pending',
+        rawInput: { file_path: 'notes/story-plan.md', content: '# Story plan' },
+      },
+    });
+    projection.acceptSessionUpdate({
+      sessionId: identity.dshSessionId,
+      _meta: { opennekoSequence: 2, opennekoTurn: 1 },
+      update: {
+        sessionUpdate: 'tool_call_update',
+        toolCallId: 'tool-write-document',
+        status: 'completed',
+        rawOutput: { path: 'notes/story-plan.md', operation: 'create' },
+      },
+    });
+    const openWrittenFile = vi.fn(async () => undefined);
+    const host = createHost({ projection, openWrittenFile });
+
+    const result = requireSessionResult(
+      await host.execute(
+        { webContentsId: 1, frameUrl: 'openneko://app' },
+        request('submit', {
+          input: {
+            kind: 'message',
+            text: 'continue',
+            references: [],
+            images: [],
+            contextPayloads: [],
+          },
+        }),
+      ),
+    );
+    expect(result.projection.events).toContainEqual(
+      expect.objectContaining({
+        kind: 'tool',
+        toolCallId: 'tool-write-document',
+        writtenFileReference: {
+          title: 'story-plan.md',
+          contentLocator: {
+            file: { authority: 'workspace', path: 'notes/story-plan.md' },
+          },
+        },
+      }),
+    );
+
+    await expect(
+      host.execute(
+        { webContentsId: 1, frameUrl: 'openneko://app' },
+        {
+          requestId: 'request-open-written-file',
+          operation: 'written-file-open',
+          windowId: 'window-1',
+          rendererSessionId: 'renderer-1',
+          conversationId: identity.conversationId,
+          toolCallId: 'tool-write-document',
+        },
+      ),
+    ).resolves.toEqual({ requestId: 'request-open-written-file', opened: true });
+    expect(openWrittenFile).toHaveBeenCalledWith({
+      windowId: 'window-1',
+      rendererSessionId: 'renderer-1',
+      conversationId: identity.conversationId,
+      reference: {
+        toolCallId: 'tool-write-document',
+        title: 'story-plan.md',
+        contentLocator: {
+          file: { authority: 'workspace', path: 'notes/story-plan.md' },
+        },
+      },
+    });
+
+    await expect(
+      host.execute(
+        { webContentsId: 1, frameUrl: 'openneko://app' },
+        {
+          requestId: 'request-open-missing-file',
+          operation: 'written-file-open',
+          windowId: 'window-1',
+          rendererSessionId: 'renderer-1',
+          conversationId: identity.conversationId,
+          toolCallId: 'tool-missing',
+        },
+      ),
+    ).rejects.toThrow(/no completed Workspace text write reference/u);
+    expect(openWrittenFile).toHaveBeenCalledTimes(1);
   });
 
   it('projects only an exact Conversation image through a sender-bound lazy resource reader', async () => {
@@ -1129,6 +1379,7 @@ describe('Desktop DSH Session Host', () => {
 
   it('delegates canonical DSH turn timing without using Desktop receipt time', async () => {
     const projection = new DshAcpProjection();
+    const applyConversation = vi.fn(async () => ({ supportsImageInput: false }));
     projection.acceptSessionEvent({
       sessionId: identity.dshSessionId,
       sequence: 0,
@@ -1147,7 +1398,7 @@ describe('Desktop DSH Session Host', () => {
     });
 
     const result = requireSessionResult(
-      await createHost({ projection }).execute(
+      await createHost({ projection, applyConversation }).execute(
         { webContentsId: 1, frameUrl: 'openneko://app' },
         {
           requestId: 'request-snapshot',
@@ -1159,6 +1410,7 @@ describe('Desktop DSH Session Host', () => {
       ),
     );
 
+    expect(applyConversation).toHaveBeenCalledWith(identity.conversationId, 'window-1');
     expect(result.projection.events).toEqual([
       { kind: 'turn', turn: 2, phase: 'start', startedAt: 1_000 },
       {
@@ -1172,7 +1424,7 @@ describe('Desktop DSH Session Host', () => {
     ]);
   });
 
-  it('projects only the conversational summary from an admitted final Markdown artifact', async () => {
+  it('projects historical marker-bearing assistant output as one ordinary transcript message', async () => {
     const projection = new DshAcpProjection();
     projection.acceptSessionEvent({
       sessionId: identity.dshSessionId,
@@ -1205,22 +1457,14 @@ describe('Desktop DSH Session Host', () => {
         messageId: 'assistant-artifact',
         content: {
           type: 'text',
-          text: 'Saved the plan.\n\n<!-- neko:artifact -->\n\n# Durable Plan\n\nFull body.',
+          text: 'Saved the plan.\n\n<!-- neko:next-action -->\n\nGenerate the opening shot.\n\n<!-- neko:artifact -->\n\n# Durable Plan\n\nFull body.',
         },
       },
     });
 
-    const resolveTerminalArtifact = vi.fn(async () => ({
-      messageId: 'assistant-artifact',
-      title: 'Durable Plan',
-      contentLocator: {
-        file: { authority: 'workspace' as const, path: 'neko/generated/file/durable-plan.md' },
-      },
-    }));
     const result = requireSessionResult(
       await createHost({
         projection,
-        resolveTerminalArtifact,
         catalogContext: {
           kind: 'workspace',
           workspaceId: 'workspace-1',
@@ -1242,62 +1486,12 @@ describe('Desktop DSH Session Host', () => {
       expect.objectContaining({
         kind: 'message',
         role: 'assistant',
-        text: 'Saved the plan.',
+        text: 'Saved the plan.\n\n<!-- neko:next-action -->\n\nGenerate the opening shot.\n\n<!-- neko:artifact -->\n\n# Durable Plan\n\nFull body.',
         state: 'final',
-        artifact: {
-          kind: 'reviewable-markdown',
-          title: 'Durable Plan',
-          contentLocator: {
-            file: { authority: 'workspace', path: 'neko/generated/file/durable-plan.md' },
-          },
-        },
       }),
     );
-    expect(resolveTerminalArtifact).toHaveBeenCalledWith(
-      expect.objectContaining({
-        conversationId: identity.conversationId,
-        dshSessionId: identity.dshSessionId,
-        messageId: 'assistant-artifact',
-      }),
-    );
-    expect(JSON.stringify(result.projection.events)).not.toContain('Full body.');
-  });
-
-  it('opens only the exact persisted terminal artifact selected by message identity', async () => {
-    const openTerminalArtifact = vi.fn(async () => undefined);
-    const resolveTerminalArtifact = vi.fn(async () => ({
-      messageId: 'assistant-artifact',
-      title: 'Durable Plan',
-      contentLocator: {
-        file: { authority: 'workspace' as const, path: 'neko/generated/file/durable-plan.md' },
-      },
-    }));
-    const result = await createHost({ resolveTerminalArtifact, openTerminalArtifact }).execute(
-      { webContentsId: 1, frameUrl: 'openneko://app' },
-      {
-        requestId: 'request-open-artifact',
-        operation: 'terminal-artifact-open',
-        windowId: 'window-1',
-        rendererSessionId: 'renderer-1',
-        conversationId: identity.conversationId,
-        messageId: 'assistant-artifact',
-      },
-    );
-
-    expect(result).toEqual({ requestId: 'request-open-artifact', opened: true });
-    expect(openTerminalArtifact).toHaveBeenCalledWith({
-      windowId: 'window-1',
-      rendererSessionId: 'renderer-1',
-      conversationId: identity.conversationId,
-      messageId: 'assistant-artifact',
-      reference: {
-        kind: 'reviewable-markdown',
-        title: 'Durable Plan',
-        contentLocator: {
-          file: { authority: 'workspace', path: 'neko/generated/file/durable-plan.md' },
-        },
-      },
-    });
+    expect(JSON.stringify(result.projection.events)).toContain('Full body.');
+    expect(JSON.stringify(result.projection.events)).toContain('neko:next-action');
   });
 
   it('delegates the exact DSH context-pressure read model without recalculation', async () => {
@@ -1479,6 +1673,20 @@ describe('Desktop DSH Session Host', () => {
         toolCallId: 'tool-invalid',
         title: 'Invalid detail',
         status: 'pending',
+        content: [
+          {
+            type: 'content',
+            content: { type: 'text', text: 'Valid sibling content' },
+          },
+          {
+            type: 'content',
+            content: {
+              type: 'resource_link',
+              name: 'broken.jpg',
+              uri: 'openneko-dsh-attachment:not-json',
+            },
+          },
+        ],
         rawInput: { invalid: undefined },
       },
     });
@@ -1513,12 +1721,17 @@ describe('Desktop DSH Session Host', () => {
         kind: 'diagnostic',
         code: 'ACP_TOOL_PAYLOAD_INVALID',
       }),
+      expect.objectContaining({
+        kind: 'diagnostic',
+        code: 'ACP_TOOL_CONTENT_INVALID',
+      }),
       {
         kind: 'tool',
         toolCallId: 'tool-invalid',
         turn: 0,
         status: 'pending',
         title: 'Invalid detail',
+        content: [{ type: 'text', text: 'Valid sibling content' }],
       },
     ]);
   });
@@ -1560,9 +1773,70 @@ describe('Desktop DSH Session Host', () => {
       /reverse Conversation binding/u,
     );
   });
+
+  it('saves Canvas selection only through the sender-bound Composer owner and publishes its change', async () => {
+    const selectCanvas = vi.fn(async () => composerConfiguration());
+    const publishChanged = vi.fn();
+    const host = createHost({ selectCanvas, publishChanged });
+    const request = {
+      requestId: 'select-canvas',
+      operation: 'composer-canvas',
+      windowId: 'window-1',
+      rendererSessionId: 'renderer-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'surface-1',
+      conversationId: identity.conversationId,
+      canvasId: 'neko/boards/story.nkc',
+    };
+    const sender = { webContentsId: 1, frameUrl: 'openneko://app' };
+    await expect(
+      host.execute(sender, { ...request, rendererSessionId: 'renderer-other' }),
+    ).rejects.toThrow(/sender-bound/u);
+    expect(selectCanvas).not.toHaveBeenCalled();
+    await host.execute(sender, request);
+    expect(selectCanvas).toHaveBeenCalledExactlyOnceWith({
+      windowId: 'window-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'surface-1',
+      conversationId: identity.conversationId,
+      canvasId: 'neko/boards/story.nkc',
+    });
+    expect(publishChanged).toHaveBeenCalledWith({
+      conversationId: identity.conversationId,
+      composerChanged: true,
+    });
+  });
+
+  it('branches from one exact reply and returns the new Conversation projection', async () => {
+    const branchConversation = vi.fn(async () => ({ conversationId: 'conversation-branch' }));
+    const publishChanged = vi.fn();
+    const result = requireSessionResult(
+      await createHost({ branchConversation, publishChanged }).execute(
+        { webContentsId: 1, frameUrl: 'openneko://app' },
+        {
+          requestId: 'request-branch',
+          operation: 'branch',
+          windowId: 'window-1',
+          rendererSessionId: 'renderer-1',
+          conversationId: identity.conversationId,
+          messageId: 'assistant-final',
+        },
+      ),
+    );
+
+    expect(branchConversation).toHaveBeenCalledWith({
+      sourceConversationId: identity.conversationId,
+      messageId: 'assistant-final',
+    });
+    expect(result.projection.conversationId).toBe('conversation-branch');
+    expect(publishChanged).toHaveBeenCalledWith({ conversationId: 'conversation-branch' });
+  });
 });
 
 function createHost(overrides: {
+  readonly selectCanvas?: ConstructorParameters<
+    typeof DesktopDshSessionHost
+  >[0]['composer']['selectCanvas'];
   readonly prompt?: ConversationDshSessionBoundClient['prompt'];
   readonly projection?: DshAcpProjection;
   readonly publishChanged?: (event: DshSessionChangedEvent) => void;
@@ -1570,15 +1844,17 @@ function createHost(overrides: {
   readonly createConversation?: ConstructorParameters<
     typeof DesktopDshSessionHost
   >[0]['createConversation'];
+  readonly branchConversation?: ConstructorParameters<
+    typeof DesktopDshSessionHost
+  >[0]['branchConversation'];
   readonly domainTurns?: ConstructorParameters<typeof DesktopDshSessionHost>[0]['domainTurns'];
   readonly applyConversation?: (
     conversationId: string,
     windowId: string,
   ) => Promise<{ readonly supportsImageInput: boolean }>;
-  readonly readConversationExecution?: (
-    conversationId: string,
-    windowId: string,
-  ) => Promise<{ readonly supportsImageInput: boolean }>;
+  readonly bindTurnConfiguration?: ConstructorParameters<
+    typeof DesktopDshSessionHost
+  >[0]['composer']['bindTurnConfiguration'];
   readonly enqueueInboxMessage?: ConversationDshSessionBoundClient['enqueueInboxMessage'];
   readonly sendInboxMessageNow?: ConversationDshSessionBoundClient['sendInboxMessageNow'];
   readonly readImageAttachment?: ConversationDshSessionBoundClient['readImageAttachment'];
@@ -1586,6 +1862,9 @@ function createHost(overrides: {
     typeof DesktopDshSessionHost
   >[0]['imagePreviews']['project'];
   readonly releaseImagePreviews?: (windowId: string, conversationId: string) => void;
+  readonly openWrittenFile?: ConstructorParameters<
+    typeof DesktopDshSessionHost
+  >[0]['openWrittenFile'];
   readonly admitPromptImages?: (input: {
     readonly conversationId: string;
     readonly windowId: string;
@@ -1621,13 +1900,17 @@ function createHost(overrides: {
   >;
   readonly turnCanvasTargets?: ReturnType<typeof createDshTurnCanvasTargetOwner>;
   readonly catalogContext?: import('@neko/agent-contracts').AgentConversationContext;
-  readonly resolveTerminalArtifact?: ConstructorParameters<
-    typeof DesktopDshSessionHost
-  >[0]['terminalArtifacts']['resolveTerminalArtifact'];
-  readonly openTerminalArtifact?: ConstructorParameters<
-    typeof DesktopDshSessionHost
-  >[0]['openTerminalArtifact'];
 }) {
+  const applyConversation =
+    overrides.applyConversation ?? vi.fn(async () => ({ supportsImageInput: false }));
+  const bindTurnConfiguration =
+    overrides.bindTurnConfiguration ??
+    vi.fn(async (conversationId: string, windowId: string, running: boolean) => ({
+      ...(running
+        ? { supportsImageInput: false }
+        : await applyConversation(conversationId, windowId)),
+      configuration: turnConfiguration,
+    }));
   return new DesktopDshSessionHost({
     bindings: {
       getByDshSessionId: overrides.getByDshSessionId ?? (async () => ({ ...identity })),
@@ -1645,6 +1928,9 @@ function createHost(overrides: {
         },
       })),
     },
+    branchConversation:
+      overrides.branchConversation ??
+      vi.fn(async () => ({ conversationId: 'conversation-branch' })),
     conversations: {
       ensureLoaded: vi.fn(async () => identity.dshSessionId),
       prompt: overrides.prompt ?? vi.fn(async () => ({ stopReason: 'end_turn' as const })),
@@ -1674,6 +1960,7 @@ function createHost(overrides: {
     turnCanvasTargets: overrides.turnCanvasTargets ?? createDshTurnCanvasTargetOwner(),
     composer: {
       project: vi.fn(async () => composerConfiguration()),
+      selectCanvas: overrides.selectCanvas ?? vi.fn(async () => composerConfiguration()),
       selectModel: overrides.selectModel ?? vi.fn(async () => composerConfiguration()),
       selectMediaModel: overrides.selectMediaModel ?? vi.fn(async () => composerConfiguration()),
       selectPermissionPreset:
@@ -1689,18 +1976,12 @@ function createHost(overrides: {
           },
           source: 'asset-library' as const,
         })),
-      applyConversation:
-        overrides.applyConversation ?? vi.fn(async () => ({ supportsImageInput: false })),
-      readConversationExecution:
-        overrides.readConversationExecution ?? vi.fn(async () => ({ supportsImageInput: false })),
+      applyConversation,
+      bindTurnConfiguration,
     },
     promptImages: {
       admit: overrides.admitPromptImages ?? vi.fn(async () => []),
     },
-    terminalArtifacts: {
-      resolveTerminalArtifact: overrides.resolveTerminalArtifact ?? vi.fn(async () => undefined),
-    },
-    openTerminalArtifact: overrides.openTerminalArtifact ?? vi.fn(async () => undefined),
     imagePreviews: {
       project:
         overrides.projectImagePreview ??
@@ -1709,6 +1990,11 @@ function createHost(overrides: {
         }),
       release: overrides.releaseImagePreviews ?? vi.fn(),
     },
+    openWrittenFile:
+      overrides.openWrittenFile ??
+      vi.fn(async () => {
+        throw new Error('Unexpected written file open.');
+      }),
     promptContext: overrides.promptContext ?? {
       resolve: vi.fn(async () => 'OpenNeko test context'),
     },

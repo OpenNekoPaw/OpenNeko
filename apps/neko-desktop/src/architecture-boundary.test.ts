@@ -42,6 +42,21 @@ describe('Desktop architecture boundaries', () => {
     expect(forgeConfig).not.toContain('MakerZIP');
   });
 
+  it('uses the OpenNeko application icon in development and packaged builds', () => {
+    const desktopRoot = path.resolve(sourceRoot, '..');
+    const forgeConfig = readFileSync(path.join(desktopRoot, 'forge.config.ts'), 'utf8');
+    const main = readFileSync(path.join(sourceRoot, 'main', 'index.ts'), 'utf8');
+
+    expect(existsSync(path.join(desktopRoot, 'resources', 'app-icon.png'))).toBe(true);
+    expect(existsSync(path.join(desktopRoot, 'resources', 'app-icon.icns'))).toBe(true);
+    expect(forgeConfig).toContain(
+      "icon: fileURLToPath(new URL('./resources/app-icon', import.meta.url))",
+    );
+    expect(main).toContain(
+      "dock.setIcon(path.join(app.getAppPath(), 'resources', 'app-icon.png'))",
+    );
+  });
+
   it('strictly configures every Electron V1 fuse', () => {
     expect(desktopFuseConfig).toEqual({
       version: FuseVersion.V1,
@@ -95,7 +110,10 @@ describe('Desktop architecture boundaries', () => {
 
   it('keeps the DSH Session bridge as the only Renderer Agent path', () => {
     const preload = readFileSync(path.join(sourceRoot, 'preload', 'index.ts'), 'utf8');
-    const renderer = readFileSync(path.join(sourceRoot, 'renderer', 'DesktopAgentSurface.tsx'), 'utf8');
+    const renderer = readFileSync(
+      path.join(sourceRoot, 'renderer', 'DesktopAgentSurface.tsx'),
+      'utf8',
+    );
 
     expect(preload).toContain('dshSessions: {');
     expect(preload).toContain('dshPermissions: {');
@@ -117,7 +135,10 @@ describe('Desktop architecture boundaries', () => {
     const agentRuntimeRoot = path.join(repositoryRoot, 'packages/agent/runtime/src/application');
     const agentWebviewRoot = path.join(repositoryRoot, 'packages/agent/webview/src');
     const charaLaunchContract = readFileSync(
-      path.join(repositoryRoot, 'packages/chara/domain/src/contracts/character-conversation-launch.ts'),
+      path.join(
+        repositoryRoot,
+        'packages/chara/domain/src/contracts/character-conversation-launch.ts',
+      ),
       'utf8',
     );
     const retiredEntryTargetService = path.join(agentRuntimeRoot, 'agent-entry-target-service.ts');
@@ -212,10 +233,7 @@ describe('Desktop architecture boundaries', () => {
   it('keeps direct Canvas Generation on owning services without an Agent turn', () => {
     const application = readFileSync(path.join(sourceRoot, 'main', 'index.ts'), 'utf8');
     const canvasHost = readFileSync(
-      path.join(
-        repositoryRoot,
-        'packages/canvas/webview/src/host-runtime/canvas-webview-host.ts',
-      ),
+      path.join(repositoryRoot, 'packages/canvas/webview/src/host-runtime/canvas-webview-host.ts'),
       'utf8',
     );
     const canvasSurface = readFileSync(
@@ -233,8 +251,8 @@ describe('Desktop architecture boundaries', () => {
     expect(canvasHost).toContain("type: 'cancel-generation-node'");
     for (const source of [canvasHost, canvasSurface, canvasRuntime]) {
       expect(source).not.toContain('dshSessions.prompt');
-      expect(source).not.toContain('openneko.generation');
-      expect(source).not.toContain('openneko.canvas');
+      expect(source).not.toContain('openneko_generation');
+      expect(source).not.toContain('openneko_canvas');
     }
   });
 
@@ -484,11 +502,11 @@ describe('Desktop architecture boundaries', () => {
     expect(appHost).not.toContain("case 'asset.remove':");
   });
 
-  it('keeps Workspace Board delivery and candidate acceptance out of renderer ownership', () => {
+  it('keeps Canvas delivery and candidate acceptance out of renderer ownership', () => {
     const rendererRoot = path.join(sourceRoot, 'renderer');
     const forbiddenOwnerTokens = [
-      'WorkspaceBoardDeliveryLedger',
-      'WorkspaceBoardDeliveryCoordinator',
+      'CanvasWorkspaceDeliveryLedger',
+      'CanvasWorkspaceDeliveryCoordinator',
       'candidateAcceptanceStore',
       'deliveryLedger',
       'acceptCandidateLocally',

@@ -39,8 +39,8 @@ describe('AI configuration contracts', () => {
     expect(PROVIDER_TYPES).toContain(provider.type);
     expect(PROVIDER_CONNECTION_KINDS).toContain(provider.connectionKind);
     expect(PROVIDER_MODEL_FAMILIES).toEqual(['dialogue', 'generation']);
-    expect(MODEL_TYPES).toEqual(['llm', 'image', 'video', 'audio']);
-    expect(MEDIA_MODEL_TYPES).toEqual(['image', 'video', 'audio']);
+    expect(MODEL_TYPES).toEqual(['llm', 'image', 'video', 'audio', 'music']);
+    expect(MEDIA_MODEL_TYPES).toEqual(['image', 'video', 'audio', 'music']);
   });
 
   it('exposes one canonical image-input capability', () => {

@@ -2,7 +2,6 @@ import type {
   DshAcpDomainToolRequest,
   DshAcpDomainToolResponse,
 } from '@neko/agent-contracts/dsh-acp';
-import type { CanvasProjectAuthoringService } from '@neko/canvas-domain';
 import type {
   CutExportSettings,
   CutExportTaskSnapshot,
@@ -16,11 +15,10 @@ import type {
   DshDomainToolContext,
   DshDomainToolContextResolver,
 } from '../application/dsh-domain-tool-context-resolver';
-import { CanvasDshHostAdapter } from './canvas-host-adapter';
+import { CanvasDshHostAdapter, type CanvasDshAuthoringPort } from './canvas-host-adapter';
 import { CutDshHostAdapter } from './cut-host-adapter';
 import {
   GenerationDshHostAdapter,
-  type GenerationDshComfyUiSubmitter,
   type GenerationDshLifecycleProjectionOutcome,
 } from './generation-host-adapter';
 import { DocumentDshHostAdapter } from './document-host-adapter';
@@ -69,18 +67,13 @@ export function createDshDomainToolHandlers(options: {
       readonly request: DshAcpDomainToolRequest;
       readonly snapshot: GenerationJobSnapshot;
     }): Promise<GenerationDshLifecycleProjectionOutcome>;
-    submitComfyUi?: (input: {
-      readonly context: DshDomainToolContext;
-      readonly request: DshAcpDomainToolRequest;
-      readonly submission: Parameters<GenerationDshComfyUiSubmitter['submit']>[0];
-    }) => ReturnType<GenerationDshComfyUiSubmitter['submit']>;
   };
   readonly canvas: {
     resolveService(
       context: DshDomainToolContext & {
         readonly binding: Extract<DshDomainToolContext['binding'], { readonly kind: 'workspace' }>;
       },
-    ): Promise<Pick<CanvasProjectAuthoringService, 'query' | 'createNode'>>;
+    ): Promise<CanvasDshAuthoringPort>;
   };
   readonly cut: {
     resolveService(
@@ -119,7 +112,6 @@ export function createDshDomainToolHandlers(options: {
   };
   readonly skillAuthoring?: Pick<DshSkillAuthoringService, 'create'>;
 }): DshDomainToolHandlers {
-  const submitComfyUi = options.generation.submitComfyUi;
   return Object.freeze({
     async executeGenerationTool(request: DshAcpDomainToolRequest, signal: AbortSignal) {
       let context: Promise<DshDomainToolContext> | undefined;
@@ -151,16 +143,6 @@ export function createDshDomainToolHandlers(options: {
               snapshot,
             }),
         },
-        submitComfyUi
-          ? {
-              submit: async (submission) =>
-                submitComfyUi({
-                  context: await resolveContext(),
-                  request,
-                  submission,
-                }),
-            }
-          : undefined,
       ).execute(request, signal);
     },
 

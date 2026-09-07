@@ -58,6 +58,19 @@ interface DesktopCutOpenInput {
   readonly absolutePath: string;
 }
 
+export type DesktopCutCanvasHandoffAvailability =
+  | {
+      readonly status: 'available';
+      readonly target: CutCanvasHandoffTarget;
+    }
+  | {
+      readonly status: 'unavailable';
+      readonly diagnostic: {
+        readonly code: 'desktop-cut-project-owner-unavailable' | 'desktop-cut-canvas-view-stale';
+        readonly message: string;
+      };
+    };
+
 export interface DesktopCutRuntimeOptions {
   readonly shell: Pick<
     DesktopShellService,
@@ -228,6 +241,22 @@ export class DesktopCutRuntime {
   async resolveCanvasHandoffTarget(
     identity: CutCanvasSourceIdentity,
   ): Promise<CutCanvasHandoffTarget> {
+    const availability = await this.resolveCanvasHandoffAvailability(identity);
+    if (availability.status === 'unavailable') {
+      throw new Error(availability.diagnostic.message);
+    }
+    return availability.target;
+  }
+
+  resolveAvailableCanvasHandoffTarget(
+    identity: CutCanvasSourceIdentity,
+  ): Promise<DesktopCutCanvasHandoffAvailability> {
+    return this.resolveCanvasHandoffAvailability(identity);
+  }
+
+  private async resolveCanvasHandoffAvailability(
+    identity: CutCanvasSourceIdentity,
+  ): Promise<DesktopCutCanvasHandoffAvailability> {
     this.requireActive();
     const current = await this.options.shell.getProjection(identity.windowId);
     if (current.rendererSessionId !== identity.rendererSessionId) {
@@ -238,13 +267,33 @@ export class DesktopCutRuntime {
         candidate.projectId === identity.projectId &&
         candidate.workspaceId === identity.workspaceId,
     );
-    const tab = current.window.tabs.find(
-      (candidate) =>
-        candidate.projectId === identity.projectId &&
-        candidate.viewInstanceId === identity.viewInstanceId,
-    );
+    const tab = current.window.tabs.find((candidate) => candidate.projectId === identity.projectId);
     if (!project || !tab) {
-      throw new Error('Desktop Cut Canvas handoff has no exact Project View owner.');
+      return {
+        status: 'unavailable',
+        diagnostic: {
+          code: 'desktop-cut-project-owner-unavailable',
+          message: 'Desktop Cut Canvas handoff has no exact Project View owner.',
+        },
+      };
+    }
+    const scene = current.window.workbench.scene;
+    const interaction = scene.slots.interaction;
+    if (
+      scene.context.kind !== 'agent' ||
+      scene.context.scope.kind !== 'workspace' ||
+      scene.context.scope.workspaceId !== identity.workspaceId ||
+      interaction?.kind !== 'agent' ||
+      interaction.scope.kind !== 'workspace' ||
+      interaction.scope.workspaceId !== identity.workspaceId
+    ) {
+      return {
+        status: 'unavailable',
+        diagnostic: {
+          code: 'desktop-cut-canvas-view-stale',
+          message: 'Desktop Cut Canvas handoff source View is stale.',
+        },
+      };
     }
     const workbench = resolveDesktopWindowWorkspaceWorkbench(current.window, identity.workspaceId);
     const canvasView = workbench.layout.main.views.find(
@@ -256,7 +305,13 @@ export class DesktopCutRuntime {
         candidate.workspaceId === identity.workspaceId,
     );
     if (!canvasView) {
-      throw new Error('Desktop Cut Canvas handoff source View is stale.');
+      return {
+        status: 'unavailable',
+        diagnostic: {
+          code: 'desktop-cut-canvas-view-stale',
+          message: 'Desktop Cut Canvas handoff source View is stale.',
+        },
+      };
     }
     const activeCut =
       workbench.layout.cutPanel?.presentation === 'docked'
@@ -279,11 +334,14 @@ export class DesktopCutRuntime {
           };
         })()
       : undefined;
-    return resolveCutCanvasHandoffTarget({
-      source: identity,
-      workbenchInstanceId: workbench.workbenchInstanceId,
-      ...(activeCutTarget ? { activeCut: activeCutTarget } : {}),
-    });
+    return {
+      status: 'available',
+      target: resolveCutCanvasHandoffTarget({
+        source: identity,
+        workbenchInstanceId: workbench.workbenchInstanceId,
+        ...(activeCutTarget ? { activeCut: activeCutTarget } : {}),
+      }),
+    };
   }
 
   async addCanvasMaterial(input: {
@@ -321,45 +379,6 @@ export class DesktopCutRuntime {
         capabilities: ['add-to-cut'],
       },
       target,
-    });
-  }
-
-  async addCanvasMaterialAndSeparateAudio(input: {
-    readonly identity: CutCanvasSourceIdentity;
-    readonly nodeId: string;
-    readonly label: string;
-    readonly locator: ContentLocator;
-    readonly target: CutCanvasHandoffTarget;
-  }): Promise<CutHostRuntimeSnapshot> {
-    const currentTarget = await this.resolveCanvasHandoffTarget(input.identity);
-    if (!sameCutCanvasHandoffTarget(currentTarget, input.target)) {
-      throw new Error('Desktop Cut Canvas handoff target changed before execution.');
-    }
-    const target =
-      currentTarget.kind === 'existing-cut'
-        ? currentTarget
-        : await this.resolveCreatedDraftTarget(input.identity, currentTarget);
-    return this.addResource({
-      resourceIdentity: {
-        projectId: input.identity.projectId,
-        workspaceId: input.identity.workspaceId,
-        windowId: input.identity.windowId,
-        viewId: input.identity.viewId,
-        viewInstanceId: input.identity.viewInstanceId,
-        rendererSessionId: input.identity.rendererSessionId,
-      },
-      item: {
-        resourceId: `canvas-material:${input.nodeId}:separate-audio`,
-        source: 'files',
-        role: 'content',
-        depth: 0,
-        kind: 'file',
-        label: input.label,
-        locator: input.locator,
-        capabilities: ['add-to-cut'],
-      },
-      target,
-      postImportAction: 'separate-audio',
     });
   }
 
@@ -613,7 +632,6 @@ export class DesktopCutRuntime {
       readonly documentId: string;
       readonly sessionId: string;
     };
-    readonly postImportAction?: 'separate-audio';
   }): Promise<CutHostRuntimeSnapshot> {
     this.requireActive();
     return this.application.addResource(input);

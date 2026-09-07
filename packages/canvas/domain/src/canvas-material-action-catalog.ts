@@ -12,7 +12,10 @@ import {
   type CanvasMaterialMediaKind,
   type CanvasMaterialOrigin,
 } from './types/canvas-material-contracts';
-import { selectedCanvasGenerationOutput } from './types/canvas-generation-node';
+import {
+  isCanvasGenerationNodeData,
+  selectedCanvasGenerationOutput,
+} from './types/canvas-generation-node';
 import { type CanvasNode } from './types/canvas';
 
 export interface CanvasMaterialActionTarget {
@@ -48,6 +51,7 @@ export function resolveCanvasMaterialActionTargets(
       throw new Error(`Canvas material action selection references unknown node "${nodeId}".`);
     }
     if (node.type === 'generation') {
+      if (!isCanvasGenerationNodeData(node.data)) return [];
       const output = selectedCanvasGenerationOutput(node.data);
       if (!output) return [];
       const locatorResult = validateContentLocator(output.locator);
@@ -105,9 +109,8 @@ export function resolveCanvasMaterialActionTargets(
 }
 
 /**
- * Projects only descriptors contributed by currently available capability
- * owners. Canvas does not infer actions from extensions or implement owner
- * behavior.
+ * Projects descriptors contributed by capability owners. Owners may expose a
+ * fail-visible unavailability diagnostic for stable actions.
  */
 export function projectCanvasMaterialActionCatalog(input: {
   readonly descriptors: readonly CanvasMaterialActionDescriptor[];

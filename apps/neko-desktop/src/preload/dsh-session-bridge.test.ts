@@ -9,6 +9,7 @@ import {
   DSH_RUNTIME_HOST_CHANNEL,
 } from '@neko/agent-contracts/dsh-runtime-host';
 import { internalVersionFields } from '@neko/agent-contracts/testing';
+import { DESKTOP_BRIDGE_CHANNELS } from '../shared/bridge-contract';
 
 const state = vi.hoisted(() => ({
   bridge: undefined as typeof window.openNekoDesktop | undefined,
@@ -49,6 +50,7 @@ describe('DSH Session preload bridge', () => {
           conversationId: 'conversation-created',
           dshSessionId: 'session-created',
           title: 'Create in project',
+          todos: [],
           inbox: { nextTurn: [], nextStep: [] },
           events: [],
         },
@@ -60,7 +62,13 @@ describe('DSH Session preload bridge', () => {
       'workbench-1',
       'surface-1',
       'workspace-write',
-      { kind: 'project', projectId: 'project-1' },
+      {
+        kind: 'authoring',
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'grant-1',
+        authority: { kind: 'project', projectId: 'project-1' },
+        target: null,
+      },
       {
         kind: 'message',
         text: 'Create in project',
@@ -78,7 +86,13 @@ describe('DSH Session preload bridge', () => {
       workbenchInstanceId: 'workbench-1',
       agentSurfaceId: 'surface-1',
       permissionPresetId: 'workspace-write',
-      target: { kind: 'project', projectId: 'project-1' },
+      target: {
+        kind: 'authoring',
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'grant-1',
+        authority: { kind: 'project', projectId: 'project-1' },
+        target: null,
+      },
       initialInput: {
         kind: 'message',
         text: 'Create in project',
@@ -100,6 +114,7 @@ describe('DSH Session preload bridge', () => {
           conversationId: 'conversation-1',
           dshSessionId: 'session-1',
           title: 'Hello',
+          todos: [],
           inbox: { nextTurn: [], nextStep: [] },
           events: [],
         },
@@ -124,6 +139,68 @@ describe('DSH Session preload bridge', () => {
     });
   });
 
+  it('uses the renderer session established by the sender-bound lifecycle', async () => {
+    state.invoke.mockImplementation(async (channel: string, request: Record<string, unknown>) => {
+      if (channel === DESKTOP_BRIDGE_CHANNELS.bootstrapGet) {
+        return bootstrap(request.requestId as string);
+      }
+      expect(channel).toBe(DSH_SESSION_HOST_CHANNEL);
+      return {
+        requestId: request.requestId,
+        stopReason: 'end_turn',
+        projection: {
+          conversationId: 'conversation-1',
+          dshSessionId: 'session-1',
+          title: 'Hello',
+          todos: [],
+          inbox: { nextTurn: [], nextStep: [] },
+          events: [],
+        },
+      };
+    });
+    const bridge = requireBridge();
+    await bridge.bootstrap.get();
+    const dispose = bridge.lifecycle.subscribe(vi.fn());
+    const lifecycle = state.listeners.get(DESKTOP_BRIDGE_CHANNELS.lifecycleEvent);
+    lifecycle?.({}, lifecycleEvent('renderer-loading', 'renderer-2', 1));
+    lifecycle?.({}, lifecycleEvent('renderer-ready', 'renderer-2', 2));
+
+    await bridge.dshSessions.submit('conversation-1', {
+      kind: 'message',
+      text: 'hello after reload',
+      references: [],
+      images: [],
+      contextPayloads: [],
+    });
+
+    expect(state.invoke).toHaveBeenLastCalledWith(
+      DSH_SESSION_HOST_CHANNEL,
+      expect.objectContaining({
+        windowId: 'window-1',
+        rendererSessionId: 'renderer-2',
+        conversationId: 'conversation-1',
+      }),
+    );
+    dispose();
+  });
+
+  it('rejects lifecycle identity changes from another application Window', async () => {
+    state.invoke.mockImplementation(async (_channel: string, request: Record<string, unknown>) =>
+      bootstrap(request.requestId as string),
+    );
+    const bridge = requireBridge();
+    await bridge.bootstrap.get();
+    const dispose = bridge.lifecycle.subscribe(vi.fn());
+
+    expect(() =>
+      state.listeners.get(DESKTOP_BRIDGE_CHANNELS.lifecycleEvent)?.(
+        {},
+        { ...lifecycleEvent('renderer-loading', 'renderer-2', 1), windowId: 'window-other' },
+      ),
+    ).toThrow(/does not match the bootstrapped application Window/u);
+    dispose();
+  });
+
   it('routes inbox send-now with exact Conversation and Message identities', async () => {
     state.invoke.mockImplementation(async (channel: string, request: Record<string, unknown>) => {
       if (channel.endsWith('bootstrap:get')) return bootstrap(request.requestId as string);
@@ -134,6 +211,7 @@ describe('DSH Session preload bridge', () => {
           conversationId: 'conversation-1',
           dshSessionId: 'session-1',
           title: 'Hello',
+          todos: [],
           inbox: { nextTurn: [], nextStep: [] },
           events: [],
         },
@@ -151,27 +229,6 @@ describe('DSH Session preload bridge', () => {
       rendererSessionId: 'renderer-1',
       conversationId: 'conversation-1',
       messageId: 'message-1',
-    });
-  });
-
-  it('opens a terminal artifact by exact message identity without exposing its path', async () => {
-    state.invoke.mockImplementation(async (channel: string, request: Record<string, unknown>) => {
-      if (channel.endsWith('bootstrap:get')) return bootstrap(request.requestId as string);
-      expect(channel).toBe(DSH_SESSION_HOST_CHANNEL);
-      return { requestId: request.requestId, opened: true };
-    });
-    const bridge = requireBridge();
-    await bridge.bootstrap.get();
-
-    await bridge.dshSessions.openTerminalArtifact('conversation-1', 'assistant-final');
-
-    expect(state.invoke).toHaveBeenLastCalledWith(DSH_SESSION_HOST_CHANNEL, {
-      requestId: expect.any(String),
-      operation: 'terminal-artifact-open',
-      windowId: 'window-1',
-      rendererSessionId: 'renderer-1',
-      conversationId: 'conversation-1',
-      messageId: 'assistant-final',
     });
   });
 
@@ -237,6 +294,24 @@ describe('DSH Session preload bridge', () => {
       expect.objectContaining({
         operation: 'composer-model',
         modelOptionId: 'deepseek-official:deepseek-v4',
+      }),
+    );
+    await bridge.dshSessions.selectComposerCanvas(
+      'workbench-1',
+      'surface-1',
+      'conversation-1',
+      'neko/boards/story.nkc',
+    );
+    expect(state.invoke).toHaveBeenLastCalledWith(
+      DSH_SESSION_HOST_CHANNEL,
+      expect.objectContaining({
+        operation: 'composer-canvas',
+        windowId: 'window-1',
+        rendererSessionId: 'renderer-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+        conversationId: 'conversation-1',
+        canvasId: 'neko/boards/story.nkc',
       }),
     );
     await bridge.dshSessions.selectComposerMediaModel(
@@ -379,6 +454,28 @@ describe('DSH Session preload bridge', () => {
     });
   });
 
+  it('opens an exact completed write through sender-bound Conversation and Tool identity', async () => {
+    state.invoke.mockImplementation(async (channel: string, request: Record<string, unknown>) => {
+      if (channel.endsWith('bootstrap:get')) return bootstrap(request.requestId as string);
+      expect(channel).toBe(DSH_SESSION_HOST_CHANNEL);
+      return { requestId: request.requestId, opened: true };
+    });
+    const bridge = requireBridge();
+    await bridge.bootstrap.get();
+
+    await expect(
+      bridge.dshSessions.openWrittenFile('conversation-1', 'tool-write-document'),
+    ).resolves.toBeUndefined();
+    expect(state.invoke).toHaveBeenLastCalledWith(DSH_SESSION_HOST_CHANNEL, {
+      requestId: expect.any(String),
+      operation: 'written-file-open',
+      windowId: 'window-1',
+      rendererSessionId: 'renderer-1',
+      conversationId: 'conversation-1',
+      toolCallId: 'tool-write-document',
+    });
+  });
+
   it('projects changed events by Conversation identity', () => {
     const listener = vi.fn();
     const dispose = requireBridge().dshSessions.subscribe(listener);
@@ -397,6 +494,7 @@ describe('DSH Session preload bridge', () => {
           conversationId: 'conversation-other',
           dshSessionId: 'session-other',
           title: 'Other',
+          todos: [],
           inbox: { nextTurn: [], nextStep: [] },
           events: [],
         },
@@ -424,6 +522,7 @@ describe('DSH Session preload bridge', () => {
             conversationId: 'conversation-1',
             dshSessionId: 'session-1',
             title: 'Hello',
+            todos: [],
             inbox: { nextTurn: [], nextStep: [] },
             events: [],
             [field]: value,
@@ -493,5 +592,19 @@ function bootstrap(requestId: string) {
     host: { id: 'host-1', kind: 'electron', ui: 'graphical' },
     runtime: { platform: 'darwin' },
     status: 'foundation-ready',
+  };
+}
+
+function lifecycleEvent(
+  type: 'renderer-loading' | 'renderer-ready',
+  rendererSessionId: string,
+  sequence: number,
+) {
+  return {
+    applicationInstanceId: 'application-1',
+    windowId: 'window-1',
+    rendererSessionId,
+    sequence,
+    type,
   };
 }

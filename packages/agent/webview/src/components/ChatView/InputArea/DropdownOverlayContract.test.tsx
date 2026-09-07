@@ -321,10 +321,17 @@ describe('dropdown overlay presentation contract', () => {
     expect(presetRule).toContain('min-width: var(--agent-overlay-compact-min-inline-size)');
     expect(presetRule).toContain('max-width: var(--agent-overlay-compact-max-inline-size)');
     expect(paramRule).toBeTruthy();
-    expect(paramRule).toContain('width: min(420px, calc(100vw - 24px))');
+    expect(paramRule).toContain('width: min(460px, calc(100vw - 24px))');
     expect(paramRule).toContain('max-width: calc(100vw - 24px)');
     expect(paramOptionsRule).toBeTruthy();
-    expect(paramOptionsRule).toContain('flex-wrap: wrap');
+    expect(paramOptionsRule).toContain('display: grid');
+    expect(paramOptionsRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))');
+    expect(css).toMatch(
+      /agent-generation-params-options\[data-option-columns='5'\][\s\S]*?grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/,
+    );
+    expect(css).toMatch(
+      /agent-generation-params-options\[data-option-layout='ratio'\][\s\S]*?min-height:\s*54px/,
+    );
     expect(modelRule).toBeTruthy();
     expect(modelRule).toContain('width: var(--agent-overlay-wide-inline-size)');
     expect(modelRule).toContain('max-width: var(--agent-overlay-wide-max-inline-size)');
@@ -349,6 +356,7 @@ describe('dropdown overlay presentation contract', () => {
   it('keeps the white model surface while distinguishing selected options', () => {
     const css = readFileSync(resolve(__dirname, '../../../index.css'), 'utf8');
     const tabsRule = css.match(/\.agent-model-config-tabs\s*\{(?<body>[^}]+)\}/)?.groups?.body;
+    const tabRule = css.match(/\.agent-model-config-tab\s*\{(?<body>[^}]+)\}/)?.groups?.body;
     const selectedCategoryRule = css.match(/\.agent-model-config-tab-selected\s*\{(?<body>[^}]+)\}/)
       ?.groups?.body;
     const selectedSectionRule = css.match(
@@ -358,10 +366,13 @@ describe('dropdown overlay presentation contract', () => {
       ?.groups?.body;
 
     expect(tabsRule).toContain('background: var(--agent-overlay-bg)');
+    expect(tabsRule).toContain('grid-template-columns: repeat(5, minmax(0, 1fr))');
+    expect(tabRule).toContain('white-space: nowrap');
     expect(selectedCategoryRule).toContain('background: color-mix');
     expect(selectedCategoryRule).toContain('box-shadow:');
     expect(selectedSectionRule).toContain('background: color-mix');
     expect(selectedSectionRule).toContain('box-shadow:');
+    expect(selectedSectionRule).not.toContain('inset 0 -2px');
     expect(selectedModelRule).toContain('background: color-mix');
     expect(selectedModelRule).toContain('box-shadow:');
   });

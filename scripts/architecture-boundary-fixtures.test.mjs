@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { describe, it } from 'node:test';
 import { checkApplicationBoundaries } from './check-application-boundaries.mjs';
 import {
-  inspectApplicationResponsibility,
-  inspectCanonicalPathFixture,
   inspectNonCanonicalPackageNaming,
-  reconcileBoundaryExceptions,
+  inspectPackageBoundaries,
 } from './check-package-boundaries.mjs';
 import { validatePackageRoleCatalog } from './check-package-roles.mjs';
 
@@ -14,15 +15,118 @@ const require = createRequire(import.meta.url);
 const dependencyConfig = require('../.dependency-cruiser.cjs');
 
 describe('architecture boundary failing fixtures', () => {
+  it('rejects undeclared/private imports and extra application roots in a real workspace', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'openneko-package-check-'));
+    try {
+      const sources = {
+        'quality/package-roles.json': JSON.stringify({
+          packages: [{ path: 'packages/example' }],
+        }),
+        'packages/example/package.json': JSON.stringify({
+          name: '@neko/example',
+          exports: { '.': './src/index.ts' },
+        }),
+        'packages/example/src/index.ts': 'export const value = 1;',
+        'apps/neko-desktop/package.json': JSON.stringify({ name: '@neko/app-desktop' }),
+        'apps/neko-desktop/src/index.ts': "import '@neko/example/private';",
+        'apps/extra/package.json': JSON.stringify({ name: '@neko/app-extra' }),
+      };
+      for (const [file, source] of Object.entries(sources)) {
+        await mkdir(dirname(join(root, file)), { recursive: true });
+        await writeFile(join(root, file), source);
+      }
+      const result = await inspectPackageBoundaries(root);
+      assert.equal(result.status, 'failed');
+      assert.deepEqual(result.findings.map((finding) => finding.rule).sort(), [
+        'application-root',
+        'undeclared-workspace-dependency',
+        'unexported-package-import',
+      ]);
+      await rm(join(root, 'apps/extra'), { recursive: true });
+      await writeFile(
+        join(root, 'apps/neko-desktop/package.json'),
+        JSON.stringify({
+          name: '@neko/app-desktop',
+          dependencies: { '@neko/example': 'workspace:*' },
+        }),
+      );
+      await writeFile(join(root, 'apps/neko-desktop/src/index.ts'), "import '@neko/example';");
+      assert.equal((await inspectPackageBoundaries(root)).status, 'passed');
+      await writeFile(join(root, 'apps/neko-desktop/package.json'), '{broken');
+      await assert.rejects(inspectPackageBoundaries(root), SyntaxError);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('rejects package-to-app, Webview-to-Node/Electron, and Main-to-React imports', async () => {
-    const root = new URL('./fixtures/architecture-boundaries/', import.meta.url).pathname;
-    const result = await checkApplicationBoundaries(root);
-    assert.ok(result.findings.some((finding) => finding.includes('packages must not import')));
-    assert.ok(result.findings.some((finding) => finding.includes('must not import Electron')));
-    assert.ok(
-      result.findings.some((finding) => finding.includes('renderer must remain browser-safe')),
-    );
-    assert.ok(result.findings.some((finding) => finding.includes('Main must not depend on React')));
+    const root = await mkdtemp(join(tmpdir(), 'openneko-boundary-check-'));
+    try {
+      const sources = {
+        'quality/package-roles.json': JSON.stringify({
+          packages: [
+            { path: 'packages/example/domain', roles: ['domain'], runtimes: ['host-neutral'] },
+            { path: 'packages/example/webview', roles: ['webview'], runtimes: ['browser'] },
+            {
+              name: '@neko/example-node',
+              path: 'packages/example/node',
+              roles: ['node'],
+              runtimes: ['node'],
+            },
+          ],
+        }),
+        'packages/example/webview/src/root.ts': [
+          "const fs = require('fs'); import('node:fs/promises');",
+          'import(`@neko/example-node`);',
+          "import child = require('node:child_process');",
+        ].join('\n'),
+        'apps/neko-desktop/src/main/main.ts': "import React from 'react';",
+        'apps/neko-desktop/src/main/shell.ts': "export const shell = 'desktop';",
+        'apps/neko-desktop/src/renderer/renderer.ts':
+          "import { readFile } from 'node:fs/promises';",
+        'packages/example/domain/src/domain.ts': [
+          "import { ipcRenderer } from 'electron';",
+          "import { shell } from '../../../../apps/neko-desktop/src/main/shell';",
+        ].join('\n'),
+      };
+      await Promise.all(
+        Object.entries(sources).map(async ([file, source]) => {
+          const target = join(root, file);
+          await mkdir(dirname(target), { recursive: true });
+          await writeFile(target, source);
+        }),
+      );
+      const result = await checkApplicationBoundaries(root);
+      assert.ok(result.findings.some((finding) => finding.includes('packages must not import')));
+      assert.ok(result.findings.some((finding) => finding.includes('must not import Electron')));
+      assert.ok(
+        result.findings.some((finding) => finding.includes('renderer must remain browser-safe')),
+      );
+      assert.ok(
+        result.findings.some((finding) => finding.includes('Host code must not depend on React')),
+      );
+      assert.ok(
+        result.findings.some(
+          (finding) =>
+            finding.includes('packages/example/webview/src/root.ts') && finding.includes('(fs)'),
+        ),
+      );
+      assert.ok(result.findings.some((finding) => finding.includes('(node:fs/promises)')));
+      assert.ok(result.findings.some((finding) => finding.includes('(@neko/example-node)')));
+      assert.ok(result.findings.some((finding) => finding.includes('(node:child_process)')));
+      await writeFile(
+        join(root, 'packages/example/webview/src/root.ts'),
+        '// import fs from "node:fs";\nconst text = \'require("electron")\';',
+      );
+      assert.equal(
+        (await checkApplicationBoundaries(root)).findings.some((finding) =>
+          finding.includes('packages/example/webview/src/root.ts'),
+        ),
+        false,
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it('keeps domain-to-Webview and contract-to-runtime dependency rules active', () => {
@@ -54,24 +158,6 @@ describe('architecture boundary failing fixtures', () => {
     assert.deepEqual(
       findings.map((finding) => finding.rule),
       ['noncanonical-package-identity', 'noncanonical-package-path'],
-    );
-  });
-
-  it('rejects business ownership in apps and successful replaced paths', () => {
-    const findings = [
-      ...inspectApplicationResponsibility({
-        path: 'apps/neko-desktop/src/main/domain-service.ts',
-        responsibility: 'business-owner',
-      }),
-      ...inspectCanonicalPathFixture({
-        path: 'apps/neko-desktop/src/main/replaced-adapter.ts',
-        replacedPathReturnsSuccess: true,
-      }),
-    ];
-    const result = reconcileBoundaryExceptions(findings, { exceptions: [] });
-    assert.deepEqual(
-      result.unapproved.map((finding) => finding.rule),
-      ['business-owner-in-app', 'replaced-path-success'],
     );
   });
 });

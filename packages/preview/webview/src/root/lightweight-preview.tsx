@@ -11,7 +11,7 @@ export interface LightweightPreviewProps {
   readonly descriptor: PreviewMediaDescriptor;
   readonly locale: SupportedLocale;
   readonly controlDensity?: PreviewViewerControlDensity;
-  readonly mediaPlayback?: 'interactive' | 'ambient';
+  readonly mediaPlayback?: 'interactive' | 'inline' | 'ambient';
   readonly playback?: PreviewViewerPlayback;
 }
 

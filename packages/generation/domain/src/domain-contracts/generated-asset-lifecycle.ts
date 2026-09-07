@@ -181,7 +181,6 @@ function readGeneratedAssetMediaKind(value: unknown): GeneratedAssetMediaKind | 
     case 'image':
     case 'audio':
     case 'video':
-    case 'storyboard':
     case 'file':
       return value;
     default:

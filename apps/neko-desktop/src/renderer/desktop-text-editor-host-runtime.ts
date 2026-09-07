@@ -24,6 +24,13 @@ export function createElectronTextEditorHostRuntime(input: {
     return `desktop-text-editor:${operation}:${requestSequence}`;
   };
   return {
+    executeClipboardCommand: async (command) => {
+      const result = await input.bridge.textEditor.executeClipboardCommand({
+        identity: currentIdentity,
+        command,
+      });
+      currentIdentity = result.identity;
+    },
     project: () =>
       execute({
         route: TEXT_EDITOR_HOST_ROUTES.projectionGet,

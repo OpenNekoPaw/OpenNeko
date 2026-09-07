@@ -16,6 +16,7 @@
     "@neko/content-domain": "workspace:*",
     "@neko/generation-domain": "workspace:*",
     "@neko/host": "workspace:*",
+    "@neko/media": "workspace:*",
     "@neko/shared": "workspace:*"
   },
   "devDependencies": {

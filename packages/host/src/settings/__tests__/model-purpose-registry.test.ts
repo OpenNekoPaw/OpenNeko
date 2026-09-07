@@ -18,13 +18,55 @@ function createModel(input: Pick<Model, 'id' | 'type' | 'capabilities'> & Partia
 }
 
 describe('model-purpose-registry', () => {
-  it('treats existing catalog capability fields as satisfying internal purposes', () => {
+  it('matches generation purposes by explicit model type and capability', () => {
+    for (const [purpose, type, capability] of [
+      ['image.generate', 'image', 'image.generate'],
+      ['image.edit', 'image', 'image.edit'],
+      ['video.generate', 'video', 'video.generate'],
+      ['audio.generate', 'audio', 'audio.generate'],
+      ['audio.tts', 'audio', 'audio.tts'],
+      ['audio.asr', 'audio', 'audio.asr'],
+    ] as const) {
+      expect(
+        modelSupportsPurpose(
+          createModel({ id: `${type}-model`, type, capabilities: [capability] }),
+          purpose,
+        ),
+      ).toBe(true);
+    }
     expect(
       modelSupportsPurpose(
-        createModel({ id: 'music-model', type: 'audio', capabilities: ['text_to_music'] }),
+        createModel({ id: 'chat-audio', type: 'llm', capabilities: ['audio'] }),
+        'audio.generate',
+      ),
+    ).toBe(false);
+    expect(
+      modelSupportsPurpose(
+        createModel({ id: 'chat-image', type: 'llm', capabilities: ['image.generate'] }),
+        'image.generate',
+      ),
+    ).toBe(false);
+    expect(
+      modelSupportsPurpose(
+        createModel({ id: 'chat-video', type: 'llm', capabilities: ['video.generate'] }),
+        'video.generate',
+      ),
+    ).toBe(false);
+    expect(
+      modelSupportsPurpose(
+        createModel({ id: 'audio-model', type: 'audio', capabilities: ['audio.generate'] }),
         'audio.music.generate',
       ),
-    ).toBe(true);
+    ).toBe(false);
+    expect(
+      modelSupportsPurpose(
+        createModel({ id: 'untyped-image', type: undefined, capabilities: ['image.generate'] }),
+        'image.generate',
+      ),
+    ).toBe(false);
+  });
+
+  it('keeps non-generation purposes capability-qualified', () => {
     expect(
       modelSupportsPurpose(
         createModel({ id: 'gpt', type: 'llm', capabilities: ['chat', 'streaming'] }),
@@ -39,10 +81,10 @@ describe('model-purpose-registry', () => {
     ).toBe(true);
     expect(
       modelSupportsPurpose(
-        createModel({ id: 'kling', type: 'video', capabilities: ['text_to_video'] }),
-        'video.generate',
+        createModel({ id: 'wrong-chat', type: 'llm', capabilities: ['streaming'] }),
+        'canvas.prompt',
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('rejects purposes outside the canonical registry', () => {

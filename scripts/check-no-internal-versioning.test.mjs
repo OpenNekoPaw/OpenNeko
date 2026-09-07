@@ -170,7 +170,6 @@ describe('internal versioning audit', () => {
           token: finding.token,
           externalOwner: 'Model Context Protocol',
           normativeSource: 'https://modelcontextprotocol.io/specification/latest/basic/lifecycle',
-          fieldScope: 'MCP initialize request adapter only',
           isolationRule: 'The adapter does not project this field into an OpenNeko contract.',
         },
       ],
@@ -188,28 +187,15 @@ describe('internal versioning audit', () => {
     );
   });
 
-  it('permits deletion from the baseline and rejects any new occurrence', () => {
-    const original = scanSources([
+  it('rejects every unapproved occurrence and passes only after removal or explicit allowance', () => {
+    const findings = scanSources([
       { path: 'packages/example/src/state.ts', content: `const state = { ${forbiddenField}: 1 };` },
     ]);
-    const baseline = { owners: [{ owner: 'packages/example', findings: original }] };
-    const emptyRegistry = { allowances: [] };
-
-    const removed = buildAuditReport({ findings: [], allowanceRegistry: emptyRegistry, baseline });
-    assert.equal(removed.status, 'passed');
-    assert.deepEqual(removed.remaining, []);
-
-    const added = scanSources([
-      { path: 'packages/example/src/other.ts', content: 'const rendererEpoch = 1;' },
-    ]);
-    const report = buildAuditReport({
-      findings: added,
-      allowanceRegistry: emptyRegistry,
-      baseline,
-    });
+    const allowanceRegistry = { allowances: [] };
+    const report = buildAuditReport({ findings, allowanceRegistry });
     assert.equal(report.status, 'failed');
-    assert.equal(report.summary.newInternalDebt, 1);
-    assert.deepEqual(report.remaining, []);
+    assert.deepEqual(report.violations, findings);
+    assert.equal(buildAuditReport({ findings: [], allowanceRegistry }).status, 'passed');
   });
 
   it('allows only exact Character or managed Asset domain occurrences inside their owners', () => {
@@ -227,7 +213,6 @@ describe('internal versioning audit', () => {
       token: finding.token,
       domainOwner: '@neko/chara-domain',
       businessRequirement: 'Published character snapshots are immutable and user-referenceable.',
-      fieldScope: 'Character publication identity only.',
       isolationRule: 'The identity never selects a contract, codec, migration, or component shape.',
       userWorkflow: 'Users publish and select exact immutable character snapshots.',
     };
@@ -259,7 +244,6 @@ describe('internal versioning audit', () => {
       correctnessInvariant: 'A stale concurrent writer cannot overwrite a committed user edit.',
       versionFreeAnalysis:
         'The store accepts writes from independent processes that cannot share an owner queue.',
-      fieldScope: 'One store write precondition only.',
       isolationRule: 'A mismatch rejects only the current write.',
       removalCondition: 'Remove when all writers share one serialized owner.',
     };

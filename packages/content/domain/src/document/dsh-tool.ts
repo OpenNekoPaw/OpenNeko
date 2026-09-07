@@ -7,7 +7,7 @@ import {
 } from '../contracts';
 import type { ContentDocumentCursor } from './content-access-document-runtime';
 
-export const DOCUMENT_DSH_TOOL_NAME = 'openneko.document' as const;
+export const DOCUMENT_DSH_TOOL_NAME = 'openneko_document' as const;
 export const DOCUMENT_DSH_TOOL_OPERATIONS = ['read', 'continue', 'read-images'] as const;
 
 export type DocumentDshToolOperation = (typeof DOCUMENT_DSH_TOOL_OPERATIONS)[number];
@@ -99,7 +99,7 @@ const WORKSPACE_FILE_LOCATOR_SCHEMA = {
 
 const DOCUMENT_CURSOR_SCHEMA = {
   type: 'object',
-  description: 'Cursor returned by a previous openneko.document read.',
+  description: 'Cursor returned by a previous openneko_document read.',
   properties: {
     source: { ...WORKSPACE_FILE_LOCATOR_SCHEMA, required: true },
     strategy: { type: 'string', const: 'manifest-order', required: true },

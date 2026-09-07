@@ -2,6 +2,7 @@ import {
   MilkdownRichSurface,
   type MilkdownRichSurfaceActions,
   type MilkdownRichSurfaceExtensions,
+  type MilkdownRichSurfaceSelectionActions,
   type MilkdownRichSurfaceState,
 } from '@neko/markdown/rich-surface';
 import type { TextDocumentProjection } from '@neko/text-editor-domain';
@@ -14,6 +15,7 @@ import {
 } from './markdown-media-presentation';
 
 export type MilkdownEditorActions = MilkdownRichSurfaceActions;
+export type MilkdownEditorSelectionActions = MilkdownRichSurfaceSelectionActions;
 
 export interface MilkdownRichEditorProps {
   readonly projection: TextDocumentProjection;
@@ -24,6 +26,7 @@ export interface MilkdownRichEditorProps {
   readonly onError: (message: string) => void;
   readonly onFocus: () => void;
   readonly onActions: (actions: MilkdownEditorActions | undefined) => void;
+  readonly onSelectionActions: (actions: MilkdownEditorSelectionActions | undefined) => void;
   readonly onOpenSource: () => void;
   readonly onRevealSource: (offset: number) => void;
   readonly readOnly: boolean;
@@ -38,6 +41,7 @@ export function MilkdownRichEditor({
   onError,
   onFocus,
   onActions,
+  onSelectionActions,
   onOpenSource,
   onRevealSource,
   readOnly,
@@ -116,8 +120,9 @@ export function MilkdownRichEditor({
       queueToken.current = Symbol('text-editor-rich-queue');
       pendingSource.current = undefined;
       onActions(undefined);
+      onSelectionActions(undefined);
     },
-    [onActions],
+    [onActions, onSelectionActions],
   );
 
   return (
@@ -131,6 +136,7 @@ export function MilkdownRichEditor({
         onChange={enqueue}
         onFocus={onFocus}
         onActions={onActions}
+        onSelectionActions={onSelectionActions}
         onStateChange={handleStateChange}
         createExtensions={createExtensions}
       />

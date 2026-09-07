@@ -147,11 +147,27 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
 
   async loadContentAsset(input: {
     readonly locator: ContentLocator;
-    readonly maxBytes: number;
+    readonly maxBytes?: number;
     readonly signal?: AbortSignal;
   }): Promise<AgentProviderAssetResult> {
+    let maxBytes = input.maxBytes;
+    if (maxBytes === undefined) {
+      const stat = await this.services.contentRead.stat(input.locator, { signal: input.signal });
+      if (stat.status === 'unavailable') {
+        return {
+          status: 'failed',
+          diagnostics: [
+            createAgentContentAccessDiagnostic({
+              code: stat.diagnostic.code,
+              message: `Content bytes are unavailable: ${stat.diagnostic.code}`,
+            }),
+          ],
+        };
+      }
+      maxBytes = stat.byteLength;
+    }
     const loaded = await this.services.contentRead.read(input.locator, {
-      maxBytes: input.maxBytes,
+      maxBytes,
       ...(input.signal ? { signal: input.signal } : {}),
     });
     if (loaded.status === 'unavailable') {
@@ -161,6 +177,21 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
           createAgentContentAccessDiagnostic({
             code: loaded.diagnostic.code,
             message: `Content bytes are unavailable: ${loaded.diagnostic.code}`,
+          }),
+        ],
+      };
+    }
+    if (
+      input.maxBytes === undefined &&
+      (loaded.bytes.byteLength !== maxBytes ||
+        (loaded.totalByteLength !== undefined && loaded.totalByteLength !== maxBytes))
+    ) {
+      return {
+        status: 'failed',
+        diagnostics: [
+          createAgentContentAccessDiagnostic({
+            code: 'content-size-changed',
+            message: 'Content size changed while reading the complete asset.',
           }),
         ],
       };

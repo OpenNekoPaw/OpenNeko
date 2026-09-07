@@ -58,6 +58,48 @@ describe('CanvasProjectAuthoringService', () => {
     });
   });
 
+  it('persists exact group membership through the authorized writer and isolates rejected mutations', async () => {
+    const fixture = await createFixture();
+    const initial = await fixture.service.query({ documentPath: 'boards/story.nkc' });
+    const first = await fixture.service.createNode({
+      documentPath: initial.documentPath,
+      expectedFingerprint: initial.fingerprint,
+      node: { type: 'markdown', data: { content: 'first' } },
+    });
+    const second = await fixture.service.createNode({
+      documentPath: initial.documentPath,
+      expectedFingerprint: first.fingerprint,
+      node: { type: 'markdown', data: { content: 'second' } },
+    });
+    const grouped = await fixture.service.groupNodes({
+      documentPath: initial.documentPath,
+      expectedFingerprint: second.fingerprint,
+      request: { nodeIds: [first.node.id, second.node.id], label: '首批素材' },
+    });
+    const reopened = await fixture.service.query({ documentPath: initial.documentPath });
+    expect(reopened.canvas).toEqual(grouped.canvas);
+    expect(reopened.canvas.nodes.filter((node) => node.parentId === grouped.node.id)).toHaveLength(
+      2,
+    );
+    await expect(
+      fixture.service.groupNodes({
+        documentPath: initial.documentPath,
+        expectedFingerprint: second.fingerprint,
+        request: { nodeIds: [first.node.id] },
+      }),
+    ).rejects.toMatchObject({ code: 'stale-project' });
+    await expect(
+      fixture.service.groupNodes({
+        documentPath: initial.documentPath,
+        expectedFingerprint: grouped.fingerprint,
+        request: { nodeIds: ['missing'] },
+      }),
+    ).rejects.toMatchObject({ code: 'invalid-operation' });
+    expect((await fixture.service.query({ documentPath: initial.documentPath })).canvas).toEqual(
+      grouped.canvas,
+    );
+  });
+
   it('fails locally for invalid codec input and empty operations', async () => {
     const fixture = await createFixture();
     await writeFile(fixture.filePath, '{"name":"broken"}', 'utf8');

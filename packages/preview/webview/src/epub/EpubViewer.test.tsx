@@ -62,7 +62,7 @@ describe('fetchForEpub', () => {
     const archive = readFileSync(
       resolve(
         import.meta.dirname,
-        '../../../../../scripts/agent-eval/shared-fixtures/document-image-workspace/synthetic-document.epub',
+        '../../../../../scripts/fixtures/documents/synthetic-document.epub',
       ),
     );
     const entries = await readArchiveEntries(archive);

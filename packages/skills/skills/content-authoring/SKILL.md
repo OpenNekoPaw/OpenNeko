@@ -1,46 +1,31 @@
 ---
 name: content-authoring
-description: '渐进生成简洁的 AI 原生创作方案、分析报告、企划书、执行计划与提示词包；用于内容规划、结构/深度/表格或模型工具交接。 Create concise, progressive AI-native proposals, reports, plans, and prompt packages for content structure, depth, tables, or model/tool handoff.'
-whenToUse: "用于用户语言下的内容规划或正式创作文档，并与适用领域 Skill 组合而非替代。 Use for content planning or formal creative documents in the user's language; combine with applicable domain Skills instead of replacing them."
+description: '编写或重组用户明确要求的通用、跨领域或既有创作文档；当领域 Skill 已直接拥有交付物时，不因结果使用 Markdown 就自动参与，也不代替编剧、分镜、媒体生成或制作编排。'
 ---
 
-# Content Authoring
+# 文档创作
 
 ## 中文方法
 
-默认使用用户语言，并先交付最小可用内容。宽泛规划请求先给一个方向、关键证据边界或理由，以及一个下一步；只有用户要求更多深度、备选、正式文档或可执行细节时才展开。
+默认使用用户语言，直接交付用户要的文档内容。只有用户明确要求通用/跨领域文档、重组既有内容、改写文体或领域结果之外的独立文档包装时才参与；领域 Skill 已能直接交付方案、剧本、分镜、提示词或制作规格时，不因为需要生成 Markdown 文档而重复加载本 Skill。保留适用领域 Skill 已经得出的创作判断、来源绑定、能力边界和产物语义；本 Skill 只负责让它们易于阅读、评审或交接，不创造另一套制作流程。
 
-交付深度必须匹配证据阶段。若核心决策依赖尚未审查的全局来源事实，先给有边界的评估或决策备忘录；代表性样本只有在样本选择、方法、不确定性和置信度可见时才能支持暂定区间。不要用猜测填满正式提案，也不要把局部抽样描述成完整分析。
+先确定用户请求的是创意方案、分析报告、项目企划、执行计划还是提示词交接，只生成这一种主产物。创意方案保留核心概念、主线、关键节拍和决定性内容选择；执行计划或提示词交接默认展示能力角色、素材职责、可直接使用的提示词或操作意图、预期产物、验收和下游用途。只有用户明确要求调试、审计、复现或复制调用时，才以 Tool 名、字段、参数或 JSON 为主体。不得为了“可执行”把创意方案压缩成单个技术测试。
 
-按需组合目标、输入与证据、关键决定、请求交付物和下一步；无价值的槽位应合并或省略。只有重复记录、映射、序列或比较明显更清楚时才使用表格。
+交付深度必须匹配证据阶段。若核心决策依赖尚未审查的全局来源事实，先由对应领域能力继续当前请求内的来源分析，不因已能写出短方案而提前包装交付；只有用户要求局部评估或存在明确读取阻塞时，才交付标为部分完成的评估或决策备忘录；代表性样本只有在样本选择、方法、不确定性和置信度可见时才能支持暂定区间。不要用猜测填满正式提案，也不要把局部抽样描述成完整分析。
+
+不因为用户谈到“创作”就添加目标、背景、方法、步骤、风险、验收等通用章节。只保留对该文档真正有用的部分。映射或比较明显更清楚时才使用表格；流程、字段和检查表不是默认产物。
+
+精简表达不能精简知识依据：来源分析形成的人物身份与出场、物品形制与归属、地点连接、事件因果及状态变化不是工具日志，即使没有改变当前创意方向也应保留在对应内容条目或已有分析文档中。创意摘要可以引用它们，不必逐项重复；不能将这些具体事实压成风格标签，也不能把“尚未读清”改写成“原作未说明”。来源页号、分析标题齐全或总览完成不证明内容已核实；正文仍有可读取的关键疑问时，由领域分析继续解决，不靠文档润色补全。
+
+将协作对话与正式文档分开。对话可以简短说明进度、决定性依据、阻塞和待确认选择；写入文档的内容只包括已验证结论、可直接使用的创作内容、必要来源绑定和适用的执行交接。读取过程、工具日志、工作进度、内部检查和被否决分析不进入文档。只有用户明确要求分析、研究或审计报告时，分析过程才属于正式产物。
+
+不预告将如何组织回答，不复述任务。把“是否影响创意内容、模型输入、验收、下游使用或创作者决定”作为内部编辑检查；无法通过的内容删除，不在文档中逐条解释用途或标注消费者。涉及 AI 内容创作时，文档编辑不得把领域 Skill 已形成的可调用输入、资产绑定、验收和下游用途降级为概括性文字，但也不得把内部 Tool 协议、原始 locator、运行时 ID 或参数转储写进普通创作文档。
 
 只读取本次交付需要的指南：创作方案、分析报告、企划书、执行计划、提示词包或模型/工具交接。多个领域 Skill 可以同时适用，不指定唯一主 Skill，也不重复同一指导。
 
-## English guidance
-
-Write in the user's language unless they request another language.
-
-Deliver the minimum useful content first. For a broad planning request, give one direction, the evidence limit or key reason, and one next action. Do not precompose a complete document outline as the first response. Expand only when the user asks for more depth, alternatives, a formal document, or executable detail.
-
-Match the deliverable to the evidence stage. If a proposal's central decision depends on source-wide facts that have not been reviewed, provide a bounded assessment or decision memo first. A representative sample may support a provisional range when its selection, method, uncertainty and confidence are visible. Do not fill a formal proposal with guessed scale, sections, or commitments, and do not describe sampled material as a completed source analysis.
-
-Use the smallest combination of these shared semantics that makes the result clear:
-
-- goal;
-- source input and evidence, with assumptions distinguished from facts;
-- key decision and its reason;
-- requested deliverable;
-- next useful action.
-
-Combine or omit slots that add no value. Do not generate empty template sections. Use a table only when repeated records, mappings, sequences, or comparisons are materially clearer than prose; explain only decisions or exceptions not evident from the table.
-
-Read only the guide needed for the current deliverable:
-
-- Creative proposal: [references/creative-proposal.md](references/creative-proposal.md)
-- Analysis report: [references/analysis-report.md](references/analysis-report.md)
-- Project proposal: [references/project-proposal.md](references/project-proposal.md)
-- Execution plan: [references/execution-plan.md](references/execution-plan.md)
-- Prompt package: [references/prompt-package.md](references/prompt-package.md)
-- AI model or creative-Tool handoff: [references/model-tool-handoff.md](references/model-tool-handoff.md)
-
-Multiple guides or domain Skills may apply. Preserve their independently useful judgment; do not appoint one primary Skill or duplicate the same guidance across sections.
+- [创意方案](references/creative-proposal.md)
+- [分析报告](references/analysis-report.md)
+- [项目企划](references/project-proposal.md)
+- [执行计划](references/execution-plan.md)
+- [提示词包](references/prompt-package.md)
+- [模型与工具交接](references/model-tool-handoff.md)

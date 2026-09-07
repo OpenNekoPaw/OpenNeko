@@ -662,7 +662,7 @@ html.canvas-webview-document #root,
   color: var(--toolbar-fg-secondary);
 }
 
-.canvas-board-navigation-bar {
+.canvas-navigation-bar {
   top: 12px;
 }
 
@@ -699,22 +699,196 @@ html.canvas-webview-document #root,
   background: var(--control-hover);
 }
 
+.canvas-playback-storyline-order-status {
+  position: absolute;
+  z-index: 2;
+  top: 8px;
+  right: 10px;
+  left: 10px;
+  display: flex;
+  height: 28px;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--warning-fg, #cca700) 38%, var(--control-border));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--warning-fg, #cca700) 8%, var(--control-bg));
+  color: color-mix(in srgb, var(--warning-fg, #cca700) 82%, var(--toolbar-fg));
+  padding: 3px 4px 3px 9px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+}
+
+.canvas-playback-storyline-order-message {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-playback-storyline-order-status[data-has-route-selector='true'] {
+  right: calc(min(180px, 34%) + 18px);
+}
+
 .canvas-playback-storyline-viewport {
   min-width: 0;
   min-height: 0;
   flex: 1 1 auto;
-  overflow: visible;
+  overflow: auto;
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--toolbar-bg) 54%, transparent),
     color-mix(in srgb, var(--canvas-bg) 78%, var(--toolbar-bg) 22%)
   );
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
 }
 
 .canvas-playback-storyline-nodes {
   position: relative;
   min-width: 100%;
   min-height: 100%;
+}
+
+.canvas-playback-storyline-graph {
+  position: relative;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+.canvas-playback-storyline-network-edges {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+
+.canvas-playback-storyline-network-edge {
+  cursor: pointer;
+  outline: none;
+}
+
+.canvas-playback-storyline-network-edge-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 12px;
+  pointer-events: stroke;
+}
+
+.canvas-playback-storyline-graph:not([data-structure-disabled='true'])
+  .canvas-playback-storyline-network-edge:hover
+  .canvas-playback-storyline-edge,
+.canvas-playback-storyline-graph:not([data-structure-disabled='true'])
+  .canvas-playback-storyline-network-edge:focus-visible
+  .canvas-playback-storyline-edge {
+  stroke: color-mix(in srgb, var(--danger-fg) 72%, var(--toolbar-fg-secondary));
+  stroke-width: 2.5;
+}
+
+.canvas-playback-storyline-graph .canvas-playback-storyline-node {
+  overflow: visible;
+}
+
+.canvas-playback-storyline-graph .canvas-playback-storyline-node[data-branch-dragging='true'] {
+  cursor: grabbing;
+  opacity: 0.48;
+}
+
+.canvas-playback-storyline-branch-drag-surface {
+  display: grid;
+  min-width: 0;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(24px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+
+.canvas-playback-storyline-branch-drag-surface[draggable='true'] {
+  cursor: grab;
+}
+
+.canvas-playback-storyline-branch-drag-surface:focus-visible {
+  border-radius: 999px;
+  outline: 2px solid color-mix(in srgb, var(--node-selected) 62%, transparent);
+  outline-offset: 3px;
+}
+
+.canvas-playback-storyline-graph .canvas-playback-storyline-node[data-connection-source='true'] {
+  border-color: color-mix(in srgb, var(--node-selected) 74%, var(--control-border));
+  background: color-mix(in srgb, var(--node-selected) 22%, var(--control-bg));
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--node-selected) 42%, transparent),
+    0 4px 12px color-mix(in srgb, var(--node-selected) 18%, transparent);
+}
+
+.canvas-playback-storyline-graph .canvas-playback-storyline-node[data-drop-target='valid'] {
+  border-color: color-mix(in srgb, var(--success-fg, #4aa56a) 76%, var(--control-border));
+  background: color-mix(in srgb, var(--success-fg, #4aa56a) 18%, var(--control-bg));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--success-fg, #4aa56a) 28%, transparent);
+}
+
+.canvas-playback-storyline-graph .canvas-playback-storyline-node[data-drop-target='invalid'] {
+  border-color: color-mix(in srgb, var(--danger-fg) 76%, var(--control-border));
+  background: color-mix(in srgb, var(--danger-fg) 14%, var(--control-bg));
+}
+
+.canvas-playback-storyline-connection-handle {
+  position: absolute;
+  top: 50%;
+  z-index: 3;
+  width: 16px;
+  height: 16px;
+  cursor: crosshair;
+  border: 1px solid color-mix(in srgb, var(--node-selected) 62%, var(--control-border));
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--control-bg) 78%, var(--node-selected) 22%);
+  padding: 0;
+  transform: translateY(-50%);
+}
+
+.canvas-playback-storyline-connection-handle::after {
+  position: absolute;
+  inset: 4px;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--node-selected) 78%, var(--control-fg));
+  content: '';
+}
+
+.canvas-playback-storyline-connection-handle:hover,
+.canvas-playback-storyline-connection-handle:focus-visible,
+.canvas-playback-storyline-connection-handle[aria-pressed='true'] {
+  border-color: var(--node-selected);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--node-selected) 26%, transparent);
+  outline: none;
+}
+
+.canvas-playback-storyline-connection-handle--output {
+  right: -9px;
+}
+
+.canvas-playback-storyline-graph[data-structure-disabled='true']
+  .canvas-playback-storyline-network-edge {
+  cursor: default;
+}
+
+.canvas-playback-storyline-graph[data-structure-disabled='true']
+  .canvas-playback-storyline-connection-handle {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+
+.canvas-playback-storyline-edge-preview {
+  pointer-events: none;
+  stroke: color-mix(in srgb, var(--warning-fg, #cca700) 72%, var(--toolbar-fg-secondary));
+  stroke-dasharray: 5 4;
+  stroke-width: 2;
+}
+
+.canvas-playback-storyline-edge-preview[data-valid-target='true'] {
+  stroke: color-mix(in srgb, var(--success-fg, #4aa56a) 78%, var(--toolbar-fg-secondary));
+  stroke-dasharray: none;
 }
 
 .canvas-playback-storyline-edges {
@@ -737,12 +911,20 @@ html.canvas-webview-document #root,
   stroke-width: 2.5;
 }
 
+.canvas-playback-storyline-arrow {
+  fill: color-mix(in srgb, var(--toolbar-fg-secondary) 58%, transparent);
+}
+
+.canvas-playback-storyline-arrow[data-selected='true'] {
+  fill: color-mix(in srgb, var(--node-selected) 88%, var(--toolbar-fg-secondary));
+}
+
 .canvas-playback-storyline-node {
   position: absolute;
   display: grid;
-  width: 108px;
+  width: 120px;
   height: 34px;
-  grid-template-columns: 20px minmax(0, 1fr);
+  grid-template-columns: minmax(24px, auto) minmax(0, 1fr);
   align-items: center;
   gap: 6px;
   overflow: hidden;
@@ -779,6 +961,44 @@ html.canvas-webview-document #root,
   border-color: color-mix(in srgb, var(--danger-fg) 70%, var(--control-border));
 }
 
+.canvas-playback-storyline-node[data-order-position='unsequenced'] {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--warning-fg, #cca700) 46%, var(--control-border));
+}
+
+.canvas-playback-storyline-node[data-order-position='start'] .canvas-playback-storyline-node-index,
+.canvas-playback-storyline-node[data-order-position='end'] .canvas-playback-storyline-node-index {
+  border-color: color-mix(in srgb, var(--node-selected) 64%, var(--control-border));
+  background: color-mix(in srgb, var(--node-selected) 24%, var(--control-bg));
+}
+
+.canvas-playback-storyline-node[data-graph-role='start'] .canvas-playback-storyline-node-index,
+.canvas-playback-storyline-node[data-graph-role='start-branch']
+  .canvas-playback-storyline-node-index,
+.canvas-playback-storyline-node[data-graph-role='merge-end'] .canvas-playback-storyline-node-index,
+.canvas-playback-storyline-node[data-graph-role='end'] .canvas-playback-storyline-node-index {
+  border-color: color-mix(in srgb, var(--node-selected) 64%, var(--control-border));
+  background: color-mix(in srgb, var(--node-selected) 24%, var(--control-bg));
+}
+
+.canvas-playback-storyline-node[data-graph-role='branch'] .canvas-playback-storyline-node-index,
+.canvas-playback-storyline-node[data-graph-role='start-branch']
+  .canvas-playback-storyline-node-index,
+.canvas-playback-storyline-node[data-graph-role='merge'] .canvas-playback-storyline-node-index,
+.canvas-playback-storyline-node[data-graph-role='merge-end'] .canvas-playback-storyline-node-index,
+.canvas-playback-storyline-node[data-graph-role='branch-merge']
+  .canvas-playback-storyline-node-index {
+  border-color: color-mix(in srgb, var(--warning-fg, #cca700) 62%, var(--control-border));
+  background: color-mix(in srgb, var(--warning-fg, #cca700) 16%, var(--control-bg));
+}
+
+.canvas-playback-storyline-node[data-order-position='unsequenced']
+  .canvas-playback-storyline-node-index {
+  border-color: color-mix(in srgb, var(--warning-fg, #cca700) 52%, var(--control-border));
+  background: color-mix(in srgb, var(--warning-fg, #cca700) 12%, var(--control-bg));
+  color: color-mix(in srgb, var(--warning-fg, #cca700) 84%, var(--toolbar-fg));
+}
+
 .canvas-playback-storyline-node[data-has-diagnostic='true']::after {
   position: absolute;
   top: 3px;
@@ -798,7 +1018,7 @@ html.canvas-webview-document #root,
 
 .canvas-playback-storyline-node-index {
   display: inline-flex;
-  width: 20px;
+  min-width: 24px;
   height: 20px;
   align-items: center;
   justify-content: center;
@@ -806,6 +1026,7 @@ html.canvas-webview-document #root,
   border-radius: 50%;
   background: color-mix(in srgb, var(--node-selected) 18%, var(--control-bg));
   color: var(--toolbar-fg);
+  padding: 0 4px;
   font-size: 10px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -1450,6 +1671,30 @@ html.canvas-webview-document #root,
   pointer-events: auto;
 }
 
+button.canvas-node-external-label {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  font-weight: inherit;
+  text-align: left;
+}
+
+.canvas-node-external-label--action {
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.canvas-node-external-label--action:hover {
+  color: var(--hostPort-textLink-activeForeground);
+}
+
+.canvas-node-external-label--action:focus-visible {
+  outline: 1px solid var(--hostPort-focusBorder);
+  outline-offset: 2px;
+}
+
 .canvas-node-drag-rail {
   position: absolute;
   right: 0;
@@ -1910,9 +2155,9 @@ html.canvas-webview-document #root,
   display: flex;
   box-sizing: border-box;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   overflow: visible;
-  padding: 14px;
+  padding: 12px;
   transform: translateX(-50%);
   border: 1px solid var(--toolbar-border);
   border-radius: 14px;
@@ -1975,7 +2220,7 @@ html.canvas-webview-document #root,
 
 .selection-generation-input-panel__prompt {
   width: 100%;
-  min-height: 92px;
+  min-height: 64px;
   flex: 1 1 auto;
   resize: none;
   padding: 2px 4px;
@@ -2026,7 +2271,7 @@ html.canvas-webview-document #root,
 .selection-generation-input-panel__references {
   display: flex;
   min-width: 0;
-  min-height: 48px;
+  min-height: 44px;
   align-items: flex-start;
   gap: 8px;
   padding: 4px;
@@ -2044,8 +2289,8 @@ html.canvas-webview-document #root,
 
 .selection-generation-input-panel__reference-slot {
   display: inline-flex;
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   flex: none;
   align-items: center;
   justify-content: center;
@@ -2098,14 +2343,48 @@ html.canvas-webview-document #root,
   font-size: 9px;
 }
 
+.selection-generation-input-panel__reference-preview {
+  position: relative;
+  width: 64px;
+  height: 44px;
+  flex: none;
+  overflow: hidden;
+  margin: 0;
+  border: 1px solid var(--control-border);
+  border-radius: 7px;
+  background: var(--node-surface);
+}
+
+.selection-generation-input-panel__reference-preview figcaption {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow: hidden;
+  padding: 8px 4px 2px;
+  background: linear-gradient(transparent, color-mix(in srgb, var(--node-surface) 88%, black));
+  color: var(--node-fg);
+  font-size: 9px;
+  line-height: 12px;
+  pointer-events: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-preview-feedback='compact'] .canvas-preview-feedback {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 0 4px 12px;
+}
+
 .selection-generation-input-panel__controls > select {
   max-width: 140px;
 }
 
 .selection-generation-input-panel__run {
   display: inline-flex;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   flex: none;
   align-items: center;
   justify-content: center;
@@ -2163,7 +2442,7 @@ html.canvas-webview-document #root,
 .selection-generation-input-panel__chip {
   display: inline-flex;
   min-width: 0;
-  height: 34px;
+  height: 32px;
   align-items: center;
   gap: 7px;
   padding: 0 10px;
@@ -2410,7 +2689,15 @@ html.canvas-webview-document #root,
 }
 
 .selection-generation-input-panel__option-group[data-option-layout='compact']
-  .selection-generation-input-panel__option-grid,
+  .selection-generation-input-panel__option-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.selection-generation-input-panel__option-group[data-option-layout='image-size']
+  .selection-generation-input-panel__option-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .selection-generation-input-panel__option-group[data-option-layout='equal']
   .selection-generation-input-panel__option-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2523,7 +2810,7 @@ html.canvas-webview-document #root,
   }
 
   .selection-generation-input-panel__prompt {
-    min-height: 80px;
+    min-height: 64px;
   }
 
   .selection-generation-input-panel__controls {
@@ -2572,6 +2859,8 @@ html.canvas-webview-document #root,
   .selection-generation-input-panel__option-group[data-option-layout='ratio']
     .selection-generation-input-panel__option-grid,
   .selection-generation-input-panel__option-group[data-option-layout='compact']
+    .selection-generation-input-panel__option-grid,
+  .selection-generation-input-panel__option-group[data-option-layout='image-size']
     .selection-generation-input-panel__option-grid,
   .selection-generation-input-panel__option-group[data-option-layout='equal']
     .selection-generation-input-panel__option-grid {

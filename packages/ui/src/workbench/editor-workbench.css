@@ -690,15 +690,6 @@
   overscroll-behavior-x: contain;
 }
 
-.neko-workbench-editor-tabs__context-actions {
-  display: flex;
-  min-width: 0;
-  height: 100%;
-  flex: 0 0 auto;
-  align-items: center;
-  padding: 4px 8px 4px 0;
-}
-
 .neko-workbench-editor-tab {
   position: relative;
   display: inline-flex;

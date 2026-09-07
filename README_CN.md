@@ -37,7 +37,7 @@ OpenNeko 是一款本地优先的桌面应用，用于管理项目与内容，�
 
 - **Alpha**：目前以源码体验和产品验证为主，界面与项目格式仍可能变化。
 - **平台**：当前只支持 Apple Silicon macOS；发布的 DMG 尚未进行 Developer ID 签名和 Apple 公证。
-- **产品重点**：发行版当前聚焦 Agent、Project、内容、素材与媒体创作；Chara/World 仅在 Development 组合中可见，发行版隐藏入口但保留代码和用户数据。
+- **产品重点**：发行版当前聚焦 Agent、Project、内容、素材与媒体创作；Chara/World 仅在 Development 中提供绑定精确 Project 的有界实验，发行版隐藏入口但保留代码和用户数据，尚不提供全局 Assistant Creator 或完整 World Experience。
 - **开发中**：完整端到端创作闭环、稳定发布通道和专业工具集成尚未完成。
 
 ## 从源码开始

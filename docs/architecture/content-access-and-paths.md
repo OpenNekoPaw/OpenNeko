@@ -111,8 +111,12 @@ Electron Main 并非真正 OS sandbox，因此仍需上述 guard；Desktop 只�
 
 ## 文档与 Agent
 
-DSH document operation 使用 canonical `ContentLocator`；文档 entry 通过 locator selector 表达，
-read-images 将同一 source locator 交回 ContentReadService。Agent 不感知 EPUB/DOCX/CBZ 解包，也不构造 cache variant。
+DSH document operation 使用 canonical `ContentLocator`；文档 entry 通过 locator selector 表达。Agent 以
+`openneko_read_images` 对一至四个 locator 做单张有界联系表筛选，只对入选 locator 通过
+`openneko_read_image` 读取原始细节；两者都把同一 source locator 交回 ContentReadService。Agent 不感知
+EPUB/DOCX/CBZ 解包，也不构造 cache variant。读取成功后，Agent Runtime 以 Tool 的已校验输入为
+authority，把源文档与 exact 原图引用立即投影到本回合获准 Canvas；overview 联系表只是 DSH Tool
+内的瞬态预览，不成为 Canvas 节点、素材副本或第二事实来源。
 
 - 已存在的 archive image entry 是 source content，直接有界读取。
 - PDF/Office raster page、document thumbnail 是实际生成的 representation。

@@ -1,4 +1,4 @@
-# Adaptation Feasibility and Scale Guide
+# 改编可行性与体量指南
 
 ## 中文指南
 
@@ -6,64 +6,31 @@
 
 ### 建立来源覆盖
 
-分别记录来源报告的单元数、排除封面/目录/空白/广告/重复/元数据后的叙事单元、实际检查范围或代表性样本、观察到的叙事段落/动作/对白/转场/氛围/节奏，以及未覆盖范围阻塞的决定。manifest 只证明清单，任意少量页面不能证明全作情节、时长、集数、分集映射或分析完成。
+分别记录来源报告的单元数、排除封面/目录/空白/广告/重复/元数据后的叙事单元、实际检查范围或代表性样本、观察到的叙事段落/动作/对白/转场/氛围/节奏，以及未覆盖范围阻塞的决定。manifest 只证明清单，任意少量页面不能证明全作情节、时长、集数、分集映射或分析完成。来源整体或卷级改编先总览当前来源范围的全部正文，再按人物、事件和状态变化精读；前、中、后是组织分析的结构，不是允许只抽取三个区域的完成标准。封面、目录以及彼此不连续的开头/结尾单页不能替代正文覆盖。
 
-### 建立代表性局部样本
+### 连续总览与定点精读
 
-优先选择完整章节或场景序列；差异较大时分层抽取前/中/后段或对白、动作、氛围型范围。记录来源边界、有效正文、场景与节拍、对白/旁白负载、动作/停留/转场时间、删并扩写、重构时长区间、置信度和其他章节可能不同的原因。20–30 页约 5–6 分钟只能是本作品样本支持的校准点，不是通用公式。
+图像型来源按主 Skill 的批量总览方法执行：先确认目录和正文阅读顺序，以一张大图观察一批连续页面，再对影响身份、剧情、物品、空间或体量判断的页面及相邻页精读。不能把缩略图观察等同于可读对白，也不能只靠封面和少量风格页估算整卷。
+
+用户要求整卷或指定制作单元分析时，持续覆盖该范围的章节和场景；重复人物、物品或空间可能证明出场、归属和状态连续性，不需要每批都改变创意方向。用户只要求样本评估时，优先选择完整章节或连续场景，并明确不能据此声明全部内容已分析。来源不可访问或授权不足时说明精确未覆盖范围，不把停止阅读包装成分析完成，也不擅自缩小用户请求。
+
+### 覆盖验收
+
+核对章节／场景的事件顺序、人物名称与出场、物品持有与状态、地点连接及未确认项。对每项关键结论检查具体证据是否可读、是否支持该结论、是否被后续出场或状态变化修正；不能用“已总览”抵消知识缺口。事件必须有连续画面证明起因、行动和后果，而不只是选作高潮的画面；名称、对白、外观和物品细节须有可读原页证据。缩略图批次和已读页数只是覆盖线索，不是分析质量或完成的替代指标。精读集中在封面、标题或风格页而缺少正文身份、交互和事件证据时，仍需按具体疑问补读。
+
+已有证据可直接复用，尚缺证据继续读取；只有当前要求的内容覆盖完成或存在明确读取阻塞时才结束。前、中、后使用相同视觉母题不构成停止理由，部分完成的范围声明也不能授权进入下一制作阶段。
+
+内部记录分别保存原作直接事实、Agent 解释和 PV 创作重组。正式创作文档不展示工具读取流水账，但应保留可复用的人物／出场与有序剧情依据及来源；不得把新增的系统反应、攻击顺序、人物处境或武器机制写成原作事实。
 
 ### 估算与文档选择
 
-从已验证叙事单元和保留、删减、合并、扩写、新写、动作、对白、蒙太奇、沉默等选择建立时长。固定格式前至少公开“集数/段数 × 可用时长 = 总时长”、平均来源负载、压缩/扩写/省略假设和关键不确定性。无代表性样本时只交付覆盖与抽样计划；有样本但全局覆盖不足时只给条件体量区间；覆盖充分但格式未批准时给带开放决定的建议；格式和范围获批后才形成正式方案。
+从已验证叙事单元和保留、删减、合并、扩写、新写、动作、对白、蒙太奇、沉默等选择建立时长。固定格式前至少公开“集数/段数 × 可用时长 = 总时长”、平均来源负载、压缩/扩写/省略假设和关键不确定性。无代表性样本时只交付覆盖与抽样计划；有样本但全局覆盖不足时只给条件体量区间；覆盖充分但格式未确认时给带开放决定的建议；创作者确认格式和范围后才形成正式方案。
 
-## English guidance
+### 决策与处理方案
 
-Use this guide when an existing ordered source is being adapted into animation, film, episodes, an animatic, or another time-based work.
+体量评估先回答当前能否选择格式。面向该决定的摘要只展示相关证据，但不能因此减少来源分析，或删除已核实的人物、物品、场景和事件知识；这些可复用依据保留在对应内容条目中，不必在体量结论重复。用户要创意方案时，交付当前证据支持的核心概念、主线和关键节拍；用户要生产规划或执行交接时，才把已确定创意转换为当前能力可接收的调用包。不得用分析报告代替创意方案，也不得用单个技术测试代替用户要求的创意设计。
 
-## Establish source coverage
-
-Record separately:
-
-- the source-reported unit count, such as files, pages, chapters, scenes, or panels;
-- verified story-bearing units after excluding covers, contents, blanks, ads, duplicates, metadata and other non-story material;
-- the ordered ranges, boundaries, or representative samples actually inspected;
-- observed narrative sections, action, dialogue, transitions, atmosphere and pacing;
-- unreviewed ranges and decisions they prevent.
-
-A source manifest proves inventory, not narrative coverage. A few arbitrary pages can support page-specific visual observations or a style test, but not whole-work plot coverage, runtime, episode count, episode mapping, or a claim that source analysis is complete.
-
-## Build a representative local sample
-
-Prefer a bounded complete narrative unit, such as one chapter or scene sequence. If units vary materially, sample contrasting early, middle and late or dialogue-heavy, action-heavy and atmospheric ranges. For each sample record:
-
-- source range and story-bearing page or scene count;
-- scenes and ordered narrative beats;
-- dialogue or narration load;
-- action, montage, silence, atmosphere and transition time;
-- intended omissions, merges or expansions;
-- reconstructed runtime range and confidence;
-- reasons other units may run shorter or longer.
-
-A 20–30 page chapter may plausibly reconstruct to about 5–6 minutes for a particular work. Use that only when the sampled beats support it, and label it as a work-specific calibration point rather than a general conversion rate.
-
-## Estimate scale without a page conversion rule
-
-Page, chapter, scene, panel, word, or image counts do not have a universal duration conversion. Build an estimate from verified narrative units and declared adaptation choices: what is kept, omitted, merged, expanded, newly written, held as atmosphere, or converted into action, dialogue, montage, silence, or transition.
-
-Before recommending a fixed format, show a compact arithmetic check:
-
-- episode or segment count × usable duration = total runtime;
-- average verified source load per episode or segment;
-- the main compression, expansion, omission and original-material assumptions;
-- uncertainty that could materially change the result.
-
-If a representative local sample exists but source-wide evidence does not, use its observed runtime range to estimate only a conditional volume range. Show the arithmetic and widen uncertainty for unreviewed variation; do not choose a winner, invent episode titles, or build a complete episode table. If no representative sample exists, stop at the next sampling plan rather than inventing a runtime.
-
-## Choose the current document
-
-- No representative sample: produce a source-coverage and sampling assessment with one next review batch.
-- Representative sample but incomplete source coverage: produce a provisional adaptation-volume range with method, confidence and sensitivity.
-- Sufficient coverage but format unapproved: produce a format recommendation with assumptions and creator decisions still open.
-- Approved format and source range: produce the creative or production proposal at the requested depth.
-
-Keep observed facts, interpretation, estimates and creator decisions visibly distinct. A plausible estimate remains a recommendation until the creator approves it.
+- 覆盖不足时，结论必须是“当前不能确定格式”，不得先宣布“最适合 4 集”、“建议电影”等胜出方案再在末尾撤回。
+- 一个局部样本只能支持局部时长或带敏感性的条件区间，不生成分集表、节拍模板或项目规格。
+- 视觉、摄影、美术、动作、声音、合成、制作方法和先导样片属于其他交付物；只有它们是用户要求的处理对象或当前可执行单元时才写，不得用来填充证据不足的体量评估。
+- 同一事实只出现一次；不重述原作的普通风格特征，只保留会改变当前决策的证据。

@@ -1,6 +1,7 @@
 import {
   projectAgentConversationSurfaceBinding,
   sameAgentDomainBinding,
+  type AgentAuthoringTargetRef,
   type AgentBoundDomainBinding,
   type AgentConversationContext,
 } from '@neko/agent-contracts';
@@ -12,7 +13,9 @@ export interface DesktopDshConversationContextResolution {
   readonly surfaceBinding: AgentBoundDomainBinding;
 }
 
-export async function resolveDesktopDshConversationContext(options: {
+export async function resolveDesktopDshConversationContext<
+  TWorkspace extends { readonly workspaceId: string },
+>(options: {
   readonly windowId: string;
   readonly target: DshConversationCreationTarget;
   readonly surfaceBinding: AgentBoundDomainBinding;
@@ -22,13 +25,17 @@ export async function resolveDesktopDshConversationContext(options: {
     resolveProjectWorkspace(projectId: string): Promise<{ readonly workspaceId: string }>;
   };
   readonly workspaceGrants: {
-    authorizeWorkspace(input: {
-      readonly windowId: string;
-      readonly workspaceId: string;
-    }): Promise<{
-      readonly grant: { readonly workspaceGrantId: string };
-      readonly workspace: { readonly workspaceId: string };
-    }>;
+    resolve(
+      windowId: string,
+      workspaceGrantId: string,
+    ): Promise<{ readonly workspace: TWorkspace }>;
+  };
+  readonly authoringTargets: {
+    require(input: {
+      readonly workspace: TWorkspace;
+      readonly projectId: string;
+      readonly target: AgentAuthoringTargetRef;
+    }): Promise<void>;
   };
 }): Promise<DesktopDshConversationContextResolution> {
   if (options.target.kind === 'surface') {
@@ -52,26 +59,34 @@ export async function resolveDesktopDshConversationContext(options: {
   if (!options.surfaceIsUnbound) {
     throw new Error('Entry Project selection requires an unbound Agent Draft.');
   }
-  const workspace = await options.projects.resolveProjectWorkspace(options.target.projectId);
-  const authorized = await options.workspaceGrants.authorizeWorkspace({
-    windowId: options.windowId,
-    workspaceId: workspace.workspaceId,
-  });
-  if (authorized.workspace.workspaceId !== workspace.workspaceId) {
-    throw new Error(`Desktop Project '${options.target.projectId}' resolved to another Workspace.`);
+  const projectWorkspace = await options.projects.resolveProjectWorkspace(
+    options.target.authority.projectId,
+  );
+  if (projectWorkspace.workspaceId !== options.target.workspaceId) {
+    throw new Error(
+      `Desktop Project '${options.target.authority.projectId}' belongs to another Workspace.`,
+    );
+  }
+  const authorized = await options.workspaceGrants.resolve(
+    options.windowId,
+    options.target.workspaceGrantId,
+  );
+  if (authorized.workspace.workspaceId !== options.target.workspaceId) {
+    throw new Error('Agent authoring grant resolves to another Workspace.');
+  }
+  if (options.target.target !== null) {
+    await options.authoringTargets.require({
+      workspace: authorized.workspace,
+      projectId: options.target.authority.projectId,
+      target: options.target.target,
+    });
   }
   return {
-    context: {
-      kind: 'authoring',
-      workspaceId: authorized.workspace.workspaceId,
-      workspaceGrantId: authorized.grant.workspaceGrantId,
-      authority: { kind: 'project', projectId: options.target.projectId },
-      target: null,
-    },
+    context: options.target,
     surfaceBinding: {
       kind: 'workspace',
-      workspaceId: authorized.workspace.workspaceId,
-      workspaceGrantId: authorized.grant.workspaceGrantId,
+      workspaceId: options.target.workspaceId,
+      workspaceGrantId: options.target.workspaceGrantId,
     },
   };
 }

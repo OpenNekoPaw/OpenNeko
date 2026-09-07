@@ -7,6 +7,6 @@ describe('World DSH plugin', () => {
     const effect = vi.fn((factory: () => unknown) => factory());
     apply({ effect, tools: { register } } as never);
     expect(register).toHaveBeenCalledTimes(1);
-    expect(register.mock.calls[0]?.[0]).toMatchObject({ name: 'openneko.world' });
+    expect(register.mock.calls[0]?.[0]).toMatchObject({ name: 'openneko_world' });
   });
 });

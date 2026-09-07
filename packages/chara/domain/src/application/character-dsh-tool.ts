@@ -14,7 +14,7 @@ import {
   type CharacterAuthoringService,
 } from './character-authoring-service';
 
-export const CHARACTER_DSH_TOOL_NAME = 'openneko.character' as const;
+export const CHARACTER_DSH_TOOL_NAME = 'openneko_character' as const;
 export const CHARACTER_DSH_TOOL_OPERATIONS = ['query', 'fill-draft'] as const;
 export const CHARACTER_DSH_MAX_PROJECTED_VERSIONS = 32;
 

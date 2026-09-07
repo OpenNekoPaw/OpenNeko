@@ -15,7 +15,7 @@ import { ProfessionalApplicationManagementRoot } from './root';
 afterEach(cleanup);
 
 describe('ProfessionalApplicationManagementRoot', () => {
-  it('shows qualified applications separately and saves an explicit loopback binding', async () => {
+  it('shows qualified applications separately and saves launcher preferences', async () => {
     const projection = createProjection();
     const updateBinding = vi.fn(async () => projection);
     const dispose = vi.fn();
@@ -67,12 +67,8 @@ describe('ProfessionalApplicationManagementRoot', () => {
     expect(cardOpenButton.getAttribute('aria-pressed')).toBe('true');
     expect(card.getAttribute('data-selected')).toBe('true');
 
-    fireEvent.change(screen.getByLabelText('ComfyUI 本地接口地址'), {
-      target: { value: 'http://127.0.0.1:8188' },
-    });
-    fireEvent.change(screen.getByLabelText('ComfyUI 默认工作流绑定'), {
-      target: { value: 'portrait-review' },
-    });
+    expect(screen.queryByLabelText('ComfyUI 本地接口地址')).toBeNull();
+    expect(screen.queryByLabelText('ComfyUI 默认工作流绑定')).toBeNull();
     fireEvent.change(screen.getByLabelText('ComfyUI 启动偏好'), {
       target: { value: 'launch-new' },
     });
@@ -81,9 +77,7 @@ describe('ProfessionalApplicationManagementRoot', () => {
     await waitFor(() =>
       expect(updateBinding).toHaveBeenCalledWith({
         integrationId: 'comfyui',
-        endpoint: 'http://127.0.0.1:8188',
         launchPreference: 'launch-new',
-        defaultWorkflowId: 'portrait-review',
       }),
     );
     fireEvent.click(screen.getByRole('button', { name: '关闭应用详情' }));
@@ -107,9 +101,7 @@ describe('ProfessionalApplicationManagementRoot', () => {
               kind: 'application-identity',
               identity: 'com.todesktop.241012ess7yxs0e',
             },
-            endpoint: 'http://127.0.0.1:8188',
             launchPreference: 'launch-new',
-            defaultWorkflowId: 'portrait-review',
           },
         },
       ],
@@ -292,7 +284,7 @@ function createProjection(bound = true): ProfessionalApplicationManagementProjec
             },
           ],
           officialDownloadUrl: 'https://github.com/Comfy-Org/Comfy-Desktop/releases',
-          configurable: { applicationLocator: true, endpoint: true, defaultWorkflow: true },
+          configurable: { applicationLocator: true, endpoint: false, defaultWorkflow: false },
           operations: [
             {
               id: 'comfyui.launch',

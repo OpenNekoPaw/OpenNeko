@@ -9,7 +9,9 @@ import { FileUserConfigManager } from './settings/user-config';
 import {
   DesktopAiModelSettingsService,
   type DesktopAiDialogueCapabilityReader,
+  type DesktopAiGenerationCapabilityReader,
 } from './ai-model-settings-service';
+import type { DesktopAiGenerationProviderCapability } from './ai-model-settings-contract';
 
 const dialogueCapabilities: DesktopAiDialogueCapabilityReader = {
   read: vi.fn(async () => ({
@@ -21,6 +23,10 @@ const dialogueCapabilities: DesktopAiDialogueCapabilityReader = {
         source: 'catalog' as const,
         settingsNamespace: 'llm-pi-ai',
         settingsPath: ['providers', 'provider-a'],
+        providerType: 'generic' as const,
+        defaultApiUrl: '',
+        connectionKind: 'direct' as const,
+        requiresApiKey: true,
       },
     ],
     protocols: [
@@ -35,12 +41,84 @@ const dialogueCapabilities: DesktopAiDialogueCapabilityReader = {
   })),
 };
 
+const generationCapabilityValues = [
+  {
+    id: 'generation-minimax-h3',
+    displayName: 'MiniMax H3',
+    suggestedProviderId: 'minimax-media',
+    providerType: 'minimax',
+    defaultApiUrl: 'https://api.minimaxi.com/v2',
+    requiresApiUrl: true,
+    connectionKind: 'direct',
+    supportLevel: 'verified',
+    requiresApiKey: true,
+    allowCustomModels: false,
+    supportedModelTypes: ['video'],
+    modelTemplates: [
+      {
+        id: 'minimax-h3',
+        providerType: 'minimax',
+        apiName: 'MiniMax-H3',
+        displayName: 'MiniMax H3',
+        type: 'video',
+        capabilities: ['text_to_video', 'video.generate', 'image_to_video', 'video_to_video'],
+      },
+    ],
+  },
+  {
+    id: 'generation-bytedance-seedance',
+    displayName: 'ByteDance Ark / Seedance',
+    suggestedProviderId: 'bytedance-media',
+    providerType: 'bytedance',
+    defaultApiUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+    requiresApiUrl: true,
+    connectionKind: 'direct',
+    supportLevel: 'verified',
+    requiresApiKey: true,
+    allowCustomModels: false,
+    supportedModelTypes: ['image', 'video'],
+    modelTemplates: [
+      {
+        id: 'bytedance-seedance-2',
+        providerType: 'bytedance',
+        apiName: 'doubao-seedance-2-0-260128',
+        displayName: 'Seedance 2.0',
+        type: 'video',
+        capabilities: ['text_to_video', 'video.generate', 'image_to_video'],
+      },
+    ],
+  },
+  {
+    id: 'generation-newapi',
+    displayName: 'NewAPI Media',
+    suggestedProviderId: 'newapi-media',
+    providerType: 'newapi',
+    defaultApiUrl: '',
+    requiresApiUrl: true,
+    connectionKind: 'gateway',
+    supportLevel: 'custom',
+    requiresApiKey: true,
+    allowCustomModels: true,
+    supportedModelTypes: ['image', 'video', 'audio', 'music'],
+    modelTemplates: [],
+  },
+] as const satisfies readonly DesktopAiGenerationProviderCapability[];
+
+const generationCapabilities: DesktopAiGenerationCapabilityReader = {
+  read: () => generationCapabilityValues,
+};
+
 function createService(
   config: ConfigManager,
   credentials: ProviderCredentialAuthority,
   capabilities: DesktopAiDialogueCapabilityReader = dialogueCapabilities,
 ) {
-  return new DesktopAiModelSettingsService(config, credentials, capabilities);
+  return new DesktopAiModelSettingsService(
+    config,
+    credentials,
+    capabilities,
+    generationCapabilities,
+  );
 }
 
 function createConfig() {
@@ -79,6 +157,11 @@ function createConfig() {
       removeProvider: vi.fn(async () => undefined),
       removeModel: vi.fn(async () => undefined),
       setDefaultModelRef: vi.fn(async () => undefined),
+      getAssistantSettingsSnapshot: vi.fn(() => ({
+        selectedProviderId: provider.id,
+        selectedModelId: model.id,
+      })),
+      clearAssistantModelSelection: vi.fn(async () => undefined),
     } as unknown as ConfigManager,
   };
 }
@@ -101,6 +184,51 @@ describe('DesktopAiModelSettingsService', () => {
     expect(JSON.stringify(projection)).not.toContain('must-not-project');
   });
 
+  it('projects and persists a configured protocol through the canonical DSH protocol', async () => {
+    const { config } = createConfig();
+    const credentials = {
+      read: vi.fn(async () => undefined),
+    } as unknown as ProviderCredentialAuthority;
+    const capabilities: DesktopAiDialogueCapabilityReader = {
+      read: vi.fn(async () => ({
+        status: 'available' as const,
+        providers: [],
+        protocols: ['openai-completions'],
+        diagnostics: [],
+      })),
+    };
+
+    const projection = await createService(config, credentials, capabilities).project();
+
+    expect(projection.providers).toEqual([
+      expect.objectContaining({
+        id: 'provider-a',
+        protocol: 'openai-completions',
+      }),
+    ]);
+
+    const projected = projection.providers[0];
+    if (!projected?.protocol) throw new Error('Projected DSH protocol is missing.');
+    await createService(config, credentials, capabilities).execute({
+      requestId: 'persist-canonical-dsh-protocol',
+      operation: 'save-provider',
+      provider: {
+        id: projected.id,
+        displayName: projected.displayName,
+        type: projected.type,
+        apiUrl: projected.apiUrl,
+        connectionKind: projected.connectionKind,
+        protocol: projected.protocol,
+        supportedModelFamilies: projected.supportedModelFamilies,
+        requiresApiKey: true,
+        enabled: projected.enabled,
+      },
+    });
+    expect(config.setProvider).toHaveBeenCalledWith(
+      expect.objectContaining({ protocolProfile: 'openai-completions' }),
+    );
+  });
+
   it('writes providers and credentials through their canonical authorities', async () => {
     const { config } = createConfig();
     const credentials = {
@@ -117,8 +245,10 @@ describe('DesktopAiModelSettingsService', () => {
         displayName: 'Provider A',
         type: 'generic',
         apiUrl: 'https://example.test/v1',
+        connectionKind: 'direct',
         protocol: 'openai-chat',
         supportedModelFamilies: ['dialogue'],
+        requiresApiKey: true,
         enabled: true,
       },
       apiKey: 'secret-value',
@@ -134,6 +264,49 @@ describe('DesktopAiModelSettingsService', () => {
     expect(credentials.replaceApiKey).toHaveBeenCalledWith('provider-a', 'secret-value');
     expect(result.executionConfigurationChanged).toBe(true);
     expect(JSON.stringify(result)).not.toContain('secret-value');
+  });
+
+  it('creates an explicit local keyless custom DSH Provider without touching credentials', async () => {
+    const { config } = createConfig();
+    const credentials = {
+      read: vi.fn(async () => undefined),
+      replaceApiKey: vi.fn(async () => undefined),
+    } as unknown as ProviderCredentialAuthority;
+    const capabilities: DesktopAiDialogueCapabilityReader = {
+      read: vi.fn(async () => ({
+        status: 'available' as const,
+        providers: [],
+        protocols: ['openai-completions'],
+        diagnostics: [],
+      })),
+    };
+
+    await createService(config, credentials, capabilities).execute({
+      requestId: 'request-local-keyless',
+      operation: 'save-provider',
+      provider: {
+        id: 'local-oneapi',
+        displayName: 'Local OneAPI',
+        type: 'oneapi',
+        apiUrl: 'http://127.0.0.1:8000/v1',
+        connectionKind: 'local',
+        protocol: 'openai-completions',
+        supportedModelFamilies: ['dialogue'],
+        requiresApiKey: false,
+        enabled: true,
+      },
+    });
+
+    expect(config.setProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'local-oneapi',
+        type: 'oneapi',
+        connectionKind: 'local',
+        protocolProfile: 'openai-completions',
+        requiresApiKey: false,
+      }),
+    );
+    expect(credentials.replaceApiKey).not.toHaveBeenCalled();
   });
 
   it('creates an unknown DSH catalog Provider without a local preset or endpoint override', async () => {
@@ -152,6 +325,10 @@ describe('DesktopAiModelSettingsService', () => {
             source: 'catalog' as const,
             settingsNamespace: 'llm-pi-ai',
             settingsPath: ['providers', 'future-provider'],
+            providerType: 'generic' as const,
+            defaultApiUrl: '',
+            connectionKind: 'direct' as const,
+            requiresApiKey: true,
           },
         ],
         protocols: ['future-protocol'],
@@ -167,9 +344,12 @@ describe('DesktopAiModelSettingsService', () => {
         displayName: 'Future Provider',
         type: 'generic',
         apiUrl: '',
+        connectionKind: 'direct',
         supportedModelFamilies: ['dialogue'],
+        requiresApiKey: true,
         enabled: true,
       },
+      apiKey: 'future-secret',
     });
 
     expect(config.setProvider).toHaveBeenCalledWith(
@@ -205,8 +385,10 @@ describe('DesktopAiModelSettingsService', () => {
           displayName: provider.displayName,
           type: provider.type,
           apiUrl: provider.apiUrl,
+          connectionKind: 'direct',
           protocol: 'removed-by-dsh',
           supportedModelFamilies: ['dialogue'],
+          requiresApiKey: true,
           enabled: true,
         },
       }),
@@ -258,8 +440,10 @@ describe('DesktopAiModelSettingsService', () => {
         displayName: 'Provider A renamed',
         type: 'newapi',
         apiUrl: provider.apiUrl,
+        connectionKind: 'direct',
         protocol: 'openai-chat',
         supportedModelFamilies: ['dialogue'],
+        requiresApiKey: true,
         enabled: true,
       },
     });
@@ -292,8 +476,10 @@ describe('DesktopAiModelSettingsService', () => {
         displayName: provider.displayName,
         type: 'generic',
         apiUrl: provider.apiUrl,
+        connectionKind: 'direct',
         protocol: 'ollama',
         supportedModelFamilies: ['dialogue'],
+        requiresApiKey: true,
         enabled: true,
       },
     });
@@ -310,7 +496,7 @@ describe('DesktopAiModelSettingsService', () => {
     expect(saved).not.toHaveProperty('builtin');
   });
 
-  it('rejects changing the exact type of an existing Provider', async () => {
+  it('changes the local Provider type only for an explicit custom DSH route', async () => {
     const { config, provider } = createConfig();
     Object.assign(provider, {
       requiresApiKey: true,
@@ -323,22 +509,65 @@ describe('DesktopAiModelSettingsService', () => {
       replaceApiKey: vi.fn(async () => undefined),
     } as unknown as ProviderCredentialAuthority;
 
+    const capabilities: DesktopAiDialogueCapabilityReader = {
+      read: vi.fn(async () => ({
+        status: 'available' as const,
+        providers: [],
+        protocols: ['openai-completions'],
+        diagnostics: [],
+      })),
+    };
+
+    await createService(config, credentials, capabilities).execute({
+      requestId: 'request-custom-oneapi',
+      operation: 'save-provider',
+      provider: {
+        id: provider.id,
+        displayName: 'OneAPI Gateway',
+        type: 'oneapi',
+        apiUrl: 'https://oneapi.example/v1',
+        connectionKind: 'gateway',
+        protocol: 'openai-completions',
+        supportedModelFamilies: ['dialogue'],
+        requiresApiKey: true,
+        enabled: true,
+      },
+    });
+
+    expect(config.setProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: provider.id,
+        type: 'oneapi',
+        connectionKind: 'gateway',
+        protocolProfile: 'openai-completions',
+      }),
+    );
+  });
+
+  it('keeps a DSH catalog Provider type immutable', async () => {
+    const { config, provider } = createConfig();
+    Object.assign(provider, { requiresApiKey: true, connectionKind: 'direct' });
+    const credentials = {
+      read: vi.fn(async () => undefined),
+    } as unknown as ProviderCredentialAuthority;
+
     await expect(
       createService(config, credentials).execute({
-        requestId: 'request-custom-ollama',
+        requestId: 'request-catalog-type-mutation',
         operation: 'save-provider',
         provider: {
           id: provider.id,
-          displayName: 'Local Ollama',
-          type: 'ollama',
-          apiUrl: 'http://localhost:11434/api',
-          protocol: 'ollama',
-          presetId: 'dialogue-ollama',
+          displayName: provider.displayName,
+          type: 'oneapi',
+          apiUrl: provider.apiUrl,
+          connectionKind: 'direct',
+          protocol: 'openai-completions',
           supportedModelFamilies: ['dialogue'],
+          requiresApiKey: true,
           enabled: true,
         },
       }),
-    ).rejects.toThrow(/type is immutable/u);
+    ).rejects.toThrow(/catalog Provider .* type is immutable/u);
 
     expect(config.setProvider).not.toHaveBeenCalled();
   });
@@ -358,8 +587,10 @@ describe('DesktopAiModelSettingsService', () => {
           displayName: 'Hybrid Provider',
           type: 'generic',
           apiUrl: 'https://example.test/v1',
+          connectionKind: 'direct',
           protocol: 'openai-chat',
           supportedModelFamilies: ['dialogue', 'generation'],
+          requiresApiKey: true,
           enabled: true,
         },
       }),
@@ -384,9 +615,10 @@ describe('DesktopAiModelSettingsService', () => {
           displayName: 'Colliding Provider',
           type: 'newapi',
           apiUrl: 'https://example.test/v1',
-          protocol: 'openai-chat',
-          presetId: 'dialogue-newapi',
-          supportedModelFamilies: ['dialogue'],
+          connectionKind: 'gateway',
+          presetId: 'generation-newapi',
+          supportedModelFamilies: ['generation'],
+          requiresApiKey: true,
           enabled: true,
         },
       }),
@@ -410,8 +642,10 @@ describe('DesktopAiModelSettingsService', () => {
         displayName: provider.displayName,
         type: 'newapi',
         apiUrl: provider.apiUrl,
+        connectionKind: 'direct',
         protocol: 'openai-responses',
         supportedModelFamilies: ['dialogue'],
+        requiresApiKey: true,
         enabled: true,
       },
     });
@@ -421,7 +655,7 @@ describe('DesktopAiModelSettingsService', () => {
     );
   });
 
-  it('rejects credentials for local Ollama providers', async () => {
+  it('rejects credentials for local keyless dialogue Providers', async () => {
     const { config } = createConfig();
     const credentials = {
       read: vi.fn(async () => undefined),
@@ -430,16 +664,17 @@ describe('DesktopAiModelSettingsService', () => {
 
     await expect(
       createService(config, credentials).execute({
-        requestId: 'request-ollama-key',
+        requestId: 'request-local-key',
         operation: 'save-provider',
         provider: {
-          id: 'local-ollama',
-          displayName: 'Local Ollama',
-          type: 'ollama',
-          apiUrl: 'http://localhost:11434/api',
-          protocol: 'ollama',
-          presetId: 'dialogue-ollama',
+          id: 'local-oneapi',
+          displayName: 'Local OneAPI',
+          type: 'oneapi',
+          apiUrl: 'http://localhost:8000/v1',
+          connectionKind: 'local',
+          protocol: 'openai-completions',
           supportedModelFamilies: ['dialogue'],
+          requiresApiKey: false,
           enabled: true,
         },
         apiKey: 'must-not-store',
@@ -469,6 +704,7 @@ describe('DesktopAiModelSettingsService', () => {
     const { config } = createConfig();
     const credentials = {
       read: vi.fn(async () => undefined),
+      replaceApiKey: vi.fn(async () => undefined),
     } as unknown as ProviderCredentialAuthority;
 
     await createService(config, credentials).execute({
@@ -479,10 +715,13 @@ describe('DesktopAiModelSettingsService', () => {
         displayName: preset.displayName,
         type: preset.type,
         apiUrl: preset.apiUrl,
+        connectionKind: 'direct',
         presetId: preset.presetId,
         supportedModelFamilies: ['generation'],
+        requiresApiKey: true,
         enabled: true,
       },
+      apiKey: 'generation-secret',
     });
 
     expect(config.setProvider).toHaveBeenCalledWith(
@@ -501,6 +740,7 @@ describe('DesktopAiModelSettingsService', () => {
     const { config } = createConfig();
     const credentials = {
       read: vi.fn(async () => undefined),
+      replaceApiKey: vi.fn(async () => undefined),
     } as unknown as ProviderCredentialAuthority;
 
     await createService(config, credentials).execute({
@@ -511,10 +751,13 @@ describe('DesktopAiModelSettingsService', () => {
         displayName: 'MiniMax Proxy',
         type: 'minimax',
         apiUrl: 'https://minimax-proxy.example/v2',
+        connectionKind: 'direct',
         presetId: 'generation-minimax-h3',
         supportedModelFamilies: ['generation'],
+        requiresApiKey: true,
         enabled: true,
       },
+      apiKey: 'generation-secret',
     });
 
     expect(config.setProvider).toHaveBeenCalledWith(
@@ -582,11 +825,11 @@ describe('DesktopAiModelSettingsService', () => {
       requestId: `request-model-${template.type}`,
       operation: 'save-model',
       model: {
-        id: template.templateId,
         providerId: provider.id,
         apiName: template.apiName,
         displayName: template.apiName,
         type: 'video',
+        capabilities: template.capabilities,
         enabled: true,
         templateId: template.templateId,
       },
@@ -594,12 +837,123 @@ describe('DesktopAiModelSettingsService', () => {
 
     expect(config.setModel).toHaveBeenCalledWith(
       expect.objectContaining({
+        id: `${provider.id}-${template.templateId}`,
         providerId: provider.id,
         name: template.apiName,
         type: 'video',
         capabilities: template.capabilities,
       }),
     );
+  });
+
+  it('rejects capability overrides for a builtin model template', async () => {
+    const { config, provider } = createConfig();
+    Object.assign(provider, {
+      type: 'minimax',
+      protocolProfile: undefined,
+      supportedModelFamilies: ['generation'],
+    });
+    const credentials = {
+      read: vi.fn(async () => undefined),
+    } as unknown as ProviderCredentialAuthority;
+
+    await expect(
+      createService(config, credentials).execute({
+        requestId: 'request-template-capability-override',
+        operation: 'save-model',
+        model: {
+          providerId: provider.id,
+          apiName: 'MiniMax-H3',
+          displayName: 'MiniMax H3',
+          type: 'video',
+          capabilities: ['video.generate'],
+          enabled: true,
+          templateId: 'minimax-h3',
+        },
+      }),
+    ).rejects.toThrow(/owns its capability declaration/u);
+
+    expect(config.setModel).not.toHaveBeenCalled();
+  });
+
+  it('persists explicitly selected capabilities for a custom dialogue model', async () => {
+    const { config, provider } = createConfig();
+    const credentials = {
+      read: vi.fn(async () => undefined),
+    } as unknown as ProviderCredentialAuthority;
+
+    await createService(config, credentials).execute({
+      requestId: 'request-custom-dialogue-capabilities',
+      operation: 'save-model',
+      model: {
+        providerId: provider.id,
+        apiName: 'custom-agent-model',
+        displayName: 'Custom Agent Model',
+        type: 'llm',
+        capabilities: ['chat', 'llm.chat', 'vision', 'function_calling', 'streaming'],
+        enabled: true,
+      },
+    });
+
+    expect(config.setModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: `${provider.id}:custom-agent-model`,
+        capabilities: ['chat', 'llm.chat', 'vision', 'function_calling', 'streaming'],
+      }),
+    );
+  });
+
+  it('preserves the Host-owned identity when editing an existing model', async () => {
+    const { config, provider, model } = createConfig();
+    const credentials = {
+      read: vi.fn(async () => undefined),
+    } as unknown as ProviderCredentialAuthority;
+
+    await createService(config, credentials).execute({
+      requestId: 'request-edit-dialogue-model',
+      operation: 'save-model',
+      model: {
+        existingId: model.id,
+        providerId: provider.id,
+        apiName: 'renamed-api-model',
+        displayName: 'Renamed Model',
+        type: 'llm',
+        capabilities: ['chat', 'llm.chat', 'streaming'],
+        enabled: true,
+      },
+    });
+
+    expect(config.setModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: model.id,
+        name: 'renamed-api-model',
+        displayName: 'Renamed Model',
+      }),
+    );
+  });
+
+  it('rejects a custom model missing the capabilities required by its type', async () => {
+    const { config, provider } = createConfig();
+    const credentials = {
+      read: vi.fn(async () => undefined),
+    } as unknown as ProviderCredentialAuthority;
+
+    await expect(
+      createService(config, credentials).execute({
+        requestId: 'request-incomplete-dialogue-capabilities',
+        operation: 'save-model',
+        model: {
+          providerId: provider.id,
+          apiName: 'incomplete-agent-model',
+          displayName: 'Incomplete Agent Model',
+          type: 'llm',
+          capabilities: ['vision'],
+          enabled: true,
+        },
+      }),
+    ).rejects.toThrow(/requires capabilities: chat, llm.chat/u);
+
+    expect(config.setModel).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -621,11 +975,11 @@ describe('DesktopAiModelSettingsService', () => {
         requestId: `request-unsupported-${type}`,
         operation: 'save-model',
         model: {
-          id: `unsupported-${type}`,
           providerId: provider.id,
           apiName,
           displayName: apiName,
           type: 'video',
+          capabilities: ['video.generate'],
           enabled: true,
         },
       }),
@@ -634,7 +988,7 @@ describe('DesktopAiModelSettingsService', () => {
     expect(config.setModel).not.toHaveBeenCalled();
   });
 
-  it('rejects a model ID that already belongs to another Provider', async () => {
+  it('rejects editing a model through another Provider', async () => {
     const { config, provider, model } = createConfig();
     Object.assign(provider, {
       id: 'provider-b',
@@ -651,16 +1005,17 @@ describe('DesktopAiModelSettingsService', () => {
         requestId: 'request-model-collision',
         operation: 'save-model',
         model: {
-          id: model.id,
+          existingId: model.id,
           providerId: provider.id,
           apiName: 'MiniMax-H3',
           displayName: 'MiniMax H3',
           type: 'video',
+          capabilities: ['video.generate'],
           enabled: true,
           templateId: 'minimax-h3',
         },
       }),
-    ).rejects.toThrow(/already belongs to Provider provider-a/u);
+    ).rejects.toThrow(/belongs to Provider provider-a, not provider-b/u);
 
     expect(config.setModel).not.toHaveBeenCalled();
   });
@@ -684,6 +1039,17 @@ describe('DesktopAiModelSettingsService', () => {
       modelId: 'image-a',
     });
     expect(result.executionConfigurationChanged).toBe(true);
+
+    await service.execute({
+      requestId: 'request-music-default',
+      operation: 'set-default',
+      modelType: 'music',
+      ref: { providerId: 'provider-a', modelId: 'music-a' },
+    });
+    expect(config.setDefaultModelRef).toHaveBeenLastCalledWith('music', {
+      providerId: 'provider-a',
+      modelId: 'music-a',
+    });
   });
 
   it('rejects models outside an explicitly configured Provider family', async () => {
@@ -698,11 +1064,11 @@ describe('DesktopAiModelSettingsService', () => {
         requestId: 'request-family-mismatch',
         operation: 'save-model',
         model: {
-          id: 'chat-mismatch',
           providerId: provider.id,
           apiName: 'chat-mismatch',
           displayName: 'Chat mismatch',
           type: 'llm',
+          capabilities: ['chat', 'llm.chat'],
           enabled: true,
         },
       }),
@@ -723,11 +1089,11 @@ describe('DesktopAiModelSettingsService', () => {
         requestId: 'request-dialogue-video-mismatch',
         operation: 'save-model',
         model: {
-          id: 'video-mismatch',
           providerId: provider.id,
           apiName: 'video-mismatch',
           displayName: 'Video mismatch',
           type: 'video',
+          capabilities: ['video.generate'],
           enabled: true,
         },
       }),
@@ -756,7 +1122,7 @@ describe('DesktopAiModelSettingsService', () => {
     expect(projection.providers).toEqual([
       expect.objectContaining({
         id: provider.id,
-        protocol: 'ollama',
+        protocol: 'openai-completions',
         connectionKind: 'local',
         supportedModelFamilies: ['dialogue'],
         credentialStatus: 'not-required',
@@ -817,8 +1183,52 @@ describe('DesktopAiModelSettingsService', () => {
     });
 
     expect(config.removeModel).toHaveBeenCalledWith(model.id);
+    expect(config.clearAssistantModelSelection).toHaveBeenCalledOnce();
     expect(config.removeProvider).toHaveBeenCalledWith(provider.id);
     expect(credentials.delete).toHaveBeenCalledWith(provider.id);
+  });
+
+  it('restores a deleted model when its stale Composer selection cannot be cleared', async () => {
+    const { config, model } = createConfig();
+    config.getDefaultModelRef = vi.fn(() => undefined);
+    config.clearAssistantModelSelection = vi.fn(async () => {
+      throw new Error('runtime settings unavailable');
+    });
+    const credentials = {
+      read: vi.fn(async () => undefined),
+    } as unknown as ProviderCredentialAuthority;
+
+    await expect(
+      createService(config, credentials).execute({
+        requestId: 'delete-selected-model',
+        operation: 'delete-model',
+        modelId: model.id,
+      }),
+    ).rejects.toThrow(/deletion was reverted/u);
+
+    expect(config.removeModel).toHaveBeenCalledWith(model.id);
+    expect(config.setModel).toHaveBeenCalledWith(model);
+  });
+
+  it('keeps an unrelated transient Composer selection when deleting another model', async () => {
+    const { config, model } = createConfig();
+    config.getDefaultModelRef = vi.fn(() => undefined);
+    config.getAssistantSettingsSnapshot = vi.fn(() => ({
+      selectedProviderId: 'another-provider',
+      selectedModelId: 'another-model',
+    }));
+    const credentials = {
+      read: vi.fn(async () => undefined),
+    } as unknown as ProviderCredentialAuthority;
+
+    await createService(config, credentials).execute({
+      requestId: 'delete-unselected-model',
+      operation: 'delete-model',
+      modelId: model.id,
+    });
+
+    expect(config.removeModel).toHaveBeenCalledWith(model.id);
+    expect(config.clearAssistantModelSelection).not.toHaveBeenCalled();
   });
 
   it('persists Provider edits and deletion through the canonical config.toml owner', async () => {
@@ -857,8 +1267,10 @@ describe('DesktopAiModelSettingsService', () => {
           displayName: 'Renamed Provider',
           type: 'generic',
           apiUrl: 'https://config.example/v2',
+          connectionKind: 'direct',
           protocol: 'openai-chat',
           supportedModelFamilies: ['dialogue'],
+          requiresApiKey: true,
           enabled: true,
         },
       });

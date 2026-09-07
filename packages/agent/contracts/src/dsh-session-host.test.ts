@@ -10,7 +10,7 @@ import {
   parseDshSessionHostProjection,
   parseDshSessionHostRequest,
   parseDshSessionHostResult,
-  parseDshTerminalArtifactOpenHostResult,
+  parseDshWrittenFileOpenHostResult,
 } from './dsh-session-host';
 import {
   internalVersionFields,
@@ -40,6 +40,21 @@ const createRequest = {
 };
 
 describe('DSH Session Host contract', () => {
+  it('strictly accepts an exact Conversation branch request', () => {
+    const request = {
+      requestId: 'request-branch',
+      operation: 'branch',
+      windowId: 'window:one',
+      rendererSessionId: 'renderer:one',
+      conversationId: 'conversation:one',
+      messageId: 'assistant:one',
+    };
+
+    expect(parseDshSessionHostRequest(request)).toEqual(request);
+    expect(() => parseDshSessionHostRequest({ ...request, messageId: '' })).toThrow(/messageId/u);
+    expect(() => parseDshSessionHostRequest({ ...request, boundary: 12 })).toThrow(/unexpected=/u);
+  });
+
   it('strictly accepts exact inbox send-now and rejects extra or empty identity fields', () => {
     const request = {
       requestId: 'request-send-now',
@@ -127,6 +142,28 @@ describe('DSH Session Host contract', () => {
           providerLabel: 'NekoAPI Media',
           category: 'image',
           capabilities: ['image.generate'],
+          parameterProfile: {
+            kind: 'image',
+            controls: {
+              size: {
+                kind: 'image-size-enum',
+                values: [
+                  { id: 'auto' },
+                  { id: '1024x1024', width: 1024, height: 1024, aspectRatio: '1:1' },
+                  { id: '1536x1024', width: 1536, height: 1024, aspectRatio: '3:2' },
+                  { id: '1024x1536', width: 1024, height: 1536, aspectRatio: '2:3' },
+                ],
+                defaultValue: 'auto',
+              },
+              quality: {
+                kind: 'string-enum',
+                required: true,
+                values: ['auto', 'low', 'medium', 'high'],
+                defaultValue: 'auto',
+              },
+            },
+            fixed: { outputCount: 1 },
+          },
         },
       ],
       selectedModelOptionId: 'deepseek-official:deepseek-v4',
@@ -165,6 +202,14 @@ describe('DSH Session Host contract', () => {
         selectedMediaModelOptionIds: { video: 'nekoapi-media:gpt-image-2' },
       }),
     ).toThrow(/selected video model/u);
+    expect(() =>
+      parseDshComposerConfigurationProjection({
+        ...configuration,
+        models: configuration.models.map((model) =>
+          model.category === 'image' ? { ...model, category: 'video' } : model,
+        ),
+      }),
+    ).toThrow(/parameter profile must match/u);
   });
 
   it('accepts create with sender, exact Agent Surface identity, and DSH preset', () => {
@@ -172,9 +217,23 @@ describe('DSH Session Host contract', () => {
     expect(
       parseDshSessionHostRequest({
         ...createRequest,
-        target: { kind: 'project', projectId: 'project-1' },
+        target: {
+          kind: 'authoring',
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+          authority: { kind: 'project', projectId: 'project-1' },
+          target: { kind: 'character-project', characterProjectId: 'character-project-1' },
+        },
       }),
-    ).toMatchObject({ target: { kind: 'project', projectId: 'project-1' } });
+    ).toMatchObject({
+      target: {
+        kind: 'authoring',
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'grant-1',
+        authority: { kind: 'project', projectId: 'project-1' },
+        target: { kind: 'character-project', characterProjectId: 'character-project-1' },
+      },
+    });
     expect(
       parseDshSessionHostRequest({
         ...createRequest,
@@ -209,7 +268,7 @@ describe('DSH Session Host contract', () => {
     expect(() =>
       parseDshSessionHostRequest({
         ...createRequest,
-        target: { kind: 'project', projectId: '', workspaceId: 'forged' },
+        target: { kind: 'authoring', projectId: '', workspaceId: 'forged' },
       }),
     ).toThrow();
   });
@@ -238,7 +297,6 @@ describe('DSH Session Host contract', () => {
           images: [],
           contextPayloads: [],
           canvasTurnTarget: {
-            kind: 'exact-canvas',
             workspaceId: 'workspace-1',
             canvasId: 'neko/boards/story.nkc',
           },
@@ -253,7 +311,6 @@ describe('DSH Session Host contract', () => {
         images: [],
         contextPayloads: [],
         canvasTurnTarget: {
-          kind: 'exact-canvas',
           workspaceId: 'workspace-1',
           canvasId: 'neko/boards/story.nkc',
         },
@@ -271,7 +328,7 @@ describe('DSH Session Host contract', () => {
     ).toMatchObject({ projection: { dshSessionId: 'session-1' } });
   });
 
-  it('strictly accepts bounded canonical inline images and rejects malformed batches', () => {
+  it('accepts canonical image batches without a count cap and rejects malformed images', () => {
     const submit = (images: unknown[]) =>
       parseDshSessionHostRequest({
         requestId: 'request-image',
@@ -295,13 +352,13 @@ describe('DSH Session Host contract', () => {
     );
     expect(() =>
       submit(
-        Array.from({ length: 5 }, (_, index) => ({
+        Array.from({ length: 24 }, (_, index) => ({
           name: `clipboard-${index}.png`,
           mimeType: 'image/png',
           data: 'AQID',
         })),
       ),
-    ).toThrow(/limit of 4/u);
+    ).not.toThrow();
   });
 
   it('strictly decodes sender-bound image preview requests and opaque resource results', () => {
@@ -353,6 +410,50 @@ describe('DSH Session Host contract', () => {
     ).toEqual({ requestId: 'request-release', released: true });
   });
 
+  it('strictly decodes a completed write open request and result', () => {
+    expect(
+      parseDshSessionHostRequest({
+        requestId: 'request-open-written-file',
+        operation: 'written-file-open',
+        windowId: 'window-1',
+        rendererSessionId: 'renderer-1',
+        conversationId: 'conversation-1',
+        toolCallId: 'tool-write-document',
+      }),
+    ).toMatchObject({
+      operation: 'written-file-open',
+      toolCallId: 'tool-write-document',
+    });
+    expect(
+      parseDshWrittenFileOpenHostResult(
+        { requestId: 'request-open-written-file', opened: true },
+        'request-open-written-file',
+      ),
+    ).toEqual({ requestId: 'request-open-written-file', opened: true });
+    expect(() =>
+      parseDshWrittenFileOpenHostResult(
+        { requestId: 'request-open-written-file', opened: false },
+        'request-open-written-file',
+      ),
+    ).toThrow(/invalid/u);
+  });
+
+  it('decodes an exact Conversation Canvas mutation and rejects malformed requests locally', () => {
+    const request = {
+      operation: 'composer-canvas',
+      requestId: 'canvas-select',
+      windowId: 'window-1',
+      rendererSessionId: 'renderer-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'surface-1',
+      conversationId: 'conversation-1',
+      canvasId: 'neko/boards/story.nkc',
+    };
+    expect(() => parseDshSessionHostRequest({ ...request, conversationId: '' })).toThrow();
+    expect(() => parseDshSessionHostRequest({ ...request, unregisteredField: true })).toThrow();
+    expect(parseDshSessionHostRequest(request)).toEqual(request);
+  });
+
   it('strictly decodes the Canvas-owned composer catalog', () => {
     expect(
       parseDshComposerConfigurationProjection({
@@ -362,19 +463,25 @@ describe('DSH Session Host contract', () => {
         permissionPresets: [{ id: 'workspace-write', label: 'Workspace Write', selectable: true }],
         context: {
           kind: 'workspace',
+          canvasSelection: null,
           workspaceId: 'workspace-1',
           workspaceLabel: 'Workspace One',
           canvas: {
             workspaceId: 'workspace-1',
-            defaultTarget: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+            defaultTarget: {
+              workspaceId: 'workspace-1',
+              canvasId: 'neko/boards/workspace.nkc',
+            },
             options: [
               {
-                target: { kind: 'workspace-board', workspaceId: 'workspace-1' },
-                label: 'Workspace Board',
+                target: {
+                  workspaceId: 'workspace-1',
+                  canvasId: 'neko/boards/workspace.nkc',
+                },
+                label: 'workspace.nkc',
               },
               {
                 target: {
-                  kind: 'exact-canvas',
                   workspaceId: 'workspace-1',
                   canvasId: 'neko/boards/story.nkc',
                 },
@@ -393,8 +500,8 @@ describe('DSH Session Host contract', () => {
       context: {
         canvas: {
           options: [
-            { target: { kind: 'workspace-board' } },
-            { target: { kind: 'exact-canvas', canvasId: 'neko/boards/story.nkc' } },
+            { target: { canvasId: 'neko/boards/workspace.nkc' } },
+            { target: { canvasId: 'neko/boards/story.nkc' } },
           ],
         },
       },
@@ -407,15 +514,22 @@ describe('DSH Session Host contract', () => {
         permissionPresets: [{ id: 'workspace-write', label: 'Workspace Write', selectable: true }],
         context: {
           kind: 'workspace',
+          canvasSelection: null,
           workspaceId: 'workspace-1',
           workspaceLabel: 'Workspace One',
           canvas: {
             workspaceId: 'workspace-2',
-            defaultTarget: { kind: 'workspace-board', workspaceId: 'workspace-2' },
+            defaultTarget: {
+              workspaceId: 'workspace-2',
+              canvasId: 'neko/boards/workspace.nkc',
+            },
             options: [
               {
-                target: { kind: 'workspace-board', workspaceId: 'workspace-2' },
-                label: 'Workspace Board',
+                target: {
+                  workspaceId: 'workspace-2',
+                  canvasId: 'neko/boards/workspace.nkc',
+                },
+                label: 'workspace.nkc',
               },
             ],
             diagnostics: [],
@@ -703,6 +817,36 @@ describe('DSH Session Host contract', () => {
     ).toThrow(/unsupported fields/u);
   });
 
+  it('decodes the exact DSH todo projection and rejects ambiguous plan items', () => {
+    expect(
+      parseDshSessionHostProjection({
+        ...projection(),
+        todos: [
+          { content: 'Inspect source evidence', status: 'completed' },
+          { content: 'Define the PV structure', status: 'in_progress' },
+        ],
+      }).todos,
+    ).toEqual([
+      { content: 'Inspect source evidence', status: 'completed' },
+      { content: 'Define the PV structure', status: 'in_progress' },
+    ]);
+    expect(() =>
+      parseDshSessionHostProjection({
+        ...projection(),
+        todos: [
+          { content: 'Inspect source evidence', status: 'pending' },
+          { content: 'Inspect source evidence', status: 'completed' },
+        ],
+      }),
+    ).toThrow(/duplicated/u);
+    expect(() =>
+      parseDshSessionHostProjection({
+        ...projection(),
+        todos: [{ content: 'Inspect source evidence', status: 'blocked' }],
+      }),
+    ).toThrow(/status is unsupported/u);
+  });
+
   it('requires canonical DSH timing on exact turn boundaries', () => {
     expect(
       parseDshSessionHostProjection({
@@ -787,64 +931,80 @@ describe('DSH Session Host contract', () => {
     ).toThrow(/unexpected=uri/u);
   });
 
-  it('keeps a terminal Markdown artifact separate from the assistant summary', () => {
-    const contentLocator = {
-      file: { authority: 'workspace' as const, path: 'neko/generated/file/story-plan.md' },
-    };
-    expect(
-      parseDshSessionHostProjection({
-        ...projection(),
-        events: [
-          {
-            kind: 'message',
-            role: 'assistant',
-            turn: 1,
-            step: 0,
-            text: '已完成故事规划。',
-            messageId: 'assistant-final',
-            state: 'final',
-            artifact: {
-              kind: 'reviewable-markdown',
-              title: '故事规划',
-              contentLocator,
-            },
+  it('accepts bounded Tool display content and rejects malformed image identities', () => {
+    const tool = {
+      kind: 'tool' as const,
+      toolCallId: 'tool-image',
+      turn: 1,
+      status: 'completed' as const,
+      content: [
+        { type: 'text' as const, text: 'A–D overview' },
+        {
+          type: 'image' as const,
+          label: 'openneko-image-overview.jpg',
+          attachment: {
+            attachmentId: 'attachment-overview',
+            mediaType: 'image/jpeg' as const,
+            byteLength: 128,
+            width: 640,
+            height: 480,
           },
-        ],
-      }).events,
-    ).toEqual([
-      {
-        kind: 'message',
-        role: 'assistant',
-        turn: 1,
-        step: 0,
-        text: '已完成故事规划。',
-        messageId: 'assistant-final',
-        state: 'final',
-        artifact: {
-          kind: 'reviewable-markdown',
-          title: '故事规划',
-          contentLocator,
         },
-      },
+      ],
+    };
+
+    expect(parseDshSessionHostProjection({ ...projection(), events: [tool] }).events).toEqual([
+      tool,
     ]);
     expect(() =>
       parseDshSessionHostProjection({
         ...projection(),
         events: [
           {
-            kind: 'message',
-            role: 'assistant',
-            turn: 1,
-            step: 0,
-            text: '已完成故事规划。',
-            messageId: 'assistant-final',
-            state: 'final',
-            artifact: {
-              kind: 'reviewable-markdown',
-              title: '故事规划',
+            ...tool,
+            content: [
+              {
+                ...tool.content[1],
+                attachment: { ...tool.content[1]!.attachment, width: 0 },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrow(/width/u);
+    expect(() =>
+      parseDshSessionHostProjection({ ...projection(), events: [{ ...tool, content: [] }] }),
+    ).toThrow(/non-empty array/u);
+  });
+
+  it('accepts only a canonical Workspace locator on completed write references', () => {
+    const tool = {
+      kind: 'tool' as const,
+      toolCallId: 'tool-write-document',
+      turn: 1,
+      status: 'completed' as const,
+      title: 'write',
+      writtenFileReference: {
+        title: 'story-plan.md',
+        contentLocator: {
+          file: { authority: 'workspace' as const, path: 'notes/story-plan.md' },
+        },
+      },
+    };
+
+    expect(parseDshSessionHostProjection({ ...projection(), events: [tool] }).events).toEqual([
+      tool,
+    ]);
+    expect(() =>
+      parseDshSessionHostProjection({
+        ...projection(),
+        events: [
+          {
+            ...tool,
+            writtenFileReference: {
+              ...tool.writtenFileReference,
               contentLocator: {
-                ...contentLocator,
-                selector: { kind: 'range', start: 0, end: 1 },
+                file: { authority: 'workspace', path: '/private/story-plan.md' },
               },
             },
           },
@@ -853,27 +1013,24 @@ describe('DSH Session Host contract', () => {
     ).toThrow(/Workspace file ContentLocator/u);
   });
 
-  it('opens a terminal artifact by exact conversation and message identity only', () => {
-    expect(
-      parseDshSessionHostRequest({
-        requestId: 'request-open-artifact',
-        operation: 'terminal-artifact-open',
-        windowId: 'window-1',
-        rendererSessionId: 'renderer-1',
-        conversationId: 'conversation-1',
-        messageId: 'assistant-final',
+  it('rejects retired terminal publication fields from assistant events', () => {
+    expect(() =>
+      parseDshSessionHostProjection({
+        ...projection(),
+        events: [
+          {
+            kind: 'message',
+            role: 'assistant',
+            turn: 1,
+            step: 0,
+            text: '已完成。',
+            messageId: 'assistant-final',
+            state: 'final',
+            artifact: { kind: 'reviewable-markdown' },
+          },
+        ],
       }),
-    ).toMatchObject({
-      operation: 'terminal-artifact-open',
-      conversationId: 'conversation-1',
-      messageId: 'assistant-final',
-    });
-    expect(
-      parseDshTerminalArtifactOpenHostResult(
-        { requestId: 'request-open-artifact', opened: true },
-        'request-open-artifact',
-      ),
-    ).toEqual({ requestId: 'request-open-artifact', opened: true });
+    ).toThrow(/unexpected=artifact/u);
     expect(() =>
       parseDshSessionHostRequest({
         requestId: 'request-open-artifact',
@@ -882,11 +1039,8 @@ describe('DSH Session Host contract', () => {
         rendererSessionId: 'renderer-1',
         conversationId: 'conversation-1',
         messageId: 'assistant-final',
-        contentLocator: {
-          file: { authority: 'workspace', path: 'neko/generated/file/forged.md' },
-        },
       }),
-    ).toThrow(/unexpected=contentLocator/u);
+    ).toThrow(/operation/u);
   });
 
   it('rejects compatibility fields and accepts only bounded JSON Tool payloads', () => {
@@ -936,6 +1090,7 @@ function projection() {
     title: 'Hello',
     currentTurn: 1,
     inbox: { nextTurn: [], nextStep: [] },
+    todos: [],
     events: [
       {
         kind: 'message',

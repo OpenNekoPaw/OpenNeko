@@ -257,7 +257,9 @@ export function useFocusedWebviewRoot<T extends HTMLElement>(
     };
     const handlePointerDown = (event: PointerEvent): void => {
       const root = rootRef.current;
-      if (!root || !(event.target instanceof Node) || !root.contains(event.target)) {
+      if (!root || !(event.target instanceof Node)) return;
+      if (!root.contains(event.target)) {
+        markBlurred();
         return;
       }
       markFocused();

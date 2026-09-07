@@ -5,70 +5,67 @@ describe('DSH turn Canvas target owner', () => {
   it('binds admitted targets to real turns in FIFO order', () => {
     const owner = createDshTurnCanvasTargetOwner();
     owner.admit('dsh-1', {
-      kind: 'exact-canvas',
       workspaceId: 'workspace-1',
       canvasId: 'boards/story.nkc',
     });
-    owner.admit('dsh-1', { kind: 'workspace-board', workspaceId: 'workspace-1' });
+    owner.admit('dsh-1', {
+      workspaceId: 'workspace-1',
+      canvasId: 'neko/boards/workspace.nkc',
+    });
 
     owner.bindStartedTurn('dsh-1', 4);
     owner.bindStartedTurn('dsh-1', 5);
 
     expect(owner.read('dsh-1', 4)).toEqual({
-      kind: 'exact-canvas',
       workspaceId: 'workspace-1',
       canvasId: 'boards/story.nkc',
     });
     expect(owner.read('dsh-1', 5)).toEqual({
-      kind: 'workspace-board',
       workspaceId: 'workspace-1',
+      canvasId: 'neko/boards/workspace.nkc',
     });
   });
 
   it('releases an admission that failed before turn start', () => {
     const owner = createDshTurnCanvasTargetOwner();
     const stale = owner.admit('dsh-1', {
-      kind: 'exact-canvas',
       workspaceId: 'workspace-1',
       canvasId: 'boards/stale.nkc',
     });
     owner.releaseAdmission(stale.admissionId);
-    owner.admit('dsh-1', { kind: 'workspace-board', workspaceId: 'workspace-1' });
+    owner.admit('dsh-1', { workspaceId: 'workspace-1', canvasId: 'neko/boards/workspace.nkc' });
     owner.bindStartedTurn('dsh-1', 1);
     expect(owner.read('dsh-1', 1)).toEqual({
-      kind: 'workspace-board',
       workspaceId: 'workspace-1',
+      canvasId: 'neko/boards/workspace.nkc',
     });
   });
 
   it('removes the exact queued admission when its Inbox message is deleted', () => {
     const owner = createDshTurnCanvasTargetOwner();
     const removed = owner.admit('dsh-1', {
-      kind: 'exact-canvas',
       workspaceId: 'workspace-1',
       canvasId: 'boards/removed.nkc',
     });
     owner.bindQueuedMessage(removed.admissionId, 'message-1');
-    owner.admit('dsh-1', { kind: 'workspace-board', workspaceId: 'workspace-1' });
+    owner.admit('dsh-1', { workspaceId: 'workspace-1', canvasId: 'neko/boards/workspace.nkc' });
 
     owner.releaseQueuedMessage('message-1');
     owner.bindStartedTurn('dsh-1', 1);
 
     expect(owner.read('dsh-1', 1)).toEqual({
-      kind: 'workspace-board',
       workspaceId: 'workspace-1',
+      canvasId: 'neko/boards/workspace.nkc',
     });
   });
 
   it('prioritizes the exact queued admission and can roll its order back', () => {
     const owner = createDshTurnCanvasTargetOwner();
     const first = owner.admit('dsh-1', {
-      kind: 'exact-canvas',
       workspaceId: 'workspace-1',
       canvasId: 'boards/first.nkc',
     });
     const selected = owner.admit('dsh-1', {
-      kind: 'exact-canvas',
       workspaceId: 'workspace-1',
       canvasId: 'boards/selected.nkc',
     });
@@ -88,12 +85,10 @@ describe('DSH turn Canvas target owner', () => {
   it('keeps a prioritized queued admission first after a successful reservation', () => {
     const owner = createDshTurnCanvasTargetOwner();
     const first = owner.admit('dsh-1', {
-      kind: 'exact-canvas',
       workspaceId: 'workspace-1',
       canvasId: 'boards/first.nkc',
     });
     const selected = owner.admit('dsh-1', {
-      kind: 'exact-canvas',
       workspaceId: 'workspace-1',
       canvasId: 'boards/selected.nkc',
     });
@@ -110,20 +105,20 @@ describe('DSH turn Canvas target owner', () => {
 
   it('rejects a stale queued identity without changing sibling admission order', () => {
     const owner = createDshTurnCanvasTargetOwner();
-    owner.admit('dsh-1', { kind: 'workspace-board', workspaceId: 'workspace-1' });
+    owner.admit('dsh-1', { workspaceId: 'workspace-1', canvasId: 'neko/boards/workspace.nkc' });
 
     expect(() => owner.prioritizeQueuedMessage('message-stale')).toThrow(
       'has no pending Canvas target admission',
     );
     owner.bindStartedTurn('dsh-1', 1);
-    expect(owner.read('dsh-1', 1)).toMatchObject({ kind: 'workspace-board' });
+    expect(owner.read('dsh-1', 1)).toMatchObject({ canvasId: 'neko/boards/workspace.nkc' });
   });
 
   it('accepts a queued-message identity that arrives after the turn already started', () => {
     const owner = createDshTurnCanvasTargetOwner();
     const admission = owner.admit('dsh-1', {
-      kind: 'workspace-board',
       workspaceId: 'workspace-1',
+      canvasId: 'neko/boards/workspace.nkc',
     });
 
     owner.bindStartedTurn('dsh-1', 1);
@@ -134,8 +129,8 @@ describe('DSH turn Canvas target owner', () => {
   it('releases a turn that started before its submitting operation failed', () => {
     const owner = createDshTurnCanvasTargetOwner();
     const admission = owner.admit('dsh-1', {
-      kind: 'workspace-board',
       workspaceId: 'workspace-1',
+      canvasId: 'neko/boards/workspace.nkc',
     });
     owner.bindStartedTurn('dsh-1', 1);
 

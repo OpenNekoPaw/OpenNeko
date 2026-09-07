@@ -47,6 +47,93 @@ export interface ContentLocator {
   readonly selector?: ContentSelector;
 }
 
+const CONTENT_LOCATOR_KEYS = ['file', 'selector'] as const;
+const WORKSPACE_FILE_KEYS = ['authority', 'path'] as const;
+const PACKAGE_FILE_KEYS = ['authority', 'packageId', 'revision', 'path'] as const;
+const PACKAGE_REVISION_KEY = PACKAGE_FILE_KEYS[2];
+const ENTRY_SELECTOR_KEYS = ['kind', 'path'] as const;
+const PAGE_SELECTOR_KEYS = ['kind', 'pageNumber', 'pageIndex'] as const;
+const TEXT_RANGE_SELECTOR_KEYS = [
+  'kind',
+  'startChar',
+  'endChar',
+  'startLine',
+  'endLine',
+  'paragraphIndex',
+  'heading',
+] as const;
+
+export const CONTENT_LOCATOR_DSH_SCHEMA = {
+  type: 'object',
+  description:
+    'Canonical @neko/content-domain ContentLocator. Use file.authority. Omit selector when the whole file is the target; never send selector: {} or add a top-level kind.',
+  properties: {
+    file: {
+      oneOf: [
+        {
+          type: 'object',
+          title: 'workspace content file',
+          properties: {
+            authority: { type: 'string', const: 'workspace', required: true },
+            path: { type: 'string', required: true },
+          },
+          additionalProperties: false,
+        },
+        {
+          type: 'object',
+          title: 'package content file',
+          properties: {
+            authority: { type: 'string', const: 'package', required: true },
+            packageId: { type: 'string', required: true },
+            [PACKAGE_REVISION_KEY]: { type: 'string', required: true },
+            path: { type: 'string', required: true },
+          },
+          additionalProperties: false,
+        },
+      ],
+      required: true,
+    },
+    selector: {
+      oneOf: [
+        {
+          type: 'object',
+          title: 'content entry selector',
+          properties: {
+            kind: { type: 'string', const: 'entry', required: true },
+            path: { type: 'string', required: true },
+          },
+          additionalProperties: false,
+        },
+        {
+          type: 'object',
+          title: 'content page selector',
+          properties: {
+            kind: { type: 'string', const: 'page', required: true },
+            pageNumber: { type: 'number', required: true },
+            pageIndex: { type: 'number', required: true },
+          },
+          additionalProperties: false,
+        },
+        {
+          type: 'object',
+          title: 'content text range selector',
+          properties: {
+            kind: { type: 'string', const: 'text-range', required: true },
+            startChar: { type: 'number' },
+            endChar: { type: 'number' },
+            startLine: { type: 'number' },
+            endLine: { type: 'number' },
+            paragraphIndex: { type: 'number' },
+            heading: { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+      ],
+    },
+  },
+  additionalProperties: false,
+} as const;
+
 export type WorkspaceFileContentLocator = ContentLocator & {
   readonly file: WorkspaceContentFileLocator;
 };
@@ -412,21 +499,6 @@ function invalidLocatorError(label: string, result: ContentLocatorValidationResu
     : result.diagnostics.map((entry) => entry.message).join('; ');
   return new Error(`${label} is invalid: ${detail}`);
 }
-
-const CONTENT_LOCATOR_KEYS = ['file', 'selector'] as const;
-const WORKSPACE_FILE_KEYS = ['authority', 'path'] as const;
-const PACKAGE_FILE_KEYS = ['authority', 'packageId', 'revision', 'path'] as const;
-const ENTRY_SELECTOR_KEYS = ['kind', 'path'] as const;
-const PAGE_SELECTOR_KEYS = ['kind', 'pageNumber', 'pageIndex'] as const;
-const TEXT_RANGE_SELECTOR_KEYS = [
-  'kind',
-  'startChar',
-  'endChar',
-  'startLine',
-  'endLine',
-  'paragraphIndex',
-  'heading',
-] as const;
 
 function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
   return Object.keys(value).every((key) => allowed.includes(key));

@@ -1,61 +1,16 @@
 ---
 name: 'audio-mixing'
-description: '音频混音与声音设计助手；用于调整电平、平衡音乐与对白、响度标准化、淡化或闪避。 Audio mixing and sound design assistant for level adjustment, music/dialogue balance, loudness normalization, fades, and ducking.'
+description: '基于实际音频测量和交付规范编写混音/声音设计意图；仅在当前挂载音频处理能力时执行。'
 ---
 
-# Audio Mixing Assistant
+# 音频混音
 
 ## 中文方法
 
-作为专业混音助手，先确认用户确实要处理音频，再根据素材和交付平台建立可验证的混音目标。对白通常保持清晰主体，背景音乐在对白期间适度闪避，音效电平依场景决定；不要把示例数值当作所有平台的固定标准。
+先读取可用的音频、测量结果和交付平台规范。当前没有音频处理 Tool 时，交付物只是绑定到具体轨道/时段的混音意图和待执行参数，不是已处理音频。
 
 - 先检查对白、音乐、音效的角色、峰值、响度和动态范围。
-- 对白可从 80–100 Hz 高通、轻度压缩、必要的齿音控制和 2–4 kHz 清晰度调整开始。
-- 音乐床可从约 -18 dB 起步，并根据对白触发快速起音、中等释放的闪避。
-- 流媒体母带可将约 -14 LUFS、-1 dB 余量作为候选目标，但必须以当前平台规范和实测为准。
+- 参数必须来自当前测量、授权参考或交付规范；高通频率、压缩比、闪避量和 LUFS 都不是跨项目默认值。
 - 在不同扬声器上复核，并与授权参考音轨做 A/B；只有实际运行结果才能证明混音已完成。
 
-## English guidance
-
-You are a professional audio mixer. Help users achieve balanced, clear audio.
-
-## Level Guidelines
-
-| Element            | Target Level      |
-| ------------------ | ----------------- |
-| Dialogue           | -12 to -6 dB      |
-| Music (background) | -18 to -24 dB     |
-| Music (featured)   | -12 to -6 dB      |
-| SFX                | Varies by context |
-
-## Common Techniques
-
-### Ducking
-
-Automatically lower music when dialogue plays:
-
-- Threshold: -20 dB
-- Reduction: -8 to -12 dB
-- Attack: Fast (10-50ms)
-- Release: Medium (100-300ms)
-
-### Dialogue Clarity
-
-1. High-pass filter at 80-100 Hz
-2. Light compression (2:1, -10dB threshold)
-3. De-ess if needed (4-8 kHz)
-4. Subtle EQ boost at 2-4 kHz
-
-### Music Bed
-
-1. Choose complementary genre/mood
-2. Set initial level -18 dB
-3. Apply ducking for dialogue
-4. Fade in/out at scene changes
-
-## Mastering Tips
-
-- Target -14 LUFS for streaming
-- Leave -1 dB headroom
-- Check on multiple speakers
-- A/B with reference tracks
+每项调整绑定实际轨道／时间范围、观察到的问题、可测量目标与当前允许的音频操作；母带交付同时核对当前平台的响度和真峰值要求。

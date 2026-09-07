@@ -310,13 +310,15 @@ function ProjectContentRow({
   );
 }
 
+export type ProjectCatalogTemplateId = 'storyboard' | 'video-plan';
+
 export interface ProjectCatalogRootProps {
   readonly associatedConversationCounts: Readonly<Record<string, number>>;
   readonly interactive: boolean;
   readonly projects: readonly ProjectCatalogItem[];
   readonly onOpenDirectory: () => void;
   readonly onOpen: (projectId: string) => void;
-  readonly onStartFromTemplate: () => void;
+  readonly onStartFromTemplate: (template: ProjectCatalogTemplateId) => void;
   readonly onArchiveAssociatedConversations: (projects: readonly ProjectCatalogItem[]) => void;
   readonly onRemove: (projects: readonly ProjectCatalogItem[]) => void;
 }
@@ -431,27 +433,31 @@ export function ProjectCatalogRoot({
         >
           <h2 id="project-templates-heading">{t('home.projects.fromTemplates')}</h2>
           <div className="project-template-grid">
-            {[
-              {
-                id: 'storyboard',
-                icon: <GridIcon size={26} />,
-                title: t('home.start.template.storyboard.title'),
-                description: t('home.start.template.storyboard.description'),
-              },
-              {
-                id: 'video-plan',
-                icon: <OpenIcon size={26} />,
-                title: t('home.start.template.video.title'),
-                description: t('home.start.template.video.description'),
-              },
-            ].map((template) => (
+            {(
+              [
+                {
+                  id: 'storyboard',
+                  icon: <GridIcon size={26} />,
+                  title: t('home.start.template.storyboard.title'),
+                  description: t('home.start.template.storyboard.description'),
+                },
+                {
+                  id: 'video-plan',
+                  icon: <OpenIcon size={26} />,
+                  title: t('home.start.template.video.title'),
+                  description: t('home.start.template.video.description'),
+                },
+              ] as const
+            ).map((template) => (
               <button
                 type="button"
                 className="project-template-card"
+                data-availability="unavailable"
                 data-project-template-id={template.id}
-                disabled={!interactive}
+                disabled
                 key={template.id}
-                onClick={onStartFromTemplate}
+                title={t('home.projects.templateUnavailableDescription')}
+                onClick={() => onStartFromTemplate(template.id)}
               >
                 <span className="project-template-card__preview" aria-hidden="true">
                   <span className="project-template-card__preview-pattern">
@@ -467,7 +473,7 @@ export function ProjectCatalogRoot({
                     <small>{template.description}</small>
                   </span>
                   <span className="project-template-card__action">
-                    {t('home.projects.startFromTemplate')}
+                    {t('home.projects.templateUnavailable')}
                   </span>
                 </span>
               </button>

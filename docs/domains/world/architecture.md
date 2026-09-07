@@ -21,6 +21,8 @@ Conversation/turn；Desktop 只拥有 sender/window/path 授权和可见 Surface
 ## Canonical Commands
 
 - `create local`：在一个精确 Project Workspace transaction 中首次提交 WorldProject 和 membership。
+- `Agent query/fill draft`：只在绑定同一精确 Project 和既有 fresh WorldProject 时查询或填充草稿；不创建全局对象或发布版本。
+- `create global`：由 World global catalog service 直接原子提交 GlobalWorld 与首个不可变版本；不是 Project-bound Agent Tool operation。
 - `synchronize to global`：创建 GlobalWorld 首版，或在显式 stale-base 选择后追加不可变版本。
 - `add/update/remove global reference`：只改变精确 Project 引用，不复制 World facts。
 - `copy global to local`：从一个精确全局版本创建新的工作区世界 identity。
@@ -39,6 +41,9 @@ Conversation/turn；Desktop 只拥有 sender/window/path 授权和可见 Surface
 
 ## Runtime Boundary
 
-World Experience 绑定一个精确全局 WorldVersion，并可组合多个精确 CharacterVersion participant。Run/Save
-不读取工作区草稿、ZIP、current/latest 或 Project active selection。全局新增版本不会改变已有 Run/Save；用户
-显式更新时只修改确认的引用。
+World runtime 绑定一个精确全局 WorldVersion；Run/Save 不读取工作区草稿、ZIP、current/latest 或
+Project active selection。全局新增版本不会改变已有 Run/Save；用户显式更新时只修改确认的引用。
+
+当前 Desktop consumer 只实现确定性 Foundation action/fact Workbench，不等同于完整 World Experience。
+Story、Gameplay、Agent Play、实时生成、外部引擎或多 Character participant 只有在各自存在真实 producer、
+consumer 和精确 action contract 后才能进入运行边界，不得由 prompt、fixture 或 UI 占位推断为可用能力。

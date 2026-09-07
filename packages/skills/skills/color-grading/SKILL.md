@@ -1,63 +1,16 @@
 ---
 name: 'color-grading'
-description: '色彩校正与调色助手；用于曝光、对比度、白平衡、饱和度、LUT 或电影感调整。 Color correction and grading assistant for exposure, contrast, white balance, saturation, LUTs, and cinematic looks.'
+description: '基于实际画面和监看信号编写镜头级校色/调色意图；仅在当前挂载调色能力时执行。'
 ---
 
-# Color Grading Assistant
+# 校色与调色
 
 ## 中文方法
 
-作为专业调色助手，先区分技术校正与风格调色：校正负责曝光、白平衡和镜头匹配，调色负责情绪、色彩关系和电影感。
+先区分技术校正与风格调色，并查看实际画面、色彩管理与镜头匹配证据。当前没有调色 Tool 时，只输出绑定到具体镜头的校正/风格意图、参考和检查方法，不声称图像已变更。
 
-- 先完成曝光、对比度、色温和色偏等一级校正，再处理高光/阴影、饱和度和局部 HSL。
-- 青橙、胶片模拟、高调或低调只是候选方向，必须服务来源内容和用户目标。
-- LUT、颗粒、黑位提升、暗角等效果应有明确作用，不能替代镜头匹配和肤色检查。
+- 技术校正只响应可观察的曝光、白平衡、对比或镜头匹配问题；风格调色响应已批准的情绪、色彩关系和参考。
+- LUT、颗粒、曲线和局部色彩效果都必须有明确作用，不能替代镜头匹配和优先色检查。
 - 只有当前视觉能力实际执行并返回结果后，才能声称已完成调色；否则只报告计划、参数意图或阻塞项。
 
-## English guidance
-
-You are a professional colorist. Help users achieve their desired visual style.
-
-## Color Correction vs Grading
-
-| Correction    | Grading        |
-| ------------- | -------------- |
-| Fix exposure  | Create mood    |
-| Balance white | Apply style    |
-| Match shots   | Cinematic look |
-
-## Key Parameters
-
-### Primary Correction
-
-- **Exposure**: Overall brightness (-3 to +3 stops)
-- **Contrast**: Tonal range (flatten or punch)
-- **Temperature**: Warm (orange) ↔ Cool (blue)
-- **Tint**: Green ↔ Magenta
-
-### Secondary Adjustments
-
-- **Highlights/Shadows**: Selective brightness
-- **Saturation/Vibrance**: Color intensity
-- **HSL**: Target specific colors
-
-## Popular Looks
-
-### Cinematic Teal & Orange
-
-- Push shadows toward teal
-- Push skin tones toward orange
-- Lift blacks slightly
-- Subtle vignette
-
-### Film Emulation
-
-- Lifted blacks (crushed shadows)
-- Reduced highlight rolloff
-- Subtle grain
-- Muted saturation
-
-### High Key / Low Key
-
-- High key: Bright, minimal shadows
-- Low key: Dark, dramatic shadows
+每项建议绑定精确镜头、可观察问题、授权参考或风格决定、拟调整的参数类别，以及示波器、镜头匹配、肤色／优先色或校准监看等验证方式。证据不足时不确定具体参数或 LUT。

@@ -21,18 +21,12 @@ export default tseslint.config(
   // Base JS recommended rules
   eslint.configs.recommended,
 
-  // Repository-owned Desktop functional scripts execute in Node.js and remain part of lint CI.
+  // Desktop development and packaging tools execute in Node.js.
   {
-    files: [
-      'scripts/desktop-functional/**/*.mjs',
-      'scripts/run-desktop-ui-functional.mjs',
-      'scripts/test-orchestration/desktop-functional-runner.test.mjs',
-      'packages/*/webview/functional/**/*.mjs',
-    ],
+    files: ['scripts/desktop/**/*.mjs'],
     languageOptions: {
       globals: {
         ...globals.node,
-        WebSocket: 'readonly',
       },
     },
     rules: {
@@ -99,10 +93,7 @@ export default tseslint.config(
       'apps/**/src/**/*.tsx',
       'packages/**/src/**/*.ts',
       'packages/**/src/**/*.tsx',
-      'scripts/desktop-functional/**/*.mjs',
-      'scripts/run-desktop-ui-functional.mjs',
-      'scripts/test-orchestration/desktop-functional-runner.test.mjs',
-      'packages/*/webview/functional/**/*.mjs',
+      'scripts/desktop/**/*.mjs',
     ],
     rules: {
       ...security.configs.recommended.rules,

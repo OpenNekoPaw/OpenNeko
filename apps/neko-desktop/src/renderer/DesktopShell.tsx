@@ -85,6 +85,11 @@ import {
   type WorkspaceQuickCreateSubmission,
 } from './WorkspaceQuickCreateControl';
 import { executeDesktopWorkspaceQuickCreation } from './desktop-workspace-quick-creation';
+import {
+  WorkspaceEmptyMainSuggestions,
+  type WorkspaceMainSuggestion,
+} from './WorkspaceEmptyMainSuggestions';
+import { executeDesktopWorkspaceQuickOpen } from './desktop-workspace-quick-open';
 import { createDesktopResourceBrowserIdentity } from '../shared/resource-browser-bridge-contract';
 import type { ResourceBrowserIdentity } from '@neko/assets-domain/resource-browser/contract';
 import {
@@ -109,10 +114,14 @@ import type {
 } from '@neko/project-domain/contracts';
 import '@neko/project-webview/style.css';
 import {
+  createEmptyCharacterDefinition,
   type CharacterAuthoringSnapshot,
   type CharacterProductHandoff,
 } from '@neko/chara-domain/contracts';
-import type { WorldAuthoringSnapshot } from '@neko/world-domain/contracts';
+import {
+  createEmptyWorldDefinition,
+  type WorldAuthoringSnapshot,
+} from '@neko/world-domain/contracts';
 import { DesktopAssetCenterMainSurface } from './DesktopAssetCenterMainSurface';
 import { DesktopAssistantPreviewSurface } from './DesktopAssistantPreviewSurface';
 import { DesktopAssetCenterRuntime } from './desktop-asset-center-runtime';
@@ -125,8 +134,17 @@ import {
   DesktopApplicationNavigationButton,
 } from './DesktopApplicationSidebar';
 import {
+  createCharacterCreationHandoffIntent,
   createCharacterDialogueHandoffIntent,
+  createProjectTemplateHandoffIntent,
+  createWorldCreationHandoffIntent,
+  type CharacterCreationEntry,
+  type CharacterCreationHandoffIntent,
   type CharacterDialogueHandoffIntent,
+  type ProjectTemplateEntry,
+  type ProjectTemplateHandoffIntent,
+  type WorldCreationEntry,
+  type WorldCreationHandoffIntent,
 } from '@neko/agent-contracts';
 import type { DesktopWindowCompositionProjection } from '@neko/host/desktop-window-composition-contract';
 import { DesktopSurfaceErrorBoundary } from './DesktopSurfaceErrorBoundary';
@@ -251,9 +269,14 @@ export function projectDesktopShellInteractionLocks(
 }
 
 interface ShellActions {
+  readonly onOpenWrittenFile: (conversationId: string, toolCallId: string) => void;
   readonly onSelectProject: (projectId: string) => void;
   readonly onOpenWorkspaceDirectory: () => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
+  readonly onConversationBranched: (
+    conversationId: string,
+    owner: import('@neko/agent-contracts').AgentConversationOwnerRef,
+  ) => void;
   readonly onArchiveConversations: (
     conversations: readonly DesktopAgentHomeConversationSummary[],
   ) => void;
@@ -272,6 +295,15 @@ interface ShellActions {
     readonly workbench: DesktopWorkbenchLayoutProjection;
     readonly mainGroupId: string;
     readonly submission: WorkspaceQuickCreateSubmission;
+  }) => Promise<string | undefined>;
+  readonly onOpenWorkspaceMainSuggestion: (input: {
+    readonly projectId: string;
+    readonly workspaceId: string;
+    readonly workspaceGrantId: string;
+    readonly workbenchInstanceId: string;
+    readonly workbench: DesktopWorkbenchLayoutProjection;
+    readonly mainGroupId: string;
+    readonly suggestion: WorkspaceMainSuggestion;
   }) => Promise<void>;
   readonly onCreateCutDraft: (workbenchInstanceId: string) => void;
   readonly onCloseCutView: (workbenchInstanceId: string, view: DesktopWorkbenchViewRef) => void;
@@ -301,6 +333,18 @@ interface ShellActions {
     readonly label: string;
   }) => Promise<void>;
   readonly onCharacterProductHandoff: (handoff: CharacterProductHandoff) => void;
+  readonly onStartCharacterCreation: (entry: CharacterCreationEntry) => Promise<void>;
+  readonly onStartProjectTemplate: (template: ProjectTemplateEntry) => Promise<void>;
+  readonly onStartWorldCreation: (entry: WorldCreationEntry) => Promise<void>;
+  readonly onSelectEntryProjectTarget: NonNullable<
+    NonNullable<DesktopAgentSurfaceProps['entryContext']>['workspace']['onSelectProject']
+  >;
+  readonly onLoadEntryAuthoringTargets: NonNullable<
+    NonNullable<DesktopAgentSurfaceProps['entryContext']>['workspace']['loadAuthoringCatalog']
+  >;
+  readonly onCreateEntryAuthoringTarget: NonNullable<
+    NonNullable<DesktopAgentSurfaceProps['entryContext']>['workspace']['onCreateAuthoringTarget']
+  >;
   readonly onLoadEntryCharacterTargets: NonNullable<
     NonNullable<DesktopAgentSurfaceProps['entryContext']>['experimentalCreative']
   >['loadCharacterTargets'];
@@ -327,6 +371,18 @@ function DesktopApplicationContent(): JSX.Element {
   const [characterDialogueHandoff, setCharacterDialogueHandoff] = useState<{
     readonly draftId: string;
     readonly intent: CharacterDialogueHandoffIntent;
+  }>();
+  const [characterCreationHandoff, setCharacterCreationHandoff] = useState<{
+    readonly draftId: string;
+    readonly intent: CharacterCreationHandoffIntent;
+  }>();
+  const [projectTemplateHandoff, setProjectTemplateHandoff] = useState<{
+    readonly draftId: string;
+    readonly intent: ProjectTemplateHandoffIntent;
+  }>();
+  const [worldCreationHandoff, setWorldCreationHandoff] = useState<{
+    readonly draftId: string;
+    readonly intent: WorldCreationHandoffIntent;
   }>();
   const [characterPortableWorkflow, setCharacterPortableWorkflow] =
     useState<CharacterPortableWorkflow>();
@@ -552,6 +608,14 @@ function DesktopApplicationContent(): JSX.Element {
   };
   const actions: ShellActions = {
     onSelectProject: (projectId) => transitionScene({ kind: 'open-project-workspace', projectId }),
+    onOpenWrittenFile: (conversationId, toolCallId) => {
+      setDiagnostic(undefined);
+      void window.openNekoDesktop.dshSessions
+        .openWrittenFile(conversationId, toolCallId)
+        .catch((error: unknown) => {
+          setDiagnostic(t('workspace.documentOpenFailed', { message: describeError(error) }));
+        });
+    },
     onOpenWorkspaceDirectory: () => {
       const finishPending = beginPending('navigation');
       setDiagnostic(undefined);
@@ -574,6 +638,11 @@ function DesktopApplicationContent(): JSX.Element {
       transitionScene({
         kind: 'restore-conversation',
         navigation: conversation.navigation,
+      }),
+    onConversationBranched: (conversationId, owner) =>
+      transitionScene({
+        kind: 'restore-conversation',
+        navigation: { conversationId, owner },
       }),
     onArchiveConversations: (conversations) => {
       if (conversations.length === 0) {
@@ -674,6 +743,7 @@ function DesktopApplicationContent(): JSX.Element {
         throw new Error(`Desktop Workbench '${input.workbenchInstanceId}' is unavailable.`);
       }
       let retainedDiagnostic: string | undefined;
+      let createdDocumentId: string | undefined;
       await runMutation(
         'workbench',
         async () => {
@@ -691,16 +761,51 @@ function DesktopApplicationContent(): JSX.Element {
               updateWorkbench: (workbenchInstanceId, workbench) =>
                 window.openNekoDesktop.workbench.update(workbenchInstanceId, workbench),
               search: (request) => window.openNekoDesktop.resources.search(request),
+              getResourceSnapshot: (request) =>
+                window.openNekoDesktop.resources.getSnapshot(request),
               execute: (request) => window.openNekoDesktop.resources.execute(request),
               getShellSnapshot: () => window.openNekoDesktop.shell.getSnapshot(),
             },
           );
           retainedDiagnostic = outcome.retainedDiagnostic?.message;
+          createdDocumentId = outcome.createdDocumentId;
           return outcome.projection;
         },
         { rethrow: true },
       );
       if (retainedDiagnostic) setDiagnostic(retainedDiagnostic);
+      return createdDocumentId;
+    },
+    onOpenWorkspaceMainSuggestion: async (input) => {
+      if (projection.window.workbench.workbenchInstanceId !== input.workbenchInstanceId) {
+        throw new Error(`Desktop Workbench '${input.workbenchInstanceId}' is unavailable.`);
+      }
+      await runMutation(
+        'workbench',
+        () =>
+          executeDesktopWorkspaceQuickOpen(
+            {
+              requestId: `workspace-quick-open:${globalThis.crypto.randomUUID()}`,
+              projectId: input.projectId,
+              workspaceId: input.workspaceId,
+              workspaceGrantId: input.workspaceGrantId,
+              workbenchInstanceId: input.workbenchInstanceId,
+              workbench: input.workbench,
+              mainGroupId: input.mainGroupId,
+              suggestion: input.suggestion,
+            },
+            {
+              updateWorkbench: (workbenchInstanceId, workbench) =>
+                window.openNekoDesktop.workbench.update(workbenchInstanceId, workbench),
+              readCanvasCatalog: (request) =>
+                window.openNekoDesktop.canvas.readWorkspaceIndexCatalog(request),
+              openCanvasDocument: (request) =>
+                window.openNekoDesktop.canvas.openWorkspaceDocument(request),
+              getShellSnapshot: () => window.openNekoDesktop.shell.getSnapshot(),
+            },
+          ),
+        { rethrow: true },
+      );
     },
     onCreateCutDraft: (workbenchInstanceId) => {
       void runMutation('workbench', async () => {
@@ -967,6 +1072,218 @@ function DesktopApplicationContent(): JSX.Element {
         finishPending();
       }
     },
+    onStartCharacterCreation: async (entry) => {
+      const finishPending = beginPending('scene');
+      setDiagnostic(undefined);
+      try {
+        const result = await window.openNekoDesktop.scenes.transition(
+          projection.window.windowId,
+          { kind: 'open-agent-entry' },
+          activeWorkbench.scene.sceneId,
+        );
+        if (result.status !== 'transitioned') throw new Error(result.diagnostic.message);
+        if (
+          result.scene.context.kind !== 'agent' ||
+          result.scene.context.scope.kind !== 'unbound'
+        ) {
+          throw new Error('Character creation requires an unbound Agent Draft.');
+        }
+        setCharacterCreationHandoff({
+          draftId: result.scene.context.scope.draftId,
+          intent: createCharacterCreationHandoffIntent({
+            intentId: `character-creation:${crypto.randomUUID()}`,
+            entry,
+          }),
+        });
+      } catch (error) {
+        setDiagnostic(describeError(error));
+        await refresh();
+        throw error;
+      } finally {
+        finishPending();
+      }
+    },
+    onStartProjectTemplate: async (template) => {
+      const finishPending = beginPending('scene');
+      setDiagnostic(undefined);
+      try {
+        const authorization = await window.openNekoDesktop.workspaceGrants.createContentProject(
+          projection.window.windowId,
+        );
+        if (authorization.status === 'cancelled') return;
+        if (authorization.status !== 'authorized-project') {
+          throw new Error('Project template creation requires an authorized Content Project.');
+        }
+        const result = await window.openNekoDesktop.scenes.transition(
+          projection.window.windowId,
+          { kind: 'open-agent-entry' },
+          activeWorkbench.scene.sceneId,
+        );
+        if (result.status !== 'transitioned') throw new Error(result.diagnostic.message);
+        if (
+          result.scene.context.kind !== 'agent' ||
+          result.scene.context.scope.kind !== 'unbound'
+        ) {
+          throw new Error('Project template creation requires an unbound Agent Draft.');
+        }
+        setProjectTemplateHandoff({
+          draftId: result.scene.context.scope.draftId,
+          intent: createProjectTemplateHandoffIntent({
+            intentId: `project-template:${crypto.randomUUID()}`,
+            template,
+            label: authorization.grant.label,
+            binding: {
+              kind: 'authoring',
+              workspaceId: authorization.workspaceId,
+              workspaceGrantId: authorization.grant.workspaceGrantId,
+              authority: { kind: 'project', projectId: authorization.projectId },
+              target: null,
+            },
+          }),
+        });
+      } catch (error) {
+        setDiagnostic(describeError(error));
+        await refresh();
+      } finally {
+        finishPending();
+      }
+    },
+    onStartWorldCreation: async (entry) => {
+      const finishPending = beginPending('scene');
+      setDiagnostic(undefined);
+      try {
+        const result = await window.openNekoDesktop.scenes.transition(
+          projection.window.windowId,
+          { kind: 'open-agent-entry' },
+          activeWorkbench.scene.sceneId,
+        );
+        if (result.status !== 'transitioned') throw new Error(result.diagnostic.message);
+        if (
+          result.scene.context.kind !== 'agent' ||
+          result.scene.context.scope.kind !== 'unbound'
+        ) {
+          throw new Error('World creation requires an unbound Agent Draft.');
+        }
+        setWorldCreationHandoff({
+          draftId: result.scene.context.scope.draftId,
+          intent: createWorldCreationHandoffIntent({
+            intentId: `world-creation:${crypto.randomUUID()}`,
+            entry,
+          }),
+        });
+      } catch (error) {
+        setDiagnostic(describeError(error));
+        await refresh();
+      } finally {
+        finishPending();
+      }
+    },
+    onSelectEntryProjectTarget: async (projectId) => {
+      const result = await window.openNekoDesktop.workspaceGrants.selectProject(
+        projection.window.windowId,
+        projectId,
+      );
+      if (result.status === 'cancelled') return undefined;
+      return {
+        label: result.grant.label,
+        context: {
+          kind: 'workspace' as const,
+          workspaceId: result.workspaceId,
+          workspaceGrantId: result.grant.workspaceGrantId,
+        },
+        authority: { kind: 'project' as const, projectId },
+      };
+    },
+    onLoadEntryAuthoringTargets: async () => ({
+      targets: [],
+      creationContexts: projection.catalog.projects.flatMap((project) =>
+        project.unavailable
+          ? []
+          : [
+              {
+                creationId: `${project.projectId}:character`,
+                label: project.displayName,
+                targetKind: 'character-project' as const,
+                placement: { kind: 'project' as const, projectId: project.projectId },
+              },
+              {
+                creationId: `${project.projectId}:world`,
+                label: project.displayName,
+                targetKind: 'world-project' as const,
+                placement: { kind: 'project' as const, projectId: project.projectId },
+              },
+            ],
+      ),
+      diagnostics: [],
+    }),
+    onCreateEntryAuthoringTarget: async (context, name) => {
+      const authorization = await window.openNekoDesktop.workspaceGrants.selectProject(
+        projection.window.windowId,
+        context.placement.projectId,
+      );
+      if (authorization.status === 'cancelled') return undefined;
+      const binding = {
+        workspaceId: authorization.workspaceId,
+        workspaceGrantId: authorization.grant.workspaceGrantId,
+        projectId: context.placement.projectId,
+      };
+      if (context.targetKind === 'world-project') {
+        const worldProjectId = crypto.randomUUID();
+        const result = await window.openNekoDesktop.projectLocalAuthoring.createTarget(
+          projection.window.windowId,
+          binding,
+          {
+            kind: 'world-project',
+            worldProjectId,
+            title: name,
+            draft: createEmptyWorldDefinition(),
+          },
+        );
+        return {
+          status: result.status,
+          target: {
+            label: `${authorization.grant.label} / ${name}`,
+            context: {
+              kind: 'workspace',
+              workspaceId: authorization.workspaceId,
+              workspaceGrantId: authorization.grant.workspaceGrantId,
+            },
+            authority: { kind: 'project', projectId: context.placement.projectId },
+            target: { kind: 'world-project', worldProjectId },
+          },
+        };
+      }
+      const characterProjectId = crypto.randomUUID();
+      const result = await window.openNekoDesktop.projectLocalAuthoring.createTarget(
+        projection.window.windowId,
+        binding,
+        {
+          kind: 'character-project',
+          characterProjectId,
+          displayName: name,
+          draft: createEmptyCharacterDefinition(),
+          sources: { evidence: [], assetRepresentations: [] },
+          entity: {
+            kind: 'create',
+            entityId: `entity:${crypto.randomUUID()}`,
+            name,
+          },
+        },
+      );
+      return {
+        status: result.status,
+        target: {
+          label: `${authorization.grant.label} / ${name}`,
+          context: {
+            kind: 'workspace',
+            workspaceId: authorization.workspaceId,
+            workspaceGrantId: authorization.grant.workspaceGrantId,
+          },
+          authority: { kind: 'project', projectId: context.placement.projectId },
+          target: { kind: 'character-project', characterProjectId },
+        },
+      };
+    },
     onLoadEntryCharacterTargets: async () => {
       const catalog =
         await window.openNekoDesktop.characterFoundation.getConversationLaunchCatalog();
@@ -1096,11 +1413,29 @@ function DesktopApplicationContent(): JSX.Element {
         ) : null}
         <DesktopSceneWorkbench
           actions={actions}
+          characterCreationHandoff={characterCreationHandoff}
+          projectTemplateHandoff={projectTemplateHandoff}
+          worldCreationHandoff={worldCreationHandoff}
           characterManagementReloadToken={characterManagementReloadToken}
           worldManagementReloadToken={worldManagementReloadToken}
           characterDialogueHandoff={characterDialogueHandoff}
           onCharacterDialogueHandoffConsumed={(intentId) => {
             setCharacterDialogueHandoff((current) =>
+              current?.intent.intentId === intentId ? undefined : current,
+            );
+          }}
+          onCharacterCreationHandoffConsumed={(intentId) => {
+            setCharacterCreationHandoff((current) =>
+              current?.intent.intentId === intentId ? undefined : current,
+            );
+          }}
+          onProjectTemplateHandoffConsumed={(intentId) => {
+            setProjectTemplateHandoff((current) =>
+              current?.intent.intentId === intentId ? undefined : current,
+            );
+          }}
+          onWorldCreationHandoffConsumed={(intentId) => {
+            setWorldCreationHandoff((current) =>
               current?.intent.intentId === intentId ? undefined : current,
             );
           }}
@@ -1188,14 +1523,19 @@ export function DesktopShellView({
 }): JSX.Element {
   const actions: ShellActions = {
     onSelectProject: () => undefined,
+    onOpenWrittenFile: () => {
+      throw new Error('Opening a document requires an interactive Desktop Workspace.');
+    },
     onOpenWorkspaceDirectory: () => undefined,
     onOpenConversation: () => undefined,
+    onConversationBranched: () => undefined,
     onArchiveConversations: () => undefined,
     onDeleteUnavailableConversation: () => undefined,
     onRemoveProjects: () => undefined,
     onArchiveProjectConversations: () => undefined,
     onUpdateWorkbench: () => undefined,
     onQuickCreateWorkspaceContent: async () => undefined,
+    onOpenWorkspaceMainSuggestion: async () => undefined,
     onCreateCutDraft: () => undefined,
     onCloseCutView: () => undefined,
     onCloseWorkbenchView: () => undefined,
@@ -1208,6 +1548,16 @@ export function DesktopShellView({
     onStartGlobalCharacterConversation: async () => undefined,
     onFinalizeAndStartCharacterConversation: async () => undefined,
     onCharacterProductHandoff: () => undefined,
+    onStartCharacterCreation: async () => undefined,
+    onStartProjectTemplate: async () => undefined,
+    onStartWorldCreation: async () => undefined,
+    onSelectEntryProjectTarget: async () => undefined,
+    onLoadEntryAuthoringTargets: async () => ({
+      targets: [],
+      creationContexts: [],
+      diagnostics: [],
+    }),
+    onCreateEntryAuthoringTarget: async () => undefined,
     onLoadEntryCharacterTargets: async () => ({ targets: [], diagnostics: [] }),
     onLoadEntryWorldTargets: async () => ({ targets: [], diagnostics: [] }),
   };
@@ -1225,24 +1575,45 @@ export function DesktopShellView({
 
 function DesktopSceneWorkbench({
   actions,
+  characterCreationHandoff,
   characterDialogueHandoff,
+  projectTemplateHandoff,
+  worldCreationHandoff,
   characterManagementReloadToken,
   worldManagementReloadToken,
   interactive = true,
   pending,
   projection,
   projectPortabilityPort,
+  onCharacterCreationHandoffConsumed,
   onCharacterDialogueHandoffConsumed,
+  onProjectTemplateHandoffConsumed,
+  onWorldCreationHandoffConsumed,
 }: {
   readonly actions: ShellActions;
+  readonly characterCreationHandoff?: {
+    readonly draftId: string;
+    readonly intent: CharacterCreationHandoffIntent;
+  };
   readonly characterDialogueHandoff?: {
     readonly draftId: string;
     readonly intent: CharacterDialogueHandoffIntent;
   };
+  readonly projectTemplateHandoff?: {
+    readonly draftId: string;
+    readonly intent: ProjectTemplateHandoffIntent;
+  };
+  readonly worldCreationHandoff?: {
+    readonly draftId: string;
+    readonly intent: WorldCreationHandoffIntent;
+  };
   readonly characterManagementReloadToken?: number;
   readonly worldManagementReloadToken?: number;
   readonly interactive?: boolean;
+  readonly onCharacterCreationHandoffConsumed?: (intentId: string) => void;
   readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
+  readonly onProjectTemplateHandoffConsumed?: (intentId: string) => void;
+  readonly onWorldCreationHandoffConsumed?: (intentId: string) => void;
   readonly pending: DesktopShellPendingProjection;
   readonly projection: DesktopShellProjection;
   readonly projectPortabilityPort?: OpenNekoDesktopProjectPortabilityBridge['projectPortability'];
@@ -1518,6 +1889,27 @@ function DesktopSceneWorkbench({
           sceneId: scene.sceneId,
           interaction: scene.slots.interaction,
           ...(scene.slots.interaction.scope.kind === 'unbound' &&
+          characterCreationHandoff?.draftId === scene.slots.interaction.scope.draftId
+            ? {
+                characterCreationHandoff: characterCreationHandoff.intent,
+                onCharacterCreationHandoffConsumed,
+              }
+            : {}),
+          ...(scene.slots.interaction.scope.kind === 'unbound' &&
+          projectTemplateHandoff?.draftId === scene.slots.interaction.scope.draftId
+            ? {
+                projectTemplateHandoff: projectTemplateHandoff.intent,
+                onProjectTemplateHandoffConsumed,
+              }
+            : {}),
+          ...(scene.slots.interaction.scope.kind === 'unbound' &&
+          worldCreationHandoff?.draftId === scene.slots.interaction.scope.draftId
+            ? {
+                worldCreationHandoff: worldCreationHandoff.intent,
+                onWorldCreationHandoffConsumed,
+              }
+            : {}),
+          ...(scene.slots.interaction.scope.kind === 'unbound' &&
           characterDialogueHandoff?.draftId === scene.slots.interaction.scope.draftId
             ? {
                 characterDialogueHandoff: characterDialogueHandoff.intent,
@@ -1533,6 +1925,9 @@ function DesktopSceneWorkbench({
                       label: project.displayName,
                       ...(project.unavailable ? { disabled: true } : {}),
                     })),
+                    onSelectProject: actions.onSelectEntryProjectTarget,
+                    loadAuthoringCatalog: actions.onLoadEntryAuthoringTargets,
+                    onCreateAuthoringTarget: actions.onCreateEntryAuthoringTarget,
                   },
                   ...(experimentalCreativeCapabilitiesReady
                     ? {
@@ -1545,6 +1940,15 @@ function DesktopSceneWorkbench({
                 },
               }
             : {}),
+          ...(scene.slots.interaction.scope.kind === 'unbound'
+            ? {}
+            : {
+                onConversationBranched: (conversationId: string) =>
+                  actions.onConversationBranched(
+                    conversationId,
+                    resolveSceneConversationOwner(scene),
+                  ),
+              }),
         })
       : undefined;
   const projectCatalogUnavailable = hasProjectCatalogDiagnostic(projection);
@@ -1589,6 +1993,35 @@ function DesktopSceneWorkbench({
               <DesktopAgentSurface
                 key={agentSurfaceProps.agentSurfaceId}
                 {...agentSurfaceProps}
+                onOpenWrittenFile={interactive ? actions.onOpenWrittenFile : undefined}
+                onCreateCanvas={
+                  workspaceScene && workspaceProject && !workspaceProject.unavailable
+                    ? async (name) => {
+                        const tab = projection.window.tabs.find(
+                          (candidate) => candidate.projectId === workspaceProject.projectId,
+                        );
+                        if (!tab)
+                          throw new Error('Workspace Canvas creation requires a Project View.');
+                        const canvasId = await actions.onQuickCreateWorkspaceContent({
+                          identity: createDesktopResourceBrowserIdentity({
+                            projectId: workspaceProject.projectId,
+                            workspaceId: workspaceProject.workspaceId,
+                            windowId: projection.window.windowId,
+                            projectViewId: tab.viewId,
+                            projectViewInstanceId: tab.viewInstanceId,
+                            rendererSessionId: projection.rendererSessionId,
+                          }),
+                          workbenchInstanceId: activeWorkbench.workbenchInstanceId,
+                          workbench: activeWorkbench.layout,
+                          mainGroupId: activeWorkbench.layout.main.activeGroupId,
+                          submission: { kind: 'canvas', name },
+                        });
+                        if (canvasId === undefined)
+                          throw new Error('Canvas creation returned no document identity.');
+                        return canvasId;
+                      }
+                    : undefined
+                }
                 conversationFeed={
                   roomInteractionOwner ? (
                     <CharacterRoomInteractionFeed
@@ -2096,7 +2529,7 @@ function DesktopWorkbenchRuntimePortals({
           interactive={interactive}
           onOpenDirectory={actions.onOpenWorkspaceDirectory}
           onOpen={actions.onSelectProject}
-          onStartFromTemplate={() => actions.onTransitionScene({ kind: 'open-agent-entry' })}
+          onStartFromTemplate={(template) => void actions.onStartProjectTemplate(template)}
           onArchiveAssociatedConversations={actions.onArchiveProjectConversations}
           onRemove={actions.onRemoveProjects}
           projects={projection.catalog.projects}
@@ -2106,9 +2539,9 @@ function DesktopWorkbenchRuntimePortals({
       ) : scene.context.catalog === 'characters' ? (
         <CharacterCatalogSurface
           locale={locale}
-          onCreate={() => actions.onTransitionScene({ kind: 'open-agent-entry' })}
+          onCreate={() => void actions.onStartCharacterCreation('blank')}
           onImport={actions.onImportCharacterPackage}
-          onStartFromTemplate={() => actions.onTransitionScene({ kind: 'open-agent-entry' })}
+          onStartFromTemplate={() => void actions.onStartCharacterCreation('character-kit')}
           onSelect={(globalCharacterId) =>
             actions.onTransitionScene({
               kind: 'select-character-detail',
@@ -2121,9 +2554,9 @@ function DesktopWorkbenchRuntimePortals({
       ) : (
         <WorldManagementCatalogRoot
           actions={{
-            onCreate: () => actions.onTransitionScene({ kind: 'open-agent-entry' }),
+            onCreate: () => void actions.onStartWorldCreation('blank'),
             onImport: actions.onImportWorldPackage,
-            onStartFromTemplate: () => actions.onTransitionScene({ kind: 'open-agent-entry' }),
+            onStartFromTemplate: () => void actions.onStartWorldCreation('world-bible'),
           }}
           locale={locale}
           onSelect={(globalWorldId) =>
@@ -2848,14 +3281,24 @@ export function createDesktopAgentSurfaceProps(input: {
   readonly sceneId: string;
   readonly interaction: DesktopAgentInteractionSurfaceRef;
   readonly entryContext?: DesktopAgentSurfaceProps['entryContext'];
+  readonly characterCreationHandoff?: CharacterCreationHandoffIntent;
+  readonly onCharacterCreationHandoffConsumed?: (intentId: string) => void;
   readonly characterDialogueHandoff?: CharacterDialogueHandoffIntent;
   readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
+  readonly projectTemplateHandoff?: ProjectTemplateHandoffIntent;
+  readonly onProjectTemplateHandoffConsumed?: (intentId: string) => void;
+  readonly worldCreationHandoff?: WorldCreationHandoffIntent;
+  readonly onWorldCreationHandoffConsumed?: (intentId: string) => void;
+  readonly onConversationBranched?: DesktopAgentSurfaceProps['onConversationBranched'];
 }): DesktopAgentSurfaceProps {
   const { interaction } = input;
   return {
     agentSurfaceId: interaction.agentSurfaceId,
     workbenchInstanceId: input.workbenchInstanceId,
     sceneId: input.sceneId,
+    ...(input.onConversationBranched === undefined
+      ? {}
+      : { onConversationBranched: input.onConversationBranched }),
     surfaceKind:
       interaction.scope.kind === 'unbound'
         ? 'entry'
@@ -2863,16 +3306,51 @@ export function createDesktopAgentSurfaceProps(input: {
           ? 'assistant'
           : 'workspace',
     ...(input.entryContext === undefined ? {} : { entryContext: input.entryContext }),
+    ...(input.characterCreationHandoff === undefined
+      ? {}
+      : {
+          characterCreationHandoff: input.characterCreationHandoff,
+          onCharacterCreationHandoffConsumed: input.onCharacterCreationHandoffConsumed,
+        }),
     ...(input.characterDialogueHandoff === undefined
       ? {}
       : {
           characterDialogueHandoff: input.characterDialogueHandoff,
           onCharacterDialogueHandoffConsumed: input.onCharacterDialogueHandoffConsumed,
         }),
+    ...(input.projectTemplateHandoff === undefined
+      ? {}
+      : {
+          projectTemplateHandoff: input.projectTemplateHandoff,
+          onProjectTemplateHandoffConsumed: input.onProjectTemplateHandoffConsumed,
+        }),
+    ...(input.worldCreationHandoff === undefined
+      ? {}
+      : {
+          worldCreationHandoff: input.worldCreationHandoff,
+          onWorldCreationHandoffConsumed: input.onWorldCreationHandoffConsumed,
+        }),
     ...(interaction.scope.kind === 'unbound' || interaction.scope.conversationId === undefined
       ? {}
       : { conversationId: interaction.scope.conversationId }),
   };
+}
+
+function resolveSceneConversationOwner(
+  scene: DesktopWorkbenchSceneProjection,
+): import('@neko/agent-contracts').AgentConversationOwnerRef {
+  if (scene.context.kind === 'character-interaction') return scene.context.owner;
+  if (scene.context.kind !== 'agent') {
+    throw new Error('Conversation branch navigation requires an Agent Scene.');
+  }
+  const scope = scene.context.scope;
+  if (scope.kind === 'assistant') {
+    return { kind: 'assistant', assistantSpaceId: scope.assistantSpaceId };
+  }
+  if (scope.kind === 'workspace') {
+    return { kind: 'workspace', workspaceId: scope.workspaceId };
+  }
+  throw new Error('Conversation branch navigation requires a bound Agent scope.');
 }
 
 function hasProjectCatalogDiagnostic(projection: DesktopShellProjection): boolean {
@@ -3697,16 +4175,56 @@ function MainViewGroupSurface({
     );
   const activeView = views.find((view) => view.viewId === group.activeViewId);
   const requestedTarget = activeView ? projectAuthoringItemForView(activeView, project) : undefined;
+  const authoringWorkspaceId = authoringAuthority?.workspaceId;
+  const authoringWorkspaceGrantId = authoringAuthority?.workspaceGrantId;
   const quickCreate = useCallback(
-    (submission: WorkspaceQuickCreateSubmission) =>
-      actions.onQuickCreateWorkspaceContent({
+    async (submission: WorkspaceQuickCreateSubmission) => {
+      await actions.onQuickCreateWorkspaceContent({
         identity: resourceBrowserIdentity,
         workbenchInstanceId,
         workbench,
         mainGroupId: group.groupId,
         submission,
-      }),
+      });
+    },
     [actions, group.groupId, resourceBrowserIdentity, workbench, workbenchInstanceId],
+  );
+  const loadWorkspaceCanvases = useCallback(() => {
+    if (!authoringWorkspaceId || !authoringWorkspaceGrantId) {
+      throw new Error('Workspace Main Canvas suggestions require Workspace authority.');
+    }
+    return window.openNekoDesktop.canvas
+      .readWorkspaceIndexCatalog({
+        requestId: `workspace-main-suggestions:${globalThis.crypto.randomUUID()}`,
+        workspaceId: authoringWorkspaceId,
+        workspaceGrantId: authoringWorkspaceGrantId,
+      })
+      .then((result) => result.catalog);
+  }, [authoringWorkspaceGrantId, authoringWorkspaceId]);
+  const openWorkspaceSuggestion = useCallback(
+    (suggestion: WorkspaceMainSuggestion) => {
+      if (!authoringWorkspaceId || !authoringWorkspaceGrantId) {
+        throw new Error('Workspace Main Canvas opening requires Workspace authority.');
+      }
+      return actions.onOpenWorkspaceMainSuggestion({
+        projectId: project.projectId,
+        workspaceId: authoringWorkspaceId,
+        workspaceGrantId: authoringWorkspaceGrantId,
+        workbenchInstanceId,
+        workbench,
+        mainGroupId: group.groupId,
+        suggestion,
+      });
+    },
+    [
+      actions,
+      authoringWorkspaceGrantId,
+      authoringWorkspaceId,
+      group.groupId,
+      project.projectId,
+      workbench,
+      workbenchInstanceId,
+    ],
   );
   if (activeView && requestedTarget) {
     targetViews.current.set(requestedTarget.identity, activeView);
@@ -3772,7 +4290,6 @@ function MainViewGroupSurface({
               activeId={group.activeViewId}
               emptyLabel={t('workspace.mainTabs.empty')}
               label={t('workspace.mainTabs.label')}
-              contextActionsRef={setContextActionsTarget}
               tabs={views.map((view) => ({
                 id: view.viewId,
                 label: view.displayLabel,
@@ -3799,6 +4316,11 @@ function MainViewGroupSurface({
               }}
             />
             <WorkspaceQuickCreateControl onCreate={quickCreate} variant="tab" />
+            <div
+              className="project-main-group__context-actions"
+              data-main-tab-context-actions="true"
+              ref={setContextActionsTarget}
+            />
           </>
         ) : undefined
       }
@@ -3806,8 +4328,16 @@ function MainViewGroupSurface({
       {!visible || views.length === 0 ? (
         <EmptyMainSurface
           action={
-            visible ? (
-              <WorkspaceQuickCreateControl onCreate={quickCreate} variant="empty" />
+            visible && authoringWorkspaceId ? (
+              <WorkspaceEmptyMainSuggestions
+                key={authoringWorkspaceId}
+                createControl={
+                  <WorkspaceQuickCreateControl onCreate={quickCreate} variant="empty" />
+                }
+                loadWorkspaceCanvases={loadWorkspaceCanvases}
+                onOpen={openWorkspaceSuggestion}
+                workspaceId={authoringWorkspaceId}
+              />
             ) : undefined
           }
         />

@@ -43,6 +43,7 @@ export function Connection({
 
   const strokeColor = 'var(--connection-default)';
   const strokeWidth = isSelected ? 2 : 1.25;
+  const strokeOpacity = isSelected ? 0.88 : connection.type === 'sequence' ? 0.54 : 0.38;
   const title = resolveConnectionTitle(connection, sourceNode, targetNode);
 
   const handleClick = (e: React.MouseEvent) => {
@@ -54,6 +55,7 @@ export function Connection({
     <g
       className="connection-group"
       data-selected={isSelected ? 'true' : 'false'}
+      data-connection-type={connection.type}
       role="img"
       aria-label={title}
     >
@@ -73,7 +75,7 @@ export function Connection({
               className="connection-arrow"
               d="M 0 0 L 8 3 L 0 6 Z"
               fill={strokeColor}
-              opacity={isSelected ? 0.88 : 0.28}
+              opacity={isSelected ? 0.88 : 0.54}
             />
           </marker>
         </defs>
@@ -108,7 +110,7 @@ export function Connection({
         fill="none"
         stroke={strokeColor}
         strokeWidth={strokeWidth}
-        strokeOpacity={isSelected ? 0.88 : 0.38}
+        strokeOpacity={strokeOpacity}
         markerEnd={connection.type === 'sequence' ? `url(#${markerId})` : undefined}
         style={{ pointerEvents: 'none' }}
       />

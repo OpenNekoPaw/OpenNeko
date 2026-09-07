@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -7,16 +8,20 @@ import { fileURLToPath } from 'node:url';
 import { Session, SessionId, type SessionHeader } from '@deepseek-ai/dsh-session';
 import { CallId, MessageId, createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm';
 import { Context } from '@deepseek-ai/cordis';
+import { AttachmentId } from '@deepseek-ai/dsh-attachment';
+import { renderSkillContent, type SkillDefinition } from '@deepseek-ai/dsh-skill';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
   listOpenNekoSessions,
   DshExtensionLifecycle,
   projectDshExtensionCatalog,
+  projectDshSkillDetail,
   projectContextPressureNotification,
   projectExtensionSessionEvent,
   projectSessionEvent,
 } from './index';
+import { branchSeedThroughAssistantReply } from './session-branch';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -32,6 +37,27 @@ const header = (input: Partial<SessionHeader> & Pick<SessionHeader, 'id'>): Sess
 });
 
 describe('OpenNeko DSH ACP bridge projections', () => {
+  it('projects the effective Host-injected Skill fingerprint instead of a body-only hash', () => {
+    const definition: SkillDefinition = {
+      name: 'review',
+      description: 'Review a draft.',
+      invocation: { modelInvocable: true, userInvocable: true },
+      source: 'bundled',
+      provider: 'openneko-builtin',
+      resourceBase: { kind: 'directory', path: '/skills/review' },
+      content: '# Review\n\nCheck the draft.',
+    };
+
+    const projected = projectDshSkillDetail(definition, definition.source);
+    const expected = `sha256:${createHash('sha256')
+      .update(renderSkillContent(definition))
+      .digest('hex')}`;
+    const bodyOnly = `sha256:${createHash('sha256').update(definition.content).digest('hex')}`;
+
+    expect(projected.fingerprint).toBe(expected);
+    expect(projected.fingerprint).not.toBe(bodyOnly);
+  });
+
   it('moves only personal Skills between enabled and disabled roots and deletes the selected entry', async () => {
     const root = await mkdtemp(join(tmpdir(), 'openneko-dsh-extension-test-'));
     const previousHome = process.env.DSH_HOME;
@@ -55,6 +81,42 @@ describe('OpenNeko DSH ACP bridge projections', () => {
       ).rejects.toMatchObject({
         code: 'ENOENT',
       });
+    } finally {
+      if (previousHome === undefined) delete process.env.DSH_HOME;
+      else process.env.DSH_HOME = previousHome;
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reads an exact disabled personal Skill for on-demand details', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'openneko-dsh-disabled-skill-test-'));
+    const previousHome = process.env.DSH_HOME;
+    process.env.DSH_HOME = root;
+    try {
+      const disabled = join(root, 'disabled-skills', 'review');
+      await mkdir(disabled, { recursive: true });
+      await writeFile(
+        join(disabled, 'SKILL.md'),
+        [
+          '---',
+          'name: review',
+          'description: Review a draft.',
+          '---',
+          '# Review',
+          '',
+          'Check the draft.',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      const lifecycle = new DshExtensionLifecycle({} as Context);
+
+      await expect(lifecycle.readDisabledSkill('review', 'user-dsh')).resolves.toMatchObject({
+        name: 'review',
+        description: 'Review a draft.',
+        content: '# Review\n\nCheck the draft.',
+      });
+      await expect(lifecycle.readDisabledSkill('review', 'bundled')).resolves.toBeUndefined();
     } finally {
       if (previousHome === undefined) delete process.env.DSH_HOME;
       else process.env.DSH_HOME = previousHome;
@@ -228,6 +290,13 @@ describe('OpenNeko DSH ACP bridge projections', () => {
     expect(patch).not.toContain('session/delete');
   });
 
+  it('keeps standard DSH context governance active', () => {
+    const patch = readPackageFile('cordis.patch.yml');
+    expect(patch).not.toMatch(/- id: compaction-basic\n {2}disabled: true/u);
+    expect(patch).not.toMatch(/- id: tool-result-pruner\n {2}disabled: true/u);
+    expect(patch).toMatch(/- id: command-compact\n {2}disabled: true/u);
+  });
+
   it('projects only the real Skill catalog without exposing Plugin inventory', () => {
     expect(
       projectDshExtensionCatalog(
@@ -378,7 +447,7 @@ describe('OpenNeko DSH ACP bridge projections', () => {
       turn: 0,
       step: 0,
       callId: CallId('call-1'),
-      name: 'openneko.canvas',
+      name: 'openneko_canvas',
       arguments: '{"node":"a"}',
     });
 
@@ -399,7 +468,7 @@ describe('OpenNeko DSH ACP bridge projections', () => {
         update: {
           sessionUpdate: 'tool_call',
           toolCallId: 'call-1',
-          title: 'openneko.canvas',
+          title: 'openneko_canvas',
           status: 'pending',
           rawInput: { node: 'a' },
         },
@@ -501,7 +570,7 @@ describe('OpenNeko DSH ACP bridge projections', () => {
       turn: 0,
       step: 0,
       callId: CallId('call-failed'),
-      name: 'openneko.canvas',
+      name: 'openneko_canvas',
       arguments: '{}',
     });
     const result = session.append(
@@ -533,6 +602,12 @@ describe('OpenNeko DSH ACP bridge projections', () => {
           sessionUpdate: 'tool_call_update',
           toolCallId: 'call-failed',
           status: 'failed',
+          content: [
+            {
+              type: 'content',
+              content: { type: 'text', text: 'Error: rejected' },
+            },
+          ],
           rawOutput: [{ type: 'text', text: 'Error: rejected' }],
         },
         _meta: {
@@ -542,6 +617,78 @@ describe('OpenNeko DSH ACP bridge projections', () => {
         },
       },
     ]);
+  });
+
+  it('projects Tool image results through standard ACP content without inlining bytes', () => {
+    const session = Session.create(SessionId('session-tool-image'));
+    const call = session.append('tool/call', {
+      turn: 0,
+      step: 0,
+      callId: CallId('call-image'),
+      name: 'openneko_read_images',
+      arguments: '{}',
+    });
+    const attachment = {
+      attachmentId: AttachmentId('attachment-overview'),
+      mediaType: 'image/jpeg' as const,
+      bytes: 128,
+      width: 640,
+      height: 480,
+      name: 'openneko-image-overview.jpg',
+    };
+    const result = session.append(
+      'tool/result',
+      {
+        turn: 0,
+        step: 0,
+        message: {
+          id: MessageId('result-image'),
+          role: 'user',
+          content: [
+            {
+              type: 'tool-result',
+              toolCallId: CallId('call-image'),
+              content: [
+                { type: 'text', text: 'Overview contact sheet' },
+                { type: 'image', attachment },
+              ],
+            },
+          ],
+          source: { kind: 'tool', callId: CallId('call-image') },
+        },
+      },
+      { surfaceOp: 'append', sourceEventSeqs: [call.seq] },
+    );
+
+    expect(projectSessionEvent('session-tool-image', result)[0]?.update).toEqual({
+      sessionUpdate: 'tool_call_update',
+      toolCallId: 'call-image',
+      status: 'completed',
+      content: [
+        { type: 'content', content: { type: 'text', text: 'Overview contact sheet' } },
+        {
+          type: 'content',
+          content: {
+            type: 'resource_link',
+            name: 'openneko-image-overview.jpg',
+            uri: `openneko-dsh-attachment:${encodeURIComponent(
+              JSON.stringify({
+                attachmentId: 'attachment-overview',
+                mediaType: 'image/jpeg',
+                bytes: 128,
+                width: 640,
+                height: 480,
+              }),
+            )}`,
+            mimeType: 'image/jpeg',
+          },
+        },
+      ],
+      rawOutput: [
+        { type: 'text', text: 'Overview contact sheet' },
+        { type: 'image', attachment },
+      ],
+    });
   });
 
   it('projects DSH text and reasoning deltas through standard ACP chunks', () => {
@@ -629,6 +776,32 @@ describe('OpenNeko DSH ACP bridge projections', () => {
         }),
       }),
     ]);
+  });
+
+  it('selects the completed turn boundary for one exact assistant reply branch', () => {
+    const session = Session.create(SessionId('session-branch-source'));
+    session.append('turn/start', { turn: 0 });
+    session.append('step/start', { turn: 0, step: 0 });
+    const assistant = createAssistantMessage({
+      content: [{ type: 'text', text: 'First answer.' }],
+      source: { provider: 'provider', model: 'model' },
+    });
+    session.append(
+      'assistant/message',
+      { turn: 0, step: 0, message: assistant },
+      { surfaceOp: 'append', sourceEventSeqs: [] },
+    );
+    session.append('step/end', { turn: 0, step: 0 });
+    const firstEnd = session.append('turn/end', { turn: 0, reason: { kind: 'completed' } });
+    session.append('turn/start', { turn: 1 });
+
+    const seed = branchSeedThroughAssistantReply(session.events, assistant.id);
+
+    expect(seed).toHaveLength(firstEnd.seq + 1);
+    expect(seed.at(-1)).toEqual(firstEnd);
+    expect(() => branchSeedThroughAssistantReply(session.events, 'missing')).toThrow(
+      /exactly one assistant reply/u,
+    );
   });
 
   it('marks standard ACP notifications as live or replay without inference', () => {
@@ -758,20 +931,17 @@ describe('OpenNeko DSH ACP bridge boundaries', () => {
     expect(source).not.toMatch(/ctx\.tools\.register|registerOpenNekoDomainTools/);
   });
 
-  it('wires Prompt admission through prompt, cancel, close, and connection quiescence', () => {
+  it('delegates Prompt execution without an outer admission queue', () => {
     const source = readPackageFile('src/index.ts');
 
-    expect(source).toContain("from './prompt-admission.js'");
-    expect(source).toContain('const promptAdmission = new PromptAdmission<PromptResponse>()');
-    expect(source).toMatch(/const runPrompt[\s\S]*promptAdmission\.run\(sessionId/u);
+    expect(source).not.toContain('promptAdmission');
+    expect(source).not.toContain('PromptAdmission');
     expect(source).toMatch(
       /async prompt\(params\)[\s\S]*return runPrompt\(params\.sessionId, async \(\) => \{[\s\S]*await admitAcpPrompt/u,
     );
-    expect(source).toMatch(/cancel\(params\)[\s\S]*promptAdmission\.cancel\(params\.sessionId/u);
     expect(source).toMatch(
-      /async closeSession\(params\)[\s\S]*promptAdmission\.cancel\(params\.sessionId/u,
+      /cancel\(params\)[\s\S]*record\.handle\.agent\.cancel\(\{ kind: 'user' \}\)/u,
     );
-    expect(source).toMatch(/const quiesce[\s\S]*promptAdmission\.close\(\)/u);
   });
 
   it('records an actionable command diagnostic when connection teardown interrupts compaction', () => {
@@ -795,29 +965,21 @@ describe('OpenNeko DSH ACP bridge boundaries', () => {
     expect(source).toMatch(/async setSessionConfigOption\(params\)/u);
     expect(source).toMatch(/params\.configId !== DSH_ACP_MODEL_CONFIG_ID/u);
     expect(source).toMatch(/current\.handle\.agent\.status !== 'idle'/u);
+    expect(source).toMatch(/current\.runtimeContext\.modelConfiguration\.apply\(configuration\)/u);
     expect(source).toMatch(
-      /replaceOwnedAgent\(ctx, owned, params\.sessionId, current, configuration, preset\)/u,
+      /installModelSelection\(agentCtx, runtimeContext\.modelConfiguration\.modelSelection\)/u,
     );
-    expect(source).toMatch(/resumeSessionId: sessionId/u);
-    expect(source).toMatch(/isSameModelConfiguration\(current\.configuration, configuration\)/u);
+    expect(source).toMatch(/agentOptions: \{\}/u);
     expect(source).toContain('const requireReadyOwned = async');
-    expect(source).toContain('current.replacement = replacement');
     expect(source).toMatch(
       /DSH_ACP_EXTENSION_METHODS\.readPermissionPresets[\s\S]*await requireReadyOwned\(sessionId\)/u,
     );
-    expect(source).not.toMatch(
-      /async function replaceOwnedAgent[\s\S]*owned\.delete\(rawSessionId\);\s*await current\.outputTail/u,
-    );
-    expect(source).toMatch(
-      /catch \(error\) \{\s*if \(owned\.get\(rawSessionId\) === current\) owned\.delete\(rawSessionId\);\s*throw error/u,
-    );
-    expect(source).toMatch(
-      /const quiesce[\s\S]*record\.replacement !== undefined[\s\S]*await record\.replacement\.catch/u,
-    );
+    expect(source).not.toContain('replaceOwnedAgent');
+    expect(source).not.toContain('record.replacement');
     expect(source).not.toMatch(/fallbackProvider|fallbackModel|tryNextProvider/u);
   });
 
-  it('binds product context to the exact DSH Agent scope and preserves it across model rebuilds', () => {
+  it('binds product context and message configuration to the exact DSH Agent scope', () => {
     const source = readPackageFile('src/index.ts');
 
     expect(source).toMatch(/DSH_ACP_EXTENSION_METHODS\.setSessionContext/u);
@@ -826,11 +988,11 @@ describe('OpenNeko DSH ACP bridge boundaries', () => {
     expect(source).toMatch(/name: 'openneko:product-protocol'/u);
     expect(source).toMatch(/text: OPENNEKO_PRODUCT_SYSTEM_PROMPT/u);
     expect(source).toMatch(/name: 'openneko:product-context'/u);
-    expect(source).toMatch(
-      /setup: setupSessionRuntimeContext\(ctx, preset, current\.runtimeContext\)/u,
-    );
     expect(source).toMatch(/ctx\.agentPresets\.mount\(agentCtx, preset\)/u);
-    expect(source).toMatch(/createOwnedSession\(handle, configuration, current\.runtimeContext\)/u);
+    expect(source).toMatch(/opennekoTurnConfiguration: request\.configuration/u);
+    expect(source).toMatch(/readOpenNekoTurnConfiguration\(message\.source\)/u);
+    expect(source).toMatch(/record\.runtimeContext\.modelConfiguration\.apply/u);
+    expect(source).toMatch(/source: current\.source/u);
     expect(source).toMatch(/record\.handle\.agent\.status !== 'idle'/u);
   });
 
@@ -853,7 +1015,6 @@ describe('OpenNeko DSH ACP bridge boundaries', () => {
     expect(readPackageFile('src/index.ts')).toContain("config.agentPreset ?? 'standard'");
     for (const id of [
       'tool-bash',
-      'tool-fs',
       'tool-skill',
       'tool-goal',
       'plan-mode',
@@ -862,8 +1023,12 @@ describe('OpenNeko DSH ACP bridge boundaries', () => {
       'tool-web',
     ]) {
       expect(readPackageFile('cordis.patch.yml')).toMatch(
-        new RegExp(`- id: ${id}\\n  disabled: true`, 'u'),
+        new RegExp(`- id: ${id}\\n {2}disabled: true`, 'u'),
       );
     }
+    expect(readPackageFile('cordis.patch.yml')).not.toMatch(/- id: tool-fs\n {2}disabled: true/u);
+    expect(readPackageFile('src/index.ts')).toContain(
+      "agentCtx.tools.restrict({ deny: ['read_image'] })",
+    );
   });
 });

@@ -177,9 +177,9 @@ export function formatDocumentReadInstruction(
   locale?: AgentRuntimePromptLocale | string,
 ): string {
   if (normalizeAgentRuntimePromptLocale(locale) === 'zh') {
-    return `分析该文档前，先调用 openneko.document 的 read 操作，使用当前会话授权的 workspace-file ContentLocator。不要把整本文档直接内联到聊天上下文。`;
+    return `分析该文档前，先调用 openneko_document 的 read 操作，使用当前会话授权的 workspace-file ContentLocator。不要把整本文档直接内联到聊天上下文。`;
   }
-  return `Use openneko.document with the read operation and the authorized workspace-file ContentLocator before analyzing this document. Do not inline the whole document as chat context.`;
+  return `Use openneko_document with the read operation and the authorized workspace-file ContentLocator before analyzing this document. Do not inline the whole document as chat context.`;
 }
 
 function getAttachmentLabels(locale?: AgentRuntimePromptLocale | string): {

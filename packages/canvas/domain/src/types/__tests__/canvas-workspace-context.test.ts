@@ -1,59 +1,59 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CANVAS_WORKSPACE_BOARD_TARGET_ID,
-  createCanvasWorkspaceBoardTarget,
+  createDefaultCanvasWorkspaceTarget,
   createCanvasWorkspaceContextCatalog,
-  createExactCanvasTarget,
+  createCanvasWorkspaceTarget,
   parseCanvasWorkspaceContextCatalog,
   parseCanvasWorkspaceTurnContext,
   parseCanvasWorkspaceTurnTarget,
 } from '../canvas-workspace-context';
 
 describe('Canvas workspace context contract', () => {
-  it('creates and parses the logical Board and exact Canvas targets', () => {
-    expect(createCanvasWorkspaceBoardTarget('workspace-1')).toEqual({
-      kind: 'workspace-board',
+  it('creates and parses default and ordinary Canvas targets with one shape', () => {
+    expect(createDefaultCanvasWorkspaceTarget('workspace-1')).toEqual({
       workspaceId: 'workspace-1',
+      canvasId: 'neko/boards/workspace.nkc',
     });
     expect(
-      parseCanvasWorkspaceTurnTarget({ kind: 'workspace-board', workspaceId: 'workspace-1' }),
-    ).toEqual(createCanvasWorkspaceBoardTarget('workspace-1'));
+      parseCanvasWorkspaceTurnTarget({
+        workspaceId: 'workspace-1',
+        canvasId: 'neko/boards/workspace.nkc',
+      }),
+    ).toEqual(createDefaultCanvasWorkspaceTarget('workspace-1'));
     expect(
       parseCanvasWorkspaceTurnTarget({
-        kind: 'exact-canvas',
         workspaceId: 'workspace-1',
-        canvasId: 'canvas-1',
+        canvasId: 'neko/boards/canvas-1.nkc',
       }),
-    ).toEqual(createExactCanvasTarget('workspace-1', 'canvas-1'));
-    expect(CANVAS_WORKSPACE_BOARD_TARGET_ID).toBe('workspace-board');
+    ).toEqual(createCanvasWorkspaceTarget('workspace-1', 'neko/boards/canvas-1.nkc'));
   });
 
   it('rejects unknown targets and extra fields', () => {
     expect(() =>
-      parseCanvasWorkspaceTurnTarget({ kind: 'recent-canvas', workspaceId: 'workspace-1' }),
-    ).toThrow('Unknown Canvas workspace turn target');
+      parseCanvasWorkspaceTurnTarget({ workspaceId: 'workspace-1', canvasId: 'recent-canvas' }),
+    ).toThrow('normalized Workspace-relative .nkc path');
     expect(() =>
       parseCanvasWorkspaceTurnTarget({
-        kind: 'workspace-board',
         workspaceId: 'workspace-1',
+        canvasId: 'neko/boards/workspace.nkc',
         fallback: true,
       }),
     ).toThrow("unsupported field 'fallback'");
   });
 
-  it('builds a catalog with the logical Board as default option without file access', () => {
+  it('builds a catalog with the default Canvas option without file access', () => {
     const catalog = createCanvasWorkspaceContextCatalog({
       workspaceId: 'workspace-1',
       options: [
         {
-          target: createCanvasWorkspaceBoardTarget('workspace-1'),
-          label: 'Workspace Board',
+          target: createDefaultCanvasWorkspaceTarget('workspace-1'),
+          label: 'workspace.nkc',
         },
         {
-          target: createExactCanvasTarget('workspace-1', 'canvas-1'),
+          target: createCanvasWorkspaceTarget('workspace-1', 'neko/boards/canvas-1.nkc'),
           label: 'Canvas 1',
           index: {
-            canvasId: 'canvas-1',
+            canvasId: 'neko/boards/canvas-1.nkc',
             name: 'Canvas 1',
             scopeKind: 'scene',
             relatedBoardCount: 0,
@@ -62,36 +62,36 @@ describe('Canvas workspace context contract', () => {
       ],
     });
 
-    expect(catalog.defaultTarget).toEqual(createCanvasWorkspaceBoardTarget('workspace-1'));
+    expect(catalog.defaultTarget).toEqual(createDefaultCanvasWorkspaceTarget('workspace-1'));
     expect(catalog.options[0]).not.toHaveProperty('index');
     expect(parseCanvasWorkspaceContextCatalog(catalog)).toEqual(catalog);
   });
 
-  it('does not allow a disabled or file-backed Board option', () => {
+  it('does not allow a disabled or file-backed default Canvas option', () => {
     expect(() =>
       createCanvasWorkspaceContextCatalog({
         workspaceId: 'workspace-1',
         options: [
           {
-            target: createCanvasWorkspaceBoardTarget('workspace-1'),
-            label: 'Workspace Board',
+            target: createDefaultCanvasWorkspaceTarget('workspace-1'),
+            label: 'workspace.nkc',
             disabled: true,
           },
         ],
       }),
-    ).toThrow('Board option cannot be disabled');
+    ).toThrow('default Canvas option cannot be disabled');
     expect(() =>
       createCanvasWorkspaceContextCatalog({
         workspaceId: 'workspace-1',
         options: [
           {
-            target: createCanvasWorkspaceBoardTarget('workspace-1'),
-            label: 'Workspace Board',
-            index: { name: 'Workspace Board', scopeKind: 'unknown', relatedBoardCount: 0 },
+            target: createDefaultCanvasWorkspaceTarget('workspace-1'),
+            label: 'workspace.nkc',
+            index: { name: 'workspace.nkc', scopeKind: 'unknown', relatedBoardCount: 0 },
           },
         ],
       }),
-    ).toThrow('Board option must not carry a file-backed index entry');
+    ).toThrow('default Canvas option must not carry a file-backed index entry');
   });
 
   it('rejects a catalog option from another Workspace', () => {
@@ -100,11 +100,11 @@ describe('Canvas workspace context contract', () => {
         workspaceId: 'workspace-1',
         options: [
           {
-            target: createCanvasWorkspaceBoardTarget('workspace-1'),
-            label: 'Workspace Board',
+            target: createDefaultCanvasWorkspaceTarget('workspace-1'),
+            label: 'workspace.nkc',
           },
           {
-            target: createExactCanvasTarget('workspace-2', 'canvas-2'),
+            target: createCanvasWorkspaceTarget('workspace-2', 'neko/boards/canvas-2.nkc'),
             label: 'Foreign Canvas',
           },
         ],
@@ -114,12 +114,12 @@ describe('Canvas workspace context contract', () => {
 
   it('parses turn context with only a light summary', () => {
     const context = parseCanvasWorkspaceTurnContext({
-      target: { kind: 'exact-canvas', workspaceId: 'workspace-1', canvasId: 'canvas-1' },
-      summary: { canvasId: 'canvas-1', name: 'Canvas 1' },
+      target: { workspaceId: 'workspace-1', canvasId: 'neko/boards/canvas-1.nkc' },
+      summary: { canvasId: 'neko/boards/canvas-1.nkc', name: 'Canvas 1' },
     });
     expect(context).toEqual({
-      target: { kind: 'exact-canvas', workspaceId: 'workspace-1', canvasId: 'canvas-1' },
-      summary: { canvasId: 'canvas-1', name: 'Canvas 1' },
+      target: { workspaceId: 'workspace-1', canvasId: 'neko/boards/canvas-1.nkc' },
+      summary: { canvasId: 'neko/boards/canvas-1.nkc', name: 'Canvas 1' },
     });
     expect(Object.isFrozen(context)).toBe(true);
   });

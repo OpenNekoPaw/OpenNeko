@@ -102,9 +102,9 @@ describe('Cut Canvas handoff policy', () => {
         projectId: source.projectId,
         workspaceId: source.workspaceId,
         viewId: 'cut:view-1',
-        viewInstanceId: source.viewInstanceId,
+        viewInstanceId: 'cut-view-instance-1',
         documentId: 'cuts/story.otio',
-        ownerId: 'cut-session:cut:view-1:view-instance-1',
+        ownerId: 'cut-session:cut:view-1:cut-view-instance-1',
       },
     });
 
@@ -112,9 +112,9 @@ describe('Cut Canvas handoff policy', () => {
       kind: 'existing-cut',
       workbenchInstanceId: 'workbench-1',
       viewId: 'cut:view-1',
-      viewInstanceId: 'view-instance-1',
+      viewInstanceId: 'cut-view-instance-1',
       documentId: 'cuts/story.otio',
-      sessionId: 'cut-session:cut:view-1:view-instance-1',
+      sessionId: 'cut-session:cut:view-1:cut-view-instance-1',
     });
     expect(parseCutCanvasHandoffPayload(createCutCanvasHandoffPayload(target))).toEqual(target);
     expect(sameCutCanvasHandoffTarget(target, { ...target })).toBe(true);
@@ -135,7 +135,7 @@ describe('Cut Canvas handoff policy', () => {
           ownerId: 'cut-session:cut:view-1:view-instance-1',
         },
       }),
-    ).toThrow('outside the exact Workspace View');
+    ).toThrow('outside the exact Workspace');
 
     expect(() =>
       resolveCutCanvasHandoffTarget({

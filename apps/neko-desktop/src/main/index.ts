@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { watch } from 'node:fs';
-import { lstat, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import {
   app,
@@ -57,11 +57,13 @@ import {
   createDshDomainConversationService,
   createDshConversationTurnContextResolver,
   createDshTurnCanvasTargetOwner,
-  createDshWorkspaceBoardArtifactDeliveryService,
+  createDshConversationCanvasSelection,
+  createDshCanvasArtifactDeliveryService,
   projectDshConversationTitle,
   type DshDomainConversationService,
 } from '@neko/agent-runtime/application';
 import {
+  canvasGenerationModelSupportsPurpose,
   createCanvasWorkspaceIndexService,
   projectCanvasGenerationModels,
 } from '@neko/canvas-domain';
@@ -76,20 +78,12 @@ import {
   readProjectEntityResources,
   readProjectEntityManagementResources,
 } from '@neko/entity-node';
-import {
-  consumeDesktopFunctionalWorkspaceSelection,
-  resolveDesktopFunctionalCutExport,
-  resolveDesktopFunctionalWorkspace,
-  resolveDesktopFunctionalWindowMode,
-  resolveDesktopFunctionalUserDataRoot,
-  resolveDesktopRuntimeHome,
-} from './desktop-functional-fixture';
-import { createDesktopMediaExecutionProviderResolver } from './desktop-media-execution-provider';
+import { createDesktopGenerationExecutionProviderResolver } from './desktop-generation-execution-provider';
 import { createEncryptedDesktopSecretPort } from './encrypted-desktop-secret-port';
 import {
-  createDshWorkspaceBoardContentRead,
-  DesktopDshWorkspaceBoardDelivery,
-} from './desktop-dsh-workspace-board-delivery';
+  createDshCanvasArtifactContentRead,
+  DesktopDshCanvasArtifactDelivery,
+} from './desktop-dsh-canvas-artifact-delivery';
 import { closeDesktopWindows } from './window-lifecycle';
 import {
   DESKTOP_STATE_AUTHORITY_KEYS,
@@ -185,6 +179,7 @@ import {
 import { DesktopPreviewRuntime } from './desktop-preview-runtime';
 import { DesktopTextEditorRuntime } from './desktop-text-editor-runtime';
 import {
+  CanvasAudioExtractionService,
   CanvasGenerationNodeRuntime,
   listAvailableProjectMediaLibraryDestinations,
 } from '@neko/canvas-node';
@@ -192,18 +187,15 @@ import {
   CANVAS_TEXT_FILE_PREVIEW_MAX_BYTES,
   type CanvasHostRuntimeIdentity,
 } from '@neko/canvas-domain';
+import { resolveGenerationModelParameterProfile } from '@neko/generation-domain';
 import { GenerationApplicationRuntime } from '@neko/generation-domain/job';
-import { ComfyUiLocalApi, ComfyUiWorkflowRunner } from '@neko/generation-domain/comfyui';
-import { PromptGenerationService, createAiSdkPromptCompletionPort } from '@neko/generation-domain/prompt';
 import {
-  createContentReadMediaRequestAssetMaterializer,
-  createMediaPlatform,
-  createNodeGenerationJobOwner,
-} from '@neko/generation-domain/media';
-import {
-  createNodeHostContentReadService,
-  NodeAuthorizedWorkspaceWriter,
-} from '@neko/content-domain/node';
+  PromptGenerationService,
+  createAiSdkPromptCompletionPort,
+} from '@neko/generation-domain/prompt';
+import { GENERATION_PROVIDER_CAPABILITIES } from '@neko/generation-domain/provider-capabilities';
+import { createMediaPlatform, createNodeGenerationJobOwner } from '@neko/generation-domain/media';
+import { createNodeHostContentReadService } from '@neko/content-domain/node';
 import { createNodeDocumentLowLevelAccess } from '@neko/content-domain/document/node';
 import { resolveWorkspaceContentLocator } from '@neko/assets-node';
 import { isWorkspaceFileContentLocator, type ContentLocator } from '@neko/content-domain';
@@ -213,6 +205,7 @@ import {
 } from '@neko/preview-domain/resource-projection';
 import { DesktopCanvasRuntime } from './desktop-canvas-runtime';
 import { DesktopCutRuntime } from './desktop-cut-runtime';
+import { createDesktopGenerationRequestAssetMaterializer } from './desktop-generation-request-asset-materializer';
 import { createCutCanvasHandoffPayload, parseCutCanvasHandoffPayload } from '@neko/cut-domain';
 import { openDesktopCanvasDocument } from './desktop-creative-document-runtime';
 import { createDesktopNativeThemeController } from './desktop-native-theme';
@@ -224,6 +217,7 @@ import {
 } from '@neko/host/application-settings-state';
 import { DesktopApplicationSettingsService } from '@neko/host/application-settings-service';
 import { DesktopAiModelSettingsService } from '@neko/host/ai-model-settings-service';
+import { projectDesktopDshProviderCapability } from './desktop-dsh-provider-capability-projection';
 import { DesktopStorageSettingsRuntime } from './desktop-storage-settings-runtime';
 import {
   DESKTOP_APPLICATION_SETTINGS_CHANNELS,
@@ -235,7 +229,6 @@ import {
   FileUserConfigManager,
   ProviderCredentialAuthority,
   WorkspaceConfigManagerAuthority,
-  modelSupportsPurpose,
 } from '@neko/host/settings';
 import {
   listGlobalMediaLibraryConnections,
@@ -300,11 +293,6 @@ void bootstrapDesktop().catch((error: unknown) => {
 async function bootstrapDesktop(): Promise<void> {
   registerDesktopOpenNekoScheme();
   app.enableSandbox();
-  const functionalUserDataRoot = resolveDesktopFunctionalUserDataRoot({
-    argv: process.argv,
-    environment: process.env,
-  });
-  if (functionalUserDataRoot) app.setPath('userData', functionalUserDataRoot);
   if (!app.requestSingleInstanceLock()) {
     app.quit();
     return;
@@ -314,14 +302,14 @@ async function bootstrapDesktop(): Promise<void> {
 
 async function startDesktop(): Promise<void> {
   await app.whenReady();
+  if (process.platform === 'darwin' && !app.isPackaged) {
+    const dock = app.dock;
+    if (!dock) throw new Error('macOS Desktop Dock is unavailable after app readiness.');
+    dock.setIcon(path.join(app.getAppPath(), 'resources', 'app-icon.png'));
+  }
 
   const userData = app.getPath('userData');
-  const homedir = resolveDesktopRuntimeHome({
-    systemHome: app.getPath('home'),
-    userDataRoot: userData,
-    argv: process.argv,
-    environment: process.env,
-  });
+  const homedir = app.getPath('home');
   const consoleTransport = new ConsoleTransport();
   const managedLogTransports = new Set<ManagedFileLogTransport>();
   const createManagedLogTransport = (owner: string, filePath: string) => {
@@ -346,20 +334,6 @@ async function startDesktop(): Promise<void> {
   setAgentRootLogger(agentLogger);
   const workspaceLoggers = new Map<string, ILogger>();
   logger.info('Desktop Electron runtime is ready.');
-  const functionalWorkspace = resolveDesktopFunctionalWorkspace({
-    argv: process.argv,
-    environment: process.env,
-    fixtureHome: homedir,
-  });
-  const functionalWorkspacePickerCancellationMarker = functionalWorkspace
-    ? path.join(homedir, '.openneko-functional-cancel-workspace-picker-once')
-    : undefined;
-  const functionalWindowMode = resolveDesktopFunctionalWindowMode(process.argv);
-  const functionalCutExport = resolveDesktopFunctionalCutExport({
-    argv: process.argv,
-    environment: process.env,
-    workspace: functionalWorkspace,
-  });
   const globalStorage = resolveGlobalStorageLayout(homedir);
   const assistantSpaceId = 'assistant-space:local-user';
   const localMetadataStore = createNodeSqliteLocalMetadataStore({ homedir });
@@ -521,12 +495,13 @@ async function startDesktop(): Promise<void> {
         const projection = await read();
         return {
           status: 'available' as const,
-          providers: projection.providers,
+          providers: projection.providers.map(projectDesktopDshProviderCapability),
           protocols: projection.protocols,
           diagnostics: projection.diagnostics.map((diagnostic) => diagnostic.message),
         };
       },
     },
+    { read: () => GENERATION_PROVIDER_CAPABILITIES },
   );
   const storageSettings = new DesktopStorageSettingsRuntime({
     homedir,
@@ -583,18 +558,15 @@ async function startDesktop(): Promise<void> {
               workspacePath: root,
             })
           : workspaceConfigAuthority.getApplicationConfig();
+      const providerResolver = createDesktopGenerationExecutionProviderResolver({
+        config: configManager,
+        credentials: providerCredentials,
+      });
       const media = createMediaPlatform({
         configManager,
-        providerResolver: createDesktopMediaExecutionProviderResolver({
-          config: configManager,
-          credentials: providerCredentials,
-        }),
-        requestAssetMaterializer: createContentReadMediaRequestAssetMaterializer({
-          contentRead: createNodeHostContentReadService({ workspaceRoot: root }),
-          encodeBase64: (bytes) => Buffer.from(bytes).toString('base64'),
-        }),
+        providerResolver,
+        requestAssetMaterializer: createDesktopGenerationRequestAssetMaterializer(root),
       });
-      const comfyUiContentRead = createNodeHostContentReadService({ workspaceRoot: root });
       return createNodeGenerationJobOwner({
         owner,
         root,
@@ -602,92 +574,9 @@ async function startDesktop(): Promise<void> {
         mediaExecution: media.service,
         promptExecution: new PromptGenerationService(
           configManager,
+          providerResolver,
           createAiSdkPromptCompletionPort(),
         ),
-        comfyUiExecution: new ComfyUiWorkflowRunner({
-          api: new ComfyUiLocalApi({
-            request: ({ url, method, body, signal }) =>
-              fetch(url, {
-                method,
-                redirect: 'manual',
-                ...(body === undefined
-                  ? {}
-                  : {
-                      headers: { 'content-type': 'application/json' },
-                      body: JSON.stringify(body),
-                    }),
-                signal: signal
-                  ? AbortSignal.any([signal, AbortSignal.timeout(10_000)])
-                  : AbortSignal.timeout(10_000),
-              }),
-          }),
-          inputs: {
-            materialize: async ({ endpoint, binding, signal }) => {
-              const content = await comfyUiContentRead.read(binding.contentLocator, {
-                maxBytes: 64 * 1024 * 1024,
-                ...(signal ? { signal } : {}),
-              });
-              if (content.status === 'unavailable') {
-                throw new Error(
-                  `ComfyUI input '${binding.nodeId}.${binding.inputName}' is unavailable: ${content.diagnostic.code}.`,
-                );
-              }
-              const mimeType = content.mimeType ?? 'application/octet-stream';
-              if (!mimeType.startsWith('image/')) {
-                throw new Error(
-                  `ComfyUI input '${binding.nodeId}.${binding.inputName}' must be an image.`,
-                );
-              }
-              const digest = createHash('sha256').update(content.bytes).digest('hex');
-              const extension =
-                mimeType === 'image/jpeg'
-                  ? '.jpg'
-                  : mimeType === 'image/webp'
-                    ? '.webp'
-                    : mimeType === 'image/gif'
-                      ? '.gif'
-                      : '.png';
-              const fileName = `openneko-${digest}${extension}`;
-              const form = new FormData();
-              form.append(
-                'image',
-                new Blob([Buffer.from(content.bytes)], { type: mimeType }),
-                fileName,
-              );
-              form.append('type', 'input');
-              form.append('overwrite', 'false');
-              const response = await fetch(`${endpoint.replace(/\/$/u, '')}/upload/image`, {
-                method: 'POST',
-                redirect: 'manual',
-                body: form,
-                signal: signal
-                  ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
-                  : AbortSignal.timeout(30_000),
-              });
-              if (!response.ok || response.status >= 300 || response.type === 'opaqueredirect') {
-                throw new Error(`ComfyUI input upload failed with HTTP ${response.status}.`);
-              }
-              const payload: unknown = await response.json();
-              if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-                throw new Error('ComfyUI input upload returned an invalid response.');
-              }
-              const name = (payload as Record<string, unknown>)['name'];
-              const subfolder = (payload as Record<string, unknown>)['subfolder'];
-              if (
-                typeof name !== 'string' ||
-                !name.trim() ||
-                name.includes('/') ||
-                name.includes('\\')
-              ) {
-                throw new Error('ComfyUI input upload did not return an exact filename.');
-              }
-              return {
-                filename: name,
-                ...(typeof subfolder === 'string' && subfolder ? { subfolder } : {}),
-              };
-            },
-          },
-        }),
       });
     },
   });
@@ -923,7 +812,6 @@ async function startDesktop(): Promise<void> {
       return result.canceled ? undefined : result.filePaths;
     },
     selectExportDestination: async ({ identity, workspacePath, outputName, container }) => {
-      if (functionalCutExport) return functionalCutExport;
       const owner = requireOwnerWindow(identity.windowId);
       const fileName = `${outputName.replace(/\.(?:mp4|mov)$/iu, '')}.${container}`;
       const result = await dialog.showSaveDialog(owner, {
@@ -965,6 +853,16 @@ async function startDesktop(): Promise<void> {
   }
   const canvasUsesChineseLabels = app.getLocale().toLocaleLowerCase().startsWith('zh');
   const canvasGenerationRuntime = new CanvasGenerationNodeRuntime({
+    createContentReader: (workspaceRoot, projectId) =>
+      createProjectContentReadService({
+        projectId,
+        workspaceRoot,
+        globalMediaLibraryRoot: globalStorage.mediaLibraries,
+        documentEntryReader: {
+          readEntry: (sourcePath, entryPath) =>
+            canvasDocumentEntryAccess.readEntry(sourcePath, entryPath),
+        },
+      }),
     generation: {
       getWorkspaceJobs: (input) =>
         generationRuntime.getJobs({
@@ -986,7 +884,7 @@ async function startDesktop(): Promise<void> {
             `Canvas Generation model '${binding.modelId}' is not available from provider '${binding.providerId}'.`,
           );
         }
-        if (!modelSupportsPurpose(model, binding.purpose)) {
+        if (!canvasGenerationModelSupportsPurpose(model, binding.purpose)) {
           throw new Error(
             `Canvas Generation model '${binding.modelId}' does not support purpose '${binding.purpose}'.`,
           );
@@ -1112,6 +1010,21 @@ async function startDesktop(): Promise<void> {
     },
     host,
     globalMediaLibraryRoot: globalStorage.mediaLibraries,
+    audioExtraction: new CanvasAudioExtractionService({
+      globalMediaLibraryRoot: globalStorage.mediaLibraries,
+      ...(canvasUsesChineseLabels
+        ? {
+            messages: {
+              sourceUnavailable: '所选视频文件不可用。',
+              videoStreamUnavailable: '所选文件不包含视频流。',
+              audioStreamUnavailable: '该视频不包含可分离的音轨。',
+              probeFailed: '无法检查该视频的媒体流。',
+              extractionFailed: '无法从该视频生成音频文件。',
+              outputUnavailable: '工作区音频派生目录不可用。',
+            },
+          }
+        : {}),
+    }),
     watchFile: (directory, fileName, onChange) =>
       watch(directory, (_eventType, changedFileName) => {
         if (changedFileName !== null && changedFileName.toString() !== fileName) return;
@@ -1139,8 +1052,18 @@ async function startDesktop(): Promise<void> {
       return projectCanvasGenerationModels({
         providers: config.getEnabledProviders(),
         models: config.getEnabledModels(),
-        supportsPurpose: modelSupportsPurpose,
-        getDefaultModelPurposeRef: (purpose) => config.getDefaultModelPurposeRef(purpose),
+        resolveParameterProfile: (model) => {
+          const provider = config.getProvider(model.providerId);
+          if (!provider) {
+            throw new Error(
+              `Canvas Generation model "${model.id}" has no configured provider "${model.providerId}".`,
+            );
+          }
+          return resolveGenerationModelParameterProfile({
+            providerType: provider.type,
+            modelName: model.name,
+          });
+        },
         getDefaultModelRef: (type) => config.getDefaultModelRef(type),
       });
     },
@@ -1301,25 +1224,12 @@ async function startDesktop(): Promise<void> {
       if (target.locator.file.authority !== 'workspace' || target.locator.selector !== undefined) {
         throw new Error('Canvas Text Editor requires a Workspace File locator.');
       }
-      await textEditorRuntime.open({
-        identity: {
-          projectId: identity.projectId,
-          workspaceId: identity.workspaceId,
-          windowId: identity.windowId,
-          viewId: `canvas-material:${identity.viewId}`,
-          viewInstanceId: identity.viewInstanceId,
-          rendererSessionId: identity.rendererSessionId,
-        },
-        item: {
-          resourceId: `canvas-content:${identity.documentId}:${target.nodeId}`,
-          source: 'files',
-          role: 'content',
-          depth: 0,
-          kind: 'document',
-          label: path.posix.basename(target.locator.file.path),
-          locator: target.locator,
-          capabilities: ['edit-text', 'preview', 'reveal'],
-        },
+      await textEditorRuntime.openWorkspaceFile({
+        windowId: identity.windowId,
+        rendererSessionId: identity.rendererSessionId,
+        workspaceId: identity.workspaceId,
+        contentLocator: { file: target.locator.file },
+        displayLabel: path.posix.basename(target.locator.file.path),
       });
     },
     resolveCut: async ({ absolutePath, identity, target }) =>
@@ -1357,27 +1267,35 @@ async function startDesktop(): Promise<void> {
         absolutePath,
       });
     },
-    resolveAddToCut: async ({ identity }) =>
-      createCutCanvasHandoffPayload(await cutRuntime.resolveCanvasHandoffTarget(identity)),
+    resolveAddToCut: async ({ identity }) => {
+      const availability = await cutRuntime.resolveAvailableCanvasHandoffTarget(identity);
+      if (availability.status === 'available') {
+        return {
+          status: 'available' as const,
+          executionPayload: createCutCanvasHandoffPayload(availability.target),
+        };
+      }
+      return {
+        status: 'unavailable' as const,
+        diagnostic: {
+          code:
+            availability.diagnostic.code === 'desktop-cut-project-owner-unavailable'
+              ? ('cut-project-owner-unavailable' as const)
+              : ('cut-canvas-source-stale' as const),
+          message: canvasUsesChineseLabels
+            ? availability.diagnostic.code === 'desktop-cut-project-owner-unavailable'
+              ? '当前画布未绑定到有效的项目工作区。'
+              : '当前画布视图已失效，请重新打开画布。'
+            : availability.diagnostic.message,
+        },
+      };
+    },
     addToCut: async ({ identity, target, executionPayload }) => {
       const label =
         target.locator.file.authority === 'workspace'
           ? path.posix.basename(target.locator.file.path)
           : target.nodeId;
       await cutRuntime.addCanvasMaterial({
-        identity,
-        nodeId: target.nodeId,
-        label,
-        locator: target.locator,
-        target: parseCutCanvasHandoffPayload(executionPayload),
-      });
-    },
-    separateAudioInCut: async ({ identity, target, executionPayload }) => {
-      const label =
-        target.locator.file.authority === 'workspace'
-          ? path.posix.basename(target.locator.file.path)
-          : target.nodeId;
-      await cutRuntime.addCanvasMaterialAndSeparateAudio({
         identity,
         nodeId: target.nodeId,
         label,
@@ -1404,23 +1322,23 @@ async function startDesktop(): Promise<void> {
     releasePreviewResourceProjection: (descriptorId) =>
       canvasPreviewResources.release(descriptorId),
   });
-  const dshWorkspaceBoardDelivery = new DesktopDshWorkspaceBoardDelivery({
+  const dshCanvasArtifactDelivery = new DesktopDshCanvasArtifactDelivery({
     applicationInstanceId,
     metadataStore: localMetadataStore,
     workspaceRegistry,
     host,
-    coordinateCanvasMutation: (workspaceId, operation) =>
-      canvasRuntime.coordinateWorkspaceBoardMutation(workspaceId, operation),
+    readImageAttachment: (sessionId, attachmentId) =>
+      dshProduct.runtime.client.readImageAttachment({ sessionId, attachmentId }),
+    coordinateCanvasMutation: (target, operation) =>
+      canvasRuntime.coordinateCanvasDocumentMutation(target, operation),
     createContentRead: (workspacePath) =>
-      createDshWorkspaceBoardContentRead({
+      createDshCanvasArtifactContentRead({
         workspacePath,
         documentEntryReader: {
           readEntry: (sourcePath, entryPath) =>
             canvasDocumentEntryAccess.readEntry(sourcePath, entryPath),
         },
       }),
-    createContentWriter: (workspacePath) =>
-      new NodeAuthorizedWorkspaceWriter({ workspaceRoot: workspacePath }),
     createIdentity: randomUUID,
   });
   const resourceBrowser = new ResourceBrowserNodeRuntime({
@@ -1485,7 +1403,6 @@ async function startDesktop(): Promise<void> {
       });
     },
     selectGlobalMediaLibrarySource: async (windowId) => {
-      if (functionalWorkspace) return path.join(homedir, 'global-media', 'workspace');
       const owner = requireOwnerWindow(windowId);
       const chinese = app.getLocale().toLocaleLowerCase().startsWith('zh');
       const result = await dialog.showOpenDialog(owner, {
@@ -1501,9 +1418,6 @@ async function startDesktop(): Promise<void> {
       return selectedPath;
     },
     selectGlobalAssetSources: async (windowId) => {
-      if (functionalWorkspace) {
-        return [path.join(functionalWorkspace, 'media', 'frame.png')];
-      }
       const owner = requireOwnerWindow(windowId);
       const chinese = app.getLocale().toLocaleLowerCase().startsWith('zh');
       const result = await dialog.showOpenDialog(owner, {
@@ -1636,13 +1550,12 @@ async function startDesktop(): Promise<void> {
   const agentConversationContexts = createPersistentAgentConversationContextAuthority({
     metadataStore: localMetadataStore,
   });
-  const dshWorkspaceBoardArtifactDelivery = createDshWorkspaceBoardArtifactDeliveryService({
+  const dshCanvasArtifactDeliveryService = createDshCanvasArtifactDeliveryService({
     contexts: agentConversationContexts,
-    delivery: dshWorkspaceBoardDelivery,
-    publication: dshWorkspaceBoardDelivery,
+    delivery: dshCanvasArtifactDelivery,
     diagnostics: {
       report: (diagnostic) =>
-        logger.warn('DSH Workspace Board skipped an invalid content Tool projection.', {
+        logger.warn('DSH Canvas skipped an invalid content Tool projection.', {
           code: diagnostic.code,
           toolCallId: diagnostic.toolCallId,
           toolName: diagnostic.toolName,
@@ -2182,13 +2095,11 @@ async function startDesktop(): Promise<void> {
       models: applicationAgentConfig.getEnabledModels(),
       credentials: providerCredentials,
     });
-  const dshWorkspaceBoardDeliveryTrigger: {
+  const dshCanvasArtifactDeliveryTrigger: {
     current?: (
       dshSessionId: string,
       conversationId: string,
-      trigger:
-        | { readonly kind: 'completed-tool'; readonly toolCallId: string }
-        | { readonly kind: 'completed-turn'; readonly turn: number },
+      trigger: { readonly kind: 'completed-tool'; readonly toolCallId: string },
     ) => Promise<void>;
   } = {};
   const dshProduct = await startDesktopDshProductRuntime({
@@ -2231,12 +2142,11 @@ async function startDesktop(): Promise<void> {
         bindings,
         contexts: agentConversationContexts,
         workspaceGrants: workspaceGrantAuthority,
+        coordinateCanvasMutation: (target, operation) =>
+          canvasRuntime.coordinateCanvasDocumentMutation(target, operation),
         generationRuntime,
         generationProjection: {
           projectSnapshot: async ({ context, request, snapshot }) => {
-            if (snapshot.request.generationType === 'workflow') {
-              return { status: 'accepted' };
-            }
             if (context.binding.kind === 'assistant') return { status: 'accepted' };
             if (context.binding.kind !== 'workspace') {
               return {
@@ -2264,7 +2174,7 @@ async function startDesktop(): Promise<void> {
               });
               return { status: 'blocked', diagnostic };
             }
-            return dshWorkspaceBoardDelivery.projectGenerationJob({
+            return dshCanvasArtifactDelivery.projectGenerationJob({
               workspaceId: context.binding.workspaceId,
               dshSessionId: request.sessionId,
               turn: request.turn,
@@ -2275,7 +2185,6 @@ async function startDesktop(): Promise<void> {
           },
         },
         configuration: workspaceConfigAuthority,
-        comfyUi: { bindings: professionalApplicationBindings },
         assistant: { assistantSpaceId, root: assistantSpaceRoot },
         skillAuthoring,
         cutRuntime,
@@ -2323,10 +2232,10 @@ async function startDesktop(): Promise<void> {
             notification.update.sessionUpdate === 'tool_call_update' &&
             notification.update.status === 'completed'
           ) {
-            if (dshWorkspaceBoardDeliveryTrigger.current === undefined) {
-              throw new Error('DSH Workspace Board artifact delivery is not initialized.');
+            if (dshCanvasArtifactDeliveryTrigger.current === undefined) {
+              throw new Error('DSH Canvas artifact delivery is not initialized.');
             }
-            await dshWorkspaceBoardDeliveryTrigger.current(
+            await dshCanvasArtifactDeliveryTrigger.current(
               notification.sessionId,
               binding.conversationId,
               {
@@ -2362,18 +2271,7 @@ async function startDesktop(): Promise<void> {
             if (terminal?.kind !== 'turn' || terminal.phase !== 'end') {
               throw new Error('DSH turn/end projected an invalid turn identity.');
             }
-            if (dshWorkspaceBoardDeliveryTrigger.current === undefined) {
-              throw new Error('DSH Workspace Board artifact delivery is not initialized.');
-            }
-            try {
-              await dshWorkspaceBoardDeliveryTrigger.current(
-                notification.sessionId,
-                binding.conversationId,
-                { kind: 'completed-turn', turn: terminal.turn },
-              );
-            } finally {
-              dshTurnCanvasTargets.releaseTurn(notification.sessionId, terminal.turn);
-            }
+            dshTurnCanvasTargets.releaseTurn(notification.sessionId, terminal.turn);
           }
           publishDshChanged(DSH_SESSION_CHANGED_CHANNEL, {
             conversationId: binding.conversationId,
@@ -2404,27 +2302,17 @@ async function startDesktop(): Promise<void> {
     },
   });
   dshDialogueCapabilities.current = () => dshProduct.runtime.client.readProviderCapabilities();
-  dshProviderRefresh.current = () => dshProduct.runtime.refreshConfiguration();
-  dshWorkspaceBoardDeliveryTrigger.current = async (dshSessionId, conversationId, trigger) => {
+  dshProviderRefresh.current = () => dshProduct.runtime.deferConfigurationRefresh();
+  dshCanvasArtifactDeliveryTrigger.current = async (dshSessionId, conversationId, trigger) => {
     try {
       const snapshot = dshProduct.runtime.client.projection.snapshot(dshSessionId);
-      if (trigger.kind === 'completed-turn') {
-        await dshWorkspaceBoardArtifactDelivery.deliverTerminal({
-          conversationId,
-          dshSessionId,
-          turn: trigger.turn,
-          events: snapshot.events,
-          canvasTurnTarget: dshTurnCanvasTargets.read(dshSessionId, trigger.turn),
-        });
-        return;
-      }
       const tool = [...snapshot.events]
         .reverse()
         .find((event) => event.kind === 'tool' && event.toolCallId === trigger.toolCallId);
       if (tool?.kind !== 'tool') {
         throw new Error(`DSH Tool '${trigger.toolCallId}' has no projected turn identity.`);
       }
-      await dshWorkspaceBoardArtifactDelivery.deliverCompletedTool({
+      await dshCanvasArtifactDeliveryService.deliverCompletedTool({
         conversationId,
         dshSessionId,
         toolCallId: trigger.toolCallId,
@@ -2433,7 +2321,7 @@ async function startDesktop(): Promise<void> {
       });
     } catch (error) {
       host.diagnostics?.report({
-        code: 'dsh-workspace-board-artifact-delivery-failed',
+        code: 'dsh-canvas-artifact-delivery-failed',
         severity: 'error',
         message: error instanceof Error ? error.message : String(error),
         metadata: { dshSessionId, conversationId },
@@ -2535,6 +2423,7 @@ async function startDesktop(): Promise<void> {
     },
     contexts: agentConversationContexts,
     canvas: canvasWorkspaceIndexService,
+    canvasSelection: createDshConversationCanvasSelection(dshProduct.runtime.conversations.catalog),
     workspaceGrants: workspaceGrantAuthority,
     configuration: workspaceConfigAuthority,
     sessions: dshProduct.runtime.conversations.conversations,
@@ -2577,6 +2466,11 @@ async function startDesktop(): Promise<void> {
       },
     },
   });
+  dshProduct.runtime.subscribe((projection) => {
+    if (projection.status !== 'running') {
+      dshComposerConfiguration.resetSessionExecutions();
+    }
+  });
   const dshPromptContext = createDshConversationTurnContextResolver({
     contexts: agentConversationContexts,
     workspaceGrants: workspaceGrantAuthority,
@@ -2608,13 +2502,13 @@ async function startDesktop(): Promise<void> {
     bindings: dshProduct.runtime.bindings,
     catalog: dshProduct.runtime.conversations.catalog,
     conversations: dshProduct.runtime.conversations.conversations,
+    branchConversation: (input) => dshProduct.runtime.conversations.branchConversation(input),
     turnCanvasTargets: dshTurnCanvasTargets,
     promptContext: dshPromptContext,
     promptImages: dshPromptImages,
-    terminalArtifacts: dshWorkspaceBoardArtifactDelivery,
-    openTerminalArtifact: async ({ windowId, rendererSessionId, conversationId, reference }) => {
+    openWrittenFile: async ({ windowId, rendererSessionId, conversationId, reference }) => {
       const context = await agentConversationContexts.readContext(conversationId);
-      if (context?.kind !== 'workspace') {
+      if (context?.kind !== 'workspace' && context?.kind !== 'authoring') {
         throw new Error(
           `Agent Conversation '${conversationId}' has no Workspace document authority.`,
         );
@@ -2769,10 +2663,47 @@ async function startDesktop(): Promise<void> {
         surfaceIsUnbound: scope.kind === 'unbound',
         projects: shellService,
         workspaceGrants: workspaceGrantAuthority,
+        authoringTargets: {
+          require: async ({ workspace, projectId, target }) => {
+            const creativeWorkspace = await createProjectCreativeWorkspace({
+              workspace,
+              workspaceId: workspace.workspaceId,
+              projectId,
+            }).read({ projectId });
+            const items =
+              target.kind === 'content-document'
+                ? creativeWorkspace.composition.content
+                : target.kind === 'character-project'
+                  ? creativeWorkspace.composition.characters
+                  : creativeWorkspace.composition.worlds;
+            const available = items.some((item) => {
+              if (item.diagnostic !== undefined || item.target.kind !== target.kind) return false;
+              if (item.target.kind === 'content-document' && target.kind === 'content-document') {
+                return item.target.documentId === target.documentId;
+              }
+              if (item.target.kind === 'character-project' && target.kind === 'character-project') {
+                return item.target.characterProjectId === target.characterProjectId;
+              }
+              return (
+                item.target.kind === 'world-project' &&
+                target.kind === 'world-project' &&
+                item.target.worldProjectId === target.worldProjectId
+              );
+            });
+            if (!available) {
+              throw new Error(
+                `Agent authoring target '${JSON.stringify(target)}' is unavailable in Project '${projectId}'.`,
+              );
+            }
+          },
+        },
       });
       const published = await dshProduct.runtime.conversations.publication.publish({
         context: context.context,
         title: projectDshConversationTitle(initialInput),
+        ...(initialInput.kind === 'command' || initialInput.canvasTurnTarget === undefined
+          ? {}
+          : { canvasSelection: initialInput.canvasTurnTarget }),
       });
       await dshProduct.runtime.conversations.conversations.setSessionMode(
         published.conversationId,
@@ -2863,7 +2794,6 @@ async function startDesktop(): Promise<void> {
   const professionalApplicationAdapter = new DesktopProfessionalApplicationAdapter(
     professionalApplicationNative,
     process.platform,
-    { comfyUiApiExecution: true },
   );
   const professionalApplicationService = createProfessionalApplicationService({
     profiles: [COMFYUI_PROFESSIONAL_APPLICATION_PROFILE],
@@ -2973,27 +2903,13 @@ async function startDesktop(): Promise<void> {
     selectWorkspaceGrant: async (event) => {
       const owner = BrowserWindow.fromWebContents(event.sender);
       if (!owner) throw new Error('Desktop workspace picker requires a registered BrowserWindow.');
-      if (
-        functionalWorkspacePickerCancellationMarker &&
-        (await consumeFunctionalMarker(functionalWorkspacePickerCancellationMarker))
-      ) {
-        return undefined;
-      }
-      const selectedPath =
-        (functionalWorkspace
-          ? await consumeDesktopFunctionalWorkspaceSelection({
-              argv: process.argv,
-              fixtureHome: homedir,
-            })
-          : undefined) ??
-        functionalWorkspace ??
-        (await chooseWorkspaceDirectory(
-          owner,
-          resolveDefaultWorkspacePath(
-            homedir,
-            applicationSettings.current.preferences.defaultWorkspaceLocator,
-          ),
-        ));
+      const selectedPath = await chooseWorkspaceDirectory(
+        owner,
+        resolveDefaultWorkspacePath(
+          homedir,
+          applicationSettings.current.preferences.defaultWorkspaceLocator,
+        ),
+      );
       return selectedPath
         ? { label: path.basename(selectedPath), hostResource: selectedPath }
         : undefined;
@@ -3001,7 +2917,6 @@ async function startDesktop(): Promise<void> {
     selectContentWorkspace: async (event) => {
       const owner = BrowserWindow.fromWebContents(event.sender);
       if (!owner) throw new Error('Desktop workspace picker requires a registered BrowserWindow.');
-      if (functionalWorkspace) return functionalWorkspace;
       const result = await dialog.showOpenDialog(owner, {
         title: 'Open Content Project',
         buttonLabel: 'Open Project',
@@ -3108,7 +3023,7 @@ async function startDesktop(): Promise<void> {
           appHost.applicationIdentity.instanceId,
         );
         sendLifecycleEvent(createdWindow, event);
-        if (functionalWindowMode === 'visible') createdWindow.show();
+        createdWindow.show();
       });
       createdWindow.webContents.on('render-process-gone', (_event, details) => {
         if (shutdownStarted) return;
@@ -3313,16 +3228,6 @@ async function startDesktop(): Promise<void> {
   }
 }
 
-async function consumeFunctionalMarker(markerPath: string): Promise<boolean> {
-  try {
-    await rm(markerPath, { force: false });
-    return true;
-  } catch (error) {
-    if (isMissingPathError(error)) return false;
-    throw error;
-  }
-}
-
 async function chooseWorkspaceDirectory(
   owner: BrowserWindow,
   defaultPath: string,
@@ -3442,10 +3347,6 @@ function readDevelopmentUrl(): string | undefined {
   return typeof MAIN_WINDOW_VITE_DEV_SERVER_URL === 'undefined'
     ? undefined
     : MAIN_WINDOW_VITE_DEV_SERVER_URL;
-}
-
-function isMissingPathError(error: unknown): boolean {
-  return error instanceof Error && Reflect.get(error, 'code') === 'ENOENT';
 }
 
 function portableSnapshotName(displayName: string): string {

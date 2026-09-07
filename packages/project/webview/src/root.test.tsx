@@ -285,6 +285,7 @@ describe('ProjectContentRoot', () => {
 describe('ProjectCatalogRoot', () => {
   it('renders invalid records visibly and disables only their open action', async () => {
     const onOpenDirectory = vi.fn();
+    const onStartFromTemplate = vi.fn();
     render(
       <ProjectCatalogRoot
         associatedConversationCounts={{}}
@@ -293,7 +294,7 @@ describe('ProjectCatalogRoot', () => {
         onOpen={vi.fn()}
         onOpenDirectory={onOpenDirectory}
         onRemove={vi.fn()}
-        onStartFromTemplate={vi.fn()}
+        onStartFromTemplate={onStartFromTemplate}
         projects={[
           {
             projectId: 'project-1',
@@ -324,6 +325,18 @@ describe('ProjectCatalogRoot', () => {
     ).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'home.projects.openExisting' }));
     expect(onOpenDirectory).toHaveBeenCalledTimes(1);
+    fireEvent.click(document.querySelector('[data-project-template-id="storyboard"]')!);
+    fireEvent.click(document.querySelector('[data-project-template-id="video-plan"]')!);
+    expect(onStartFromTemplate).not.toHaveBeenCalled();
+    expect(
+      [...document.querySelectorAll<HTMLButtonElement>('.project-template-card')].every(
+        (template) =>
+          template.disabled &&
+          template.dataset.availability === 'unavailable' &&
+          template.title === 'home.projects.templateUnavailableDescription',
+      ),
+    ).toBe(true);
+    expect(screen.getAllByText('home.projects.templateUnavailable')).toHaveLength(2);
     fireEvent.click(screen.getByRole('button', { name: 'home.projects.moreActions' }));
     expect(
       (

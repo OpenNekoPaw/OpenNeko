@@ -5,14 +5,12 @@
 // stable refs such as `assetRef`; host adapters project paths into render URIs.
 // =============================================================================
 
-import type { CameraMovement, ShotScale } from './storyboard-cinematography';
 import type { PerceptualAssetRef } from '@neko/media';
 
 /**
  * Discriminator for generated asset types.
  */
-export type GeneratedAssetType =
-  'generated-image' | 'generated-audio' | 'generated-video' | 'generated-storyboard';
+export type GeneratedAssetType = 'generated-image' | 'generated-audio' | 'generated-video';
 
 /**
  * Base fields shared by all generated assets.
@@ -43,16 +41,8 @@ export interface BaseGeneratedAsset {
   prompt?: string;
   /** Model / provider identifier (e.g. `fal.ai/flux`, `dashscope/wanx`) */
   model?: string;
-  /** Stable creative entity bindings inherited from the source context */
-  characterIds?: readonly string[];
   /** Source canvas node or upstream node identifier for lineage tracing */
   sourceNodeId?: string;
-  /** Source dialogue/voice cue identifier for generated audio or lip-sync lineage. */
-  sourceCueId?: string;
-  /** Speaker creative entity identifier for generated dialogue audio lineage. */
-  speakerEntityId?: string;
-  /** Voice representation or voice asset used by generated dialogue audio. */
-  voiceAssetId?: string;
 }
 
 // -----------------------------------------------------------------------------
@@ -67,13 +57,6 @@ export interface GeneratedImage extends BaseGeneratedAsset {
   height: number;
   /** Aspect ratio label (e.g. '16:9', '1:1') */
   ratio: string;
-  /** Optional storyboard metadata linking image to a shot */
-  shotMeta?: {
-    sceneIndex: number;
-    shotIndex: number;
-    shotScale?: ShotScale;
-    cameraMovement?: CameraMovement;
-  };
 }
 
 // -----------------------------------------------------------------------------
@@ -107,30 +90,11 @@ export interface GeneratedVideo extends BaseGeneratedAsset {
 }
 
 // -----------------------------------------------------------------------------
-// Storyboard (composite — references multiple GeneratedImage items)
-// -----------------------------------------------------------------------------
-
-/** A single scene within a storyboard */
-export interface GeneratedStoryboardScene {
-  sceneIndex: number;
-  /** Scene heading text (e.g. 'INT. CAFE - DAY') */
-  heading: string;
-  /** Ordered shot images belonging to this scene */
-  shots: GeneratedImage[];
-}
-
-export interface GeneratedStoryboard extends BaseGeneratedAsset {
-  type: 'generated-storyboard';
-  /** Scenes with their constituent shots */
-  scenes: GeneratedStoryboardScene[];
-}
-
-// -----------------------------------------------------------------------------
 // Union + type guards
 // -----------------------------------------------------------------------------
 
 /** Any generated asset variant */
-export type GeneratedAsset = GeneratedImage | GeneratedAudio | GeneratedVideo | GeneratedStoryboard;
+export type GeneratedAsset = GeneratedImage | GeneratedAudio | GeneratedVideo;
 
 /** Type guard: narrows `GeneratedAsset` to `GeneratedImage` */
 export function isGeneratedImage(asset: GeneratedAsset): asset is GeneratedImage {
@@ -147,45 +111,21 @@ export function isGeneratedVideo(asset: GeneratedAsset): asset is GeneratedVideo
   return asset.type === 'generated-video';
 }
 
-/** Type guard: narrows `GeneratedAsset` to `GeneratedStoryboard` */
-export function isGeneratedStoryboard(asset: GeneratedAsset): asset is GeneratedStoryboard {
-  return asset.type === 'generated-storyboard';
-}
-
 export type GeneratedImageWithoutPath = Omit<GeneratedImage, 'path'>;
 export type GeneratedAudioWithoutPath = Omit<GeneratedAudio, 'path'>;
 export type GeneratedVideoWithoutPath = Omit<GeneratedVideo, 'path'>;
 
-export interface GeneratedStoryboardSceneWithoutPath extends Omit<
-  GeneratedStoryboardScene,
-  'shots'
-> {
-  shots: GeneratedImageWithoutPath[];
-}
-
-export interface GeneratedStoryboardWithoutPath extends Omit<
-  GeneratedStoryboard,
-  'path' | 'scenes'
-> {
-  scenes: GeneratedStoryboardSceneWithoutPath[];
-}
-
 export type GeneratedAssetWithoutPath<T extends BaseGeneratedAsset = GeneratedAsset> =
-  T extends GeneratedStoryboard
-    ? GeneratedStoryboardWithoutPath
-    : T extends GeneratedImage
+  T extends GeneratedImage
+    ? Omit<T, 'path'>
+    : T extends GeneratedAudio
       ? Omit<T, 'path'>
-      : T extends GeneratedAudio
+      : T extends GeneratedVideo
         ? Omit<T, 'path'>
-        : T extends GeneratedVideo
-          ? Omit<T, 'path'>
-          : Omit<T, 'path'>;
+        : Omit<T, 'path'>;
 
 export type PathlessGeneratedAsset =
-  | GeneratedImageWithoutPath
-  | GeneratedAudioWithoutPath
-  | GeneratedVideoWithoutPath
-  | GeneratedStoryboardWithoutPath;
+  GeneratedImageWithoutPath | GeneratedAudioWithoutPath | GeneratedVideoWithoutPath;
 
 /**
  * Host-neutral generated asset projection for short-lived render surfaces.
@@ -212,7 +152,6 @@ export function stripRenderableGeneratedAssetPath(
 export function stripGeneratedAssetPath(asset: GeneratedImage): GeneratedImageWithoutPath;
 export function stripGeneratedAssetPath(asset: GeneratedAudio): GeneratedAudioWithoutPath;
 export function stripGeneratedAssetPath(asset: GeneratedVideo): GeneratedVideoWithoutPath;
-export function stripGeneratedAssetPath(asset: GeneratedStoryboard): GeneratedStoryboardWithoutPath;
 export function stripGeneratedAssetPath(asset: GeneratedAsset): PathlessGeneratedAsset;
 export function stripGeneratedAssetPath(asset: GeneratedAsset): PathlessGeneratedAsset {
   switch (asset.type) {
@@ -227,19 +166,6 @@ export function stripGeneratedAssetPath(asset: GeneratedAsset): PathlessGenerate
     case 'generated-video': {
       const { path: _path, ...assetWithoutPath } = asset;
       return assetWithoutPath;
-    }
-    case 'generated-storyboard': {
-      const { path: _path, scenes, ...assetWithoutPath } = asset;
-      return {
-        ...assetWithoutPath,
-        scenes: scenes.map((scene) => ({
-          ...scene,
-          shots: scene.shots.map((shot) => {
-            const { path: _shotPath, ...shotWithoutPath } = shot;
-            return shotWithoutPath;
-          }),
-        })),
-      };
     }
   }
 }
@@ -257,7 +183,7 @@ export function isPublicGeneratedAssetResultUri(value: string): boolean {
 // Durable generated asset roots
 // -----------------------------------------------------------------------------
 
-export type GeneratedAssetMediaKind = 'image' | 'audio' | 'video' | 'storyboard' | 'file';
+export type GeneratedAssetMediaKind = 'image' | 'audio' | 'video' | 'file';
 
 export interface ResolveGeneratedAssetMediaKindInput {
   readonly mediaKind?: string;
@@ -271,7 +197,6 @@ export const GENERATED_ASSET_DIRS = {
   image: 'image',
   audio: 'audio',
   video: 'video',
-  storyboard: 'storyboard',
   file: 'file',
 } as const;
 
@@ -285,7 +210,6 @@ export function resolveGeneratedAssetMediaKind(
   if (input.mimeType?.startsWith('image/')) return 'image';
   if (input.mimeType?.startsWith('audio/')) return 'audio';
   if (input.mimeType?.startsWith('video/')) return 'video';
-  if (input.mimeType === 'application/vnd.neko.storyboard+json') return 'storyboard';
   return 'file';
 }
 

@@ -23,7 +23,7 @@ describe('Canvas node sizing', () => {
       'canvas-embed': { width: 120, height: 80 },
       generation: { width: 120, height: 90 },
     });
-    expect(CANVAS_AUDIO_NODE_DEFAULT_SIZE).toEqual({ width: 120, height: 60 });
+    expect(CANVAS_AUDIO_NODE_DEFAULT_SIZE).toEqual({ width: 240, height: 100 });
     expect(CANVAS_TEXT_REFERENCE_NODE_DEFAULT_SIZE).toEqual({ width: 240, height: 160 });
     expect(resolveCanvasFileNodeDefaultSize({ path: 'notes/readme.md' })).toEqual({
       width: 240,
@@ -42,7 +42,7 @@ describe('Canvas node sizing', () => {
     const prompt = resolveCanvasGenerationNodeDefaultSize('prompt');
     expect(prompt).toEqual({ width: 120, height: 80 });
     expect(resolveCanvasGenerationNodeDefaultSize('image')).toEqual({ width: 120, height: 90 });
-    expect(resolveCanvasGenerationNodeDefaultSize('audio')).toEqual({ width: 120, height: 60 });
+    expect(resolveCanvasGenerationNodeDefaultSize('audio')).toEqual({ width: 240, height: 100 });
     expect(resolveCanvasGenerationNodeDefaultSize('video')).toEqual({ width: 120, height: 90 });
 
     (prompt as { width: number }).width = 999;

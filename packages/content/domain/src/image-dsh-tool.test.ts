@@ -2,10 +2,16 @@ import { describe, expect, it } from 'vitest';
 
 import {
   CONTENT_IMAGE_DSH_CHUNK_BYTES,
+  CONTENT_IMAGE_DSH_DETAILS,
   CONTENT_IMAGE_DSH_TOOL_NAME,
   CONTENT_IMAGE_DSH_TOOL_PARAMETERS,
+  CONTENT_IMAGES_DSH_MAX_SOURCES,
+  CONTENT_IMAGES_DSH_TOOL_NAME,
+  CONTENT_IMAGES_DSH_TOOL_PARAMETERS,
   decodeContentImageDshChunk,
   decodeContentImageDshChunkRequest,
+  decodeContentImageDshToolInput,
+  decodeContentImagesDshToolInput,
 } from './image-dsh-tool';
 
 const source = {
@@ -15,16 +21,80 @@ const source = {
 
 describe('Content image DSH contract', () => {
   it('accepts an exact document-entry locator and bounded offset', () => {
-    expect(CONTENT_IMAGE_DSH_TOOL_NAME).toBe('openneko.read_image');
+    expect(CONTENT_IMAGE_DSH_TOOL_NAME).toBe('openneko_read_image');
     expect(CONTENT_IMAGE_DSH_CHUNK_BYTES).toBeLessThan(192 * 1024);
+    expect(CONTENT_IMAGE_DSH_DETAILS).toEqual(['overview', 'original']);
     expect(CONTENT_IMAGE_DSH_TOOL_PARAMETERS.source.properties).toHaveProperty('selector');
+    expect(CONTENT_IMAGE_DSH_TOOL_PARAMETERS.source.description).toContain(
+      'imageInfo locator returned by openneko_document',
+    );
+    expect(CONTENT_IMAGE_DSH_TOOL_PARAMETERS.source.description).toContain(
+      'XHTML, HTML, or other document entry is not an image source',
+    );
+    expect(CONTENT_IMAGE_DSH_TOOL_PARAMETERS.detail.enum).toEqual(['overview', 'original']);
+    expect(decodeContentImageDshToolInput({ source, detail: 'overview' })).toEqual({
+      source,
+      detail: 'overview',
+    });
+    expect(decodeContentImageDshToolInput({ source })).toEqual({ source, detail: 'original' });
     expect(decodeContentImageDshChunkRequest('read-chunk', { source, offset: 0 })).toEqual({
       source,
       offset: 0,
     });
   });
 
+  it('accepts up to twenty distinct overview sources and rejects unbounded shapes', () => {
+    const second = {
+      ...source,
+      selector: { kind: 'entry' as const, path: 'OPS/images/page-2.png' },
+    };
+    expect(CONTENT_IMAGES_DSH_TOOL_NAME).toBe('openneko_read_images');
+    expect(CONTENT_IMAGES_DSH_MAX_SOURCES).toBe(16);
+    expect(CONTENT_IMAGES_DSH_TOOL_PARAMETERS.sources).toMatchObject({
+      type: 'array',
+      required: true,
+    });
+    expect(decodeContentImagesDshToolInput({ sources: [source, second] })).toEqual({
+      sources: [source, second],
+    });
+    const batch = Array.from({ length: 16 }, (_, index) => ({
+      ...source,
+      selector: { kind: 'entry' as const, path: `OPS/images/page-${index + 1}.png` },
+    }));
+    expect(decodeContentImagesDshToolInput({ sources: batch }).sources).toEqual(batch);
+    expect(() => decodeContentImagesDshToolInput({ sources: [] })).toThrow(/between 1 and 16/u);
+    expect(() => decodeContentImagesDshToolInput({ sources: [source, second, source] })).toThrow(
+      /duplicate ContentLocator at index 2/u,
+    );
+    expect(() =>
+      decodeContentImagesDshToolInput({
+        sources: [
+          source,
+          second,
+          { ...source, file: { ...source.file, path: 'other.epub' } },
+          second,
+        ],
+        detail: 'original',
+      }),
+    ).toThrow(/must contain exactly sources/u);
+    expect(() =>
+      decodeContentImagesDshToolInput({
+        sources: [...batch, second],
+      }),
+    ).toThrow(/between 1 and 16/u);
+  });
+
   it('rejects raw paths, extra fields, and invalid offsets', () => {
+    expect(() =>
+      decodeContentImageDshToolInput({ source: { ...source, detail: 'overview' } }),
+    ).toThrow(/canonical Workspace ContentLocator/u);
+    expect(CONTENT_IMAGE_DSH_TOOL_PARAMETERS.detail.description).toContain('never source.detail');
+    expect(() => decodeContentImageDshToolInput({ source, detail: 'thumbnail' })).toThrow(
+      /overview, original/u,
+    );
+    expect(() => decodeContentImageDshToolInput({ source, extra: true })).toThrow(
+      /only source and detail/u,
+    );
     expect(() =>
       decodeContentImageDshChunkRequest('read-chunk', {
         source: { path: '/tmp/page.png' },

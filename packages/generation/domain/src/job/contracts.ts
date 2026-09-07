@@ -1,5 +1,6 @@
 import type { JobRef, JobSnapshotBase, JobStore } from '@neko/shared/job-lifecycle';
 import type { WorkspaceFileContentLocator } from '@neko/content-domain';
+import type { ProviderType } from '@neko/ai-contracts';
 import type {
   AudioGenerationRequest,
   ImageGenerationRequest,
@@ -7,11 +8,14 @@ import type {
   VideoGenerationRequest,
 } from '../contracts';
 import type {
+  GenerationModelParameterProfile,
+  GenerationParameterAdjustment,
+} from '../model-parameter-profile';
+import type {
   GenerationExecutionResult,
   GenerationProviderTaskRef,
   PromptGenerationRequest,
 } from '../execution';
-import type { ComfyUiWorkflowGenerationRequest } from '../comfyui/index';
 
 export const GENERATION_JOB_KIND = 'generation' as const;
 
@@ -26,6 +30,7 @@ export type { GenerationProviderTaskRef } from '../execution';
 interface GenerationJobRequestBase {
   readonly providerId: string;
   readonly modelId: string;
+  readonly parameterAdjustments?: readonly GenerationParameterAdjustment[];
 }
 
 export type GenerationJobRequest =
@@ -48,14 +53,9 @@ export type GenerationJobRequest =
       readonly request: VideoGenerationRequest;
     })
   | (GenerationJobRequestBase & {
-      readonly generationType: Extract<MediaGenerationType, 'text-to-audio' | 'text-to-music'>;
+      readonly generationType: Extract<MediaGenerationType, 'text-to-audio'>;
       readonly request: AudioGenerationRequest;
-    })
-  | {
-      readonly providerId: 'comfyui';
-      readonly generationType: 'workflow';
-      readonly request: ComfyUiWorkflowGenerationRequest;
-    };
+    });
 
 export interface GenerationJobProgress {
   readonly stage: GenerationJobStage;
@@ -95,7 +95,7 @@ export type SubmitGenerationJobInput = GenerationJobRequest & {
   readonly regenerateOf?: GenerationJobRef;
 };
 
-type ModelBoundGenerationJobRequest = Exclude<GenerationJobRequest, { generationType: 'workflow' }>;
+type ModelBoundGenerationJobRequest = GenerationJobRequest;
 
 type PurposeGenerationRequest<
   T extends ModelBoundGenerationJobRequest = ModelBoundGenerationJobRequest,
@@ -137,12 +137,25 @@ export interface PurposeGenerationJobPort extends Omit<GenerationJobPort, 'submi
 }
 
 export interface PurposeGenerationBindingResolver {
-  resolveGenerationBinding(
-    purpose: string,
-  ):
-    | { readonly providerId: string; readonly modelId: string }
+  resolveGenerationBinding(purpose: string):
+    | {
+        readonly providerId: string;
+        readonly modelId: string;
+        readonly providerType?: ProviderType;
+        readonly modelCapabilities?: readonly string[];
+        readonly parameterProfile?: GenerationModelParameterProfile;
+      }
     | undefined
-    | Promise<{ readonly providerId: string; readonly modelId: string } | undefined>;
+    | Promise<
+        | {
+            readonly providerId: string;
+            readonly modelId: string;
+            readonly providerType?: ProviderType;
+            readonly modelCapabilities?: readonly string[];
+            readonly parameterProfile?: GenerationModelParameterProfile;
+          }
+        | undefined
+      >;
 }
 
 export type GenerationJobErrorCode =

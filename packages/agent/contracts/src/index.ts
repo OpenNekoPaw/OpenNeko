@@ -9,17 +9,10 @@ export * from './agent-ui-contracts';
 export * from './agent-context';
 export * from './agent-file-reference';
 export * from './agent-home';
-export * from './agent-image-transport';
 export * from './agent-availability';
 export * from './canonical-base64';
 export * from './agent-interaction-binding';
 export * from './agent-model-catalog';
-export {
-  parseAgentFlatPurposeModelRefs,
-  type AgentFlatPurposeModelRefMap,
-  type AgentFlatPurposeModelRefs,
-  type AgentPurposeModelRef,
-} from './agent-purpose-model';
 export * from './agent-conversation-context';
 export * from './agent-conversation-binding';
 export * from './agent-input-intent';
@@ -91,3 +84,6 @@ export {
 } from './builtin-slash-command';
 
 export * from './character-dialogue-handoff';
+export * from './character-creation-handoff';
+export * from './world-creation-handoff';
+export * from './project-template-handoff';

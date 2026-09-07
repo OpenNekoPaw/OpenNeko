@@ -57,7 +57,53 @@ describe('Canvas Host runtime contract', () => {
         providerLabel: 'Provider One',
         isDefault: true,
       },
+      {
+        binding: {
+          purpose: 'video.generate',
+          providerId: 'provider-1',
+          modelId: 'video-model-1',
+        },
+        label: 'MiniMax H3',
+        providerLabel: 'Provider One',
+        isDefault: true,
+        parameterProfile: minimaxH3ParameterProfile(),
+      },
     ]);
+  });
+
+  it('accepts a snapshot with one unavailable node while preserving its raw content', () => {
+    const unavailableData = {
+      recipe: { kind: 'image', prompt: '' },
+      outputs: [],
+      phase: 'running',
+    };
+    const snapshot = parseCanvasHostSnapshot({
+      ...validSnapshot(),
+      canvas: {
+        ...DEFAULT_CANVAS_DATA,
+        nodes: [
+          {
+            id: 'available-note',
+            type: 'markdown',
+            position: { x: 0, y: 0 },
+            size: { width: 240, height: 160 },
+            zIndex: 0,
+            data: { content: 'still available' },
+          },
+          {
+            id: 'unavailable-generation',
+            type: 'generation',
+            position: { x: 280, y: 0 },
+            size: { width: 240, height: 160 },
+            zIndex: 1,
+            data: unavailableData,
+          },
+        ],
+      },
+    });
+
+    expect(snapshot.canvas.nodes).toHaveLength(2);
+    expect(snapshot.canvas.nodes[1]?.data).toEqual(unavailableData);
   });
 
   it('requires explicit source semantics and typed Generation Node creation', () => {
@@ -312,8 +358,49 @@ function validSnapshot() {
           providerLabel: 'Provider One',
           isDefault: true,
         },
+        {
+          binding: {
+            purpose: 'video.generate',
+            providerId: 'provider-1',
+            modelId: 'video-model-1',
+          },
+          label: 'MiniMax H3',
+          providerLabel: 'Provider One',
+          isDefault: true,
+          parameterProfile: minimaxH3ParameterProfile(),
+        },
       ],
     },
     generationNodes: [],
+  };
+}
+
+function minimaxH3ParameterProfile() {
+  return {
+    kind: 'video' as const,
+    supportedParameters: ['duration', 'resolution', 'aspectRatio'] as const,
+    controls: {
+      aspectRatio: {
+        kind: 'string-enum' as const,
+        required: true,
+        values: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'],
+        defaultValue: '16:9',
+      },
+      resolution: {
+        kind: 'string-enum' as const,
+        required: true,
+        values: ['768P', '2K'],
+        defaultValue: '768P',
+      },
+      duration: {
+        kind: 'integer' as const,
+        required: true,
+        min: 4,
+        max: 15,
+        step: 1,
+        defaultValue: 5,
+      },
+    },
+    fixed: { outputCount: 1 as const },
   };
 }

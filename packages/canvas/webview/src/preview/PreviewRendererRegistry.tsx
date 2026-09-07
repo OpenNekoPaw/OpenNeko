@@ -12,6 +12,7 @@ import type { PreviewPlaybackControl, PreviewSourceDescriptor } from './types';
 import type { PlaybackSurfaceKind } from '../stores/playbackStore';
 import { useOptionalCanvasHost } from '../host-runtime';
 import { getLocale, t } from '../i18n';
+import { WarningIcon } from '@neko/ui/icons';
 import {
   readCanonicalContentLocator,
   readCanonicalContentLocatorKey,
@@ -23,7 +24,8 @@ export interface PreviewRendererProps {
   surfaceKind?: PlaybackSurfaceKind;
   playbackControl?: PreviewPlaybackControl;
   chrome?: 'contained' | 'full-bleed';
-  audioLayout?: 'transport' | 'node-card';
+  mediaPlayback?: 'interactive' | 'inline' | 'ambient';
+  feedback?: 'full' | 'compact';
 }
 
 export type PreviewRenderer = ComponentType<PreviewRendererProps>;
@@ -53,6 +55,8 @@ function CanonicalPreviewRenderer({
   source,
   chrome = 'contained',
   playbackControl,
+  mediaPlayback,
+  feedback = 'full',
 }: PreviewRendererProps): ReactNode {
   const { descriptor, diagnostic } = useCanvasPreviewDescriptor(source);
   const contentKind = previewContentKind(source);
@@ -89,16 +93,24 @@ function CanonicalPreviewRenderer({
       className={previewFrameClassName(chrome)}
       data-preview-surface={contentKind}
       data-preview-chrome={chrome}
+      data-preview-feedback={feedback}
     >
       {diagnostic ? (
         <div
-          className="flex h-full items-center justify-center px-3 text-center text-xs text-[var(--hostPort-errorForeground)]"
+          className="canvas-preview-feedback flex h-full items-center justify-center px-3 text-center text-xs text-[var(--hostPort-errorForeground)]"
           role="alert"
+          title={diagnostic}
+          aria-label={diagnostic}
         >
-          {diagnostic}
+          {feedback === 'compact' ? <WarningIcon size={16} /> : diagnostic}
         </div>
       ) : descriptor ? (
-        <LightweightPreview descriptor={descriptor} locale={getLocale()} playback={playback} />
+        <LightweightPreview
+          descriptor={descriptor}
+          locale={getLocale()}
+          playback={playback}
+          mediaPlayback={mediaPlayback}
+        />
       ) : (
         <div
           className="flex h-full items-center justify-center text-xs text-[var(--node-fg-secondary)]"
@@ -180,8 +192,8 @@ function useCanvasPreviewDescriptor(source: PreviewSourceDescriptor): {
 
     return () => {
       disposed = true;
-      unsubscribe();
       if (descriptorId) {
+        unsubscribe();
         host.postMessage({ type: 'preview:releaseResource', descriptorId });
       }
     };

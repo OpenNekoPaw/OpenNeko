@@ -41,7 +41,11 @@ describe('Desktop Text Editor reference Host runtime', () => {
       };
     });
     const bridge = {
-      textEditor: { execute, subscribe: vi.fn(() => () => undefined) },
+      textEditor: {
+        execute,
+        executeClipboardCommand: vi.fn(async (request) => ({ ...request, status: 'executed' })),
+        subscribe: vi.fn(() => () => undefined),
+      },
     } satisfies OpenNekoDesktopTextEditorBridge;
     const runtime = createElectronTextEditorHostRuntime({ bridge, identity });
     const request = {

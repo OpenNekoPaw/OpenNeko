@@ -176,6 +176,25 @@ describe('DesktopCutRuntime', () => {
     await harness.runtime.dispose();
   });
 
+  it('treats a missing exact Canvas Project View as unavailable during action discovery', async () => {
+    const harness = await createDraftRuntimeHarness({});
+    const unavailableIdentity = {
+      ...harness.canvasSourceIdentity(),
+      projectId: 'missing-project',
+    };
+
+    await expect(
+      harness.runtime.resolveAvailableCanvasHandoffTarget(unavailableIdentity),
+    ).resolves.toMatchObject({
+      status: 'unavailable',
+      diagnostic: { code: 'desktop-cut-project-owner-unavailable' },
+    });
+    await expect(harness.runtime.resolveCanvasHandoffTarget(unavailableIdentity)).rejects.toThrow(
+      'has no exact Project View owner',
+    );
+    await harness.runtime.dispose();
+  });
+
   it('creates one exact draft for Canvas media, preserves the source and deduplicates its Cut command', async () => {
     const probe = vi.fn(async () => ({
       durationSeconds: 3,
@@ -225,59 +244,6 @@ describe('DesktopCutRuntime', () => {
     expect(dispose).toHaveBeenCalledOnce();
     expect(await readFile(sourcePath, 'utf8')).toBe('source-fixture');
     expect(harness.workbench().cutPanel?.views).toHaveLength(1);
-    await harness.runtime.dispose();
-  });
-
-  it('imports a Canvas Video and applies canonical audio separation in the exact Cut target', async () => {
-    const harness = await createDraftRuntimeHarness({
-      createAuthoringMediaAdapter: () => ({
-        probe: vi.fn(async () => ({
-          durationSeconds: 3,
-          width: 1920,
-          height: 1080,
-          framesPerSecond: 30,
-          hasVideo: true,
-          hasAudio: true,
-          audioStreams: [],
-        })),
-        dispose: vi.fn(async () => undefined),
-      }),
-    });
-    await mkdir(path.join(harness.workspacePath, 'media'));
-    await writeFile(path.join(harness.workspacePath, 'media', 'clip.mp4'), 'source-fixture');
-    const identity = harness.canvasSourceIdentity();
-    const target = await harness.runtime.resolveCanvasHandoffTarget(identity);
-
-    const snapshot = await harness.runtime.addCanvasMaterialAndSeparateAudio({
-      identity,
-      nodeId: 'video-node-1',
-      label: 'clip.mp4',
-      locator: { file: { authority: 'workspace', path: 'media/clip.mp4' } },
-      target,
-    });
-
-    expect(snapshot.document).toMatchObject({
-      tracks: [
-        expect.objectContaining({
-          kind: 'Video',
-          items: [
-            expect.objectContaining({
-              name: 'clip.mp4',
-              linkedAudioClipId: expect.any(String),
-            }),
-          ],
-        }),
-        expect.objectContaining({
-          kind: 'Audio',
-          items: [
-            expect.objectContaining({
-              name: 'clip.mp4 Audio',
-              linkedVideoClipId: expect.any(String),
-            }),
-          ],
-        }),
-      ],
-    });
     await harness.runtime.dispose();
   });
 
@@ -1645,11 +1611,11 @@ async function createDraftRuntimeHarness(options: {
   let failWorkbenchUpdates = false;
   workbench = openOrFocusMainView(workbench, {
     viewId: 'canvas-view-1',
-    viewInstanceId: 'view-instance-1',
+    viewInstanceId: 'canvas-view-instance-1',
     projectId: 'project-1',
     workspaceId: 'workspace-1',
     kind: 'canvas',
-    ownerId: 'canvas-session:canvas-view-1:view-instance-1',
+    ownerId: 'canvas-session:canvas-view-1:canvas-view-instance-1',
     displayLabel: 'Workspace Canvas',
     documentId: 'neko/boards/workspace.nkc',
   });
@@ -1770,7 +1736,7 @@ async function createDraftRuntimeHarness(options: {
       workspaceId: 'workspace-1',
       windowId: 'window-1',
       viewId: 'canvas-view-1',
-      viewInstanceId: 'view-instance-1',
+      viewInstanceId: 'canvas-view-instance-1',
       rendererSessionId: 'endpoint-1',
     }),
   };

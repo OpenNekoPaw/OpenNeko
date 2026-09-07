@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type {
   CanvasMaterialActionDescriptor,
   CanvasMaterialActionEffect,
@@ -34,6 +34,7 @@ import {
   CANVAS_VIDEO_OPEN_EDITOR_TOOLS_ACTION_ID,
   CANVAS_VIDEO_REMOVE_SUBTITLES_ACTION_ID,
   CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID,
+  selectedCanvasGenerationOutput,
 } from '@neko/canvas-domain';
 import { Button, IconButton, Popover } from '@neko/ui/primitives';
 import {
@@ -97,6 +98,7 @@ const STABLE_MATERIAL_ACTION_IDS: Readonly<Record<CanvasMaterialMediaKind, reado
 interface SelectionContextToolbarProps {
   readonly nodes: readonly CanvasNode[];
   readonly selectedNodeIds: readonly string[];
+  readonly unavailableNodeIds?: ReadonlySet<string>;
   readonly viewport: CanvasViewport;
   readonly viewportSize: { readonly width: number; readonly height: number };
   readonly hidden?: boolean;
@@ -122,11 +124,19 @@ type MaterialActionState =
       readonly status: 'ready';
       readonly descriptors: readonly CanvasMaterialActionDescriptor[];
     }
-  | { readonly status: 'error'; readonly descriptors: readonly []; readonly message: string };
+  | {
+      readonly status: 'error';
+      readonly descriptors: readonly [];
+      readonly message: string;
+      readonly retry: () => void;
+    };
+
+type BeginMaterialActionExecution = (label: string) => (error: unknown) => void;
 
 export function SelectionContextToolbar({
   nodes,
   selectedNodeIds,
+  unavailableNodeIds = new Set(),
   viewport,
   viewportSize,
   hidden = false,
@@ -141,74 +151,125 @@ export function SelectionContextToolbar({
     status: 'idle',
     descriptors: [],
   });
-  const [executionDiagnostic, setExecutionDiagnostic] = useState<string>();
+  const [executionDiagnostic, setExecutionDiagnostic] = useState<{
+    readonly label: string;
+    readonly message: string;
+  }>();
+  const executionFailureReporter = useRef<(error: unknown) => void>();
+  const beginExecution = useCallback<BeginMaterialActionExecution>((label) => {
+    const reportFailure = (error: unknown): void => {
+      if (executionFailureReporter.current !== reportFailure) return;
+      setExecutionDiagnostic({
+        label,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    };
+    executionFailureReporter.current = reportFailure;
+    setExecutionDiagnostic(undefined);
+    return reportFailure;
+  }, []);
   const selectedNodes = useMemo(
     () => selectedNodeIds.flatMap((id) => nodes.find((node) => node.id === id) ?? []),
     [nodes, selectedNodeIds],
   );
+  const selectionUnavailable = selectedNodes.some((node) => unavailableNodeIds.has(node.id));
   const materialIdentityKey = useMemo(
-    () => selectedNodes.map(materialActionIdentityKey).join('\u0000'),
-    [selectedNodes],
+    () =>
+      selectionUnavailable
+        ? `unavailable:${selectedNodes.map((node) => node.id).join('\u0000')}`
+        : selectedNodes.map(materialActionIdentityKey).join('\u0000'),
+    [selectedNodes, selectionUnavailable],
   );
   const selectedNodeIdsKey = JSON.stringify(selectedNodeIds);
   const selectedNodeIdsRef = useRef(selectedNodeIds);
   selectedNodeIdsRef.current = selectedNodeIds;
   useEffect(() => {
     let current = true;
+    const stopObserving = (): void => {
+      current = false;
+      executionFailureReporter.current = undefined;
+    };
+    executionFailureReporter.current = undefined;
     setExecutionDiagnostic(undefined);
     const requestNodeIds = selectedNodeIdsRef.current;
-    if (!host || requestNodeIds.length === 0) {
+    if (!host || requestNodeIds.length === 0 || selectionUnavailable) {
       setMaterialActionState({ status: 'idle', descriptors: [] });
-      return () => {
-        current = false;
-      };
+      return stopObserving;
     }
-    setMaterialActionState({ status: 'loading', descriptors: [] });
-    void host
-      .resolveMaterialActions(requestNodeIds)
-      .then((descriptors) => {
-        if (current) setMaterialActionState({ status: 'ready', descriptors });
-      })
-      .catch((error: unknown) => {
-        if (current) {
-          setMaterialActionState({
-            status: 'error',
-            descriptors: [],
-            message: error instanceof Error ? error.message : String(error),
-          });
-        }
-      });
-    return () => {
-      current = false;
+    const resolve = (): void => {
+      setMaterialActionState({ status: 'loading', descriptors: [] });
+      void host
+        .resolveMaterialActions(requestNodeIds)
+        .then((descriptors) => {
+          if (current) setMaterialActionState({ status: 'ready', descriptors });
+        })
+        .catch((error: unknown) => {
+          if (current) {
+            setMaterialActionState({
+              status: 'error',
+              descriptors: [],
+              message: error instanceof Error ? error.message : String(error),
+              retry: resolve,
+            });
+          }
+        });
     };
-  }, [host, materialIdentityKey, selectedNodeIdsKey]);
-  const actions = useMemo(
-    () =>
-      resolveActions(
-        selectedNodes,
-        host,
-        materialActionState.descriptors,
-        canvasStore,
-        clipboardStore,
-        historyStore,
-        setExecutionDiagnostic,
-        onMarkdownEdit,
-      ),
-    [
+    resolve();
+    return stopObserving;
+  }, [host, materialIdentityKey, selectedNodeIdsKey, selectionUnavailable]);
+  const actions = useMemo(() => {
+    if (selectionUnavailable) {
+      return [
+        {
+          key: 'delete-selection',
+          label: t('menu.delete'),
+          icon: <TrashIcon size={14} />,
+          placement: 'visible',
+          priority: 10,
+          display: 'label',
+          section: 'canvas',
+          danger: true,
+          run: () => canvasStore.getState().deleteSelected(),
+        } satisfies ToolbarAction,
+      ];
+    }
+    return resolveActions(
+      selectedNodes,
+      host,
+      materialActionState.descriptors,
       canvasStore,
       clipboardStore,
       historyStore,
-      host,
-      materialActionState.descriptors,
+      beginExecution,
       onMarkdownEdit,
-      selectedNodes,
-    ],
-  );
+    );
+  }, [
+    beginExecution,
+    canvasStore,
+    clipboardStore,
+    historyStore,
+    host,
+    materialActionState.descriptors,
+    onMarkdownEdit,
+    selectedNodes,
+    selectionUnavailable,
+  ]);
   if (hidden || selectedNodes.length === 0 || actions.length === 0) return null;
 
   const position = resolveToolbarPosition(selectedNodes, viewport, viewportSize);
   const { primary, overflow } = partitionActions(actions);
-  const selectionLabel = resolveSelectionLabel(selectedNodes);
+  const selectionLabel = selectionUnavailable
+    ? t('node.unavailableBadge')
+    : resolveSelectionLabel(selectedNodes);
+  const diagnostic =
+    materialActionState.status === 'error'
+      ? { label: t('selection.actionsLoadFailed'), message: materialActionState.message }
+      : executionDiagnostic
+        ? {
+            label: t('selection.actionFailed', { action: executionDiagnostic.label }),
+            message: executionDiagnostic.message,
+          }
+        : undefined;
 
   return (
     <div
@@ -313,19 +374,25 @@ export function SelectionContextToolbar({
           </div>
         </Popover>
       )}
-      {materialActionState.status === 'error' || executionDiagnostic ? (
+      {diagnostic ? (
         <span
           className="selection-context-toolbar__diagnostic"
           data-material-actions-status="error"
           role="alert"
-          title={
-            materialActionState.status === 'error'
-              ? materialActionState.message
-              : executionDiagnostic
-          }
+          title={diagnostic.message}
         >
           <WarningIcon size={14} />
-          <span>{t('selection.actionsUnavailable')}</span>
+          <span>{diagnostic.label}</span>
+          {materialActionState.status === 'error' ? (
+            <Button
+              data-material-actions-retry="true"
+              size="xs"
+              variant="ghost"
+              onClick={materialActionState.retry}
+            >
+              {t('errorBoundary.retry')}
+            </Button>
+          ) : null}
         </span>
       ) : null}
     </div>
@@ -355,19 +422,13 @@ function resolveActions(
   canvasStore: ReturnType<typeof useCanvasStoreApi>,
   clipboardStore: ReturnType<typeof useClipboardStoreApi>,
   historyStore: ReturnType<typeof useHistoryStoreApi>,
-  reportExecutionDiagnostic: (message: string | undefined) => void,
+  beginExecution: BeginMaterialActionExecution,
   onMarkdownEdit: ((nodeId: string) => void) | undefined,
 ): ToolbarAction[] {
   const selectedIds = selectedNodes.map((node) => node.id);
   if (selectedNodes.length > 1) {
     return [
-      ...resolveOwnerActions(
-        selectedNodes,
-        ownerDescriptors,
-        selectedIds,
-        host,
-        reportExecutionDiagnostic,
-      ),
+      ...resolveOwnerActions(selectedNodes, ownerDescriptors, selectedIds, host, beginExecution),
       {
         key: 'group-selection',
         label: t('menu.group'),
@@ -400,7 +461,7 @@ function resolveActions(
     ownerDescriptors,
     selectedIds,
     host,
-    reportExecutionDiagnostic,
+    beginExecution,
   );
   if (node.type === 'markdown') {
     actions.push({
@@ -465,7 +526,7 @@ function resolveOwnerActions(
   descriptors: readonly CanvasMaterialActionDescriptor[],
   selectedNodeIds: readonly string[],
   host: ReturnType<typeof useOptionalCanvasHost>,
-  reportExecutionDiagnostic: (message: string | undefined) => void,
+  beginExecution: BeginMaterialActionExecution,
 ): ToolbarAction[] {
   const inlineMarkdown = selectedNodes.length === 1 && selectedNodes[0]?.type === 'markdown';
   const availableDescriptors = descriptors.filter(
@@ -476,7 +537,7 @@ function resolveOwnerActions(
   const descriptorById = new Map(
     availableDescriptors.map((descriptor) => [descriptor.id, descriptor] as const),
   );
-  const stableIds = stableMaterialActionIds(selectedNodes);
+  const stableIds = stableMaterialActionIds(selectedNodes, descriptors);
   const unavailableReason = t('selection.capabilityUnavailable');
   const stableActions = stableIds.map((actionId) => {
     const descriptor = descriptorById.get(actionId);
@@ -491,14 +552,12 @@ function resolveOwnerActions(
       } satisfies ToolbarAction;
     }
     descriptorById.delete(actionId);
-    return createOwnerAction(descriptor, selectedNodeIds, host, reportExecutionDiagnostic);
+    return createOwnerAction(descriptor, selectedNodeIds, host, beginExecution);
   });
   if (!host) return stableActions;
   const overflowActions = availableDescriptors
     .filter((descriptor) => descriptorById.has(descriptor.id))
-    .map((descriptor) =>
-      createOwnerAction(descriptor, selectedNodeIds, host, reportExecutionDiagnostic),
-    );
+    .map((descriptor) => createOwnerAction(descriptor, selectedNodeIds, host, beginExecution));
   return [...stableActions, ...overflowActions];
 }
 
@@ -506,7 +565,7 @@ function createOwnerAction(
   descriptor: CanvasMaterialActionDescriptor,
   selectedNodeIds: readonly string[],
   host: NonNullable<ReturnType<typeof useOptionalCanvasHost>>,
-  reportExecutionDiagnostic: (message: string | undefined) => void,
+  beginExecution: BeginMaterialActionExecution,
 ): ToolbarAction {
   const presentation = materialActionPresentation(descriptor.id);
   return {
@@ -514,29 +573,47 @@ function createOwnerAction(
     label: descriptor.label,
     icon: materialActionIcon(descriptor.id, descriptor.effect),
     ...presentation,
-    run: () => {
-      reportExecutionDiagnostic(undefined);
-      void host
-        .executeMaterialAction(descriptor.id, selectedNodeIds, descriptor.executionPayload ?? {})
-        .catch((error: unknown) => {
-          reportExecutionDiagnostic(error instanceof Error ? error.message : String(error));
-        });
-    },
+    disabledReason: descriptor.unavailable?.message,
+    run: descriptor.unavailable
+      ? undefined
+      : () => {
+          const reportFailure = beginExecution(descriptor.label);
+          void host
+            .executeMaterialAction(
+              descriptor.id,
+              selectedNodeIds,
+              descriptor.executionPayload ?? {},
+            )
+            .catch(reportFailure);
+        },
   };
 }
 
-function stableMaterialActionIds(selectedNodes: readonly CanvasNode[]): readonly string[] {
+function stableMaterialActionIds(
+  selectedNodes: readonly CanvasNode[],
+  descriptors: readonly CanvasMaterialActionDescriptor[],
+): readonly string[] {
   if (selectedNodes.length !== 1) return [];
   const node = selectedNodes[0];
   if (!node) return [];
   if (node.type === 'markdown') return [CANVAS_PREVIEW_ACTION_ID];
+  if (node.type === 'generation' && selectedCanvasGenerationOutput(node.data)?.kind === 'prompt') {
+    return [CANVAS_EDIT_TEXT_ACTION_ID];
+  }
   const kind = materialKindForNode(node);
+  if (kind === 'document') {
+    return descriptors.some((descriptor) => descriptor.id === CANVAS_EDIT_TEXT_ACTION_ID)
+      ? [CANVAS_EDIT_TEXT_ACTION_ID]
+      : [CANVAS_PREVIEW_ACTION_ID];
+  }
   return kind ? STABLE_MATERIAL_ACTION_IDS[kind] : [];
 }
 
 function materialKindForNode(node: CanvasNode): CanvasMaterialMediaKind | undefined {
   if (node.type === 'generation') {
-    return node.data.recipe.kind === 'prompt' ? 'document' : node.data.recipe.kind;
+    const output = selectedCanvasGenerationOutput(node.data);
+    if (!output) return undefined;
+    return output.kind === 'prompt' ? 'document' : output.kind;
   }
   if (node.type === 'media') return node.data.mediaType;
   if (node.type === 'file') return node.data.mediaKind ?? 'document';

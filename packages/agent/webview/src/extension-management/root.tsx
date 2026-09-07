@@ -15,6 +15,7 @@ import type {
   AgentExtensionManagementProjection,
   AgentExtensionManagementRuntime,
   AgentManagedMcpItem,
+  AgentManagedSkillDetail,
   AgentManagedSkillItem,
 } from '@neko/agent-contracts/extension-management';
 
@@ -342,6 +343,7 @@ export function AgentExtensionManagementRoot({
           onRemove={() => setRemoveEntry(selectedEntry)}
           onSetEnabled={(enabled) => setEnabled(selectedEntry, enabled)}
           pending={pendingIdentity === `${selectedEntry.kind}:${selectedEntry.item.id}`}
+          runtime={runtime}
         />
       ) : null}
       <McpAddDialog
@@ -388,15 +390,43 @@ function AgentExtensionDetailOverlay({
   onRemove,
   onSetEnabled,
   pending,
+  runtime,
 }: {
   readonly entry: AgentExtensionCatalogEntry;
   readonly onClose: () => void;
   readonly onRemove: () => void;
   readonly onSetEnabled: (enabled: boolean) => void;
   readonly pending: boolean;
+  readonly runtime: AgentExtensionManagementRuntime;
 }): JSX.Element {
   const { t } = useTranslation();
   const { item, kind, presentation } = entry;
+  const [skillDetail, setSkillDetail] = useState<AgentManagedSkillDetail>();
+  const [skillDetailError, setSkillDetailError] = useState<string>();
+  const [skillDetailLoading, setSkillDetailLoading] = useState(kind === 'skill');
+
+  useEffect(() => {
+    if (kind !== 'skill') return;
+    let active = true;
+    setSkillDetail(undefined);
+    setSkillDetailError(undefined);
+    setSkillDetailLoading(true);
+    void runtime
+      .getSkillDetail({ name: item.name, source: item.source })
+      .then((detail) => {
+        if (active) setSkillDetail(detail);
+      })
+      .catch((reason: unknown) => {
+        if (active) setSkillDetailError(reason instanceof Error ? reason.message : String(reason));
+      })
+      .finally(() => {
+        if (active) setSkillDetailLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [item, kind, runtime]);
+
   return (
     <Dialog
       className="extension-detail-overlay agent-extension-detail-overlay"
@@ -416,11 +446,14 @@ function AgentExtensionDetailOverlay({
           <div>
             <div className="extension-detail-overlay__tags">
               <span>{kind === 'skill' ? 'Skill' : 'MCP'}</span>
-              {kind === 'skill' ? <span>{item.source}</span> : <span>{item.status}</span>}
+              {kind === 'mcp' ? <span>{item.status}</span> : null}
             </div>
           </div>
         </header>
-        {kind === 'skill' && item.whenToUse && item.whenToUse !== presentation.summary ? (
+        {kind === 'skill' &&
+        item.source !== 'bundled' &&
+        item.whenToUse &&
+        item.whenToUse !== presentation.summary ? (
           <section className="extension-detail-overlay__section">
             <h3>{t('extension.detail.whenToUse')}</h3>
             <p className="extension-detail-overlay__long-copy">{item.whenToUse}</p>
@@ -429,19 +462,31 @@ function AgentExtensionDetailOverlay({
         <section className="extension-detail-overlay__section">
           <h3>{t('extension.detail.capabilityInfo')}</h3>
           <dl className="extension-detail-overlay__facts">
-            <div>
-              <dt>{t('extension.detail.identity')}</dt>
-              <dd>{item.id}</dd>
-            </div>
+            {kind === 'mcp' ? (
+              <div>
+                <dt>{t('extension.detail.identity')}</dt>
+                <dd>{item.id}</dd>
+              </div>
+            ) : null}
             {kind === 'skill' ? (
               <>
                 <div>
-                  <dt>{t('extension.detail.source')}</dt>
-                  <dd>{item.source}</dd>
+                  <dt>{t('extension.detail.status')}</dt>
+                  <dd>
+                    {item.enabled
+                      ? t('extension.lifecycle.enabled')
+                      : t('extension.lifecycle.disabled')}
+                  </dd>
                 </div>
                 <div>
-                  <dt>{t('extension.detail.provider')}</dt>
-                  <dd>{item.provider}</dd>
+                  <dt>{t('extension.detail.invocationEntry')}</dt>
+                  <dd>
+                    {item.userInvocable ? (
+                      <code className="extension-detail-overlay__inline-code">${item.name}</code>
+                    ) : (
+                      t('extension.detail.notUserInvocable')
+                    )}
+                  </dd>
                 </div>
                 <div>
                   <dt>{t('extension.detail.invocation')}</dt>
@@ -464,6 +509,56 @@ function AgentExtensionDetailOverlay({
             )}
           </dl>
         </section>
+        {kind === 'skill' ? (
+          <section className="extension-detail-overlay__section">
+            <h3>{t('extension.detail.instructions')}</h3>
+            {skillDetailLoading ? (
+              <p className="extension-detail-overlay__long-copy" role="status">
+                {t('extension.detail.loading')}
+              </p>
+            ) : skillDetailError ? (
+              <div className="management-surface-diagnostic" role="alert">
+                <WarningIcon size={17} />
+                <span>{skillDetailError}</span>
+              </div>
+            ) : skillDetail ? (
+              <pre className="extension-detail-overlay__skill-content">{skillDetail.content}</pre>
+            ) : null}
+          </section>
+        ) : null}
+        {kind === 'skill' ? (
+          <details className="extension-detail-overlay__technical">
+            <summary>{t('extension.detail.technical')}</summary>
+            <dl className="extension-detail-overlay__facts">
+              <div>
+                <dt>{t('extension.detail.canonicalName')}</dt>
+                <dd>{item.name}</dd>
+              </div>
+              <div>
+                <dt>{t('extension.detail.identity')}</dt>
+                <dd>{item.id}</dd>
+              </div>
+              <div>
+                <dt>{t('extension.detail.source')}</dt>
+                <dd>{item.source}</dd>
+              </div>
+              <div>
+                <dt>{t('extension.detail.provider')}</dt>
+                <dd>{item.provider}</dd>
+              </div>
+              {skillDetail ? (
+                <div>
+                  <dt>{t('extension.detail.fingerprint')}</dt>
+                  <dd>
+                    <code className="extension-detail-overlay__fingerprint">
+                      {skillDetail.fingerprint}
+                    </code>
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+          </details>
+        ) : null}
         {kind === 'mcp' && item.status !== 'ready' ? (
           <div className="management-surface-diagnostic" role="alert">
             <WarningIcon size={17} />
@@ -643,6 +738,11 @@ const BUILTIN_SKILL_PRESENTATION_NAMES = new Set([
   'subtitle-assistant',
   'video',
   'video-editing',
+  'media-delivery',
+  'media-preparation',
+  'media-selection',
+  'sound-generation',
+  'video-compositing',
   'world-creator',
 ]);
 

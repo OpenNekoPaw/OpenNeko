@@ -3,7 +3,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Electron distribution archive",
-      "fieldScope": "Pinned macOS arm64 Electron archive checksum key",
       "id": "c714055b504093648da6",
       "isolationRule": "The archive name is consumed only by Electron Forge download verification and cannot affect OpenNeko data contracts, persistence, component state, or runtime routing.",
       "normativeSource": "https://www.electronjs.org/docs/latest/tutorial/installation#mirrors-and-custom-caches",
@@ -13,7 +12,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Electron fuses API",
-      "fieldScope": "Electron FuseConfig version property required by @electron/fuses",
       "id": "0cd889112eb6216cd1bb",
       "isolationRule": "The property selects the external Electron fuse layout during packaging only and cannot validate or dispatch OpenNeko data.",
       "normativeSource": "https://www.electronjs.org/docs/latest/tutorial/fuses",
@@ -23,7 +21,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Electron fuses API",
-      "fieldScope": "Electron FuseVersion import required by the Forge fuses plugin",
       "id": "1e7ce2a30aa21f2efcff",
       "isolationRule": "The enum configures the packaged Electron executable only and is never projected into OpenNeko contracts, persisted data, component state, or routing.",
       "normativeSource": "https://www.electronjs.org/docs/latest/tutorial/fuses",
@@ -33,7 +30,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Electron Forge application manifest",
-      "fieldScope": "OpenNeko Desktop package.json application release version only",
       "id": "1c856b923c78be3a3d93",
       "isolationRule": "Electron Forge reads this value only while starting, packaging, and releasing the Desktop application; it is not projected into OpenNeko contracts, component state, persistence records, runtime routing, or data validity checks.",
       "normativeSource": "https://github.com/electron/forge/blob/v7.11.2/packages/api/core/src/api/start.ts",
@@ -43,7 +39,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Electron distribution archive",
-      "fieldScope": "Architecture test exclusion of an unsupported Linux archive",
       "id": "4d03a75c5f3e048f8397",
       "isolationRule": "The literal verifies packaging target scope only and cannot enter product contracts or persistence.",
       "normativeSource": "https://www.electronjs.org/docs/latest/tutorial/installation#mirrors-and-custom-caches",
@@ -53,7 +48,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Electron fuses API",
-      "fieldScope": "Architecture test import of the exact Electron fuse enum",
       "id": "65c1e795e119bb1302d6",
       "isolationRule": "The enum is used only to assert the packaged Electron security configuration and has no product data consumer.",
       "normativeSource": "https://www.electronjs.org/docs/latest/tutorial/fuses",
@@ -63,7 +57,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Electron distribution archive",
-      "fieldScope": "Architecture test assertion for the supported macOS arm64 archive",
       "id": "a770e3a9dc691e74e0ac",
       "isolationRule": "The literal verifies Electron Forge download pinning only and cannot enter product contracts or persistence.",
       "normativeSource": "https://www.electronjs.org/docs/latest/tutorial/installation#mirrors-and-custom-caches",
@@ -73,7 +66,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Electron distribution archive",
-      "fieldScope": "Architecture test exclusion of an unsupported Windows archive",
       "id": "ac98cda244db7e771284",
       "isolationRule": "The literal verifies packaging target scope only and cannot enter product contracts or persistence.",
       "normativeSource": "https://www.electronjs.org/docs/latest/tutorial/installation#mirrors-and-custom-caches",
@@ -83,7 +75,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Electron fuses API",
-      "fieldScope": "Architecture test assertion for the external FuseConfig version property",
       "id": "e9f47b3424faa57f03d0",
       "isolationRule": "The property is asserted only as Electron packaging security metadata and never participates in OpenNeko data validity.",
       "normativeSource": "https://www.electronjs.org/docs/latest/tutorial/fuses",
@@ -93,7 +84,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "glTF 2.0 specification",
-      "fieldScope": "Desktop media qualification glTF asset declaration",
       "id": "288b3a42a48c9f738792",
       "isolationRule": "The value exists only inside a generated glTF fixture parsed by the external format consumer and cannot dispatch OpenNeko contracts or persistence.",
       "normativeSource": "https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html",
@@ -103,7 +93,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg command-line tool",
-      "fieldScope": "Desktop qualification report of the selected external FFmpeg release",
       "id": "c7fd9bbc4d163e00c085",
       "isolationRule": "The value is qualification output only and never selects an OpenNeko contract, migration, component generation, codec path, or persisted data shape.",
       "normativeSource": "https://ffmpeg.org/ffmpeg.html",
@@ -113,7 +102,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "glTF 2.0 specification",
-      "fieldScope": "Desktop Preview symlink-escape glTF fixture asset declaration",
       "id": "7e6cbfca600f63361019",
       "isolationRule": "The value is confined to one rejected glTF fixture and cannot dispatch OpenNeko contracts, persistence, migrations, or Preview component state.",
       "normativeSource": "https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html",
@@ -123,7 +111,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "glTF 2.0 specification",
-      "fieldScope": "Desktop Preview unsafe-path glTF fixture asset declaration",
       "id": "b23231d9ad48766cd49c",
       "isolationRule": "The value is confined to one rejected glTF fixture and cannot dispatch OpenNeko contracts, persistence, migrations, or Preview component state.",
       "normativeSource": "https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html",
@@ -133,7 +120,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "glTF 2.0 specification",
-      "fieldScope": "Desktop Preview valid glTF dependency fixture asset declaration",
       "id": "e2161f8e8096302e1279",
       "isolationRule": "The value is confined to one glTF fixture and cannot dispatch OpenNeko contracts, persistence, migrations, or Preview component state.",
       "normativeSource": "https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html",
@@ -143,7 +129,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Vitest coverage-v8 package",
-      "fieldScope": "Root development dependency package name only",
       "id": "8cfabeedc0c9f8a64186",
       "isolationRule": "The v8 suffix identifies Vitest's externally published coverage provider package and is not projected into OpenNeko contracts, persistence, component state, or runtime routing.",
       "normativeSource": "https://vitest.dev/guide/coverage.html",
@@ -153,7 +138,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "DeepSeek Harness Session contract",
-      "fieldScope": "version: 0, (packages/dsh-bridge/src/index.test.ts:18)",
       "id": "572a53b1e0034fa5f9cd",
       "isolationRule": "The value satisfies the external DSH SessionHeader shape in a bridge test fixture and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://www.npmjs.com/package/@deepseek-ai/dsh-session",
@@ -163,7 +147,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
-      "fieldScope": "agentInfo: { name: '@neko/dsh-bridge', version: 'development' }, (packages/dsh-bridge/src/index.ts:207)",
       "id": "2c883ce143256e2b8b76",
       "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
@@ -173,7 +156,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
-      "fieldScope": "protocolVersion: PROTOCOL_VERSION, (packages/dsh-bridge/src/index.ts:206)",
       "id": "2d3a73c02e45ab67ff2e",
       "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
@@ -183,7 +165,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
-      "fieldScope": "PROTOCOL_VERSION, (packages/dsh-bridge/src/index.ts:7)",
       "id": "c7f55f1adb78a3935bda",
       "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
@@ -193,7 +174,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
-      "fieldScope": "const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} }); (packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts:387)",
       "id": "3ed9ae1672ca589398ab",
       "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
@@ -203,7 +183,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
-      "fieldScope": "const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} }); (packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts:967)",
       "id": "794d5917ddbe8f18bf59",
       "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
@@ -213,7 +192,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
-      "fieldScope": "const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} }); (packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts:293)",
       "id": "5f2929fe9daa073991b7",
       "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
@@ -223,7 +201,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
-      "fieldScope": "const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} }); (packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts:268)",
       "id": "62fdbfadbf8bf3385603",
       "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
@@ -233,7 +210,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
-      "fieldScope": "const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} }); (packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts:315)",
       "id": "6a5ee7de11fd74952fd9",
       "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
@@ -243,7 +219,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
-      "fieldScope": "const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} }); (packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts:131)",
       "id": "8ec28299faf0b3b10345",
       "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
@@ -253,7 +228,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
-      "fieldScope": "const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} }); (packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts:190)",
       "id": "90c78b432928f44ab4df",
       "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
@@ -263,7 +237,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
-      "fieldScope": "const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} }); (packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts:350)",
       "id": "93b43b7da18bb187d188",
       "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
@@ -273,7 +246,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
-      "fieldScope": "const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} }); (packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts:248)",
       "id": "9dd18d4839cd65b5e844",
       "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
@@ -283,7 +255,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
-      "fieldScope": "protocolVersion: 1, (packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts:106)",
       "id": "b3b410c417bf7cbaa377",
       "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
@@ -293,7 +264,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
-      "fieldScope": "const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} }); (packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts:89)",
       "id": "ccf9d88fe445cd990450",
       "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
@@ -303,7 +273,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
-      "fieldScope": "const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} }); (packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts:423)",
       "id": "d361dca3674eeb0bd31f",
       "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
@@ -313,7 +282,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
-      "fieldScope": "const fixture = createFixture({ protocolVersion: 2, agentCapabilities: {} }); (packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts:458)",
       "id": "f55e879c93459d0c2545",
       "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
@@ -323,7 +291,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
-      "fieldScope": "PROTOCOL_VERSION, (packages/agent/runtime/src/acp/dsh-acp-application-client.ts:3)",
       "id": "3f3d3744112361ff4c18",
       "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
@@ -333,7 +300,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
-      "fieldScope": "protocolVersion: PROTOCOL_VERSION, (packages/agent/runtime/src/acp/dsh-acp-application-client.ts:119)",
       "id": "a674513201a572c5692f",
       "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
@@ -343,7 +309,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
-      "fieldScope": "clientInfo: { name: 'OpenNeko', version: 'development' }, (packages/agent/runtime/src/acp/dsh-acp-application-client.ts:121)",
       "id": "a8707985095300695fcf",
       "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
@@ -353,7 +318,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "NewAPI OpenAI-compatible language API",
-      "fieldScope": "NewAPI language adapter configured base endpoint suffix append",
       "id": "0cb669bf6eda2ff5f17f",
       "isolationRule": "The route suffix is consumed only by the explicitly selected NewAPI adapter and cannot select an OpenNeko contract, persisted schema, migration, or fallback provider.",
       "normativeSource": "https://docs.newapi.pro/en/api/openai-chat/",
@@ -363,7 +327,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "NewAPI OpenAI-compatible language API",
-      "fieldScope": "NewAPI language adapter configured base endpoint suffix check",
       "id": "affec987964f687dba6d",
       "isolationRule": "The route suffix is consumed only by the explicitly selected NewAPI adapter and cannot select an OpenNeko contract, persisted schema, migration, or fallback provider.",
       "normativeSource": "https://docs.newapi.pro/en/api/openai-chat/",
@@ -373,7 +336,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "NewAPI chat-image adapter external ImageModelV3 specification value",
       "id": "0d3c2d52df152d5a926d",
       "isolationRule": "The literal is required by the external AI SDK interface and cannot select an OpenNeko schema, persistence generation, migration, or alternate internal implementation.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/image-generation",
@@ -383,7 +345,6 @@
     {
       "category": "versioned-identifier",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "NewAPI chat-image adapter ImageModelV3 interface import",
       "id": "4d88762712712a1febb2",
       "isolationRule": "The identifier is required by the installed AI SDK provider interface and remains inside the selected provider adapter; it cannot identify OpenNeko data or dispatch an internal contract.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/image-generation",
@@ -393,7 +354,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "OpenAI-compatible Chat Completions API",
-      "fieldScope": "NewAPI chat-image adapter request endpoint",
       "id": "6d1250ae87df43afba40",
       "isolationRule": "The route is emitted only by the explicitly selected NewAPI adapter and never becomes an OpenNeko contract, persisted identity, or fallback path.",
       "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
@@ -403,7 +363,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "OpenAI-compatible Images API",
-      "fieldScope": "NewAPI chat-image adapter diagnostic naming the standard image endpoint",
       "id": "7f49bb2b475199bd270e",
       "isolationRule": "The route appears only in a provider-bound diagnostic and cannot dispatch an OpenNeko schema, migration, component state, or alternate internal implementation.",
       "normativeSource": "https://platform.openai.com/docs/api-reference/images",
@@ -413,7 +372,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "NewAPI chat-image adapter specificationVersion implementation field",
       "id": "b908dc39d9f32cb0988c",
       "isolationRule": "The field satisfies the external ImageModelV3 interface only and is never persisted or projected into an OpenNeko contract, component, cache, or migration.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/image-generation",
@@ -423,7 +381,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "OpenAI-compatible Images API",
-      "fieldScope": "NewAPI image adapter test assertion for its outbound generations endpoint",
       "id": "b8710de1779a9ed48919",
       "isolationRule": "The test observes only the selected external adapter request URL and cannot define an OpenNeko contract, persisted identity, migration, or fallback.",
       "normativeSource": "https://platform.openai.com/docs/api-reference/images",
@@ -433,7 +390,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "NewAPI image adapter specificationVersion implementation field",
       "id": "53b107175c99089ca41e",
       "isolationRule": "The field satisfies the external ImageModelV3 interface only and is never persisted or projected into an OpenNeko contract, component, cache, or migration.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/image-generation",
@@ -443,7 +399,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "OpenAI-compatible Images API",
-      "fieldScope": "NewAPI image adapter edit request endpoint",
       "id": "72bb8393ce3f03ebfcd4",
       "isolationRule": "The route is emitted only by the explicitly selected NewAPI adapter and never becomes an OpenNeko contract, persisted identity, or fallback path.",
       "normativeSource": "https://platform.openai.com/docs/api-reference/images",
@@ -453,7 +408,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "OpenAI-compatible Images API",
-      "fieldScope": "NewAPI image adapter text-to-image request endpoint",
       "id": "7c4119862161168ef864",
       "isolationRule": "The route is emitted only by the explicitly selected NewAPI adapter and never becomes an OpenNeko contract, persisted identity, or fallback path.",
       "normativeSource": "https://platform.openai.com/docs/api-reference/images",
@@ -463,7 +417,6 @@
     {
       "category": "versioned-identifier",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "NewAPI image adapter ImageModelV3 interface import",
       "id": "d9262bf18a68d8701fe2",
       "isolationRule": "The identifier is required by the installed AI SDK provider interface and remains inside the selected provider adapter; it cannot identify OpenNeko data or dispatch an internal contract.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/image-generation",
@@ -473,7 +426,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "NewAPI image adapter external ImageModelV3 specification value",
       "id": "ecfc57d232270dc59eb7",
       "isolationRule": "The literal is required by the external AI SDK interface and cannot select an OpenNeko schema, persistence generation, migration, or alternate internal implementation.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/image-generation",
@@ -483,7 +435,6 @@
     {
       "category": "versioned-identifier",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "NewAPI speech adapter SpeechModelV3 interface imports",
       "id": "7a03bd2f6c31ee8590ce",
       "isolationRule": "The identifiers are required by the installed AI SDK provider interface and remain inside the selected provider adapter; they cannot identify OpenNeko data or dispatch an internal contract.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/speech",
@@ -493,7 +444,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "NewAPI speech adapter specificationVersion implementation field",
       "id": "934431cf2cd51e82b958",
       "isolationRule": "The field satisfies the external SpeechModelV3 interface only and is never persisted or projected into an OpenNeko contract, component, cache, or migration.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/speech",
@@ -503,7 +453,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "OpenAI-compatible Audio API",
-      "fieldScope": "NewAPI speech adapter request endpoint",
       "id": "bc0dfab6b536fc31fc9e",
       "isolationRule": "The route is emitted only by the explicitly selected NewAPI adapter and never becomes an OpenNeko contract, persisted identity, or fallback path.",
       "normativeSource": "https://platform.openai.com/docs/api-reference/audio/createSpeech",
@@ -513,7 +462,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "NewAPI speech adapter external SpeechModelV3 specification value",
       "id": "d3e1da6f74fe4cec2c0b",
       "isolationRule": "The literal is required by the external AI SDK interface and cannot select an OpenNeko schema, persistence generation, migration, or alternate internal implementation.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/speech",
@@ -523,7 +471,6 @@
     {
       "category": "versioned-identifier",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "Shared provider type import for ImageModelV3",
       "id": "0e6f7e251ad531201e56",
       "isolationRule": "The identifier types the selected external provider result only and cannot identify OpenNeko data, component state, migrations, or internal routing.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/image-generation",
@@ -533,7 +480,6 @@
     {
       "category": "versioned-identifier",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "Shared provider type import for LanguageModelV3",
       "id": "7bbb2a835192b8c4b67d",
       "isolationRule": "The identifier types the selected external provider result only and cannot identify OpenNeko data, component state, migrations, or internal routing.",
       "normativeSource": "https://ai-sdk.dev/docs/reference/ai-sdk-core/language-model-v3",
@@ -543,7 +489,6 @@
     {
       "category": "versioned-identifier",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "Shared provider type import for Experimental_VideoModelV3",
       "id": "af9b1d04d8fe16c9c8cb",
       "isolationRule": "The identifier types the selected external provider result only and cannot identify OpenNeko data, component state, migrations, or internal routing.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
@@ -553,7 +498,6 @@
     {
       "category": "versioned-identifier",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "Shared provider type import for SpeechModelV3",
       "id": "fa923706ecbf3021234c",
       "isolationRule": "The identifier types the selected external provider result only and cannot identify OpenNeko data, component state, migrations, or internal routing.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/speech",
@@ -562,158 +506,7 @@
     },
     {
       "category": "versioned-path-or-key",
-      "externalOwner": "Alibaba Cloud Model Studio Wanx image model catalog",
-      "fieldScope": "DashScope image adapter default model identifier for task submission",
-      "id": "998b1eda2a1c8b3e99af",
-      "isolationRule": "The value identifies the explicitly selected external model for one provider request and cannot select an OpenNeko contract, migration, component state, or fallback provider.",
-      "normativeSource": "https://help.aliyun.com/zh/model-studio/text-to-image-api-reference",
-      "path": "packages/generation/domain/src/media/adapters/dashscope-media-adapter.ts",
-      "token": "-v1"
-    },
-    {
-      "category": "versioned-path-or-key",
-      "externalOwner": "Alibaba Cloud Model Studio Wanx image model catalog",
-      "fieldScope": "DashScope image adapter default model identifier for request submission",
-      "id": "01df8c39f3509aedf615",
-      "isolationRule": "The value identifies the explicitly selected external model for one provider request and cannot select an OpenNeko contract, migration, component state, or fallback provider.",
-      "normativeSource": "https://help.aliyun.com/zh/model-studio/text-to-image-api-reference",
-      "path": "packages/generation/domain/src/media/adapters/dashscope-media-adapter.ts",
-      "token": "-v1"
-    },
-    {
-      "category": "versioned-path-or-key",
-      "externalOwner": "Luma Dream Machine API",
-      "fieldScope": "Luma generation cancellation endpoint",
-      "id": "ccec864ca32891b60da9",
-      "isolationRule": "The route remains inside the selected Luma adapter and failure rejects only that provider task without internal fallback or schema dispatch.",
-      "normativeSource": "https://docs.lumalabs.ai/docs/video-generation",
-      "path": "packages/generation/domain/src/media/adapters/luma-media-adapter.ts",
-      "token": "/v1/"
-    },
-    {
-      "category": "versioned-path-or-key",
-      "externalOwner": "Luma Dream Machine API",
-      "fieldScope": "Luma generation status endpoint",
-      "id": "c32bbde9b51d1c9c2933",
-      "isolationRule": "The route remains inside the selected Luma adapter and failure rejects only that provider task without internal fallback or schema dispatch.",
-      "normativeSource": "https://docs.lumalabs.ai/docs/video-generation",
-      "path": "packages/generation/domain/src/media/adapters/luma-media-adapter.ts",
-      "token": "/v1/"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Luma Dream Machine API response contract",
-      "fieldScope": "Provider response version metadata received from Luma only",
-      "id": "12552a9ef9ae4f70daf4",
-      "isolationRule": "The optional value mirrors one external provider response and is not persisted as OpenNeko schema identity or used for migration, component validity, or alternate routing.",
-      "normativeSource": "https://docs.lumalabs.ai/docs/video-generation",
-      "path": "packages/generation/domain/src/media/adapters/luma-media-adapter.ts",
-      "token": "version"
-    },
-    {
-      "category": "versioned-path-or-key",
-      "externalOwner": "Luma Dream Machine API",
-      "fieldScope": "Luma generation submission endpoint",
-      "id": "4fc90223893e5b852709",
-      "isolationRule": "The route remains inside the selected Luma adapter and cannot dispatch internal contracts, migrations, component state, or another provider.",
-      "normativeSource": "https://docs.lumalabs.ai/docs/video-generation",
-      "path": "packages/generation/domain/src/media/adapters/luma-media-adapter.ts",
-      "token": "/v1/"
-    },
-    {
-      "category": "versioned-path-or-key",
-      "externalOwner": "Runway API",
-      "fieldScope": "Runway video generation endpoint",
-      "id": "378127c0aaa45b6ddf9c",
-      "isolationRule": "The route remains inside the selected Runway adapter and cannot dispatch internal contracts, migrations, component state, or another provider.",
-      "normativeSource": "https://docs.dev.runwayml.com/api/",
-      "path": "packages/generation/domain/src/media/adapters/runway-media-adapter.ts",
-      "token": "/v1/"
-    },
-    {
-      "category": "versioned-path-or-key",
-      "externalOwner": "Runway API",
-      "fieldScope": "Runway task status endpoint",
-      "id": "e1b68aee005fbac30abd",
-      "isolationRule": "The route remains inside the selected Runway adapter and failure stays task-local without internal schema dispatch or provider fallback.",
-      "normativeSource": "https://docs.dev.runwayml.com/api/",
-      "path": "packages/generation/domain/src/media/adapters/runway-media-adapter.ts",
-      "token": "/v1/"
-    },
-    {
-      "category": "versioned-path-or-key",
-      "externalOwner": "Runway API",
-      "fieldScope": "Runway task cancellation endpoint",
-      "id": "8d5a3d3e690d1cad95d3",
-      "isolationRule": "The route remains inside the selected Runway adapter and failure stays task-local without internal schema dispatch or provider fallback.",
-      "normativeSource": "https://docs.dev.runwayml.com/api/",
-      "path": "packages/generation/domain/src/media/adapters/runway-media-adapter.ts",
-      "token": "/v1/"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Runway API",
-      "fieldScope": "Runway-Version request header value",
-      "id": "ae2e1f0a244d4ed56570",
-      "isolationRule": "The value is emitted only to the selected Runway API request and cannot select an OpenNeko contract, migration, component state, or fallback provider.",
-      "normativeSource": "https://docs.dev.runwayml.com/api/",
-      "path": "packages/generation/domain/src/media/adapters/runway-media-adapter.ts",
-      "token": "apiVersion"
-    },
-    {
-      "category": "versioned-path-or-key",
-      "externalOwner": "Suno music generation model catalog",
-      "fieldScope": "Suno chirp-v3-5 provider model identifier",
-      "id": "260b5b29394515708e08",
-      "isolationRule": "The value identifies the explicitly selected external model only and cannot select an OpenNeko contract, persisted schema, migration, component state, or fallback provider.",
-      "normativeSource": "https://docs.sunoapi.org/suno-api/generate-music",
-      "path": "packages/generation/domain/src/media/adapters/suno-media-adapter.ts",
-      "token": "-v3-"
-    },
-    {
-      "category": "versioned-path-or-key",
-      "externalOwner": "Suno music generation model catalog",
-      "fieldScope": "Suno chirp-v4 provider model identifier",
-      "id": "6f5097b98e7556d57b33",
-      "isolationRule": "The value identifies the explicitly selected external model only and cannot select an OpenNeko contract, persisted schema, migration, component state, or fallback provider.",
-      "normativeSource": "https://docs.sunoapi.org/suno-api/generate-music",
-      "path": "packages/generation/domain/src/media/adapters/suno-media-adapter.ts",
-      "token": "-v4"
-    },
-    {
-      "category": "versioned-path-or-key",
-      "externalOwner": "Vidu API",
-      "fieldScope": "Vidu generation submission base URL",
-      "id": "51c508f15adef38b3380",
-      "isolationRule": "The base URL remains inside the selected Vidu adapter and cannot dispatch internal contracts, migrations, component state, or another provider.",
-      "normativeSource": "https://platform.vidu.com/docs/en/api",
-      "path": "packages/generation/domain/src/media/adapters/vidu-media-adapter.ts",
-      "token": "/v1"
-    },
-    {
-      "category": "versioned-path-or-key",
-      "externalOwner": "Vidu API",
-      "fieldScope": "Vidu generation cancellation base URL",
-      "id": "7048ec6d4ff10aa0ee0c",
-      "isolationRule": "The base URL remains inside the selected Vidu adapter and failure stays task-local without internal schema dispatch or provider fallback.",
-      "normativeSource": "https://platform.vidu.com/docs/en/api",
-      "path": "packages/generation/domain/src/media/adapters/vidu-media-adapter.ts",
-      "token": "/v1"
-    },
-    {
-      "category": "versioned-path-or-key",
-      "externalOwner": "Vidu API",
-      "fieldScope": "Vidu generation status base URL",
-      "id": "8c5a81f9d02dc551a11c",
-      "isolationRule": "The base URL remains inside the selected Vidu adapter and failure stays task-local without internal schema dispatch or provider fallback.",
-      "normativeSource": "https://platform.vidu.com/docs/en/api",
-      "path": "packages/generation/domain/src/media/adapters/vidu-media-adapter.ts",
-      "token": "/v1"
-    },
-    {
-      "category": "versioned-path-or-key",
       "externalOwner": "New API OpenAI-compatible protocol",
-      "fieldScope": "Built-in Neko Gateway provider base path only",
       "id": "60201a6f0ee72750b5ac",
       "isolationRule": "The route is passed only to the selected external gateway adapter and cannot select an OpenNeko contract, persisted shape, migration, component generation, or alternate provider.",
       "normativeSource": "https://docs.newapi.pro/en/api/",
@@ -722,18 +515,7 @@
     },
     {
       "category": "versioned-path-or-key",
-      "externalOwner": "Suno music generation model catalog",
-      "fieldScope": "Built-in gateway music model catalog name only",
-      "id": "6beebf2b68732ba9d5d0",
-      "isolationRule": "The value identifies the selected external music model only and cannot dispatch an OpenNeko contract, persisted schema, migration, component state, or alternate provider.",
-      "normativeSource": "https://docs.sunoapi.org/suno-api/generate-music",
-      "path": "packages/host/src/settings/default-config.ts",
-      "token": "-v4"
-    },
-    {
-      "category": "versioned-path-or-key",
       "externalOwner": "New API OpenAI-compatible protocol",
-      "fieldScope": "User-configurable New API provider base path only",
       "id": "9003a7ab7d2131ad2680",
       "isolationRule": "The route is passed only to the explicitly selected external gateway adapter and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "normativeSource": "https://docs.newapi.pro/en/api/",
@@ -743,7 +525,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg command-line tools",
-      "fieldScope": "MediaRuntimeQualification FFmpeg executable release reported by the external binary",
       "id": "5af547834c611b5c3f99",
       "isolationRule": "The value records the selected external FFmpeg binary release for runtime qualification only; it never selects an OpenNeko contract, component shape, persistence schema, migration, or alternate media implementation.",
       "normativeSource": "https://ffmpeg.org/ffmpeg.html",
@@ -753,7 +534,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg ffprobe command-line tool",
-      "fieldScope": "MediaRuntimeQualification ffprobe executable release reported by the external binary",
       "id": "b150a5b378eb91d03b49",
       "isolationRule": "The value records the selected external ffprobe binary release for runtime qualification only; it never selects an OpenNeko contract, component shape, persistence schema, migration, or alternate media implementation.",
       "normativeSource": "https://ffmpeg.org/ffprobe.html",
@@ -763,7 +543,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg ffprobe command-line tool",
-      "fieldScope": "Verified media descriptor test expectation for the packaged ffprobe executable release",
       "id": "18db4b1fe829eb0b8b89",
       "isolationRule": "The fixture verifies one packaged external binary and cannot dispatch an OpenNeko schema, migration, component state, or fallback path; mismatch rejects that runtime bundle.",
       "normativeSource": "https://ffmpeg.org/ffprobe.html",
@@ -773,7 +552,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg command-line tools",
-      "fieldScope": "Verified media descriptor test expectation for the packaged FFmpeg executable release",
       "id": "bcc306ccf959e0db790e",
       "isolationRule": "The fixture verifies one packaged external binary and cannot dispatch an OpenNeko schema, migration, component state, or fallback path; mismatch rejects that runtime bundle.",
       "normativeSource": "https://ffmpeg.org/ffmpeg.html",
@@ -783,7 +561,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg command-line tools",
-      "fieldScope": "Strict media runtime descriptor output copy of the external FFmpeg release",
       "id": "0ca762e8c8a52868e4e0",
       "isolationRule": "The parsed value remains external binary qualification metadata and cannot dispatch internal contracts, migrations, component state, or fallback paths.",
       "normativeSource": "https://ffmpeg.org/ffmpeg.html",
@@ -793,7 +570,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg ffprobe command-line tool",
-      "fieldScope": "Strict media runtime descriptor parser read of the external ffprobe release",
       "id": "4cf0fbcbdba23415c732",
       "isolationRule": "The parser validates external binary metadata only; failure rejects the exact media runtime bundle and never selects an OpenNeko migration or alternate implementation.",
       "normativeSource": "https://ffmpeg.org/ffprobe.html",
@@ -803,7 +579,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg command-line tools",
-      "fieldScope": "MediaRuntimeDescriptor expected packaged FFmpeg executable release field",
       "id": "98cce1a86ebac0e38673",
       "isolationRule": "The field qualifies one packaged external binary and never identifies OpenNeko data generations, contracts, components, or migrations.",
       "normativeSource": "https://ffmpeg.org/ffmpeg.html",
@@ -813,7 +588,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg command-line tools",
-      "fieldScope": "Strict media runtime descriptor parser read of the external FFmpeg release",
       "id": "d4b875b6351fa68a695c",
       "isolationRule": "The parser validates external binary metadata only; failure rejects the exact media runtime bundle and never selects an OpenNeko migration or alternate implementation.",
       "normativeSource": "https://ffmpeg.org/ffmpeg.html",
@@ -823,7 +597,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg ffprobe command-line tool",
-      "fieldScope": "MediaRuntimeDescriptor expected packaged ffprobe executable release field",
       "id": "f1ddab72b1665cfbeeec",
       "isolationRule": "The field qualifies one packaged external binary and never identifies OpenNeko data generations, contracts, components, or migrations.",
       "normativeSource": "https://ffmpeg.org/ffprobe.html",
@@ -833,7 +606,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg ffprobe command-line tool",
-      "fieldScope": "Strict media runtime descriptor output copy of the external ffprobe release",
       "id": "fe0493a877266201d807",
       "isolationRule": "The parsed value remains external binary qualification metadata and cannot dispatch internal contracts, migrations, component state, or fallback paths.",
       "normativeSource": "https://ffmpeg.org/ffprobe.html",
@@ -843,7 +615,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg ffprobe command-line tool",
-      "fieldScope": "Node media runtime qualification fixture for external ffprobe command output",
       "id": "3af9018eac49cdf3fd64",
       "isolationRule": "The fixture represents external command output only and does not select an OpenNeko schema, migration, component state, or media path.",
       "normativeSource": "https://ffmpeg.org/ffprobe.html",
@@ -853,7 +624,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg command-line tools",
-      "fieldScope": "Node media runtime qualification fixture for external FFmpeg command output",
       "id": "a6aba14370389e2e7f36",
       "isolationRule": "The fixture represents external command output only and does not select an OpenNeko schema, migration, component state, or media path.",
       "normativeSource": "https://ffmpeg.org/ffmpeg.html",
@@ -863,7 +633,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg ffprobe command-line tool",
-      "fieldScope": "Node media runtime capture of the external ffprobe version command result",
       "id": "3ad0c5c5df4dffdc28e2",
       "isolationRule": "The value is process-local external qualification output and never acts as persisted component state, internal data generation, migration key, or alternate route.",
       "normativeSource": "https://ffmpeg.org/ffprobe.html",
@@ -873,7 +642,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg command-line tools",
-      "fieldScope": "MediaRuntimeQualification output property populated from FFmpeg -version",
       "id": "58de99d62b1cd7878510",
       "isolationRule": "The value reports the selected external executable release and cannot dispatch OpenNeko contracts, migrations, component state, caches, or alternate implementations.",
       "normativeSource": "https://ffmpeg.org/ffmpeg.html",
@@ -883,7 +651,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg command-line tools",
-      "fieldScope": "Node media runtime capture of the external FFmpeg version command result",
       "id": "d03e74f0f6c0eab417df",
       "isolationRule": "The value is process-local external qualification output and never acts as persisted component state, internal data generation, migration key, or alternate route.",
       "normativeSource": "https://ffmpeg.org/ffmpeg.html",
@@ -893,7 +660,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg ffprobe command-line tool",
-      "fieldScope": "MediaRuntimeQualification output property populated from ffprobe -version",
       "id": "ddf4f341b7342f4bc941",
       "isolationRule": "The value reports the selected external executable release and cannot dispatch OpenNeko contracts, migrations, component state, caches, or alternate implementations.",
       "normativeSource": "https://ffmpeg.org/ffprobe.html",
@@ -901,59 +667,8 @@
       "token": "ffprobeVersion"
     },
     {
-      "category": "versioned-path-or-key",
-      "externalOwner": "OpenAI-compatible Chat Completions API",
-      "fieldScope": "OpenAI-compatible Judge provider endpoint fixture",
-      "id": "48e989deab9c6e8d2a47",
-      "isolationRule": "The versioned route is confined to the explicitly configured external Judge provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, provider fallback, or component state.",
-      "normativeSource": "https://platform.openai.com/docs/api-reference/chat/create",
-      "path": "scripts/agent-eval/judge/provider-adapter.test.mjs",
-      "token": "/v1"
-    },
-    {
-      "category": "versioned-path-or-key",
-      "externalOwner": "OpenAI-compatible Chat Completions API",
-      "fieldScope": "OpenAI-compatible Judge provider endpoint fixture",
-      "id": "7ed98c94e7b560a3bffd",
-      "isolationRule": "The versioned route is confined to the explicitly configured external Judge provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, provider fallback, or component state.",
-      "normativeSource": "https://platform.openai.com/docs/api-reference/chat/create",
-      "path": "scripts/agent-eval/judge/provider-adapter.test.mjs",
-      "token": "/v1/"
-    },
-    {
-      "category": "versioned-path-or-key",
-      "externalOwner": "OpenAI-compatible Chat Completions API",
-      "fieldScope": "OpenAI-compatible Judge provider endpoint fixture",
-      "id": "b1eafc66bda4df4678b4",
-      "isolationRule": "The versioned route is confined to the explicitly configured external Judge provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, provider fallback, or component state.",
-      "normativeSource": "https://platform.openai.com/docs/api-reference/chat/create",
-      "path": "scripts/agent-eval/judge/provider-adapter.test.mjs",
-      "token": "/v1"
-    },
-    {
-      "category": "versioned-path-or-key",
-      "externalOwner": "OpenAI-compatible Chat Completions API",
-      "fieldScope": "OpenAI-compatible Judge provider endpoint fixture",
-      "id": "c541f1daea179c62c0c1",
-      "isolationRule": "The versioned route is confined to the explicitly configured external Judge provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, provider fallback, or component state.",
-      "normativeSource": "https://platform.openai.com/docs/api-reference/chat/create",
-      "path": "scripts/agent-eval/judge/provider-adapter.test.mjs",
-      "token": "/v1"
-    },
-    {
-      "category": "versioned-path-or-key",
-      "externalOwner": "Configured DeepSeek-compatible model provider",
-      "fieldScope": "Agent Evaluation explicit chat model identity",
-      "id": "64f6226d7f5103f7193b",
-      "isolationRule": "The value preserves the exact externally configured model identity for one Evaluation profile and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://api-docs.deepseek.com/api/create-chat-completion",
-      "path": "scripts/agent-eval/suites/agent-runtime/creative-media-workflow/suite.json",
-      "token": "-v4-"
-    },
-    {
       "category": "internal-version-field",
       "externalOwner": "npm package and application release metadata",
-      "fieldScope": "macOS release package metadata projection and test",
       "id": "2b7c93741f213dd8d5d6",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
@@ -963,7 +678,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "npm package and application release metadata",
-      "fieldScope": "macOS release package metadata projection and test",
       "id": "538b3d8415278e11c2be",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
@@ -973,7 +687,6 @@
     {
       "category": "data-generation-alias",
       "externalOwner": "SOURCE_DATE_EPOCH reproducible-build convention",
-      "fieldScope": "Contained provenance for the timestamp supplied to the pinned external Rust build",
       "id": "9757fa86654845819273",
       "isolationRule": "The value records one external compiler input in artifact provenance; it cannot select an OpenNeko contract, schema, migration, provider fallback, or alternate runtime path.",
       "normativeSource": "https://reproducible-builds.org/docs/source-date-epoch/",
@@ -983,7 +696,6 @@
     {
       "category": "data-generation-alias",
       "externalOwner": "SOURCE_DATE_EPOCH reproducible-build convention",
-      "fieldScope": "First-party Node runtime receipt for the external Rust build timestamp",
       "id": "b956b2dc9e546c247d0c",
       "isolationRule": "The value preserves one external build input for provenance validation; it cannot select an OpenNeko contract, schema, migration, provider fallback, or alternate runtime path.",
       "normativeSource": "https://reproducible-builds.org/docs/source-date-epoch/",
@@ -993,7 +705,6 @@
     {
       "category": "data-generation-alias",
       "externalOwner": "SOURCE_DATE_EPOCH reproducible-build convention",
-      "fieldScope": "Environment variable supplied to the pinned external Rust compiler",
       "id": "dbef8870dcad02a133a2",
       "isolationRule": "The variable controls external build timestamps only; it cannot select an OpenNeko contract, schema, migration, provider fallback, or alternate runtime path.",
       "normativeSource": "https://reproducible-builds.org/docs/source-date-epoch/",
@@ -1003,7 +714,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "SPDX specification",
-      "fieldScope": "Generated SPDX 2.3 candidate document format",
       "id": "15ba3e8dbedee598c18d",
       "isolationRule": "The field identifies the external SPDX document format and cannot select an OpenNeko contract, schema, migration, provider fallback, or runtime path.",
       "normativeSource": "https://spdx.github.io/spdx-spec/v2.3/",
@@ -1013,7 +723,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "crates.io Registry Web API",
-      "fieldScope": "SPDX package download location for an exact locked Cargo crate",
       "id": "d12724a6719ef615a02b",
       "isolationRule": "The v1 path is owned by the external crates.io download API and is emitted only as SPDX provenance; it cannot dispatch an OpenNeko contract, schema, migration, provider fallback, or runtime path.",
       "normativeSource": "https://doc.rust-lang.org/cargo/reference/registry-web-api.html",
@@ -1023,7 +732,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Cua Driver GitHub Release",
-      "fieldScope": "Pinned upstream Cua Driver release tag",
       "id": "02c31124368c2adf2f02",
       "isolationRule": "The tag identifies one third-party Cua Driver release input; it cannot select an OpenNeko contract, schema, migration, provider fallback, or alternate runtime path.",
       "normativeSource": "https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.19.2",
@@ -1033,7 +741,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Cua Driver GitHub Release",
-      "fieldScope": "Pinned upstream Cua Driver release-manifest URL",
       "id": "17e5f59e81b084b8f9eb",
       "isolationRule": "The URL downloads one exact third-party release manifest for supply-chain verification; it cannot dispatch an OpenNeko contract, schema, migration, provider fallback, or alternate runtime path.",
       "normativeSource": "https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.19.2",
@@ -1043,7 +750,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Cua Driver GitHub Release",
-      "fieldScope": "Pinned upstream macOS x64 Cua Driver asset URL",
       "id": "603b5df05a260cc229d1",
       "isolationRule": "The URL identifies exact third-party bytes for one platform input; digest mismatch rejects the artifact and cannot dispatch an OpenNeko contract, migration, provider fallback, or alternate runtime path.",
       "normativeSource": "https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.19.2",
@@ -1053,7 +759,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Cua Driver GitHub Release",
-      "fieldScope": "Pinned upstream macOS arm64 Cua Driver asset URL",
       "id": "633b290421e3ed6821c7",
       "isolationRule": "The URL identifies exact third-party bytes for one platform input; digest mismatch rejects the artifact and cannot dispatch an OpenNeko contract, migration, provider fallback, or alternate runtime path.",
       "normativeSource": "https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.19.2",
@@ -1063,7 +768,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Cua Driver GitHub Release",
-      "fieldScope": "Pinned upstream Windows arm64 Cua Driver asset URL",
       "id": "79f224b51e64f6149545",
       "isolationRule": "The URL identifies exact third-party bytes for one platform input; digest mismatch rejects the artifact and cannot dispatch an OpenNeko contract, migration, provider fallback, or alternate runtime path.",
       "normativeSource": "https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.19.2",
@@ -1073,7 +777,6 @@
     {
       "category": "data-generation-alias",
       "externalOwner": "SOURCE_DATE_EPOCH reproducible-build convention",
-      "fieldScope": "Pinned external build timestamp in the Cua Node runtime input lock",
       "id": "82c548b952f4c943c958",
       "isolationRule": "The value is an immutable external compiler input and cannot identify or dispatch an OpenNeko contract, schema, migration, provider, or alternate runtime path.",
       "normativeSource": "https://reproducible-builds.org/docs/source-date-epoch/",
@@ -1083,7 +786,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Cua Driver GitHub Release",
-      "fieldScope": "Pinned upstream Linux x64 Cua Driver asset URL",
       "id": "8aa1f0674f775247cb8a",
       "isolationRule": "The URL identifies exact third-party bytes for one platform input; digest mismatch rejects the artifact and cannot dispatch an OpenNeko contract, migration, provider fallback, or alternate runtime path.",
       "normativeSource": "https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.19.2",
@@ -1093,7 +795,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Cua Driver GitHub Release",
-      "fieldScope": "Pinned upstream Windows x64 Cua Driver asset URL",
       "id": "c445653046327b1f0607",
       "isolationRule": "The URL identifies exact third-party bytes for one platform input; digest mismatch rejects the artifact and cannot dispatch an OpenNeko contract, migration, provider fallback, or alternate runtime path.",
       "normativeSource": "https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.19.2",
@@ -1103,7 +804,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Cua Driver GitHub Release",
-      "fieldScope": "Pinned upstream Linux arm64 Cua Driver asset URL",
       "id": "dadb1303eeaaf603c5d5",
       "isolationRule": "The URL identifies exact third-party bytes for one platform input; digest mismatch rejects the artifact and cannot dispatch an OpenNeko contract, migration, provider fallback, or alternate runtime path.",
       "normativeSource": "https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.19.2",
@@ -1113,7 +813,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Node.js runtime",
-      "fieldScope": "Node.js external runtime release parsing and policy verification",
       "id": "840ac262db73b4a40d7b",
       "isolationRule": "The value qualifies the executing external Node.js runtime only and cannot identify an OpenNeko contract, persistence shape, migration, component generation, or alternate runtime path.",
       "normativeSource": "https://nodejs.org/api/process.html#processversions",
@@ -1122,18 +821,7 @@
     },
     {
       "category": "internal-version-field",
-      "externalOwner": "Khronos glTF 2.0 specification",
-      "fieldScope": "Desktop qualification glTF asset format declaration",
-      "id": "c31ba6bcbffcc9859633",
-      "isolationRule": "The field declares the external glTF file format only and cannot dispatch an OpenNeko contract, component shape, persistence schema, migration, or alternate loader.",
-      "normativeSource": "https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html",
-      "path": "scripts/desktop-functional/media-fixtures.mjs",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
       "externalOwner": "ACP and DeepSeek Harness package manifests",
-      "fieldScope": "for (const [packageName, expectedVersion] of Object.entries(expectedVersions)) { (scripts/dsh-q0/src/qualification-core.mjs:11)",
       "id": "8a111af7eb12ad7c1ebf",
       "isolationRule": "The value qualifies exact external ACP/DSH package releases in the non-product Q0 fixture and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json",
@@ -1143,7 +831,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "ACP and DeepSeek Harness package manifests",
-      "fieldScope": "Generated package.json fixture for exact external ACP/DSH release qualification",
       "id": "c691473e210212e1a254",
       "isolationRule": "The field models the npm package manifest release consumed only by the non-product Q0 pin check and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json",
@@ -1153,7 +840,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
-      "fieldScope": "protocolVersion: 1, (scripts/dsh-q0/src/qualification-core.test.mjs:28)",
       "id": "7d2094e242d196177ede",
       "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
@@ -1163,7 +849,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
-      "fieldScope": "protocolVersion: PROTOCOL_VERSION, (scripts/dsh-q0/src/qualify.mjs:283)",
       "id": "092dd64b1f01710ffca4",
       "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
@@ -1173,7 +858,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
-      "fieldScope": "import { ClientSideConnection, PROTOCOL_VERSION, ndJsonStream } from '@agentclientprotocol/sdk'; (scripts/dsh-q0/src/qualify.mjs:8)",
       "id": "268635c1dd3b5e230892",
       "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
@@ -1183,7 +867,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
-      "fieldScope": "protocolVersion: third.initializeResponse.protocolVersion, (scripts/dsh-q0/src/qualify.mjs:538)",
       "id": "8b49059bd2633ce5040a",
       "isolationRule": "The value is required by the external ACP initialization negotiation or implementation identity shape and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
@@ -1193,7 +876,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg ffprobe command-line tool",
-      "fieldScope": "Packaged ffprobe executable release qualification",
       "id": "2d3f4cc2fb266a38d785",
       "isolationRule": "The value is external binary qualification metadata only; mismatch rejects the exact media runtime bundle and cannot select an OpenNeko contract, migration, component state, or fallback implementation.",
       "normativeSource": "https://ffmpeg.org/ffprobe.html",
@@ -1203,7 +885,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg command-line tool",
-      "fieldScope": "Packaged FFmpeg executable release qualification",
       "id": "51131164bd98ac102ce2",
       "isolationRule": "The value is external binary qualification metadata only; mismatch rejects the exact media runtime bundle and cannot select an OpenNeko contract, migration, component state, or fallback implementation.",
       "normativeSource": "https://ffmpeg.org/ffmpeg.html",
@@ -1213,7 +894,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg ffprobe command-line tool",
-      "fieldScope": "Packaged ffprobe executable release qualification",
       "id": "5ae33486216e2bab3a2a",
       "isolationRule": "The value is external binary qualification metadata only; mismatch rejects the exact media runtime bundle and cannot select an OpenNeko contract, migration, component state, or fallback implementation.",
       "normativeSource": "https://ffmpeg.org/ffprobe.html",
@@ -1223,7 +903,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg command-line tool",
-      "fieldScope": "Packaged FFmpeg executable release qualification",
       "id": "89a3c7963435b7762ec0",
       "isolationRule": "The value is external binary qualification metadata only; mismatch rejects the exact media runtime bundle and cannot select an OpenNeko contract, migration, component state, or fallback implementation.",
       "normativeSource": "https://ffmpeg.org/ffmpeg.html",
@@ -1233,7 +912,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg ffprobe command-line tool",
-      "fieldScope": "Packaged ffprobe executable release qualification",
       "id": "8a80d23fae1bae6ac102",
       "isolationRule": "The value is external binary qualification metadata only; mismatch rejects the exact media runtime bundle and cannot select an OpenNeko contract, migration, component state, or fallback implementation.",
       "normativeSource": "https://ffmpeg.org/ffprobe.html",
@@ -1243,7 +921,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg command-line tool",
-      "fieldScope": "Packaged FFmpeg executable release qualification",
       "id": "a2959877276ea612e653",
       "isolationRule": "The value is external binary qualification metadata only; mismatch rejects the exact media runtime bundle and cannot select an OpenNeko contract, migration, component state, or fallback implementation.",
       "normativeSource": "https://ffmpeg.org/ffmpeg.html",
@@ -1253,7 +930,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg ffprobe command-line tool",
-      "fieldScope": "Packaged ffprobe executable release qualification",
       "id": "ca76f0cf88c4eb12420a",
       "isolationRule": "The value is external binary qualification metadata only; mismatch rejects the exact media runtime bundle and cannot select an OpenNeko contract, migration, component state, or fallback implementation.",
       "normativeSource": "https://ffmpeg.org/ffprobe.html",
@@ -1263,7 +939,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg command-line tool",
-      "fieldScope": "Packaged FFmpeg executable release qualification",
       "id": "fa2b53fd04e4cb592f41",
       "isolationRule": "The value is external binary qualification metadata only; mismatch rejects the exact media runtime bundle and cannot select an OpenNeko contract, migration, component state, or fallback implementation.",
       "normativeSource": "https://ffmpeg.org/ffmpeg.html",
@@ -1273,7 +948,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "npm package and application release metadata",
-      "fieldScope": "macOS release package metadata projection and test",
       "id": "26cb653a02729545f8dc",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
@@ -1283,7 +957,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "npm package and application release metadata",
-      "fieldScope": "macOS release package metadata projection and test",
       "id": "4c7e9499791690c8a37a",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
@@ -1293,7 +966,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "npm package and application release metadata",
-      "fieldScope": "macOS release package metadata projection and test",
       "id": "fa723615f4a7680f017c",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
@@ -1303,7 +975,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "npm package and application release metadata",
-      "fieldScope": "macOS release package metadata projection and test",
       "id": "095056e08b864efceee4",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
@@ -1313,7 +984,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "npm package and application release metadata",
-      "fieldScope": "macOS release package metadata projection and test",
       "id": "0e410b83fd4b803e8997",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
@@ -1323,7 +993,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "npm package and application release metadata",
-      "fieldScope": "macOS release package metadata projection and test",
       "id": "41cc1737266e173c9228",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
@@ -1333,7 +1002,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "npm package and application release metadata",
-      "fieldScope": "macOS release package metadata projection and test",
       "id": "dc6d3a3553ade8d57b28",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
@@ -1343,7 +1011,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Arm A-profile architecture",
-      "fieldScope": "External ARMv8 cache architecture fixture",
       "id": "31ffe20b88da89049b3a",
       "isolationRule": "The suffix identifies the external CPU architecture cache target only and cannot identify an OpenNeko data generation, contract, migration, or fallback path.",
       "normativeSource": "https://developer.arm.com/Architectures/A-Profile%20Architecture",
@@ -1353,7 +1020,6 @@
     {
       "category": "data-generation-alias",
       "externalOwner": "SOURCE_DATE_EPOCH reproducible-build convention",
-      "fieldScope": "Artifact builder fixture for the pinned external Rust build timestamp",
       "id": "092f89326a82a91d901b",
       "isolationRule": "The fixture validates one external build input and cannot select an OpenNeko contract, schema, migration, provider fallback, or alternate runtime path.",
       "normativeSource": "https://reproducible-builds.org/docs/source-date-epoch/",
@@ -1363,7 +1029,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "OpenNeko extension package release",
-      "fieldScope": "Computer Use package manifest release fixture",
       "id": "297c663b804681c23ddc",
       "isolationRule": "The value is the user-visible Computer Use extension package release checked against the pinned Cua release; it cannot dispatch an internal contract, schema, migration, provider fallback, or alternate runtime path.",
       "normativeSource": "https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.19.2",
@@ -1373,7 +1038,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "SPDX specification",
-      "fieldScope": "Reviewed SPDX license inventory fixture",
       "id": "429fca63b726011e6c23",
       "isolationRule": "The field identifies the external SPDX document format in deterministic release-tooling evidence; it cannot select an OpenNeko contract, schema, migration, provider, or runtime path.",
       "normativeSource": "https://spdx.github.io/spdx-spec/v2.3/",
@@ -1383,7 +1047,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Cua Driver GitHub Release",
-      "fieldScope": "Pinned upstream Cua Driver URL in artifact builder fixture",
       "id": "4738601b11fb48a455a7",
       "isolationRule": "The URL identifies exact third-party bytes used by the release-tooling fixture; digest mismatch rejects the artifact and cannot dispatch an OpenNeko contract, migration, provider fallback, or alternate runtime path.",
       "normativeSource": "https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.19.2",
@@ -1393,7 +1056,6 @@
     {
       "category": "data-generation-alias",
       "externalOwner": "SOURCE_DATE_EPOCH reproducible-build convention",
-      "fieldScope": "Artifact receipt fixture for the pinned external Rust build timestamp",
       "id": "b0bd987a2c9919fb870d",
       "isolationRule": "The fixture validates contained external build provenance and cannot select an OpenNeko contract, schema, migration, provider fallback, or alternate runtime path.",
       "normativeSource": "https://reproducible-builds.org/docs/source-date-epoch/",
@@ -1403,7 +1065,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "SPDX specification",
-      "fieldScope": "Incomplete SPDX inventory poison fixture",
       "id": "dea9661e00346912a5ea",
       "isolationRule": "The field identifies the external SPDX document format in a release-tooling rejection fixture; it cannot select an OpenNeko contract, schema, migration, provider, or runtime path.",
       "normativeSource": "https://spdx.github.io/spdx-spec/v2.3/",
@@ -1413,7 +1074,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "uniffi-bindgen-react-native npm package",
-      "fieldScope": "Pinned third-party npm source package manifest fixture",
       "id": "e0a39a65830383075b46",
       "isolationRule": "The field is the external npm package release identity; mismatch rejects the source and cannot dispatch an OpenNeko contract, schema, migration, provider fallback, or alternate runtime path.",
       "normativeSource": "https://www.npmjs.com/package/uniffi-bindgen-react-native/v/0.31.0-3",
@@ -1423,7 +1083,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Cargo metadata format",
-      "fieldScope": "External Cargo package release parameter in the SPDX metadata fixture",
       "id": "00c980ff7b12093ac40d",
       "isolationRule": "The parameter models Cargo package release metadata used to verify the locked SPDX closure and cannot dispatch an OpenNeko contract, schema, migration, provider fallback, or runtime path.",
       "normativeSource": "https://doc.rust-lang.org/cargo/commands/cargo-metadata.html",
@@ -1433,7 +1092,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "uniffi-bindgen-react-native npm package",
-      "fieldScope": "Pinned third-party npm source package manifest in the SPDX builder fixture",
       "id": "0e602f11afd001c5df8c",
       "isolationRule": "The field is the external npm package release identity; mismatch rejects the source and cannot dispatch an OpenNeko contract, schema, migration, provider fallback, or runtime path.",
       "normativeSource": "https://www.npmjs.com/package/uniffi-bindgen-react-native/v/0.31.0-3",
@@ -1443,7 +1101,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Cargo metadata format",
-      "fieldScope": "External registry Cargo package release field in the SPDX metadata fixture",
       "id": "323594efc75f8f66a5fe",
       "isolationRule": "The field models Cargo package release metadata used to verify the locked SPDX closure and cannot dispatch an OpenNeko contract, schema, migration, provider fallback, or runtime path.",
       "normativeSource": "https://doc.rust-lang.org/cargo/commands/cargo-metadata.html",
@@ -1453,7 +1110,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Cargo lockfile format",
-      "fieldScope": "External Cargo package release value used to construct the SPDX lock fixture",
       "id": "4482c0603ae5d5dcab1a",
       "isolationRule": "The value models Cargo lockfile package release metadata used to verify exact dependency provenance and cannot dispatch an OpenNeko contract, schema, migration, provider fallback, or runtime path.",
       "normativeSource": "https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html",
@@ -1463,7 +1119,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Cargo metadata format",
-      "fieldScope": "External workspace Cargo package release field in the SPDX metadata fixture",
       "id": "c81ba57dc66ae5108f6f",
       "isolationRule": "The field models Cargo package release metadata used to verify the locked SPDX closure and cannot dispatch an OpenNeko contract, schema, migration, provider fallback, or runtime path.",
       "normativeSource": "https://doc.rust-lang.org/cargo/commands/cargo-metadata.html",
@@ -1473,7 +1128,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Semantic Versioning release tag",
-      "fieldScope": "macOS release tag fixture governed by SemVer",
       "id": "03b1d8ae6ee93c63ef49",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://semver.org/",
@@ -1483,7 +1137,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "npm package and application release metadata",
-      "fieldScope": "macOS release package metadata projection and test",
       "id": "396c00be5f8198907606",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
@@ -1493,7 +1146,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "npm package and application release metadata",
-      "fieldScope": "macOS release package metadata projection and test",
       "id": "3f88adab10e14b4b4107",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
@@ -1503,7 +1155,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "npm package and application release metadata",
-      "fieldScope": "macOS release package metadata projection and test",
       "id": "4ef2513a2a7044aaa4e4",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
@@ -1513,7 +1164,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "npm package and application release metadata",
-      "fieldScope": "macOS release package metadata projection and test",
       "id": "59cf8db965d2cd6b9848",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
@@ -1523,7 +1173,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Semantic Versioning release tag",
-      "fieldScope": "macOS release tag fixture governed by SemVer",
       "id": "5a30a63cfc45cb08ff2b",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://semver.org/",
@@ -1533,7 +1182,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Semantic Versioning release tag",
-      "fieldScope": "macOS release tag fixture governed by SemVer",
       "id": "5b9cab85f0057f66b40b",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://semver.org/",
@@ -1543,7 +1191,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Semantic Versioning release tag",
-      "fieldScope": "macOS release tag fixture governed by SemVer",
       "id": "604af4b23d908b14ca12",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://semver.org/",
@@ -1553,7 +1200,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "npm package and application release metadata",
-      "fieldScope": "macOS release package metadata projection and test",
       "id": "70fbc675612917e7a844",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
@@ -1563,7 +1209,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Semantic Versioning release tag",
-      "fieldScope": "macOS release tag fixture governed by SemVer",
       "id": "716cb8365d1b372fb58c",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://semver.org/",
@@ -1573,7 +1218,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "npm package and application release metadata",
-      "fieldScope": "macOS release package metadata projection and test",
       "id": "866e3f7b86fa4a95d971",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
@@ -1583,7 +1227,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "npm package and application release metadata",
-      "fieldScope": "macOS release package metadata projection and test",
       "id": "905e4f19469dae92fb57",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
@@ -1593,7 +1236,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "npm package and application release metadata",
-      "fieldScope": "macOS release package metadata projection and test",
       "id": "c027ff40b8c7dbea0658",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
@@ -1603,7 +1245,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Semantic Versioning release tag",
-      "fieldScope": "macOS release tag fixture governed by SemVer",
       "id": "df0464694c3005d48094",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://semver.org/",
@@ -1613,7 +1254,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "npm package and application release metadata",
-      "fieldScope": "macOS release package metadata projection and test",
       "id": "ebb088fa43d7b98496ab",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
@@ -1623,7 +1263,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Semantic Versioning release tag",
-      "fieldScope": "macOS release tag fixture governed by SemVer",
       "id": "f22e5ba31cdb42f2f0e0",
       "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
       "normativeSource": "https://semver.org/",
@@ -1633,7 +1272,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg ffprobe command-line tool",
-      "fieldScope": "Packaged ffprobe executable release qualification",
       "id": "0125508c1b9dbb96c11b",
       "isolationRule": "The value is external binary qualification metadata only; mismatch rejects the exact media runtime bundle and cannot select an OpenNeko contract, migration, component state, or fallback implementation.",
       "normativeSource": "https://ffmpeg.org/ffprobe.html",
@@ -1643,7 +1281,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "FFmpeg command-line tool",
-      "fieldScope": "Packaged FFmpeg executable release qualification",
       "id": "fd3973a9edbcadcd705f",
       "isolationRule": "The value is external binary qualification metadata only; mismatch rejects the exact media runtime bundle and cannot select an OpenNeko contract, migration, component state, or fallback implementation.",
       "normativeSource": "https://ffmpeg.org/ffmpeg.html",
@@ -1653,7 +1290,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Node.js runtime",
-      "fieldScope": "Node.js external runtime release parsing and policy verification",
       "id": "572e458064317a2fad2b",
       "isolationRule": "The value qualifies the executing external Node.js runtime only and cannot identify an OpenNeko contract, persistence shape, migration, component generation, or alternate runtime path.",
       "normativeSource": "https://nodejs.org/api/process.html#processversions",
@@ -1663,7 +1299,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Vitest V8 coverage provider",
-      "fieldScope": "Shared Vitest coverage provider selection only",
       "id": "4595e9d906b77d93f30a",
       "isolationRule": "The value selects Vitest's external V8 coverage implementation during tests and is not persisted or used by any OpenNeko product contract or runtime route.",
       "normativeSource": "https://vitest.dev/guide/coverage.html",
@@ -1673,7 +1308,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "MiniMax Video Generation V2 API",
-      "fieldScope": "H3 creation endpoint assertion",
       "id": "2522ac59bb8302c2ba90",
       "isolationRule": "The path is asserted only for the explicitly selected MiniMax H3 adapter and cannot select an OpenNeko contract or fallback path.",
       "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
@@ -1683,7 +1317,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "MiniMax Video Generation V2 API",
-      "fieldScope": "H3 status and cancellation endpoint assertions",
       "id": "5657d4973a854a0fb398",
       "isolationRule": "The path is asserted only for the explicitly selected MiniMax H3 adapter and cannot select an OpenNeko contract or fallback path.",
       "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-query",
@@ -1693,7 +1326,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "MiniMax Video Generation V2 API",
-      "fieldScope": "H3 configured base endpoint in adapter test",
       "id": "fa53b2435c4f997d494e",
       "isolationRule": "The value configures only a MiniMax test provider and cannot version or dispatch an OpenNeko contract.",
       "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
@@ -1703,7 +1335,6 @@
     {
       "category": "versioned-identifier",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "MiniMax H3 VideoModelV4 interface import",
       "id": "bb74fb5e88016b05415f",
       "isolationRule": "The identifier is required by the external AI SDK interface and cannot identify persisted OpenNeko data or select an internal path.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
@@ -1713,7 +1344,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "MiniMax H3 external VideoModelV4 specification field",
       "id": "dcad55eda28c332786d9",
       "isolationRule": "The field satisfies only the external AI SDK provider interface and is not projected into any OpenNeko contract or persistence record.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
@@ -1723,7 +1353,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "MiniMax H3 external VideoModelV4 specification value",
       "id": "f6c76839547eb41e39dd",
       "isolationRule": "The value satisfies only the external AI SDK provider interface and cannot select an OpenNeko schema or alternate implementation.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
@@ -1733,7 +1362,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "MiniMax Video Generation V2 API",
-      "fieldScope": "H3 task creation endpoint",
       "id": "432c2b1966a7c7a990c7",
       "isolationRule": "The route is emitted only by the explicitly selected MiniMax H3 adapter and cannot dispatch an OpenNeko contract or fallback provider.",
       "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
@@ -1743,7 +1371,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "MiniMax Video Generation V2 API",
-      "fieldScope": "H3 task status endpoint",
       "id": "7c726f5f869525fe8285",
       "isolationRule": "The route is emitted only by the explicitly selected MiniMax H3 adapter and cannot dispatch an OpenNeko contract or fallback provider.",
       "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-query",
@@ -1753,7 +1380,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "MiniMax Video Generation V2 API",
-      "fieldScope": "H3 task cancellation endpoint",
       "id": "3c9f84b05c31cb37c710",
       "isolationRule": "The route is emitted only by the explicitly selected MiniMax H3 adapter and cannot dispatch an OpenNeko contract or fallback provider.",
       "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-delete",
@@ -1761,69 +1387,8 @@
       "token": "/v2/"
     },
     {
-      "category": "versioned-identifier",
-      "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "NewAPI VideoModelV4 interface import",
-      "id": "9b035c6f38fecca8e872",
-      "isolationRule": "The identifier is required by the external AI SDK interface and cannot identify persisted OpenNeko data or select an internal path.",
-      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
-      "path": "packages/ai/sdk/src/providers/newapi/newapi-video-model.ts",
-      "token": "lV4"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "NewAPI external VideoModelV4 specification field",
-      "id": "ffc923ded5d9809b8b89",
-      "isolationRule": "The field satisfies only the external AI SDK provider interface and is not projected into any OpenNeko contract or persistence record.",
-      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
-      "path": "packages/ai/sdk/src/providers/newapi/newapi-video-model.ts",
-      "token": "specificationVersion"
-    },
-    {
-      "category": "versioned-path-or-key",
-      "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "NewAPI external VideoModelV4 specification value",
-      "id": "3d57ced63bf833090e04",
-      "isolationRule": "The value satisfies only the external AI SDK provider interface and cannot select an OpenNeko schema or alternate implementation.",
-      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
-      "path": "packages/ai/sdk/src/providers/newapi/newapi-video-model.ts",
-      "token": "v4"
-    },
-    {
-      "category": "versioned-path-or-key",
-      "externalOwner": "NewAPI video API",
-      "fieldScope": "NewAPI video task creation endpoint",
-      "id": "c12eec2a9e6fb612afb1",
-      "isolationRule": "The route is emitted only by the explicitly selected NewAPI adapter and cannot version OpenNeko data or select a fallback provider.",
-      "normativeSource": "https://docs.newapi.pro/en/api/openai-video/",
-      "path": "packages/ai/sdk/src/providers/newapi/newapi-video-model.ts",
-      "token": "/v1/"
-    },
-    {
-      "category": "versioned-path-or-key",
-      "externalOwner": "NewAPI video API",
-      "fieldScope": "NewAPI video task status endpoint",
-      "id": "121e8a843edac695f01a",
-      "isolationRule": "The route is emitted only by the explicitly selected NewAPI adapter and cannot version OpenNeko data or select a fallback provider.",
-      "normativeSource": "https://docs.newapi.pro/en/api/openai-video/",
-      "path": "packages/ai/sdk/src/providers/newapi/newapi-video-model.ts",
-      "token": "/v1/"
-    },
-    {
-      "category": "versioned-path-or-key",
-      "externalOwner": "NewAPI video API",
-      "fieldScope": "NewAPI video output endpoint normalization",
-      "id": "0a9cd4eb310e59ea5a87",
-      "isolationRule": "The route is emitted only by the explicitly selected NewAPI adapter and cannot version OpenNeko data or select a fallback provider.",
-      "normativeSource": "https://docs.newapi.pro/en/api/openai-video/",
-      "path": "packages/ai/sdk/src/providers/newapi/newapi-video-model.ts",
-      "token": "/v1/"
-    },
-    {
       "category": "versioned-path-or-key",
       "externalOwner": "MiniMax Video Generation V2 API",
-      "fieldScope": "MiniMax configured endpoint in provider resolution test",
       "id": "31f97c20f53c807708b9",
       "isolationRule": "The value configures only a MiniMax test provider and cannot dispatch an OpenNeko contract.",
       "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
@@ -1833,7 +1398,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "ByteDance Ark API",
-      "fieldScope": "ByteDance configured endpoint in provider resolution test",
       "id": "d49e4646f9f299e7a150",
       "isolationRule": "The value configures only a ByteDance test provider and cannot dispatch an OpenNeko contract.",
       "normativeSource": "https://ai-sdk.dev/providers/ai-sdk-providers/bytedance",
@@ -1843,7 +1407,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "Resolved MiniMax model external specification assertion",
       "id": "8a263ea6a2c543ec48a0",
       "isolationRule": "The field is asserted only for the external AI SDK interface and cannot enter OpenNeko persistence or routing.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
@@ -1853,7 +1416,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "Resolved MiniMax model external specification value",
       "id": "08dd7519508119e4e58b",
       "isolationRule": "The value is asserted only for the external AI SDK interface and cannot select an OpenNeko contract or alternate path.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
@@ -1863,7 +1425,6 @@
     {
       "category": "internal-version-field",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "Resolved ByteDance model external specification assertion",
       "id": "fd0b77af06580de0a648",
       "isolationRule": "The field is asserted only for the external AI SDK interface and cannot enter OpenNeko persistence or routing.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
@@ -1873,7 +1434,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "Resolved ByteDance model external specification value",
       "id": "ffbb67bb09b11cdf02d5",
       "isolationRule": "The value is asserted only for the external AI SDK interface and cannot select an OpenNeko contract or alternate path.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
@@ -1883,7 +1443,6 @@
     {
       "category": "versioned-identifier",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "AI SDK image model external interface union",
       "id": "3cd24bbca029340432b1",
       "isolationRule": "The identifier is an external SDK type only and cannot identify OpenNeko data or select an internal implementation.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/image-generation",
@@ -1893,7 +1452,6 @@
     {
       "category": "versioned-identifier",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "AI SDK language model external interface union",
       "id": "c8b1fad7aaab743881e2",
       "isolationRule": "The identifier is an external SDK type only and cannot identify OpenNeko data or select an internal implementation.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/generating-text",
@@ -1903,7 +1461,6 @@
     {
       "category": "versioned-identifier",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "AI SDK speech model external interface union",
       "id": "1e2b765555c1d6824a11",
       "isolationRule": "The identifier is an external SDK type only and cannot identify OpenNeko data or select an internal implementation.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/speech",
@@ -1913,7 +1470,6 @@
     {
       "category": "versioned-identifier",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "AI SDK video model external interface union",
       "id": "4c4649c8d815e9dd3352",
       "isolationRule": "The identifier is an external SDK type only and cannot identify OpenNeko data or select an internal implementation.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
@@ -1923,7 +1479,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "MiniMax Video Generation V2 API",
-      "fieldScope": "MiniMax configured endpoint in linked execution test",
       "id": "27c92c241baef8dafc45",
       "isolationRule": "The value configures only a MiniMax test provider and cannot dispatch an OpenNeko contract.",
       "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
@@ -1933,7 +1488,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "MiniMax Video Generation V2 API",
-      "fieldScope": "MiniMax task creation endpoint assertion in linked execution test",
       "id": "0850547bcdd680007d3e",
       "isolationRule": "The route is asserted only for the selected MiniMax H3 provider and cannot dispatch an OpenNeko contract or fallback path.",
       "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
@@ -1943,7 +1497,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "MiniMax Video Generation V2 API",
-      "fieldScope": "MiniMax task status endpoint assertion in linked execution test",
       "id": "f102079158260e2e7f84",
       "isolationRule": "The route is asserted only for the selected MiniMax H3 provider and cannot dispatch an OpenNeko contract or fallback path.",
       "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-query",
@@ -1953,7 +1506,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "ByteDance Ark API",
-      "fieldScope": "ByteDance configured endpoint in linked execution test",
       "id": "f2aa88c9d1b217c4ccac",
       "isolationRule": "The value configures only a ByteDance test provider and cannot dispatch an OpenNeko contract.",
       "normativeSource": "https://ai-sdk.dev/providers/ai-sdk-providers/bytedance",
@@ -1963,7 +1515,6 @@
     {
       "category": "versioned-identifier",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "Generation executor VideoModelV4 interface import",
       "id": "7e21bdfb16521a823275",
       "isolationRule": "The identifier is required by the external AI SDK interface and cannot identify persisted OpenNeko data or select an internal path.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
@@ -1973,7 +1524,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "Generation executor external VideoModelV4 requirement",
       "id": "c6935eb0194e55e42704",
       "isolationRule": "The value checks only the external AI SDK video provider interface and cannot version an OpenNeko contract or select a fallback path.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
@@ -1983,7 +1533,6 @@
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Vercel AI SDK provider contract",
-      "fieldScope": "Generation status reader external VideoModelV4 requirement",
       "id": "55b8cfeb6528a6fc6236",
       "isolationRule": "The value checks only the external AI SDK video provider interface and cannot version an OpenNeko contract or select a fallback path.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
@@ -1994,7 +1543,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "selectedModelOptionId: 'deepseek-official:deepseek-v4', (apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts:84)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "481516b12e06eab93bb3",
       "path": "apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts",
@@ -2004,7 +1552,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "selectedModelOptionId: 'deepseek-official:deepseek-v4', (apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts:359)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "24c46ca314060d2bfab2",
       "path": "apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts",
@@ -2014,7 +1561,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "modelOptionId: 'deepseek-official:deepseek-v4', (apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts:669)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "97cb48425a30e674fc37",
       "path": "apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts",
@@ -2024,7 +1570,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "models.set('deepseek-official', new Map([['deepseek-v4', 'deepseek-v4-api']])); (apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts:681)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "9380850dc020d49f3f15",
       "path": "apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts",
@@ -2034,7 +1579,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "models.set('deepseek-official', new Map([['deepseek-v4', 'deepseek-v4-api']])); (apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts:681)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "956a5da063e48d8a5f94",
       "path": "apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts",
@@ -2044,7 +1588,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "selectedModelId: 'deepseek-v4', (apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts:802)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "ed2bfe3cca2e81f879e2",
       "path": "apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts",
@@ -2054,7 +1597,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "id: 'deepseek-official:deepseek-v4', (apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts:812)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "507732635c34cf0da21b",
       "path": "apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts",
@@ -2064,7 +1606,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "modelId: 'deepseek-v4', (apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts:815)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "2bfd9c16a4d5978491b4",
       "path": "apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts",
@@ -2074,7 +1615,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "OpenAI-compatible API",
       "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
-      "fieldScope": "protocolVariant: { basePath: '/v1', authType: 'bearer' }, (apps/neko-desktop/src/main/desktop-dsh-provider-runtime.test.ts:25)",
       "isolationRule": "The route belongs to the explicitly configured external provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "id": "e65bbe52209cc222bfbd",
       "path": "apps/neko-desktop/src/main/desktop-dsh-provider-runtime.test.ts",
@@ -2084,7 +1624,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "Configured DeepSeek-compatible model provider",
       "normativeSource": "https://api-docs.deepseek.com/api/create-chat-completion",
-      "fieldScope": "apiUrl: 'https://api.deepseek.example/v1', (apps/neko-desktop/src/main/desktop-dsh-provider-runtime.test.ts:32)",
       "isolationRule": "The route is passed only to the explicitly selected DeepSeek-compatible provider and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "id": "b18ab0bbbc56ad54a2b5",
       "path": "apps/neko-desktop/src/main/desktop-dsh-provider-runtime.test.ts",
@@ -2094,7 +1633,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "name: 'deepseek-v4-flash', (apps/neko-desktop/src/main/desktop-dsh-provider-runtime.test.ts:45)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "038246692d9d3856c0e5",
       "path": "apps/neko-desktop/src/main/desktop-dsh-provider-runtime.test.ts",
@@ -2104,7 +1642,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "apiModelName: 'deepseek-v4-flash', (apps/neko-desktop/src/main/desktop-dsh-provider-runtime.test.ts:61)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "bb5b74cb4684d8c77c69",
       "path": "apps/neko-desktop/src/main/desktop-dsh-provider-runtime.test.ts",
@@ -2114,7 +1651,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "OpenAI-compatible API",
       "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
-      "fieldScope": "apiUrl: 'https://api.example.test/v1', (apps/neko-desktop/src/main/desktop-dsh-provider-runtime.test.ts:273)",
       "isolationRule": "The route belongs to the explicitly configured external provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "id": "f8492398ec1a8750219c",
       "path": "apps/neko-desktop/src/main/desktop-dsh-provider-runtime.test.ts",
@@ -2124,7 +1660,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "OpenAI-compatible API",
       "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
-      "fieldScope": "if (path !== '' && path !== '/api' && path !== '/v1') return undefined; (apps/neko-desktop/src/main/desktop-dsh-provider-runtime.ts:272)",
       "isolationRule": "The route belongs to the explicitly configured external provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "id": "db030f3b0571f697a33d",
       "path": "apps/neko-desktop/src/main/desktop-dsh-provider-runtime.ts",
@@ -2134,7 +1669,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "OpenAI-compatible API",
       "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
-      "fieldScope": "parsed.pathname = '/v1'; (apps/neko-desktop/src/main/desktop-dsh-provider-runtime.ts:273)",
       "isolationRule": "The route belongs to the explicitly configured external provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "id": "902738f59d4d15f84d40",
       "path": "apps/neko-desktop/src/main/desktop-dsh-provider-runtime.ts",
@@ -2144,7 +1678,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "id: 'deepseek-official:deepseek-v4', (apps/neko-desktop/src/preload/dsh-session-bridge.test.ts:182)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "155d9743ce2debeabc8f",
       "path": "apps/neko-desktop/src/preload/dsh-session-bridge.test.ts",
@@ -2154,7 +1687,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "modelId: 'deepseek-v4', (apps/neko-desktop/src/preload/dsh-session-bridge.test.ts:185)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "64fee07444e5709fa27a",
       "path": "apps/neko-desktop/src/preload/dsh-session-bridge.test.ts",
@@ -2164,7 +1696,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "selectedModelOptionId: 'deepseek-official:deepseek-v4', (apps/neko-desktop/src/preload/dsh-session-bridge.test.ts:200)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "7db1959d3ae6e158f644",
       "path": "apps/neko-desktop/src/preload/dsh-session-bridge.test.ts",
@@ -2174,7 +1705,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "'deepseek-official:deepseek-v4', (apps/neko-desktop/src/preload/dsh-session-bridge.test.ts:233)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "9a0947977cfe8be2ebec",
       "path": "apps/neko-desktop/src/preload/dsh-session-bridge.test.ts",
@@ -2184,7 +1714,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "modelOptionId: 'deepseek-official:deepseek-v4', (apps/neko-desktop/src/preload/dsh-session-bridge.test.ts:239)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "ba47d7f6fe2c6ee2c011",
       "path": "apps/neko-desktop/src/preload/dsh-session-bridge.test.ts",
@@ -2194,7 +1723,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "id: 'deepseek-official:deepseek-v4', (apps/neko-desktop/src/renderer/DesktopAgentSurface.test.tsx:104)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "f3481dd3a5f4b985591b",
       "path": "apps/neko-desktop/src/renderer/DesktopAgentSurface.test.tsx",
@@ -2204,7 +1732,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "modelId: 'deepseek-v4', (apps/neko-desktop/src/renderer/DesktopAgentSurface.test.tsx:107)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "762afc8d0e07ef1d6d6b",
       "path": "apps/neko-desktop/src/renderer/DesktopAgentSurface.test.tsx",
@@ -2214,7 +1741,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "selectedModelOptionId: 'deepseek-official:deepseek-v4', (apps/neko-desktop/src/renderer/DesktopAgentSurface.test.tsx:131)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "45162123b61e84057e8b",
       "path": "apps/neko-desktop/src/renderer/DesktopAgentSurface.test.tsx",
@@ -2224,7 +1750,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "id: 'deepseek-official:deepseek-v4', (apps/neko-desktop/src/renderer/DesktopApplication.test.tsx:3184)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "3550ee54b99321f597f1",
       "path": "apps/neko-desktop/src/renderer/DesktopApplication.test.tsx",
@@ -2234,7 +1759,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "modelId: 'deepseek-v4', (apps/neko-desktop/src/renderer/DesktopApplication.test.tsx:3187)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "e8a472488196e5971f06",
       "path": "apps/neko-desktop/src/renderer/DesktopApplication.test.tsx",
@@ -2244,7 +1768,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "selectedModelOptionId: 'deepseek-official:deepseek-v4', (apps/neko-desktop/src/renderer/DesktopApplication.test.tsx:3193)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "c6bc3e944a6724ca3090",
       "path": "apps/neko-desktop/src/renderer/DesktopApplication.test.tsx",
@@ -2254,7 +1777,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "Configured DeepSeek-compatible model provider",
       "normativeSource": "https://api-docs.deepseek.com/api/create-chat-completion",
-      "fieldScope": "apiUrl: 'https://api.deepseek.com/v1', (apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx:122)",
       "isolationRule": "The route is passed only to the explicitly selected DeepSeek-compatible provider and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "id": "077ee3a7101949d3e2e9",
       "path": "apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx",
@@ -2264,7 +1786,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "Configured DeepSeek-compatible model provider",
       "normativeSource": "https://api-docs.deepseek.com/api/create-chat-completion",
-      "fieldScope": "apiUrl: 'https://api.deepseek.com/v1', (apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx:286)",
       "isolationRule": "The route is passed only to the explicitly selected DeepSeek-compatible provider and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "id": "5a1ee2e7f4c15cf1ad10",
       "path": "apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx",
@@ -2274,7 +1795,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "OpenAI-compatible API",
       "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
-      "fieldScope": "apiUrl: 'https://www.nekoapi.com/v1', (apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx:297)",
       "isolationRule": "The route belongs to the explicitly configured external provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "id": "aa36a8fc3b9e66639d40",
       "path": "apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx",
@@ -2284,7 +1804,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "Configured DeepSeek-compatible model provider",
       "normativeSource": "https://api-docs.deepseek.com/api/create-chat-completion",
-      "fieldScope": "'https://api.deepseek.com/v1', (apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx:338)",
       "isolationRule": "The route is passed only to the explicitly selected DeepSeek-compatible provider and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "id": "59819a6d3121d4d802e0",
       "path": "apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx",
@@ -2294,7 +1813,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "OpenAI-compatible API",
       "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
-      "fieldScope": "'https://www.nekoapi.com/v1', (apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx:355)",
       "isolationRule": "The route belongs to the explicitly configured external provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "id": "79a672466aaa332428ee",
       "path": "apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx",
@@ -2304,7 +1822,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "OpenAI-compatible API",
       "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
-      "fieldScope": "apiUrl: 'https://www.nekoapi.com/v1', (apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx:373)",
       "isolationRule": "The route belongs to the explicitly configured external provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "id": "c4cc37c9757d09c683ea",
       "path": "apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx",
@@ -2314,7 +1831,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "OpenAI-compatible API",
       "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
-      "fieldScope": "apiUrl: 'https://custom.example/v1', (apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx:390)",
       "isolationRule": "The route belongs to the explicitly configured external provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "id": "38f7349e5ac52cd1757a",
       "path": "apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx",
@@ -2324,7 +1840,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "OpenAI-compatible API",
       "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
-      "fieldScope": "apiUrl: `https://${id}.example/v1`, (apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx:447)",
       "isolationRule": "The route belongs to the explicitly configured external provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "id": "c8f4b95d34e8fc671fa0",
       "path": "apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx",
@@ -2334,7 +1849,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "MiniMax Video Generation V2 API",
       "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
-      "fieldScope": "'https://api.minimaxi.com/v2', (apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx:523)",
       "isolationRule": "The versioned endpoint belongs to the explicitly configured MiniMax provider and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
       "id": "5a25f22bc62e061af4f0",
       "path": "apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx",
@@ -2344,7 +1858,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "MiniMax Video Generation V2 API",
       "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
-      "fieldScope": "apiUrl: 'https://api.minimaxi.com/v2', (apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx:541)",
       "isolationRule": "The versioned endpoint belongs to the explicitly configured MiniMax provider and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
       "id": "b107ced1261c9852159a",
       "path": "apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx",
@@ -2354,7 +1867,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "MiniMax Video Generation V2 API",
       "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
-      "fieldScope": "apiUrl: 'https://api.minimaxi.com/v2', (apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx:558)",
       "isolationRule": "The versioned endpoint belongs to the explicitly configured MiniMax provider and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
       "id": "8b5fce15faa3546ba411",
       "path": "apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx",
@@ -2364,7 +1876,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "OpenAI-compatible API",
       "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
-      "fieldScope": "'settings.agent.apiUrlPlaceholder': 'https://gateway.example/v1', (apps/neko-desktop/src/renderer/i18n/locales/en.ts:144)",
       "isolationRule": "The route belongs to the explicitly configured external provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "id": "3568ededb526e4cdcce8",
       "path": "apps/neko-desktop/src/renderer/i18n/locales/en.ts",
@@ -2374,7 +1885,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "OpenAI-compatible API",
       "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
-      "fieldScope": "'settings.agent.apiUrlPlaceholder': 'https://gateway.example/v1', (apps/neko-desktop/src/renderer/i18n/locales/zh-cn.ts:129)",
       "isolationRule": "The route belongs to the explicitly configured external provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "id": "53d3b6300b0432472ee0",
       "path": "apps/neko-desktop/src/renderer/i18n/locales/zh-cn.ts",
@@ -2384,7 +1894,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "modelId: 'deepseek-v4', (packages/agent/contracts/src/dsh-acp.test.ts:278)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "26d16a89a8f0b2fec70d",
       "path": "packages/agent/contracts/src/dsh-acp.test.ts",
@@ -2394,7 +1903,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "modelId: 'deepseek-v4', (packages/agent/contracts/src/dsh-acp.test.ts:284)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "02c205239b54497c663a",
       "path": "packages/agent/contracts/src/dsh-acp.test.ts",
@@ -2404,7 +1912,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "modelOptionId: 'deepseek-official:deepseek-v4', (packages/agent/contracts/src/dsh-session-host.test.ts:65)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "e0d16891848ac4a00337",
       "path": "packages/agent/contracts/src/dsh-session-host.test.ts",
@@ -2414,7 +1921,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "modelOptionId: 'deepseek-official:deepseek-v4', (packages/agent/contracts/src/dsh-session-host.test.ts:69)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "cfe1f3e8b02a714b1063",
       "path": "packages/agent/contracts/src/dsh-session-host.test.ts",
@@ -2424,7 +1930,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "modelOptionId: 'deepseek-official:deepseek-v4', (packages/agent/contracts/src/dsh-session-host.test.ts:98)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "c581e5ac45a1fbba9d85",
       "path": "packages/agent/contracts/src/dsh-session-host.test.ts",
@@ -2434,7 +1939,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "id: 'deepseek-official:deepseek-v4', (packages/agent/contracts/src/dsh-session-host.test.ts:114)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "e01dc36d0b001ffda466",
       "path": "packages/agent/contracts/src/dsh-session-host.test.ts",
@@ -2444,7 +1948,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "modelId: 'deepseek-v4', (packages/agent/contracts/src/dsh-session-host.test.ts:117)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "31166d7732d8d0d60a0e",
       "path": "packages/agent/contracts/src/dsh-session-host.test.ts",
@@ -2454,7 +1957,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "selectedModelOptionId: 'deepseek-official:deepseek-v4', (packages/agent/contracts/src/dsh-session-host.test.ts:132)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "14818c63c799ed23dcbc",
       "path": "packages/agent/contracts/src/dsh-session-host.test.ts",
@@ -2464,7 +1966,6 @@
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
-      "fieldScope": "const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} }); (packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts:641)",
       "isolationRule": "The value is required by the external ACP initialization negotiation and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "id": "64e33e3490d6f60d7d47",
       "path": "packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts",
@@ -2474,7 +1975,6 @@
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
-      "fieldScope": "const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} }); (packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts:692)",
       "isolationRule": "The value is required by the external ACP initialization negotiation and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "id": "f1ea1d96127a9e5c7441",
       "path": "packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts",
@@ -2484,7 +1984,6 @@
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
-      "fieldScope": "const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} }); (packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts:713)",
       "isolationRule": "The value is required by the external ACP initialization negotiation and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "id": "1a8dd10984fbbd9148db",
       "path": "packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts",
@@ -2494,7 +1993,6 @@
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
-      "fieldScope": "const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} }); (packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts:739)",
       "isolationRule": "The value is required by the external ACP initialization negotiation and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "id": "765f396fb570815206d3",
       "path": "packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts",
@@ -2504,7 +2002,6 @@
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
-      "fieldScope": "const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} }); (packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts:764)",
       "isolationRule": "The value is required by the external ACP initialization negotiation and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "id": "28a68455f9e647d411d0",
       "path": "packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts",
@@ -2514,7 +2011,6 @@
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
-      "fieldScope": "const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} }); (packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts:801)",
       "isolationRule": "The value is required by the external ACP initialization negotiation and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "id": "27a8a4177a927ad19554",
       "path": "packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts",
@@ -2524,7 +2020,6 @@
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
-      "fieldScope": "const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} }); (packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts:840)",
       "isolationRule": "The value is required by the external ACP initialization negotiation and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "id": "2388653c99db88137c96",
       "path": "packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts",
@@ -2534,7 +2029,6 @@
       "category": "internal-version-field",
       "externalOwner": "Agent Client Protocol initialization contract",
       "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
-      "fieldScope": "const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} }); (packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts:935)",
       "isolationRule": "The value is required by the external ACP initialization negotiation and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path.",
       "id": "674e3b0c4c69631849a2",
       "path": "packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts",
@@ -2544,7 +2038,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "id: 'deepseek-official:deepseek-v4', (packages/agent/webview/src/dsh-session/root.test.tsx:588)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "904aa64b724f89f57985",
       "path": "packages/agent/webview/src/dsh-session/root.test.tsx",
@@ -2554,7 +2047,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "modelId: 'deepseek-v4', (packages/agent/webview/src/dsh-session/root.test.tsx:591)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "7dfc56aa4f66258fc304",
       "path": "packages/agent/webview/src/dsh-session/root.test.tsx",
@@ -2564,7 +2056,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "selectedModelOptionId: 'deepseek-official:deepseek-v4', (packages/agent/webview/src/dsh-session/root.test.tsx:606)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "d2e8287ac080cd043f5f",
       "path": "packages/agent/webview/src/dsh-session/root.test.tsx",
@@ -2574,7 +2065,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "id: 'deepseek-official:deepseek-v4', (packages/agent/webview/src/dsh-session/root.test.tsx:928)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "999b6895e38a07ef8d1a",
       "path": "packages/agent/webview/src/dsh-session/root.test.tsx",
@@ -2584,7 +2074,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "modelId: 'deepseek-v4', (packages/agent/webview/src/dsh-session/root.test.tsx:931)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "ffef29db6dfd170a6ad9",
       "path": "packages/agent/webview/src/dsh-session/root.test.tsx",
@@ -2594,7 +2083,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "selectedModelOptionId: 'deepseek-official:deepseek-v4', (packages/agent/webview/src/dsh-session/root.test.tsx:937)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "f3a3e0b1da5dcaafa1a8",
       "path": "packages/agent/webview/src/dsh-session/root.test.tsx",
@@ -2604,7 +2092,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "id: 'deepseek-official:deepseek-v4', (packages/agent/webview/src/dsh-session/root.test.tsx:982)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "c1551b073a8971956520",
       "path": "packages/agent/webview/src/dsh-session/root.test.tsx",
@@ -2614,7 +2101,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "modelId: 'deepseek-v4', (packages/agent/webview/src/dsh-session/root.test.tsx:985)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "867c0b96f88ff01fa55c",
       "path": "packages/agent/webview/src/dsh-session/root.test.tsx",
@@ -2624,7 +2110,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "selectedModelOptionId: 'deepseek-official:deepseek-v4', (packages/agent/webview/src/dsh-session/root.test.tsx:991)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "ae374d764da4576319bb",
       "path": "packages/agent/webview/src/dsh-session/root.test.tsx",
@@ -2634,7 +2119,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "id: 'deepseek-official:deepseek-v4', (packages/agent/webview/src/dsh-session/root.test.tsx:1892)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "e026349be04751768ce8",
       "path": "packages/agent/webview/src/dsh-session/root.test.tsx",
@@ -2644,7 +2128,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "modelId: 'deepseek-v4', (packages/agent/webview/src/dsh-session/root.test.tsx:1895)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "fed6900984460205d216",
       "path": "packages/agent/webview/src/dsh-session/root.test.tsx",
@@ -2654,7 +2137,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "DeepSeek model catalog",
       "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
-      "fieldScope": "selectedModelOptionId: 'deepseek-official:deepseek-v4', (packages/agent/webview/src/dsh-session/root.test.tsx:1901)",
       "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
       "id": "e9a2fdb06797c367f891",
       "path": "packages/agent/webview/src/dsh-session/root.test.tsx",
@@ -2662,39 +2144,71 @@
     },
     {
       "category": "versioned-path-or-key",
-      "externalOwner": "OpenAI-compatible API",
-      "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
-      "fieldScope": "defaultApiUrl: 'https://api.openai.com/v1', (packages/host/src/ai-model-provider-presets.ts:74)",
-      "isolationRule": "The route belongs to the explicitly configured external provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
-      "id": "ca674868e4a1af61819c",
-      "path": "packages/host/src/ai-model-provider-presets.ts",
-      "token": "/v1"
-    },
-    {
-      "category": "versioned-path-or-key",
       "externalOwner": "MiniMax Video Generation V2 API",
       "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
-      "fieldScope": "defaultApiUrl: 'https://api.minimaxi.com/v2', (packages/host/src/ai-model-provider-presets.ts:126)",
-      "isolationRule": "The versioned endpoint belongs to the explicitly configured MiniMax provider and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
-      "id": "609546648827971c44e2",
-      "path": "packages/host/src/ai-model-provider-presets.ts",
+      "isolationRule": "The endpoint belongs to the explicitly selected MiniMax provider and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
+      "id": "1dac1fae31ae11288ef2",
+      "path": "apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx",
       "token": "/v2"
     },
     {
       "category": "versioned-path-or-key",
       "externalOwner": "ByteDance Ark API",
       "normativeSource": "https://ai-sdk.dev/providers/ai-sdk-providers/bytedance",
-      "fieldScope": "defaultApiUrl: 'https://ark.cn-beijing.volces.com/api/v3', (packages/host/src/ai-model-provider-presets.ts:139)",
-      "isolationRule": "The versioned endpoint belongs to the explicitly configured ByteDance Ark provider and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
-      "id": "e4bfb8a23e00ff33a957",
-      "path": "packages/host/src/ai-model-provider-presets.ts",
+      "isolationRule": "The endpoint belongs to the explicitly selected ByteDance Ark provider and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
+      "id": "4f208a466c6be3092997",
+      "path": "apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx",
+      "token": "/v3"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "MiniMax Video Generation V2 API",
+      "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
+      "isolationRule": "The endpoint is provider-specific configuration for the explicitly selected MiniMax adapter and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
+      "id": "811ba287ad069341480d",
+      "path": "packages/generation/domain/src/provider-capabilities.ts",
+      "token": "/v2"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "ByteDance Ark API",
+      "normativeSource": "https://ai-sdk.dev/providers/ai-sdk-providers/bytedance",
+      "isolationRule": "The endpoint is provider-specific configuration for the explicitly selected ByteDance Ark adapter and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
+      "id": "2ce656ae3baa373f3adf",
+      "path": "packages/generation/domain/src/provider-capabilities.ts",
+      "token": "/v3"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI-compatible API",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
+      "isolationRule": "The endpoint is provider-specific configuration for the explicitly selected OpenAI adapter and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
+      "id": "dcc06ca2c4ad3bc57a42",
+      "path": "packages/generation/domain/src/provider-capabilities.ts",
+      "token": "/v1"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "MiniMax Video Generation V2 API",
+      "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
+      "isolationRule": "The endpoint configures only the explicitly selected MiniMax test provider and cannot dispatch an OpenNeko contract, migration, or alternate provider.",
+      "id": "2bcdaf2bfc0e89e0a5f6",
+      "path": "packages/host/src/ai-model-settings-service.test.ts",
+      "token": "/v2"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "ByteDance Ark API",
+      "normativeSource": "https://ai-sdk.dev/providers/ai-sdk-providers/bytedance",
+      "isolationRule": "The endpoint configures only the explicitly selected ByteDance Ark test provider and cannot dispatch an OpenNeko contract, migration, or alternate provider.",
+      "id": "fb89a951ef23fbab3969",
+      "path": "packages/host/src/ai-model-settings-service.test.ts",
       "token": "/v3"
     },
     {
       "category": "versioned-path-or-key",
       "externalOwner": "Configured DeepSeek-compatible model provider",
       "normativeSource": "https://api-docs.deepseek.com/api/create-chat-completion",
-      "fieldScope": "apiUrl: 'https://api.deepseek.com/v1', (packages/host/src/ai-model-settings-contract.test.ts:17)",
       "isolationRule": "The route is passed only to the explicitly selected DeepSeek-compatible provider and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "id": "6de44fd450499fe6c130",
       "path": "packages/host/src/ai-model-settings-contract.test.ts",
@@ -2704,7 +2218,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "Configured DeepSeek-compatible model provider",
       "normativeSource": "https://api-docs.deepseek.com/api/create-chat-completion",
-      "fieldScope": "apiUrl: 'https://api.deepseek.com/v1', (packages/host/src/ai-model-settings-contract.test.ts:39)",
       "isolationRule": "The route is passed only to the explicitly selected DeepSeek-compatible provider and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "id": "edbc9ad5f5106cb2f022",
       "path": "packages/host/src/ai-model-settings-contract.test.ts",
@@ -2714,7 +2227,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "Configured DeepSeek-compatible model provider",
       "normativeSource": "https://api-docs.deepseek.com/api/create-chat-completion",
-      "fieldScope": "apiUrl: 'https://api.deepseek.com/v1', (packages/host/src/ai-model-settings-contract.test.ts:82)",
       "isolationRule": "The route is passed only to the explicitly selected DeepSeek-compatible provider and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "id": "e543184a112a790dcb34",
       "path": "packages/host/src/ai-model-settings-contract.test.ts",
@@ -2724,7 +2236,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "OpenAI-compatible API",
       "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
-      "fieldScope": "apiUrl: 'https://example.test/v1', (packages/host/src/ai-model-settings-contract.test.ts:135)",
       "isolationRule": "The route belongs to the explicitly configured external provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "id": "eb7d8bf76df9bb3fd444",
       "path": "packages/host/src/ai-model-settings-contract.test.ts",
@@ -2734,7 +2245,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "MiniMax Video Generation V2 API",
       "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
-      "fieldScope": "apiUrl: 'https://api.minimaxi.com/v2', (packages/host/src/ai-model-settings-contract.test.ts:164)",
       "isolationRule": "The versioned endpoint belongs to the explicitly configured MiniMax provider and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
       "id": "c7b7930ee2b48fa5b237",
       "path": "packages/host/src/ai-model-settings-contract.test.ts",
@@ -2744,7 +2254,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "OpenAI-compatible API",
       "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
-      "fieldScope": "apiUrl: 'https://example.test/v1', (packages/host/src/ai-model-settings-service.test.ts:17)",
       "isolationRule": "The route belongs to the explicitly configured external provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "id": "fc29fff8ff9c8f138cfd",
       "path": "packages/host/src/ai-model-settings-service.test.ts",
@@ -2754,7 +2263,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "OpenAI-compatible API",
       "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
-      "fieldScope": "apiUrl: 'https://example.test/v1', (packages/host/src/ai-model-settings-service.test.ts:84)",
       "isolationRule": "The route belongs to the explicitly configured external provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "id": "5279b04b8a60b7ea7c26",
       "path": "packages/host/src/ai-model-settings-service.test.ts",
@@ -2764,7 +2272,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "OpenAI-compatible API",
       "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
-      "fieldScope": "apiUrl: 'https://example.test/v1', (packages/host/src/ai-model-settings-service.test.ts:225)",
       "isolationRule": "The route belongs to the explicitly configured external provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "id": "1d2be3d6ce9222d10794",
       "path": "packages/host/src/ai-model-settings-service.test.ts",
@@ -2774,7 +2281,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "OpenAI-compatible API",
       "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
-      "fieldScope": "apiUrl: 'https://example.test/v1', (packages/host/src/ai-model-settings-service.test.ts:251)",
       "isolationRule": "The route belongs to the explicitly configured external provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "id": "0a2ae9707a24974963bf",
       "path": "packages/host/src/ai-model-settings-service.test.ts",
@@ -2784,7 +2290,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "MiniMax Video Generation V2 API",
       "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
-      "fieldScope": "apiUrl: 'https://api.minimaxi.com/v2', (packages/host/src/ai-model-settings-service.test.ts:324)",
       "isolationRule": "The versioned endpoint belongs to the explicitly configured MiniMax provider and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
       "id": "fda0b766e79e8a00d392",
       "path": "packages/host/src/ai-model-settings-service.test.ts",
@@ -2794,7 +2299,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "ByteDance Ark API",
       "normativeSource": "https://ai-sdk.dev/providers/ai-sdk-providers/bytedance",
-      "fieldScope": "apiUrl: 'https://ark.cn-beijing.volces.com/api/v3', (packages/host/src/ai-model-settings-service.test.ts:331)",
       "isolationRule": "The versioned endpoint belongs to the explicitly configured ByteDance Ark provider and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
       "id": "143cea372e682613befc",
       "path": "packages/host/src/ai-model-settings-service.test.ts",
@@ -2804,7 +2308,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "MiniMax Video Generation V2 API",
       "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
-      "fieldScope": "apiUrl: 'https://minimax-proxy.example/v2', (packages/host/src/ai-model-settings-service.test.ts:378)",
       "isolationRule": "The versioned endpoint belongs to the explicitly configured MiniMax provider and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
       "id": "f59a7f8b5e359d1bf1fe",
       "path": "packages/host/src/ai-model-settings-service.test.ts",
@@ -2814,7 +2317,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "MiniMax Video Generation V2 API",
       "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
-      "fieldScope": "apiUrl: 'https://minimax-proxy.example/v2', (packages/host/src/ai-model-settings-service.test.ts:389)",
       "isolationRule": "The versioned endpoint belongs to the explicitly configured MiniMax provider and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
       "id": "253df2498353735d5bb2",
       "path": "packages/host/src/ai-model-settings-service.test.ts",
@@ -2824,7 +2326,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "OpenAI-compatible API",
       "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
-      "fieldScope": "apiUrl: 'https://config.example/v1', (packages/host/src/ai-model-settings-service.test.ts:701)",
       "isolationRule": "The route belongs to the explicitly configured external provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
       "id": "54cfc68c67b209737715",
       "path": "packages/host/src/ai-model-settings-service.test.ts",
@@ -2834,7 +2335,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "MiniMax Video Generation V2 API",
       "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
-      "fieldScope": "apiUrl: 'https://config.example/v2', (packages/host/src/ai-model-settings-service.test.ts:724)",
       "isolationRule": "The versioned endpoint belongs to the explicitly configured MiniMax provider and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
       "id": "711b0e5d3d2eb891cf73",
       "path": "packages/host/src/ai-model-settings-service.test.ts",
@@ -2844,7 +2344,6 @@
       "category": "versioned-path-or-key",
       "externalOwner": "MiniMax Video Generation V2 API",
       "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
-      "fieldScope": "apiUrl: 'https://config.example/v2', (packages/host/src/ai-model-settings-service.test.ts:740)",
       "isolationRule": "The versioned endpoint belongs to the explicitly configured MiniMax provider and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
       "id": "21addf0c59a159b22998",
       "path": "packages/host/src/ai-model-settings-service.test.ts",
@@ -2854,27 +2353,15 @@
       "category": "internal-version-field",
       "externalOwner": "Three.js Material API",
       "normativeSource": "https://threejs.org/docs/#api/en/materials/Material.version",
-      "fieldScope": "expect(opaqueBlend).toMatchObject({ transparent: false, depthWrite: true, version: 1 }); (packages/model/webview/src/threeRuntime.test.ts:262)",
       "isolationRule": "The assertion observes Three.js material invalidation only; the value is neither persisted nor exposed through an OpenNeko contract and cannot select a component shape, migration, or alternate renderer.",
       "id": "469df5fe3ff8f1e8c5b4",
       "path": "packages/model/webview/src/threeRuntime.test.ts",
       "token": "version"
     },
     {
-      "category": "versioned-path-or-key",
-      "externalOwner": "MiniMax Video Generation V2 API",
-      "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
-      "fieldScope": "generationPresetState.apiUrl !== 'https://api.minimaxi.com/v2' || (scripts/desktop-functional/desktop-ai-model-settings.mjs:139)",
-      "isolationRule": "The versioned endpoint belongs to the explicitly configured MiniMax provider and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
-      "id": "bed849aa396049abb857",
-      "path": "scripts/desktop-functional/desktop-ai-model-settings.mjs",
-      "token": "/v2"
-    },
-    {
       "category": "internal-version-field",
       "externalOwner": "npm package and application release metadata",
       "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
-      "fieldScope": "version: NODE_RELEASE, (scripts/prepare-dsh-development-runtime.mjs:324)",
       "isolationRule": "The value is copied only into the generated third-party license inventory and cannot select an OpenNeko contract, persisted shape, migration, runtime implementation, or fallback path.",
       "id": "e6a5edcccf566ab722ae",
       "path": "scripts/prepare-dsh-development-runtime.mjs",
@@ -2884,11 +2371,199 @@
       "category": "internal-version-field",
       "externalOwner": "npm package and application release metadata",
       "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
-      "fieldScope": "version: manifest.version, (scripts/prepare-dsh-development-runtime.mjs:363)",
       "isolationRule": "The value is copied only into the generated third-party license inventory and cannot select an OpenNeko contract, persisted shape, migration, runtime implementation, or fallback path.",
       "id": "a47effbea2881c9def25",
       "path": "scripts/prepare-dsh-development-runtime.mjs",
       "token": "version"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "id": "4f4d2eb8e9fa7b175b55",
+      "path": "apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts",
+      "token": "-v4",
+      "externalOwner": "Suno model catalog",
+      "normativeSource": "https://help.suno.com/en/articles/3593281",
+      "isolationRule": "The provider-configured model identifier and option prefix select an external Suno model only; they cannot identify an OpenNeko contract, persisted shape, migration, or fallback provider."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "id": "c17dd73e31b25220edf2",
+      "path": "apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts",
+      "token": "-v4",
+      "externalOwner": "Suno model catalog",
+      "normativeSource": "https://help.suno.com/en/articles/3593281",
+      "isolationRule": "The provider-configured model identifier and option prefix select an external Suno model only; they cannot identify an OpenNeko contract, persisted shape, migration, or fallback provider."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "id": "1a8fdb61bdb6147bdec4",
+      "path": "apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts",
+      "token": "-v4",
+      "externalOwner": "Suno model catalog",
+      "normativeSource": "https://help.suno.com/en/articles/3593281",
+      "isolationRule": "The provider-configured model identifier and option prefix select an external Suno model only; they cannot identify an OpenNeko contract, persisted shape, migration, or fallback provider."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "id": "1b1cdd3c3e1f91f247b3",
+      "path": "apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts",
+      "token": "-v4",
+      "externalOwner": "Suno model catalog",
+      "normativeSource": "https://help.suno.com/en/articles/3593281",
+      "isolationRule": "The provider-configured model identifier and option prefix select an external Suno model only; they cannot identify an OpenNeko contract, persisted shape, migration, or fallback provider."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "id": "f9c23f4417213e90f426",
+      "path": "apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts",
+      "token": "-v4",
+      "externalOwner": "DeepSeek model catalog",
+      "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
+      "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "id": "955376002a26fb2ec21c",
+      "path": "apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts",
+      "token": "-v4",
+      "externalOwner": "DeepSeek model catalog",
+      "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
+      "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "id": "7907bcbc8d0130144120",
+      "path": "apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts",
+      "token": "-v4",
+      "externalOwner": "Suno model catalog",
+      "normativeSource": "https://help.suno.com/en/articles/3593281",
+      "isolationRule": "The provider-configured model identifier and option prefix select an external Suno model only; they cannot identify an OpenNeko contract, persisted shape, migration, or fallback provider."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "id": "1257d3b0c297b6f33040",
+      "path": "apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts",
+      "token": "-v4",
+      "externalOwner": "Suno model catalog",
+      "normativeSource": "https://help.suno.com/en/articles/3593281",
+      "isolationRule": "The provider-configured model identifier and option prefix select an external Suno model only; they cannot identify an OpenNeko contract, persisted shape, migration, or fallback provider."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "id": "52b324ae1885dee1d324",
+      "path": "apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts",
+      "token": "-v4",
+      "externalOwner": "Suno model catalog",
+      "normativeSource": "https://help.suno.com/en/articles/3593281",
+      "isolationRule": "The provider-configured model identifier and option prefix select an external Suno model only; they cannot identify an OpenNeko contract, persisted shape, migration, or fallback provider."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "id": "b02b97f5bee5f610b2e2",
+      "path": "apps/neko-desktop/src/main/desktop-dsh-composer-configuration.test.ts",
+      "token": "-v4",
+      "externalOwner": "Suno model catalog",
+      "normativeSource": "https://help.suno.com/en/articles/3593281",
+      "isolationRule": "The provider-configured model identifier and option prefix select an external Suno model only; they cannot identify an OpenNeko contract, persisted shape, migration, or fallback provider."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "id": "4840444b6af3e8d9e21d",
+      "path": "apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx",
+      "token": "/v1",
+      "externalOwner": "OpenAI-compatible API",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
+      "isolationRule": "The route belongs to the explicitly configured external provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "id": "9aaa7e55ee136c4cd0dc",
+      "path": "apps/neko-desktop/src/renderer/DesktopSettingsSurface.test.tsx",
+      "token": "/v1",
+      "externalOwner": "OpenAI-compatible API",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
+      "isolationRule": "The route belongs to the explicitly configured external provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider."
+    },
+    {
+      "category": "internal-version-field",
+      "id": "d38e546a7c94909a29cf",
+      "path": "packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts",
+      "token": "protocolVersion",
+      "externalOwner": "Agent Client Protocol initialization contract",
+      "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
+      "isolationRule": "The value is required by the external ACP initialization negotiation and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path."
+    },
+    {
+      "category": "internal-version-field",
+      "id": "477b756753ac86242d9a",
+      "path": "packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts",
+      "token": "protocolVersion",
+      "externalOwner": "Agent Client Protocol initialization contract",
+      "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
+      "isolationRule": "The value is required by the external ACP initialization negotiation and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path."
+    },
+    {
+      "category": "internal-version-field",
+      "id": "beb7b97482ea4c438e01",
+      "path": "packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts",
+      "token": "protocolVersion",
+      "externalOwner": "Agent Client Protocol initialization contract",
+      "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
+      "isolationRule": "The value is required by the external ACP initialization negotiation and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path."
+    },
+    {
+      "category": "internal-version-field",
+      "id": "84c3ed6d0f53dd6538e3",
+      "path": "packages/agent/runtime/src/acp/dsh-acp-application-client.test.ts",
+      "token": "protocolVersion",
+      "externalOwner": "Agent Client Protocol initialization contract",
+      "normativeSource": "https://agentclientprotocol.com/protocol/initialization",
+      "isolationRule": "The value is required by the external ACP initialization negotiation and cannot dispatch an OpenNeko contract, schema, component state, migration, provider, or alternate runtime path."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "id": "f7950471d03455ab3a10",
+      "path": "packages/generation/domain/src/media/__tests__/media-linked-execution.test.ts",
+      "token": "/v2",
+      "externalOwner": "MiniMax Video Generation V2 API",
+      "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
+      "isolationRule": "The value configures only a MiniMax test provider and cannot dispatch an OpenNeko contract."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "id": "e3822679cb43f9a76ed9",
+      "path": "packages/generation/domain/src/media/__tests__/media-linked-execution.test.ts",
+      "token": "/v2",
+      "externalOwner": "MiniMax Video Generation V2 API",
+      "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
+      "isolationRule": "The value configures only a MiniMax test provider and cannot dispatch an OpenNeko contract."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "id": "859597301ce48e50cfd3",
+      "path": "packages/host/src/ai-model-settings-service.test.ts",
+      "token": "/v1",
+      "externalOwner": "OpenAI-compatible API",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
+      "isolationRule": "The route belongs to the explicitly configured external provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "id": "9766c32b4124cc13635b",
+      "path": "packages/host/src/ai-model-settings-service.test.ts",
+      "token": "/v1",
+      "externalOwner": "OpenAI-compatible API",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
+      "isolationRule": "The route belongs to the explicitly configured external provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "id": "f4a41d0aca3cce9368d7",
+      "path": "packages/host/src/ai-model-settings-service.test.ts",
+      "token": "/v1",
+      "externalOwner": "OpenAI-compatible API",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
+      "isolationRule": "The route belongs to the explicitly configured external provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider."
     }
   ]
 }

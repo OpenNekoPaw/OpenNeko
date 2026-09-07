@@ -26,6 +26,24 @@ export function CopyIcon({ size = 16, className, strokeWidth = 2 }: IconProps) {
   );
 }
 
+export function BranchIcon({ size = 16, className, strokeWidth = 2 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      className={className}
+      {...base(strokeWidth)}
+    >
+      <circle cx="6" cy="5" r="2" />
+      <circle cx="18" cy="6" r="2" />
+      <circle cx="18" cy="18" r="2" />
+      <path d="M8 5h3a4 4 0 0 1 4 4v5a4 4 0 0 0 1.2 2.8" />
+      <path d="M8 5v7a6 6 0 0 0 6 6h2" />
+    </svg>
+  );
+}
+
 export function CheckIcon({ size = 16, className, strokeWidth = 2 }: IconProps) {
   return (
     <svg

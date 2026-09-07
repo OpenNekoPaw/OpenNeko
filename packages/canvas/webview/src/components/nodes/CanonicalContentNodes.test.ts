@@ -31,9 +31,8 @@ describe('canonical content node runtime boundaries', () => {
     expect(source).toContain('<PreviewSurface');
     expect(source).toContain('surfaceKind="inline"');
     expect(source).not.toContain('audioPresentation');
-    expect(source).toContain('audioLayout={mediaType ===');
+    expect(source).not.toContain('audioLayout');
     expect(source).toContain("className={mediaType === 'image' ? 'canvas-image-node-frame'");
-    expect(source).toContain("'node-card'");
     expect(source).not.toContain('canvas-audio-node-title');
     expect(source).not.toContain('onPointerEnter');
     expect(source).not.toContain('onPointerLeave');
@@ -54,7 +53,7 @@ describe('canonical content node runtime boundaries', () => {
     expect(source).toContain("t('node.contentLocatorMissing')");
     expect(source).toContain('!contentLocator ?');
     expect(source).toContain(
-      'contentLocator && onFullscreenPreview ? () => onFullscreenPreview(node.id) : undefined',
+      'host.executeMaterialAction(CANVAS_EDIT_TEXT_ACTION_ID, [node.id], {})',
     );
     expect(source).toContain('isFullscreenPreviewFile(node.data)');
     expect(source).toContain('contentLocator && onOpen');
@@ -74,8 +73,10 @@ describe('canonical content node runtime boundaries', () => {
       }),
     ).toBe('outline.md');
     expect(source).toContain('text: fileName');
+    expect(source).toContain("ariaLabel: t('node.openFile', { name: fileName })");
     expect(source).toContain('text: title');
     expect(baseNodeSource).toContain('data-canvas-node-label');
+    expect(baseNodeSource).toContain('canvas-node-external-label--action');
     expect(baseNodeSource.indexOf('data-canvas-node-label')).toBeLessThan(
       baseNodeSource.indexOf('{/* Node content */}'),
     );

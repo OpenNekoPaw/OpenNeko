@@ -3,17 +3,38 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "qualify": "pnpm --dir ../../packages/dsh-bridge build && pnpm --dir ../../packages/agent/dsh-plugin build && pnpm --dir ../../packages/generation/dsh-plugin build && pnpm --dir ../../packages/canvas/dsh-plugin build && node src/qualify.mjs",
+    "qualify": "pnpm --dir ../../packages/dsh-bridge build && pnpm --dir ../../packages/agent/dsh-plugin build && pnpm --dir ../../packages/generation/dsh-plugin build && pnpm --dir ../../packages/canvas/dsh-plugin build && pnpm --dir ../../packages/content/dsh-plugin build && node src/qualify.mjs",
     "qualify:draft-input-catalog": "pnpm --dir ../../packages/dsh-bridge build && node src/qualify.mjs --draft-input-catalog-only",
     "qualify:model-transition": "pnpm --dir ../../packages/dsh-bridge build && node src/qualify.mjs --session-model-transition-only",
     "test": "node --test src/*.test.mjs"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "0.25.1",
-    "@deepseek-ai/dsh": "0.1.0-rc.8",
-    "@deepseek-ai/dsh-base": "0.1.0-rc.8",
-    "@deepseek-ai/dsh-headless": "0.1.0-rc.8",
-    "@deepseek-ai/dsh-llm": "0.1.0-rc.8",
-    "@deepseek-ai/dsh-tools": "0.1.0-rc.8"
+    "@deepseek-ai/dsh": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-base": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-headless": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-llm": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-tools": "0.1.1-rc.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "@deepseek-ai/dsh-anonymous-user-id": "0.1.1-rc.2",
+      "@deepseek-ai/dsh-atomic-write": "0.1.1-rc.2",
+      "@deepseek-ai/dsh-bash-local": "0.1.1-rc.2",
+      "@deepseek-ai/dsh-code-runtime": "0.1.1-rc.2",
+      "@deepseek-ai/dsh-compaction": "0.1.1-rc.2",
+      "@deepseek-ai/dsh-fs": "0.1.1-rc.2",
+      "@deepseek-ai/dsh-invariants": "0.1.1-rc.2",
+      "@deepseek-ai/dsh-output-retention": "0.1.1-rc.2",
+      "@deepseek-ai/dsh-sandbox": "0.1.1-rc.2",
+      "@deepseek-ai/dsh-scope": "0.1.1-rc.2",
+      "@deepseek-ai/dsh-session-telemetry": "0.1.1-rc.2",
+      "@deepseek-ai/dsh-session-title-llm": "0.1.1-rc.2",
+      "@deepseek-ai/dsh-shell": "0.1.1-rc.2",
+      "@deepseek-ai/dsh-spill": "0.1.1-rc.2",
+      "@deepseek-ai/dsh-subagent-in-process-driver": "0.1.1-rc.2",
+      "@deepseek-ai/dsh-timeout": "0.1.1-rc.2",
+      "@deepseek-ai/dsh-workflow": "0.1.1-rc.2"
+    }
   }
 }

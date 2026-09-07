@@ -7,7 +7,7 @@
 
 import type { CanvasData } from '../types/canvas';
 import type { ValidationResult } from './validator';
-import { validateNkc } from './validator';
+import { isNkcNodeContentDiagnostic, validateNkc } from './validator';
 
 /** Result of loading an NKC file */
 export interface NkcLoadResult {
@@ -90,6 +90,36 @@ export function saveNkc(data: CanvasData, options: NkcSaveOptions = {}): string 
 export function isValidNkc(data: unknown): data is CanvasData {
   const result = validateNkc(data);
   return result.valid;
+}
+
+/**
+ * A document with a valid root, connections, and projectable node shells can be
+ * opened even when one node's durable content is unavailable. The invalid node
+ * remains intact so the UI can expose its diagnostic without losing user data.
+ */
+export function isLoadableNkc(data: unknown): data is CanvasData {
+  if (!isCanvasRoot(data)) return false;
+  const validation = validateNkc(data);
+  return validation.errors.every(isNkcNodeContentDiagnostic);
+}
+
+export function isLoadableNkcResult(result: NkcLoadResult): boolean {
+  return isCanvasRoot(result.data) && result.validation.errors.every(isNkcNodeContentDiagnostic);
+}
+
+/** Persist a loadable document while preserving unavailable node content verbatim. */
+export function saveLoadableNkc(
+  data: CanvasData,
+  options: Pick<NkcSaveOptions, 'indent'> = {},
+): string {
+  if (!isLoadableNkc(data)) {
+    const validation = validateNkc(data);
+    const errorMessages = validation.errors
+      .map((error) => `${error.field}: ${error.message}`)
+      .join('; ');
+    throw new Error(`NKC loadable document validation failed: ${errorMessages}`);
+  }
+  return JSON.stringify(data, null, options.indent ?? 2);
 }
 
 // =============================================================================

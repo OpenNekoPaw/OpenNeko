@@ -12,6 +12,8 @@ import {
   decodeDshAcpMcpIdentityRequest,
   decodeDshAcpMcpServerInput,
   decodeDshAcpSkillMutationRequest,
+  decodeDshAcpSkillDetailProjection,
+  decodeDshAcpSkillDetailRequest,
   decodeDshAcpInboxSnapshot,
   decodeDshAcpInboxEnqueueRequest,
   decodeDshAcpImageAttachmentReadProjection,
@@ -19,6 +21,8 @@ import {
   decodeDshAcpJsonPayload,
   decodeDshAcpModelConfiguration,
   decodeDshAcpSessionContextSetRequest,
+  decodeDshAcpSessionBranchProjection,
+  decodeDshAcpSessionBranchRequest,
   decodeDshAcpSessionArchiveRequest,
   decodeDshAcpSessionEventNotification,
   decodeDshAcpSkillObservationProjection,
@@ -27,6 +31,21 @@ import {
 } from './dsh-acp';
 
 describe('DSH ACP extension contract', () => {
+  it('accepts large image attachments while preserving exact byte metadata', () => {
+    const bytes = Buffer.alloc(5 * 1024 * 1024, 97);
+    const input = {
+      attachment: {
+        attachmentId: 'large-image',
+        mediaType: 'image/png',
+        bytes: bytes.length,
+        width: 4096,
+        height: 4096,
+      },
+      data: bytes.toString('base64'),
+    };
+    expect(decodeDshAcpImageAttachmentReadProjection(input)).toEqual(input);
+  });
+
   it('decodes exact staged validation and scoped Skill observation payloads', () => {
     expect(
       decodeDshAcpStagedSkillValidationRequest({
@@ -72,6 +91,37 @@ describe('DSH ACP extension contract', () => {
     expect(() => decodeDshAcpExtensionProjection({ ...projection, plugins: [] })).toThrow(
       /must contain exactly/u,
     );
+  });
+
+  it('decodes exact on-demand Skill detail with a canonical content fingerprint', () => {
+    expect(decodeDshAcpSkillDetailRequest({ name: 'review', source: 'user-dsh' })).toEqual({
+      name: 'review',
+      source: 'user-dsh',
+    });
+    expect(
+      decodeDshAcpSkillDetailProjection({
+        name: 'review',
+        description: 'Review drafts.',
+        source: 'user-dsh',
+        provider: 'filesystem',
+        userInvocable: true,
+        modelInvocable: true,
+        content: '# Review',
+        fingerprint: `sha256:${'a'.repeat(64)}`,
+      }),
+    ).toMatchObject({ name: 'review', content: '# Review' });
+    expect(() =>
+      decodeDshAcpSkillDetailProjection({
+        name: 'review',
+        description: 'Review drafts.',
+        source: 'user-dsh',
+        provider: 'filesystem',
+        userInvocable: true,
+        modelInvocable: true,
+        content: '# Review',
+        fingerprint: 'sha256:short',
+      }),
+    ).toThrow(/canonical SHA-256/u);
   });
 
   it('decodes exact Skill and MCP lifecycle payloads', () => {
@@ -141,7 +191,7 @@ describe('DSH ACP extension contract', () => {
         },
         data: 'YQ==',
       }),
-    ).toThrow(/exceeds/u);
+    ).toThrow(/byte length/u);
   });
 
   it('decodes exact bounded context pressure while allowing unavailable optional fields', () => {
@@ -209,12 +259,20 @@ describe('DSH ACP extension contract', () => {
         prompt: [{ type: 'text', text: 'next' }],
         displayContent: [{ type: 'text', text: 'next' }],
         contextText: 'workspace context',
+        configuration: {
+          model: '["openai","gpt-5",8192]',
+          permissionPresetId: 'workspace-write',
+        },
       }),
     ).toEqual({
       sessionId: 'session-1',
       prompt: [{ type: 'text', text: 'next' }],
       displayContent: [{ type: 'text', text: 'next' }],
       contextText: 'workspace context',
+      configuration: {
+        model: '["openai","gpt-5",8192]',
+        permissionPresetId: 'workspace-write',
+      },
     });
     expect(() =>
       decodeDshAcpInboxEnqueueRequest({
@@ -222,6 +280,10 @@ describe('DSH ACP extension contract', () => {
         prompt: [{ type: 'text', text: 'next' }],
         displayContent: [{ type: 'text', text: 'next' }],
         contextText: 'workspace context',
+        configuration: {
+          model: '["openai","gpt-5",8192]',
+          permissionPresetId: 'workspace-write',
+        },
         fallbackQueue: true,
       }),
     ).toThrow(/must contain exactly/u);
@@ -239,6 +301,10 @@ describe('DSH ACP extension contract', () => {
         ],
         displayContent: [{ type: 'image', name: 'clipboard.png' }],
         contextText: 'workspace context',
+        configuration: {
+          model: '["openai","gpt-5",8192]',
+          permissionPresetId: 'workspace-write',
+        },
       }),
     ).toMatchObject({
       prompt: [{ type: 'image', _meta: { opennekoDisplayName: 'clipboard.png' } }],
@@ -259,16 +325,48 @@ describe('DSH ACP extension contract', () => {
         ],
         displayContent: [{ type: 'image', name: 'large.png' }],
         contextText: 'workspace context',
+        configuration: {
+          model: '["openai","gpt-5",8192]',
+          permissionPresetId: 'workspace-write',
+        },
       }).prompt[0],
     ).toMatchObject({ type: 'image', data: imageData });
+    expect(() =>
+      decodeDshAcpInboxEnqueueRequest({
+        sessionId: 'session-1',
+        prompt: [{ type: 'text', text: 'next' }],
+        displayContent: [{ type: 'text', text: 'next' }],
+        contextText: 'workspace context',
+        configuration: {
+          model: '["openai","gpt-5",8192]',
+          permissionPresetId: '',
+        },
+      }),
+    ).toThrow(/turn permissionPresetId/u);
   });
 
   it('accepts only the exact bounded Session context payload', () => {
     expect(
-      decodeDshAcpSessionContextSetRequest({ sessionId: 'session-1', text: 'Workspace Board' }),
-    ).toEqual({ sessionId: 'session-1', text: 'Workspace Board' });
+      decodeDshAcpSessionContextSetRequest({ sessionId: 'session-1', text: 'workspace.nkc' }),
+    ).toEqual({ sessionId: 'session-1', text: 'workspace.nkc' });
     expect(() =>
       decodeDshAcpSessionContextSetRequest({ sessionId: 'session-1', text: '', stale: true }),
+    ).toThrow(/must contain exactly/u);
+  });
+
+  it('accepts only an exact assistant reply branch identity and result', () => {
+    expect(
+      decodeDshAcpSessionBranchRequest({ sessionId: 'session-1', messageId: 'assistant-1' }),
+    ).toEqual({ sessionId: 'session-1', messageId: 'assistant-1' });
+    expect(decodeDshAcpSessionBranchProjection({ sessionId: 'session-branch' })).toEqual({
+      sessionId: 'session-branch',
+    });
+    expect(() =>
+      decodeDshAcpSessionBranchRequest({
+        sessionId: 'session-1',
+        messageId: 'assistant-1',
+        boundary: 7,
+      }),
     ).toThrow(/must contain exactly/u);
   });
 
@@ -299,7 +397,7 @@ describe('DSH ACP extension contract', () => {
         turn: 2,
         toolCallId: 'call-3',
         sandboxMode: 'workspace-write',
-        tool: 'openneko.generation',
+        tool: 'openneko_generation',
         operation: 'generate-image',
         input: { prompt: 'cat' },
       }),
@@ -308,7 +406,7 @@ describe('DSH ACP extension contract', () => {
       turn: 2,
       toolCallId: 'call-3',
       sandboxMode: 'workspace-write',
-      tool: 'openneko.generation',
+      tool: 'openneko_generation',
       operation: 'generate-image',
       input: { prompt: 'cat' },
     });
@@ -351,7 +449,7 @@ describe('DSH ACP extension contract', () => {
         turn: 0,
         toolCallId: 'call-1',
         sandboxMode: 'workspace-write',
-        tool: 'openneko.generation',
+        tool: 'openneko_generation',
         operation: 'submit',
         input: oversized,
       }),
@@ -468,7 +566,7 @@ describe('DSH ACP extension contract', () => {
         turn: 0,
         toolCallId: 'call-1',
         sandboxMode: 'workspace-write',
-        tool: 'openneko.canvas',
+        tool: 'openneko_canvas',
         operation: 'apply',
         input: { value: undefined },
       }),
@@ -495,7 +593,7 @@ describe('DSH ACP extension contract', () => {
       sessionId: 'session-1',
       turn: 0,
       toolCallId: 'call-1',
-      tool: 'openneko.canvas',
+      tool: 'openneko_canvas',
       operation: 'query',
       input: { documentPath: 'neko/boards/workspace.nkc' },
     };

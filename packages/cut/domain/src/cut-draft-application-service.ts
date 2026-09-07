@@ -119,10 +119,9 @@ export function resolveCutCanvasHandoffTarget(input: {
     activeCut.kind !== 'cut' ||
     activeCut.projectId !== source.projectId ||
     activeCut.workspaceId !== source.workspaceId ||
-    activeCut.viewInstanceId !== source.viewInstanceId ||
     !activeCut.documentId
   ) {
-    throw new Error('Cut Canvas handoff target is outside the exact Workspace View.');
+    throw new Error('Cut Canvas handoff target is outside the exact Workspace.');
   }
   const sessionId = createCutHostSessionId(activeCut.viewId, activeCut.viewInstanceId);
   if (activeCut.ownerId !== sessionId) {

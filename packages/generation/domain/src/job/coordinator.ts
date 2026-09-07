@@ -12,11 +12,7 @@ import {
   type GenerationProviderTaskBinding,
   type MediaGenerationExecutionOptions,
 } from '../execution';
-import type { MediaAdapterResult } from '../contracts';
-import type {
-  ComfyUiWorkflowExecutionPort,
-  ComfyUiWorkflowTaskObservation,
-} from '../comfyui/index';
+import type { GenerationProviderTaskObservation } from '../contracts';
 import type {
   GenerationJobCommandInput,
   GenerationJobPort,
@@ -38,7 +34,6 @@ interface ActiveGeneration {
 export interface GenerationJobCoordinatorOptions {
   readonly store: GenerationJobStore;
   readonly execution: GenerationExecutionPort;
-  readonly comfyUiExecution?: ComfyUiWorkflowExecutionPort;
   readonly resultCommitter: GenerationJobResultCommitter;
   readonly now?: () => number;
   readonly createJobId?: () => string;
@@ -152,16 +147,9 @@ export class GenerationJobCoordinator implements GenerationJobPort {
 
       const active = this.active.get(input.ref.jobId);
       if (current.providerTask) {
-        if (current.request.generationType === 'workflow') {
-          await this.requireComfyUiExecution().cancelWorkflowTask(
-            current.request.request,
-            current.providerTask,
-          );
-        } else {
-          await this.options.execution.cancelExternalTask(
-            bindMediaProviderTask(current, current.providerTask),
-          );
-        }
+        await this.options.execution.cancelExternalTask(
+          bindMediaProviderTask(current, current.providerTask),
+        );
       } else if (!active) {
         throw new GenerationJobError(
           'generation-job-cancel-unsupported',
@@ -228,13 +216,6 @@ export class GenerationJobCoordinator implements GenerationJobPort {
           'generation-job-reconcile-unavailable',
           `Generation Job ${current.ref.jobId} has no provider task identity to reconcile.`,
         );
-      }
-      if (current.request.generationType === 'workflow') {
-        const result = await this.requireComfyUiExecution().describeWorkflowTask(
-          current.request.request,
-          current.providerTask,
-        );
-        return this.applyComfyUiProviderResult(current, result);
       }
       const result = await this.options.execution.describeExternalTask(
         bindMediaProviderTask(current, current.providerTask),
@@ -355,7 +336,6 @@ export class GenerationJobCoordinator implements GenerationJobPort {
               },
             });
           });
-          if (initial.request.generationType === 'workflow') return;
           return this.observeActiveMediaProviderTask(initial, providerTask, controller.signal);
         },
       });
@@ -423,21 +403,13 @@ export class GenerationJobCoordinator implements GenerationJobPort {
   ): Promise<void> {
     try {
       while (!controller.signal.aborted) {
-        const result =
-          initial.request.generationType === 'workflow'
-            ? await this.requireComfyUiExecution().describeWorkflowTask(
-                initial.request.request,
-                providerTask,
-              )
-            : await this.options.execution.describeExternalTask(
-                bindMediaProviderTask(initial, providerTask),
-              );
+        const result = await this.options.execution.describeExternalTask(
+          bindMediaProviderTask(initial, providerTask),
+        );
         const current = await this.enqueue(initial.ref, async () => {
           const latest = await this.options.store.get(initial.ref);
           if (isTerminalJobPhase(latest.phase)) return latest;
-          return initial.request.generationType === 'workflow'
-            ? this.applyComfyUiProviderResult(latest, result as ComfyUiWorkflowTaskObservation)
-            : this.applyProviderResult(latest, result as MediaAdapterResult);
+          return this.applyProviderResult(latest, result);
         });
         if (isTerminalJobPhase(current.phase)) return;
         await this.waitForRecoveryPoll(this.recoveryPollIntervalMs, controller.signal);
@@ -469,7 +441,7 @@ export class GenerationJobCoordinator implements GenerationJobPort {
     initial: GenerationJobSnapshot,
     providerTask: NonNullable<GenerationJobSnapshot['providerTask']>,
     signal: AbortSignal,
-  ): Promise<MediaAdapterResult> {
+  ): Promise<GenerationProviderTaskObservation> {
     while (!signal.aborted) {
       await this.waitForRecoveryPoll(this.recoveryPollIntervalMs, signal);
       const result = await this.options.execution.describeExternalTask(
@@ -512,82 +484,13 @@ export class GenerationJobCoordinator implements GenerationJobPort {
       case 'video-edit':
         return this.options.execution.generateVideo(snapshot.request.request, options);
       case 'text-to-audio':
-      case 'text-to-music':
         return this.options.execution.generateAudio(snapshot.request.request, options);
-      case 'workflow':
-        return this.requireComfyUiExecution().generateWorkflow(snapshot.request.request, options);
     }
-  }
-
-  private async applyComfyUiProviderResult(
-    current: GenerationJobSnapshot,
-    result: ComfyUiWorkflowTaskObservation,
-  ): Promise<GenerationJobSnapshot> {
-    if (current.request.generationType !== 'workflow') {
-      throw new GenerationJobError(
-        'generation-job-binding-mismatch',
-        `Non-workflow Generation Job ${current.ref.jobId} received a ComfyUI workflow result.`,
-      );
-    }
-    switch (result.status) {
-      case 'pending':
-      case 'processing':
-        return this.commit(current, {
-          phase: 'running',
-          progress: {
-            stage: 'waiting-provider',
-            percent: normalizeProgress(result.progress ?? current.progress.percent),
-          },
-        });
-      case 'cancelled':
-        return this.commit(current, {
-          phase: 'cancelled',
-          progress: current.progress,
-          failure: {
-            code: 'generation-provider-cancelled',
-            message: 'ComfyUI reports that the exact workflow prompt was cancelled.',
-            retryable: true,
-          },
-        });
-      case 'failed':
-        return this.commit(current, {
-          phase: 'failed',
-          progress: current.progress,
-          failure: result.error,
-        });
-      case 'completed': {
-        assertGenerationResultBinding(current, result.generation);
-        const committing = await this.commit(current, {
-          phase: 'running',
-          progress: { stage: 'committing-result', percent: 100 },
-        });
-        const resultLocators = await this.options.resultCommitter.commit({
-          ref: current.ref,
-          generation: result.generation,
-        });
-        assertResultLocators(resultLocators);
-        return this.commit(committing, {
-          phase: 'succeeded',
-          progress: { stage: 'completed', percent: 100 },
-          resultLocators: Object.freeze([...resultLocators]),
-        });
-      }
-    }
-  }
-
-  private requireComfyUiExecution(): ComfyUiWorkflowExecutionPort {
-    if (!this.options.comfyUiExecution) {
-      throw new GenerationJobError(
-        'generation-job-binding-mismatch',
-        'ComfyUI workflow execution is not composed for this Generation owner.',
-      );
-    }
-    return this.options.comfyUiExecution;
   }
 
   private async applyProviderResult(
     current: GenerationJobSnapshot,
-    result: MediaAdapterResult,
+    result: GenerationProviderTaskObservation,
   ): Promise<GenerationJobSnapshot> {
     const progress = normalizeProgress(result.progress ?? current.progress.percent);
     switch (result.status) {
@@ -618,10 +521,7 @@ export class GenerationJobCoordinator implements GenerationJobPort {
           },
         });
       case 'completed':
-        if (
-          current.request.generationType === 'prompt' ||
-          current.request.generationType === 'workflow'
-        ) {
+        if (current.request.generationType === 'prompt') {
           throw new GenerationJobError(
             'generation-job-binding-mismatch',
             `Generation Job ${current.ref.jobId} cannot complete through a model-bound media provider task.`,
@@ -716,10 +616,7 @@ function bindMediaProviderTask(
   snapshot: GenerationJobSnapshot,
   task: NonNullable<GenerationJobSnapshot['providerTask']>,
 ): GenerationProviderTaskBinding {
-  if (
-    snapshot.request.generationType === 'prompt' ||
-    snapshot.request.generationType === 'workflow'
-  ) {
+  if (snapshot.request.generationType === 'prompt') {
     throw new GenerationJobError(
       'generation-job-binding-mismatch',
       `Generation Job ${snapshot.ref.jobId} does not have a model-bound media provider task.`,
@@ -770,7 +667,6 @@ function freezeRequest(input: SubmitGenerationJobInput): GenerationJobSnapshot['
         }),
       });
     case 'text-to-audio':
-    case 'text-to-music':
       return Object.freeze({
         generationType: input.generationType,
         providerId: input.providerId,
@@ -781,17 +677,11 @@ function freezeRequest(input: SubmitGenerationJobInput): GenerationJobSnapshot['
           modelId: input.modelId,
         }),
       });
-    case 'workflow':
-      return deepFreezeClone({
-        generationType: input.generationType,
-        providerId: input.providerId,
-        request: input.request,
-      });
   }
 }
 
 function assertRequestBinding(input: SubmitGenerationJobInput): void {
-  if (input.generationType === 'prompt' || input.generationType === 'workflow') return;
+  if (input.generationType === 'prompt') return;
   const requestProviderId = input.request.providerId;
   const requestModelId = input.request.modelId;
   if (
@@ -809,27 +699,6 @@ function assertGenerationResultBinding(
   snapshot: GenerationJobSnapshot,
   result: GenerationExecutionResult,
 ): void {
-  if (snapshot.request.generationType === 'workflow') {
-    if (
-      result.type !== 'workflow' ||
-      result.providerId !== 'comfyui' ||
-      result.request.endpoint !== snapshot.request.request.endpoint ||
-      result.request.clientId !== snapshot.request.request.clientId ||
-      JSON.stringify(result.request) !== JSON.stringify(snapshot.request.request)
-    ) {
-      throw new GenerationJobError(
-        'generation-job-binding-mismatch',
-        `ComfyUI workflow result does not match Job ${snapshot.ref.jobId}'s frozen workflow/input snapshot.`,
-      );
-    }
-    return;
-  }
-  if (result.type === 'workflow') {
-    throw new GenerationJobError(
-      'generation-job-binding-mismatch',
-      `ComfyUI workflow result does not match non-workflow Job ${snapshot.ref.jobId}.`,
-    );
-  }
   if (
     result.providerId !== snapshot.request.providerId ||
     result.modelId !== snapshot.request.modelId ||
@@ -840,19 +709,6 @@ function assertGenerationResultBinding(
       `Generation result binding ${result.providerId}/${result.modelId}/${result.type} does not match Job binding ${snapshot.request.providerId}/${snapshot.request.modelId}/${snapshot.request.generationType}.`,
     );
   }
-}
-
-function deepFreezeClone<T>(value: T): T {
-  const clone = structuredClone(value);
-  deepFreezeValue(clone, new WeakSet<object>());
-  return clone;
-}
-
-function deepFreezeValue(value: unknown, visited: WeakSet<object>): void {
-  if (typeof value !== 'object' || value === null || visited.has(value)) return;
-  visited.add(value);
-  for (const nested of Object.values(value)) deepFreezeValue(nested, visited);
-  Object.freeze(value);
 }
 
 function submissionMatches(

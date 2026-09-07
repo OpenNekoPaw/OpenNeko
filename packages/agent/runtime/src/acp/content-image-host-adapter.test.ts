@@ -64,7 +64,7 @@ function request() {
     turn: 1,
     toolCallId: 'call-1',
     sandboxMode: 'read-only',
-    tool: 'openneko.read_image',
+    tool: 'openneko_read_image',
     operation: 'read-chunk',
     input: { source, offset: 0 },
   } as const;

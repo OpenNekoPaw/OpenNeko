@@ -17,6 +17,7 @@ import { lookup as dnsLookup } from 'node:dns/promises';
 import type {
   ImageModelV3,
   ImageModelV3CallOptions,
+  ImageModelV3File,
   ImageModelV3ProviderMetadata,
   ImageModelV3Usage,
   SharedV3Warning,
@@ -52,6 +53,8 @@ export class NewAPIImageModel implements ImageModelV3 {
 
     // Route image-edit requests (mask or reference image) to /v1/images/edits per
     // the OpenAI/NewAPI spec. Pure text-to-image falls through to generations.
+    const hasNativeFiles = Boolean(options.files?.length);
+    const hasNativeMask = options.mask !== undefined;
     const hasReferenceBase64 =
       typeof nekoExtras['referenceImageBase64'] === 'string' &&
       (nekoExtras['referenceImageBase64'] as string).length > 0;
@@ -61,11 +64,16 @@ export class NewAPIImageModel implements ImageModelV3 {
     const hasMask =
       typeof nekoExtras['maskBase64'] === 'string' &&
       (nekoExtras['maskBase64'] as string).length > 0;
-    if (hasReferenceBase64 || hasReferenceUrl || hasMask) {
+    if (hasNativeFiles || hasNativeMask || hasReferenceBase64 || hasReferenceUrl || hasMask) {
       // The OpenAI/NewAPI edit contract requires a non-empty `image` part. A
       // mask without a source image is unusable — fail fast with a clear error
       // rather than sending an incomplete multipart request that will 4xx.
-      if (hasMask && !hasReferenceBase64 && !hasReferenceUrl) {
+      if (
+        (hasNativeMask || hasMask) &&
+        !hasNativeFiles &&
+        !hasReferenceBase64 &&
+        !hasReferenceUrl
+      ) {
         throw new Error(
           'NewAPI image edit: maskBase64 was provided without a source image. ' +
             'Supply either `referenceImageBase64` or `referenceImageUrl` alongside the mask.',
@@ -214,31 +222,29 @@ export class NewAPIImageModel implements ImageModelV3 {
     form.append('prompt', options.prompt ?? '');
     if (options.n) form.append('n', String(options.n));
     if (options.size) form.append('size', options.size);
+    if (options.aspectRatio) form.append('aspect_ratio', options.aspectRatio);
     const quality = normalizeNewAPIImageQuality(nekoExtras['quality'], this.modelId);
     if (quality !== undefined) form.append('quality', String(quality));
 
     // Attach source image. Accepts base64, data URL, or remote URL (downloaded).
-    const referenceImageBase64 = nekoExtras['referenceImageBase64'] as string | undefined;
-    const referenceImageUrl = nekoExtras['referenceImageUrl'] as string | undefined;
-    if (referenceImageBase64) {
-      const { bytes, mimeType } = decodeBase64OrDataUrl(referenceImageBase64);
-      form.append(
-        'image',
-        new Blob([copyBytesToArrayBuffer(bytes)], { type: mimeType }),
-        `image.${extFromMime(mimeType)}`,
-      );
-    } else if (referenceImageUrl) {
-      const fetched = await fetchBinary(referenceImageUrl, options.abortSignal);
-      if (!fetched) {
-        throw new Error(
-          `NewAPI image edit: failed to download referenceImageUrl (${referenceImageUrl}).`,
+    if (options.files?.length) {
+      for (const file of options.files) {
+        await appendImageModelFile(form, 'image', file, options.abortSignal);
+      }
+    } else {
+      const referenceImageBase64 = nekoExtras['referenceImageBase64'] as string | undefined;
+      const referenceImageUrl = nekoExtras['referenceImageUrl'] as string | undefined;
+      if (referenceImageBase64) {
+        const { bytes, mimeType } = decodeBase64OrDataUrl(referenceImageBase64);
+        appendImageBytes(form, 'image', bytes, mimeType);
+      } else if (referenceImageUrl) {
+        await appendImageModelFile(
+          form,
+          'image',
+          { type: 'url', url: referenceImageUrl },
+          options.abortSignal,
         );
       }
-      form.append(
-        'image',
-        new Blob([copyBytesToArrayBuffer(fetched.bytes)], { type: fetched.mimeType }),
-        `image.${extFromMime(fetched.mimeType)}`,
-      );
     }
 
     // Attach mask. Neko's internal contract is a grayscale PNG where white =
@@ -248,9 +254,12 @@ export class NewAPIImageModel implements ImageModelV3 {
     // be resolved at runtime), throw loudly — uploading the raw grayscale
     // bytes would silently produce wrong inpaint regions, and "fail loudly"
     // is easier to diagnose than "wrong output".
+    const maskFile = options.mask;
     const maskBase64 = nekoExtras['maskBase64'] as string | undefined;
-    if (maskBase64) {
-      const { bytes: rawBytes } = decodeBase64OrDataUrl(maskBase64);
+    if (maskFile || maskBase64) {
+      const rawBytes = maskFile
+        ? (await readImageModelFile(maskFile, options.abortSignal)).bytes
+        : decodeBase64OrDataUrl(maskBase64 ?? '').bytes;
       const convertResult = await grayscaleMaskToTransparentPng(rawBytes);
       if (convertResult.ok === false) {
         throw new Error(
@@ -363,6 +372,46 @@ export class NewAPIImageModel implements ImageModelV3 {
 // Helpers
 // =============================================================================
 
+async function appendImageModelFile(
+  form: FormData,
+  field: string,
+  file: ImageModelV3File,
+  signal?: AbortSignal,
+): Promise<void> {
+  const { bytes, mediaType } = await readImageModelFile(file, signal);
+  appendImageBytes(form, field, bytes, mediaType);
+}
+
+async function readImageModelFile(
+  file: ImageModelV3File,
+  signal?: AbortSignal,
+): Promise<{ readonly bytes: Uint8Array; readonly mediaType: string }> {
+  if (file.type === 'file') {
+    return {
+      bytes: typeof file.data === 'string' ? Buffer.from(file.data, 'base64') : file.data,
+      mediaType: file.mediaType,
+    };
+  }
+  const fetched = await fetchBinary(file.url, signal);
+  if (!fetched) {
+    throw new Error(`NewAPI image edit: failed to download input image (${file.url}).`);
+  }
+  return { bytes: fetched.bytes, mediaType: fetched.mimeType };
+}
+
+function appendImageBytes(
+  form: FormData,
+  field: string,
+  bytes: Uint8Array,
+  mediaType: string,
+): void {
+  form.append(
+    field,
+    new Blob([copyBytesToArrayBuffer(bytes)], { type: mediaType }),
+    `${field}.${extFromMime(mediaType)}`,
+  );
+}
+
 /** Decode a bare base64 string or `data:` URL into raw bytes + MIME. */
 function decodeBase64OrDataUrl(input: string): { bytes: Uint8Array; mimeType: string } {
   const match = /^data:([^;]+);base64,(.*)$/s.exec(input);
@@ -375,14 +424,8 @@ function decodeBase64OrDataUrl(input: string): { bytes: Uint8Array; mimeType: st
 function normalizeNewAPIImageQuality(value: unknown, modelId: string): string | undefined {
   if (typeof value !== 'string' || value.length === 0) return undefined;
   if (!modelId.startsWith('gpt-image-')) return value;
-  switch (value) {
-    case 'hd':
-      return 'high';
-    case 'standard':
-      return 'auto';
-    default:
-      return value;
-  }
+  if (value === 'auto' || value === 'low' || value === 'medium' || value === 'high') return value;
+  throw new Error(`NewAPI GPT Image model rejects quality '${value}'.`);
 }
 
 const AMBIGUOUS_IMAGE_SUBMISSION_CODES = new Set([

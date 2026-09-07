@@ -1,6 +1,6 @@
 export * from './canvas';
 export * from './canvas-creative-scope';
-export * from './canvas-workspace-board';
+export * from './canvas-workspace-delivery';
 export * from './canvas-workspace-context';
 export * from './canvas-playback';
 export * from './canvas-layered';

@@ -8,6 +8,7 @@ import type {
   CanvasNode,
   GenerationCanvasNode,
   MarkdownCanvasNode,
+  MediaCanvasNode,
 } from '@neko/canvas-domain';
 import { createEmptyCanvasData } from '@neko/canvas-domain';
 import { CONTENT_LOCATOR_DRAG_MIME, createContentLocatorDragData } from '@neko/content-domain';
@@ -77,7 +78,9 @@ describe('SelectionGenerationInputPanel', () => {
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
       'Provider rejected this run.',
     );
-    expect(container.querySelector('[data-canvas-generation-recipe-stale="true"]')).not.toBeNull();
+    expect(container.textContent).not.toContain(
+      'This output was generated from an earlier Recipe or input.',
+    );
     expect(container.textContent).not.toContain('Text generation');
   });
 
@@ -86,6 +89,64 @@ describe('SelectionGenerationInputPanel', () => {
     render([reference], [], [reference.id], createHost());
 
     expect(container.innerHTML).toBe('');
+  });
+
+  it('renders an image reference through the authorized Canvas preview path', () => {
+    const postMessage = vi.fn();
+    const node = generationNode({ kind: 'video', prompt: 'Animate the first frame' });
+    const reference = imageReferenceNode();
+    render(
+      [reference, node],
+      [referenceConnection(reference.id, node.id)],
+      [node.id],
+      createHost(undefined, { postMessage }),
+    );
+
+    expect(
+      container.querySelector('[data-canvas-generation-reference-preview="image"]'),
+    ).not.toBeNull();
+    expect(container.querySelector('[data-preview-surface="image"]')).not.toBeNull();
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'preview:resolveResource',
+        nodeId: reference.id,
+        outputId: reference.id,
+        contentLocator: reference.data.contentLocator,
+        contentKind: 'image',
+      }),
+    );
+  });
+
+  it('renders an embedded Agent input without requiring a separate Canvas material node', () => {
+    const postMessage = vi.fn();
+    const locator = {
+      file: {
+        authority: 'workspace' as const,
+        path: 'neko/generated/image/first-frame.png',
+      },
+    };
+    const base = generationNode({ kind: 'video', prompt: 'Animate the first frame' });
+    const node: GenerationCanvasNode = {
+      ...base,
+      data: {
+        ...base.data,
+        inputMaterials: [{ mediaKind: 'image', locator }],
+      },
+    };
+    render([node], [], [node.id], createHost(undefined, { postMessage }));
+
+    expect(
+      container.querySelector('[data-canvas-generation-reference-preview="image"]'),
+    ).not.toBeNull();
+    expect(container.textContent).toContain('first-frame.png');
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'preview:resolveResource',
+        nodeId: node.id,
+        contentLocator: locator,
+        contentKind: 'image',
+      }),
+    );
   });
 
   it('adds an authorized reference to the exact generation node', async () => {
@@ -276,11 +337,8 @@ describe('SelectionGenerationInputPanel', () => {
         providerId: 'provider-1',
         modelId: 'image-model-1',
       },
-      aspectRatio: '1:1',
-      width: 1024,
-      height: 1024,
       count: 1,
-      quality: 'standard',
+      quality: 'auto',
     });
 
     render([node], [], [node.id], createHost(undefined, { updateGenerationRecipe }));
@@ -294,10 +352,7 @@ describe('SelectionGenerationInputPanel', () => {
           providerId: 'provider-1',
           modelId: 'image-model-1',
         },
-        aspectRatio: '1:1',
-        width: 1024,
-        height: 1024,
-        quality: 'standard',
+        quality: 'auto',
         count: 1,
       }),
     );
@@ -306,10 +361,10 @@ describe('SelectionGenerationInputPanel', () => {
     ).toContain('Image Model');
     expect(
       container.querySelector<HTMLButtonElement>('[aria-label="Parameters"]')?.textContent,
-    ).toContain('1:1 · 1K · Medium');
+    ).toContain('Auto · Auto');
     expect(
       container.querySelector<HTMLButtonElement>('[aria-label="Count"]')?.textContent,
-    ).toContain('× 1');
+    ).toBeUndefined();
   });
 
   it('does not replace an authored unset Recipe with the configured default', () => {
@@ -328,81 +383,263 @@ describe('SelectionGenerationInputPanel', () => {
     const parameterMenu = document.querySelector<HTMLElement>(
       '.selection-generation-input-panel__parameter-menu',
     );
-    expect(parameterMenu?.style.getPropertyValue('--generation-input-panel-width')).toBe('620px');
+    expect(parameterMenu?.style.getPropertyValue('--generation-input-panel-width')).toBe('520px');
     expect(
       parameterMenu?.querySelectorAll('.selection-generation-input-panel__option-group'),
-    ).toHaveLength(3);
+    ).toHaveLength(2);
     expect(
       parameterMenu?.querySelectorAll(
-        '.selection-generation-input-panel__option-group[data-option-layout="ratio"] button',
+        '.selection-generation-input-panel__option-group[data-option-layout="image-size"] button',
       ),
-    ).toHaveLength(14);
+    ).toHaveLength(8);
     expect(
       parameterMenu?.querySelectorAll(
-        '.selection-generation-input-panel__option-group[data-option-layout="equal"] button',
+        '.selection-generation-input-panel__option-group[data-option-layout="compact"] button',
       ),
-    ).toHaveLength(3);
+    ).toHaveLength(4);
     await act(async () => {
-      document.querySelector<HTMLButtonElement>('[aria-label="Aspect ratio: 16:9"]')?.click();
-      document.querySelector<HTMLButtonElement>('[aria-label="Resolution: 4K"]')?.click();
-    });
-
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('[aria-label="Count"]')?.click();
-    });
-    const countMenu = document.querySelector<HTMLElement>(
-      '.selection-generation-input-panel__count-menu',
-    );
-    expect(countMenu?.querySelectorAll('[role="menuitemradio"]')).toHaveLength(4);
-    await act(async () => {
-      Array.from(countMenu?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? [])
-        .find((button) => button.textContent?.trim() === '× 2')
+      document
+        .querySelector<HTMLButtonElement>('[aria-label="Size and aspect ratio: 3:2 · 1536×1024"]')
         ?.click();
+    });
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[aria-label="Quality: High"]')?.click();
     });
 
     expect(updateGenerationRecipe).toHaveBeenCalledWith(
       node.id,
-      expect.objectContaining({ kind: 'image', count: 2, width: 4096 }),
+      expect.objectContaining({
+        kind: 'image',
+        count: 1,
+        width: 1536,
+        height: 1024,
+        aspectRatio: '3:2',
+        quality: 'high',
+      }),
     );
   });
 
-  it('switches one Audio node to music mode and filters the model purpose', async () => {
-    const updateGenerationRecipe = vi.fn(async (_nodeId: string, _recipe: CanvasGenerationRecipe) =>
-      snapshot(),
-    );
+  it('repairs stale image parameters and reports the model adjustment', async () => {
+    const updateGenerationRecipe = vi.fn(async () => snapshot());
     const node = generationNode({
-      kind: 'audio',
-      prompt: '',
-      model: {
-        purpose: 'audio.generate',
-        providerId: 'provider-1',
-        modelId: 'audio-model-1',
-      },
+      kind: 'image',
+      prompt: 'Keep the prompt',
+      model: GENERATION_MODELS[1].binding,
+      width: 1920,
+      height: 1080,
+      aspectRatio: '16:9',
+      count: 4,
+      quality: 'high',
     });
     render([node], [], [node.id], createHost(undefined, { updateGenerationRecipe }));
 
     await act(async () => {
-      Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
-        .find((button) => button.textContent === 'Music generation')
-        ?.click();
+      await Promise.resolve();
+      await Promise.resolve();
     });
+
+    expect(updateGenerationRecipe).toHaveBeenCalledWith(node.id, {
+      kind: 'image',
+      prompt: 'Keep the prompt',
+      model: GENERATION_MODELS[1].binding,
+      count: 1,
+      quality: 'high',
+    });
+    expect(container.textContent).toContain('Parameters were adjusted to match Image Model');
+  });
+
+  it('repairs stale video parameters and exposes only controls accepted by the model', async () => {
+    const updateGenerationRecipe = vi.fn(async (_nodeId: string, _recipe: CanvasGenerationRecipe) =>
+      snapshot(),
+    );
+    const node = generationNode({
+      kind: 'video',
+      prompt: 'A cat waving at the camera',
+      model: GENERATION_MODELS[2].binding,
+      aspectRatio: '16:9',
+      resolution: '720p',
+      duration: 5,
+      fps: 24,
+    });
+    render([node], [], [node.id], createHost(undefined, { updateGenerationRecipe }));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
     expect(updateGenerationRecipe).toHaveBeenCalledWith(
       node.id,
       expect.objectContaining({
-        kind: 'audio',
-        isMusic: true,
-        model: {
-          purpose: 'audio.music.generate',
-          providerId: 'provider-1',
-          modelId: 'music-model-1',
-        },
+        kind: 'video',
+        resolution: '768P',
+        duration: 5,
+        aspectRatio: '16:9',
       }),
     );
+    const repairedRecipe = updateGenerationRecipe.mock.calls.at(-1)?.[1];
+    expect(repairedRecipe).not.toHaveProperty('fps');
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'Parameters were adjusted to match Video Model',
+    );
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="Parameters"]')?.click();
+    });
+    const parameterMenu = document.querySelector<HTMLElement>(
+      '.selection-generation-input-panel__parameter-menu',
+    );
+    expect(
+      parameterMenu?.querySelectorAll('.selection-generation-input-panel__option-group'),
+    ).toHaveLength(3);
+    expect(parameterMenu?.textContent).toContain('768P');
+    expect(parameterMenu?.textContent).toContain('2K');
+    expect(parameterMenu?.textContent).not.toContain('Frame rate');
+    expect(parameterMenu?.textContent).not.toContain('720p');
+  });
+
+  it('shows Seedance audio generation without exposing its fixed FPS as editable', async () => {
+    const updateGenerationRecipe = vi.fn(async () => snapshot());
+    const node = generationNode({
+      kind: 'video',
+      prompt: 'A quiet cinematic street',
+      model: SEEDANCE_MODEL.binding,
+      aspectRatio: 'adaptive',
+      resolution: '720p',
+      duration: 5,
+    });
+    const host = createHost(undefined, {
+      updateGenerationRecipe,
+      getAuthoringCapabilities: () => ({
+        sourceModes: [],
+        generationKinds: ['prompt', 'image', 'audio', 'video'],
+        generationModels: [SEEDANCE_MODEL],
+      }),
+    });
+    render([node], [], [node.id], host);
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="Parameters"]')?.click();
+    });
+    const parameterMenu = document.querySelector<HTMLElement>(
+      '.selection-generation-input-panel__parameter-menu',
+    );
+    expect(
+      parameterMenu?.querySelectorAll('.selection-generation-input-panel__option-group'),
+    ).toHaveLength(4);
+    expect(parameterMenu?.textContent).toContain('adaptive');
+    expect(parameterMenu?.textContent).toContain('4k');
+    expect(parameterMenu?.textContent).toContain('Generate audio');
+    expect(parameterMenu?.textContent).not.toContain('Frame rate');
+
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[aria-label="Generate audio: Enabled"]')?.click();
+    });
+    expect(updateGenerationRecipe).toHaveBeenCalledWith(
+      node.id,
+      expect.objectContaining({ generateAudio: true }),
+    );
+  });
+
+  it('conforms parameters when switching from Seedance to MiniMax H3', async () => {
+    const updateGenerationRecipe = vi.fn(async (_nodeId: string, _recipe: CanvasGenerationRecipe) =>
+      snapshot(),
+    );
+    const minimaxModel = { ...GENERATION_MODELS[2], isDefault: false };
+    const node = generationNode({
+      kind: 'video',
+      prompt: 'Switch this shot',
+      model: SEEDANCE_MODEL.binding,
+      aspectRatio: 'adaptive',
+      resolution: '4k',
+      duration: 15,
+      generateAudio: true,
+    });
+    render(
+      [node],
+      [],
+      [node.id],
+      createHost(undefined, {
+        updateGenerationRecipe,
+        getAuthoringCapabilities: () => ({
+          sourceModes: [],
+          generationKinds: ['prompt', 'image', 'audio', 'video'],
+          generationModels: [SEEDANCE_MODEL, minimaxModel],
+        }),
+      }),
+    );
+
     await act(async () => {
       container.querySelector<HTMLButtonElement>('[aria-label="Model"]')?.click();
     });
-    expect(document.body.textContent).toContain('Music Model');
-    expect(document.body.textContent).not.toContain('Audio Model');
+    const minimaxOption = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]'),
+    ).find((button) => button.textContent?.includes('Video Model'));
+    await act(async () => {
+      minimaxOption?.click();
+    });
+
+    const switchedRecipe = updateGenerationRecipe.mock.calls.at(-1)?.[1];
+    expect(switchedRecipe).toEqual({
+      kind: 'video',
+      prompt: 'Switch this shot',
+      model: minimaxModel.binding,
+      aspectRatio: '16:9',
+      resolution: '768P',
+      duration: 15,
+    });
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'Parameters were adjusted to match Video Model',
+    );
+  });
+
+  it('clears hidden video parameters when a custom model has no verified profile', async () => {
+    const updateGenerationRecipe = vi.fn(async () => snapshot());
+    const customModel = {
+      binding: {
+        purpose: 'video.generate' as const,
+        providerId: 'custom-provider',
+        modelId: 'custom-video',
+      },
+      label: 'Custom Video',
+      providerLabel: 'Custom Provider',
+      isDefault: true,
+    };
+    const node = generationNode({
+      kind: 'video',
+      prompt: 'A safe request',
+      model: customModel.binding,
+      resolution: '720p',
+      fps: 24,
+    });
+    render(
+      [node],
+      [],
+      [node.id],
+      createHost(undefined, {
+        updateGenerationRecipe,
+        getAuthoringCapabilities: () => ({
+          sourceModes: [],
+          generationKinds: ['prompt', 'image', 'audio', 'video'],
+          generationModels: [customModel],
+        }),
+      }),
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(updateGenerationRecipe).toHaveBeenCalledWith(node.id, {
+      kind: 'video',
+      prompt: 'A safe request',
+      model: customModel.binding,
+    });
+    expect(container.querySelector('[aria-label="Parameters"]')).toBeNull();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'no verified parameter profile',
+    );
   });
 
   it('keeps the node-anchored panel compact at a fixed gap in a narrow viewport', () => {
@@ -418,7 +655,7 @@ describe('SelectionGenerationInputPanel', () => {
     expect(
       container.querySelector<HTMLElement>('[data-canvas-generation-input="true"]')?.style
         .minHeight,
-    ).toBe('246px');
+    ).toBe('224px');
   });
 
   it('uses a compact node-following composer on desktop', () => {
@@ -426,10 +663,10 @@ describe('SelectionGenerationInputPanel', () => {
     render([node], [], [node.id], createHost(), { width: 1000, height: 700 });
 
     const panel = container.querySelector<HTMLElement>('[data-canvas-generation-input="true"]');
-    expect(panel?.style.width).toBe('620px');
+    expect(panel?.style.width).toBe('520px');
     expect(panel?.style.left).toBe('400px');
     expect(panel?.style.top).toBe('416px');
-    expect(panel?.style.minHeight).toBe('246px');
+    expect(panel?.style.minHeight).toBe('210px');
     expect(
       panel?.querySelector('.selection-generation-input-panel__reference-slot'),
     ).not.toBeNull();
@@ -445,7 +682,7 @@ describe('SelectionGenerationInputPanel', () => {
         { pan: { x: 100, y: 50 }, zoom: 0.5 },
         { width: 1000, height: 700 },
       ),
-    ).toMatchObject({ x: 300, top: 266, width: 620, placement: 'node-below' });
+    ).toMatchObject({ x: 300, top: 266, width: 520, placement: 'node-below' });
     expect(
       resolveGenerationInputPanelPosition(
         { ...node, position: { x: 240, y: 430 } },
@@ -464,7 +701,7 @@ describe('SelectionGenerationInputPanel', () => {
         { pan: { x: 12, y: 0 }, zoom: 1 },
         { width: 500, height: 640 },
       ),
-    ).toEqual({ x: -150, y: -38 });
+    ).toEqual({ x: -150, y: -16 });
     expect(
       resolveGenerationSelectionSafePan(
         node,
@@ -514,6 +751,24 @@ function referenceNode(): MarkdownCanvasNode {
     size: { width: 240, height: 160 },
     zIndex: 0,
     data: { content: '# Reference note\nA stable text input.' },
+  };
+}
+
+function imageReferenceNode(): MediaCanvasNode {
+  return {
+    id: 'reference-image-1',
+    type: 'media',
+    position: { x: 20, y: 30 },
+    size: { width: 240, height: 160 },
+    zIndex: 0,
+    data: {
+      assetPath: 'neko/generated/image/reference-image.png',
+      mediaType: 'image',
+      title: 'Reference image',
+      contentLocator: {
+        file: { authority: 'workspace', path: 'neko/generated/image/reference-image.png' },
+      },
+    },
   };
 }
 
@@ -603,7 +858,6 @@ function createHost(
     runGenerationNode: async () => snapshot(),
     cancelGenerationNode: async () => snapshot(),
     selectGenerationOutput: async () => snapshot(),
-    authorGenerationText: async () => snapshot(),
     getGenerationProjection: () => projection,
     projectContent: async () => snapshot(),
     previewResource: async () => undefined,
@@ -672,6 +926,32 @@ const GENERATION_MODELS = [
     label: 'Image Model',
     providerLabel: 'Provider One',
     isDefault: true,
+    parameterProfile: {
+      kind: 'image' as const,
+      controls: {
+        size: {
+          kind: 'image-size-enum' as const,
+          values: [
+            { id: 'auto' },
+            { id: '1024x1024', width: 1024, height: 1024, aspectRatio: '1:1' },
+            { id: '1536x1024', width: 1536, height: 1024, aspectRatio: '3:2' },
+            { id: '1024x1536', width: 1024, height: 1536, aspectRatio: '2:3' },
+            { id: '2048x2048', width: 2048, height: 2048, aspectRatio: '1:1' },
+            { id: '2048x1152', width: 2048, height: 1152, aspectRatio: '16:9' },
+            { id: '3840x2160', width: 3840, height: 2160, aspectRatio: '16:9' },
+            { id: '2160x3840', width: 2160, height: 3840, aspectRatio: '9:16' },
+          ],
+          defaultValue: 'auto',
+        },
+        quality: {
+          kind: 'string-enum' as const,
+          required: true,
+          values: ['auto', 'low', 'medium', 'high'],
+          defaultValue: 'auto',
+        },
+      },
+      fixed: { outputCount: 1 as const },
+    },
   },
   {
     binding: {
@@ -682,6 +962,33 @@ const GENERATION_MODELS = [
     label: 'Video Model',
     providerLabel: 'Provider One',
     isDefault: true,
+    parameterProfile: {
+      kind: 'video' as const,
+      supportedParameters: ['duration', 'resolution', 'aspectRatio'] as const,
+      controls: {
+        aspectRatio: {
+          kind: 'string-enum' as const,
+          required: true,
+          values: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'],
+          defaultValue: '16:9',
+        },
+        resolution: {
+          kind: 'string-enum' as const,
+          required: true,
+          values: ['768P', '2K'],
+          defaultValue: '768P',
+        },
+        duration: {
+          kind: 'integer' as const,
+          required: true,
+          min: 4,
+          max: 15,
+          step: 1,
+          defaultValue: 5,
+        },
+      },
+      fixed: { outputCount: 1 as const },
+    },
   },
   {
     binding: {
@@ -693,14 +1000,43 @@ const GENERATION_MODELS = [
     providerLabel: 'Provider One',
     isDefault: true,
   },
-  {
-    binding: {
-      purpose: 'audio.music.generate' as const,
-      providerId: 'provider-1',
-      modelId: 'music-model-1',
-    },
-    label: 'Music Model',
-    providerLabel: 'Provider One',
-    isDefault: true,
-  },
 ] as const;
+
+const SEEDANCE_MODEL = {
+  binding: {
+    purpose: 'video.generate' as const,
+    providerId: 'bytedance-provider',
+    modelId: 'seedance-2',
+  },
+  label: 'Seedance 2.0',
+  providerLabel: 'ByteDance',
+  isDefault: true,
+  parameterProfile: {
+    kind: 'video' as const,
+    supportedParameters: ['duration', 'resolution', 'aspectRatio', 'generateAudio'] as const,
+    controls: {
+      aspectRatio: {
+        kind: 'string-enum' as const,
+        required: true,
+        values: ['adaptive', '16:9', '9:16', '1:1', '4:3', '3:4', '21:9'],
+        defaultValue: 'adaptive',
+      },
+      resolution: {
+        kind: 'string-enum' as const,
+        required: true,
+        values: ['480p', '720p', '1080p', '4k'],
+        defaultValue: '720p',
+      },
+      duration: {
+        kind: 'integer' as const,
+        required: true,
+        min: 4,
+        max: 15,
+        step: 1,
+        defaultValue: 5,
+      },
+      generateAudio: { kind: 'boolean' as const, required: false },
+    },
+    fixed: { outputCount: 1 as const, fps: 24 },
+  },
+} as const;

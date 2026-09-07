@@ -268,20 +268,9 @@ describe('config-reader typed results', () => {
     fs.writeFileSync(
       filePath,
       [
-        '[default_models.audio]',
-        'provider_id = "neko-gateway"',
-        'model_id = "music-model"',
-        '',
         '[default_models.video]',
         'provider_id = "neko-gateway"',
         'model_id = "gemini-video"',
-        '',
-        '[[models]]',
-        'id = "music-model"',
-        'name = "music-model"',
-        'provider_id = "neko-gateway"',
-        'type = "audio"',
-        'capabilities = ["text_to_music"]',
         '',
         '[[models]]',
         'id = "gemini-video"',
@@ -298,16 +287,9 @@ describe('config-reader typed results', () => {
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') throw new Error('Expected ok result');
     expect(result.config.defaultModels).toEqual({
-      audio: { providerId: 'neko-gateway', modelId: 'music-model' },
       video: { providerId: 'neko-gateway', modelId: 'gemini-video' },
     });
     expect(result.config.models?.[0]).toEqual(
-      expect.objectContaining({
-        type: 'audio',
-        capabilities: ['text_to_music'],
-      }),
-    );
-    expect(result.config.models?.[1]).toEqual(
       expect.objectContaining({
         type: 'video',
         capabilities: ['text_to_video', 'vision'],
@@ -315,15 +297,11 @@ describe('config-reader typed results', () => {
     );
   });
 
-  it('rejects an unknown purpose while preserving valid sibling purposes', () => {
+  it('rejects retired purpose defaults instead of creating a second routing layer', () => {
     const filePath = path.join(createTempRoot(), 'config.toml');
     fs.writeFileSync(
       filePath,
       [
-        '[default_model_purposes.media_analysis]',
-        'provider_id = "google"',
-        'model_id = "google-gemini-2.5-flash"',
-        '',
         '[default_model_purposes.character_dialogue]',
         'provider_id = "google"',
         'model_id = "google-gemini-2.5-flash"',
@@ -342,23 +320,17 @@ describe('config-reader typed results', () => {
 
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') throw new Error('Expected ok result');
-    expect(result.config.defaultModelPurposes).toEqual({
-      'character.dialogue': {
-        providerId: 'google',
-        modelId: 'google-gemini-2.5-flash',
-      },
-    });
+    expect(result.config.defaultModels).toBeUndefined();
     expect(result.diagnostics).toEqual([
       expect.objectContaining({
-        code: 'unsupportedDefaultModelPurpose',
-        path: 'default_model_purposes.media_analysis',
+        code: 'invalidConfigField',
+        path: 'default_model_purposes',
       }),
     ]);
 
     writeConfigFile(filePath, result.config);
     const rewritten = fs.readFileSync(filePath, 'utf-8');
-    expect(rewritten).toContain('[default_model_purposes.character_dialogue]');
-    expect(rewritten).not.toContain('media_analysis');
+    expect(rewritten).not.toContain('default_model_purposes');
   });
 
   it('preserves model protocol profile overrides from TOML', () => {
@@ -532,7 +504,7 @@ describe('config-reader typed results', () => {
         '',
         '[default_models.audio]',
         'provider_id = "neko-gateway"',
-        'model_id = "music-model"',
+        'model_id = "audio-model"',
         '',
         '[[models]]',
         'id = "gpt"',
@@ -542,11 +514,11 @@ describe('config-reader typed results', () => {
         'capabilities = ["chat", "function_calling", "streaming", "json_mode", "code"]',
         '',
         '[[models]]',
-        'id = "music-model"',
-        'name = "music-model"',
+        'id = "audio-model"',
+        'name = "audio-model"',
         'provider_id = "neko-gateway"',
         'type = "audio"',
-        'capabilities = ["text_to_music"]',
+        'capabilities = ["audio.generate"]',
       ].join('\n'),
       'utf-8',
     );
@@ -557,7 +529,7 @@ describe('config-reader typed results', () => {
     if (result.status !== 'ok') throw new Error('Expected ok result');
     expect(result.config.defaultModels).toEqual({
       llm: { providerId: 'neko-gateway', modelId: 'gpt' },
-      audio: { providerId: 'neko-gateway', modelId: 'music-model' },
+      audio: { providerId: 'neko-gateway', modelId: 'audio-model' },
     });
   });
 
@@ -708,7 +680,7 @@ describe('config-reader typed results', () => {
     ]);
   });
 
-  it('rejects music as a top-level model type', () => {
+  it('accepts music as a separate top-level model type', () => {
     const filePath = path.join(createTempRoot(), 'config.toml');
     fs.writeFileSync(
       filePath,
@@ -718,7 +690,7 @@ describe('config-reader typed results', () => {
         'name = "music-model"',
         'provider_id = "neko-gateway"',
         'type = "music"',
-        'capabilities = ["text_to_music"]',
+        'capabilities = ["text_to_music", "audio.music.generate"]',
       ].join('\n'),
       'utf-8',
     );
@@ -727,10 +699,14 @@ describe('config-reader typed results', () => {
 
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') throw new Error('Expected ok result');
-    expect(result.config.models).toEqual([]);
-    expect(result.diagnostics).toEqual([
-      expect.objectContaining({ code: 'unsupportedModelType', path: 'models.music-model.type' }),
+    expect(result.config.models).toEqual([
+      expect.objectContaining({
+        id: 'music-model',
+        type: 'music',
+        capabilities: ['text_to_music', 'audio.music.generate'],
+      }),
     ]);
+    expect(result.diagnostics).toEqual([]);
   });
 
   it('preserves opaque model protocol profile overrides', () => {
@@ -766,14 +742,14 @@ describe('config-reader typed results', () => {
       [
         '[default_models.audio_music_generate]',
         'provider_id = "neko-gateway"',
-        'model_id = "music-model"',
+        'model_id = "audio-model"',
         '',
         '[[models]]',
-        'id = "music-model"',
-        'name = "music-model"',
+        'id = "audio-model"',
+        'name = "audio-model"',
         'provider_id = "neko-gateway"',
         'type = "audio"',
-        'capabilities = ["text_to_music"]',
+        'capabilities = ["audio.generate"]',
       ].join('\n'),
       'utf-8',
     );
@@ -783,7 +759,7 @@ describe('config-reader typed results', () => {
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') throw new Error('Expected ok result');
     expect(result.config.defaultModels).toBeUndefined();
-    expect(result.config.models?.[0]?.id).toBe('music-model');
+    expect(result.config.models?.[0]?.id).toBe('audio-model');
     expect(result.diagnostics).toEqual([
       expect.objectContaining({
         code: 'unsupportedDefaultModelType',
@@ -792,7 +768,7 @@ describe('config-reader typed results', () => {
     ]);
   });
 
-  it('rejects malformed purpose defaults', () => {
+  it('rejects malformed retired purpose defaults at the retired root', () => {
     const filePath = path.join(createTempRoot(), 'config.toml');
     fs.writeFileSync(
       filePath,
@@ -804,11 +780,11 @@ describe('config-reader typed results', () => {
 
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') throw new Error('Expected ok result');
-    expect(result.config.defaultModelPurposes).toBeUndefined();
+    expect(result.config.defaultModels).toBeUndefined();
     expect(result.diagnostics).toEqual([
       expect.objectContaining({
-        code: 'unsupportedDefaultModelPurpose',
-        path: 'default_model_purposes.character_dialogue',
+        code: 'invalidConfigField',
+        path: 'default_model_purposes',
       }),
     ]);
   });

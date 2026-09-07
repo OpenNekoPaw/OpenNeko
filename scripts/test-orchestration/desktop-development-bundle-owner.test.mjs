@@ -10,7 +10,7 @@ import {
   resolveDesktopDevelopmentOwnerPath,
   runDesktopDevelopment,
   runDesktopForgeBuild,
-} from '../desktop-functional/run-development.mjs';
+} from '../desktop/run-development.mjs';
 
 const repositoryRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 
@@ -117,7 +117,7 @@ describe('Desktop development bundle ownership', () => {
         appRoot,
         temporaryDirectory: fixtureRoot,
         platform: 'darwin',
-        argv: ['--openneko-functional-fixture'],
+        argv: ['--enable-logging'],
         pid: 505,
         token: 'owner-launch',
         environment: { OPENNEKO_TEST_ENV: 'preserved' },
@@ -143,7 +143,7 @@ describe('Desktop development bundle ownership', () => {
         'electron-forge',
         'start',
         '--',
-        '--openneko-functional-fixture',
+        '--enable-logging',
       ]);
       assert.equal(calls[0].options.cwd, await realpath(resolve(appRoot)));
       assert.equal(calls[0].options.stdio, 'inherit');
@@ -341,27 +341,21 @@ describe('Desktop development bundle ownership', () => {
     }
   });
 
-  it('keeps root development and functional scenarios on the guarded package command', async () => {
-    const [rootManifest, desktopManifest, runnerSource] = await Promise.all([
+  it('keeps root development and packaging on the guarded package command', async () => {
+    const [rootManifest, desktopManifest] = await Promise.all([
       readFile(join(repositoryRoot, 'package.json'), 'utf8').then(JSON.parse),
       readFile(join(repositoryRoot, 'apps/neko-desktop/package.json'), 'utf8').then(JSON.parse),
-      readFile(join(repositoryRoot, 'scripts/desktop-functional/runner.mjs'), 'utf8'),
     ]);
 
     assert.equal(rootManifest.scripts['dev:desktop'], 'pnpm --filter @neko/app-desktop dev');
     assert.equal(
       desktopManifest.scripts.dev,
-      'node ../../scripts/assert-supported-desktop-host.mjs && node ../../scripts/desktop-functional/run-development.mjs',
+      'node ../../scripts/assert-supported-desktop-host.mjs && node ../../scripts/desktop/run-development.mjs',
     );
     assert.doesNotMatch(desktopManifest.scripts.dev, /electron-forge start/u);
     for (const script of ['build', 'package', 'make']) {
       assert.match(desktopManifest.scripts[script], /run-forge-build\.mjs/u);
       assert.doesNotMatch(desktopManifest.scripts[script], /&& electron-forge (?:package|make)/u);
     }
-    assert.match(
-      runnerSource,
-      /Object\.freeze\(\['--filter', '@neko\/app-desktop', 'dev', '--', \.\.\.commonArgs\]\)/u,
-    );
-    assert.match(runnerSource, /if \(input\.target === 'packaged'\)/u);
   });
 });

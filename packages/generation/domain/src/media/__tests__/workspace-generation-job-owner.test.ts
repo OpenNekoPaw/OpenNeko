@@ -1,11 +1,12 @@
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { GenerationExecutionPort, GenerationJobSnapshot } from '@neko/generation-domain';
-import type { ComfyUiWorkflowExecutionPort } from '@neko/generation-domain/comfyui';
 import { createNodeWorkspaceResourceCacheMetadataBinding } from '@neko/local-metadata/node';
 import { createNodeGenerationJobOwner } from '../node-generation-job-owner';
+import { createStableGeneratedOutputId } from '../media-generated-asset';
 
 const temporaryDirectories: string[] = [];
 const WORKSPACE_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -144,69 +145,52 @@ describe('createNodeGenerationJobOwner', () => {
     await owner.dispose();
   });
 
-  it('commits only exact ComfyUI history bytes without a fabricated model identity', async () => {
+  it('fails Prompt publication without overwriting an existing generated file', async () => {
     const root = await createTemporaryDirectory();
     const homedir = path.join(root, 'home');
     const workspaceRoot = path.join(root, 'workspace');
     await Promise.all([fs.mkdir(homedir), fs.mkdir(workspaceRoot)]);
-    const execution = createExecution(path.join(root, 'unused.png'));
-    const comfyUiExecution: ComfyUiWorkflowExecutionPort = {
-      generateWorkflow: vi.fn(async (request, options) => {
-        await options?.onExternalTask?.({
-          providerId: 'comfyui',
-          externalTaskId: 'prompt-exact',
-        });
-        return {
-          type: 'workflow' as const,
-          providerId: 'comfyui' as const,
-          promptId: 'prompt-exact',
-          request,
-          outputs: [
-            {
-              descriptor: { filename: 'exact.png', subfolder: '', outputType: 'output' },
-              mimeType: 'image/png',
-              bytes: new Uint8Array([137, 80, 78, 71]),
-            },
-          ],
-        };
-      }),
-      describeWorkflowTask: vi.fn(),
-      cancelWorkflowTask: vi.fn(),
+    const text = '# Generated scene';
+    const result = {
+      type: 'prompt' as const,
+      providerId: 'provider-1',
+      modelId: 'text-model',
+      text,
+      request: { prompt: 'Write a scene' },
     };
+    let releasePrompt: (() => void) | undefined;
+    const execution = createExecution(path.join(root, 'unused.png'));
+    execution.generatePrompt.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releasePrompt = () => resolve(result);
+        }),
+    );
     const owner = await createNodeGenerationJobOwner({
       owner: { kind: 'workspace', workspaceId: WORKSPACE_ID },
       root: workspaceRoot,
       homedir,
       mediaExecution: execution,
       promptExecution: execution,
-      comfyUiExecution,
     });
-    const request = {
-      endpoint: 'http://127.0.0.1:8188',
-      clientId: 'openneko-job-1',
-      workflow: { '3': { class_type: 'KSampler', inputs: { seed: 42 } } },
-      outputKind: 'image' as const,
-      inputBindings: [],
-    };
 
     const started = await owner.jobs.submitGeneration({
       lifecycleMode: 'detached',
-      generationType: 'workflow',
-      providerId: 'comfyui',
-      request,
+      generationType: 'prompt',
+      providerId: 'provider-1',
+      modelId: 'text-model',
+      request: { prompt: 'Write a scene' },
     });
-    const completed = await waitForTerminal(owner.jobs.observeGeneration(started.ref));
+    const digest = `sha256:${createHash('sha256').update(text).digest('hex')}`;
+    const outputId = createStableGeneratedOutputId(started.ref.jobId, 0, digest);
+    const outputPath = path.join(workspaceRoot, 'neko', 'generated', 'text', `${outputId}.md`);
+    await fs.mkdir(path.dirname(outputPath), { recursive: true });
+    await fs.writeFile(outputPath, '# User edit');
+    releasePrompt?.();
 
-    expect(completed, completed.failure?.message).toMatchObject({
-      phase: 'succeeded',
-      providerTask: { providerId: 'comfyui', externalTaskId: 'prompt-exact' },
-    });
-    expect('modelId' in completed.request).toBe(false);
-    const locator = completed.resultLocators?.[0];
-    expect(locator?.file.path).toMatch(/^neko\/generated\/image\//u);
-    await expect(fs.readFile(path.join(workspaceRoot, locator!.file.path))).resolves.toEqual(
-      Buffer.from([137, 80, 78, 71]),
-    );
+    const completed = await waitForTerminal(owner.jobs.observeGeneration(started.ref));
+    expect(completed).toMatchObject({ phase: 'failed' });
+    await expect(fs.readFile(outputPath, 'utf8')).resolves.toBe('# User edit');
     await owner.dispose();
   });
 

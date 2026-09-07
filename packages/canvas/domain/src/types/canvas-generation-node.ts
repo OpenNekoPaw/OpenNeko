@@ -1,12 +1,19 @@
 import {
+  contentLocatorKey,
+  isContentLocator,
   isWorkspaceFileContentLocator,
   validateContentLocator,
+  type ContentLocator,
   type WorkspaceFileContentLocator,
 } from '@neko/content-domain';
 import {
   GENERATION_RECIPE_KINDS,
   GENERATION_RECIPE_PURPOSES,
+  createImageGenerationRecipeForProfile,
+  conformImageGenerationRecipeToProfile,
+  conformVideoGenerationRecipeToProfile,
   createGenerationRecipe,
+  createVideoGenerationRecipeForProfile,
   isGenerationRecipe,
   isGenerationRecipeKind,
   purposeForGenerationRecipe,
@@ -16,6 +23,13 @@ import {
   type GenerationRecipeKind,
   type GenerationRecipeModelBinding,
   type GenerationRecipePurpose,
+  type GenerationParameterAdjustment,
+  type GenerationModelParameterProfile,
+  type GenerationImageSizeParameterControl,
+  type ImageGenerationQuality,
+  type ImageGenerationParameterAdjustment,
+  type ImageGenerationModelParameterProfile,
+  type VideoGenerationModelParameterProfile,
   type ImageGenerationRecipe,
   type PromptGenerationRecipe,
   type VideoGenerationRecipe,
@@ -29,6 +43,8 @@ export type CanvasGenerationPurpose = GenerationRecipePurpose;
 export type CanvasGenerationModelBinding = GenerationRecipeModelBinding;
 export type CanvasPromptGenerationRecipe = PromptGenerationRecipe;
 export type CanvasImageGenerationRecipe = ImageGenerationRecipe;
+export type CanvasImageGenerationQuality = ImageGenerationQuality;
+export type CanvasImageGenerationSizeParameterControl = GenerationImageSizeParameterControl;
 export type CanvasAudioGenerationRecipe = AudioGenerationRecipe;
 export type CanvasVideoGenerationRecipe = VideoGenerationRecipe;
 export type CanvasGenerationRecipe = GenerationRecipe;
@@ -53,17 +69,21 @@ export interface CanvasGenerationOutputBinding {
   readonly recipeInputFingerprint: string;
 }
 
-export interface CanvasGenerationAuthoredText {
-  readonly text: string;
-  readonly sourceOutputId: string;
+export interface CanvasGenerationInputMaterialBinding {
+  readonly locator: ContentLocator;
+  readonly mediaKind: 'image' | 'audio' | 'video';
+}
+
+export function canvasGenerationInputPreviewId(locator: ContentLocator): string {
+  return `input:${contentLocatorKey(locator)}`;
 }
 
 export interface CanvasGenerationNodeData {
   readonly recipe: CanvasGenerationRecipe;
+  readonly inputMaterials?: readonly CanvasGenerationInputMaterialBinding[];
   readonly latestRun?: CanvasGenerationRunBinding;
   readonly outputs: readonly CanvasGenerationOutputBinding[];
   readonly selectedOutputId?: string;
-  readonly authoredText?: CanvasGenerationAuthoredText;
 }
 
 export interface CanvasGenerationDiagnostic {
@@ -87,8 +107,7 @@ export function purposeForCanvasGenerationKind(
 }
 
 export function purposeForCanvasGenerationRecipe(
-  recipe: Pick<CanvasGenerationRecipe, 'kind'> &
-    Partial<Pick<CanvasAudioGenerationRecipe, 'isMusic'>>,
+  recipe: Pick<CanvasGenerationRecipe, 'kind'>,
 ): CanvasGenerationPurpose {
   return purposeForGenerationRecipe(recipe);
 }
@@ -96,8 +115,43 @@ export function purposeForCanvasGenerationRecipe(
 export function createCanvasGenerationNodeData(
   kind: CanvasGenerationKind,
   model?: CanvasGenerationModelBinding,
+  parameterProfile?: GenerationModelParameterProfile,
 ): CanvasGenerationNodeData {
-  return { recipe: createGenerationRecipe(kind, model), outputs: [] };
+  if (parameterProfile && parameterProfile.kind !== kind) {
+    throw new Error('Canvas Generation parameter profile does not match the node kind.');
+  }
+  const recipe =
+    kind === 'image' && model && parameterProfile?.kind === 'image'
+      ? createImageGenerationRecipeForProfile(model, parameterProfile)
+      : kind === 'video' && model
+        ? parameterProfile?.kind === 'video'
+          ? createVideoGenerationRecipeForProfile(model, parameterProfile)
+          : { kind: 'video' as const, prompt: '', model }
+        : createGenerationRecipe(kind, model);
+  return {
+    recipe,
+    outputs: [],
+  };
+}
+
+export function conformCanvasVideoGenerationRecipeToProfile(
+  recipe: CanvasVideoGenerationRecipe,
+  parameterProfile: VideoGenerationModelParameterProfile,
+): {
+  readonly recipe: CanvasVideoGenerationRecipe;
+  readonly adjustments: readonly GenerationParameterAdjustment[];
+} {
+  return conformVideoGenerationRecipeToProfile(recipe, parameterProfile);
+}
+
+export function conformCanvasImageGenerationRecipeToProfile(
+  recipe: CanvasImageGenerationRecipe,
+  parameterProfile: ImageGenerationModelParameterProfile,
+): {
+  readonly recipe: CanvasImageGenerationRecipe;
+  readonly adjustments: readonly ImageGenerationParameterAdjustment[];
+} {
+  return conformImageGenerationRecipeToProfile(recipe, parameterProfile);
 }
 
 export function isCanvasGenerationRecipe(value: unknown): value is CanvasGenerationRecipe {
@@ -107,6 +161,19 @@ export function isCanvasGenerationRecipe(value: unknown): value is CanvasGenerat
 export function isCanvasGenerationNodeData(value: unknown): value is CanvasGenerationNodeData {
   if (!isRecord(value) || !hasOnlyKeys(value, GENERATION_NODE_DATA_KEYS)) return false;
   if (!isCanvasGenerationRecipe(value['recipe']) || !Array.isArray(value['outputs'])) return false;
+  if (
+    value['inputMaterials'] !== undefined &&
+    (!Array.isArray(value['inputMaterials']) ||
+      !value['inputMaterials'].every(isCanvasGenerationInputMaterialBinding))
+  ) {
+    return false;
+  }
+  const inputMaterialKeys = new Set<string>();
+  for (const material of value['inputMaterials'] ?? []) {
+    const key = contentLocatorKey(material.locator);
+    if (inputMaterialKeys.has(key)) return false;
+    inputMaterialKeys.add(key);
+  }
   if (!value['outputs'].every(isCanvasGenerationOutputBinding)) return false;
   const outputIds = new Set<string>();
   for (const output of value['outputs']) {
@@ -121,15 +188,6 @@ export function isCanvasGenerationNodeData(value: unknown): value is CanvasGener
     (typeof value['selectedOutputId'] !== 'string' || !outputIds.has(value['selectedOutputId']))
   ) {
     return false;
-  }
-  if (value['authoredText'] !== undefined) {
-    if (
-      value['recipe'].kind !== 'prompt' ||
-      !isCanvasGenerationAuthoredText(value['authoredText'])
-    ) {
-      return false;
-    }
-    if (!outputIds.has(value['authoredText'].sourceOutputId)) return false;
   }
   return true;
 }
@@ -256,7 +314,6 @@ export function applyCanvasGenerationOutputs(
       ...current,
       outputs: [...merged.values()],
       selectedOutputId: selected.outputId,
-      authoredText: undefined,
     },
   };
 }
@@ -269,22 +326,7 @@ export function selectCanvasGenerationOutput(
   if (!current.outputs.some((output) => output.outputId === outputId)) {
     throw new Error(`Canvas Generation output "${outputId}" does not exist.`);
   }
-  return { ...current, selectedOutputId: outputId, authoredText: undefined };
-}
-
-export function authorCanvasGeneratedText(
-  current: CanvasGenerationNodeData,
-  text: string,
-): CanvasGenerationNodeData {
-  assertGenerationData(current);
-  if (current.recipe.kind !== 'prompt') {
-    throw new Error('Only a Prompt Generation Node can own authored text.');
-  }
-  const sourceOutputId = current.selectedOutputId;
-  if (!sourceOutputId) {
-    throw new Error('Authored Canvas text requires a selected generated source output.');
-  }
-  return { ...current, authoredText: { text, sourceOutputId } };
+  return { ...current, selectedOutputId: outputId };
 }
 
 export function selectedCanvasGenerationOutput(
@@ -319,12 +361,15 @@ function isCanvasGenerationOutputBinding(value: unknown): value is CanvasGenerat
   );
 }
 
-function isCanvasGenerationAuthoredText(value: unknown): value is CanvasGenerationAuthoredText {
+function isCanvasGenerationInputMaterialBinding(
+  value: unknown,
+): value is CanvasGenerationInputMaterialBinding {
+  if (!isRecord(value) || !hasOnlyKeys(value, INPUT_MATERIAL_BINDING_KEYS)) return false;
   return (
-    isRecord(value) &&
-    hasOnlyKeys(value, AUTHORED_TEXT_KEYS) &&
-    typeof value['text'] === 'string' &&
-    isNonEmptyString(value['sourceOutputId'])
+    isContentLocator(value['locator']) &&
+    (value['mediaKind'] === 'image' ||
+      value['mediaKind'] === 'audio' ||
+      value['mediaKind'] === 'video')
   );
 }
 
@@ -359,6 +404,7 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 const RUN_BINDING_KEYS = new Set(['submissionId', 'recipeInputFingerprint', 'jobRef']);
+const INPUT_MATERIAL_BINDING_KEYS = new Set(['locator', 'mediaKind']);
 const OUTPUT_BINDING_KEYS = new Set([
   'outputId',
   'jobRef',
@@ -366,11 +412,10 @@ const OUTPUT_BINDING_KEYS = new Set([
   'kind',
   'recipeInputFingerprint',
 ]);
-const AUTHORED_TEXT_KEYS = new Set(['text', 'sourceOutputId']);
 const GENERATION_NODE_DATA_KEYS = new Set([
   'recipe',
+  'inputMaterials',
   'latestRun',
   'outputs',
   'selectedOutputId',
-  'authoredText',
 ]);

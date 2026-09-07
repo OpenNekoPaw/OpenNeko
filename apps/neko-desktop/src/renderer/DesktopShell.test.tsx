@@ -500,11 +500,20 @@ describe('Desktop scene Workbench', () => {
     expect(mainGroupSource).toContain('variant="tab"');
     expect(mainGroupSource).toContain('variant="empty"');
     expect(mainGroupSource).toContain('<EmptyMainSurface');
+    expect(mainGroupSource).toContain('<WorkspaceEmptyMainSuggestions');
+    expect(mainGroupSource).toContain('loadWorkspaceCanvases={loadWorkspaceCanvases}');
+    expect(mainGroupSource).toContain('workspaceId={authoringWorkspaceId}');
     expect(mainGroupSource.indexOf('variant="tab"')).toBeGreaterThan(
       mainGroupSource.indexOf('<WorkbenchEditorTabs'),
     );
+    expect(mainGroupSource).toContain('data-main-tab-context-actions="true"');
+    expect(mainGroupSource.indexOf('data-main-tab-context-actions="true"')).toBeGreaterThan(
+      mainGroupSource.indexOf('variant="tab"'),
+    );
+    expect(mainGroupSource).not.toContain('contextActionsRef={setContextActionsTarget}');
     expect(standaloneEmptySource).toContain('<EmptyMainSurface />');
     expect(standaloneEmptySource).not.toContain('WorkspaceQuickCreateControl');
+    expect(standaloneEmptySource).not.toContain('WorkspaceEmptyMainSuggestions');
   });
 
   it('selects Workspace region controls only while their exact layout regions are visible', () => {
@@ -957,7 +966,7 @@ describe('Desktop scene Workbench', () => {
     expect(source).not.toMatch(/latest|versions\[0\]|activeCharacter|recentCharacter/u);
   });
 
-  it('projects Entry targets without creating Workspace authority in Renderer', () => {
+  it('projects Entry targets through exact Host-authorized Project authority', () => {
     const characterStart = desktopShellSource.indexOf('onLoadEntryCharacterTargets: async () =>');
     const worldStart = desktopShellSource.indexOf(
       'onLoadEntryWorldTargets: async () =>',
@@ -969,6 +978,14 @@ describe('Desktop scene Workbench', () => {
     const entryContextStart = desktopShellSource.indexOf('entryContext: {');
     const entryContextEnd = desktopShellSource.indexOf('loadWorldTargets:', entryContextStart);
     const entryContextSource = desktopShellSource.slice(entryContextStart, entryContextEnd);
+    const selectionStart = desktopShellSource.indexOf(
+      'onSelectEntryProjectTarget: async (projectId) =>',
+    );
+    const selectionEnd = desktopShellSource.indexOf(
+      'onLoadEntryAuthoringTargets: async () =>',
+      selectionStart,
+    );
+    const selectionSource = desktopShellSource.slice(selectionStart, selectionEnd);
 
     expect(characterStart).toBeGreaterThanOrEqual(0);
     expect(worldStart).toBeGreaterThan(characterStart);
@@ -978,7 +995,13 @@ describe('Desktop scene Workbench', () => {
     expect(entryContextSource).toContain('projection.catalog.projects.map');
     expect(entryContextSource).toContain('projectId: project.projectId');
     expect(entryContextSource).not.toContain('workspaceGrants.selectProject');
-    expect(desktopShellSource).not.toContain('onSelectEntryProject');
+    expect(entryContextSource).toContain('onSelectProject: actions.onSelectEntryProjectTarget');
+    expect(selectionStart).toBeGreaterThanOrEqual(0);
+    expect(selectionEnd).toBeGreaterThan(selectionStart);
+    expect(selectionSource).toContain('workspaceGrants.selectProject');
+    expect(selectionSource).toContain("authority: { kind: 'project' as const, projectId }");
+    expect(selectionSource).toContain('workspaceGrantId: result.grant.workspaceGrantId');
+    expect(selectionSource).not.toContain('crypto.randomUUID');
     expect(characterSource).toContain('characterFoundation.getConversationLaunchCatalog()');
     expect(worldSource).toContain('worldManagement.getCatalog');
     expect(worldSource).toContain('worldManagement.getDetail');

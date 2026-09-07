@@ -6,9 +6,11 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   CanvasHostRuntime,
+  CanvasHostSnapshot,
   CanvasTextFilePreviewResult,
   FileCanvasNode,
 } from '@neko/canvas-domain';
+import { createEmptyCanvasData } from '@neko/canvas-domain';
 import { CanvasHostProvider, createCanvasWebviewHost } from '../../host-runtime';
 import { FileNode } from './CanonicalContentNodes';
 
@@ -86,6 +88,87 @@ describe('Canvas File node text preview', () => {
         identity,
         nodeId: node.id,
         locator: node.data.contentLocator,
+      }),
+    );
+  });
+
+  it('opens a referenced text file in the Text Editor from its direct file link', async () => {
+    const readTextFilePreview = vi.fn(async (request) => ({
+      requestId: request.requestId,
+      nodeId: request.nodeId,
+      status: 'ready' as const,
+      kind: 'markdown' as const,
+      text: '# Notes',
+      truncated: false,
+      empty: false,
+    }));
+    const executeIntent: CanvasHostRuntime['executeIntent'] = vi.fn(async (request) => ({
+      requestId: request.requestId,
+      commandId: request.commandId,
+      status: 'accepted' as const,
+      snapshot: emptySnapshot(),
+    }));
+    const host = createCanvasWebviewHost(runtime(readTextFilePreview, executeIntent));
+    const node = fileNode('file-markdown', 'notes/readme.md', 'text/markdown');
+
+    await renderFile(root, host, node, true);
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="Open file: readme.md"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.querySelector('button[aria-label="Open file: readme.md"]')).not.toBeNull();
+    expect(executeIntent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        intent: {
+          type: 'execute-material-action',
+          action: expect.objectContaining({
+            actionId: 'text:edit',
+            selectedNodeIds: ['file-markdown'],
+            payload: {},
+          }),
+        },
+      }),
+    );
+  });
+
+  it('keeps double-click activation on the node as the same Text Editor action', async () => {
+    const readTextFilePreview = vi.fn(async (request) => ({
+      requestId: request.requestId,
+      nodeId: request.nodeId,
+      status: 'ready' as const,
+      kind: 'markdown' as const,
+      text: '# Notes',
+      truncated: false,
+      empty: false,
+    }));
+    const executeIntent: CanvasHostRuntime['executeIntent'] = vi.fn(async (request) => ({
+      requestId: request.requestId,
+      commandId: request.commandId,
+      status: 'accepted' as const,
+      snapshot: emptySnapshot(),
+    }));
+    const host = createCanvasWebviewHost(runtime(readTextFilePreview, executeIntent));
+    const node = fileNode('file-markdown', 'notes/readme.md', 'text/markdown');
+
+    await renderFile(root, host, node, true);
+    await act(async () => {
+      container
+        .querySelector<HTMLElement>('[data-node-id="file-markdown"]')
+        ?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    });
+
+    expect(executeIntent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        intent: {
+          type: 'execute-material-action',
+          action: expect.objectContaining({
+            actionId: 'text:edit',
+            selectedNodeIds: ['file-markdown'],
+            payload: {},
+          }),
+        },
       }),
     );
   });
@@ -333,7 +416,12 @@ async function renderFile(
   });
 }
 
-function runtime(readTextFilePreview: CanvasHostRuntime['readTextFilePreview']): CanvasHostRuntime {
+function runtime(
+  readTextFilePreview: CanvasHostRuntime['readTextFilePreview'],
+  executeIntent: CanvasHostRuntime['executeIntent'] = async () => {
+    throw new Error('Intents are not used by this component test.');
+  },
+): CanvasHostRuntime {
   return {
     identity,
     getSnapshot: async () => {
@@ -344,9 +432,21 @@ function runtime(readTextFilePreview: CanvasHostRuntime['readTextFilePreview']):
     },
     readTextFilePreview,
     subscribe: () => () => undefined,
-    executeIntent: async () => {
-      throw new Error('Intents are not used by this component test.');
+    executeIntent,
+  };
+}
+
+function emptySnapshot(): CanvasHostSnapshot {
+  return {
+    identity,
+    dirty: false,
+    canvas: createEmptyCanvasData('Fixture'),
+    presentation: {
+      viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+      selectedNodeIds: [],
     },
+    authoringCapabilities: { sourceModes: [], generationKinds: [], generationModels: [] },
+    generationNodes: [],
   };
 }
 

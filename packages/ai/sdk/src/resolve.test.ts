@@ -8,29 +8,22 @@ describe('resolveProvider', () => {
     ).toBeNull();
   });
 
-  it('resolves native OpenAI-compatible paths without requiring a package media adapter', () => {
+  it('resolves the supported OpenAI-compatible paths', () => {
     const config = { apiUrl: 'https://api.example.test', apiKey: 'test-key' };
 
-    expect(resolveProvider('openai', config)).toMatchObject({ type: 'openai', source: 'native' });
-    expect(resolveProvider('newapi', config)).toMatchObject({ type: 'newapi', source: 'native' });
-    expect(resolveProvider('oneapi', config)).toMatchObject({ type: 'oneapi', source: 'native' });
+    expect(resolveProvider('openai', config)).toMatchObject({ type: 'openai', source: 'ai-sdk' });
+    expect(resolveProvider('newapi', config)).toMatchObject({ type: 'newapi', source: 'ai-sdk' });
+    expect(resolveProvider('oneapi', config)).toMatchObject({ type: 'oneapi', source: 'ai-sdk' });
     expect(resolveProvider('generic', config)).toMatchObject({
       type: 'generic',
-      source: 'native',
+      source: 'ai-sdk',
     });
-    expect(resolveProvider('xai', config)).toMatchObject({ type: 'xai', source: 'native' });
+    expect(resolveProvider('xai', config)).toBeNull();
+    expect(resolveProvider('kling', config)).toBeNull();
+    expect(resolveProvider('newapi', config)?.video('video-model')).toBeNull();
   });
 
-  it('resolves Kling through the compatible native path', () => {
-    const resolved = resolveProvider('kling', {
-      apiUrl: 'https://api.example.test',
-      apiKey: 'test-key',
-    });
-
-    expect(resolved).toMatchObject({ type: 'kling', source: 'native' });
-  });
-
-  it('resolves H3 and Seedance as native async video models', () => {
+  it('resolves H3 and Seedance as AI SDK async video models', () => {
     const minimax = resolveProvider('minimax', {
       apiUrl: 'https://api.minimaxi.com/v2',
       apiKey: 'test-key',

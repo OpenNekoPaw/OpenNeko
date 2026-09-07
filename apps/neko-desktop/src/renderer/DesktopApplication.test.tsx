@@ -47,6 +47,11 @@ import type {
   OpenNekoDesktopProjectPortabilityBridge,
 } from '@neko/assets-domain/contracts';
 import type { RoomView } from '@neko/chara-domain/contracts';
+import {
+  createCanvasWorkspaceContextCatalog,
+  createCanvasWorkspaceContextCatalogOption,
+  createDefaultCanvasWorkspaceTarget,
+} from '@neko/canvas-domain';
 import type { DesktopLifecycleEvent } from '../shared/bridge-contract';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -453,6 +458,84 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
+  it('reports document-open failure in the Shell without failing the completed Agent response', async () => {
+    const base = createTextEditorShellProjection();
+    const current = base.window.workbench;
+    const interaction = current.scene.slots.interaction;
+    if (!interaction || interaction.kind !== 'agent') throw new Error('Agent fixture missing.');
+    const scope = { ...interaction.scope, conversationId: 'conversation-1' };
+    const scene = parseDesktopWorkbenchSceneProjection({
+      ...current.scene,
+      context: { ...current.scene.context, scope },
+      slots: { ...current.scene.slots, interaction: { ...interaction, phase: 'session', scope } },
+    });
+    installBridge({
+      projection: {
+        ...base,
+        window: {
+          ...base.window,
+          workbench: createDesktopWindowComposition({
+            workbenchInstanceId: current.workbenchInstanceId,
+            layout: setWorkbenchDisplayMode(current.layout, 'chat-only'),
+            scene,
+          }),
+        },
+      },
+    });
+    const bridge = window.openNekoDesktop.dshSessions;
+    vi.mocked(bridge.openWrittenFile).mockRejectedValueOnce(
+      new Error('Main View capacity reached'),
+    );
+    vi.mocked(bridge.getSnapshot).mockResolvedValue({
+      title: 'Workspace planning',
+      conversationId: 'conversation-1',
+      dshSessionId: 'dsh:conversation-1',
+      todos: [],
+      inbox: { nextTurn: [], nextStep: [] },
+      events: [
+        {
+          kind: 'tool',
+          toolCallId: 'write-1',
+          turn: 1,
+          status: 'completed',
+          title: 'write',
+          writtenFileReference: {
+            title: 'plan.md',
+            contentLocator: { file: { authority: 'workspace', path: 'plan.md' } },
+          },
+        },
+        {
+          kind: 'message',
+          role: 'assistant',
+          turn: 1,
+          step: 0,
+          text: 'Document created.',
+          messageId: 'final-1',
+          state: 'final',
+        },
+      ],
+    });
+    const { container, root } = await renderApplication();
+    const link = await screen.findByRole('button', { name: 'Open document: plan.md' });
+    await act(async () => fireEvent.click(link));
+    await waitFor(() => container.querySelector('.shell-diagnostic') !== null);
+    expect(container.querySelector('.shell-diagnostic')?.textContent).toContain(
+      'Unable to open document: Main View capacity reached',
+    );
+    expect(container.querySelectorAll('[role="alert"]')).toHaveLength(1);
+    expect(screen.getByText('Document created.')).toBeTruthy();
+    expect(bridge.cancel).not.toHaveBeenCalled();
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Dismiss notification' })),
+    );
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    await act(async () => fireEvent.click(link));
+    expect(bridge.openWrittenFile).toHaveBeenCalledTimes(2);
+    expect(bridge.openWrittenFile).toHaveBeenLastCalledWith('conversation-1', 'write-1');
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
   it('opens Settings as an overlay without replacing the current Scene', async () => {
     const assistant = createProjection();
     const getSnapshot = vi.fn(async () => assistant);
@@ -737,18 +820,14 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
-  it('starts from a Project template through the canonical Start Creating transition', async () => {
+  it('keeps Project templates visible but unavailable without opening a Workspace picker', async () => {
     const initial = withActiveScene(
       createProjection(),
       creativeManagementScene('content-projects'),
     );
-    const entryScene = createDefaultDesktopAgentScene('window-1', 'draft:template-start');
-    const transition = vi.fn(async () => ({
-      status: 'transitioned' as const,
-      requestId: 'template-start-1',
-      scene: entryScene,
-    }));
-    installBridge({ projection: initial, transition });
+    const transition = vi.fn();
+    const createContentProject = vi.fn();
+    installBridge({ projection: initial, transition, createContentProject });
     const { container, root } = await renderApplication();
     const storyboard = container.querySelector<HTMLButtonElement>(
       '[data-project-template-id="storyboard"]',
@@ -760,21 +839,18 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(projects?.querySelector('[data-project-template-id="character-kit"]')).toBeNull();
     expect(projects?.querySelector('.management-segmented-control')).toBeNull();
     expect(projects?.querySelector('[data-view-mode]')).toBeNull();
+    expect(storyboard.disabled).toBe(true);
+    expect(storyboard.dataset.availability).toBe('unavailable');
+    expect(storyboard.title).toBe('Project template creation is temporarily unavailable.');
+    expect(screen.getAllByText('Coming soon')).toHaveLength(2);
 
     await act(async () => storyboard.click());
-    await waitFor(() => transition.mock.calls.length === 1);
-    expect(transition).toHaveBeenCalledWith(
-      'window-1',
-      { kind: 'open-agent-entry' },
-      creativeManagementScene('content-projects').sceneId,
-    );
+    expect(createContentProject).not.toHaveBeenCalled();
+    expect(transition).not.toHaveBeenCalled();
     await act(async () => root.unmount());
   });
 
-  it.each([
-    ['characters', '[data-character-template="character-kit"]'],
-    ['worlds', '[data-world-template="world-bible"]'],
-  ] as const)(
+  it.each([['characters', '[data-character-template="character-kit"]']] as const)(
     'starts from the %s domain template through the canonical Start Creating transition',
     async (catalog, selector) => {
       const initialScene = creativeManagementScene(catalog);
@@ -802,10 +878,195 @@ describe('DesktopApplication scene lifecycle', () => {
     },
   );
 
-  it.each([
-    ['characters', '[data-character-management-action="create"]'],
-    ['worlds', '[data-world-management-action="create"]'],
-  ] as const)(
+  it('creates the Character Kit as one exact Project-local target before Agent submission', async () => {
+    const projectProjection = createTextEditorShellProjection();
+    const initialScene = creativeManagementScene('characters');
+    const initial = withActiveScene(projectProjection, initialScene);
+    const entryScene = createDefaultDesktopAgentScene('window-1', 'draft:character-kit');
+    const entered = withActiveScene(initial, entryScene);
+    let shellListener: ((event: DesktopShellProjectionEvent) => void) | undefined;
+    const transition = vi.fn(async () => ({
+      status: 'transitioned' as const,
+      requestId: 'character-kit-start',
+      scene: entryScene,
+    }));
+    const selectProject = vi.fn(async () => ({
+      requestId: 'select-project-1',
+      status: 'authorized-project' as const,
+      workspaceId: 'workspace-1',
+      projectId: 'project-1',
+      grant: {
+        workspaceGrantId: 'grant-1',
+        windowId: 'window-1',
+        label: 'Screenplay project',
+      },
+    }));
+    const createLocalTarget = vi.fn(async (_windowId, binding, input) => ({
+      requestId: 'create-character-1',
+      ...binding,
+      status: 'created' as const,
+      target: {
+        kind: 'character-project' as const,
+        characterProjectId:
+          input.kind === 'character-project' ? input.characterProjectId : 'unexpected-world',
+      },
+    }));
+    installBridge({
+      projection: initial,
+      transition,
+      subscribe: vi.fn((listener) => {
+        shellListener = listener;
+        return () => undefined;
+      }),
+      selectProject,
+      createLocalTarget,
+    });
+    const { container, root } = await renderApplication();
+    await waitFor(
+      () => container.querySelector('[data-character-template="character-kit"]') !== null,
+    );
+    const template = container.querySelector<HTMLButtonElement>(
+      '[data-character-template="character-kit"]',
+    );
+    if (!template) throw new Error('Desktop fixture requires the Character Kit template.');
+
+    await act(async () => template.click());
+    await waitFor(() => transition.mock.calls.length === 1);
+    await act(async () => {
+      shellListener?.({
+        applicationInstanceId: entered.applicationInstanceId,
+        windowId: entered.window.windowId,
+        rendererSessionId: entered.rendererSessionId,
+        sequence: 1,
+        projection: entered,
+      });
+    });
+
+    const name = await screen.findByLabelText('Character name');
+    const composer = screen.getByLabelText('Message') as HTMLTextAreaElement;
+    await waitFor(() => composer.value === '$character-creator ');
+    fireEvent.change(name, { target: { value: 'Neko' } });
+    fireEvent.click(await screen.findByTitle('Screenplay project'));
+
+    await waitFor(() => createLocalTarget.mock.calls.length === 1);
+    expect(selectProject).toHaveBeenCalledWith('window-1', 'project-1');
+    expect(createLocalTarget).toHaveBeenCalledWith(
+      'window-1',
+      {
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'grant-1',
+        projectId: 'project-1',
+      },
+      expect.objectContaining({
+        kind: 'character-project',
+        displayName: 'Neko',
+        sources: { evidence: [], assetRepresentations: [] },
+        entity: expect.objectContaining({ kind: 'create', name: 'Neko' }),
+      }),
+    );
+    expect(
+      await screen.findByRole('button', { name: 'Clear: Screenplay project / Neko' }),
+    ).toBeTruthy();
+    await act(async () => root.unmount());
+  });
+
+  it('creates the World Bible as one exact Project-local target before Agent submission', async () => {
+    const projectProjection = createTextEditorShellProjection();
+    const initialScene = creativeManagementScene('worlds');
+    const initial = withActiveScene(projectProjection, initialScene);
+    const entryScene = createDefaultDesktopAgentScene('window-1', 'draft:world-bible');
+    const entered = withActiveScene(initial, entryScene);
+    let shellListener: ((event: DesktopShellProjectionEvent) => void) | undefined;
+    const transition = vi.fn(async () => ({
+      status: 'transitioned' as const,
+      requestId: 'world-bible-start',
+      scene: entryScene,
+    }));
+    const selectProject = vi.fn(async () => ({
+      requestId: 'select-project-1',
+      status: 'authorized-project' as const,
+      workspaceId: 'workspace-1',
+      projectId: 'project-1',
+      grant: {
+        workspaceGrantId: 'grant-1',
+        windowId: 'window-1',
+        label: 'Screenplay project',
+      },
+    }));
+    const createLocalTarget = vi.fn(async (_windowId, binding, input) => ({
+      requestId: 'create-world-1',
+      ...binding,
+      status: 'created' as const,
+      target: {
+        kind: 'world-project' as const,
+        worldProjectId:
+          input.kind === 'world-project' ? input.worldProjectId : 'unexpected-character',
+      },
+    }));
+    installBridge({
+      projection: initial,
+      transition,
+      subscribe: vi.fn((listener) => {
+        shellListener = listener;
+        return () => undefined;
+      }),
+      selectProject,
+      createLocalTarget,
+    });
+    const { container, root } = await renderApplication();
+    await waitFor(() => container.querySelector('[data-world-template="world-bible"]') !== null);
+    const template = container.querySelector<HTMLButtonElement>(
+      '[data-world-template="world-bible"]',
+    );
+    if (!template) throw new Error('Desktop fixture requires the World Bible template.');
+
+    await act(async () => template.click());
+    await waitFor(() => transition.mock.calls.length === 1);
+    await act(async () => {
+      shellListener?.({
+        applicationInstanceId: entered.applicationInstanceId,
+        windowId: entered.window.windowId,
+        rendererSessionId: entered.rendererSessionId,
+        sequence: 1,
+        projection: entered,
+      });
+    });
+
+    const name = await screen.findByLabelText('World name');
+    const composer = screen.getByLabelText('Message') as HTMLTextAreaElement;
+    await waitFor(() => composer.value === '$world-creator ');
+    fireEvent.change(name, { target: { value: 'Neko World' } });
+    fireEvent.click(await screen.findByTitle('Screenplay project'));
+
+    await waitFor(() => createLocalTarget.mock.calls.length === 1);
+    expect(selectProject).toHaveBeenCalledWith('window-1', 'project-1');
+    expect(createLocalTarget).toHaveBeenCalledWith(
+      'window-1',
+      {
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'grant-1',
+        projectId: 'project-1',
+      },
+      expect.objectContaining({
+        kind: 'world-project',
+        title: 'Neko World',
+        draft: {
+          background: '',
+          worldBook: [],
+          locations: [],
+          organizations: [],
+          rules: [],
+          initialFacts: [],
+        },
+      }),
+    );
+    expect(
+      await screen.findByRole('button', { name: 'Clear: Screenplay project / Neko World' }),
+    ).toBeTruthy();
+    await act(async () => root.unmount());
+  });
+
+  it.each([['characters', '[data-character-management-action="create"]']] as const)(
     'starts a new %s creation through the canonical Start Creating transition',
     async (catalog, selector) => {
       const initialScene = creativeManagementScene(catalog);
@@ -3105,7 +3366,26 @@ function installBridge({
   characterAvatarReleaseSurface = vi.fn(),
   characterRoomGetSnapshot = vi.fn(async (roomRunId: string) => roomWorkbenchView(roomRunId)),
   characterRoomSubscribe = vi.fn(() => () => undefined),
+  canvasReadWorkspaceIndexCatalog = vi.fn(async (request) => ({
+    requestId: request.requestId,
+    catalog: createCanvasWorkspaceContextCatalog({
+      workspaceId: request.workspaceId,
+      options: [
+        createCanvasWorkspaceContextCatalogOption({
+          target: createDefaultCanvasWorkspaceTarget(request.workspaceId),
+          label: 'workspace.nkc',
+        }),
+      ],
+    }),
+  })),
+  canvasOpenWorkspaceDocument = vi.fn(async (request) => ({
+    requestId: request.requestId,
+    status: 'opened' as const,
+  })),
   lifecycleSubscribe = vi.fn(() => () => undefined),
+  selectProject = vi.fn(),
+  createContentProject = vi.fn(),
+  createLocalTarget = vi.fn(),
 }: {
   readonly getSnapshot?: () => Promise<DesktopShellProjection>;
   readonly projection: DesktopShellProjection;
@@ -3134,7 +3414,12 @@ function installBridge({
   readonly characterAvatarReleaseSurface?: typeof window.openNekoDesktop.characterAvatar.releaseSurface;
   readonly characterRoomGetSnapshot?: (roomRunId: string) => Promise<RoomView>;
   readonly characterRoomSubscribe?: typeof window.openNekoDesktop.characterRoomWorkbench.subscribe;
+  readonly canvasReadWorkspaceIndexCatalog?: typeof window.openNekoDesktop.canvas.readWorkspaceIndexCatalog;
+  readonly canvasOpenWorkspaceDocument?: typeof window.openNekoDesktop.canvas.openWorkspaceDocument;
   readonly lifecycleSubscribe?: (listener: (event: DesktopLifecycleEvent) => void) => () => void;
+  readonly selectProject?: typeof window.openNekoDesktop.workspaceGrants.selectProject;
+  readonly createContentProject?: typeof window.openNekoDesktop.workspaceGrants.createContentProject;
+  readonly createLocalTarget?: typeof window.openNekoDesktop.projectLocalAuthoring.createTarget;
 }): void {
   Object.defineProperty(window, 'openNekoDesktop', {
     configurable: true,
@@ -3149,6 +3434,12 @@ function installBridge({
       projects: { remove: removeProjects, archiveConversations: archiveProjectConversations },
       applicationSidebar: { update: updateApplicationSidebar },
       workbench: { update: updateWorkbench },
+      workspaceGrants: {
+        selectProject,
+        createContentProject,
+        chooseDirectory: vi.fn(),
+      },
+      projectLocalAuthoring: { createTarget: createLocalTarget },
       assetCenter: { execute: assetCenterExecute },
       characterFoundation: {
         getConversationLaunchCatalog: vi.fn(async () => ({ targets: [], diagnostics: [] })),
@@ -3194,10 +3485,13 @@ function installBridge({
       },
       textEditor: { execute: textEditorExecute, subscribe: vi.fn(() => () => undefined) },
       dshSessions: {
+        openWrittenFile: vi.fn(async () => undefined),
         create: vi.fn(),
         getSnapshot: vi.fn(async (conversationId: string) => ({
           conversationId,
           dshSessionId: `dsh:${conversationId}`,
+          todos: [],
+          inbox: { nextTurn: [], nextStep: [] },
           events: [],
         })),
         submit: vi.fn(),
@@ -3232,6 +3526,7 @@ function installBridge({
       },
       dshRuntime: {
         getStatus: vi.fn(async () => ({ status: 'running' as const })),
+        prepareSession: vi.fn(async () => ({ status: 'running' as const })),
         restart: vi.fn(async () => ({ status: 'running' as const })),
         subscribe: vi.fn(() => () => undefined),
       },
@@ -3242,6 +3537,8 @@ function installBridge({
         subscribe: vi.fn(() => () => undefined),
       },
       canvas: {
+        readWorkspaceIndexCatalog: canvasReadWorkspaceIndexCatalog,
+        openWorkspaceDocument: canvasOpenWorkspaceDocument,
         subscribeWorkspaceIndex: vi.fn(() => () => undefined),
       },
       projectPortability,

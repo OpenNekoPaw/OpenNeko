@@ -16,7 +16,6 @@ export type AgentModelPurpose =
   | 'audio.generate'
   | 'audio.tts'
   | 'audio.asr'
-  | 'audio.music.generate'
   | 'content.safety.moderate'
   | 'local.video.probe';
 
@@ -41,10 +40,29 @@ const PURPOSE_CAPABILITY_MATCHES: Record<AgentModelPurpose, PurposeCapabilityRul
   'audio.generate': { capabilities: ['audio.generate', 'text_to_audio', 'audio'] },
   'audio.tts': { capabilities: ['audio.tts', 'text_to_audio', 'audio'] },
   'audio.asr': { capabilities: ['audio.asr', 'audio'] },
-  'audio.music.generate': { capabilities: ['audio.music.generate', 'text_to_music'] },
   'content.safety.moderate': { capabilities: ['content.safety.moderate'] },
   'local.video.probe': { capabilities: ['local.video.probe'] },
 };
+
+const PURPOSE_MODEL_TYPE_MATCHES: Partial<Record<AgentModelPurpose, NonNullable<Model['type']>>> = {
+  'llm.chat': 'llm',
+  'llm.plan': 'llm',
+  'llm.judge': 'llm',
+  'canvas.prompt': 'llm',
+  'canvas.judge': 'llm',
+  'character.dialogue': 'llm',
+  'character.profile': 'llm',
+  'image.generate': 'image',
+  'image.edit': 'image',
+  'video.generate': 'video',
+  'audio.generate': 'audio',
+  'audio.tts': 'audio',
+  'audio.asr': 'audio',
+};
+
+export function modelTypeForPurpose(purpose: string): NonNullable<Model['type']> | undefined {
+  return isAgentModelPurpose(purpose) ? PURPOSE_MODEL_TYPE_MATCHES[purpose] : undefined;
+}
 
 export function getModelPurposeCapabilityMatches(purpose: AgentModelPurpose): readonly string[] {
   return PURPOSE_CAPABILITY_MATCHES[purpose].capabilities;
@@ -62,9 +80,16 @@ export function modelSupportsPurpose(
   purpose: string,
 ): boolean {
   const modelCapabilities = model.capabilities;
-  const rule = PURPOSE_CAPABILITY_MATCHES[purpose as AgentModelPurpose];
-  if (!rule) {
-    return modelCapabilities.includes(purpose);
+  const canonicalPurpose = purpose as AgentModelPurpose;
+  const rule = PURPOSE_CAPABILITY_MATCHES[canonicalPurpose];
+  if (!rule) return false;
+  const requiredModelType = PURPOSE_MODEL_TYPE_MATCHES[canonicalPurpose];
+  if (requiredModelType) {
+    const actualModelType = model.type ?? 'llm';
+    return (
+      actualModelType === requiredModelType &&
+      rule.capabilities.some((capability) => modelCapabilities.includes(capability))
+    );
   }
   if ('type' in model && rule.modelType && model.type !== rule.modelType) {
     return false;

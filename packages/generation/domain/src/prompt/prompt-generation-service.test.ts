@@ -4,7 +4,11 @@ import { PromptGenerationService } from './prompt-generation-service';
 describe('PromptGenerationService', () => {
   it('validates the exact provider/model and delegates to the narrow completion port', async () => {
     const complete = vi.fn(async () => ({ text: 'Generated text' }));
-    const service = new PromptGenerationService(config(), { complete });
+    const fixture = config();
+    const resolveProvider = vi.fn(async (id: string) =>
+      id === fixture.provider.id ? fixture.provider : undefined,
+    );
+    const service = new PromptGenerationService(fixture, { resolveProvider }, { complete });
 
     await expect(
       service.generatePrompt({
@@ -21,13 +25,24 @@ describe('PromptGenerationService', () => {
       text: 'Generated text',
     });
     expect(complete).toHaveBeenCalledWith(
-      expect.objectContaining({ prompt: 'Write a scene\n\nReference context:\nRain' }),
+      expect.objectContaining({
+        provider: fixture.provider,
+        prompt: 'Write a scene\n\nReference context:\nRain',
+      }),
     );
+    expect(resolveProvider).toHaveBeenCalledWith('provider-1');
   });
 
   it('rejects unsupported or mismatched bindings without invoking completion', async () => {
     const complete = vi.fn();
-    const service = new PromptGenerationService(config(), { complete });
+    const fixture = config();
+    const service = new PromptGenerationService(
+      fixture,
+      {
+        resolveProvider: async (id) => (id === fixture.provider.id ? fixture.provider : undefined),
+      },
+      { complete },
+    );
 
     await expect(
       service.generatePrompt({
@@ -58,7 +73,7 @@ function config() {
     enabled: true,
   };
   return {
-    getProvider: (id: string) => (id === provider.id ? provider : undefined),
+    provider,
     getModel: (id: string) => {
       if (id === 'text-model') {
         return {

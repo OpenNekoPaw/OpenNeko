@@ -1,7 +1,7 @@
 import type { CanvasConnection, CanvasData, GenerationCanvasNode } from './types/canvas';
+import type { GenerationModelParameterProfile } from '@neko/generation-domain';
 import {
   applyCanvasGenerationOutputs,
-  authorCanvasGeneratedText,
   bindCanvasGenerationJob,
   createCanvasGenerationNodeData,
   selectCanvasGenerationOutput,
@@ -21,6 +21,7 @@ export function createCanvasGenerationNode(input: {
   readonly kind: CanvasGenerationKind;
   readonly position: { readonly x: number; readonly y: number };
   readonly defaultModel?: CanvasGenerationModelBinding;
+  readonly parameterProfile?: GenerationModelParameterProfile;
 }): CanvasData {
   if (input.canvas.nodes.some((node) => node.id === input.nodeId)) {
     throw new Error(`Canvas node identity "${input.nodeId}" already exists.`);
@@ -33,7 +34,7 @@ export function createCanvasGenerationNode(input: {
     zIndex:
       input.canvas.nodes.reduce((highest, candidate) => Math.max(highest, candidate.zIndex), -1) +
       1,
-    data: createCanvasGenerationNodeData(input.kind, input.defaultModel),
+    data: createCanvasGenerationNodeData(input.kind, input.defaultModel, input.parameterProfile),
   };
   return { ...input.canvas, nodes: [...input.canvas.nodes, node] };
 }
@@ -85,17 +86,6 @@ export function selectCanvasGenerationNodeOutput(input: {
   return replaceGenerationNode(input.canvas, input.nodeId, (node) => ({
     ...node,
     data: selectCanvasGenerationOutput(node.data, input.outputId),
-  }));
-}
-
-export function authorCanvasGenerationNodeText(input: {
-  readonly canvas: CanvasData;
-  readonly nodeId: string;
-  readonly text: string;
-}): CanvasData {
-  return replaceGenerationNode(input.canvas, input.nodeId, (node) => ({
-    ...node,
-    data: authorCanvasGeneratedText(node.data, input.text),
   }));
 }
 

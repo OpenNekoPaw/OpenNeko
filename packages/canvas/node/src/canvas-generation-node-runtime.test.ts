@@ -1,5 +1,7 @@
 import {
+  attachCanvasGenerationReference,
   createCanvasGenerationNode,
+  projectResolvedCanvasMaterialToCanvas,
   requireCanvasGenerationNode,
   updateCanvasGenerationNodeRecipe,
   type CanvasData,
@@ -15,6 +17,11 @@ import {
 } from '@neko/generation-domain';
 import { describe, expect, it, vi } from 'vitest';
 import { CanvasGenerationNodeRuntime } from './canvas-generation-node-runtime';
+import { createNodeHostContentReadService } from '@neko/content-domain/node';
+import { createProjectContentReadService } from '@neko/assets-node';
+import { mkdtemp, writeFile, symlink, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const workspace: CanvasGenerationWorkspace = {
   workspaceId: 'workspace-1',
@@ -33,6 +40,84 @@ const identity: CanvasHostRuntimeIdentity = {
 };
 
 describe('CanvasGenerationNodeRuntime', () => {
+  it('reads embedded document images through the project reader and isolates missing or unauthorized inputs', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'canvas-generation-input-'));
+    const outside = await mkdtemp(join(tmpdir(), 'canvas-generation-outside-'));
+    try {
+      await writeFile(join(root, 'comic.epub'), 'document fixture');
+      await writeFile(join(outside, 'comic.epub'), 'unauthorized document fixture');
+      await symlink(outside, join(root, 'outside'));
+      const source = {
+        file: { authority: 'workspace' as const, path: 'comic.epub' },
+        selector: { kind: 'entry' as const, path: 'image/page.jpg' },
+      };
+      const readEntry = vi.fn(async () => new Uint8Array([1, 2, 3]));
+      const createContentReader = vi.fn((workspaceRoot: string, projectId: string) =>
+        createProjectContentReadService({
+          workspaceRoot,
+          projectId,
+          globalMediaLibraryRoot: join(root, 'libraries'),
+          documentEntryReader: { readEntry },
+        }),
+      );
+      const submitGeneration = vi.fn(async () =>
+        snapshot({ phase: 'running', submissionId: 'submission-1' }),
+      );
+      const runtime = new CanvasGenerationNodeRuntime({
+        generation: {
+          getWorkspaceJobs: async () => createJobs({ submitGeneration }),
+          validateBinding: vi.fn(),
+        },
+        createContentReader,
+        createSubmissionId: () => 'submission-1',
+      });
+      const canvasWithSource = (path: string): CanvasData => {
+        const canvas = configuredCanvas();
+        const node = requireCanvasGenerationNode(canvas, 'generation-1');
+        return {
+          ...canvas,
+          nodes: [
+            {
+              ...node,
+              data: {
+                ...node.data,
+                inputMaterials: [
+                  { mediaKind: 'image', locator: { ...source, file: { ...source.file, path } } },
+                ],
+              },
+            },
+          ],
+        };
+      };
+      const persistCanvas = vi.fn(async () => undefined);
+      const start = (path: string) =>
+        runtime.startNode({
+          identity,
+          workspace: { ...workspace, workspacePath: root },
+          canvas: canvasWithSource(path),
+          nodeId: 'generation-1',
+          persistCanvas,
+        });
+      await expect(start('missing.epub')).rejects.toThrow('content-missing');
+      await expect(start('outside/comic.epub')).rejects.toThrow('content-unauthorized');
+      expect(readEntry).not.toHaveBeenCalled();
+      expect(submitGeneration).not.toHaveBeenCalled();
+      expect(persistCanvas).not.toHaveBeenCalled();
+      await start('comic.epub');
+      expect(createContentReader).toHaveBeenLastCalledWith(root, identity.projectId);
+      expect(readEntry).toHaveBeenCalledExactlyOnceWith(join(root, 'comic.epub'), 'image/page.jpg');
+      expect(submitGeneration).toHaveBeenCalledWith(
+        expect.objectContaining({
+          generationType: 'image-to-image',
+          request: expect.objectContaining({ referenceImageLocator: source }),
+        }),
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
   it('persists run intent before exact Workspace submission and persists the Job binding afterward', async () => {
     const persisted: CanvasData[] = [];
     const submitGeneration = vi.fn(async (input: SubmitGenerationJobInput) => {
@@ -48,6 +133,7 @@ describe('CanvasGenerationNodeRuntime', () => {
     const validateBinding = vi.fn();
     const runtime = new CanvasGenerationNodeRuntime({
       generation: { getWorkspaceJobs, validateBinding },
+      createContentReader: (workspaceRoot) => createNodeHostContentReadService({ workspaceRoot }),
       createSubmissionId: () => 'submission-1',
     });
 
@@ -98,6 +184,108 @@ describe('CanvasGenerationNodeRuntime', () => {
     expect(result.canvas.nodes[0]?.type).toBe('generation');
   });
 
+  it('resubmits a projected video recipe with its first frame and effective parameters intact', async () => {
+    const firstFrame = {
+      file: {
+        authority: 'workspace' as const,
+        path: 'neko/generated/image/first-frame.png',
+      },
+    };
+    const submitGeneration = vi.fn(async (input: SubmitGenerationJobInput) =>
+      snapshot({ submissionId: input.submissionId, phase: 'running' }),
+    );
+    const runtime = new CanvasGenerationNodeRuntime({
+      generation: {
+        getWorkspaceJobs: vi.fn(async () => createJobs({ submitGeneration })),
+        validateBinding: vi.fn(),
+      },
+      createContentReader: () => ({
+        stat: async (locator) => ({
+          status: 'ready',
+          locator,
+          byteLength: 1,
+          fingerprint: { strategy: 'sha256', value: 'first-frame' },
+        }),
+        read: async () => {
+          throw new Error('Image-to-video preparation must not read image bytes.');
+        },
+      }),
+      createSubmissionId: () => 'submission-1',
+    });
+    const withGeneration = updateCanvasGenerationNodeRecipe({
+      canvas: createCanvasGenerationNode({
+        canvas: emptyCanvas(),
+        nodeId: 'generation-1',
+        kind: 'video',
+        position: { x: 392, y: 48 },
+      }),
+      nodeId: 'generation-1',
+      recipe: {
+        kind: 'video',
+        prompt: 'Slowly push into the megastructure',
+        negativePrompt: 'fast camera',
+        model: {
+          purpose: 'video.generate',
+          providerId: 'minimax-provider',
+          modelId: 'minimax-h3',
+        },
+        duration: 6,
+        resolution: '768P',
+        fps: 24,
+        aspectRatio: '16:9',
+        generateAudio: false,
+        motionStrength: 0.2,
+        cameraMovement: 'slow push-in',
+        cameraAngle: 'low-angle upward view',
+        shotScale: 'extreme wide shot',
+        editInstruction: 'Preserve the first-frame composition',
+      },
+    });
+    const withMaterial = projectResolvedCanvasMaterialToCanvas({
+      canvas: withGeneration,
+      material: { locator: firstFrame, title: 'first-frame.png', mediaKind: 'image' },
+      generateId: () => 'first-frame',
+    });
+    const canvas = attachCanvasGenerationReference({
+      canvas: withMaterial,
+      nodeId: 'generation-1',
+      sourceNodeId: 'first-frame',
+    });
+
+    await runtime.startNode({
+      identity,
+      workspace,
+      canvas,
+      nodeId: 'generation-1',
+      persistCanvas: async () => undefined,
+    });
+
+    expect(submitGeneration).toHaveBeenCalledWith({
+      generationType: 'image-to-video',
+      providerId: 'minimax-provider',
+      modelId: 'minimax-h3',
+      lifecycleMode: 'detached',
+      submissionId: 'submission-1',
+      request: {
+        providerId: 'minimax-provider',
+        modelId: 'minimax-h3',
+        prompt: 'Slowly push into the megastructure',
+        negativePrompt: 'fast camera',
+        duration: 6,
+        resolution: '768P',
+        fps: 24,
+        aspectRatio: '16:9',
+        generateAudio: false,
+        motionStrength: 0.2,
+        cameraMovement: 'slow push-in',
+        cameraAngle: 'low-angle upward view',
+        shotScale: 'extreme wide shot',
+        editInstruction: 'Preserve the first-frame composition',
+        inputs: [{ type: 'image', role: 'first-frame', locator: firstFrame }],
+      },
+    });
+  });
+
   it('resumes an uncertain unbound submission with the same idempotency identity', async () => {
     const submitGeneration = vi
       .fn<(input: SubmitGenerationJobInput) => Promise<GenerationJobSnapshot>>()
@@ -146,6 +334,7 @@ describe('CanvasGenerationNodeRuntime', () => {
       );
     const runtime = new CanvasGenerationNodeRuntime({
       generation: { getWorkspaceJobs, validateBinding: vi.fn() },
+      createContentReader: (workspaceRoot) => createNodeHostContentReadService({ workspaceRoot }),
       createSubmissionId: () => 'submission-1',
     });
 
@@ -369,15 +558,9 @@ describe('CanvasGenerationNodeRuntime', () => {
 });
 
 function configuredCanvas(): CanvasData {
-  const empty: CanvasData = {
-    name: 'Fixture',
-    viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
-    nodes: [],
-    connections: [],
-  };
   return updateCanvasGenerationNodeRecipe({
     canvas: createCanvasGenerationNode({
-      canvas: empty,
+      canvas: emptyCanvas(),
       nodeId: 'generation-1',
       kind: 'image',
       position: { x: 32, y: 48 },
@@ -395,6 +578,15 @@ function configuredCanvas(): CanvasData {
       height: 768,
     },
   });
+}
+
+function emptyCanvas(): CanvasData {
+  return {
+    name: 'Fixture',
+    viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+    nodes: [],
+    connections: [],
+  };
 }
 
 function withRun(canvas: CanvasData, run: CanvasGenerationRunBinding): CanvasData {
@@ -425,6 +617,7 @@ function boundRun(): CanvasGenerationRunBinding & {
 
 function createRuntime(jobs: GenerationJobPort): CanvasGenerationNodeRuntime {
   return new CanvasGenerationNodeRuntime({
+    createContentReader: (workspaceRoot) => createNodeHostContentReadService({ workspaceRoot }),
     generation: {
       getWorkspaceJobs: vi.fn(async () => jobs),
       validateBinding: vi.fn(),

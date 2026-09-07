@@ -77,6 +77,10 @@ export interface BaseNodeProps {
   nodeLabel?: {
     readonly icon: ReactNode;
     readonly text: string;
+    readonly action?: {
+      readonly ariaLabel: string;
+      readonly onActivate: () => void;
+    };
   };
   className?: string;
   autoSizeContent?: boolean;
@@ -339,15 +343,32 @@ export function BaseNode({
       })}
     >
       {nodeLabel ? (
-        <div
-          className="canvas-node-external-label"
-          data-canvas-node-label
-          data-node-drag-allow="true"
-          title={nodeLabel.text}
-        >
-          {nodeLabel.icon}
-          <span>{nodeLabel.text}</span>
-        </div>
+        nodeLabel.action ? (
+          <button
+            type="button"
+            className="canvas-node-external-label canvas-node-external-label--action"
+            data-canvas-node-label
+            title={nodeLabel.text}
+            aria-label={nodeLabel.action.ariaLabel}
+            onClick={(event) => {
+              event.stopPropagation();
+              nodeLabel.action?.onActivate();
+            }}
+          >
+            {nodeLabel.icon}
+            <span>{nodeLabel.text}</span>
+          </button>
+        ) : (
+          <div
+            className="canvas-node-external-label"
+            data-canvas-node-label
+            data-node-drag-allow="true"
+            title={nodeLabel.text}
+          >
+            {nodeLabel.icon}
+            <span>{nodeLabel.text}</span>
+          </div>
+        )
       ) : null}
 
       <div

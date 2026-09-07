@@ -92,6 +92,24 @@ describe('DesktopTextEditorRuntime', () => {
       documentId: 'notes/readme.md',
       editorSessionId: opened.identity.sessionId,
     });
+    expect(
+      runtime.authorizeClipboardCommand('window-1', {
+        identity: opened.identity,
+        command: 'copy',
+      }),
+    ).toEqual({ identity: opened.identity, command: 'copy' });
+    expect(() =>
+      runtime.authorizeClipboardCommand('window-1', {
+        identity: { ...opened.identity, rendererSessionId: 'renderer-stale' },
+        command: 'copy',
+      }),
+    ).toThrow('no current owner-bound session');
+    expect(() =>
+      runtime.authorizeClipboardCommand('window-other', {
+        identity: opened.identity,
+        command: 'copy',
+      }),
+    ).toThrow('no current owner-bound session');
 
     const edited = await runtime.execute('window-1', {
       route: TEXT_EDITOR_HOST_ROUTES.editsApply,
@@ -114,7 +132,7 @@ describe('DesktopTextEditorRuntime', () => {
     expect(await readFile(path.join(root, 'notes/readme.md'), 'utf8')).toBe('# Saved\n');
   });
 
-  it('opens a persisted Agent Markdown locator through the existing Text Editor path', async () => {
+  it('opens and saves a generated Markdown locator through the existing Text Editor path', async () => {
     const root = await createWorkspace('neko/generated/file/story-plan.md', '# Story plan\n');
     let workbench = createDefaultDesktopWorkbenchLayout('window-1');
     const shell = createShell(
@@ -156,6 +174,23 @@ describe('DesktopTextEditorRuntime', () => {
         documentId: 'neko/generated/file/story-plan.md',
       }),
     ]);
+    if (opened.status !== 'ready') return;
+    await runtime.execute('window-1', {
+      route: TEXT_EDITOR_HOST_ROUTES.editsApply,
+      requestId: 'generated-edit-1',
+      identity: opened.identity,
+      expectedEditSequence: 0,
+      changes: [{ from: 2, to: 7, insert: 'Edited story' }],
+    });
+    await runtime.execute('window-1', {
+      route: TEXT_EDITOR_HOST_ROUTES.save,
+      requestId: 'generated-save-1',
+      identity: opened.identity,
+      expectedEditSequence: 1,
+    });
+    await expect(
+      readFile(path.join(root, 'neko/generated/file/story-plan.md'), 'utf8'),
+    ).resolves.toBe('# Edited story plan\n');
   });
 
   it('delegates reference search to one exact catalog and discards a stale edit sequence', async () => {

@@ -48,11 +48,7 @@ import {
   projectAssistantConfigReadResultDiagnostic,
   type AssistantConfigDiagnostic,
 } from './config-diagnostic';
-import {
-  isAgentModelPurpose,
-  modelSupportsPurpose,
-  type AgentModelPurpose,
-} from './model-purpose-registry';
+import { modelSupportsPurpose, modelTypeForPurpose } from './model-purpose-registry';
 import {
   buildAssistantStatusBarPresentation,
   type AssistantGenerationModelSelection,
@@ -431,59 +427,35 @@ export class ConfigManager {
     this.reloadConfig();
   }
 
-  getDefaultModelPurposeRef(purpose: string): ModelRefConfig | undefined {
-    if (!isAgentModelPurpose(purpose)) return undefined;
-    return this.getScalar('defaultModelPurposes')?.[purpose];
-  }
-
   resolveModelRefForPurpose(purpose: string): ModelRefConfig | undefined {
-    return this.getDefaultModelPurposeRef(purpose);
+    const type = modelTypeForPurpose(purpose);
+    if (!type) return undefined;
+    const ref = this.getDefaultModelRef(type);
+    if (!ref) return undefined;
+    this.assertModelPurposeRef(purpose, ref);
+    return ref;
   }
 
-  async setDefaultModelPurposeRefs(
-    updates: Readonly<Partial<Record<AgentModelPurpose, ModelRefConfig>>>,
-  ): Promise<void> {
-    const entries = Object.entries(updates);
-    if (entries.length === 0) {
-      throw new Error('At least one explicit model purpose binding is required.');
-    }
-
-    this.ensureUserConfigManager();
+  private assertModelPurposeRef(purpose: string, ref: ModelRefConfig): void {
     this.ensureMerged();
-    for (const [purpose, ref] of entries) {
-      if (!isAgentModelPurpose(purpose)) {
-        throw new Error(`Unknown model purpose: ${purpose}.`);
-      }
-      if (!ref) {
-        throw new Error(`Model purpose ${purpose} requires an exact provider/model reference.`);
-      }
-      const provider = this.providers.get(ref.providerId);
-      const model = this.models.get(ref.modelId);
-      if (!provider || provider.enabled === false) {
-        throw new Error(`Provider ${ref.providerId} is unavailable for purpose ${purpose}.`);
-      }
-      if (!model || model.enabled === false) {
-        throw new Error(
-          `Model ${ref.providerId}/${ref.modelId} is unavailable for purpose ${purpose}.`,
-        );
-      }
-      if (model.providerId !== provider.id) {
-        throw new Error(
-          `Model ${model.id} belongs to provider ${model.providerId}, not ${provider.id}.`,
-        );
-      }
-      if (!modelSupportsPurpose(model, purpose)) {
-        throw new Error(`Model ${provider.id}/${model.id} does not support purpose ${purpose}.`);
-      }
+    const provider = this.providers.get(ref.providerId);
+    const model = this.models.get(ref.modelId);
+    if (!provider || provider.enabled === false) {
+      throw new Error(`Provider ${ref.providerId} is unavailable for purpose ${purpose}.`);
     }
-
-    await this.userConfigManager!.updateScalars({
-      defaultModelPurposes: {
-        ...(this.getScalar('defaultModelPurposes') ?? {}),
-        ...updates,
-      },
-    });
-    this.reloadConfig();
+    if (!model || model.enabled === false) {
+      throw new Error(
+        `Model ${ref.providerId}/${ref.modelId} is unavailable for purpose ${purpose}.`,
+      );
+    }
+    if (model.providerId !== provider.id) {
+      throw new Error(
+        `Model ${model.id} belongs to provider ${model.providerId}, not ${provider.id}.`,
+      );
+    }
+    if (!modelSupportsPurpose(model, purpose)) {
+      throw new Error(`Model ${provider.id}/${model.id} does not support purpose ${purpose}.`);
+    }
   }
 
   getTemperature(): number {
@@ -535,6 +507,14 @@ export class ConfigManager {
   async setAssistantSettings(updates: Partial<AssistantSettingsSnapshot>): Promise<void> {
     const authority = this.requireAssistantRuntimeSettings();
     await authority.commit({ ...authority.snapshot(), ...updates });
+  }
+
+  async clearAssistantModelSelection(): Promise<void> {
+    const authority = this.requireAssistantRuntimeSettings();
+    const next = { ...authority.snapshot() };
+    delete next.selectedProviderId;
+    delete next.selectedModelId;
+    await authority.commit(next);
   }
 
   async applyRuntimeAssistantSettingsFromWebview(settings: Record<string, unknown>): Promise<void> {
@@ -651,6 +631,7 @@ export class ConfigManager {
       image: defaults.image ? toModelOptionId(defaults.image) : undefined,
       video: defaults.video ? toModelOptionId(defaults.video) : undefined,
       audio: defaults.audio ? toModelOptionId(defaults.audio) : undefined,
+      music: defaults.music ? toModelOptionId(defaults.music) : undefined,
     });
   }
 
@@ -762,35 +743,6 @@ export class ConfigManager {
           'invalidDefaultModelBinding',
           result.filePath,
           `default_models.${type}`,
-        );
-      }
-    }
-
-    const purposeDefaults = result.config.defaultModelPurposes ?? {};
-    for (const [purpose, ref] of Object.entries(purposeDefaults)) {
-      if (!ref) continue;
-      if (!isAgentModelPurpose(purpose)) {
-        return buildAssistantConfigAvailabilityDiagnostic(
-          'invalidDefaultModelBinding',
-          result.filePath,
-          `default_model_purposes.${purpose}`,
-        );
-      }
-      const provider = this.providers.get(ref.providerId);
-      const model = this.models.get(ref.modelId);
-      if (
-        !provider ||
-        provider.enabled === false ||
-        !isProviderConfigured(provider) ||
-        !model ||
-        model.enabled === false ||
-        model.providerId !== provider.id ||
-        !modelSupportsPurpose(model, purpose)
-      ) {
-        return buildAssistantConfigAvailabilityDiagnostic(
-          'invalidDefaultModelBinding',
-          result.filePath,
-          `default_model_purposes.${purpose}`,
         );
       }
     }

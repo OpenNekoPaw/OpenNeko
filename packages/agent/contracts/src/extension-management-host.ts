@@ -4,6 +4,8 @@ import {
   parseAgentExtensionManagementSessionIdentity,
   type AgentExtensionManagementProjection,
   type AgentExtensionManagementSessionIdentity,
+  parseAgentManagedSkillDetail,
+  type AgentManagedSkillDetail,
 } from './extension-management';
 
 export const AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL = 'neko:agent:extension-management' as const;
@@ -15,6 +17,11 @@ interface RequestBase {
 
 export type AgentExtensionManagementHostRequest =
   | (RequestBase & { readonly route: 'snapshot.get' | 'skill.add' })
+  | (RequestBase & {
+      readonly route: 'skill.detail.get';
+      readonly name: string;
+      readonly source: string;
+    })
   | (RequestBase & {
       readonly route: 'skill.enablement.update';
       readonly name: string;
@@ -34,11 +41,17 @@ export type AgentExtensionManagementHostRequest =
     })
   | (RequestBase & { readonly route: 'mcp.remove'; readonly id: string });
 
-export interface AgentExtensionManagementHostResult {
-  readonly requestId: string;
-  readonly route: AgentExtensionManagementHostRequest['route'];
-  readonly projection: AgentExtensionManagementProjection;
-}
+export type AgentExtensionManagementHostResult =
+  | {
+      readonly requestId: string;
+      readonly route: 'skill.detail.get';
+      readonly detail: AgentManagedSkillDetail;
+    }
+  | {
+      readonly requestId: string;
+      readonly route: Exclude<AgentExtensionManagementHostRequest['route'], 'skill.detail.get'>;
+      readonly projection: AgentExtensionManagementProjection;
+    };
 
 export interface OpenNekoAgentExtensionManagementBridge {
   readonly extensionManagement: {
@@ -66,6 +79,15 @@ export function parseAgentExtensionManagementHostRequest(
   if (route === 'snapshot.get' || route === 'skill.add') {
     requireExactKeys(record, ['requestId', 'identity', 'route']);
     return { ...base, route };
+  }
+  if (route === 'skill.detail.get') {
+    requireExactKeys(record, ['requestId', 'identity', 'route', 'name', 'source']);
+    return {
+      ...base,
+      route,
+      name: requireId(record.name, 'Skill'),
+      source: requireId(record.source, 'Skill source'),
+    };
   }
   if (route === 'skill.enablement.update') {
     requireExactKeys(record, ['requestId', 'identity', 'route', 'name', 'source', 'enabled']);
@@ -111,10 +133,18 @@ export function parseAgentExtensionManagementHostResult(
   request: AgentExtensionManagementHostRequest,
 ): AgentExtensionManagementHostResult {
   const record = requireRecord(value, 'DSH extension management result must be an object.');
-  requireExactKeys(record, ['requestId', 'route', 'projection']);
   if (record.requestId !== request.requestId || record.route !== request.route) {
     throw new Error('DSH extension management result identity is stale.');
   }
+  if (request.route === 'skill.detail.get') {
+    requireExactKeys(record, ['requestId', 'route', 'detail']);
+    const detail = parseAgentManagedSkillDetail(record.detail);
+    if (detail.name !== request.name || detail.source !== request.source) {
+      throw new Error('DSH Skill detail identity is stale.');
+    }
+    return { requestId: request.requestId, route: request.route, detail };
+  }
+  requireExactKeys(record, ['requestId', 'route', 'projection']);
   const projection = parseAgentExtensionManagementProjection(record.projection);
   if (projection.identity.windowId !== request.identity.windowId) {
     throw new Error('DSH extension management projection owner identity is stale.');

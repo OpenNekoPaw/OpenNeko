@@ -3,8 +3,14 @@ import { autocompletion, type CompletionContext } from '@codemirror/autocomplete
 import { EditorState, Prec, type Extension } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { projectMarkdownNavigation, type MarkdownNavigationProjection } from '@neko/markdown';
-import type { TextDocumentChange, TextDocumentProjection } from '@neko/text-editor-domain';
+import type {
+  TextDocumentChange,
+  TextDocumentProjection,
+  TextEditorClipboardCommand,
+} from '@neko/text-editor-domain';
 import '@neko/ui/icons/codicon.css';
+import { CopyIcon, RedoIcon, ScissorsIcon, UndoIcon } from '@neko/ui/icons';
+import { PositionedContextMenu, type MenuItem } from '@neko/ui/primitives';
 import {
   lazy,
   Suspense,
@@ -15,11 +21,12 @@ import {
   useState,
   type MutableRefObject,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type ReactElement,
 } from 'react';
 import type { TextEditorRuntimeBootstrap } from './runtime-bootstrap';
 import type { TextEditorHostRuntime } from './host-runtime';
-import type { MilkdownEditorActions } from './milkdown-rich-editor';
+import type { MilkdownEditorActions, MilkdownEditorSelectionActions } from './milkdown-rich-editor';
 import {
   isTextEditorDiagnosticCode,
   textEditorDiagnosticLabel,
@@ -50,6 +57,14 @@ type RootState =
   | { readonly status: 'ready'; readonly projection: TextDocumentProjection }
   | { readonly status: 'error'; readonly message: string };
 
+interface TextEditorMenuState {
+  readonly x: number;
+  readonly y: number;
+  readonly editor: 'rich' | 'source';
+  readonly editable: boolean;
+  readonly hasSelection: boolean;
+}
+
 const MilkdownRichEditor = lazy(async () => {
   const module = await import('./milkdown-rich-editor');
   return { default: module.MilkdownRichEditor };
@@ -76,10 +91,12 @@ export function TextEditorRoot({
   const [outlineVisible, setOutlineVisible] = useState(parsedSnapshot.snapshot.outlineVisible);
   const [operationError, setOperationError] = useState<string>();
   const [conflictDismissed, setConflictDismissed] = useState(false);
+  const [editMenu, setEditMenu] = useState<TextEditorMenuState>();
   const previousConflict = useRef(false);
   const requestOrdinal = useRef(0);
   const editorView = useRef<EditorView>();
   const richEditorActions = useRef<MilkdownEditorActions>();
+  const richEditorSelectionActions = useRef<MilkdownEditorSelectionActions>();
   const pendingSourceOffset = useRef<number>();
   const [activeEditor, setActiveEditor] = useState<'rich' | 'source'>(
     parsedSnapshot.snapshot.mode === 'rich' ? 'rich' : 'source',
@@ -95,6 +112,12 @@ export function TextEditorRoot({
   const bindRichEditorActions = useCallback((value: MilkdownEditorActions | undefined) => {
     richEditorActions.current = value;
   }, []);
+  const bindRichEditorSelectionActions = useCallback(
+    (value: MilkdownEditorSelectionActions | undefined) => {
+      richEditorSelectionActions.current = value;
+    },
+    [],
+  );
   const activateRichEditor = useCallback(() => setActiveEditor('rich'), []);
   const activateSourceEditor = useCallback(() => setActiveEditor('source'), []);
 
@@ -206,6 +229,12 @@ export function TextEditorRoot({
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
     if (event.defaultPrevented) return;
     const modifier = event.metaKey || event.ctrlKey;
+    if (modifier && !event.altKey && !event.shiftKey && event.code === 'KeyA') {
+      if (activeEditor !== 'rich' || !richEditorSelectionActions.current) return;
+      event.preventDefault();
+      richEditorSelectionActions.current.selectAll();
+      return;
+    }
     if (modifier && !event.altKey && !event.shiftKey && event.code === 'KeyS') {
       event.preventDefault();
       if (projection.dirty) void save();
@@ -250,6 +279,128 @@ export function TextEditorRoot({
     }
   };
 
+  const focusEditor = (editor: TextEditorMenuState['editor']) => {
+    if (editor === 'source') {
+      editorView.current?.focus();
+      return;
+    }
+    document.querySelector<HTMLElement>('.neko-text-editor-rich .ProseMirror')?.focus();
+  };
+  const selectAll = (editor: TextEditorMenuState['editor']) => {
+    focusEditor(editor);
+    if (editor === 'rich') {
+      richEditorSelectionActions.current?.selectAll();
+      return;
+    }
+    const view = editorView.current;
+    if (!view) return;
+    view.dispatch({ selection: { anchor: 0, head: view.state.doc.length } });
+  };
+  const executeEditCommand = async (
+    editor: TextEditorMenuState['editor'],
+    command: TextEditorClipboardCommand,
+  ) => {
+    focusEditor(editor);
+    try {
+      await runtime.executeClipboardCommand(command);
+    } catch (error) {
+      setOperationError(errorMessage(error));
+    }
+  };
+  const handleContextMenu = (event: ReactMouseEvent<HTMLElement>) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const rich = target.closest<HTMLElement>('.neko-text-editor-rich');
+    const source = target.closest<HTMLElement>('.neko-text-editor-codemirror');
+    if (!rich && !source) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (source) {
+      const view = editorView.current;
+      view?.focus();
+      setActiveEditor('source');
+      setEditMenu({
+        x: event.clientX,
+        y: event.clientY,
+        editor: 'source',
+        editable: view !== undefined,
+        hasSelection: view?.state.selection.ranges.some((range) => !range.empty) ?? false,
+      });
+      return;
+    }
+    rich?.querySelector<HTMLElement>('.ProseMirror')?.focus();
+    setActiveEditor('rich');
+    const selection = window.getSelection();
+    setEditMenu({
+      x: event.clientX,
+      y: event.clientY,
+      editor: 'rich',
+      editable: effectiveMode !== 'split' && richEditorActions.current !== undefined,
+      hasSelection:
+        selection !== null &&
+        !selection.isCollapsed &&
+        selection.anchorNode !== null &&
+        selection.focusNode !== null &&
+        rich?.contains(selection.anchorNode) === true &&
+        rich.contains(selection.focusNode),
+    });
+  };
+  const editMenuItems: readonly MenuItem[] | undefined = editMenu
+    ? [
+        {
+          label: textEditorLabel(locale, 'undo'),
+          icon: <UndoIcon size={14} strokeWidth={1.8} />,
+          shortcut: '⌘Z',
+          disabled: !editMenu.editable,
+          onClick: () => {
+            focusEditor(editMenu.editor);
+            if (editMenu.editor === 'rich') richEditorActions.current?.undo();
+            else if (editorView.current) undo(editorView.current);
+          },
+        },
+        {
+          label: textEditorLabel(locale, 'redo'),
+          icon: <RedoIcon size={14} strokeWidth={1.8} />,
+          shortcut: '⇧⌘Z',
+          disabled: !editMenu.editable,
+          onClick: () => {
+            focusEditor(editMenu.editor);
+            if (editMenu.editor === 'rich') richEditorActions.current?.redo();
+            else if (editorView.current) redo(editorView.current);
+          },
+        },
+        { separator: true },
+        {
+          label: textEditorLabel(locale, 'cut'),
+          icon: <ScissorsIcon size={14} strokeWidth={1.8} />,
+          shortcut: '⌘X',
+          disabled: !editMenu.editable || !editMenu.hasSelection,
+          onClick: () => void executeEditCommand(editMenu.editor, 'cut'),
+        },
+        {
+          label: textEditorLabel(locale, 'copy'),
+          icon: <CopyIcon size={14} strokeWidth={1.8} />,
+          shortcut: '⌘C',
+          disabled: !editMenu.hasSelection,
+          onClick: () => void executeEditCommand(editMenu.editor, 'copy'),
+        },
+        {
+          label: textEditorLabel(locale, 'paste'),
+          icon: <span className="codicon codicon-clippy" aria-hidden="true" />,
+          shortcut: '⌘V',
+          disabled: !editMenu.editable,
+          onClick: () => void executeEditCommand(editMenu.editor, 'paste'),
+        },
+        { separator: true },
+        {
+          label: textEditorLabel(locale, 'selectAll'),
+          icon: <span className="codicon codicon-selection" aria-hidden="true" />,
+          shortcut: '⌘A',
+          onClick: () => selectAll(editMenu.editor),
+        },
+      ]
+    : undefined;
+
   const contextActions = renderContextActions?.(
     <TextEditorContextActions
       activeMode={effectiveMode}
@@ -273,6 +424,7 @@ export function TextEditorRoot({
       <section
         className="neko-text-editor-root"
         data-document-mode={projection.mode}
+        onContextMenu={handleContextMenu}
         onKeyDown={handleKeyDown}
       >
         {displayedError ? (
@@ -366,6 +518,7 @@ export function TextEditorRoot({
                 onError={setOperationError}
                 onFocus={activateRichEditor}
                 onActions={bindRichEditorActions}
+                onSelectionActions={bindRichEditorSelectionActions}
                 onOpenSource={() => updatePresentationMode('source')}
                 onRevealSource={(offset) => {
                   const view = editorView.current;
@@ -386,6 +539,15 @@ export function TextEditorRoot({
           ) : null}
         </div>
       </section>
+      {editMenu && editMenuItems ? (
+        <PositionedContextMenu
+          className="neko-text-editor-edit-menu"
+          items={editMenuItems}
+          x={editMenu.x}
+          y={editMenu.y}
+          onClose={() => setEditMenu(undefined)}
+        />
+      ) : null}
     </>
   );
 }
@@ -532,9 +694,10 @@ function CodeMirrorEditor({
           borderLeftColor: 'var(--neko-editor-foreground, #202124)',
         },
         '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
-          backgroundColor: 'var(--neko-list-activeSelectionBackground, #e8e8e7)',
+          backgroundColor: 'var(--neko-editor-selectionBackground, rgba(95, 99, 97, 0.32))',
+          color: 'var(--neko-editor-selectionForeground, inherit)',
         },
-        '.cm-scroller': { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
+        '.cm-scroller': { fontFamily: 'var(--neko-text-editor-mono)' },
       }),
       EditorView.domEventHandlers({
         focus: () => {

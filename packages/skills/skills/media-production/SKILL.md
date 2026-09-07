@@ -1,51 +1,110 @@
 ---
 name: 'media-production'
-description: '基于来源证据评估动画化/影视化体量、格式与时长，并用当前能力组织从来源到交付物的自适应制作。 Assess source-grounded adaptation scope, format, and runtime, then guide adaptive source-to-deliverable production with current capabilities.'
+description: '基于真实来源规划 AI 驱动媒体作品的整体路线，完成当前创作阶段，并在用户要求继续制作时按依赖批次协调素材准备、生成、检查、后期与交付能力；不代替各领域能力。'
 ---
 
-# Media Production
+# 媒体制作
 
 ## 中文方法
 
-依据当前证据和可用能力组织可恢复的来源到交付物制作，不强制固定流水线。
+把真实来源转译为可评审、可继续制作的媒体创意。先保持全局方向，再把当前步骤做深；不要把整条生产链一次性扩写成未经验证的说明书。
 
-1. 先读取真实来源和项目状态，区分观察事实、Agent 解释、创作者决定与拟议动作；复用仍有效的分镜、角色参考、资产、修订和质量证据。
-2. 格式、集数和时长决策前读取 [适配可行性与体量指南](references/adaptation-feasibility.md)。页数、目录、封面或任意少量页面不能直接证明全卷体量；代表性样本只能形成带方法、不确定性和置信度的暂定区间。
-3. 普通请求只给下一批有用工作及验收证据；仅在正式执行计划或当前决定确实需要时加入完整字段和矩阵。
-4. 只有改编目标、故事/角色变化、核心风格、主要技术、成本风险、修改范围和交付边界等实质选择才要求创作者确认。
-5. 缺失能力必须返回可见的 `blocked`、`degraded` 或 `partial`；只有实际结果才能证明资产、编辑、导出或交付完成。
+1. 先读取当前 Canvas、已有文档、分镜、角色/场景参考和已生成结果。先核对已有分析的来源覆盖和事实依据，再复用有效内容；用户要求补全分析或已有内容无法定位来源时，回到原始来源，不能把既有方案、提示词或生成结果当作原作事实。
+2. 为多阶段作品维护一条简洁路线：**素材分析与创意设计 → 素材预处理 → 逐镜生成 → 选片与修复 → 剪辑/声音/后期 → 成片与交付**。每阶段只记录目标产物、输入依赖和完成条件，用于约束当前决定，不提前编写尚未验证的细节。路线按依赖推进：当前阶段的完成条件未满足时，“继续”只处理该阶段下一个已命名缺口，不能因为已有一页方案、一个提示词、一个静帧或一次技术试镜就进入视频生成或后期。
+3. 先分开确定来源分析范围和成片选材范围。“分析所选卷册，设计 PV”默认分析该卷正文，再决定哪些内容进入 PV；片长短、方案简洁或只采用开篇镜头，不会自动缩小来源分析范围。只有用户指定局部、只要抽样评估，或已有可靠分析覆盖其余范围时，才限定本次新增读取。
+   当前创意阶段必须形成与来源分析范围相称的五类分析，而不能只提取风格：
+   - **画面分析**：构图、景别、视角、尺度、光影、材质、空间层次、页面／分格语法和可转译的运动暗示；
+   - **人物分析**：来源确认的名称／别名或稳定临时标识、外观锚点、首次与后续出场范围、参与事件、当前状态、目标、关系、行动能力、表演边界和跨镜连续性；
+   - **剧情分析**：场景／节拍顺序、起因—行动—后果、冲突升级、结果、对白与叙事边界；
+   - **世界观分析**：地点与空间拓扑、群体／生物／系统、技术与规则、威胁以及来源能够支持的限制；
+   - **分镜转译分析**：原页／面板的保留、跳过、合并、拆分或过渡用途，以及镜头轴线、动作衔接、转场、静帧意图与视频运动意图。
+     这些分析最终仍要收敛为剧情或信息主线、人物目标与作用、场景职责、视觉风格、声音节奏和跨镜头连续性。当前来源范围内任一类仍有可核查而未核查的关键缺口时，创意分析未完成；人物后续出场、物品归属与状态延续即使不改变创意方向，也属于必要内容依据。
+4. 当前请求的来源分析完成后，才以创意方案作为本阶段交付；已有可评审草案不代表人物、剧情和来源覆盖已经完成。必要证据仍可读取时，在同一任务中继续总览与精读，不把补读变成等待用户再次确认的下一阶段。当前阶段形成可评审结果后，输出可复用文档或明确结论，并只推荐一个能推进整体路线的下一批次或创作者决定。状态只描述已观察到的范围：可以说“创意草案已形成”或“当前设计阶段已完成”，但未经用户明确决定不得说方向、暂定规格或作品已经确认；后续准备、生成、选择、后期和交付分别由对应 Skill 与 Tool 完成。
+5. 时间型作品从创意设计进入素材预处理前，必须存在覆盖当前制作范围的权威镜头表。PV 的当前制作范围默认是整支 PV；长篇或 TV 项目默认是创作者当前确认的一个剧集、段落或连续制作单元，而不是凭空要求一次准备整部系列。从素材预处理进入生产性视频生成前，必须逐镜盘点该范围消费的剧情节拍与世界规则、角色及状态、物品、场景及空间关系、风格、构图、动作与声音素材，并为每镜明确静帧生成／编辑是否需要以及视频运动意图是否完整。每个镜头必须被具体覆盖；不得用“后续镜头之后再准备”代替需求分析。单张图只满足它实际呈现且已绑定的职责，不能同时冒充未呈现的人物状态、物品、场景拓扑、动作姿态或其他镜头构图。只要当前制作范围仍有关键静态素材缺口或逐镜生成意图缺口，某个镜头已有首帧或旧文档写有“可提交”也不能让视频成为默认下一操作。单次生成仍以当前能力支持的有界操作为单位，但单个准备包或单帧不代表当前制作范围的素材已经充分。用户明确要求提前试镜时可以执行，并必须标为不完成当前阶段的技术实验。
+6. 不创建审批对象、gate、预算授权或全局工作流状态。创作者直接评审当前结果；系统负责解释“继续”和修改反馈的流转语义。
+7. 用户要求“继续处理”“开始执行”或完成当前制作范围时，先从权威镜头表、逐镜生产输入表和真实产物重新计算当前**就绪批次**。就绪批次包含所有输入已绑定、当前 Tool schema 已确认、彼此没有结果依赖且属于同一当前阶段的操作；不能因为表中第一项就绪而忽略同批其余项。每个素材仍由对应领域 Skill 编译为一个有界操作，并分别调用一次 owning Tool：三个独立图片素材就是三次独立图像操作，不得合并成一个多素材 prompt，也不得在第一个结果返回后结束任务。运行时允许同一模型步骤发出多个 Tool call 时，应先发出当前批次全部独立调用再等待，而不是人为逐项串行；必须等整批每个调用进入成功、失败或取消终态后，再依据真实返回逐项检查并更新覆盖判断。
+8. 一批结算后，若检查结果能在当前授权和已确定创意范围内给出唯一修复，修复项仍按一素材一调用组成下一就绪批次；若本批已经满足验收且解锁了无歧义的下一依赖批次，则在同一任务中继续，不等待用户再次输入“继续”。只有出现需要创作者选择的候选采用或实质创意分歧、权限／成本确认、当前能力不支持、无法唯一修复的失败，或当前请求已经完成时才停下。一个素材失败不得丢弃已成功 sibling，也不得阻止与它无依赖的操作继续；当前预览和 Agent 检查仍不等于创作者采用。
 
-## English guidance
+## 从观察构建内容知识
 
-Coordinate an Agent-directed, recoverable source-to-deliverable production. Select and reorder work from current evidence and available capabilities; do not force every request through one fixed pipeline.
+总览建立索引，精读解决问题，综合分析建立可复用知识。三者不能互相冒充：浏览全部缩略图不等于理解全部内容，几张高清封面也不能支撑正文中的人物和剧情。分析深度由待证实的内容决定，不用固定精读比例、图片数量或五类标题齐全来判定完成。
 
-## Evidence and creator review
+每个连续场景总览后，先回答“谁在何处、发生了什么、什么发生变化、哪些信息仍看不清”。把未解决的问题绑定到具体页段再精读：
 
-1. Read the actual source and existing project state before planning. Separate observed facts, Agent interpretation, creator decisions, and proposed actions. Never treat a filename, prompt, thumbnail, or old plan as content evidence.
-2. Reuse current Storyboards, character references, generated assets, project revisions, Quality evidence, and approved documents when they remain valid. Skip satisfied work instead of recreating documents or assets.
-3. Ask the creator to approve only material choices: adaptation target and omissions, story or character changes, core visual style, primary image/video/audio technique, cost or risk ceiling, mutation scope, and delivery boundary. Record alternatives, uncertainty, and unresolved questions.
-4. A simple low-risk operation may proceed without creating planning files. For complex work, an optional `brief.md` may capture source evidence, interpretation, alternatives, creator decisions, and approval scope; it remains ordinary reviewable Markdown, not runtime state.
+- 名称、别名、身份与关系：读清称呼、说话者与被称呼者，结合首次和后续出场核对；同场人物不得因服装相似合并，旁白或称呼也不能脱离对象猜名。
+- 外观与物品：选择主体可辨的正文视角，核对轮廓、相对身体尺度、左右位置、持握／佩戴、交接和使用后状态。遮挡、透视缩短或封面装饰不能直接变成装备尺寸、功能或归属；不同页冲突时先核查状态与视角，不用泛化的类型设定补齐。
+- 行动与因果：沿连续页读到触发、行动和后果能衔接；遇到指代不明、转场、失踪、伤损或物品易主，向前后扩读至边界可解释。不能只精读首次出场或高潮页，跳过解释后果和关系的普通对白页。
+- 空间与世界规则：核对进入／离开、通路、障碍、绕行、技术作用和限制；画面未呈现的连接或一次事件推导出的普遍规则仍是解释，不是事实。
 
-Ground each source in its own evidence: comics use actual page, panel, reading-order, dialogue, and character appearance evidence; screenplays use scene headings, action, dialogue, location, and timing intent; novels use chapter or scene boundaries, point of view, narration, dialogue, and adaptation omissions; illustrations use visible composition, subjects, layers when available, palette, and spatial relationships. Existing Storyboards and projects use their current revision, owned shots or timeline state, referenced assets, and validation evidence. When those existing facts already satisfy a work unit, mark it skipped or reused rather than rebuilding it.
+每次精读后将“具体结论＋支持它的可读页／面板＋适用状态＋未解决问题”归入相应实体或事件，消除同名／别名重复，串起出场和状态变化。来源引用只证明位置；必须能说明该处实际支持什么，不能把整批拼图统一挂在所有结论后。先解决会改变身份、物品形制／归属或事件因果的疑问，再补稳定细节；不按画面漂亮程度选择精读页。
 
-For adaptation scope, format, episode count, or runtime estimation, read [references/adaptation-feasibility.md](references/adaptation-feasibility.md). Do this before turning a source manifest, page count, chapter list, synopsis, or visual sample into a season, film, episode, or duration plan.
+用于形象设计的外观依据要能区分具体对象，不能停在“黑发人物、深色长衣、功能装备”等类型标签。对当前需要复用的形象，从可辨原页记录脸型与发型轮廓、体态比例、衣长与层次、领口／袖口／开合结构、显著分片与左右非对称、携带物的外轮廓及持握／佩戴位置；只记录实际可见且影响识别的细节，不为填满清单猜测。不同出场的换装、伤损和装备变化分别绑定状态，不拼成一个从未出现过的造型。
 
-## Adaptation scope gate
+把物品的可见形制与功能判断分开：破坏范围大不证明武器尺寸大，发光或白闪不证明电击机制，白色留白不直接证明白发、白衣或具体材质。“额部或面部的装置／标记”仍是待辨认线索，不能在交接时变成位置固定的确定装置。名称或机制未知不妨碍描述已看清的形状，但影响轮廓、尺度、服装或部件位置的歧义必须继续核查；确实无来源的补全属于待确认改编设计。既有文档即使标为“已观察”或“已确认”，也不能代替相应原页证据；创作者采用某个造型不使它成为原著事实。
 
-Do not begin with a fixed format. First decide whether the inspected evidence supports a local estimate or source-wide scale judgment. A representative bounded sample may support a provisional range with its method, uncertainty and confidence stated. If even that is unsupported, the current output is a bounded coverage and adaptation-volume assessment: state what was actually reviewed, what remains unknown, which decisions are blocked, and the next evidence batch. A candidate range or format remains conditional until broader coverage supports it; it is not an approved production plan.
+缩略图中的文字、手部、器物或动作关系不可读时，只记为待核查线索；改用原页、当前工具支持的局部检查或较小批次，直到相关细节可辨。若仍不可读，明确记录限制及受影响结论，不能从“看不清”推成“原作未说明”，也不能仅把疑问标为未知就跳过仍可读取的证据。
 
-## Actionable plan
+声明分析完成前，保留以下可复用内容依据，而非只有风格与分镜：
 
-Use an optional living `plan.md` only when it improves review or coordination. For ordinary planning, state the next useful work units, their intended result, and acceptance evidence. Add trigger and skip conditions, stable inputs, capability intent, creative and technical constraints, failure branches, dependencies, and approval requirements only for a formal execution plan or when those fields affect the next decision. Do not emit a full work-unit matrix merely because production may later become complex.
+- 人物清单：确认的名称与别名、可辨认形象、身份／关系证据、首次及后续出场章节或页段、参与事件及服装／装备／状态变化。未知名称保留稳定临时标识和待核实项；核查可访问的称呼与对白，不用封面或记忆猜名，也不把不同人物按相似剪影合并。
+- 有序剧情：按来源章节与场景记录谁在何处、为何行动、行动及后果；以稳定来源范围绑定对白与事件。无对白的漫画可以依据连续画面，文字抽取为空不等于没有故事。
+- 物品与地点：记录拥有者／使用者、用途与状态变化，以及地点的进入、离开和连接关系；由这些事实推导复用设计资产与消费镜头。
 
-Keep near-term progress bounded with `pending`, `in_progress`, `completed`, or `blocked`, with at most one current unit per executing Agent task. Large shot, asset, and project graphs stay in their owning Storyboard, project revision, generated output, Quality result, or asynchronous task result. Progress text never proves completion.
+按实体和事件验收知识，而不是按读取次数验收：人物能否区分并追踪出场，物品能否说明形制、归属与变化，事件能否说明参与者和前因后果，场景能否说明连接与行动限制。关键结论必须有可读证据且没有未处理的矛盾。仅有“沉默行者、巨构、未知威胁”等标签，或把所有名称、关系与用途留待核实，不构成准确的内容分析。来源确实未揭示的事实可以保留未知，并写明已经核查的相关范围；可靠既有知识及用户限定的局部问题无需为凑数量重复读取。
 
-Do not turn temporary execution details into production truth. On continuation, reread current documents, assets, and results before deciding the next useful work unit.
+以上是创作内容依据，可以紧凑地进入创作文档或已有项目笔记，不属于应删除的工具日志。分析范围按用户请求确定；初步抽样用于定位，不得因抽样额度用尽就擅自把全卷分析改成氛围 PV 或技术试镜。来源可读时继续按章节／连续场景补齐必要证据；不可读、超出授权或当前只能完成部分时明确未覆盖范围，不声称分析完成。未知姓名本身不阻止已确定身份的局部工作，但身份、因果或造型冲突不得靠生成图片补写为来源事实。
 
-## Capability-aware execution and recovery
+## 改编目标美术
 
-Choose milestones only when applicable: source interpretation; creator review; Storyboard or shot planning; character/reference preparation; image, video, or audio production; animatic or project authoring; Quality review; export; deliverable verification. Missing panel/OCR, character/reference, Storyboard, animatic/project, audio, Quality, export, or delivery capability must yield a visible `blocked`, `degraded`, or `partial` outcome with the smallest useful next decision.
+画面分析必须区分来源表现形式和目标作品美术：从来源提取人物身份、物品结构、空间与世界规则，再明确目标造型、色彩、材质、光照、体积和所需完成度。不能把“漫画改编”直接翻译成“保留漫画排线的裁剪补全”，也不能默认动画必须彩色、3D 或写实。已有目标美术直接复用；方向缺失且会改变素材外观时，先提交可评审方向或获准的风格样张，不将未经选择的方向批量固化。
 
-Bounded reorder, batch split, equivalent capability selection, and local repair may remain inside approved scope. Story, character, core style or sound, primary technique, cost/risk, mutation, or delivery changes require renewed creator approval. Repairs target the owning capability, create a new asset or project revision, invalidate stale evidence, and rerun only affected acceptance or Quality checks.
+向素材预处理交接时，按当前镜头需要列出人物与物品的多视角、表演／使用状态、交互细节和场景布局需求；共享设计先定型，再派生视图和逐镜构图。不能把单张情境图等同于可复用设计包，不能把结构线稿等同于目标完成度，也不能把多视图设定板当成视频首帧。具体提示词、批次与验收由素材准备及对应领域能力负责。
 
-Execution continues until requested deliverables are backed by actual current results. Report planned, submitted, or blocked state when results are absent; never present an intended asset, edit, export, or delivery as completed.
+## 请求边界
+
+- **分析/评估**：按用户指定范围完成内容理解，保留人物、剧情、物品、地点及其来源依据；不能仅提取会改变改编方向的风格结论。
+- **设计/改编作品或 PV**：交付当前创意方案，同时给出简洁整体路线。默认不展开预处理提示词、逐镜生成参数、剪辑细节和交付清单。
+- **镜头主线**：交付一份权威节拍或镜头表，承载因果、画面、动作、摄影、声音、转场与必要连续性；普通创作使用可更新的 Markdown 表格。
+- **完整制作规格**：仅在用户明确要求一份跨阶段制作规格时读取 [时序媒体制作规格指南](references/time-based-production-specification.md)。即使如此，也只能描述规划，不得声称未执行阶段已经完成。
+- **准备或执行**：向对应能力传递当前已确定的创意决定、稳定来源、连续性要求和当前就绪批次；由各领域 Skill 编译单个操作，由真实 Tool 执行并返回结果。本 Skill 只协调依赖与批次，不伪造提示词调用、候选素材、剪辑结果或导出回执。
+
+不得未经用户决定改变指定片长、画幅、叙事目标或交付类型。未指定时，可以采用一个明确标为“暂定”的工作基准，但不得把它写成来源事实或最终规格。
+
+## 来源证据
+
+按用户要求的来源范围建立“结构定位 → 批量总览 → 定点精读 → 覆盖核对”的读取过程：
+
+- 先读取结构／清单，区分容器条目数量、图像页数量与实际叙事章节，不把一页一个 HTML 条目称为一个故事章节。清单或文本被截断时，只将实际返回部分用于定位；按当前工具支持的游标或明确选择继续取回，不能猜造分页字段、路径或把截断当成到达末尾。识别目录、章节、真实阅读顺序和封面、空白、广告、附录等非正文单元；图片文件名排序不能替代正文阅读顺序。目录或章节标题若只存在于图片中，也需实际读图确认。
+- 当前工具目录提供 `openneko_read_images` 时，图像型卷册先用它将连续页面的小图拼装为一张大图进行总览。通常每批 8 页，按页面密度、章节边界和当前工具限制调整为 4～16 页；密集分格优先 4 页，场景扫描可用 16 页，不足 4 页时读取剩余页。一次调用返回一张拼图，不用逐页 `openneko_read_image` 代替批量总览，也不把多张独立图片附件称作一张拼图。
+- 按真实顺序逐批总览来源范围内的全部正文页面，直到范围末尾；已核验的封面、目录、空白、广告和重复页面单独归类，不冒充剧情覆盖，也不要求逐页精读。开头的若干拼图只是已读前缀，不是整卷代表性结论。所需批次数由正文数量与每批容量决定，不设固定总批次；单图审阅、用户指定局部与可靠旧分析不强制重读全卷。
+- 在当前工作记录中保留来源范围终点、已总览的不同页段、已精读页段、未读区间与待核查事实。每批只据成功返回更新这些记录，再从首个未覆盖区间继续；精读已总览页面只增加细节证据，不增加不同页面覆盖数。清单中的页、提交但失败的批次、只返回文字诊断而没有可见拼图的批次都不算已观察；一次成功总览只能覆盖该次实际可见的页面。
+- 批次因页面定位错误失败时，从原始目录／图像清单核对失败项，使用确认的页面引用重试，不拼接或猜测路径。修复属于当前分析，不是新的制作步骤；未成功返回整张拼图时，不能把错误位置之前的页面算作已读。确实不可读的范围保持明确缺口，与其无依赖的可读章节仍继续；不能把一个局部错误变成整卷分析结束，也不能反复盲试或把失败包装成成功。
+- 总览用于定位人物出场、事件顺序、场景转换和待精读页，不用于直接定稿身份、对白或物品结构。按“从观察构建内容知识”中的疑问穿插使用 `openneko_read_image` 精读原始细节及相邻页；不必等全部总览结束，也不能只在末尾补几张详情图。缩略图不可读的信息保持待核查，继续寻找可读证据，不能凭印象补写。
+- 保留拼图序号到稳定来源页面的映射，汇总各章节的主要事件、人物及后续出场、物品归属／状态和场景连接。重复出场和状态延续是有效证据，不要求每批产生不同创意决定。已观察内容直接复用，但从缩略图转为原页精读不属于无意义重复读取。
+- 收尾前分别检查两项：一是全部正文已总览或有可复用的可靠覆盖依据，没有未说明的阅读空档；二是人物身份／名称与出场变化、物品归属／形制、事件因果和地点连接已从可读细节核实。两项都满足才完成来源分析。原作未交代的事实可以保持未知，但未读后文、未看清对白不能等同于原作未交代。写出方案、读取工具成功或不再产生新创意都不满足完成条件，不能据此把分析待办标为完成。
+- 有未读正文且来源仍可访问时继续当前分析，不将补读留为请用户再次确认的下一步。只有用户暂停／改范围、真实权限或能力阻塞、执行限制使当前工作无法继续时，才以明确未完成的状态交接已读区间、未读区间和精读缺口。不得以“开篇草案已完成”结束仍可继续的整卷请求，也不得将素材／视频生成作为默认下一步。
+- 读取与视觉检查是瞬态证据，不因检查过就加入 Canvas 或素材库。正式文档保留可复用的内容结论和来源，不保存逐次调用日志。
+
+卷级结论需有与用户要求范围相称的章节覆盖和连续因果证据。部分完成可以如实交付局部发现，但不缩小原任务目标或声称全卷分析完成。格式、集数和时长判断按需读取 [适配可行性与体量指南](references/adaptation-feasibility.md)。
+
+卷级或来源整体创作文档保留简短的“来源—决定映射”：来源范围、直接观察事实、被支持或修正的创作决定及未知项。人物、物品和场景的内容依据先于分镜设计；既有镜头表不能反过来限定原作只需分析哪些事实。
+
+内部始终区分：
+
+- 来源直接事实；
+- 基于事实的解释；
+- 为作品提出的创作重组。
+
+创作重组可以进入方案，但必须明确是设计决定，不能伪装成原作连续事件。在权威节拍或镜头表中，凡是跨段拼接、事件重排、新增转场、对白、触发关系或后果，都必须在对应行的“依据性质”中标为“创作重组”；来源直接事实和基于事实的解释也在使用处区分。只在文末统一声明“主题性重组”不够。
+
+## 产物形式
+
+Agent 对话只保留结论、关键边界、文档链接和一个下一批次或创作者决定。正式创作文档保留：
+
+1. 来源特有的核心命题、目标观众体验与作品范围；
+2. 画面、人物、剧情、世界观与分镜转译中会约束后续制作的结论，以及场景、风格和声音不变量；
+3. 一份权威节拍或镜头表；
+4. 与标题范围相称的来源—决定映射，以及在节拍表使用处标明的事实／解释／创作重组；
+5. 简洁整体路线，仅标出当前阶段、下一阶段及后续阶段目标，不重复正文。
+
+不要写读取过程、工具日志、工作进度、内部覆盖记录、多个备选流程或通用行业说明。不要因精简而删除作品特有的角色动机、因果升级、空间关系、高潮后果或连续性要求。

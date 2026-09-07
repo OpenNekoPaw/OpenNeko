@@ -1,17 +1,15 @@
-# Creative Proposal Guide
+# 创意方案指南
 
 ## 中文指南
 
-从创作目标、一个核心概念、最小交付物和关键生成/制作步骤开始。受众、基调、视觉语言、叙事节拍、镜头、资产、变体、排期和风险只在当前请求或决策需要时展开，并区分来源事实与创作假设。
+从创作目标、一个核心概念、叙事或体验主线和关键节拍开始。视觉、动作、声音、镜头或文字只有在直接塑造这些节拍时展开；模型调用、资产、排期和风险只在用户要求生产交接或当前创作决定依赖它们时加入。创意方案不是来源分析记录，也不能被压缩成单个技术验证。
+
+正式文档只保留经过验证、可供创作者评审或继续制作的内容。来源阅读过程、工具调用、工作进度、内部检查和被否决推理留在 Agent 对话或评测证据中，不写入方案正文。
+
+每项创作决定只保留一个权威位置。节拍表、镜头表或场景表已经承载画面、动作、声音和验收时，不再增设章节复述相同信息；跨项目规则集中一次，局部规则留在对应项目。只有用户同时要求 AI 生产交接时，才在主方案后附精简、可提交的语义化交接；纯创意方案不附生成交接。
+
+用户要求简洁的时序概念方案时，正文默认只有两块：一段核心概念和至多四项跨镜头不变量，以及一份 6–8 个因果节拍的权威序列。若用户还要求 AI 生产交接，系统应继续调用准备与生成相关 Skill，由它们追加一个当前依赖已满足单元的语义化交接：素材职责、可直接使用的提示词或操作意图、预期产物、验收和下游用途。完整调用封装保留在真实 Tool 调用或 owning capability 的结构化对象中；不得由文档编辑 Skill 猜测或打印 operation、参数、locator 或运行时 ID。不得用三级标题或粗体字段把分析、来源、声音、视觉、技术、验收和评审问题重新扩写成小章节。
+
+用户要求完整制作设计时，仍只生成一份主规格，不按能力阶段拆成多份解释文档。主规格由对应媒体能力提供创作合同、必要的连续性、权威生产单元表和后期/交付合同；准备与生成能力只追加依赖已满足单元的语义化生产交接。实际素材、完整调用、候选、任务状态、失败历史、项目修订和导出回执属于 owning capability 的结构化对象，不复制成文档正文。
 
 不得依据 manifest、页数、目录、封面或任意小样本直接选择全局格式、时长、集数和章节映射。证据不足时，本轮应先成为来源覆盖或体量评估。代表性样本只有在样本、估算方法、不确定性和置信度可见时才支持暂定区间；固定格式还需公开总时长、平均来源负载以及扩写、压缩、省略假设。三个以上可比较项目才使用表格。
-
-## English guidance
-
-Start with the creative goal, one core concept, the minimum deliverable, and the key generation or production steps.
-
-Add audience, tone, visual language, narrative beats, shots, assets, variants, schedule, or risks only when the request or production decision needs them. Distinguish supplied source facts from creative assumptions.
-
-Do not choose a source-wide format, runtime, episode count, chapter map, or production scale from a manifest, page count, outline, cover, or arbitrary small sample. When those decisions depend on unreviewed content, make the current deliverable a source-coverage or scale assessment and keep the creative proposal provisional. A deliberately selected representative sample may support a provisional range when the document states the sample, estimation method, uncertainty and confidence. A fixed format should expose the broader evidence and arithmetic that make it plausible, including total runtime, average source load, and material expansion, compression, or omission assumptions.
-
-Use a table for three or more comparable shots, assets, scenes, or deliverables with repeated fields. Prefer prose or a short list for one concept and one next action.

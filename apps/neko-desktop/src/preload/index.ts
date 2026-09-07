@@ -17,7 +17,7 @@ import {
   parseDshImageAttachmentPreviewsReleaseHostResult,
   parseDshSessionChangedEvent,
   parseDshSessionHostResult,
-  parseDshTerminalArtifactOpenHostResult,
+  parseDshWrittenFileOpenHostResult,
   type DshSessionHostResult,
   type OpenNekoDshSessionBridge,
 } from '@neko/agent-contracts/dsh-session-host';
@@ -101,6 +101,8 @@ import type { PreviewRuntimeIdentity } from '@neko/preview-domain';
 import {
   TEXT_EDITOR_HOST_CHANNELS,
   TEXT_EDITOR_HOST_ROUTES,
+  parseTextEditorClipboardCommandRequest,
+  parseTextEditorClipboardCommandResult,
   parseTextEditorHostRequest,
   parseTextEditorHostResult,
   parseTextEditorProjectionEvent,
@@ -290,7 +292,13 @@ import {
 
 let requestSequence = 0;
 let desktopWindowContext:
-  { readonly windowId: string; readonly rendererSessionId: string } | undefined;
+  | {
+      readonly applicationInstanceId: string;
+      readonly windowId: string;
+      readonly rendererSessionId: string;
+    }
+  | undefined;
+let desktopLifecycleProjectionStarted = false;
 let latestShellProjection: DesktopShellMutationContext | undefined;
 let currentResourceIdentity: ResourceBrowserIdentity | undefined;
 let currentResourceEventSequence = 0;
@@ -348,6 +356,9 @@ const dshSessionListeners = new Set<
 >();
 const dshRuntimeListeners = new Set<
   Parameters<OpenNekoDshRuntimeBridge['dshRuntime']['subscribe']>[0]
+>();
+const desktopLifecycleListeners = new Set<
+  Parameters<OpenNekoDesktopBridge['lifecycle']['subscribe']>[0]
 >();
 
 const bridge: OpenNekoDesktopBridge &
@@ -496,6 +507,23 @@ const bridge: OpenNekoDesktopBridge &
         conversationId,
       ).projection;
     },
+    async branch(conversationId, messageId) {
+      const context = requireDesktopWindowContext();
+      const request = {
+        requestId: nextRequestId('dsh-session-branch'),
+        operation: 'branch' as const,
+        windowId: context.windowId,
+        rendererSessionId: context.rendererSessionId,
+        conversationId,
+        messageId,
+      };
+      const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
+      const result = parseDshSessionHostResult(response, request.requestId);
+      if (result.projection.conversationId === conversationId) {
+        throw new Error('DSH Session branch returned the source Conversation.');
+      }
+      return result.projection;
+    },
     async sendInboxMessageNow(conversationId, messageId) {
       const context = requireDesktopWindowContext();
       const request = {
@@ -553,18 +581,18 @@ const bridge: OpenNekoDesktopBridge &
       const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
       parseDshImageAttachmentPreviewsReleaseHostResult(response, request.requestId);
     },
-    async openTerminalArtifact(conversationId, messageId) {
+    async openWrittenFile(conversationId, toolCallId) {
       const context = requireDesktopWindowContext();
       const request = {
-        requestId: nextRequestId('dsh-session-terminal-artifact-open'),
-        operation: 'terminal-artifact-open' as const,
+        requestId: nextRequestId('dsh-session-written-file-open'),
+        operation: 'written-file-open' as const,
         windowId: context.windowId,
         rendererSessionId: context.rendererSessionId,
         conversationId,
-        messageId,
+        toolCallId,
       };
       const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
-      parseDshTerminalArtifactOpenHostResult(response, request.requestId);
+      parseDshWrittenFileOpenHostResult(response, request.requestId);
     },
     async getComposerConfiguration(workbenchInstanceId, agentSurfaceId) {
       const context = requireDesktopWindowContext();
@@ -575,6 +603,21 @@ const bridge: OpenNekoDesktopBridge &
         rendererSessionId: context.rendererSessionId,
         workbenchInstanceId,
         agentSurfaceId,
+      };
+      const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
+      return parseDshComposerConfigurationHostResult(response, request.requestId).configuration;
+    },
+    async selectComposerCanvas(workbenchInstanceId, agentSurfaceId, conversationId, canvasId) {
+      const context = requireDesktopWindowContext();
+      const request = {
+        requestId: nextRequestId('dsh-composer-canvas'),
+        operation: 'composer-canvas' as const,
+        windowId: context.windowId,
+        rendererSessionId: context.rendererSessionId,
+        workbenchInstanceId,
+        agentSurfaceId,
+        conversationId,
+        canvasId,
       };
       const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
       return parseDshComposerConfigurationHostResult(response, request.requestId).configuration;
@@ -661,6 +704,17 @@ const bridge: OpenNekoDesktopBridge &
       const request = {
         requestId: nextRequestId('dsh-runtime-status'),
         operation: 'status' as const,
+        windowId: context.windowId,
+        rendererSessionId: context.rendererSessionId,
+      };
+      const response: unknown = await ipcRenderer.invoke(DSH_RUNTIME_HOST_CHANNEL, request);
+      return parseDshRuntimeHostResult(response, request.requestId).projection;
+    },
+    async prepareSession() {
+      const context = requireDesktopWindowContext();
+      const request = {
+        requestId: nextRequestId('dsh-runtime-prepare-session'),
+        operation: 'prepare-session' as const,
         windowId: context.windowId,
         rendererSessionId: context.rendererSessionId,
       };
@@ -1128,20 +1182,18 @@ const bridge: OpenNekoDesktopBridge &
         request,
       );
       const projection = parseDesktopBootstrapProjection(response, requestId);
-      desktopWindowContext = projection.window;
+      desktopWindowContext = {
+        applicationInstanceId: projection.application.instanceId,
+        ...projection.window,
+      };
+      startDesktopLifecycleProjection();
       return projection;
     },
   },
   lifecycle: {
     subscribe(listener: (event: DesktopLifecycleEvent) => void): () => void {
-      const handler = (_event: Electron.IpcRendererEvent, value: unknown): void => {
-        const event = parseDesktopLifecycleEvent(value);
-        listener(event);
-      };
-      ipcRenderer.on(DESKTOP_BRIDGE_CHANNELS.lifecycleEvent, handler);
-      return () => {
-        ipcRenderer.removeListener(DESKTOP_BRIDGE_CHANNELS.lifecycleEvent, handler);
-      };
+      desktopLifecycleListeners.add(listener);
+      return () => desktopLifecycleListeners.delete(listener);
     },
   },
   settings: {
@@ -1624,6 +1676,26 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
   textEditor: {
+    async executeClipboardCommand(value) {
+      const request = parseTextEditorClipboardCommandRequest(value);
+      const key = textEditorIdentityKey(request.identity);
+      const identity = currentTextEditorIdentities.get(key);
+      if (!identity || !sameTextEditorRuntimeIdentity(identity, request.identity)) {
+        throw new Error('Desktop Text Editor clipboard command requires a current session.');
+      }
+      const response: unknown = await ipcRenderer.invoke(
+        TEXT_EDITOR_HOST_CHANNELS.clipboardExecute,
+        request,
+      );
+      const result = parseTextEditorClipboardCommandResult(response);
+      if (
+        result.command !== request.command ||
+        !sameTextEditorRuntimeIdentity(result.identity, request.identity)
+      ) {
+        throw new Error('Desktop Text Editor clipboard result identity does not match.');
+      }
+      return result;
+    },
     async execute(value) {
       const request = parseTextEditorHostRequest(value);
       const response: unknown = await ipcRenderer.invoke(
@@ -2304,6 +2376,36 @@ function requireDesktopWindowContext(): {
     throw new Error('DSH permission request requires an authoritative Desktop bootstrap.');
   }
   return desktopWindowContext;
+}
+
+function rememberDesktopWindowLifecycle(event: DesktopLifecycleEvent): void {
+  const current = desktopWindowContext;
+  if (!current) {
+    throw new Error('Desktop lifecycle event requires an authoritative Desktop bootstrap.');
+  }
+  if (
+    current.applicationInstanceId !== event.applicationInstanceId ||
+    current.windowId !== event.windowId
+  ) {
+    throw new Error('Desktop lifecycle event does not match the bootstrapped application Window.');
+  }
+  if (event.type !== 'renderer-loading' && current.rendererSessionId !== event.rendererSessionId) {
+    throw new Error('Desktop lifecycle event does not match the active renderer session.');
+  }
+  desktopWindowContext = {
+    ...current,
+    rendererSessionId: event.rendererSessionId,
+  };
+}
+
+function startDesktopLifecycleProjection(): void {
+  if (desktopLifecycleProjectionStarted) return;
+  desktopLifecycleProjectionStarted = true;
+  ipcRenderer.on(DESKTOP_BRIDGE_CHANNELS.lifecycleEvent, (_event, value: unknown) => {
+    const event = parseDesktopLifecycleEvent(value);
+    rememberDesktopWindowLifecycle(event);
+    for (const listener of desktopLifecycleListeners) listener(event);
+  });
 }
 
 function requireDshSessionConversation(

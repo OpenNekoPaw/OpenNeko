@@ -74,10 +74,8 @@ export class MiniMaxH3VideoModel implements VideoModelV4 {
     }
 
     const frameImages = [...(options.frameImages ?? [])];
-    if (options.image) {
-      if (frameImages.some((entry) => entry.frameType === 'first_frame')) {
-        throw new Error('MiniMax H3 received duplicate first-frame inputs.');
-      }
+    if (options.image && !frameImages.some((entry) => entry.frameType === 'first_frame')) {
+      // AI SDK projects the resolved first frame through both fields; frameImages is authoritative.
       frameImages.push({ frameType: 'first_frame', image: options.image });
     }
     const firstFrames = frameImages.filter((entry) => entry.frameType === 'first_frame');

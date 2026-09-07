@@ -273,7 +273,7 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && 'code' in error;
 }
 
-function mimeTypeForPath(filePath: string): string | undefined {
+export function mimeTypeForPath(filePath: string): string | undefined {
   switch (path.extname(filePath).toLowerCase()) {
     case '.png':
       return 'image/png';

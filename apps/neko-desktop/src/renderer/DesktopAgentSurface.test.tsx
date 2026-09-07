@@ -20,9 +20,11 @@ import type {
 
 vi.mock('@neko/ui/i18n/react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@neko/ui/i18n/react')>();
+  const { createDesktopI18n } = await import('./i18n');
+  const { i18nService } = createDesktopI18n('en');
   return {
     ...actual,
-    useTranslation: () => ({ locale: 'en' }),
+    useTranslation: () => ({ locale: 'en', t: i18nService.t.bind(i18nService) }),
   };
 });
 
@@ -41,6 +43,7 @@ const projection: DshSessionHostProjection = {
   title: 'Workspace planning',
   currentTurn: 3,
   inbox: { nextTurn: [], nextStep: [] },
+  todos: [],
   events: [
     {
       kind: 'message',
@@ -54,7 +57,7 @@ const projection: DshSessionHostProjection = {
       turn: 3,
       status: 'in_progress',
       title: 'Canvas create node',
-      rawInput: { operation: 'create-node', title: 'Opening' },
+      rawInput: { operation: 'apply', command: 'create_node', title: 'Opening' },
       rawOutput: { accepted: true },
     },
     {
@@ -93,9 +96,9 @@ const generationPermission: DshPermissionHostProjection = {
   ],
 };
 
-const workspaceBoardTarget = {
-  kind: 'workspace-board' as const,
+const defaultCanvasTarget = {
   workspaceId: 'workspace-1',
+  canvasId: 'neko/boards/workspace.nkc',
 };
 
 const composerConfiguration: DshComposerConfigurationProjection = {
@@ -140,18 +143,42 @@ const composerConfiguration: DshComposerConfigurationProjection = {
     kind: 'workspace',
     workspaceId: 'workspace-1',
     workspaceLabel: 'My Film',
+    canvasSelection: { conversationId: 'conversation-1', canvasId: defaultCanvasTarget.canvasId },
     canvas: {
       workspaceId: 'workspace-1',
-      defaultTarget: workspaceBoardTarget,
+      defaultTarget: defaultCanvasTarget,
       options: [
         {
-          target: workspaceBoardTarget,
-          label: 'Board',
+          target: defaultCanvasTarget,
+          label: 'workspace.nkc',
         },
       ],
       diagnostics: [],
     },
   },
+};
+
+const imageParameterProfile = {
+  kind: 'image' as const,
+  controls: {
+    size: {
+      kind: 'image-size-enum' as const,
+      values: [
+        { id: 'auto' },
+        { id: '1024x1024', width: 1024, height: 1024, aspectRatio: '1:1' },
+        { id: '1536x1024', width: 1536, height: 1024, aspectRatio: '3:2' },
+        { id: '1024x1536', width: 1024, height: 1536, aspectRatio: '2:3' },
+      ],
+      defaultValue: 'auto',
+    },
+    quality: {
+      kind: 'string-enum' as const,
+      required: true,
+      values: ['auto', 'low', 'medium', 'high'],
+      defaultValue: 'auto',
+    },
+  },
+  fixed: { outputCount: 1 as const },
 };
 
 const entryComposerConfiguration: DshComposerConfigurationProjection = {
@@ -162,7 +189,9 @@ const entryComposerConfiguration: DshComposerConfigurationProjection = {
   permissionPresets: composerConfiguration.permissionPresets,
 };
 
-let sessionListener: ((event: { readonly conversationId: string }) => void) | undefined;
+let sessionListener:
+  | ((event: { readonly conversationId: string; readonly composerChanged?: true }) => void)
+  | undefined;
 let permissionListener: ((event: { readonly conversationId: string }) => void) | undefined;
 let canvasWorkspaceIndexListener: ((event: { readonly workspaceId: string }) => void) | undefined;
 const dshSessions = {
@@ -174,9 +203,13 @@ const dshSessions = {
     stopReason: 'end_turn',
   })),
   cancel: vi.fn(async () => projection),
+  branch: vi.fn(async () => ({
+    ...projection,
+    conversationId: 'conversation-branch',
+    dshSessionId: 'dsh-session-branch',
+  })),
   sendInboxMessageNow: vi.fn(async () => projection),
   removeInboxMessage: vi.fn(async () => projection),
-  openTerminalArtifact: vi.fn(async () => undefined),
   getImageAttachmentPreview: vi.fn(async () => ({
     url: 'openneko://resource/lease-1/image',
     mediaType: 'image/png' as const,
@@ -185,7 +218,22 @@ const dshSessions = {
     height: 1,
   })),
   releaseImageAttachmentPreviews: vi.fn(async () => undefined),
+  openWrittenFile: vi.fn(async () => undefined),
   getComposerConfiguration: vi.fn(async () => composerConfiguration),
+  selectComposerCanvas: vi.fn(
+    async (
+      _workbench: string,
+      _surface: string,
+      conversationId: string,
+      canvasId: string,
+    ): Promise<DshComposerConfigurationProjection> => {
+      const configuration = await dshSessions.getComposerConfiguration();
+      return {
+        ...configuration,
+        context: { ...configuration.context!, canvasSelection: { conversationId, canvasId } },
+      };
+    },
+  ),
   searchComposerMentions: vi.fn(async () => []),
   selectComposerModel: vi.fn(async () => ({
     ...composerConfiguration,
@@ -210,14 +258,12 @@ const dshPermissions = {
     return vi.fn();
   }),
 };
-let runtimeListener:
-  | ((projection: {
-      readonly status: 'running' | 'restarting' | 'unavailable';
-      readonly diagnostic?: { readonly code: string; readonly message: string };
-    }) => void)
-  | undefined;
+let runtimeListener: ((projection: DshRuntimeHostProjection) => void) | undefined;
 const dshRuntime = {
   getStatus: vi.fn<() => Promise<DshRuntimeHostProjection>>(async () => ({ status: 'running' })),
+  prepareSession: vi.fn<() => Promise<DshRuntimeHostProjection>>(async () => ({
+    status: 'running',
+  })),
   restart: vi.fn<() => Promise<DshRuntimeHostProjection>>(async () => ({ status: 'running' })),
   subscribe: vi.fn((listener: typeof runtimeListener) => {
     runtimeListener = listener;
@@ -243,10 +289,15 @@ beforeEach(() => {
     stopReason: 'end_turn',
   });
   dshSessions.cancel.mockResolvedValue(projection);
+  dshSessions.branch.mockResolvedValue({
+    ...projection,
+    conversationId: 'conversation-branch',
+    dshSessionId: 'dsh-session-branch',
+  });
   dshSessions.sendInboxMessageNow.mockResolvedValue(projection);
   dshSessions.removeInboxMessage.mockResolvedValue(projection);
-  dshSessions.openTerminalArtifact.mockResolvedValue(undefined);
   dshSessions.releaseImageAttachmentPreviews.mockResolvedValue(undefined);
+  dshSessions.openWrittenFile.mockResolvedValue(undefined);
   dshSessions.getComposerConfiguration.mockResolvedValue(composerConfiguration);
   dshSessions.selectComposerModel.mockResolvedValue({
     ...composerConfiguration,
@@ -269,6 +320,7 @@ beforeEach(() => {
     return vi.fn();
   });
   dshRuntime.getStatus.mockResolvedValue({ status: 'running' });
+  dshRuntime.prepareSession.mockResolvedValue({ status: 'running' });
   dshRuntime.restart.mockResolvedValue({ status: 'running' });
   dshRuntime.subscribe.mockImplementation((listener: typeof runtimeListener) => {
     runtimeListener = listener;
@@ -289,9 +341,188 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('DesktopAgentSurface', () => {
+  it('prepares the runtime before opening an exact existing Conversation', async () => {
+    render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
+        agentSurfaceId="surface-1"
+        conversationId="conversation-1"
+        surfaceKind="workspace"
+      />,
+    );
+
+    expect(await screen.findByText('Create a node')).toBeTruthy();
+    expect(dshRuntime.prepareSession).toHaveBeenCalledOnce();
+    expect(dshRuntime.prepareSession.mock.invocationCallOrder[0]).toBeLessThan(
+      dshSessions.getSnapshot.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    );
+
+    await act(async () =>
+      runtimeListener?.({ status: 'running', sessionConfigurationPending: true }),
+    );
+    expect(dshRuntime.prepareSession).toHaveBeenCalledOnce();
+  });
+
+  it('restores committed Canvas state with a fresh page store and saves only the exact Conversation through IPC', async () => {
+    const target = { workspaceId: 'workspace-1', canvasId: 'neko/boards/story.nkc' };
+    let savedConfiguration: DshComposerConfigurationProjection = {
+      ...composerConfiguration,
+      context: {
+        ...composerConfiguration.context!,
+        canvas: {
+          ...composerConfiguration.context!.canvas,
+          options: [
+            ...composerConfiguration.context!.canvas.options,
+            { target, label: 'story.nkc' },
+          ],
+        },
+      },
+    };
+    dshSessions.getComposerConfiguration.mockImplementation(async () => savedConfiguration);
+    dshSessions.getSnapshot.mockResolvedValue({ ...projection, currentTurn: undefined });
+    dshPermissions.list.mockResolvedValue([]);
+    dshSessions.selectComposerCanvas.mockImplementation(
+      async (_workbench, _surface, conversationId, canvasId) => {
+        savedConfiguration = {
+          ...savedConfiguration,
+          context: {
+            ...savedConfiguration.context!,
+            canvasSelection: { conversationId, canvasId },
+          },
+        };
+        return savedConfiguration;
+      },
+    );
+    const page = (sceneId: string, agentSurfaceId: string) => (
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId={sceneId}
+        agentSurfaceId={agentSurfaceId}
+        conversationId="conversation-1"
+        surfaceKind="workspace"
+      />
+    );
+    const first = render(page('scene-before-close', 'surface-before-close'));
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Canvas index' }), {
+      target: { value: target.canvasId },
+    });
+    await waitFor(() =>
+      expect(dshSessions.selectComposerCanvas).toHaveBeenCalledExactlyOnceWith(
+        'workbench-1',
+        'surface-before-close',
+        'conversation-1',
+        target.canvasId,
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole<HTMLSelectElement>('combobox', { name: 'Canvas index' }).value).toBe(
+        target.canvasId,
+      ),
+    );
+    first.unmount();
+    render(page('scene-after-close', 'surface-after-close'));
+    await waitFor(() =>
+      expect(screen.getByRole<HTMLSelectElement>('combobox', { name: 'Canvas index' }).value).toBe(
+        target.canvasId,
+      ),
+    );
+    fireEvent.change(screen.getByLabelText('Message'), {
+      target: { value: 'Continue on this Canvas' },
+    });
+    fireEvent.click(screen.getByLabelText('Send (Enter)'));
+    await waitFor(() =>
+      expect(dshSessions.submit).toHaveBeenCalledWith(
+        'conversation-1',
+        expect.objectContaining({ canvasTurnTarget: target }),
+      ),
+    );
+    const reads = dshSessions.getComposerConfiguration.mock.calls.length;
+    await act(async () =>
+      sessionListener?.({ conversationId: 'conversation-other', composerChanged: true }),
+    );
+    expect(dshSessions.getComposerConfiguration).toHaveBeenCalledTimes(reads);
+    savedConfiguration = {
+      ...savedConfiguration,
+      context: {
+        ...savedConfiguration.context!,
+        canvasSelection: {
+          conversationId: 'conversation-1',
+          canvasId: defaultCanvasTarget.canvasId,
+        },
+      },
+    };
+    await act(async () =>
+      sessionListener?.({ conversationId: 'conversation-1', composerChanged: true }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole<HTMLSelectElement>('combobox', { name: 'Canvas index' }).value).toBe(
+        defaultCanvasTarget.canvasId,
+      ),
+    );
+  });
+
+  it('branches from the exact final assistant reply and publishes the new Conversation identity', async () => {
+    const onConversationBranched = vi.fn();
+    dshSessions.getSnapshot.mockResolvedValue({
+      ...projection,
+      currentTurn: undefined,
+      events: [
+        {
+          kind: 'message',
+          role: 'assistant',
+          turn: 2,
+          step: 0,
+          text: 'Finished',
+          messageId: 'assistant-final',
+          state: 'final',
+        },
+      ],
+    });
+    render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
+        agentSurfaceId="surface-1"
+        conversationId="conversation-1"
+        surfaceKind="workspace"
+        onConversationBranched={onConversationBranched}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Branch conversation' }));
+
+    await waitFor(() =>
+      expect(dshSessions.branch).toHaveBeenCalledWith('conversation-1', 'assistant-final'),
+    );
+    expect(onConversationBranched).toHaveBeenCalledWith('conversation-branch');
+  });
+
+  it('re-prepares a Draft surface when future-Session model configuration changes', async () => {
+    render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-draft"
+        agentSurfaceId="surface-draft"
+        surfaceKind="entry"
+      />,
+    );
+
+    await waitFor(() => expect(dshSessions.getComposerConfiguration).toHaveBeenCalledOnce());
+    expect(dshRuntime.prepareSession).toHaveBeenCalledOnce();
+
+    await act(async () =>
+      runtimeListener?.({ status: 'running', sessionConfigurationPending: true }),
+    );
+
+    await waitFor(() => expect(dshRuntime.prepareSession).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(dshSessions.getComposerConfiguration).toHaveBeenCalledTimes(2));
+  });
+
   it('releases exact Conversation image preview resources when the Surface unmounts', async () => {
     const view = render(
       <DesktopAgentSurface
@@ -324,21 +555,75 @@ describe('DesktopAgentSurface', () => {
 
     expect(await screen.findByText('Create a node')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Workspace planning' })).toBeTruthy();
-    expect(screen.getByText('Canvas create node')).toBeTruthy();
-    expect(screen.getByText('Running')).toBeTruthy();
+    const workProgress = screen.getByRole('button', {
+      name: /Work progress.*0\/1 operations completed/u,
+    });
+    expect(screen.queryByText('Canvas create node')).toBeNull();
     expect(screen.getByText('Allow Canvas write?')).toBeTruthy();
     expect(container.querySelector('[data-markdown-document="ready"]')).toBeTruthy();
     expect(container.querySelector('.agent-transcript-rail')).toBeTruthy();
     expect(container.querySelector('.agent-composer-shell')).toBeTruthy();
 
+    fireEvent.click(workProgress);
+    expect(screen.getByText('Canvas create node')).toBeTruthy();
+    expect(screen.getByText('Running')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Canvas create node/u }));
-    expect(screen.getByText(/"operation": "create-node"/u)).toBeTruthy();
+    expect(screen.getByText(/"operation": "apply"/u)).toBeTruthy();
     expect(screen.getByText(/"accepted": true/u)).toBeTruthy();
 
     await act(async () => sessionListener?.({ conversationId: 'conversation-other' }));
     expect(dshSessions.getSnapshot).toHaveBeenCalledOnce();
     await act(async () => permissionListener?.({ conversationId: 'conversation-1' }));
     await waitFor(() => expect(dshSessions.getSnapshot).toHaveBeenCalledTimes(2));
+  });
+
+  it('opens a projected completed write from the Agent response link', async () => {
+    const onOpenWrittenFile = vi.fn();
+    dshSessions.getSnapshot.mockResolvedValueOnce({
+      ...projection,
+      currentTurn: undefined,
+      events: [
+        {
+          kind: 'tool',
+          toolCallId: 'tool-write-document',
+          turn: 3,
+          status: 'completed',
+          title: 'write',
+          writtenFileReference: {
+            title: 'story-plan.md',
+            contentLocator: {
+              file: { authority: 'workspace', path: 'notes/story-plan.md' },
+            },
+          },
+        },
+        {
+          kind: 'message',
+          role: 'assistant',
+          turn: 3,
+          step: 0,
+          text: 'Document created.',
+          messageId: 'message-final',
+          state: 'final',
+        },
+      ],
+    });
+    render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
+        agentSurfaceId="surface-1"
+        conversationId="conversation-1"
+        surfaceKind="workspace"
+        onOpenWrittenFile={onOpenWrittenFile}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open document: story-plan.md' }));
+    await waitFor(() => {
+      expect(onOpenWrittenFile).toHaveBeenCalledWith('conversation-1', 'tool-write-document');
+    });
+    expect(dshSessions.openWrittenFile).not.toHaveBeenCalled();
+    expect(screen.getByText('Document created.')).toBeTruthy();
   });
 
   it('coalesces stream refreshes without letting an older projection replace the latest', async () => {
@@ -425,7 +710,7 @@ describe('DesktopAgentSurface', () => {
         references: [],
         images: [],
         contextPayloads: [],
-        canvasTurnTarget: workspaceBoardTarget,
+        canvasTurnTarget: defaultCanvasTarget,
       }),
     );
 
@@ -490,7 +775,7 @@ describe('DesktopAgentSurface', () => {
       references: [],
       images: [],
       contextPayloads: [],
-      canvasTurnTarget: workspaceBoardTarget,
+      canvasTurnTarget: defaultCanvasTarget,
     });
 
     await act(async () =>
@@ -679,7 +964,7 @@ describe('DesktopAgentSurface', () => {
       'Preserve this draft',
     );
     expect(await screen.findByText('My Film')).toBeTruthy();
-    expect(screen.getByRole('option', { name: 'Workspace Board' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'workspace.nkc' })).toBeTruthy();
     expect(view.container.querySelector('[data-workspace-canvas-context="true"]')).toBeTruthy();
     expect(dshSessions.getComposerConfiguration).toHaveBeenNthCalledWith(
       2,
@@ -766,7 +1051,6 @@ describe('DesktopAgentSurface', () => {
 
   it('refreshes only the matching Workspace Canvas catalog after creation without starting a Turn', async () => {
     const exactCanvasTarget = {
-      kind: 'exact-canvas' as const,
       workspaceId: 'workspace-1',
       canvasId: 'test.nkc',
     };
@@ -810,6 +1094,61 @@ describe('DesktopAgentSurface', () => {
     expect(dshSessions.getComposerConfiguration).toHaveBeenCalledTimes(2);
     expect(dshSessions.create).not.toHaveBeenCalled();
     expect(dshSessions.submit).not.toHaveBeenCalled();
+  });
+
+  it('creates an index Canvas through the supplied action and selects it after catalog refresh', async () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+      },
+    );
+    const target = { workspaceId: 'workspace-1', canvasId: 'Index.nkc' };
+    const onCreateCanvas = vi.fn(async () => {
+      dshSessions.getComposerConfiguration.mockResolvedValue({
+        ...composerConfiguration,
+        context: {
+          ...composerConfiguration.context!,
+          canvas: {
+            ...composerConfiguration.context!.canvas,
+            options: [
+              ...composerConfiguration.context!.canvas.options,
+              { target, label: 'Index.nkc' },
+            ],
+          },
+        },
+      });
+      return target.canvasId;
+    });
+    render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-workspace"
+        agentSurfaceId="surface-draft"
+        surfaceKind="workspace"
+        onCreateCanvas={onCreateCanvas}
+      />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'New index Canvas' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), {
+      target: { value: ' Index ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+    await waitFor(() => {
+      expect(screen.getByRole<HTMLSelectElement>('combobox', { name: 'Canvas index' }).value).toBe(
+        'Index.nkc',
+      );
+    });
+    expect(onCreateCanvas).toHaveBeenCalledExactlyOnceWith('Index');
+    expect(dshSessions.getComposerConfiguration).toHaveBeenLastCalledWith(
+      'workbench-1',
+      'surface-draft',
+    );
+    expect(dshSessions.create).not.toHaveBeenCalled();
+    expect(dshSessions.submit).not.toHaveBeenCalled();
+    expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull();
   });
 
   it('passes the complete Entry context presentation to the retained selector components', async () => {
@@ -903,6 +1242,7 @@ describe('DesktopAgentSurface', () => {
       dshSessionId: projection.dshSessionId,
       title: projection.title,
       inbox: { nextTurn: [], nextStep: [] },
+      todos: [],
       events: projection.events,
     });
     const { container } = render(
@@ -915,7 +1255,7 @@ describe('DesktopAgentSurface', () => {
       />,
     );
     expect(await screen.findByText('My Film')).toBeTruthy();
-    expect(screen.getByRole('option', { name: 'Workspace Board' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'workspace.nkc' })).toBeTruthy();
     expect(container.querySelector('[data-workspace-canvas-context="true"]')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Configure models' }));
@@ -955,6 +1295,39 @@ describe('DesktopAgentSurface', () => {
     ).toBe(false);
   });
 
+  it('renders exact selected image-model parameters projected through the Desktop contract', async () => {
+    const profiledConfiguration: DshComposerConfigurationProjection = {
+      ...composerConfiguration,
+      models: composerConfiguration.models.map((model) =>
+        model.category === 'image' ? { ...model, parameterProfile: imageParameterProfile } : model,
+      ),
+      selectedMediaModelOptionIds: { image: 'nekoapi-media:gpt-image-2' },
+    };
+    dshSessions.getComposerConfiguration.mockResolvedValueOnce(profiledConfiguration);
+
+    render(
+      <DesktopAgentSurface
+        agentSurfaceId="surface-1"
+        conversationId="conversation-1"
+        sceneId="scene-1"
+        workbenchInstanceId="workbench-1"
+        surfaceKind="workspace"
+      />,
+    );
+    await screen.findByText('My Film');
+    fireEvent.click(screen.getByRole('button', { name: 'Configure models' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Image' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Parameters' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Creation configuration' });
+    expect(dialog.textContent).toContain('1024×1024');
+    expect(dialog.textContent).toContain('1536×1024');
+    expect(dialog.textContent).toContain('Auto');
+    expect(dialog.textContent).toContain('Quality');
+    expect(dialog.textContent).not.toContain('512');
+    expect(dialog.textContent).not.toContain('720p');
+  });
+
   it('submits the first Draft message atomically through create', async () => {
     const createdProjection: DshSessionHostProjection = {
       ...projection,
@@ -992,7 +1365,7 @@ describe('DesktopAgentSurface', () => {
           references: [],
           images: [],
           contextPayloads: [],
-          canvasTurnTarget: workspaceBoardTarget,
+          canvasTurnTarget: defaultCanvasTarget,
         },
       ),
     );
@@ -1019,7 +1392,18 @@ describe('DesktopAgentSurface', () => {
         agentSurfaceId="surface-project-draft"
         surfaceKind="entry"
         entryContext={{
-          workspace: { projects: [{ projectId: 'project-1', label: 'Project One' }] },
+          workspace: {
+            projects: [{ projectId: 'project-1', label: 'Project One' }],
+            onSelectProject: vi.fn(async () => ({
+              label: 'Project One',
+              context: {
+                kind: 'workspace' as const,
+                workspaceId: 'workspace-1',
+                workspaceGrantId: 'grant-1',
+              },
+              authority: { kind: 'project' as const, projectId: 'project-1' },
+            })),
+          },
           experimentalCreative: {
             loadCharacterTargets: vi.fn(async () => ({ targets: [], diagnostics: [] })),
             loadWorldTargets: vi.fn(async () => ({ targets: [], diagnostics: [] })),
@@ -1035,6 +1419,7 @@ describe('DesktopAgentSurface', () => {
       container.querySelector('[data-entry-context-action="project"]') as HTMLButtonElement,
     );
     fireEvent.click(screen.getByTitle('Project One'));
+    expect(await screen.findByRole('button', { name: 'Clear: Project One' })).toBeTruthy();
     fireEvent.change(composer, { target: { value: '  create in project  ' } });
     fireEvent.click(screen.getByLabelText('Send (Enter)'));
 
@@ -1043,14 +1428,20 @@ describe('DesktopAgentSurface', () => {
         'workbench-1',
         'surface-project-draft',
         'workspace-write',
-        { kind: 'project', projectId: 'project-1' },
+        {
+          kind: 'authoring',
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+          authority: { kind: 'project', projectId: 'project-1' },
+          target: null,
+        },
         {
           kind: 'message',
           text: 'create in project',
           references: [],
           images: [],
           contextPayloads: [],
-          canvasTurnTarget: workspaceBoardTarget,
+          canvasTurnTarget: defaultCanvasTarget,
         },
       ),
     );

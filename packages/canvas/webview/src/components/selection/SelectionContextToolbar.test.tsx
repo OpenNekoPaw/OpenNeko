@@ -139,6 +139,35 @@ describe('SelectionContextToolbar', () => {
     container.remove();
   });
 
+  it('does not project material actions for a Generation node without a selected output', () => {
+    const node: CanvasNode = {
+      id: 'generation-video-failed',
+      type: 'generation',
+      position: { x: 100, y: 100 },
+      size: { width: 320, height: 180 },
+      zIndex: 1,
+      data: {
+        recipe: { kind: 'video', prompt: 'Generate a clip' },
+        outputs: [],
+      },
+    };
+
+    const markup = renderToStaticMarkup(
+      <SelectionContextToolbar
+        nodes={[node]}
+        selectedNodeIds={[node.id]}
+        viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
+        viewportSize={{ width: 800, height: 600 }}
+      />,
+    );
+
+    expect(markup).toContain('data-selection-action="node:duplicate"');
+    expect(markup).not.toContain('data-selection-action="cut:add-resource"');
+    expect(markup).not.toContain('data-selection-action="video:separate-audio"');
+    expect(markup).not.toContain('data-selection-action="preview:open"');
+    expect(markup).not.toContain('data-material-actions-status="error"');
+  });
+
   it('keeps the toolbar preview owned by Main Preview without duplicating Canvas fullscreen', async () => {
     const node = mediaNode('image-preview', 'image', 'assets/image.png');
     const executeMaterialAction = vi.fn(async () => materialActionSnapshot());
@@ -441,23 +470,20 @@ describe('SelectionContextToolbar', () => {
     expect(markup).not.toContain('node:open-content-overlay');
   });
 
-  it('keeps referenced text editing and preview visible while omitting Finder operations', async () => {
+  it('uses Text Editor as the sole open action for referenced text', async () => {
     const node = fileNode('notes', 'notes/scene.md');
     const toolbar = await renderToolbar(
       [node],
       [node.id],
-      [
-        descriptor('text:edit', 'Edit text', 'handoff'),
-        descriptor('preview:open', 'Full-screen preview', 'read'),
-        descriptor('desktop:reveal', 'Reveal in Finder', 'handoff'),
-      ],
+      [descriptor('text:edit', 'Edit text', 'handoff')],
     );
 
     expect(
       Array.from(
         toolbar.container.querySelectorAll('[data-selection-action-location="primary"]'),
       ).map((element) => element.getAttribute('data-selection-action')),
-    ).toEqual(['text:edit', 'node:duplicate', 'preview:open']);
+    ).toEqual(['text:edit', 'node:duplicate']);
+    expect(toolbar.container.innerHTML).not.toContain('preview:open');
     expect(toolbar.container.innerHTML).not.toContain('desktop:reveal');
     expect(toolbar.container.querySelector('[data-selection-kind-label]')?.textContent).toBe(
       'File',
@@ -510,13 +536,13 @@ describe('SelectionContextToolbar', () => {
     expect(markup).toContain('data-selection-kind-label="true"');
     expect(markup).toContain('>Image</span>');
     expect(markup).toContain('data-selection-action="node:duplicate"');
-    expect(markup).toContain('data-selection-action="preview:open"');
-    expect(markup).toContain('data-disabled-reason="This capability is unavailable"');
+    expect(markup).not.toContain('data-selection-action="preview:open"');
+    expect(markup).not.toContain('data-disabled-reason');
     expect(markup).not.toContain('text:edit');
     expect(markup).not.toContain('cut:add-resource');
   });
 
-  it('renders immutable Prompt output actions without inventing Text Editor ownership', async () => {
+  it('renders generated Prompt output with Text Editor and without Preview', async () => {
     const node: CanvasNode = {
       id: 'generation-prompt',
       type: 'generation',
@@ -542,27 +568,24 @@ describe('SelectionContextToolbar', () => {
     const toolbar = await renderToolbar(
       [node],
       [node.id],
-      [
-        descriptor('preview:open', 'Full-screen preview', 'read'),
-        descriptor('desktop:reveal', 'Reveal in Finder', 'handoff'),
-        descriptor('media-library:copy-to-project', 'Save material', 'copy'),
-      ],
+      [descriptor('text:edit', 'Edit text', 'handoff')],
     );
 
     expect(
       Array.from(
         toolbar.container.querySelectorAll('[data-selection-action-location="primary"]'),
       ).map((element) => element.getAttribute('data-selection-action')),
-    ).toEqual(['text:edit', 'node:duplicate', 'preview:open']);
+    ).toEqual(['text:edit', 'node:duplicate']);
     expect(
       toolbar.container.querySelector<HTMLButtonElement>('[data-selection-action="text:edit"]')
         ?.disabled,
-    ).toBe(true);
+    ).toBe(false);
+    expect(toolbar.container.innerHTML).not.toContain('preview:open');
     expect(toolbar.container.innerHTML).not.toContain('desktop:reveal');
     await toolbar.dispose();
   });
 
-  it('enables and disables stable Video slots without reordering as capability changes', async () => {
+  it('projects Video material actions only while a selected output exists', async () => {
     const emptyNode: CanvasNode = {
       id: 'generation-video',
       type: 'generation',
@@ -617,13 +640,8 @@ describe('SelectionContextToolbar', () => {
       render(emptyNode);
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    expect(
-      container.querySelector<HTMLButtonElement>('[data-selection-action="cut:add-resource"]')
-        ?.disabled,
-    ).toBe(true);
-    const stableOrder = Array.from(
-      container.querySelectorAll('[data-selection-action-location="primary"]'),
-    ).map((element) => element.getAttribute('data-selection-action'));
+    expect(container.querySelector('[data-selection-action="cut:add-resource"]')).toBeNull();
+    expect(container.querySelector('[data-selection-action="video:separate-audio"]')).toBeNull();
 
     await act(async () => {
       render(completedNode);
@@ -640,25 +658,20 @@ describe('SelectionContextToolbar', () => {
       Array.from(container.querySelectorAll('[data-selection-action-location="primary"]')).map(
         (element) => element.getAttribute('data-selection-action'),
       ),
-    ).toEqual(stableOrder);
+    ).toEqual(['cut:add-resource', 'video:separate-audio', 'node:duplicate', 'preview:open']);
 
     await act(async () => {
       render(emptyNode);
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
+    expect(container.querySelector('[data-selection-action="cut:add-resource"]')).toBeNull();
+    expect(container.querySelector('[data-selection-action="video:separate-audio"]')).toBeNull();
     expect(resolveMaterialActions).toHaveBeenCalledTimes(3);
-    expect(
-      container.querySelector<HTMLButtonElement>('[data-selection-action="cut:add-resource"]')
-        ?.disabled,
-    ).toBe(true);
     expect(
       Array.from(container.querySelectorAll('[data-selection-action-location="primary"]')).map(
         (element) => element.getAttribute('data-selection-action'),
       ),
-    ).toEqual(stableOrder);
-    expect(
-      container.querySelector('[data-selection-action="video:separate-audio"]'),
-    ).not.toBeNull();
+    ).toEqual(['node:duplicate']);
     await act(async () => root.unmount());
     container.remove();
   });
@@ -692,7 +705,7 @@ describe('SelectionContextToolbar', () => {
     const diagnostic = container.querySelector('[data-material-actions-status="error"]');
     expect(diagnostic?.getAttribute('role')).toBe('alert');
     expect(diagnostic?.getAttribute('title')).toBe('Image action owner is unavailable.');
-    expect(diagnostic?.textContent).toContain('Actions unavailable');
+    expect(diagnostic?.textContent).toContain('Could not load actions');
     expect(container.querySelector('[data-selection-action="node:duplicate"]')).not.toBeNull();
     await act(async () => root.unmount());
     container.remove();
@@ -755,9 +768,224 @@ describe('SelectionContextToolbar', () => {
 
     const diagnostic = toolbar.container.querySelector('[data-material-actions-status="error"]');
     expect(diagnostic?.getAttribute('title')).toBe('Cut target changed before execution.');
+    expect(diagnostic?.textContent).toContain('Edit failed');
     expect(
       toolbar.container.querySelector('[data-selection-action="cut:add-resource"]'),
     ).not.toBeNull();
+    await toolbar.dispose();
+  });
+
+  it.each(['another node', 'return to the same node', 'changed content', 'another host'] as const)(
+    'isolates a delayed execution failure after selecting %s',
+    async (change) => {
+      const first = fileNode('first-document', 'first.md');
+      const second = fileNode('second-document', 'second.md');
+      const execution = deferred<CanvasHostSnapshot>();
+      const executeMaterialAction = vi.fn(() => execution.promise);
+      const descriptors = [descriptor('text:edit', 'Edit text', 'handoff')];
+      const host = createMaterialHost(descriptors, executeMaterialAction);
+      const nextHost = createMaterialHost(descriptors);
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const root = createRoot(container);
+      const render = (node: CanvasNode, selectedHost = host): void =>
+        root.render(
+          <CanvasHostProvider host={selectedHost}>
+            <SelectionContextToolbar
+              nodes={[node]}
+              selectedNodeIds={[node.id]}
+              viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
+              viewportSize={{ width: 800, height: 600 }}
+            />
+          </CanvasHostProvider>,
+        );
+      try {
+        await act(async () => render(first));
+        await act(async () => {
+          container
+            .querySelector<HTMLButtonElement>('[data-selection-action="text:edit"]')
+            ?.click();
+        });
+        expect(executeMaterialAction).toHaveBeenCalledWith('text:edit', [first.id], {});
+        await act(async () => {
+          if (change === 'changed content') render(fileNode(first.id, 'changed.md'));
+          else if (change === 'another host') render(first, nextHost);
+          else render(second);
+        });
+        if (change === 'return to the same node') await act(async () => render(first));
+        await act(async () => execution.reject(new Error('Only the previous action failed.')));
+
+        expect(container.querySelector('[role="alert"]')).toBeNull();
+        expect(
+          container.querySelector<HTMLButtonElement>('[data-selection-action="text:edit"]')
+            ?.disabled,
+        ).toBe(false);
+      } finally {
+        await act(async () => root.unmount());
+        container.remove();
+      }
+    },
+  );
+
+  it('does not replace a newer successful execution with an earlier failure', async () => {
+    const node = fileNode('document', 'document.md');
+    const first = deferred<CanvasHostSnapshot>();
+    const executeMaterialAction = vi
+      .fn<CanvasWebviewHostPort['executeMaterialAction']>()
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce(materialActionSnapshot());
+    const toolbar = await renderToolbar(
+      [node],
+      [node.id],
+      [descriptor('text:edit', 'Edit text', 'handoff')],
+      executeMaterialAction,
+    );
+    try {
+      const action = toolbar.container.querySelector<HTMLButtonElement>(
+        '[data-selection-action="text:edit"]',
+      );
+      await act(async () => action?.click());
+      await act(async () => action?.click());
+      expect(executeMaterialAction).toHaveBeenCalledTimes(2);
+      await act(async () => first.reject(new Error('The earlier execution failed.')));
+      expect(toolbar.container.querySelector('[role="alert"]')).toBeNull();
+    } finally {
+      await toolbar.dispose();
+    }
+  });
+
+  it('clears the current execution failure when the user retries the action', async () => {
+    const node = fileNode('document', 'document.md');
+    const executeMaterialAction = vi
+      .fn<CanvasWebviewHostPort['executeMaterialAction']>()
+      .mockRejectedValueOnce(new Error('Document could not be opened.'))
+      .mockResolvedValueOnce(materialActionSnapshot());
+    const toolbar = await renderToolbar(
+      [node],
+      [node.id],
+      [descriptor('text:edit', 'Edit text', 'handoff')],
+      executeMaterialAction,
+    );
+    try {
+      const action = toolbar.container.querySelector<HTMLButtonElement>(
+        '[data-selection-action="text:edit"]',
+      );
+      await act(async () => action?.click());
+      expect(toolbar.container.querySelector('[role="alert"]')?.textContent).toContain(
+        'Edit text failed',
+      );
+      expect(action?.disabled).toBe(false);
+      await act(async () => action?.click());
+      expect(executeMaterialAction).toHaveBeenCalledTimes(2);
+      expect(toolbar.container.querySelector('[role="alert"]')).toBeNull();
+    } finally {
+      await toolbar.dispose();
+    }
+  });
+
+  it('retries failed action resolution for the same selection through its Host', async () => {
+    const node = fileNode('document', 'document.md');
+    const resolved = deferred<readonly CanvasMaterialActionDescriptor[]>();
+    const resolveMaterialActions = vi
+      .fn<CanvasWebviewHostPort['resolveMaterialActions']>()
+      .mockRejectedValueOnce(new Error('Action catalog could not be loaded.'))
+      .mockReturnValueOnce(resolved.promise);
+    const host = { ...createMaterialHost([]), resolveMaterialActions };
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    try {
+      await act(async () => {
+        root.render(
+          <CanvasHostProvider host={host}>
+            <SelectionContextToolbar
+              nodes={[node]}
+              selectedNodeIds={[node.id]}
+              viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
+              viewportSize={{ width: 800, height: 600 }}
+            />
+          </CanvasHostProvider>,
+        );
+      });
+      expect(container.querySelector('[role="alert"]')?.getAttribute('title')).toBe(
+        'Action catalog could not be loaded.',
+      );
+      expect(container.querySelector('[data-selection-action="node:duplicate"]')).not.toBeNull();
+      const retry = container.querySelector<HTMLButtonElement>('[data-material-actions-retry]');
+      expect(retry).not.toBeNull();
+      await act(async () => retry?.click());
+      expect(container.querySelector('[data-material-actions-status="loading"]')).not.toBeNull();
+      expect(container.querySelector('[role="alert"]')).toBeNull();
+      await act(async () => resolved.resolve([descriptor('text:edit', 'Edit text', 'handoff')]));
+      expect(resolveMaterialActions.mock.calls).toEqual([[[node.id]], [[node.id]]]);
+      expect(container.querySelector('[data-material-actions-status="loading"]')).toBeNull();
+      expect(
+        container.querySelector<HTMLButtonElement>('[data-selection-action="text:edit"]')?.disabled,
+      ).toBe(false);
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+    }
+  });
+
+  it('shows the capability-owner diagnostic for an unavailable Cut action', async () => {
+    const node = mediaNode('video-stale', 'video', 'media/stale.mp4');
+    const executeMaterialAction = vi.fn(async () => materialActionSnapshot());
+    const reason = '当前画布视图已失效，请重新打开画布。';
+    const toolbar = await renderToolbar(
+      [node],
+      [node.id],
+      [
+        {
+          ...descriptor('cut:add-resource', '剪辑', 'handoff'),
+          unavailable: {
+            code: 'cut-canvas-source-stale',
+            message: reason,
+          },
+        },
+      ],
+      executeMaterialAction,
+    );
+
+    const action = toolbar.container.querySelector<HTMLButtonElement>(
+      '[data-selection-action="cut:add-resource"]',
+    );
+    expect(action?.disabled).toBe(true);
+    expect(action?.getAttribute('data-disabled-reason')).toBe(reason);
+    expect(action?.title).toBe(reason);
+    action?.click();
+    expect(executeMaterialAction).not.toHaveBeenCalled();
+    await toolbar.dispose();
+  });
+
+  it('keeps Video editing enabled while explaining that a silent Video has no audio to separate', async () => {
+    const node = mediaNode('silent-video', 'video', 'media/silent.mp4');
+    const reason = '该视频不包含可分离的音轨。';
+    const toolbar = await renderToolbar(
+      [node],
+      [node.id],
+      [
+        descriptor('cut:add-resource', '剪辑', 'handoff'),
+        {
+          ...descriptor('video:separate-audio', '音频分离', 'derive'),
+          unavailable: {
+            code: 'media-audio-stream-unavailable',
+            message: reason,
+          },
+        },
+      ],
+    );
+
+    const edit = toolbar.container.querySelector<HTMLButtonElement>(
+      '[data-selection-action="cut:add-resource"]',
+    );
+    const separate = toolbar.container.querySelector<HTMLButtonElement>(
+      '[data-selection-action="video:separate-audio"]',
+    );
+    expect(edit?.disabled).toBe(false);
+    expect(separate?.disabled).toBe(true);
+    expect(separate?.getAttribute('data-disabled-reason')).toBe(reason);
+    expect(separate?.title).toBe(reason);
     await toolbar.dispose();
   });
 
@@ -923,9 +1151,6 @@ function createMaterialHost(
     selectGenerationOutput: async () => {
       throw new Error('Not used by this static component test.');
     },
-    authorGenerationText: async () => {
-      throw new Error('Not used by this static component test.');
-    },
     getGenerationProjection: () => undefined,
     projectContent: async () => {
       throw new Error('Not used by this static component test.');
@@ -1051,4 +1276,18 @@ function materialActionSnapshot(): CanvasHostSnapshot {
     authoringCapabilities: { sourceModes: [], generationKinds: [], generationModels: [] },
     generationNodes: [],
   };
+}
+
+function deferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+  readonly reject: (error: Error) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((accept, fail) => {
+    resolve = accept;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
 }

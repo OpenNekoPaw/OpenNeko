@@ -11,6 +11,7 @@ import type {
   CanvasConnection,
   CanvasViewport as ViewportType,
 } from '@neko/canvas-domain';
+import { validateNkcNodeContent } from '@neko/canvas-domain';
 import { CanvasGrid } from './CanvasGrid';
 import { CanvasViewport } from './CanvasViewport';
 import { renderCanvasNode } from './nodes';
@@ -220,7 +221,9 @@ export function InfiniteCanvas({
       selectedNodeIds.length === 1
         ? nodes.find(
             (candidate): candidate is Extract<CanvasNode, { type: 'generation' }> =>
-              candidate.id === selectedNodeIds[0] && candidate.type === 'generation',
+              candidate.id === selectedNodeIds[0] &&
+              candidate.type === 'generation' &&
+              validateNkcNodeContent(candidate).valid,
           )
         : undefined;
     if (!selectedNode) return;
@@ -336,6 +339,19 @@ export function InfiniteCanvas({
   const interactionNodeById = useMemo(
     () => new Map(interactionNodes.map((node) => [node.id, node])),
     [interactionNodes],
+  );
+  const unavailableInteractionNodeIds = useMemo(
+    () =>
+      new Set(
+        interactionNodes
+          .filter((node) => !validateNkcNodeContent(node).valid)
+          .map((node) => node.id),
+      ),
+    [interactionNodes],
+  );
+  const availableInteractionNodes = useMemo(
+    () => interactionNodes.filter((node) => !unavailableInteractionNodeIds.has(node.id)),
+    [interactionNodes, unavailableInteractionNodeIds],
   );
   const openFullscreenPreview = useCallback(
     (nodeId: string, outputId?: string) => {
@@ -604,6 +620,7 @@ export function InfiniteCanvas({
       <SelectionContextToolbar
         nodes={interactionNodes}
         selectedNodeIds={selectedNodeIds}
+        unavailableNodeIds={unavailableInteractionNodeIds}
         viewport={viewport}
         viewportSize={containerSize}
         onMarkdownEdit={onNodeUpdateData ? openMarkdownEditor : undefined}
@@ -614,7 +631,7 @@ export function InfiniteCanvas({
         }
       />
       <SelectionGenerationInputPanel
-        nodes={interactionNodes}
+        nodes={availableInteractionNodes}
         connections={connections}
         selectedNodeIds={selectedNodeIds}
         viewport={viewport}
@@ -627,7 +644,7 @@ export function InfiniteCanvas({
         onLayoutMeasure={setGenerationInputLayout}
       />
       <SelectionMaterialGenerationBar
-        nodes={nodes}
+        nodes={availableInteractionNodes}
         selectedNodeIds={selectedNodeIds}
         viewport={viewport}
         viewportSize={containerSize}

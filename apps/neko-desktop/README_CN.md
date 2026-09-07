@@ -21,6 +21,5 @@ pnpm --filter @neko/app-desktop test
 pnpm --filter @neko/app-desktop lint
 pnpm --filter @neko/app-desktop dev
 pnpm --filter @neko/app-desktop package
-pnpm test:local:ui --scenario=all-openneko-consumers
 pnpm test:local:media-openneko
 ```

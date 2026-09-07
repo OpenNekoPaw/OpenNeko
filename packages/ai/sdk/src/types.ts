@@ -29,7 +29,7 @@ export interface ProviderConfig {
  * Resolved AI SDK provider with media model factories.
  * Returns null for unsupported model types.
  */
-export type ResolvedProviderSource = 'native';
+export type ResolvedProviderSource = 'ai-sdk';
 
 export interface ResolvedProvider {
   /** Provider type identifier */

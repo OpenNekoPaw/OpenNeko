@@ -1,10 +1,13 @@
 import type { CanvasHostRuntimeIdentity } from '../canvas-host-runtime-contract';
 import type { CanvasGenerationProjectionSnapshot } from '../canvas-generation-projection';
 import type { CanvasMaterialActionTarget } from '../canvas-material-action-catalog';
+import type { ContentLocator } from '@neko/content-domain';
 import type {
   CanvasMaterialActionDescriptor,
   CanvasMaterialActionIntent,
   CanvasMaterialMediaKind,
+  CanvasMaterialActionUnavailableDiagnostic,
+  CanvasMaterialAuthoringRequest,
 } from '../types/canvas-material-contracts';
 
 const MATERIAL_MEDIA_KINDS: readonly CanvasMaterialMediaKind[] = [
@@ -46,12 +49,30 @@ export const CANVAS_IMAGE_OPEN_EDITOR_TOOLS_ACTION_ID = 'image:open-editor-tools
 
 export interface CanvasMaterialActionExecutionResult {
   readonly generationProjection?: CanvasGenerationProjectionSnapshot;
+  readonly authoringRequest?: CanvasMaterialAuthoringRequest;
 }
 
 export interface CanvasGenerationActionAvailability {
   readonly regenerate: boolean;
   readonly editAndGenerate: boolean;
 }
+
+export type CanvasMaterialActionAvailability =
+  | {
+      readonly status: 'available';
+      readonly executionPayload: Readonly<Record<string, unknown>>;
+    }
+  | {
+      readonly status: 'unavailable';
+      readonly diagnostic: CanvasMaterialActionUnavailableDiagnostic;
+    };
+
+export type CanvasMaterialActionCapabilityAvailability =
+  | { readonly status: 'available' }
+  | {
+      readonly status: 'unavailable';
+      readonly diagnostic: CanvasMaterialActionUnavailableDiagnostic;
+    };
 
 export interface CanvasMaterialActionOwner {
   resolve(input: {
@@ -102,17 +123,20 @@ export function createCanvasMaterialActionOwner(options: {
   readonly resolveAddToCut?: (input: {
     readonly identity: CanvasHostRuntimeIdentity;
     readonly target: CanvasMaterialActionTarget;
-  }) => Promise<Readonly<Record<string, unknown>> | undefined>;
+  }) => Promise<CanvasMaterialActionAvailability>;
   readonly addToCut?: (input: {
     readonly identity: CanvasHostRuntimeIdentity;
     readonly target: CanvasMaterialActionTarget;
     readonly executionPayload: Readonly<Record<string, unknown>>;
   }) => Promise<void>;
-  readonly separateAudioInCut?: (input: {
+  readonly separateAudio?: (input: {
     readonly identity: CanvasHostRuntimeIdentity;
     readonly target: CanvasMaterialActionTarget;
-    readonly executionPayload: Readonly<Record<string, unknown>>;
-  }) => Promise<void>;
+  }) => Promise<{ readonly locator: ContentLocator; readonly title: string }>;
+  readonly resolveSeparateAudio?: (input: {
+    readonly identity: CanvasHostRuntimeIdentity;
+    readonly target: CanvasMaterialActionTarget;
+  }) => Promise<CanvasMaterialActionCapabilityAvailability>;
   readonly resolveMediaLibraryCopy?: (input: {
     readonly identity: CanvasHostRuntimeIdentity;
     readonly target: CanvasMaterialActionTarget;
@@ -167,8 +191,15 @@ export function createCanvasMaterialActionOwner(options: {
   }
   return {
     async resolve({ identity, targets }) {
-      const descriptors = [...baseDescriptors];
       const target = targets.length === 1 ? targets[0] : undefined;
+      const editTextAvailable =
+        target?.mediaKind === 'document' && options.resolveEditText && options.editText
+          ? await options.resolveEditText({ identity, target })
+          : false;
+      const descriptors =
+        editTextAvailable || (target?.mediaKind === 'document' && target.origin === 'generated')
+          ? []
+          : [...baseDescriptors];
       if (
         target &&
         options.reveal &&
@@ -184,19 +215,13 @@ export function createCanvasMaterialActionOwner(options: {
           effect: 'handoff',
         });
       }
-      if (
-        target?.mediaKind === 'document' &&
-        target.origin === 'referenced' &&
-        options.resolveEditText &&
-        options.editText &&
-        (await options.resolveEditText({ identity, target }))
-      ) {
+      if (target && editTextAvailable) {
         descriptors.push({
           id: CANVAS_EDIT_TEXT_ACTION_ID,
           ownerId: 'text-editor',
           label: options.labels?.editText ?? 'Edit text',
           mediaKinds: ['document'],
-          origins: ['referenced'],
+          origins: ['referenced', 'generated'],
           selection: { minimum: 1, maximum: 1 },
           effect: 'handoff',
         });
@@ -225,31 +250,36 @@ export function createCanvasMaterialActionOwner(options: {
         options.resolveAddToCut &&
         options.addToCut
       ) {
-        const executionPayload = await options.resolveAddToCut({ identity, target });
-        if (executionPayload) {
-          descriptors.push({
-            id: CANVAS_ADD_TO_CUT_ACTION_ID,
-            ownerId: 'cut',
-            label: options.labels?.addToCut ?? 'Add to Cut',
-            mediaKinds: ['video', 'audio'],
-            origins: ['referenced', 'generated'],
-            selection: { minimum: 1, maximum: 1 },
-            effect: 'handoff',
-            executionPayload,
-          });
-          if (target.mediaKind === 'video' && options.separateAudioInCut) {
-            descriptors.push({
-              id: CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID,
-              ownerId: 'cut',
-              label: options.labels?.separateAudio ?? 'Separate audio',
-              mediaKinds: ['video'],
-              origins: ['referenced', 'generated'],
-              selection: { minimum: 1, maximum: 1 },
-              effect: 'derive',
-              executionPayload,
-            });
-          }
-        }
+        const availability = await options.resolveAddToCut({ identity, target });
+        const availabilityFields =
+          availability.status === 'available'
+            ? { executionPayload: availability.executionPayload }
+            : { unavailable: availability.diagnostic };
+        descriptors.push({
+          id: CANVAS_ADD_TO_CUT_ACTION_ID,
+          ownerId: 'cut',
+          label: options.labels?.addToCut ?? 'Add to Cut',
+          mediaKinds: ['video', 'audio'],
+          origins: ['referenced', 'generated'],
+          selection: { minimum: 1, maximum: 1 },
+          effect: 'handoff',
+          ...availabilityFields,
+        });
+      }
+      if (target?.mediaKind === 'video' && options.resolveSeparateAudio && options.separateAudio) {
+        const availability = await options.resolveSeparateAudio({ identity, target });
+        descriptors.push({
+          id: CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID,
+          ownerId: 'media',
+          label: options.labels?.separateAudio ?? 'Separate audio',
+          mediaKinds: ['video'],
+          origins: ['referenced', 'generated'],
+          selection: { minimum: 1, maximum: 1 },
+          effect: 'derive',
+          ...(availability.status === 'unavailable'
+            ? { unavailable: availability.diagnostic }
+            : {}),
+        });
       }
       if (target && options.resolveMediaLibraryCopy) {
         const availability = await options.resolveMediaLibraryCopy({ identity, target });
@@ -307,6 +337,9 @@ export function createCanvasMaterialActionOwner(options: {
       if (descriptor.id !== action.actionId) {
         throw new Error('Desktop Canvas material action descriptor does not match its intent.');
       }
+      if (descriptor.unavailable) {
+        throw new Error(descriptor.unavailable.message);
+      }
       const target = requireSingleTarget(targets);
       if (action.actionId === CANVAS_PREVIEW_ACTION_ID && options.preview) {
         await options.preview({ identity, target });
@@ -332,13 +365,22 @@ export function createCanvasMaterialActionOwner(options: {
         });
         return {};
       }
-      if (action.actionId === CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID && options.separateAudioInCut) {
-        await options.separateAudioInCut({
-          identity,
-          target,
-          executionPayload: descriptor.executionPayload ?? {},
-        });
-        return {};
+      if (action.actionId === CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID && options.separateAudio) {
+        const output = await options.separateAudio({ identity, target });
+        return {
+          authoringRequest: {
+            kind: 'derived-output-commit',
+            identity: {
+              projectId: identity.projectId,
+              canvasId: identity.documentId,
+              canvasSessionId: identity.sessionId,
+            },
+            locator: output.locator,
+            mediaKind: 'audio',
+            title: output.title,
+            sourceNodeIds: [target.nodeId],
+          },
+        };
       }
       if (
         action.actionId === CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID &&

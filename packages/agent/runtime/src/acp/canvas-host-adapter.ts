@@ -5,20 +5,55 @@ import type {
 import {
   CANVAS_DSH_TOOL_NAME,
   CanvasProjectAuthoringError,
-  CanvasProjectAuthoringService,
+  canvasDshCreateConnectionRequest,
+  canvasDshCreateNodeSpec,
+  canvasDshUpdateNodeRequest,
   decodeCanvasDshToolInput,
-  projectCanvasCreateNodeResult,
+  projectCanvasConnectionMutationResult,
+  projectCanvasNodeMutationResult,
   projectCanvasQuerySnapshot,
+  type CanvasCreateConnectionRequest,
+  type CanvasGroupNodesRequest,
+  type CanvasNodeCreateSpec,
+  type CanvasProjectConnectionMutationResult,
+  type CanvasProjectNodeMutationResult,
+  type CanvasProjectSnapshot,
+  type CanvasUpdateBlockRequest,
 } from '@neko/canvas-domain';
 import { enforceDshDomainToolEffect } from './dsh-domain-tool-access';
+
+export interface CanvasDshAuthoringPort {
+  groupNodes(input: {
+    readonly documentPath: string;
+    readonly request: CanvasGroupNodesRequest;
+    readonly signal?: AbortSignal;
+  }): Promise<CanvasProjectNodeMutationResult>;
+  query(input: {
+    readonly documentPath: string;
+    readonly signal?: AbortSignal;
+  }): Promise<CanvasProjectSnapshot>;
+  createNode(input: {
+    readonly documentPath: string;
+    readonly node: CanvasNodeCreateSpec;
+    readonly signal?: AbortSignal;
+  }): Promise<CanvasProjectNodeMutationResult>;
+  updateNode(input: {
+    readonly documentPath: string;
+    readonly request: CanvasUpdateBlockRequest;
+    readonly signal?: AbortSignal;
+  }): Promise<CanvasProjectNodeMutationResult>;
+  createConnection(input: {
+    readonly documentPath: string;
+    readonly connection: CanvasCreateConnectionRequest;
+    readonly signal?: AbortSignal;
+  }): Promise<CanvasProjectConnectionMutationResult>;
+}
 
 export class CanvasDshHostAdapter {
   private readonly toolName: string;
 
   constructor(
-    private readonly service:
-      | Pick<CanvasProjectAuthoringService, 'query' | 'createNode'>
-      | (() => Promise<Pick<CanvasProjectAuthoringService, 'query' | 'createNode'>>),
+    private readonly service: CanvasDshAuthoringPort | (() => Promise<CanvasDshAuthoringPort>),
     toolName: string = CANVAS_DSH_TOOL_NAME,
   ) {
     if (toolName !== CANVAS_DSH_TOOL_NAME) {
@@ -56,40 +91,48 @@ export class CanvasDshHostAdapter {
           documentPath: decoded.input.documentPath,
           ...(signal === undefined ? {} : { signal }),
         });
-        const facts = projectCanvasQuerySnapshot(snapshot);
+        return { outcome: 'success', result: projectCanvasQuerySnapshot(snapshot, decoded.input) };
+      }
+      const command = decoded.input.command;
+      if (command.kind === 'group_nodes') {
+        const result = await service.groupNodes({
+          documentPath: decoded.input.documentPath,
+          request: command,
+          ...(signal === undefined ? {} : { signal }),
+        });
         return {
           outcome: 'success',
-          result: {
-            documentPath: facts.documentPath,
-            nodeCount: facts.nodeCount,
-            connectionCount: facts.connectionCount,
-          },
+          result: projectCanvasNodeMutationResult(command.kind, result),
         };
       }
-      const current = await service.query({
+      if (command.kind === 'create_node') {
+        const result = await service.createNode({
+          documentPath: decoded.input.documentPath,
+          node: canvasDshCreateNodeSpec(command),
+          ...(signal === undefined ? {} : { signal }),
+        });
+        return {
+          outcome: 'success',
+          result: projectCanvasNodeMutationResult(command.kind, result),
+        };
+      }
+      if (command.kind === 'update_node') {
+        const result = await service.updateNode({
+          documentPath: decoded.input.documentPath,
+          request: canvasDshUpdateNodeRequest(command),
+          ...(signal === undefined ? {} : { signal }),
+        });
+        return {
+          outcome: 'success',
+          result: projectCanvasNodeMutationResult(command.kind, result),
+        };
+      }
+      const result = await service.createConnection({
         documentPath: decoded.input.documentPath,
+        connection: canvasDshCreateConnectionRequest(command),
         ...(signal === undefined ? {} : { signal }),
       });
-      const result = await service.createNode({
-        documentPath: decoded.input.documentPath,
-        expectedFingerprint: current.fingerprint,
-        node: decoded.input.node,
-        ...(signal === undefined ? {} : { signal }),
-      });
-      const facts = projectCanvasCreateNodeResult(result);
-      return {
-        outcome: 'success',
-        result: {
-          documentPath: facts.documentPath,
-          nodeId: facts.nodeId,
-          nodeType: facts.nodeType,
-          nodePosition: {
-            x: facts.nodePosition.x,
-            y: facts.nodePosition.y,
-          },
-          ...(facts.parentId === undefined ? {} : { parentId: facts.parentId }),
-        },
-      };
+      return { outcome: 'success', result: projectCanvasConnectionMutationResult(result) };
     } catch (error) {
       return failure(toCanvasDiagnostic(error), errorMessage(error));
     }

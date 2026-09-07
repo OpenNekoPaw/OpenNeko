@@ -47,7 +47,10 @@ import {
   clampNodeStoredSizes,
   resolveNodeMinSize,
 } from '../utils/nodeSizing';
-import { createsDisallowedConnectionCycle } from '../utils/connectionProjection';
+import {
+  createSequenceGraphSyncPlan,
+  createsDisallowedConnectionCycle,
+} from '../utils/connectionProjection';
 import { resolveCanvasDropContainer } from '../utils/containerMembership';
 import {
   arrangeSpatialGroup,
@@ -58,6 +61,7 @@ import {
   type SpatialGroupSort,
 } from '../utils/spatialGroupLayout';
 import {
+  type CanvasConnectionRejectionReason,
   type CanvasConnectionMutationResult,
   validateCanvasConnectionDraft,
 } from '../utils/canvasConnectionAuthoring';
@@ -134,6 +138,9 @@ export interface CanvasStore {
     updates: Partial<CanvasConnection>,
   ) => CanvasConnectionMutationResult;
   removeConnection: (id: string) => void;
+  replacePlaybackSequenceGraph: (
+    graph: CanvasPlaybackSequenceGraphInput,
+  ) => CanvasPlaybackSequenceMutationResult;
 
   // ==================== Derive Actions ====================
   /** Create a successor node positioned to the right, auto-connected. Uses targetType if given, else same type as source. */
@@ -166,6 +173,19 @@ export interface CanvasStore {
 }
 
 type CanvasNodeUpdates = CanvasNodeUpdateOperation['payload']['updates'];
+
+export type CanvasPlaybackSequenceMutationResult =
+  | { readonly ok: true; readonly changed: boolean }
+  | {
+      readonly ok: false;
+      readonly reason:
+        CanvasConnectionRejectionReason | 'duplicate-node' | 'missing-node' | 'duplicate-edge';
+    };
+
+export interface CanvasPlaybackSequenceGraphInput {
+  readonly nodeIds: readonly string[];
+  readonly edges: readonly { readonly sourceNodeId: string; readonly targetNodeId: string }[];
+}
 
 export function canCreateCanvasConnection(
   nodes: readonly CanvasNode[],
@@ -950,6 +970,155 @@ function createCanvasState(
       });
 
       operationStore.getState().recordConnectionRemove(id, removedConnection);
+    },
+
+    replacePlaybackSequenceGraph: ({ nodeIds: orderedNodeIds, edges }) => {
+      const { canvasData, selection } = get();
+      if (!canvasData) return { ok: false, reason: 'missing-canvas' };
+      const orderedNodeIdSet = new Set(orderedNodeIds);
+      if (orderedNodeIdSet.size !== orderedNodeIds.length) {
+        return { ok: false, reason: 'duplicate-node' };
+      }
+      if (orderedNodeIds.some((nodeId) => !canvasData.nodes.some((node) => node.id === nodeId))) {
+        return { ok: false, reason: 'missing-node' };
+      }
+
+      const expectedEdges = edges.map((edge, order) => ({
+        sourceId: edge.sourceNodeId,
+        targetId: edge.targetNodeId,
+        order,
+      }));
+      const edgeKeys = new Set<string>();
+      const validatedGraphConnections: CanvasConnection[] = [];
+      for (const edge of expectedEdges) {
+        if (!orderedNodeIdSet.has(edge.sourceId) || !orderedNodeIdSet.has(edge.targetId)) {
+          return { ok: false, reason: 'missing-node' };
+        }
+        const edgeKey = `${edge.sourceId}\u0000${edge.targetId}`;
+        if (edgeKeys.has(edgeKey)) return { ok: false, reason: 'duplicate-edge' };
+        edgeKeys.add(edgeKey);
+        const connection = normalizeCanvasConnectionInput(
+          {
+            sourceId: edge.sourceId,
+            targetId: edge.targetId,
+            type: 'sequence',
+            sourceEndpoint: createNodeConnectionEndpoint(edge.sourceId),
+            targetEndpoint: createNodeConnectionEndpoint(edge.targetId),
+          },
+          `draft-sequence-${edge.order}`,
+        );
+        const validation = validateCanvasConnectionDraft(
+          canvasData.nodes,
+          validatedGraphConnections,
+          connection,
+        );
+        if (!validation.ok) return validation;
+        validatedGraphConnections.push(connection);
+      }
+
+      const syncPlan = createSequenceGraphSyncPlan(
+        canvasData.connections,
+        orderedNodeIds,
+        expectedEdges,
+      );
+      const staleConnectionIdSet = new Set(syncPlan.staleConnectionIds);
+      const retainedConnections = canvasData.connections.filter(
+        (connection) => !staleConnectionIdSet.has(connection.id),
+      );
+      const addedConnections: CanvasConnection[] = [];
+      for (const edge of syncPlan.missingEdges) {
+        const connection = normalizeCanvasConnectionInput(
+          {
+            sourceId: edge.sourceId,
+            targetId: edge.targetId,
+            type: 'sequence',
+            sourceEndpoint: createNodeConnectionEndpoint(edge.sourceId),
+            targetEndpoint: createNodeConnectionEndpoint(edge.targetId),
+          },
+          generateId(),
+        );
+        const validation = validateCanvasConnectionDraft(
+          canvasData.nodes,
+          [...retainedConnections, ...addedConnections],
+          connection,
+        );
+        if (!validation.ok) return validation;
+        addedConnections.push(connection);
+      }
+
+      const targetNodeIds = new Set(edges.map((edge) => edge.targetNodeId));
+      const nextEntryIds = orderedNodeIds.filter((nodeId) => !targetNodeIds.has(nodeId));
+      const nextConnections = [...retainedConnections, ...addedConnections];
+      const graphConnectionIdByKey = new Map(
+        nextConnections
+          .filter(
+            (connection) =>
+              connection.type === 'sequence' &&
+              orderedNodeIdSet.has(connection.sourceId) &&
+              orderedNodeIdSet.has(connection.targetId),
+          )
+          .map((connection) => [
+            `${connection.sourceId}\u0000${connection.targetId}`,
+            connection.id,
+          ]),
+      );
+      const previousEdgeOverrides = canvasData.playback?.edgeOverrides ?? {};
+      const nextEdgeOverrides = { ...previousEdgeOverrides };
+      let edgeOrderChanged = false;
+      for (const connectionId of syncPlan.staleConnectionIds) {
+        if (nextEdgeOverrides[connectionId] !== undefined) edgeOrderChanged = true;
+        delete nextEdgeOverrides[connectionId];
+      }
+      for (const edge of expectedEdges) {
+        const connectionId = graphConnectionIdByKey.get(`${edge.sourceId}\u0000${edge.targetId}`);
+        if (!connectionId) {
+          throw new Error('Canvas sequence graph sync produced a missing connection.');
+        }
+        const previousOverride = nextEdgeOverrides[connectionId];
+        if (previousOverride?.order !== edge.order) edgeOrderChanged = true;
+        nextEdgeOverrides[connectionId] = { ...previousOverride, order: edge.order };
+      }
+      const entryChanged =
+        canvasData.playback?.entryIds?.length !== nextEntryIds.length ||
+        canvasData.playback?.entryIds?.some((nodeId, index) => nodeId !== nextEntryIds[index]);
+      if (
+        syncPlan.staleConnectionIds.length === 0 &&
+        addedConnections.length === 0 &&
+        !edgeOrderChanged &&
+        !entryChanged
+      ) {
+        return { ok: true, changed: false };
+      }
+
+      const removedConnections = canvasData.connections.filter((connection) =>
+        staleConnectionIdSet.has(connection.id),
+      );
+      recordHistory(canvasData);
+      set({
+        canvasData: normalizeCanvasData({
+          ...canvasData,
+          connections: nextConnections,
+          playback: {
+            ...canvasData.playback,
+            entryIds: nextEntryIds,
+            edgeOverrides: nextEdgeOverrides,
+          },
+        }),
+        selection: {
+          ...selection,
+          connectionIds: selection.connectionIds.filter(
+            (connectionId) => !staleConnectionIdSet.has(connectionId),
+          ),
+        },
+      });
+
+      const operations = operationStore.getState();
+      removedConnections.forEach((connection) =>
+        operations.recordConnectionRemove(connection.id, connection),
+      );
+      addedConnections.forEach((connection) => operations.recordConnectionAdd(connection));
+      recordCanvasDirty('Replace canvas playback sequence graph');
+      return { ok: true, changed: true };
     },
 
     // ==================== Derive Actions ====================

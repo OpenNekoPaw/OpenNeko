@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { resolveGenerationModelParameterProfile } from '@neko/generation-domain';
 
-import { projectCanvasGenerationModels } from './canvas-generation-model-catalog';
+import {
+  canvasGenerationModelSupportsPurpose,
+  projectCanvasGenerationModels,
+} from './canvas-generation-model-catalog';
 
 describe('Canvas Generation model catalog', () => {
-  it('projects enabled purpose-qualified labels without provider secrets or options', () => {
+  it('projects enabled models by configured type without provider secrets or options', () => {
     const providers = [
       {
         id: 'provider-1',
@@ -15,38 +19,58 @@ describe('Canvas Generation model catalog', () => {
     const models = [
       {
         id: 'image-model',
-        name: 'wire-image-model',
+        name: 'gpt-image-2-pro-all',
         displayName: 'Image Model',
         providerId: 'provider-1',
-        capabilities: ['image.generate'],
+        type: 'image' as const,
+        capabilities: ['audio'],
         options: { privateProviderParameter: true },
       },
       {
-        id: 'music-model',
-        name: 'wire-music-model',
-        displayName: 'Music Model',
+        id: 'video-model',
+        name: 'MiniMax-H3',
+        displayName: 'MiniMax H3',
         providerId: 'provider-1',
-        capabilities: ['audio.music.generate'],
+        type: 'video' as const,
+        capabilities: [],
+      },
+      {
+        id: 'chat-model',
+        name: 'wire-chat-model',
+        displayName: 'Chat Model',
+        providerId: 'provider-1',
+        type: 'llm' as const,
+        capabilities: ['audio'],
       },
     ];
 
     const catalog = projectCanvasGenerationModels({
       providers,
       models,
-      supportsPurpose: (model, purpose) => model.capabilities.includes(purpose),
+      resolveParameterProfile: (model) =>
+        resolveGenerationModelParameterProfile({
+          providerType: model.type === 'image' ? 'newapi' : 'minimax',
+          modelName: model.name,
+        }),
       getDefaultModelRef: (type) =>
         type === 'image'
           ? { providerId: 'provider-1', modelId: 'image-model' }
           : type === 'audio'
             ? { providerId: 'provider-1', modelId: 'audio-model' }
             : undefined,
-      getDefaultModelPurposeRef: (purpose) =>
-        purpose === 'audio.music.generate'
-          ? { providerId: 'provider-1', modelId: 'music-model' }
-          : undefined,
     });
 
     expect(catalog).toEqual([
+      {
+        binding: {
+          purpose: 'canvas.prompt',
+          providerId: 'provider-1',
+          modelId: 'chat-model',
+        },
+        label: 'Chat Model',
+        providerLabel: 'Provider One',
+        isDefault: false,
+      },
       {
         binding: {
           purpose: 'image.generate',
@@ -56,18 +80,67 @@ describe('Canvas Generation model catalog', () => {
         label: 'Image Model',
         providerLabel: 'Provider One',
         isDefault: true,
+        parameterProfile: expect.objectContaining({
+          kind: 'image',
+          controls: expect.objectContaining({
+            size: expect.objectContaining({
+              defaultValue: 'auto',
+              values: expect.arrayContaining([
+                { id: 'auto' },
+                { id: '1536x1024', width: 1536, height: 1024, aspectRatio: '3:2' },
+              ]),
+            }),
+            quality: expect.objectContaining({ values: ['auto', 'low', 'medium', 'high'] }),
+          }),
+          fixed: { outputCount: 1 },
+        }),
       },
       {
         binding: {
-          purpose: 'audio.music.generate',
+          purpose: 'video.generate',
           providerId: 'provider-1',
-          modelId: 'music-model',
+          modelId: 'video-model',
         },
-        label: 'Music Model',
+        label: 'MiniMax H3',
         providerLabel: 'Provider One',
-        isDefault: true,
+        isDefault: false,
+        parameterProfile: expect.objectContaining({
+          kind: 'video',
+          supportedParameters: ['duration', 'resolution', 'aspectRatio'],
+          fixed: { outputCount: 1 },
+        }),
       },
     ]);
     expect(JSON.stringify(catalog)).not.toMatch(/apiKey|apiUrl|options|must-not-project/u);
+  });
+
+  it('uses model type instead of generic capabilities for Canvas purpose matching', () => {
+    expect(canvasGenerationModelSupportsPurpose({ type: 'llm' }, 'audio.generate')).toBe(false);
+    expect(canvasGenerationModelSupportsPurpose({ type: 'audio' }, 'audio.generate')).toBe(true);
+    expect(canvasGenerationModelSupportsPurpose({}, 'canvas.prompt')).toBe(false);
+  });
+
+  it('projects only the executable audio catalog', () => {
+    const catalog = projectCanvasGenerationModels({
+      providers: [{ id: 'provider-1', displayName: 'Provider One' }],
+      models: [
+        {
+          id: 'audio-model',
+          name: 'audio-model',
+          displayName: 'Audio Model',
+          providerId: 'provider-1',
+          type: 'audio',
+          capabilities: [],
+        },
+      ],
+      getDefaultModelRef: (type) =>
+        type === 'audio' ? { providerId: 'provider-1', modelId: 'audio-model' } : undefined,
+    });
+
+    expect(
+      catalog
+        .filter((option) => option.binding.purpose === 'audio.generate')
+        .map((option) => [option.label, option.isDefault]),
+    ).toEqual([['Audio Model', true]]);
   });
 });

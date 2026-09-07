@@ -62,7 +62,7 @@ export interface PreviewViewerPlayback {
 export interface PreviewViewerKernelProps {
   readonly descriptor: PreviewMediaDescriptor;
   readonly controlDensity: PreviewViewerControlDensity;
-  readonly mediaPlayback?: 'interactive' | 'ambient';
+  readonly mediaPlayback?: 'interactive' | 'inline' | 'ambient';
   readonly locale: SupportedLocale;
   readonly i18nService: II18nService;
   readonly snapshot?: PreviewViewerSnapshot;
@@ -211,6 +211,7 @@ function SharedImagePreview({
 
 function VideoPreview(props: PreviewViewerKernelProps): ReactElement {
   const ambient = props.mediaPlayback === 'ambient';
+  const inline = props.mediaPlayback === 'inline';
   return (
     <ViewerModuleBoundary locale={props.locale}>
       <I18nProvider service={props.i18nService}>
@@ -219,9 +220,10 @@ function VideoPreview(props: PreviewViewerKernelProps): ReactElement {
           displayName={props.descriptor.displayName}
           compact={props.controlDensity === 'compact'}
           ambient={ambient}
+          inlinePlayback={inline}
           autoPlay={ambient}
           muted={ambient}
-          controls={!props.playback}
+          controls={!ambient && !inline && !props.playback}
           playback={ambient ? undefined : props.playback}
           initialSnapshot={props.snapshot?.media}
           onSnapshotChange={(media) => props.onSnapshotChange({ media })}
@@ -233,6 +235,7 @@ function VideoPreview(props: PreviewViewerKernelProps): ReactElement {
 
 function AudioPreview(props: PreviewViewerKernelProps): ReactElement {
   const ambient = props.mediaPlayback === 'ambient';
+  const interactive = props.mediaPlayback !== 'ambient' && props.mediaPlayback !== 'inline';
   return (
     <ViewerModuleBoundary locale={props.locale}>
       <I18nProvider service={props.i18nService}>
@@ -242,7 +245,7 @@ function AudioPreview(props: PreviewViewerKernelProps): ReactElement {
           compact={props.controlDensity === 'compact'}
           ambient={ambient}
           autoPlay={ambient}
-          controls={!props.playback}
+          controls={interactive && !props.playback}
           playback={ambient ? undefined : props.playback}
           initialSnapshot={props.snapshot?.media}
           onSnapshotChange={(media) => props.onSnapshotChange({ media })}

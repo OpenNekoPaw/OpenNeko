@@ -4,6 +4,7 @@ import type {
   ModelRefConfig,
   ProviderConfig,
 } from '@neko/ai-contracts';
+import type { GenerationExecutionProviderResolver } from '../execution-provider';
 
 export type MediaProvider = ProviderConfig;
 export type MediaModel = ModelConfig;
@@ -22,9 +23,7 @@ export interface MediaGenerationConfigPort {
 }
 
 /** Resolves one exact provider with its current execution credential. */
-export interface MediaExecutionProviderResolver {
-  resolveProvider(providerId: string): Promise<MediaProvider | undefined>;
-}
+export type MediaExecutionProviderResolver = GenerationExecutionProviderResolver;
 
 export interface MediaRoutingResult {
   readonly providerId: string;

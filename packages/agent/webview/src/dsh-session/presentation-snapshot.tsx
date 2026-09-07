@@ -1,23 +1,18 @@
 import { createContext, useContext, useMemo, useSyncExternalStore, type ReactNode } from 'react';
+import { CANVAS_DEFAULT_DOCUMENT_PATH } from '@neko/canvas-domain';
 import { getLogger } from '../utils/logger';
 
-const WORKSPACE_BOARD_SELECTION = 'workspace-board';
 const SESSION_STORAGE_KEY = 'neko.agent.dshComposerCanvasSelections';
 const logger = getLogger('DshComposerPresentationSnapshot');
 
 export interface DshComposerCanvasSelectionScope {
   readonly agentSurfaceId: string;
   readonly workspaceId: string;
-  readonly conversationId?: string;
 }
 
 export interface DshComposerPresentationSnapshotStore {
   read(scope: DshComposerCanvasSelectionScope): string | undefined;
   select(scope: DshComposerCanvasSelectionScope, canvasId: string): void;
-  transferIfAbsent(
-    source: DshComposerCanvasSelectionScope,
-    target: DshComposerCanvasSelectionScope,
-  ): void;
   subscribe(scope: DshComposerCanvasSelectionScope, listener: () => void): () => void;
 }
 
@@ -66,16 +61,6 @@ export function createDshComposerPresentationSnapshotStore(
       selections.set(key, identity);
       persist();
       notify(listeners.get(key));
-    },
-    transferIfAbsent(source, target) {
-      const sourceKey = selectionScopeKey(source);
-      const targetKey = selectionScopeKey(target);
-      if (sourceKey === targetKey || selections.has(targetKey)) return;
-      const selection = selections.get(sourceKey);
-      if (selection === undefined) return;
-      selections.set(targetKey, selection);
-      persist();
-      notify(listeners.get(targetKey));
     },
     subscribe(scope, listener) {
       const key = selectionScopeKey(scope);
@@ -146,12 +131,12 @@ export function useDshComposerCanvasSelection(
     (listener) => (scope === undefined ? () => undefined : store.subscribe(scope, listener)),
     () =>
       scope === undefined
-        ? WORKSPACE_BOARD_SELECTION
-        : (store.read(scope) ?? WORKSPACE_BOARD_SELECTION),
+        ? CANVAS_DEFAULT_DOCUMENT_PATH
+        : (store.read(scope) ?? CANVAS_DEFAULT_DOCUMENT_PATH),
     () =>
       scope === undefined
-        ? WORKSPACE_BOARD_SELECTION
-        : (store.read(scope) ?? WORKSPACE_BOARD_SELECTION),
+        ? CANVAS_DEFAULT_DOCUMENT_PATH
+        : (store.read(scope) ?? CANVAS_DEFAULT_DOCUMENT_PATH),
   );
   return [
     selection,
@@ -166,8 +151,8 @@ export function useDshComposerCanvasSelection(
 
 function selectionScopeKey(scope: DshComposerCanvasSelectionScope): string {
   return JSON.stringify([
-    scope.conversationId === undefined ? 'draft' : 'conversation',
-    scope.conversationId ?? requireIdentity(scope.agentSurfaceId, 'Agent Surface'),
+    'draft',
+    requireIdentity(scope.agentSurfaceId, 'Agent Surface'),
     requireIdentity(scope.workspaceId, 'Workspace'),
   ]);
 }
@@ -231,7 +216,7 @@ function isSelectionScopeKey(value: string): boolean {
   return (
     Array.isArray(parsed) &&
     parsed.length === 3 &&
-    (parsed[0] === 'draft' || parsed[0] === 'conversation') &&
+    parsed[0] === 'draft' &&
     typeof parsed[1] === 'string' &&
     parsed[1].trim().length > 0 &&
     typeof parsed[2] === 'string' &&

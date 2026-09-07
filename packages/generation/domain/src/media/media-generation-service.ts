@@ -25,25 +25,11 @@ import {
   validateProviderImageRequest,
   validateProviderVideoRequest,
 } from './media-operation-capabilities';
-
-function hasThreeReferenceImageControls(
-  request: ImageGenerationRequest | VideoGenerationRequest | AudioGenerationRequest,
-): request is ImageGenerationRequest {
-  if (!(
-    'controlImageLocator' in request ||
-    'ipAdapterRefs' in request ||
-    'cameraReference' in request ||
-    'panoramaReference' in request
-  )) {
-    return false;
-  }
-  return Boolean(
-    request.controlImageLocator ||
-    request.ipAdapterRefs?.some((reference) => reference.imageLocator) ||
-    request.cameraReference ||
-    request.panoramaReference,
-  );
-}
+import {
+  resolveGenerationModelParameterProfile,
+  validateImageGenerationParameters,
+  validateVideoGenerationParameters,
+} from '../model-parameter-profile';
 
 interface PreparedMediaGeneration {
   readonly request: ImageGenerationRequest | VideoGenerationRequest | AudioGenerationRequest;
@@ -87,11 +73,11 @@ export class MediaGenerationService implements MediaGenerationExecutionPort {
     request: AudioGenerationRequest,
     options: MediaGenerationExecutionOptions = {},
   ): Promise<MediaGenerationResult> {
-    return this.generate(request.isMusic ? 'text-to-music' : 'text-to-audio', request, options);
+    return this.generate('text-to-audio', request, options);
   }
 
   private async generate(
-    generationType: Exclude<MediaGenerationType, 'workflow'>,
+    generationType: MediaGenerationType,
     request: ImageGenerationRequest | VideoGenerationRequest | AudioGenerationRequest,
     options: MediaGenerationExecutionOptions,
   ): Promise<MediaGenerationResult> {
@@ -132,7 +118,7 @@ export class MediaGenerationService implements MediaGenerationExecutionPort {
   }
 
   private async prepareGeneration(
-    generationType: Exclude<MediaGenerationType, 'workflow'>,
+    generationType: MediaGenerationType,
     initialRequest: ImageGenerationRequest | VideoGenerationRequest | AudioGenerationRequest,
   ): Promise<PreparedMediaGeneration> {
     let request = initialRequest;
@@ -151,31 +137,52 @@ export class MediaGenerationService implements MediaGenerationExecutionPort {
     if (!provider) {
       throw new Error(`Configured media provider ${routing.providerId} is unavailable.`);
     }
-    const requiresPreciseImageCapabilities =
-      generationType.includes('image') && hasThreeReferenceImageControls(request);
-    const model = requiresPreciseImageCapabilities
-      ? this.configManager.getModel(routing.modelId)
-      : undefined;
-    if (requiresPreciseImageCapabilities && !model) {
+    const isVideoGeneration = generationType.includes('video');
+    const model = this.configManager.getModel(routing.modelId);
+    if (!model) {
       throw new Error(`Configured media model ${routing.modelId} is unavailable.`);
     }
-    const capabilityDiagnostics = generationType.includes('video')
-      ? validateProviderVideoRequest(provider.type, request as VideoGenerationRequest)
+    const capabilityDiagnostics = isVideoGeneration
+      ? validateProviderVideoRequest(
+          provider.type,
+          request as VideoGenerationRequest,
+          model.capabilities,
+        )
       : generationType.includes('image')
         ? validateProviderImageRequest(
             provider.type,
             request as ImageGenerationRequest,
-            model?.capabilities ?? [],
+            model.capabilities,
           )
         : [];
-    const capabilityErrors = capabilityDiagnostics.filter(
-      (diagnostic) => diagnostic.severity === 'error',
-    );
+    const modelParameterProfile =
+      isVideoGeneration || generationType.includes('image')
+        ? resolveGenerationModelParameterProfile({
+            providerType: provider.type,
+            modelName: model.name,
+          })
+        : undefined;
+    const modelParameterDiagnostics =
+      modelParameterProfile?.kind === 'video'
+        ? validateVideoGenerationParameters(
+            modelParameterProfile,
+            request as VideoGenerationRequest,
+          )
+        : modelParameterProfile?.kind === 'image'
+          ? validateImageGenerationParameters(
+              modelParameterProfile,
+              request as ImageGenerationRequest,
+            )
+          : [];
+    const capabilityErrors = [
+      ...capabilityDiagnostics
+        .filter((diagnostic) => diagnostic.severity === 'error')
+        .map((diagnostic) => diagnostic.message),
+      ...modelParameterDiagnostics.map((diagnostic) => diagnostic.message),
+    ];
     if (capabilityErrors.length > 0) {
       throw new Error(
-        `Media provider capability negotiation failed: ${capabilityErrors
-          .map((diagnostic) => diagnostic.message)
-          .join('; ')}`,
+        `Media provider capability negotiation failed: ${capabilityErrors.join('; ')}`,
       );
     }
     if (capabilityDiagnostics.length > 0) {

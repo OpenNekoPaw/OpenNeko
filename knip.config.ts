@@ -36,39 +36,10 @@ const config: KnipConfig = {
   workspaces: {
     '.': {
       entry: [
-        'scripts/agent-eval/ablation/run.mjs',
-        'scripts/agent-eval/canvas-json-check.mjs',
-        'scripts/agent-eval/fixtures/generate-synthetic-document-image-epub.mjs',
-        'scripts/agent-eval/validators/file-validator-cli.mjs',
-        'scripts/automation-runtime-release-inputs.mjs',
-        'scripts/check-agent-extension-surface.mjs',
-        'scripts/check-application-boundaries.mjs',
-        'scripts/check-canvas-playback-boundary.mjs',
-        'scripts/check-content-access-boundaries.mjs',
-        'scripts/check-desktop-only-topology.mjs',
-        'scripts/check-engine-retirement-boundary.mjs',
-        'scripts/check-*-debt-surfaces.mjs',
-        'scripts/check-local-metadata-runtime-matrix.mjs',
-        'scripts/check-neko-agent-boundaries.mjs',
-        'scripts/check-openspec.mjs',
-        'scripts/check-package-boundaries.mjs',
-        'scripts/check-package-product-status.mjs',
-        'scripts/check-shared-public-surface.mjs',
-        'scripts/check-storage-authorities.mts',
-        'scripts/check-strict-tsconfig.mjs',
-        'scripts/check-webview-boundaries.mjs',
         'scripts/dsh-runtime-closure.mjs',
-        'scripts/desktop-functional/run-forge-build.mjs',
+        'scripts/desktop/run-forge-build.mjs',
         'scripts/prepare-media-runtime-bundle.mjs',
         'scripts/prepare-dsh-runtime-stage.mjs',
-        'scripts/run-desktop-ui-functional.mjs',
-        'scripts/smoke-webview-builds.mjs',
-        'scripts/validate-node-media-matrix.mts',
-        'scripts/validate-node-media-waveform.mts',
-      ],
-      ignore: [
-        // Deliberately invalid source trees consumed as architecture-gate fixtures.
-        'scripts/fixtures/architecture-boundaries/**',
       ],
     },
     // ── Layer 0: Library packages ──────────────────────
@@ -123,13 +94,7 @@ const config: KnipConfig = {
       entry: ['src/index.ts'],
     },
     'packages/generation/domain': {
-      entry: [
-        'src/index.ts',
-        'src/comfyui/index.ts',
-        'src/job/index.ts',
-        'src/media/index.ts',
-        'src/prompt/index.ts',
-      ],
+      entry: ['src/index.ts', 'src/job/index.ts', 'src/media/index.ts', 'src/prompt/index.ts'],
     },
     'packages/entity/domain': {
       entry: [
@@ -202,11 +167,7 @@ const config: KnipConfig = {
       ],
     },
     'packages/cut/webview': {
-      entry: [
-        'functional/desktop-openneko-consumer.mjs',
-        'src/host-adapter/index.tsx',
-        'src/retained.ts',
-      ],
+      entry: ['src/host-adapter/index.tsx', 'src/retained.ts'],
     },
     'apps/neko-desktop': {
       entry: [
@@ -262,12 +223,7 @@ const config: KnipConfig = {
       ],
     },
     'packages/canvas/webview': {
-      entry: [
-        'functional/desktop-openneko-consumer.mjs',
-        'src/host-adapter/index.tsx',
-        'src/host-runtime/index.ts',
-        'src/root.tsx',
-      ],
+      entry: ['src/host-adapter/index.tsx', 'src/host-runtime/index.ts', 'src/root.tsx'],
       ignore: [
         // Barrel exports
         'src/utils/index.ts',
@@ -282,7 +238,6 @@ const config: KnipConfig = {
     },
     'packages/preview/webview': {
       entry: [
-        'functional/desktop-openneko-consumer.mjs',
         'src/cbz/main.tsx',
         'src/docx/main.tsx',
         'src/epub/main.tsx',

@@ -7,7 +7,6 @@ import { I18nProvider } from '../../../i18n/I18nContext';
 import { WorkspaceCanvasContextBar } from './WorkspaceCanvasContextBar';
 
 const translations: Record<string, string> = {
-  'chat.input.workspaceCanvas.board': 'Workspace Board',
   'chat.input.workspaceCanvas.label': 'Workspace Canvas',
   'chat.input.workspaceCanvas.canvasIndex': 'Canvas index',
 };
@@ -61,14 +60,14 @@ describe('WorkspaceCanvasContextBar', () => {
     expect(bar?.classList.contains('agent-entry-binding-bar')).toBe(false);
   });
 
-  it('does not claim Board when the selected Canvas id is unknown', () => {
-    const board = { kind: 'workspace-board' as const, workspaceId: 'workspace-1' };
+  it('does not claim the default Canvas when the selected Canvas id is unknown', () => {
+    const defaultTarget = { workspaceId: 'workspace-1', canvasId: 'neko/boards/workspace.nkc' };
     const canvas: AgentComposerCanvasPresentation = {
       workspaceId: 'workspace-1',
-      defaultTarget: board,
+      defaultTarget,
       selectedId: 'neko/boards/missing.nkc',
       loading: false,
-      options: [{ id: 'workspace-board', label: 'Workspace Board', target: board }],
+      options: [{ id: 'neko/boards/workspace.nkc', label: 'workspace.nkc', target: defaultTarget }],
       onSelect: async () => undefined,
     };
     renderBar(canvas);
@@ -79,13 +78,13 @@ describe('WorkspaceCanvasContextBar', () => {
   });
 
   it('can render only the Workspace label without Canvas index', () => {
-    const board = { kind: 'workspace-board' as const, workspaceId: 'workspace-1' };
+    const defaultTarget = { workspaceId: 'workspace-1', canvasId: 'neko/boards/workspace.nkc' };
     const canvas: AgentComposerCanvasPresentation = {
       workspaceId: 'workspace-1',
-      defaultTarget: board,
-      selectedId: 'workspace-board',
+      defaultTarget,
+      selectedId: 'neko/boards/workspace.nkc',
       loading: false,
-      options: [{ id: 'workspace-board', label: 'Workspace Board', target: board }],
+      options: [{ id: 'neko/boards/workspace.nkc', label: 'workspace.nkc', target: defaultTarget }],
       onSelect: async () => undefined,
     };
     render(
@@ -110,23 +109,22 @@ describe('WorkspaceCanvasContextBar', () => {
     expect(bar?.className).toBe('agent-workspace-canvas-context-bar');
     expect(screen.getByText('Workspace')).toBeTruthy();
     expect(document.querySelector('select')).toBeNull();
-    expect(screen.queryByText('Workspace Board')).toBeNull();
+    expect(screen.queryByText('workspace.nkc')).toBeNull();
   });
 
   it('renders only Workspace label and selected Canvas index', () => {
-    const board = { kind: 'workspace-board' as const, workspaceId: 'workspace-1' };
+    const defaultTarget = { workspaceId: 'workspace-1', canvasId: 'neko/boards/workspace.nkc' };
     const canvas: AgentComposerCanvasPresentation = {
       workspaceId: 'workspace-1',
-      defaultTarget: board,
-      selectedId: 'workspace-board',
+      defaultTarget,
+      selectedId: 'neko/boards/workspace.nkc',
       loading: false,
       options: [
-        { id: 'workspace-board', label: 'Workspace Board', target: board },
+        { id: 'neko/boards/workspace.nkc', label: 'workspace.nkc', target: defaultTarget },
         {
           id: 'neko/boards/a.nkc',
           label: 'Story Canvas',
           target: {
-            kind: 'exact-canvas' as const,
             workspaceId: 'workspace-1',
             canvasId: 'neko/boards/a.nkc',
           },
@@ -137,32 +135,30 @@ describe('WorkspaceCanvasContextBar', () => {
     };
     renderBar(canvas);
     expect(screen.getByText('Workspace')).toBeTruthy();
-    expect(screen.getByText('Workspace Board')).toBeTruthy();
-    expect(screen.queryByText('workspace.nkc')).toBeNull();
+    expect(screen.getByText('workspace.nkc')).toBeTruthy();
     const select = document.querySelector('select');
     expect(select?.closest('.agent-workspace-canvas-select-control')).toBeTruthy();
-    expect(select?.value).toBe('workspace-board');
+    expect(select?.value).toBe('neko/boards/workspace.nkc');
     expect(select?.options).toHaveLength(2);
     expect(screen.queryByText('read')).toBeNull();
     expect(screen.queryByText('write')).toBeNull();
     expect(screen.queryByText('range')).toBeNull();
   });
 
-  it('opens only the currently selected exact Canvas on double-click', () => {
-    const board = { kind: 'workspace-board' as const, workspaceId: 'workspace-1' };
+  it('opens the currently selected Canvas on double-click', () => {
+    const defaultTarget = { workspaceId: 'workspace-1', canvasId: 'neko/boards/workspace.nkc' };
     const onOpen = vi.fn(async () => undefined);
     const canvas: AgentComposerCanvasPresentation = {
       workspaceId: 'workspace-1',
-      defaultTarget: board,
+      defaultTarget,
       selectedId: 'neko/boards/story.nkc',
       loading: false,
       options: [
-        { id: 'workspace-board', label: 'Workspace Board', target: board },
+        { id: 'neko/boards/workspace.nkc', label: 'workspace.nkc', target: defaultTarget },
         {
           id: 'neko/boards/story.nkc',
           label: 'story.nkc',
           target: {
-            kind: 'exact-canvas',
             workspaceId: 'workspace-1',
             canvasId: 'neko/boards/story.nkc',
           },

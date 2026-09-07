@@ -4,30 +4,30 @@ import {
   type CanvasWorkspaceIndexReadPort,
 } from './canvas-workspace-index-service';
 import {
-  createCanvasWorkspaceBoardTarget,
-  createExactCanvasTarget,
+  createDefaultCanvasWorkspaceTarget,
+  createCanvasWorkspaceTarget,
 } from './types/canvas-workspace-context';
 
 describe('Canvas workspace index service', () => {
-  it('lists the logical Board first without reading or creating files', async () => {
+  it('lists the default Canvas first without reading or creating files', async () => {
     const read: CanvasWorkspaceIndexReadPort = {
       listExactCanvasDocuments: vi.fn(async () => []),
       readExactCanvasSummary: vi.fn(async () => ({ canvasId: 'x', name: 'X' })),
     };
-    const service = createCanvasWorkspaceIndexService({ read, boardLabel: 'Workspace Board' });
+    const service = createCanvasWorkspaceIndexService({ read });
 
     const catalog = await service.readCatalog('workspace-1');
 
-    expect(catalog.defaultTarget).toEqual(createCanvasWorkspaceBoardTarget('workspace-1'));
+    expect(catalog.defaultTarget).toEqual(createDefaultCanvasWorkspaceTarget('workspace-1'));
     expect(catalog.options[0]).toEqual({
-      target: createCanvasWorkspaceBoardTarget('workspace-1'),
-      label: 'Workspace Board',
+      target: createDefaultCanvasWorkspaceTarget('workspace-1'),
+      label: 'workspace.nkc',
     });
     expect(read.listExactCanvasDocuments).toHaveBeenCalledWith('workspace-1');
     expect(read.readExactCanvasSummary).not.toHaveBeenCalled();
   });
 
-  it('keeps a broken exact document disabled while preserving the Board and valid siblings', async () => {
+  it('keeps a broken document disabled while preserving the default and valid siblings', async () => {
     const read: CanvasWorkspaceIndexReadPort = {
       listExactCanvasDocuments: vi.fn(async () => ['neko/boards/a.nkc', 'neko/boards/b.nkc']),
       readExactCanvasSummary: vi.fn(async (workspaceId, identity) => {
@@ -45,15 +45,15 @@ describe('Canvas workspace index service', () => {
 
     expect(catalog.options).toHaveLength(3);
     expect(catalog.options[0]).toMatchObject({
-      target: createCanvasWorkspaceBoardTarget('workspace-1'),
+      target: createDefaultCanvasWorkspaceTarget('workspace-1'),
     });
     expect(catalog.options[1]).toMatchObject({
-      target: createExactCanvasTarget('workspace-1', 'neko/boards/a.nkc'),
+      target: createCanvasWorkspaceTarget('workspace-1', 'neko/boards/a.nkc'),
       disabled: true,
     });
     expect(catalog.options[1]?.diagnostic).toBe('bad nkc');
     expect(catalog.options[2]).toMatchObject({
-      target: createExactCanvasTarget('workspace-1', 'neko/boards/b.nkc'),
+      target: createCanvasWorkspaceTarget('workspace-1', 'neko/boards/b.nkc'),
       label: 'b.nkc',
       summary: {
         canvasId: 'neko/boards/b.nkc',
@@ -93,22 +93,22 @@ describe('Canvas workspace index service', () => {
     await expect(
       service.resolveTurnContext(
         'workspace-1',
-        createExactCanvasTarget('workspace-1', 'neko/boards/a.nkc'),
+        createCanvasWorkspaceTarget('workspace-1', 'neko/boards/a.nkc'),
       ),
     ).resolves.toEqual({
-      target: createExactCanvasTarget('workspace-1', 'neko/boards/a.nkc'),
+      target: createCanvasWorkspaceTarget('workspace-1', 'neko/boards/a.nkc'),
       summary: { canvasId: 'neko/boards/a.nkc', name: 'A' },
     });
 
     await expect(
       service.resolveTurnContext(
         'workspace-1',
-        createExactCanvasTarget('workspace-1', 'neko/boards/missing.nkc'),
+        createCanvasWorkspaceTarget('workspace-1', 'neko/boards/missing.nkc'),
       ),
     ).rejects.toThrow();
   });
 
-  it('resolves the logical Board without reading files', async () => {
+  it('resolves the default Canvas without reading files', async () => {
     const read: CanvasWorkspaceIndexReadPort = {
       listExactCanvasDocuments: vi.fn(async () => []),
       readExactCanvasSummary: vi.fn(async () => ({ canvasId: 'x', name: 'X' })),
@@ -116,9 +116,9 @@ describe('Canvas workspace index service', () => {
     const service = createCanvasWorkspaceIndexService({ read });
 
     await expect(
-      service.resolveTurnContext('workspace-1', createCanvasWorkspaceBoardTarget('workspace-1')),
+      service.resolveTurnContext('workspace-1', createDefaultCanvasWorkspaceTarget('workspace-1')),
     ).resolves.toEqual({
-      target: createCanvasWorkspaceBoardTarget('workspace-1'),
+      target: createDefaultCanvasWorkspaceTarget('workspace-1'),
     });
     expect(read.readExactCanvasSummary).not.toHaveBeenCalled();
   });

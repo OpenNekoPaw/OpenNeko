@@ -42,7 +42,10 @@ export function createDesktopDshPromptReferenceBytePort(options: {
               `DSH Prompt reference '${reference.label}' is unavailable: ${result.diagnostic.code}.`,
             );
           }
-          return { ...(result.mimeType === undefined ? {} : { mimeType: result.mimeType }) };
+          return {
+            byteLength: result.byteLength,
+            ...(result.mimeType === undefined ? {} : { mimeType: result.mimeType }),
+          };
         },
         async read(reference: AgentPromptReference, readOptions: { readonly maxBytes: number }) {
           requireWorkspaceFileReference(reference);

@@ -122,7 +122,7 @@ function applyRequest(): DshAcpDomainToolRequest {
     turn: 1,
     toolCallId: 'call:cut',
     sandboxMode: 'workspace-write',
-    tool: 'openneko.cut',
+    tool: 'openneko_cut',
     operation: 'apply',
     input: {
       documentPath: 'cuts/story.otio',
@@ -147,7 +147,7 @@ function exportRequest(
     turn: 1,
     toolCallId: `call:${operation}`,
     sandboxMode: 'workspace-write',
-    tool: 'openneko.cut',
+    tool: 'openneko_cut',
     operation,
     input:
       operation === 'export-submit'

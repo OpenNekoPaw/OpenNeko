@@ -63,10 +63,11 @@ describe('GenerationNode', () => {
     expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 
-  it('opens the Canvas fullscreen preview when a generated Text node is double-clicked', async () => {
+  it('opens generated Text in the Text Editor instead of Preview when double-clicked', async () => {
     const onFullscreenPreview = vi.fn();
+    const executeMaterialAction = vi.fn(async () => snapshot());
     const node = nodeWithHistory();
-    render(node, createHost(), onFullscreenPreview);
+    render(node, createHost(undefined, { executeMaterialAction }), onFullscreenPreview);
 
     await act(async () => {
       container
@@ -74,7 +75,8 @@ describe('GenerationNode', () => {
         ?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
     });
 
-    expect(onFullscreenPreview).toHaveBeenCalledWith('generation-1', 'output-2');
+    expect(executeMaterialAction).toHaveBeenCalledWith('text:edit', ['generation-1'], {});
+    expect(onFullscreenPreview).not.toHaveBeenCalled();
   });
 
   it('presents one Job image batch side by side and selects a visible member without hiding siblings', async () => {
@@ -119,6 +121,60 @@ describe('GenerationNode', () => {
     const frame = container.querySelector<HTMLElement>('.canvas-generation-node-frame');
     expect(frame?.style.width).toBe('320px');
     expect(frame?.style.height).toBe('240px');
+  });
+
+  it('renders a generated video with the Canvas inline playback control', async () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+    const listeners = new Set<(message: unknown) => void>();
+    const host = {
+      ...createHost(),
+      supportsMessage: () => true,
+      postMessage(message: unknown) {
+        if (!isRecord(message) || message['type'] !== 'preview:resolveResource') return;
+        queueMicrotask(() => {
+          for (const listener of listeners) {
+            listener({
+              type: 'preview:resourceResolved',
+              requestId: message['requestId'],
+              descriptor: {
+                descriptorId: 'generated-video-descriptor',
+                sourceFingerprint: 'generated-video-fingerprint',
+                contentLocator: message['contentLocator'],
+                url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+                contentKind: 'video',
+                mediaType: 'video/mp4',
+                displayName: 'generated-video.mp4',
+                byteLength: 42,
+              },
+            });
+          }
+        });
+      },
+      subscribe(listener: (message: unknown) => void) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    } as unknown as CanvasWebviewHostPort;
+
+    await act(async () => {
+      root.render(
+        <CanvasHostProvider host={host}>
+          <GenerationNode
+            node={videoNodeWithOutput()}
+            viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
+            isSelected
+            containerRef={{ current: container }}
+          />
+        </CanvasHostProvider>,
+      );
+      await import('@neko/preview-webview/root');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    await vi.waitFor(() => expect(container.querySelector('video')).toBeTruthy());
+    expect(container.querySelector('video')?.controls).toBe(false);
+    expect(container.querySelector('[data-testid="preview-video-toggle-playback"]')).toBeTruthy();
   });
 
   it('preserves an earlier image group and reports a later Job failure only at group level', () => {
@@ -332,6 +388,34 @@ function imageNodeWithBatch(count = 2): GenerationCanvasNode {
   };
 }
 
+function videoNodeWithOutput(): GenerationCanvasNode {
+  return {
+    id: 'generation-video',
+    type: 'generation',
+    position: { x: 20, y: 30 },
+    size: { width: 320, height: 180 },
+    zIndex: 1,
+    data: {
+      recipe: { kind: 'video', prompt: 'A cat walking toward the camera' },
+      outputs: [
+        {
+          outputId: 'video-output-1',
+          jobRef: { kind: 'generation', jobId: 'job-video' },
+          locator: {
+            file: {
+              authority: 'workspace',
+              path: 'neko/generated/video/video-output-1.mp4',
+            },
+          },
+          kind: 'video',
+          recipeInputFingerprint: 'sha256:video-recipe',
+        },
+      ],
+      selectedOutputId: 'video-output-1',
+    },
+  };
+}
+
 function imageOutput(outputId: string) {
   return {
     outputId,
@@ -383,7 +467,6 @@ function createHost(
     runGenerationNode: async () => snapshot(),
     cancelGenerationNode: async () => snapshot(),
     selectGenerationOutput: async () => snapshot(),
-    authorGenerationText: async () => snapshot(),
     getGenerationProjection: () => projection,
     projectContent: async () => snapshot(),
     previewResource: async () => undefined,
@@ -426,4 +509,8 @@ function snapshot(): CanvasHostSnapshot {
     authoringCapabilities: { sourceModes: [], generationKinds: [], generationModels: [] },
     generationNodes: [],
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }

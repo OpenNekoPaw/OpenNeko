@@ -5,10 +5,10 @@ import {
   type Provider,
   type ProviderCredentialReader,
 } from '@neko/host/settings';
+import { resolveDshDialogueProtocol } from '@neko/host/ai-model-settings-service';
 
 const DSH_PI_AI_ROW_ID = 'llm-pi-ai';
 const DSH_CREDENTIAL_ENV_PREFIX = 'OPENNEKO_DSH_PROVIDER_CREDENTIAL_';
-export const OPENNEKO_DSH_MAX_REQUEST_IMAGE_BYTES = 12 * 1024 * 1024;
 
 export interface DesktopDshExecutionModel {
   readonly providerId: string;
@@ -40,7 +40,6 @@ interface DshProviderProfile {
   readonly baseURL?: string;
   readonly models: readonly Readonly<Record<string, unknown>>[];
   readonly apiKeyEnv?: string;
-  readonly maxRequestImageBytes: number;
 }
 
 export async function createDesktopDshProviderRuntimeProjection(input: {
@@ -64,7 +63,7 @@ export async function createDesktopDshProviderRuntimeProjection(input: {
     );
     if (providerModels.length === 0) continue;
 
-    const protocol = resolveDshProtocol(provider);
+    const protocol = resolveDshDialogueProtocol(provider);
     const baseURL = resolveDshBaseUrl(provider);
     if (
       (provider.apiUrl.trim().length > 0 && baseURL === undefined) ||
@@ -156,7 +155,6 @@ export async function createDesktopDshProviderRuntimeProjection(input: {
       ...(protocol === undefined ? {} : { api: protocol }),
       ...(baseURL === undefined ? {} : { baseURL }),
       models: Object.freeze(dshModels),
-      maxRequestImageBytes: OPENNEKO_DSH_MAX_REQUEST_IMAGE_BYTES,
       ...(credentialEnvironmentName === undefined ? {} : { apiKeyEnv: credentialEnvironmentName }),
     });
     executionModels.set(provider.id, providerExecutionModels);
@@ -223,26 +221,6 @@ function toDshReasoningEffort(
 
 function modelSupportsImageInput(capabilities: readonly string[]): boolean {
   return capabilities.includes('vision');
-}
-
-function resolveDshProtocol(provider: Provider): DshProviderProfile['api'] | undefined {
-  if (provider.protocolProfile === 'ollama') {
-    return 'openai-completions';
-  }
-  if (provider.protocolProfile === 'openai-responses') return 'openai-responses';
-  if (provider.protocolProfile === 'anthropic') {
-    return 'anthropic-messages';
-  }
-  if (provider.protocolProfile === 'newapi' || provider.protocolProfile === 'openai-chat') {
-    if (
-      provider.protocolVariant?.authType !== undefined &&
-      provider.protocolVariant.authType !== 'bearer'
-    ) {
-      return undefined;
-    }
-    return 'openai-completions';
-  }
-  return provider.protocolProfile;
 }
 
 function resolveDshBaseUrl(provider: Provider): string | undefined {

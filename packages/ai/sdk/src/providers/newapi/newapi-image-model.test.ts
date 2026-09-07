@@ -104,7 +104,7 @@ describe('NewAPIImageModel', () => {
     );
   });
 
-  it('normalizes DALL-E style quality hints for GPT image models', async () => {
+  it('forwards GPT Image quality values without legacy DALL-E remapping', async () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,
       json: async () => ({
@@ -129,7 +129,7 @@ describe('NewAPIImageModel', () => {
       mask: undefined,
       providerOptions: {
         neko: {
-          quality: 'hd',
+          quality: 'medium',
         },
       },
     });
@@ -138,7 +138,62 @@ describe('NewAPIImageModel', () => {
     const calls = fetchMock.mock.calls as unknown as Array<[unknown, RequestInit?]>;
     const init = calls[0]?.[1];
     if (!init) throw new Error('Expected NewAPI image generation to call fetch with init');
-    expect(JSON.parse(String(init.body))).toEqual(expect.objectContaining({ quality: 'high' }));
+    expect(JSON.parse(String(init.body))).toEqual(expect.objectContaining({ quality: 'medium' }));
+  });
+
+  it('forwards explicit GPT Image auto quality while leaving output size automatic', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ created: 0, data: [{ b64_json: 'image-bytes' }] }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const model = new NewAPIImageModel('gpt-image-2', {
+      apiUrl: 'https://www.nekoapi.com',
+      apiKey: 'test-key',
+    });
+
+    await model.doGenerate({
+      prompt: 'A quiet industrial interior',
+      n: 1,
+      size: undefined,
+      aspectRatio: undefined,
+      seed: undefined,
+      files: undefined,
+      mask: undefined,
+      providerOptions: { neko: { quality: 'auto' } },
+    });
+
+    const calls = fetchMock.mock.calls as unknown as Array<[unknown, RequestInit?]>;
+    const body = JSON.parse(String(calls[0]?.[1]?.body)) as Record<string, unknown>;
+    expect(body).toEqual(expect.objectContaining({ quality: 'auto' }));
+    expect(body).not.toHaveProperty('size');
+    expect(body).not.toHaveProperty('aspect_ratio');
+  });
+
+  it('forwards a requested aspect ratio to the image generation endpoint', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ created: 0, data: [{ b64_json: 'image-bytes' }] }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const model = new NewAPIImageModel('gpt-image-2', {
+      apiUrl: 'https://www.nekoapi.com',
+      apiKey: 'test-key',
+    });
+
+    await model.doGenerate({
+      prompt: 'A wide industrial city',
+      n: 1,
+      size: undefined,
+      aspectRatio: '16:9',
+      seed: undefined,
+      files: undefined,
+      mask: undefined,
+      providerOptions: {},
+    });
+
+    const calls = fetchMock.mock.calls as unknown as Array<[unknown, RequestInit?]>;
+    expect(JSON.parse(String(calls[0]?.[1]?.body))).toMatchObject({ aspect_ratio: '16:9' });
   });
 
   it('downloads a same-origin URL-only result with provider authorization', async () => {

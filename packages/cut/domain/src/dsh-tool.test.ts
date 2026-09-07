@@ -11,7 +11,7 @@ import {
 
 describe('Cut DSH tool contract', () => {
   it('accepts exact query and bounded semantic edit commands', () => {
-    expect(CUT_DSH_TOOL_NAME).toBe('openneko.cut');
+    expect(CUT_DSH_TOOL_NAME).toBe('openneko_cut');
     expect(decodeCutDshToolInput('query', { documentPath: 'cuts/story.otio' })).toEqual({
       operation: 'query',
       input: { documentPath: 'cuts/story.otio' },

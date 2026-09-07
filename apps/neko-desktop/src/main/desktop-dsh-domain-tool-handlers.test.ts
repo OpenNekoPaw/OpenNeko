@@ -13,6 +13,10 @@ const roots: string[] = [];
 const generationProjection = {
   projectSnapshot: vi.fn(async () => ({ status: 'accepted' as const })),
 };
+const coordinateCanvasMutation = async <TResult>(
+  _target: unknown,
+  operation: () => Promise<TResult>,
+): Promise<TResult> => operation();
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
@@ -44,6 +48,7 @@ describe('Desktop DSH domain Tool handlers', () => {
         },
       },
       workspaceGrants: { resolveAuthorizedWorkspace },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
       configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
@@ -81,6 +86,7 @@ describe('Desktop DSH domain Tool handlers', () => {
         },
       },
       workspaceGrants: { resolveAuthorizedWorkspace },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
       configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
@@ -104,10 +110,7 @@ describe('Desktop DSH domain Tool handlers', () => {
   it('reads an EPUB image entry through the Content-owned DSH image path', async () => {
     const root = await createRoot();
     await copyFile(
-      new URL(
-        '../../../../scripts/agent-eval/shared-fixtures/document-image-workspace/synthetic-document.epub',
-        import.meta.url,
-      ),
+      new URL('../../../../scripts/fixtures/documents/synthetic-document.epub', import.meta.url),
       join(root, 'story.epub'),
     );
     const handlers = createDesktopDshDomainToolHandlers({
@@ -124,6 +127,7 @@ describe('Desktop DSH domain Tool handlers', () => {
       workspaceGrants: {
         resolveAuthorizedWorkspace: vi.fn(async () => workspaceResolution(root)),
       },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
       configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
@@ -138,7 +142,7 @@ describe('Desktop DSH domain Tool handlers', () => {
           turn: 1,
           toolCallId: 'tool:image',
           sandboxMode: 'read-only',
-          tool: 'openneko.read_image',
+          tool: 'openneko_read_image',
           operation: 'read-chunk',
           input: {
             source: {
@@ -180,11 +184,31 @@ describe('Desktop DSH domain Tool handlers', () => {
         },
       },
       workspaceGrants: { resolveAuthorizedWorkspace },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs },
       generationProjection: { projectSnapshot },
       configuration: {
         getApplicationConfig: vi.fn(),
-        getWorkspaceConfig: vi.fn(() => ({ resolveModelRefForPurpose }) as never),
+        getWorkspaceConfig: vi.fn(
+          () =>
+            ({
+              resolveModelRefForPurpose,
+              getProvider: (providerId: string) =>
+                providerId === 'provider:one'
+                  ? { id: providerId, type: 'generic', enabled: true }
+                  : undefined,
+              getModel: (modelId: string) =>
+                modelId === 'model:one'
+                  ? {
+                      id: modelId,
+                      providerId: 'provider:one',
+                      name: 'image-model',
+                      capabilities: ['image.generate', 'text_to_image'],
+                      enabled: true,
+                    }
+                  : undefined,
+            }) as never,
+        ),
       },
       assistant: { assistantSpaceId: 'assistant:one', root },
     });
@@ -207,6 +231,123 @@ describe('Desktop DSH domain Tool handlers', () => {
         snapshot: expect.objectContaining({ ref: { kind: 'generation', jobId: 'job:one' } }),
       }),
     );
+
+    const unsupportedControlRequest = {
+      ...generationRequest(),
+      toolCallId: 'call:unsupported-image-control',
+      input: {
+        purpose: 'image.generate',
+        lifecycleMode: 'detached',
+        generationType: 'image-to-image',
+        request: {
+          prompt: 'Keep the subject identity',
+          ipAdapterRefs: [
+            {
+              imageLocator: { file: { authority: 'workspace', path: 'references/subject.png' } },
+              mode: 'subject',
+            },
+          ],
+        },
+      },
+    } satisfies DshAcpDomainToolRequest;
+    await expect(
+      handlers.executeGenerationTool(unsupportedControlRequest, new AbortController().signal),
+    ).resolves.toMatchObject({
+      outcome: 'failure',
+      diagnostic: {
+        code: 'GENERATION_DSH_TOOL_FAILED',
+        message: expect.stringContaining('image.reference.ip-adapter'),
+      },
+    });
+    expect(submitGeneration).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves the video model profile before submitting an Agent Generation Job', async () => {
+    const root = await createRoot();
+    const submitGeneration = vi.fn<GenerationJobPort['submitGeneration']>(async () =>
+      generationSnapshot(),
+    );
+    const resolveModelRefForPurpose = vi.fn(() => ({
+      providerId: 'minimax-provider',
+      modelId: 'minimax-h3',
+    }));
+    const handlers = createDesktopDshDomainToolHandlers({
+      bindings: {
+        async getByDshSessionId() {
+          return sessionBinding();
+        },
+      },
+      contexts: {
+        async readContext() {
+          return workspaceContext();
+        },
+      },
+      workspaceGrants: {
+        resolveAuthorizedWorkspace: vi.fn(async () => workspaceResolution(root)),
+      },
+      coordinateCanvasMutation,
+      generationRuntime: {
+        getJobs: vi.fn(async () => generationJobs(submitGeneration)),
+      },
+      generationProjection,
+      configuration: {
+        getApplicationConfig: vi.fn(),
+        getWorkspaceConfig: vi.fn(
+          () =>
+            ({
+              resolveModelRefForPurpose,
+              getProvider: (providerId: string) =>
+                providerId === 'minimax-provider'
+                  ? { id: providerId, type: 'minimax', enabled: true }
+                  : undefined,
+              getModel: (modelId: string) =>
+                modelId === 'minimax-h3'
+                  ? {
+                      id: modelId,
+                      providerId: 'minimax-provider',
+                      name: 'MiniMax-H3',
+                      capabilities: ['video.generate', 'image_to_video'],
+                      enabled: true,
+                    }
+                  : undefined,
+            }) as never,
+        ),
+      },
+      assistant: { assistantSpaceId: 'assistant:one', root },
+    });
+
+    await expect(
+      handlers.executeGenerationTool(videoGenerationRequest(), new AbortController().signal),
+    ).resolves.toMatchObject({ outcome: 'success', jobId: 'job:one' });
+    expect(submitGeneration).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerId: 'minimax-provider',
+        modelId: 'minimax-h3',
+        parameterAdjustments: [
+          { parameter: 'negativePrompt', reason: 'unsupported' },
+          { parameter: 'resolution', reason: 'invalid' },
+          { parameter: 'fps', reason: 'unsupported' },
+          { parameter: 'generateAudio', reason: 'unsupported' },
+          { parameter: 'motionStrength', reason: 'unsupported' },
+          { parameter: 'cameraMovement', reason: 'unsupported' },
+        ],
+        request: {
+          prompt: 'A slow upward push',
+          providerId: 'minimax-provider',
+          modelId: 'minimax-h3',
+          inputs: [
+            {
+              type: 'image',
+              role: 'first-frame',
+              locator: { file: { authority: 'workspace', path: 'frames/SH01.png' } },
+            },
+          ],
+          duration: 6,
+          resolution: '768P',
+          aspectRatio: '16:9',
+        },
+      }),
+    );
   });
 
   it('resolves Canvas only after exact Workspace authorization', async () => {
@@ -224,6 +365,7 @@ describe('Desktop DSH domain Tool handlers', () => {
         },
       },
       workspaceGrants: { resolveAuthorizedWorkspace },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
       configuration: {
@@ -243,6 +385,79 @@ describe('Desktop DSH domain Tool handlers', () => {
       diagnostic: { code: 'CANVAS_DSH_TOOL_INVALID_INPUT' },
     });
     expect(resolveAuthorizedWorkspace).not.toHaveBeenCalled();
+  });
+
+  it('coordinates an exact Canvas mutation before projecting the Agent-authored node', async () => {
+    const root = await createRoot();
+    await mkdir(join(root, 'boards'), { recursive: true });
+    await writeFile(
+      join(root, 'boards', 'main.nkc'),
+      JSON.stringify({
+        name: 'Main',
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        nodes: [],
+        connections: [],
+      }),
+    );
+    const coordinateTarget = vi.fn();
+    const handlers = createDesktopDshDomainToolHandlers({
+      bindings: {
+        async getByDshSessionId() {
+          return sessionBinding();
+        },
+      },
+      contexts: {
+        async readContext() {
+          return workspaceContext();
+        },
+      },
+      workspaceGrants: {
+        resolveAuthorizedWorkspace: vi.fn(async () => workspaceResolution(root)),
+      },
+      coordinateCanvasMutation: async (target, operation) => {
+        coordinateTarget(target);
+        const documentPath = join(root, 'boards', 'main.nkc');
+        const current = JSON.parse(await readFile(documentPath, 'utf8'));
+        await writeFile(documentPath, JSON.stringify({ ...current, name: 'Saved host edit' }));
+        return operation();
+      },
+      generationRuntime: { getJobs: vi.fn() },
+      generationProjection,
+      configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
+      assistant: { assistantSpaceId: 'assistant:one', root },
+    });
+
+    await expect(
+      handlers.executeCanvasTool(
+        {
+          ...canvasRequest(),
+          operation: 'apply',
+          input: {
+            documentPath: 'boards/main.nkc',
+            command: {
+              kind: 'create_node',
+              node: { type: 'markdown', content: '# Agent node' },
+            },
+          },
+        },
+        new AbortController().signal,
+      ),
+    ).resolves.toMatchObject({
+      outcome: 'success',
+      result: {
+        documentPath: 'boards/main.nkc',
+        command: 'create_node',
+        nodeType: 'markdown',
+      },
+    });
+    expect(coordinateTarget).toHaveBeenCalledWith({
+      workspaceId: 'workspace:one',
+      canvasId: 'boards/main.nkc',
+    });
+    expect(JSON.parse(await readFile(join(root, 'boards', 'main.nkc'), 'utf8'))).toMatchObject({
+      name: 'Saved host edit',
+      nodes: [expect.objectContaining({ type: 'markdown', data: { content: '# Agent node' } })],
+    });
   });
 
   it('resolves Character through the exact authoring target and Workspace grant', async () => {
@@ -271,6 +486,7 @@ describe('Desktop DSH domain Tool handlers', () => {
         },
       },
       workspaceGrants: { resolveAuthorizedWorkspace },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
       configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
@@ -285,7 +501,7 @@ describe('Desktop DSH domain Tool handlers', () => {
           turn: 1,
           toolCallId: 'call:character',
           sandboxMode: 'read-only',
-          tool: 'openneko.character',
+          tool: 'openneko_character',
           operation: 'query',
           input: { characterProjectId: 'character:one' },
         },
@@ -317,6 +533,7 @@ describe('Desktop DSH domain Tool handlers', () => {
       bindings: { getByDshSessionId },
       contexts: { readContext },
       workspaceGrants: { resolveAuthorizedWorkspace },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
       configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
@@ -331,7 +548,7 @@ describe('Desktop DSH domain Tool handlers', () => {
           turn: 1,
           toolCallId: 'call:character',
           sandboxMode: 'read-only',
-          tool: 'openneko.character',
+          tool: 'openneko_character',
           operation: 'fill-draft',
           input: {
             characterProjectId: 'character:one',
@@ -366,6 +583,7 @@ describe('Desktop DSH domain Tool handlers', () => {
         },
       },
       workspaceGrants: { resolveAuthorizedWorkspace },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
       configuration: {
@@ -409,6 +627,7 @@ describe('Desktop DSH domain Tool handlers', () => {
         },
       },
       workspaceGrants: { resolveAuthorizedWorkspace },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
       configuration: {
@@ -461,6 +680,7 @@ describe('Desktop DSH domain Tool handlers', () => {
         },
       },
       workspaceGrants: { resolveAuthorizedWorkspace },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
       configuration: {
@@ -534,6 +754,7 @@ describe('Desktop DSH domain Tool handlers', () => {
         },
       },
       workspaceGrants: { resolveAuthorizedWorkspace: vi.fn() },
+      coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
       configuration: { getApplicationConfig, getWorkspaceConfig: vi.fn() },
@@ -584,7 +805,7 @@ function generationRequest(): DshAcpDomainToolRequest {
     turn: 1,
     toolCallId: 'call:one',
     sandboxMode: 'workspace-write',
-    tool: 'openneko.generation',
+    tool: 'openneko_generation',
     operation: 'submit',
     input: {
       purpose: 'image.generate',
@@ -595,13 +816,47 @@ function generationRequest(): DshAcpDomainToolRequest {
   };
 }
 
+function videoGenerationRequest(): DshAcpDomainToolRequest {
+  return {
+    sessionId: 'dsh-session:one',
+    turn: 1,
+    toolCallId: 'call:video',
+    sandboxMode: 'workspace-write',
+    tool: 'openneko_generation',
+    operation: 'submit',
+    input: {
+      purpose: 'video.generate',
+      lifecycleMode: 'detached',
+      generationType: 'image-to-video',
+      request: {
+        prompt: 'A slow upward push',
+        negativePrompt: 'text',
+        inputs: [
+          {
+            type: 'image',
+            role: 'first-frame',
+            locator: { file: { authority: 'workspace', path: 'frames/SH01.png' } },
+          },
+        ],
+        duration: 6,
+        resolution: '1080p',
+        fps: 24,
+        aspectRatio: '16:9',
+        generateAudio: false,
+        motionStrength: 0.25,
+        cameraMovement: 'dolly-in',
+      },
+    },
+  };
+}
+
 function canvasRequest(): DshAcpDomainToolRequest {
   return {
     sessionId: 'dsh-session:one',
     turn: 1,
     toolCallId: 'call:canvas',
     sandboxMode: 'workspace-write',
-    tool: 'openneko.canvas',
+    tool: 'openneko_canvas',
     operation: 'query',
     input: { documentPath: 'boards/main.nkc' },
   };
@@ -613,7 +868,7 @@ function documentRequest(): DshAcpDomainToolRequest {
     turn: 1,
     toolCallId: 'call:document',
     sandboxMode: 'read-only',
-    tool: 'openneko.document',
+    tool: 'openneko_document',
     operation: 'read',
     input: { source: { file: { authority: 'workspace', path: 'notes.md' } } },
   };
@@ -625,7 +880,7 @@ function cutQueryRequest(): DshAcpDomainToolRequest {
     turn: 1,
     toolCallId: 'call:cut',
     sandboxMode: 'read-only',
-    tool: 'openneko.cut',
+    tool: 'openneko_cut',
     operation: 'query',
     input: { documentPath: 'cuts/story.otio' },
   };

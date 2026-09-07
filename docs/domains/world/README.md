@@ -9,8 +9,9 @@ domain/application 位于 `packages/world`，本地持久化和 ZIP adapter 位�
 - 全局管理只展示 `GlobalWorld`、当前版本和历史 `WorldVersion`，不区分草稿、发布、安装或适配状态。
 - Project Creative Workspace 中的新世界从首次 durable commit 起属于一个精确 Project，可编辑并可同步到全局。
 - 工作区可以加入全局 `WorldVersion` 的只读精确引用；编辑时必须复制为新的本地世界。
-- 助手模式调用 `world-creator` 时直接创建全局世界及首个不可变版本，不创建隐藏 Project。
-- World Experience 只消费一个精确全局世界版本，并可同时携带多个精确全局角色版本。
+- Agent 世界 Tool 只在绑定精确 Project 和既有 fresh WorldProject 时查询或填充草稿；Assistant Conversation 不直接创建全局世界。
+- 全局首版必须由 World global catalog service 的显式 command 提交；工作区同步和 `.neko-world` 导入是与现有 Desktop authority 对齐的入口。
+- 当前 Desktop consumer 是只消费精确全局版本的确定性 Foundation Runtime；Story、Gameplay、Agent Play、实时生成和外部引擎不属于当前 World Runtime contract。
 
 ## 核心模型
 

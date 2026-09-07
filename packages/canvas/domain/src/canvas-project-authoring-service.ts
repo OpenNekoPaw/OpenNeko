@@ -11,6 +11,7 @@ import { loadNkc, saveNkc } from './nkc';
 import type { CanvasConnection, CanvasData, CanvasNode } from './types/canvas';
 import type {
   CanvasCreateConnectionRequest,
+  CanvasGroupNodesRequest,
   CanvasNodeCreateSpec,
   CanvasUpdateBlockRequest,
 } from './types/canvas-agent-operations';
@@ -20,6 +21,7 @@ import {
   planCanvasBlockUpdate,
   planCanvasConnectionCreation,
   planCanvasNodeCreation,
+  planCanvasNodeGrouping,
 } from './utils/canvasHeadlessAuthoring';
 
 const MAX_CANVAS_PROJECT_BYTES = 64 * 1024 * 1024;
@@ -194,6 +196,27 @@ export class CanvasProjectAuthoringService {
       );
     }
     return { ...snapshot, node };
+  }
+
+  async groupNodes(input: {
+    readonly documentPath: string;
+    readonly expectedFingerprint: ContentFingerprint;
+    readonly request: CanvasGroupNodesRequest;
+    readonly signal?: AbortSignal;
+  }): Promise<CanvasProjectNodeMutationResult> {
+    const current = await this.readProject(
+      input.documentPath,
+      input.expectedFingerprint,
+      input.signal,
+    );
+    let plan: ReturnType<typeof planCanvasNodeGrouping>;
+    try {
+      plan = planCanvasNodeGrouping({ canvasData: current.canvas }, input.request);
+    } catch (error) {
+      throw invalidOperation(error);
+    }
+    const snapshot = await this.apply({ ...input, operations: plan.operations });
+    return { ...snapshot, node: plan.group };
   }
 
   async createConnection(input: {

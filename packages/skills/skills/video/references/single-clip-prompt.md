@@ -1,29 +1,7 @@
-# Single-clip Prompt Handoff
+# 单片段提示词交接
 
 ## 中文指南
 
 单片段意图明确后、提交生成或转换前使用。只构建片段需要的语义：主体身份、可见动作与状态变化、空间位置和关系、起始—节拍—转场—结束的时间顺序、构图/机位与连续节拍中的一个主要运镜、适用的对白/旁白/音效/环境/音乐/静默、每个授权参考的控制作用，以及任务相关风格、失败约束和能力支持范围内的时长/节奏。
 
 连续镜头使用一个连续描述；只有能力支持多镜头且片段确有不同剪辑/节拍时才使用分段，否则拆成独立片段操作。执行前检查当前 operation、model binding、输入类型/数量、首尾帧、reference 顺序、时长、比例、分辨率、音频控制和 permission；不复制外部 provider endpoint、命令、位置语法或参数，也不为未解析参考发明 alias。提示词请求只返回提示词、授权输入、未决项和一个验收检查；执行请求必须区分准备、提交、等待和确认结果。
-
-## English guidance
-
-Use this guide after the single-clip intent is clear and before generation or transformation is submitted.
-
-Build only the semantics the clip needs:
-
-- target and subject: who or what must remain identifiable;
-- visible action: concrete motion, expression and state change rather than abstract emotion alone;
-- spatial state: environment, subject position, relationships and relevant changes;
-- temporal order: starting state, ordered beats, transitions and ending state;
-- camera: framing, camera position and one coherent primary movement per continuous beat;
-- audio when applicable: dialogue, narration, sound effects, ambience, music or intentional silence, each with a clear role;
-- references: what each authorized image, keyframe, video or audio input controls;
-- style and constraints: only the visual system and failure prevention relevant to this request;
-- duration or pacing as intent, with precision no stronger than the selected capability supports.
-
-Use one continuous description for a continuous shot. Use ordered segments when the selected capability supports multi-shot generation and the requested clip contains distinct cuts or beats; otherwise split the work into separate clip operations rather than overloading one prompt.
-
-Before execution, inspect the current capability and Tool schema for supported operation, model binding, input kinds/count, start/end frame semantics, reference order, duration, aspect ratio, resolution, audio controls and permission. Do not copy provider endpoints, commands, positional reference syntax or parameter values from an external template. Do not invent an alias for an unresolved reference.
-
-For a prompt-only request, return the prompt, required authorized inputs, unresolved choices and one validation check. Do not call generation or claim an output. For an execution request, distinguish prompt preparation, submission, pending state and confirmed terminal result.

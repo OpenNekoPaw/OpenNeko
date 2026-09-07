@@ -54,29 +54,42 @@ export interface SkillSummary {
 // Generation params -------------------------------------------------------
 
 export type GenCategory = 'image' | 'video' | 'audio';
+export type MediaModelCategory = GenCategory | 'music';
 export type EntryPromptMenu = 'roleplay';
 export type CharacterConversationMode =
   import('@neko/agent-contracts').AgentCharacterDialogueLaunchBinding['mode'];
-export type GenerationDuration = 'auto' | number;
+export type MediaModelParameterProfile = NonNullable<
+  import('@neko/agent-contracts/dsh-session-host').DshComposerModelOption['parameterProfile']
+>;
 
 export interface GenerationParams {
-  ratio: '16:9' | '9:16' | '1:1' | '4:3' | '3:2' | '21:9' | '2.39:1';
-  resolution: '512' | '720p' | '1080p' | '2K' | '4K';
-  /** Video duration in seconds, or auto for Agent/model inference. */
-  videoDuration: GenerationDuration;
-  videoFps: 24 | 30;
-  /** Audio duration in seconds, or auto for Agent/model inference. */
-  audioDuration: GenerationDuration;
-  audioType: 'sfx' | 'ambient' | 'voice';
+  readonly image: {
+    readonly width?: number;
+    readonly height?: number;
+    readonly aspectRatio?: string;
+    readonly quality?: string;
+  };
+  readonly video: {
+    readonly aspectRatio?: string;
+    readonly resolution?: string;
+    readonly duration?: number;
+    readonly fps?: number;
+    readonly generateAudio?: boolean;
+  };
+  readonly audio: {
+    readonly duration?: number;
+    readonly audioType?: 'sfx' | 'ambient' | 'voice';
+  };
+  readonly music: {
+    readonly duration?: number;
+  };
 }
 
 export const DEFAULT_GENERATION_PARAMS: GenerationParams = {
-  ratio: '16:9',
-  resolution: '1080p',
-  videoDuration: 'auto',
-  videoFps: 24,
-  audioDuration: 'auto',
-  audioType: 'sfx',
+  image: {},
+  video: {},
+  audio: {},
+  music: {},
 };
 
 export interface ComposerMenuSelectionState {
@@ -85,7 +98,7 @@ export interface ComposerMenuSelectionState {
   readonly selectedIndex: number;
 }
 
-export type ComposerConfigCategory = 'llm' | GenCategory;
+export type ComposerConfigCategory = 'llm' | MediaModelCategory;
 export type ComposerConfigSection = 'model' | 'params';
 
 export type ComposerControlMenuId =

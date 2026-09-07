@@ -29,52 +29,6 @@ const FULL_VIDEO_CONTROLS = [
   'shot-scale',
 ] as const satisfies readonly CreativeMediaControlId[];
 
-export interface AuditedImageCapability {
-  readonly owner: 'media' | 'sketch' | 'canvas' | 'engine' | 'cut';
-  readonly operationId: ImageOperationId;
-  readonly level: CreativeMediaOperationSupport['level'];
-  readonly supportedSplitProfiles?: CreativeMediaOperationSupport['supportedSplitProfiles'];
-  readonly diagnostic?: string;
-}
-
-export const AUDITED_IMAGE_CAPABILITY_MATRIX: readonly AuditedImageCapability[] = [
-  { owner: 'media', operationId: 'generate', level: 'supported' },
-  { owner: 'media', operationId: 'edit', level: 'supported' },
-  { owner: 'sketch', operationId: 'inpaint', level: 'supported' },
-  { owner: 'sketch', operationId: 'upscale', level: 'supported' },
-  { owner: 'sketch', operationId: 'colorize', level: 'supported' },
-  { owner: 'sketch', operationId: 'style-transfer', level: 'supported' },
-  { owner: 'sketch', operationId: 'composite', level: 'supported' },
-  { owner: 'canvas', operationId: 'composite', level: 'supported' },
-  {
-    owner: 'media',
-    operationId: 'outpaint',
-    level: 'unsupported',
-    diagnostic: 'No audited provider path currently preserves explicit canvas expansion semantics.',
-  },
-  {
-    owner: 'engine',
-    operationId: 'split',
-    level: 'unsupported',
-    supportedSplitProfiles: [],
-    diagnostic:
-      'Grid crop, comic-panel, and semantic segmentation require explicit owning adapters.',
-  },
-  {
-    owner: 'cut',
-    operationId: 'background-remove',
-    level: 'degraded',
-    diagnostic: 'Existing background removal is Webview-bound and is not a headless image adapter.',
-  },
-  {
-    owner: 'media',
-    operationId: 'background-replace',
-    level: 'unsupported',
-    diagnostic: 'No audited canonical background replacement adapter is registered.',
-  },
-  { owner: 'canvas', operationId: 'prepare-shot-reference', level: 'supported' },
-];
-
 export function getProviderVideoOperationSupport(
   providerType: ProviderType,
   operationId: VideoOperationId,
@@ -101,7 +55,6 @@ export function getProviderVideoOperationSupport(
     mediaKind: 'video',
     operationId,
     level: profile.level,
-    adapterId: `media-provider:${providerType}`,
     acceptedControls: profile.controls,
     ...(profile.degradedControls ? { degradedControls: profile.degradedControls } : {}),
     requirements: {
@@ -139,11 +92,42 @@ export function resolveCanonicalVideoOperation(request: VideoGenerationRequest):
 export function validateProviderVideoRequest(
   providerType: ProviderType,
   request: VideoGenerationRequest,
+  modelCapabilities?: readonly string[],
 ): readonly CreativeMediaOperationDiagnostic[] {
   const operationId = resolveCanonicalVideoOperation(request);
   const support = getProviderVideoOperationSupport(providerType, operationId);
   const requestedControls = requestedVideoControls(request);
   const diagnostics = [...support.diagnostics];
+  for (const role of requiredVideoRoles(operationId)) {
+    const inputRole =
+      role === 'start-frame' ? 'first-frame' : role === 'end-frame' ? 'last-frame' : role;
+    if (!request.inputs?.some((input) => input.role === inputRole)) {
+      diagnostics.push({
+        code: 'missing-required-input',
+        severity: 'error',
+        message: `Video operation ${operationId} requires a ${role} input.`,
+        details: { providerType, operationId, role },
+      });
+    }
+  }
+  const requiredModelCapabilities = requiredVideoModelCapabilities(operationId);
+  if (
+    requiredModelCapabilities.length > 0 &&
+    modelCapabilities !== undefined &&
+    !requiredModelCapabilities.some((capability) => modelCapabilities.includes(capability))
+  ) {
+    diagnostics.push({
+      code: 'operation-unsupported',
+      severity: 'error',
+      message: `Selected model does not declare a capability required by video operation ${operationId}.`,
+      details: {
+        providerType,
+        operationId,
+        requiredCapabilities: requiredModelCapabilities,
+        owner: 'model',
+      },
+    });
+  }
   for (const control of requestedControls) {
     if (!support.acceptedControls.includes(control)) {
       diagnostics.push({
@@ -167,21 +151,56 @@ export function validateProviderVideoRequest(
 export function validateProviderImageRequest(
   providerType: ProviderType,
   request: ImageGenerationRequest,
-  modelCapabilities: readonly string[] = [],
+  modelCapabilities?: readonly string[],
 ): readonly CreativeMediaOperationDiagnostic[] {
   const operationId = resolveCanonicalImageOperation(request);
-  if (!['generate', 'edit', 'inpaint', 'style-transfer'].includes(operationId)) {
-    return [
-      {
-        code: 'operation-unsupported',
-        severity: 'error',
-        message: `${providerType} media generation does not declare canonical image operation ${operationId}; use an owning Image adapter.`,
-        details: { providerType, operationId },
-      },
-    ];
-  }
-
   const diagnostics: CreativeMediaOperationDiagnostic[] = [];
+  if (operationId !== 'generate' && !providerSupportsImageOperation(providerType, operationId)) {
+    diagnostics.push({
+      code: 'operation-unsupported',
+      severity: 'error',
+      message: `${providerType} does not expose an AI SDK path for image operation ${operationId}.`,
+      details: { providerType, operationId, owner: 'provider' },
+    });
+  }
+  if (
+    operationId !== 'generate' &&
+    modelCapabilities !== undefined &&
+    !requiredImageModelCapabilities(operationId).some((capability) =>
+      modelCapabilities.includes(capability),
+    )
+  ) {
+    diagnostics.push({
+      code: 'operation-unsupported',
+      severity: 'error',
+      message: `Selected model does not declare a capability required by image operation ${operationId}.`,
+      details: {
+        providerType,
+        operationId,
+        requiredCapabilities: requiredImageModelCapabilities(operationId),
+        owner: 'model',
+      },
+    });
+  }
+  if (
+    (operationId === 'edit' || operationId === 'inpaint' || operationId === 'style-transfer') &&
+    !request.referenceImageLocator
+  ) {
+    diagnostics.push({
+      code: 'missing-required-input',
+      severity: 'error',
+      message: `Image operation ${operationId} requires a source image.`,
+      details: { providerType, operationId, role: 'source-image' },
+    });
+  }
+  if (operationId === 'inpaint' && !request.maskLocator) {
+    diagnostics.push({
+      code: 'missing-required-input',
+      severity: 'error',
+      message: 'Image operation inpaint requires a mask.',
+      details: { providerType, operationId, role: 'mask' },
+    });
+  }
   if (
     request.controlImageLocator &&
     request.controlMode !== 'pose' &&
@@ -195,17 +214,20 @@ export function validateProviderImageRequest(
     });
   }
   const stableAppearanceReferences = request.ipAdapterRefs ?? [];
-  const adapterControls = providerThreeReferenceImageControls(providerType, modelCapabilities);
+  const providerControls = providerThreeReferenceImageControls(
+    providerType,
+    modelCapabilities ?? [],
+  );
   for (const requirement of requestedThreeReferenceImageControls(request)) {
-    if (!adapterControls.includes(requirement.control)) {
+    if (!providerControls.includes(requirement.control)) {
       diagnostics.push({
         code: 'unsupported-operation-control',
         severity: 'error',
         message: `${providerType} does not declare audited support for requested image control ${requirement.control}.`,
-        details: { providerType, operationId, control: requirement.control, owner: 'adapter' },
+        details: { providerType, operationId, control: requirement.control, owner: 'provider' },
       });
     }
-    if (!modelCapabilities.includes(requirement.modelCapability)) {
+    if (!modelCapabilities?.includes(requirement.modelCapability)) {
       diagnostics.push({
         code: 'unsupported-operation-control',
         severity: 'error',
@@ -224,11 +246,42 @@ export function validateProviderImageRequest(
     diagnostics.push({
       code: 'operation-limit-exceeded',
       severity: 'error',
-      message: 'Audited 3D appearance-reference adapters accept exactly one image reference.',
+      message: 'Audited image providers accept exactly one stable appearance reference.',
       details: { providerType, operationId, control: 'appearance-reference', maxInputCount: 1 },
     });
   }
   return diagnostics;
+}
+
+function providerSupportsImageOperation(
+  providerType: ProviderType,
+  operationId: ImageOperationId,
+): boolean {
+  if (operationId === 'generate') {
+    return ['openai', 'bytedance', 'newapi', 'oneapi', 'generic'].includes(providerType);
+  }
+  if (operationId === 'inpaint') {
+    return ['openai', 'newapi', 'oneapi', 'generic'].includes(providerType);
+  }
+  return ['openai', 'bytedance', 'newapi', 'oneapi', 'generic'].includes(providerType);
+}
+
+function requiredImageModelCapabilities(operationId: ImageOperationId): readonly string[] {
+  return operationId === 'generate'
+    ? ['image.generate', 'text_to_image']
+    : ['image.edit', 'image_edit', 'image_to_image'];
+}
+
+function requiredVideoModelCapabilities(operationId: VideoOperationId): readonly string[] {
+  switch (operationId) {
+    case 'generate-from-prompt':
+    case 'generate-from-image':
+    case 'generate-from-keyframes':
+      return [];
+    case 'transform':
+    case 'restyle':
+      return ['video_edit', 'video_to_video'];
+  }
 }
 
 interface ThreeReferenceImageControlRequirement {
@@ -280,19 +333,10 @@ function providerThreeReferenceImageControls(
   providerType: ProviderType,
   modelCapabilities: readonly string[],
 ): readonly ThreeReferenceImageControlRequirement['control'][] {
-  if (providerType === 'fal') {
-    return ['pose-control', 'depth-control', 'appearance-reference'];
-  }
-  if (providerType === 'dashscope') {
-    return ['pose-control', 'depth-control'];
-  }
   const usesChatImageRuntime =
     modelCapabilities.includes('chat') && modelCapabilities.includes('text_to_image');
-  if (
-    !usesChatImageRuntime &&
-    ['generic', 'newapi', 'oneapi', 'xai', 'kling'].includes(providerType)
-  ) {
-    return ['pose-control', 'depth-control'];
+  if (!usesChatImageRuntime && ['generic', 'newapi', 'oneapi'].includes(providerType)) {
+    return ['pose-control', 'depth-control', 'appearance-reference'];
   }
   return [];
 }
@@ -315,71 +359,6 @@ function providerVideoProfile(
   readonly degradedControls?: readonly CreativeMediaControlId[];
   readonly message?: string;
 } {
-  if (['openai', 'generic', 'newapi', 'xai', 'kling'].includes(providerType)) {
-    if (['extend', 'enhance', 'trim', 'retime', 'prepare-for-timeline'].includes(operationId)) {
-      return unsupportedVideoProfile(operationId);
-    }
-    return { level: 'supported', controls: FULL_VIDEO_CONTROLS };
-  }
-  if (providerType === 'dashscope') {
-    if (['generate-from-prompt', 'generate-from-image'].includes(operationId)) {
-      return {
-        level: 'supported',
-        controls: [...IMAGE_VIDEO_CONTROLS, 'camera-movement', 'edit-instruction'],
-      };
-    }
-    if (operationId === 'generate-from-keyframes') {
-      return {
-        level: 'supported',
-        controls: [...IMAGE_VIDEO_CONTROLS, 'end-frame', 'camera-movement', 'edit-instruction'],
-      };
-    }
-    if (operationId === 'transform' || operationId === 'restyle') {
-      return {
-        level: 'supported',
-        controls: [
-          ...PROMPT_VIDEO_CONTROLS,
-          'reference-video',
-          'edit-instruction',
-          'camera-movement',
-        ],
-      };
-    }
-    return unsupportedVideoProfile(operationId);
-  }
-  if (providerType === 'runway') {
-    if (operationId === 'generate-from-prompt' || operationId === 'generate-from-image') {
-      return { level: 'supported', controls: IMAGE_VIDEO_CONTROLS };
-    }
-    return unsupportedVideoProfile(operationId);
-  }
-  if (providerType === 'luma') {
-    if (operationId === 'generate-from-prompt' || operationId === 'generate-from-image') {
-      return {
-        level: 'supported',
-        controls: ['prompt', 'aspect-ratio', 'start-frame'],
-      };
-    }
-    return unsupportedVideoProfile(operationId);
-  }
-  if (providerType === 'vidu') {
-    if (operationId === 'generate-from-prompt' || operationId === 'generate-from-image') {
-      return {
-        level: 'supported',
-        controls: ['prompt', 'duration', 'aspect-ratio', 'start-frame'],
-      };
-    }
-    return unsupportedVideoProfile(operationId);
-  }
-  if (providerType === 'liblib') {
-    if (operationId === 'generate-from-prompt' || operationId === 'generate-from-image') {
-      return {
-        level: 'supported',
-        controls: ['prompt', 'duration', 'output-size', 'start-frame'],
-      };
-    }
-    return unsupportedVideoProfile(operationId);
-  }
   if (providerType === 'minimax' || providerType === 'bytedance') {
     if (
       [
@@ -405,7 +384,7 @@ function unsupportedVideoProfile(operationId: VideoOperationId): {
   return {
     level: 'unsupported',
     controls: [],
-    message: `No audited adapter path supports canonical video operation ${operationId}.`,
+    message: `No audited AI SDK provider path supports canonical video operation ${operationId}.`,
   };
 }
 
@@ -417,11 +396,6 @@ function requiredVideoRoles(operationId: VideoOperationId): readonly string[] {
       return ['start-frame', 'end-frame'];
     case 'transform':
     case 'restyle':
-    case 'extend':
-    case 'enhance':
-    case 'trim':
-    case 'retime':
-    case 'prepare-for-timeline':
       return ['reference-video'];
     case 'generate-from-prompt':
       return [];

@@ -12,7 +12,7 @@ const source = { file: { authority: 'workspace' as const, path: 'books/story.epu
 
 describe('OpenNeko document DSH contract', () => {
   it('uses the canonical domain name and operations', () => {
-    expect(DOCUMENT_DSH_TOOL_NAME).toBe('openneko.document');
+    expect(DOCUMENT_DSH_TOOL_NAME).toBe('openneko_document');
     expect(DOCUMENT_DSH_TOOL_OPERATIONS).toEqual(['read', 'continue', 'read-images']);
     expect(DOCUMENT_DSH_TOOL_PARAMETERS).toHaveProperty('source');
     expect(DOCUMENT_DSH_TOOL_PARAMETERS).not.toHaveProperty('input');

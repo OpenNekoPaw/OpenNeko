@@ -9,10 +9,6 @@ export interface WorkspaceCanvasContextBarProps {
   readonly showCanvasIndex?: boolean;
 }
 
-/**
- * Composer top rail: stable Workspace label + current Canvas index only.
- * It deliberately does not show read/write status, scope, or permission info.
- */
 export function WorkspaceCanvasContextBar({
   workspaceLabel,
   canvas,
@@ -23,7 +19,7 @@ export function WorkspaceCanvasContextBar({
   const selectedOption = canvas?.options.find((option) => option.id === canvas.selectedId);
   const selectedLabel =
     canvas === undefined
-      ? t('chat.input.workspaceCanvas.board')
+      ? t('chat.input.workspaceCanvas.unavailable')
       : (selectedOption?.label ?? t('chat.input.workspaceCanvas.unavailable'));
 
   return (
@@ -48,7 +44,7 @@ export function WorkspaceCanvasContextBar({
               void canvas.onSelect(event.target.value);
             }}
             onDoubleClick={() => {
-              if (selectedOption?.target.kind === 'exact-canvas') {
+              if (selectedOption !== undefined && selectedOption.disabled !== true) {
                 void canvas.onOpen?.(selectedOption.id);
               }
             }}
@@ -69,8 +65,9 @@ export function WorkspaceCanvasContextBar({
           </span>
         </span>
       ) : showCanvasIndex ? (
-        <span className="agent-workspace-canvas-board-default">{selectedLabel}</span>
+        <span className="agent-workspace-canvas-default">{selectedLabel}</span>
       ) : null}
+      {showCanvasIndex ? canvas?.creationControl : null}
       {canvas?.diagnostic ? (
         <span className="agent-workspace-canvas-diagnostic" role="alert">
           {canvas.diagnostic}

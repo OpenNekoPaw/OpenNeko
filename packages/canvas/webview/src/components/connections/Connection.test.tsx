@@ -42,8 +42,10 @@ describe('Connection', () => {
         targetNode={targetNode}
       />,
     );
+    expect(sequence).toContain('data-connection-type="sequence"');
     expect(sequence).toContain('class="connection-arrow"');
     expect(sequence).toContain('marker-end="url(#arrow-sequence-edge)"');
+    expect(sequence).toContain('stroke-opacity="0.54"');
   });
 });
 

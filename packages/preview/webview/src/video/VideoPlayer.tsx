@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../i18n/I18nContext';
 import { VideoControls } from './VideoControls';
 import { EmptyState } from '@neko/ui/primitives';
-import { PlayIcon, WarningIcon } from '@neko/ui/icons';
+import { PauseIcon, PlayIcon, WarningIcon } from '@neko/ui/icons';
 import type { PreviewMediaViewerSnapshot } from '../root/viewer-snapshot';
 import type { PreviewViewerPlayback } from '../root/viewer-kernel';
 import { useProgrammaticMediaPlayback } from '../shared/useProgrammaticMediaPlayback';
@@ -16,6 +16,7 @@ export interface VideoPlayerProps {
   readonly autoPlay?: boolean;
   readonly compact?: boolean;
   readonly ambient?: boolean;
+  readonly inlinePlayback?: boolean;
   readonly muted?: boolean;
   readonly controls?: boolean;
   readonly initialSnapshot?: PreviewMediaViewerSnapshot;
@@ -29,6 +30,7 @@ export function VideoPlayer({
   autoPlay = false,
   compact = false,
   ambient = false,
+  inlinePlayback = false,
   muted = false,
   controls = true,
   initialSnapshot,
@@ -42,6 +44,7 @@ export function VideoPlayer({
       autoPlay={autoPlay}
       compact={compact}
       ambient={ambient}
+      inlinePlayback={inlinePlayback}
       muted={muted}
       controls={controls}
       initialSnapshot={initialSnapshot}
@@ -57,13 +60,17 @@ function SourceVideoPlayer({
   autoPlay,
   compact,
   ambient,
+  inlinePlayback,
   muted,
   controls,
   initialSnapshot,
   onSnapshotChange,
   playback,
 }: Required<
-  Pick<VideoPlayerProps, 'sourceUrl' | 'autoPlay' | 'compact' | 'ambient' | 'muted' | 'controls'>
+  Pick<
+    VideoPlayerProps,
+    'sourceUrl' | 'autoPlay' | 'compact' | 'ambient' | 'inlinePlayback' | 'muted' | 'controls'
+  >
 > &
   Pick<VideoPlayerProps, 'displayName' | 'initialSnapshot' | 'onSnapshotChange' | 'playback'>) {
   const { t } = useTranslation();
@@ -230,16 +237,23 @@ function SourceVideoPlayer({
             setFailed(true);
           }}
         />
-        {controls && !compact && !isPlaying && !failed ? (
+        {(inlinePlayback || (controls && !compact && !isPlaying)) && !failed ? (
           <button
             type="button"
             data-testid="preview-video-toggle-playback"
-            className="absolute inset-0 flex items-center justify-center"
+            data-preview-video-playing={isPlaying ? 'true' : 'false'}
+            className="group absolute inset-0 flex items-center justify-center"
             onClick={togglePlay}
-            aria-label={t('preview.video.playButton')}
+            aria-label={t(isPlaying ? 'preview.video.pauseButton' : 'preview.video.playButton')}
           >
-            <span className="w-16 h-16 rounded-full bg-white/15 flex items-center justify-center">
-              <PlayIcon className="w-8 h-8 text-white" />
+            <span
+              className={`flex h-16 w-16 items-center justify-center rounded-full bg-black/45 text-white shadow-lg transition-opacity ${
+                isPlaying
+                  ? 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'
+                  : 'opacity-100'
+              }`}
+            >
+              {isPlaying ? <PauseIcon className="h-8 w-8" /> : <PlayIcon className="h-8 w-8" />}
             </span>
           </button>
         ) : null}

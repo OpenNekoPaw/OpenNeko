@@ -139,8 +139,23 @@ describe('WorkspaceQuickCreateControl', () => {
     expect(document.body.textContent).not.toContain('Discard me');
   });
 
+  it('opens the index Canvas name field directly and cancels back to the rail', async () => {
+    const onCreate = vi.fn(async () => undefined);
+    await renderControl('canvas-index', onCreate);
+    click(document.querySelector('[data-workspace-quick-create-trigger="canvas-index"]'));
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+    const input = document.querySelector<HTMLInputElement>('input[aria-label="Name"]');
+    expect(document.activeElement).toBe(input);
+    expect(document.body.textContent).toContain('.nkc');
+    click(document.querySelector('.workspace-quick-create-popover__form button[type="button"]'));
+    expect(document.querySelector('input[aria-label="Name"]')).toBeNull();
+    expect(onCreate).not.toHaveBeenCalled();
+    click(document.querySelector('[data-workspace-quick-create-trigger="canvas-index"]'));
+    expect(document.querySelector<HTMLInputElement>('input[aria-label="Name"]')?.value).toBe('');
+  });
+
   async function renderControl(
-    variant: 'tab' | 'empty',
+    variant: 'tab' | 'empty' | 'canvas-index',
     onCreate: (submission: {
       kind: 'file' | 'directory' | 'canvas' | 'cut';
       name: string;

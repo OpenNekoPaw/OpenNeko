@@ -16,6 +16,19 @@ export interface AgentManagedSkillItem {
   readonly removable: boolean;
 }
 
+export interface AgentManagedSkillDetail {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+  readonly whenToUse?: string;
+  readonly source: string;
+  readonly provider: string;
+  readonly userInvocable: boolean;
+  readonly modelInvocable: boolean;
+  readonly content: string;
+  readonly fingerprint: string;
+}
+
 export interface AgentManagedMcpItem {
   readonly id: string;
   readonly name: string;
@@ -55,6 +68,10 @@ export interface AgentExtensionManagementProjection {
 export interface AgentExtensionManagementRuntime {
   readonly identity: AgentExtensionManagementSessionIdentity;
   getSnapshot(): Promise<AgentExtensionManagementProjection>;
+  getSkillDetail(input: {
+    readonly name: string;
+    readonly source: string;
+  }): Promise<AgentManagedSkillDetail>;
   addSkill(): Promise<AgentExtensionManagementProjection>;
   setSkillEnabled(input: {
     readonly name: string;
@@ -72,6 +89,54 @@ export interface AgentExtensionManagementRuntime {
   }): Promise<AgentExtensionManagementProjection>;
   removeMcp(id: string): Promise<AgentExtensionManagementProjection>;
   dispose(): void;
+}
+
+export function parseAgentManagedSkillDetail(value: unknown): AgentManagedSkillDetail {
+  const skill = requireRecord(value, 'DSH Skill detail is invalid.');
+  const keys =
+    skill.whenToUse === undefined
+      ? [
+          'id',
+          'name',
+          'description',
+          'source',
+          'provider',
+          'userInvocable',
+          'modelInvocable',
+          'content',
+          'fingerprint',
+        ]
+      : [
+          'id',
+          'name',
+          'description',
+          'whenToUse',
+          'source',
+          'provider',
+          'userInvocable',
+          'modelInvocable',
+          'content',
+          'fingerprint',
+        ];
+  const record = requireExactRecord(value, keys, 'DSH Skill detail is invalid.');
+  const fingerprint = requireNonEmptyString(record.fingerprint, 'DSH Skill detail fingerprint');
+  if (!/^sha256:[a-f0-9]{64}$/u.test(fingerprint)) {
+    throw new Error('DSH Skill detail fingerprint is invalid.');
+  }
+  return {
+    id: requireNonEmptyString(record.id, 'DSH Skill detail id'),
+    name: requireNonEmptyString(record.name, 'DSH Skill detail name'),
+    description: requireString(record.description, 'DSH Skill detail description'),
+    ...(skill.whenToUse === undefined
+      ? {}
+      : { whenToUse: requireNonEmptyString(record.whenToUse, 'DSH Skill detail whenToUse') }),
+    source: requireNonEmptyString(record.source, 'DSH Skill detail source'),
+    provider: requireNonEmptyString(record.provider, 'DSH Skill detail provider'),
+    userInvocable: requireBoolean(record.userInvocable, 'DSH Skill detail user invocation flag'),
+    modelInvocable: requireBoolean(record.modelInvocable, 'DSH Skill detail model invocation flag'),
+    content: requireString(record.content, 'DSH Skill detail content'),
+    fingerprint,
+  };
 }
 
 export function parseAgentExtensionManagementProjection(

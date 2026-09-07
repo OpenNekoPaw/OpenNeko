@@ -1,8 +1,7 @@
 /**
  * @neko/ai-sdk - AI SDK Integration Layer
  *
- * Provides native AI SDK provider resolution and NewAPI media models.
- * Provider-owned MediaAdapters remain a separate Platform media boundary.
+ * Provides AI SDK provider resolution and provider-specific AI SDK model contracts.
  */
 
 export { resolveProvider } from './resolve';

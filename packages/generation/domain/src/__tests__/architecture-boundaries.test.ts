@@ -30,7 +30,6 @@ describe('@neko/generation-domain architecture boundaries', () => {
     const roots = [
       resolve(packageRoot, 'src/contracts.ts'),
       resolve(packageRoot, 'src/execution.ts'),
-      resolve(packageRoot, 'src/generation-params.ts'),
       resolve(packageRoot, 'src/index.ts'),
       resolve(packageRoot, 'src/job'),
     ];
@@ -117,8 +116,8 @@ describe('@neko/generation-domain architecture boundaries', () => {
     const ownedContractFiles = [
       'packages/generation/domain/src/contracts.ts',
       'packages/generation/domain/src/job/contracts.ts',
-      'packages/canvas/domain/src/types/canvas-workspace-board.ts',
-      'packages/canvas/domain/src/utils/canvasWorkspaceBoardProjection.ts',
+      'packages/canvas/domain/src/types/canvas-workspace-delivery.ts',
+      'packages/canvas/domain/src/utils/canvasArtifactProjection.ts',
     ];
     const forbiddenImports = [
       /from ['"][^'"]*resource-cache['"]/u,

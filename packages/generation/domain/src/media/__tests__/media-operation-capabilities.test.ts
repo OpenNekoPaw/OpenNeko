@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { IMAGE_OPERATION_IDS } from '@neko/generation-domain';
 import {
-  AUDITED_IMAGE_CAPABILITY_MATRIX,
   getProviderVideoOperationSupport,
   resolveCanonicalVideoOperation,
   validateProviderImageRequest,
@@ -19,7 +17,10 @@ function videoRequest(overrides: Partial<VideoGenerationRequest> = {}): VideoGen
   return { prompt: 'cinematic movement', ...overrides };
 }
 
-function errorCodes(request: VideoGenerationRequest, provider: 'runway' | 'dashscope' | 'openai') {
+function errorCodes(
+  request: VideoGenerationRequest,
+  provider: 'runway' | 'bytedance' | 'minimax' | 'openai',
+) {
   return validateProviderVideoRequest(provider, request)
     .filter((diagnostic) => diagnostic.severity === 'error')
     .map((diagnostic) => diagnostic.code);
@@ -45,7 +46,7 @@ describe('media provider capability negotiation', () => {
     ).toEqual(expect.arrayContaining(['operation-unsupported', 'unsupported-operation-control']));
   });
 
-  it('accepts audited DashScope first/end-frame controls', () => {
+  it('accepts audited ByteDance first/end-frame controls', () => {
     expect(
       errorCodes(
         videoRequest({
@@ -62,12 +63,12 @@ describe('media provider capability negotiation', () => {
           duration: 5,
           aspectRatio: '16:9',
         }),
-        'dashscope',
+        'bytedance',
       ),
     ).toEqual([]);
   });
 
-  it('does not infer transform, extend, or enhance support from a prompt', () => {
+  it('does not infer transform support for providers without an AI SDK video runtime', () => {
     const source = contentLocator('asset:video:source.mp4');
     expect(
       errorCodes(
@@ -79,27 +80,9 @@ describe('media provider capability negotiation', () => {
         'runway',
       ),
     ).toContain('operation-unsupported');
-    expect(
-      errorCodes(
-        videoRequest({
-          operation: 'extend',
-          inputs: [{ type: 'video', role: 'reference-video', locator: source }],
-        }),
-        'openai',
-      ),
-    ).toContain('operation-unsupported');
-    expect(
-      errorCodes(
-        videoRequest({
-          operation: 'enhance',
-          inputs: [{ type: 'video', role: 'reference-video', locator: source }],
-        }),
-        'openai',
-      ),
-    ).toContain('operation-unsupported');
   });
 
-  it('accepts declared controls for audited OpenAI-compatible operations', () => {
+  it('accepts declared controls for the audited MiniMax AI SDK model', () => {
     expect(
       errorCodes(
         videoRequest({
@@ -120,7 +103,7 @@ describe('media provider capability negotiation', () => {
           aspectRatio: '16:9',
           resolution: '1920x1080',
         }),
-        'openai',
+        'minimax',
       ),
     ).toEqual([]);
   });
@@ -155,27 +138,66 @@ describe('media provider capability negotiation', () => {
     ).toBe('restyle');
   });
 
-  it('routes non-provider image operations to owning adapters instead of substitutions', () => {
-    const request: ImageGenerationRequest = {
-      prompt: 'extend the canvas',
-      operation: 'outpaint',
-      referenceImageLocator: contentLocator('source:image'),
-      outpaintExpansion: { left: 64, right: 64, top: 0, bottom: 128, fillMode: 'generative' },
-    };
-    expect(validateProviderImageRequest('openai', request)).toEqual([
-      expect.objectContaining({ code: 'operation-unsupported', severity: 'error' }),
+  it('requires exact source and mask inputs for provider image editing', () => {
+    expect(validateProviderImageRequest('openai', { prompt: 'edit', operation: 'edit' })).toEqual([
+      expect.objectContaining({ code: 'missing-required-input', severity: 'error' }),
+    ]);
+    expect(
+      validateProviderImageRequest('openai', {
+        prompt: 'replace the sky',
+        operation: 'inpaint',
+        referenceImageLocator: contentLocator('source:image'),
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        code: 'missing-required-input',
+        details: expect.objectContaining({ role: 'mask' }),
+      }),
     ]);
   });
 
-  it('requires both audited adapter mapping and precise selected-model capabilities', () => {
+  it('rejects image editing when the provider or selected model has no edit path', () => {
+    const request: ImageGenerationRequest = {
+      prompt: 'replace the sky',
+      operation: 'edit',
+      referenceImageLocator: contentLocator('source:image'),
+    };
+
+    expect(validateProviderImageRequest('openai', request, ['text_to_image'])).toEqual([
+      expect.objectContaining({
+        code: 'operation-unsupported',
+        details: expect.objectContaining({ owner: 'model' }),
+      }),
+    ]);
+    expect(validateProviderImageRequest('runway', request, ['image.edit'])).toEqual([
+      expect.objectContaining({
+        code: 'operation-unsupported',
+        details: expect.objectContaining({ owner: 'provider' }),
+      }),
+    ]);
+  });
+
+  it('requires a reference video and an edit-capable model for video editing', () => {
+    const request = videoRequest({ operation: 'transform', editInstruction: 'make it blue' });
+
+    expect(validateProviderVideoRequest('minimax', request, ['video.generate'])).toEqual([
+      expect.objectContaining({ code: 'missing-required-input' }),
+      expect.objectContaining({
+        code: 'operation-unsupported',
+        details: expect.objectContaining({ owner: 'model' }),
+      }),
+    ]);
+  });
+
+  it('requires both audited provider mapping and precise selected-model capabilities', () => {
     const request: ImageGenerationRequest = {
       prompt: 'match the pose',
       controlImageLocator: contentLocator('preview:pose'),
       controlMode: 'pose',
     };
 
-    expect(validateProviderImageRequest('dashscope', request, ['image.control.pose'])).toEqual([]);
-    expect(validateProviderImageRequest('dashscope', request, ['controlnet'])).toEqual([
+    expect(validateProviderImageRequest('oneapi', request, ['image.control.pose'])).toEqual([]);
+    expect(validateProviderImageRequest('oneapi', request, ['controlnet'])).toEqual([
       expect.objectContaining({
         code: 'unsupported-operation-control',
         details: expect.objectContaining({ owner: 'model' }),
@@ -184,7 +206,7 @@ describe('media provider capability negotiation', () => {
     expect(validateProviderImageRequest('runway', request, ['image.control.pose'])).toEqual([
       expect.objectContaining({
         code: 'unsupported-operation-control',
-        details: expect.objectContaining({ owner: 'adapter' }),
+        details: expect.objectContaining({ owner: 'provider' }),
       }),
     ]);
   });
@@ -199,7 +221,7 @@ describe('media provider capability negotiation', () => {
     expect(validateProviderImageRequest('openai', request, ['image.control.pose'])).toEqual([
       expect.objectContaining({
         code: 'unsupported-operation-control',
-        details: expect.objectContaining({ owner: 'adapter' }),
+        details: expect.objectContaining({ owner: 'provider' }),
       }),
     ]);
     expect(
@@ -211,7 +233,7 @@ describe('media provider capability negotiation', () => {
     ).toEqual([
       expect.objectContaining({
         code: 'unsupported-operation-control',
-        details: expect.objectContaining({ owner: 'adapter' }),
+        details: expect.objectContaining({ owner: 'provider' }),
       }),
     ]);
     expect(
@@ -219,7 +241,7 @@ describe('media provider capability negotiation', () => {
     ).toEqual([]);
   });
 
-  it('fails structured camera and panorama references while no adapter owns them', () => {
+  it('fails structured camera and panorama references while no provider owns them', () => {
     const request: ImageGenerationRequest = {
       prompt: 'match the composition',
       cameraReference: {
@@ -244,8 +266,8 @@ describe('media provider capability negotiation', () => {
       'image.control.panorama',
     ]);
     expect(diagnostics).toEqual([
-      expect.objectContaining({ details: expect.objectContaining({ owner: 'adapter' }) }),
-      expect.objectContaining({ details: expect.objectContaining({ owner: 'adapter' }) }),
+      expect.objectContaining({ details: expect.objectContaining({ owner: 'provider' }) }),
+      expect.objectContaining({ details: expect.objectContaining({ owner: 'provider' }) }),
     ]);
   });
 
@@ -256,14 +278,14 @@ describe('media provider capability negotiation', () => {
     });
     expect(
       validateProviderImageRequest(
-        'fal',
+        'oneapi',
         { prompt: 'same character', ipAdapterRefs: [appearance('appearance:1')] },
         ['image.reference.ip-adapter'],
       ),
     ).toEqual([]);
     expect(
       validateProviderImageRequest(
-        'fal',
+        'oneapi',
         {
           prompt: 'ambiguous character',
           ipAdapterRefs: [appearance('appearance:1'), appearance('appearance:2')],
@@ -288,20 +310,8 @@ describe('media provider capability negotiation', () => {
     ]);
   });
 
-  it('audits every canonical image operation as supported, degraded, or unsupported', () => {
-    const auditedIds = new Set(AUDITED_IMAGE_CAPABILITY_MATRIX.map((entry) => entry.operationId));
-    expect(IMAGE_OPERATION_IDS.filter((operationId) => !auditedIds.has(operationId))).toEqual([]);
-    expect(AUDITED_IMAGE_CAPABILITY_MATRIX).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ operationId: 'outpaint', level: 'unsupported' }),
-        expect.objectContaining({ operationId: 'split', level: 'unsupported' }),
-        expect.objectContaining({ operationId: 'background-remove', level: 'degraded' }),
-      ]),
-    );
-  });
-
   it('declares unsupported operations with no accepted controls', () => {
-    expect(getProviderVideoOperationSupport('runway', 'extend')).toEqual(
+    expect(getProviderVideoOperationSupport('runway', 'transform')).toEqual(
       expect.objectContaining({ level: 'unsupported', acceptedControls: [] }),
     );
   });

@@ -68,6 +68,25 @@ describe('useFocusedWebviewRoot', () => {
     expect(document.body.getAttribute('data-neko-keyboard-focused')).toBe('true');
   });
 
+  it('releases local root focus when the user interacts with another surface', () => {
+    const outsideSurface = document.createElement('button');
+    document.body.append(outsideSurface);
+    act(() => {
+      root.render(<FocusedRootHarness defaultFocused={true} />);
+    });
+
+    const shell = host.querySelector<HTMLElement>('[data-testid="keyboard-root"]');
+    expect(shell?.getAttribute('data-neko-keyboard-focused')).toBe('true');
+
+    act(() => {
+      outsideSurface.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    });
+
+    expect(shell?.getAttribute('data-neko-keyboard-focused')).toBe('false');
+    expect(document.body.getAttribute('data-neko-keyboard-focused')).toBe('false');
+    outsideSurface.remove();
+  });
+
   it('restores local focus when the keyboard root mounts after the hook effect', () => {
     act(() => {
       root.render(<DelayedFocusedRootHarness />);

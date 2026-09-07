@@ -1,9 +1,9 @@
-import { AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES } from './agent-image-transport';
 import { decodedBase64ByteLength, requireCanonicalBase64 } from './canonical-base64';
 import type { DshSkillAuthoringLayout } from './dsh-skill-authoring';
 
 export const DSH_ACP_EXTENSION_METHODS = {
   setSessionContext: 'openneko/session/context/set',
+  branchSession: 'openneko/session/branch',
   archiveSession: 'openneko/session/archive',
   readArchivedSessions: 'openneko/session/archive/read',
   readPermissionPresets: 'openneko/session/permissions/read',
@@ -18,6 +18,7 @@ export const DSH_ACP_EXTENSION_METHODS = {
   invokeSkill: 'openneko/session/skill/invoke',
   readProviderCapabilities: 'openneko/providers/capabilities/read',
   readExtensions: 'openneko/extensions/read',
+  readSkillDetail: 'openneko/extensions/skill/detail/read',
   setSkillEnabled: 'openneko/extensions/skill/enabled/set',
   removeSkill: 'openneko/extensions/skill/remove',
   addMcp: 'openneko/extensions/mcp/add',
@@ -291,6 +292,81 @@ export interface DshAcpExtensionSkill {
   readonly removable: boolean;
 }
 
+export interface DshAcpSkillDetailRequest {
+  readonly name: string;
+  readonly source: string;
+}
+
+export interface DshAcpSkillDetailProjection {
+  readonly name: string;
+  readonly description: string;
+  readonly whenToUse?: string;
+  readonly source: string;
+  readonly provider: string;
+  readonly userInvocable: boolean;
+  readonly modelInvocable: boolean;
+  readonly content: string;
+  readonly fingerprint: string;
+}
+
+export function decodeDshAcpSkillDetailRequest(
+  input: Record<string, unknown>,
+): DshAcpSkillDetailRequest {
+  decodeDshAcpJsonPayload(input, 'Skill detail request');
+  requireExactKeys(input, ['name', 'source'], 'Skill detail request');
+  return {
+    name: requireNonEmptyString(input.name, 'Skill detail name'),
+    source: requireNonEmptyString(input.source, 'Skill detail source'),
+  };
+}
+
+export function decodeDshAcpSkillDetailProjection(
+  input: Record<string, unknown>,
+): DshAcpSkillDetailProjection {
+  decodeDshAcpJsonPayload(input, 'Skill detail projection');
+  const keys =
+    input.whenToUse === undefined
+      ? [
+          'name',
+          'description',
+          'source',
+          'provider',
+          'userInvocable',
+          'modelInvocable',
+          'content',
+          'fingerprint',
+        ]
+      : [
+          'name',
+          'description',
+          'whenToUse',
+          'source',
+          'provider',
+          'userInvocable',
+          'modelInvocable',
+          'content',
+          'fingerprint',
+        ];
+  requireExactKeys(input, keys, 'Skill detail projection');
+  const fingerprint = requireNonEmptyString(input.fingerprint, 'Skill detail fingerprint');
+  if (!/^sha256:[a-f0-9]{64}$/u.test(fingerprint)) {
+    throw new Error('Skill detail fingerprint must be a canonical SHA-256 identity.');
+  }
+  return {
+    name: requireNonEmptyString(input.name, 'Skill detail name'),
+    description: requireString(input.description, 'Skill detail description'),
+    ...(input.whenToUse === undefined
+      ? {}
+      : { whenToUse: requireNonEmptyString(input.whenToUse, 'Skill detail whenToUse') }),
+    source: requireNonEmptyString(input.source, 'Skill detail source'),
+    provider: requireNonEmptyString(input.provider, 'Skill detail provider'),
+    userInvocable: requireBoolean(input.userInvocable, 'Skill detail userInvocable'),
+    modelInvocable: requireBoolean(input.modelInvocable, 'Skill detail modelInvocable'),
+    content: requireString(input.content, 'Skill detail content'),
+    fingerprint,
+  };
+}
+
 export interface DshAcpExtensionMcp {
   readonly id: string;
   readonly name: string;
@@ -503,9 +579,23 @@ export interface DshAcpModelConfiguration {
   readonly maxTokens: number;
 }
 
+export interface DshAcpTurnConfiguration {
+  readonly model: string;
+  readonly permissionPresetId: string;
+}
+
 export interface DshAcpSessionContextSetRequest {
   readonly sessionId: string;
   readonly text: string;
+}
+
+export interface DshAcpSessionBranchRequest {
+  readonly sessionId: string;
+  readonly messageId: string;
+}
+
+export interface DshAcpSessionBranchProjection {
+  readonly sessionId: string;
 }
 
 export interface DshAcpSessionArchiveRequest {
@@ -521,6 +611,25 @@ export function decodeDshAcpSessionArchiveRequest(
 ): DshAcpSessionArchiveRequest {
   decodeDshAcpJsonPayload(input, 'Session archive request');
   requireExactKeys(input, ['sessionId'], 'Session archive request');
+  return { sessionId: requireNonEmptyString(input.sessionId, 'sessionId') };
+}
+
+export function decodeDshAcpSessionBranchRequest(
+  input: Record<string, unknown>,
+): DshAcpSessionBranchRequest {
+  decodeDshAcpJsonPayload(input, 'Session branch request');
+  requireExactKeys(input, ['sessionId', 'messageId'], 'Session branch request');
+  return {
+    sessionId: requireNonEmptyString(input.sessionId, 'sessionId'),
+    messageId: requireNonEmptyString(input.messageId, 'messageId'),
+  };
+}
+
+export function decodeDshAcpSessionBranchProjection(
+  input: Record<string, unknown>,
+): DshAcpSessionBranchProjection {
+  decodeDshAcpJsonPayload(input, 'Session branch projection');
+  requireExactKeys(input, ['sessionId'], 'Session branch projection');
   return { sessionId: requireNonEmptyString(input.sessionId, 'sessionId') };
 }
 
@@ -848,6 +957,7 @@ export interface DshAcpInboxEnqueueRequest {
   readonly prompt: readonly DshAcpInboxPromptBlock[];
   readonly displayContent: readonly DshAcpContentBlock[];
   readonly contextText: string;
+  readonly configuration: DshAcpTurnConfiguration;
 }
 
 export interface DshAcpInboxSnapshot {
@@ -951,7 +1061,7 @@ export function decodeDshAcpImageAttachmentReadProjection(
     'DSH ACP image attachment data must be canonical base64.',
   );
   const decodedBytes = decodedBase64ByteLength(data);
-  if (decodedBytes !== attachment.bytes || decodedBytes > AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES) {
+  if (decodedBytes !== attachment.bytes) {
     throw new Error(
       `DSH ACP image attachment byte length is invalid: ${decodedBytes}/${attachment.bytes}.`,
     );
@@ -969,11 +1079,6 @@ export function decodeDshAcpImageAttachmentRefProjection(
     'image attachment reference',
   );
   const bytes = requirePositiveInteger(record.bytes, 'image attachment bytes');
-  if (bytes > AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES) {
-    throw new Error(
-      `DSH ACP image attachment exceeds ${AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES} bytes.`,
-    );
-  }
   return {
     attachmentId: requireNonEmptyString(record.attachmentId, 'attachmentId'),
     mediaType: requireImageAttachmentMediaType(record.mediaType),
@@ -1187,7 +1292,7 @@ export function decodeDshAcpInboxEnqueueRequest(
   decodeDshAcpJsonPayload(projectInboxPayloadMetadata(input), 'inbox enqueue request metadata');
   requireExactKeys(
     input,
-    ['sessionId', 'prompt', 'displayContent', 'contextText'],
+    ['sessionId', 'prompt', 'displayContent', 'contextText', 'configuration'],
     'inbox enqueue request',
   );
   if (!Array.isArray(input.prompt) || input.prompt.length === 0) {
@@ -1203,6 +1308,17 @@ export function decodeDshAcpInboxEnqueueRequest(
       decodeContentBlock(block, `displayContent[${index}]`),
     ),
     contextText: requireString(input.contextText, 'contextText'),
+    configuration: decodeDshAcpTurnConfiguration(input.configuration),
+  };
+}
+
+export function decodeDshAcpTurnConfiguration(input: unknown): DshAcpTurnConfiguration {
+  const record = requireRecord(input, 'turn configuration');
+  requireExactKeys(record, ['model', 'permissionPresetId'], 'turn configuration');
+  const model = encodeDshAcpModelConfiguration(decodeDshAcpModelConfiguration(record.model));
+  return {
+    model,
+    permissionPresetId: requireNonEmptyString(record.permissionPresetId, 'turn permissionPresetId'),
   };
 }
 
