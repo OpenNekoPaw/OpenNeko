@@ -1271,6 +1271,15 @@
     },
     {
       "category": "internal-version-field",
+      "externalOwner": "npm package manifest consumed by pnpm",
+      "id": "72b3d8fd217ba6773303",
+      "isolationRule": "The value exists only in the synthetic npm tarball manifest consumed by pnpm during the cold-store fetch and offline-install regression; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime path.",
+      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
+      "path": "scripts/test-orchestration/macos-release-workflow.test.mjs",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
       "externalOwner": "FFmpeg ffprobe command-line tool",
       "id": "0125508c1b9dbb96c11b",
       "isolationRule": "The value is external binary qualification metadata only; mismatch rejects the exact media runtime bundle and cannot select an OpenNeko contract, migration, component state, or fallback implementation.",
