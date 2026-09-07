@@ -1,0 +1,56 @@
+diff --git a/dist/cjs/util.js b/dist/cjs/util.js
+index 77e64b56872bc65bcb0f60ecfbec84eb3da02c6f..7249af7a079b74a051dad7b43be7b5c5af7247ad 100644
+--- a/dist/cjs/util.js
++++ b/dist/cjs/util.js
+@@ -151,7 +151,7 @@ async function walkAsync(dirPath) {
+     (0, exports.debugLog)('Walking... ' + dirPath);
+     async function _walkAsync(dirPath) {
+         const children = await fs.readdir(dirPath);
+-        return await Promise.all(children.map(async (child) => {
++        const walkChild = async (child) => {
+             const filePath = path.resolve(dirPath, child);
+             const stat = await fs.stat(filePath);
+             if (stat.isFile()) {
+@@ -174,7 +174,13 @@ async function walkAsync(dirPath) {
+                 return walkResult;
+             }
+             return null;
+-        }));
++        };
++        // Bound open files across the entire recursive scan, including unsigned resources.
++        const results = [];
++        for (const child of children) {
++            results.push(await walkChild(child));
++        }
++        return results;
+     }
+     const allPaths = await _walkAsync(dirPath);
+     return compactFlattenedList(allPaths);
+diff --git a/dist/esm/util.js b/dist/esm/util.js
+index d3f66d54b1a88e7410d78affe17de87302db02a3..c67e15520c211c3f365e447cf83808fece29209b 100644
+--- a/dist/esm/util.js
++++ b/dist/esm/util.js
+@@ -115,7 +115,7 @@ export async function walkAsync(dirPath) {
+     debugLog('Walking... ' + dirPath);
+     async function _walkAsync(dirPath) {
+         const children = await fs.readdir(dirPath);
+-        return await Promise.all(children.map(async (child) => {
++        const walkChild = async (child) => {
+             const filePath = path.resolve(dirPath, child);
+             const stat = await fs.stat(filePath);
+             if (stat.isFile()) {
+@@ -138,7 +138,13 @@ export async function walkAsync(dirPath) {
+                 return walkResult;
+             }
+             return null;
+-        }));
++        };
++        // Bound open files across the entire recursive scan, including unsigned resources.
++        const results = [];
++        for (const child of children) {
++            results.push(await walkChild(child));
++        }
++        return results;
+     }
+     const allPaths = await _walkAsync(dirPath);
+     return compactFlattenedList(allPaths);
