@@ -14,6 +14,55 @@ const forbiddenField = ['schema', 'Version'].join('');
 const externalField = ['protocol', 'Version'].join('');
 
 describe('internal versioning audit', () => {
+  it('recognizes external HTTP endpoints and top-level npm manifest versions without exempting internal fields', () => {
+    const findings = scanSources([
+      {
+        path: 'packages/example/package.json',
+        content: '{"name":"example","version":"1.0.0","config":{"version":2}}',
+      },
+      {
+        path: 'packages/example/src/api.ts',
+        content:
+          "const endpoint = 'https://api.example.com/v2/messages'; const schemaVersion = 2; const route = 'internal/v2/message';",
+      },
+    ]);
+    assert.deepEqual(
+      findings.map(({ token }) => token).sort(),
+      ['/v2/', 'schemaVersion', 'version'].sort(),
+    );
+  });
+
+  it('shares evidence while rejecting an unapproved sibling and malformed occurrence', () => {
+    const findings = scanSources([
+      {
+        path: 'packages/example/src/adapter.ts',
+        content: 'const first = { protocolVersion: a };\nconst second = { protocolVersion: b };',
+      },
+    ]);
+    const registry = {
+      allowances: [
+        {
+          externalOwner: 'External protocol',
+          normativeSource: 'https://example.com/protocol',
+          isolationRule: 'Only the external wire consumes this field.',
+          occurrences: findings.map(({ id, path, category, token }) => ({
+            id,
+            path,
+            category,
+            token,
+          })),
+        },
+      ],
+    };
+    assert.equal(buildAuditReport({ findings, allowanceRegistry: registry }).status, 'passed');
+    registry.allowances[0].occurrences.pop();
+    assert.equal(buildAuditReport({ findings, allowanceRegistry: registry }).violations.length, 1);
+    registry.allowances[0].occurrences[0].extra = 'not allowed';
+    assert.ok(
+      validateAllowanceRegistry(registry, findings).some((error) => error.includes('exactly')),
+    );
+  });
+
   it('keeps generated DSH packaging stages outside the source audit', () => {
     assert.equal(isGeneratedDirectoryName('.dsh-runtime-stage'), true);
   });
@@ -161,19 +210,17 @@ describe('internal versioning audit', () => {
       },
     ]);
     assert.ok(finding);
-    const registry = {
-      allowances: [
-        {
-          id: finding.id,
-          path: finding.path,
-          category: finding.category,
-          token: finding.token,
-          externalOwner: 'Model Context Protocol',
-          normativeSource: 'https://modelcontextprotocol.io/specification/latest/basic/lifecycle',
-          isolationRule: 'The adapter does not project this field into an OpenNeko contract.',
-        },
-      ],
-    };
+    const registry = groupAllowances([
+      {
+        id: finding.id,
+        path: finding.path,
+        category: finding.category,
+        token: finding.token,
+        externalOwner: 'Model Context Protocol',
+        normativeSource: 'https://modelcontextprotocol.io/specification/latest/basic/lifecycle',
+        isolationRule: 'The adapter does not project this field into an OpenNeko contract.',
+      },
+    ]);
 
     assert.deepEqual(validateAllowanceRegistry(registry, [finding]), []);
     const changed = scanSources([
@@ -217,10 +264,10 @@ describe('internal versioning audit', () => {
       userWorkflow: 'Users publish and select exact immutable character snapshots.',
     };
 
-    assert.deepEqual(validateDomainAllowanceRegistry({ allowances: [allowance] }, [finding]), []);
+    assert.deepEqual(validateDomainAllowanceRegistry(groupAllowances([allowance]), [finding]), []);
     assert.ok(
       validateDomainAllowanceRegistry(
-        { allowances: [{ ...allowance, domainOwner: 'desktop-shell' }] },
+        groupAllowances([{ ...allowance, domainOwner: 'desktop-shell' }]),
         [finding],
       ).some((error) => error.includes('owning @neko package')),
     );
@@ -249,14 +296,23 @@ describe('internal versioning audit', () => {
     };
 
     assert.deepEqual(
-      validateCorrectnessAllowanceRegistry({ allowances: [allowance] }, [finding]),
+      validateCorrectnessAllowanceRegistry(groupAllowances([allowance]), [finding]),
       [],
     );
     const { consumer: _consumer, ...incomplete } = allowance;
     assert.ok(
-      validateCorrectnessAllowanceRegistry({ allowances: [incomplete] }, [finding]).some((error) =>
+      validateCorrectnessAllowanceRegistry(groupAllowances([incomplete]), [finding]).some((error) =>
         error.includes('exactly'),
       ),
     );
   });
 });
+
+function groupAllowances(entries) {
+  return {
+    allowances: entries.map(({ id, path, category, token, ...evidence }) => ({
+      ...evidence,
+      occurrences: [{ id, path, category, token }],
+    })),
+  };
+}

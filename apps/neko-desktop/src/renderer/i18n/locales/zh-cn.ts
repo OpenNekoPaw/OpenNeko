@@ -129,7 +129,7 @@ export const zhCN = {
   'settings.agent.noModels': '尚未为该 Provider 配置模型。',
   'settings.agent.providerId': 'Provider ID',
   'settings.agent.providerIdPlaceholder': '例如 acme-gateway',
-  'settings.agent.providerIdHelp': '使用小写字母开头的唯一标识，用于派生凭据名称。',
+  'settings.agent.providerIdHelp': '使用小写字母开头的唯一标识，用于关联 Provider 配置与模型。',
   'settings.agent.providerName': '显示名称',
   'settings.agent.providerNamePlaceholder': 'Provider 显示名称',
   'settings.agent.protocol': '协议',
@@ -145,6 +145,8 @@ export const zhCN = {
   'settings.agent.authentication.apiKey': 'API Key',
   'settings.agent.authentication.none': '无需 API Key',
   'settings.agent.apiKey': 'API Key',
+  'settings.agent.apiKeyStorage':
+    'API Key 以明文保存在本机 ~/.neko/config.toml，请勿分享或提交此文件。',
   'settings.agent.apiKeyPlaceholder': '输入 API Key',
   'settings.agent.apiKeyKeep': '留空则保留现有凭据',
   'settings.agent.deleteProvider': '删除 Provider',

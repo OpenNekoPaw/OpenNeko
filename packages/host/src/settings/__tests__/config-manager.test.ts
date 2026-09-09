@@ -847,8 +847,8 @@ describe('ConfigManager', () => {
       });
       expect(manager.getAssistantRuntimeSettingsSnapshot()).toEqual(
         expect.objectContaining({
-          selectedProviderId: 'nekoapi-chat',
-          selectedModelId: 'gateway-chat',
+          selectedProviderId: null,
+          selectedModelId: null,
           executionMode: 'auto',
         }),
       );
@@ -857,8 +857,8 @@ describe('ConfigManager', () => {
 
       expect(manager.getAssistantRuntimeSettingsSnapshot()).toEqual(
         expect.objectContaining({
-          selectedProviderId: 'nekoapi-chat',
-          selectedModelId: 'gateway-chat',
+          selectedProviderId: null,
+          selectedModelId: null,
           executionMode: 'auto',
         }),
       );
@@ -920,7 +920,7 @@ describe('ConfigManager', () => {
       );
     });
 
-    it('clears only the transient model selection while preserving other runtime settings', async () => {
+    it('projects missing transient selections as unselected without changing other settings', async () => {
       const runtimeSettings = createMemoryAssistantRuntimeSettings();
       const manager = new ConfigManager({
         assistantRuntimeSettings: runtimeSettings,
@@ -932,9 +932,13 @@ describe('ConfigManager', () => {
         executionMode: 'plan',
       });
 
-      await manager.clearAssistantModelSelection();
-
-      expect(runtimeSettings.snapshot()).toEqual({ executionMode: 'plan' });
+      expect(manager.getAssistantSettingsSnapshot()).toMatchObject({
+        selectedProviderId: null,
+        selectedModelId: null,
+        executionMode: 'plan',
+      });
+      expect(manager.getEffectiveAgentWorkspaceConfigSnapshot().blockingDiagnostic).toBeDefined();
+      expect(runtimeSettings.snapshot().executionMode).toBe('plan');
     });
 
     it('allows explicit reset when the runtime settings authority rejected its stored record', async () => {

@@ -137,8 +137,8 @@ Provider metadata 只能改善展示，不得隐藏 DSH 已广告的 Provider �
 settings storage 建成平行产品配置。单项能力 decode 失败只隔离该项；能力读取整体不可用时禁止新建
 依赖该目录的对话 Provider，但现有记录和无关设置保持可用。
 
-Host 是 provider credential authority。Secret 只能通过 Desktop SecretStorage concrete adapter 和受限 Host
-port 解析，不能进入 ACP logs/stdout、DSH Session、Renderer、诊断事实 或 domain artifacts。Renderer
+Host 是 Provider credential authority。Provider API Key 只由用户配置拥有，并通过受限 Host
+port 提供给精确 Provider 执行边界，不能进入 ACP logs/stdout、DSH Session、Renderer、诊断事实 或 domain artifacts。Renderer
 不得访问 Node/Electron、本地绝对路径、raw cache path、credential 或进程 handle。
 
 ACP stdout 必须保持协议纯净；日志走 stderr 或受控 diagnostic。reverse request、permission 与资源授权必须

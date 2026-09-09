@@ -106,6 +106,32 @@ describe('resolveEffectiveAgentWorkspaceConfigSnapshot', () => {
     expect(snapshot.diagnostics).toEqual([]);
   });
 
+  it('isolates a removed transient model without substituting the durable default or changing sibling settings', () => {
+    const config = createUserConfig();
+    const before = structuredClone(config);
+    const snapshot = resolve(config, {
+      selectedProviderId: 'explicit-user',
+      selectedModelId: 'removed-model',
+      executionMode: 'plan',
+      temperature: 0.8,
+    });
+    expect(snapshot).toMatchObject({
+      providerId: 'explicit-user',
+      modelId: null,
+      executionMode: 'plan',
+      temperature: 0.8,
+      defaultMediaModels: { image: 'explicit-user:user-image' },
+    });
+    expect(snapshot.model).toBeUndefined();
+    expect(snapshot.blockingDiagnostic).toBeDefined();
+    expect(config).toEqual(before);
+    expect(resolve(config).modelId).toBe('user-chat');
+    expect(
+      resolve(config, { selectedProviderId: 'explicit-user', selectedModelId: 'user-chat' })
+        .blockingDiagnostic,
+    ).toBeUndefined();
+  });
+
   it('keeps runtime overrides session-only', () => {
     const userConfig = createUserConfig();
     const snapshot = resolve(userConfig, {

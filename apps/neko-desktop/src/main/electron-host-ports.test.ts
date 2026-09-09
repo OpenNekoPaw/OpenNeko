@@ -75,30 +75,6 @@ describe('ElectronNekoHostPorts', () => {
       diagnostic: { code: 'desktop-host-access-denied-managed-storage' },
     });
   });
-
-  it('exposes only an explicitly injected Host secret boundary', async () => {
-    const root = await createTemporaryRoot();
-    const values = new Map<string, string>();
-    const host = createElectronNekoHostPorts({
-      homedir: root,
-      nekoHome: path.join(root, '.neko'),
-      logger: createLogger(),
-      secrets: {
-        get: async (key) => values.get(key),
-        set: async (key, value) => {
-          values.set(key, value);
-        },
-        delete: async (key) => {
-          values.delete(key);
-        },
-      },
-    });
-
-    await host.secrets?.set('fixture', 'host-only');
-
-    await expect(host.secrets?.get('fixture')).resolves.toBe('host-only');
-    expect(JSON.stringify(await host.environment.getRuntimeInfo())).not.toContain('host-only');
-  });
 });
 
 async function createTemporaryRoot(): Promise<string> {

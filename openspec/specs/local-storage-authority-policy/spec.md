@@ -1,8 +1,11 @@
 # local-storage-authority-policy Specification
 
 ## Purpose
+
 Define ownership and failure isolation for local user records, project facts, projections, credentials and package data.
+
 ## Requirements
+
 ### Requirement: Durable data declares one authority
 
 Every durable datum SHALL declare owner, scope, user-management class, portability, sensitivity,
@@ -69,25 +72,18 @@ select, pin, compare or restore versions of that object. Internal shape/schema v
 
 ### Requirement: Secrets and raw logs use dedicated authorities
 
-Credentials, provider tokens, mount secrets and encryption material MUST use a dedicated sensitive
-authority. A user-authored provider `api_key` MAY use the product-owned local configuration document
-as its explicit authority only when the config owner keeps the secret outside ordinary DTOs and
-projects it through a Host-only credential port. Credentials entered through protected product UI
-MUST use SecretStorage/keychain. Raw logs/audit data MUST use owner-partitioned managed files with
-retention/redaction and MUST NOT be stored as ordinary SQLite rows or replayed as business facts.
+Provider API keys SHALL use the product-owned user TOML document as their sole persisted authority. The Host configuration owner SHALL separate secret declarations from ordinary DTOs and commit writes atomically with owner-only file permissions. Other credentials and encryption material MUST use their explicit sensitive authority. Raw logs/audit data MUST use owner-partitioned managed files with retention/redaction and MUST NOT become ordinary SQLite rows or business facts.
 
-#### Scenario: Provider credential is configured in the user document
+#### Scenario: Provider credential is saved through settings
 
-- **WHEN** a provider explicitly declares a valid `api_key` in canonical user TOML
-- **THEN** the product config owner parses the secret under that provider identity
-- **AND** secret bytes never enter SQLite, ordinary config facts, logs, Renderer projection or export
-- **AND** no automatic migration or second persisted credential copy is created
+- **WHEN** the user submits an API key in the Provider editor
+- **THEN** it is stored in the user configuration document with explicit plaintext-storage disclosure
+- **AND** secret bytes never enter SQLite, logs, Renderer projections or ordinary config exports
 
-#### Scenario: Provider credential is entered through protected UI
+#### Scenario: Unselected local credential files exist
 
-- **WHEN** the user enters a credential through the product credential interaction
-- **THEN** SecretStorage/keychain is its sole persisted authority
-- **AND** the product does not write the secret into user TOML
+- **WHEN** local files outside the canonical credential authority exist
+- **THEN** the product preserves them without reading, importing or deleting them
 
 ### Requirement: Unowned data remains outside product runtime
 

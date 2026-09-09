@@ -119,11 +119,42 @@ function validateRegistry(registry, findings, evidenceKeys) {
   if (Object.keys(registry).some((key) => key !== 'allowances')) {
     errors.push('Allowance registry contains unsupported top-level fields.');
   }
-  const requiredKeys = ['category', 'id', 'path', 'token', ...evidenceKeys].sort();
+  const occurrenceKeys = ['category', 'id', 'path', 'token'];
+  const requiredKeys = [...occurrenceKeys, ...evidenceKeys].sort();
+  const groupKeys = ['occurrences', ...evidenceKeys].sort();
+  const occurrences = [];
+  for (const [index, group] of registry.allowances.entries()) {
+    if (
+      !isRecord(group) ||
+      JSON.stringify(Object.keys(group).sort()) !== JSON.stringify(groupKeys) ||
+      !Array.isArray(group.occurrences) ||
+      group.occurrences.length === 0
+    ) {
+      errors.push(
+        `allowances[${index}] must contain exactly ${groupKeys.join(', ')} with non-empty occurrences.`,
+      );
+      continue;
+    }
+    const { occurrences: entries, ...evidence } = group;
+    for (const [entryIndex, entry] of entries.entries()) {
+      if (
+        !isRecord(entry) ||
+        JSON.stringify(Object.keys(entry).sort()) !== JSON.stringify([...occurrenceKeys].sort())
+      ) {
+        errors.push(
+          `allowances[${index}].occurrences[${entryIndex}] must contain exactly ${occurrenceKeys.join(', ')}.`,
+        );
+        continue;
+      }
+      occurrences.push({
+        label: `allowances[${index}].occurrences[${entryIndex}]`,
+        allowance: { ...evidence, ...entry },
+      });
+    }
+  }
   const findingById = new Map(findings.map((finding) => [finding.id, finding]));
   const ids = new Set();
-  for (const [index, allowance] of registry.allowances.entries()) {
-    const label = `allowances[${index}]`;
+  for (const { label, allowance } of occurrences) {
     if (
       !isRecord(allowance) ||
       JSON.stringify(Object.keys(allowance).sort()) !== JSON.stringify(requiredKeys)
@@ -177,7 +208,11 @@ export function buildAuditReport({
   const registries = [allowanceRegistry, domainAllowanceRegistry, correctnessAllowanceRegistry];
   const allowedIds = new Set(
     registries.flatMap((registry) =>
-      Array.isArray(registry?.allowances) ? registry.allowances.map((entry) => entry.id) : [],
+      Array.isArray(registry?.allowances)
+        ? registry.allowances.flatMap((group) =>
+            Array.isArray(group?.occurrences) ? group.occurrences.map((entry) => entry?.id) : [],
+          )
+        : [],
     ),
   );
   const violations = findings.filter((finding) => !allowedIds.has(finding.id));
@@ -201,7 +236,15 @@ function scanSource(source) {
   let occurrence = 0;
 
   function visit(node) {
-    const value = tokenValue(node);
+    const manifestVersion =
+      (source.path === 'package.json' || source.path.endsWith('/package.json')) &&
+      node.parent !== undefined &&
+      ts.isPropertyAssignment(node.parent) &&
+      node.parent.name === node &&
+      node.getText(sourceFile).replace(/["']/gu, '') === 'version' &&
+      ts.isObjectLiteralExpression(node.parent.parent) &&
+      ts.isExpressionStatement(node.parent.parent.parent);
+    const value = manifestVersion ? undefined : tokenValue(node);
     const classification =
       value && classifyToken(value.token, value.isStringLiteral, value.counterLike);
     if (classification) {
@@ -331,6 +374,12 @@ function scriptKind(path) {
   return ts.ScriptKind.TS;
 }
 
+function isExternalHttpUrl(value) {
+  if (!URL.canParse(value)) return false;
+  const url = new URL(value);
+  return url.protocol === 'http:' || url.protocol === 'https:';
+}
+
 function classifyToken(token, isStringLiteral, counterLike = false) {
   if (
     tableGenerationIdentifierPattern.test(token) ||
@@ -355,7 +404,7 @@ function classifyToken(token, isStringLiteral, counterLike = false) {
   const multiPathClassification = classifyMultiPathMarker(token, isStringLiteral);
   if (multiPathClassification) return multiPathClassification;
   const numericPathMatch = isStringLiteral ? token.match(numericPathPattern)?.[0] : undefined;
-  if (numericPathMatch) {
+  if (numericPathMatch && !isExternalHttpUrl(token)) {
     return { category: 'versioned-path-or-key', token: numericPathMatch };
   }
   const numericIdentifierMatch = token.match(numericIdentifierPattern)?.[0];
@@ -382,7 +431,7 @@ function classifyPath(path) {
     };
   }
   const numericPathMatch = path.match(numericPathPattern)?.[0];
-  if (numericPathMatch) {
+  if (numericPathMatch && !isExternalHttpUrl(token)) {
     return { category: 'versioned-file-or-directory', token: numericPathMatch };
   }
   return undefined;

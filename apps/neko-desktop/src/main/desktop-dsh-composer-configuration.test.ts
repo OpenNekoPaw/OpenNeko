@@ -13,7 +13,6 @@ import { createDesktopDshComposerConfiguration } from './desktop-dsh-composer-co
 describe('Desktop DSH composer configuration', () => {
   it('projects workspace models and DSH permission presets through their canonical owners', async () => {
     const workspaceConfig = createConfig();
-    const applicationConfig = createConfig();
     const setSessionConfigOption = vi.fn(async () => ({ configOptions: [] }));
     const readConversationInputCatalog = vi.fn(async () => ({
       commands: [],
@@ -53,10 +52,7 @@ describe('Desktop DSH composer configuration', () => {
       workspaceGrants: {
         restore: restoreWorkspace,
       },
-      configuration: {
-        getApplicationConfig: () => applicationConfig,
-        getWorkspaceConfig: vi.fn(() => workspaceConfig),
-      },
+      configuration: workspaceConfig,
       sessions: {
         setSessionConfigOption,
         readInputCatalog: readConversationInputCatalog,
@@ -153,7 +149,6 @@ describe('Desktop DSH composer configuration', () => {
       selectedModelId: 'gpt-5',
     });
     expect(setSessionConfigOption).not.toHaveBeenCalled();
-    expect(applicationConfig.setAssistantSettings).not.toHaveBeenCalled();
 
     await expect(
       service.selectPermissionPreset({
@@ -291,7 +286,7 @@ describe('Desktop DSH composer configuration', () => {
           throw new Error('Workspace resolution must not run.');
         }),
       },
-      configuration: { getApplicationConfig: () => config, getWorkspaceConfig: () => config },
+      configuration: config,
       sessions: {
         setSessionConfigOption: vi.fn(async () => ({ configOptions: [] })),
         readInputCatalog: readConversationInputCatalog,
@@ -370,7 +365,7 @@ describe('Desktop DSH composer configuration', () => {
           },
         })),
       },
-      configuration: { getApplicationConfig: () => config, getWorkspaceConfig: () => config },
+      configuration: config,
       sessions: {
         setSessionConfigOption: vi.fn(async () => ({ configOptions: [] })),
         readInputCatalog: vi.fn(async () => {
@@ -427,10 +422,7 @@ describe('Desktop DSH composer configuration', () => {
           throw new Error('Workspace resolution must not run.');
         }),
       },
-      configuration: {
-        getApplicationConfig: () => config,
-        getWorkspaceConfig: () => config,
-      },
+      configuration: config,
       sessions: {
         setSessionConfigOption: vi.fn(async () => ({ configOptions: [] })),
         readInputCatalog: vi.fn(async () => ({ commands: [], skills: [], skillsComplete: true })),
@@ -473,10 +465,7 @@ describe('Desktop DSH composer configuration', () => {
           throw new Error('Workspace resolution must not run.');
         }),
       },
-      configuration: {
-        getApplicationConfig: () => config,
-        getWorkspaceConfig: () => config,
-      },
+      configuration: config,
       sessions: {
         setSessionConfigOption: vi.fn(async () => ({ configOptions: [] })),
         readInputCatalog: vi.fn(async () => ({ commands: [], skills: [], skillsComplete: true })),
@@ -607,7 +596,7 @@ describe('Desktop DSH composer configuration', () => {
           },
         })),
       },
-      configuration: { getApplicationConfig: () => config, getWorkspaceConfig: () => config },
+      configuration: config,
       sessions: {
         setSessionConfigOption: vi.fn(async () => ({ configOptions: [] })),
         readInputCatalog: vi.fn(async () => ({ commands: [], skills: [], skillsComplete: true })),
@@ -729,10 +718,7 @@ describe('Desktop DSH composer configuration', () => {
           throw new Error('Workspace resolution must not run.');
         }),
       },
-      configuration: {
-        getApplicationConfig: () => config,
-        getWorkspaceConfig: () => config,
-      },
+      configuration: config,
       sessions: {
         setSessionConfigOption: vi.fn(async () => ({ configOptions: [] })),
         readInputCatalog: vi.fn(async () => ({ commands: [], skills: [], skillsComplete: true })),
@@ -797,7 +783,7 @@ describe('Desktop DSH composer configuration', () => {
           throw new Error('Workspace resolution must not run.');
         }),
       },
-      configuration: { getApplicationConfig: () => config, getWorkspaceConfig: () => config },
+      configuration: config,
       sessions: {
         setSessionConfigOption,
         readInputCatalog: vi.fn(async () => ({ commands: [], skills: [], skillsComplete: true })),

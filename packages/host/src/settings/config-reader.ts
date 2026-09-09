@@ -4,6 +4,7 @@
  * Reads TOML configuration files from user and workspace locations.
  */
 
+import { randomUUID } from 'node:crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -184,17 +185,16 @@ export function writeConfigFile(
   config: UnifiedConfig,
   providerCredentials: Readonly<Record<string, ProviderCredentialDeclaration>> = {},
 ): void {
-  const dir = path.dirname(filePath);
-
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+  const source = stringify(unifiedConfigToToml(config, providerCredentials));
+  fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
+  const temporaryPath = `${filePath}.${randomUUID()}.tmp`;
+  try {
+    fs.writeFileSync(temporaryPath, source, { encoding: 'utf-8', mode: 0o600, flag: 'wx' });
+    fs.renameSync(temporaryPath, filePath);
+  } catch (error) {
+    fs.rmSync(temporaryPath, { force: true });
+    throw error;
   }
-
-  fs.writeFileSync(
-    filePath,
-    `${stringify(unifiedConfigToToml(config, providerCredentials))}`,
-    'utf-8',
-  );
 }
 
 /**

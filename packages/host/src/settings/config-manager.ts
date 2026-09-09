@@ -158,9 +158,9 @@ export class ConfigManager {
     return Array.from(this.providers.values()).filter((p) => p.enabled !== false);
   }
 
-  async setProvider(provider: ProviderDefinition): Promise<void> {
+  async setProvider(provider: ProviderDefinition, apiKey?: string): Promise<void> {
     this.ensureUserConfigManager();
-    await this.userConfigManager!.addProvider(provider);
+    await this.userConfigManager!.addProvider(provider, apiKey);
     this.reloadConfig();
   }
 
@@ -507,14 +507,6 @@ export class ConfigManager {
   async setAssistantSettings(updates: Partial<AssistantSettingsSnapshot>): Promise<void> {
     const authority = this.requireAssistantRuntimeSettings();
     await authority.commit({ ...authority.snapshot(), ...updates });
-  }
-
-  async clearAssistantModelSelection(): Promise<void> {
-    const authority = this.requireAssistantRuntimeSettings();
-    const next = { ...authority.snapshot() };
-    delete next.selectedProviderId;
-    delete next.selectedModelId;
-    await authority.commit(next);
   }
 
   async applyRuntimeAssistantSettingsFromWebview(settings: Record<string, unknown>): Promise<void> {

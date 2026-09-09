@@ -309,7 +309,7 @@ describe('Desktop DSH Agent runtime composition', () => {
       },
     });
 
-    await expect(runtime.deferConfigurationRefresh()).resolves.toBe('pending');
+    runtime.setSessionConfigurationPending(true);
 
     expect(start).toHaveBeenCalledOnce();
     expect(firstSubprocess.dispose).not.toHaveBeenCalled();
@@ -357,7 +357,7 @@ describe('Desktop DSH Agent runtime composition', () => {
       replay: false,
     });
 
-    await runtime.deferConfigurationRefresh();
+    runtime.setSessionConfigurationPending(true);
     await expect(runtime.prepareSession()).rejects.toThrow(/current Session work/u);
 
     runtime.client.projection.acceptSessionEvent({

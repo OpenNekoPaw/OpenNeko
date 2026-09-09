@@ -75,13 +75,7 @@ export function createDesktopDshComposerConfiguration(options: {
       };
     }>;
   };
-  readonly configuration: {
-    getApplicationConfig(): ComposerConfigManager;
-    getWorkspaceConfig(input: {
-      readonly workspaceId: string;
-      readonly workspacePath: string;
-    }): ComposerConfigManager;
-  };
+  readonly configuration: ComposerConfigManager;
   readonly sessions: Pick<
     ConversationDshSessionBoundClient,
     'setSessionConfigOption' | 'readInputCatalog'
@@ -129,7 +123,7 @@ export function createDesktopDshComposerConfiguration(options: {
     readonly context?: DshComposerContextProjection;
   }> => {
     if (binding.kind !== 'workspace' && binding.kind !== 'authoring') {
-      return { config: options.configuration.getApplicationConfig() };
+      return { config: options.configuration };
     }
     const resolution = await options.workspaceGrants.restore(
       windowId,
@@ -138,10 +132,7 @@ export function createDesktopDshComposerConfiguration(options: {
     );
     const canvas = await options.canvas.readCatalog(resolution.workspace.workspaceId);
     return {
-      config: options.configuration.getWorkspaceConfig({
-        workspaceId: resolution.workspace.workspaceId,
-        workspacePath: resolution.workspace.workspacePath,
-      }),
+      config: options.configuration,
       context: {
         kind: 'workspace',
         workspaceId: resolution.workspace.workspaceId,

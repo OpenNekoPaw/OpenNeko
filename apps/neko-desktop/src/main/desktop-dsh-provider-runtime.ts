@@ -28,6 +28,7 @@ export interface DesktopDshProviderDiagnostic {
 }
 
 export interface DesktopDshProviderRuntimeProjection {
+  readonly modelBindings: readonly DesktopDshExecutionModel[];
   readonly profilePatchEntries: readonly Readonly<Record<string, unknown>>[];
   readonly credentialEnvironment: Readonly<Record<string, string>>;
   readonly executionCatalog: DesktopDshExecutionCatalog;
@@ -166,6 +167,9 @@ export async function createDesktopDshProviderRuntimeProjection(input: {
     },
   });
   return Object.freeze({
+    modelBindings: Object.freeze(
+      [...executionModels.values()].flatMap((models) => [...models.values()]),
+    ),
     profilePatchEntries: Object.freeze([
       Object.freeze({
         id: DSH_PI_AI_ROW_ID,

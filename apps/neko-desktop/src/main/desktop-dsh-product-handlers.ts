@@ -29,7 +29,7 @@ import { CANVAS_DSH_TOOL_NAME, type CanvasWorkspaceTurnTarget } from '@neko/canv
 import { CONTENT_IMAGE_DSH_TOOL_NAME } from '@neko/content-domain';
 import { DOCUMENT_DSH_TOOL_NAME } from '@neko/content-domain/document';
 import type { DesktopWorkspaceGrantAuthorityPort } from '@neko/host/desktop-workspace-grant-authority';
-import type { WorkspaceConfigManagerAuthority } from '@neko/host/settings';
+import type { ConfigManager } from '@neko/host/settings';
 import type { ProfessionalApplicationBindingRepository } from '@neko/professional-apps-node';
 
 import type { DesktopDshAgentHandlerAssembly } from './desktop-dsh-agent-runtime';
@@ -53,8 +53,8 @@ export function createDesktopDshProductHandlers(options: {
   readonly generationRuntime: Pick<GenerationApplicationRuntime, 'getJobs'>;
   readonly generationProjection: DesktopDshGenerationProjectionPort;
   readonly configuration: Pick<
-    WorkspaceConfigManagerAuthority,
-    'getApplicationConfig' | 'getWorkspaceConfig'
+    ConfigManager,
+    'resolveModelRefForPurpose' | 'getProvider' | 'getModel'
   >;
   readonly assistant: {
     readonly assistantSpaceId: string;

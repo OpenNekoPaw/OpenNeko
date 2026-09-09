@@ -56,7 +56,7 @@ pnpm dev:desktop
 ```
 
 After launching, configure AI services and models in Settings at the bottom left. Then start a conversation or select a project to begin creating.
-Model configuration is stored in `~/.neko/config.toml`. See [Contributing](./CONTRIBUTING.md) for development and validation details.
+Model configuration and API keys are stored in the local `~/.neko/config.toml` file. API keys are plain text; product writes restrict file permissions to the current user. Do not share or commit this file. See [Contributing](./CONTRIBUTING.md) for development and validation details.
 
 ## Learn More
 

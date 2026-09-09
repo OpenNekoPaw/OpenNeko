@@ -78,57 +78,12 @@ describe('Desktop architecture boundaries', () => {
     expect(violations).toEqual([]);
   });
 
-  it('keeps Desktop Agent composition on the canonical ACP and DSH subprocess path', () => {
-    const supervisor = readFileSync(
-      path.join(sourceRoot, 'main', 'desktop-dsh-subprocess-supervisor.ts'),
-      'utf8',
-    );
-    const application = readFileSync(
-      path.join(
-        repositoryRoot,
-        'packages/agent/runtime/src/application/conversation-dsh-session-application.ts',
-      ),
-      'utf8',
-    );
-    const client = readFileSync(
-      path.join(repositoryRoot, 'packages/agent/runtime/src/acp/dsh-acp-application-client.ts'),
-      'utf8',
-    );
-
-    expect(supervisor).toContain("stdio: ['pipe', 'pipe', 'pipe']");
-    expect(supervisor).toContain('import type { DshAcpByteTransport }');
-    expect(application).toContain('createConversationDshSessionBindingService');
-    expect(application).toContain('createConversationDshSessionBoundClient');
-    expect(client).toContain('new ClientSideConnection');
-    for (const source of [supervisor, application, client]) {
-      expect(source).not.toContain('@neko/agent-runtime/pi');
-      expect(source).not.toContain('createAgentAppHost');
-      expect(source).not.toContain('createAgentControllerComposition');
-      expect(source).not.toContain('ctx.agents');
-    }
-  });
-
-  it('keeps the DSH Session bridge as the only Renderer Agent path', () => {
-    const preload = readFileSync(path.join(sourceRoot, 'preload', 'index.ts'), 'utf8');
+  it('keeps Agent persistence outside the renderer', () => {
     const renderer = readFileSync(
       path.join(sourceRoot, 'renderer', 'DesktopAgentSurface.tsx'),
       'utf8',
     );
-
-    expect(preload).toContain('dshSessions: {');
-    expect(preload).toContain('dshPermissions: {');
-    expect(preload).toContain('dshRuntime: {');
-    expect(renderer).toContain('window.openNekoDesktop.dshSessions.submit');
-    expect(renderer).toContain('window.openNekoDesktop.dshPermissions.decide');
-    expect(renderer).toContain('window.openNekoDesktop.dshRuntime.restart');
-    expect(renderer).toContain('requireReadyState');
     expect(renderer).not.toMatch(/localStorage|sessionStorage|indexedDB/u);
-    expect(renderer).not.toMatch(/rawSession|piHistory|PiConversation/u);
-    expect(preload).not.toContain('DESKTOP_AGENT_CHANNELS');
-    expect(preload).not.toContain('agentLaunch: {');
-    expect(preload).not.toContain('assistantResources: {');
-    expect(existsSync(path.join(sourceRoot, 'shared', 'agent-contract.ts'))).toBe(false);
-    expect(existsSync(path.join(sourceRoot, 'shared', 'agent-automation-contract.ts'))).toBe(false);
   });
 
   it('keeps one canonical Agent Entry mode and submit path', () => {
@@ -207,27 +162,18 @@ describe('Desktop architecture boundaries', () => {
     expect(shell.match(/<ControlledWorkbenchShell/gu)).toHaveLength(1);
   });
 
-  it('keeps provider credentials in the Host authority and Desktop safeStorage boundary', () => {
-    const mainRoot = path.join(sourceRoot, 'main');
-    const application = readFileSync(path.join(mainRoot, 'index.ts'), 'utf8');
+  it('wires Provider credentials to the Host user configuration authority', () => {
+    const application = readFileSync(path.join(sourceRoot, 'main', 'index.ts'), 'utf8');
     const credentialAuthority = readFileSync(
       path.join(sourceRoot, '../../../packages/host/src/settings/provider-credential-authority.ts'),
       'utf8',
     );
-
-    expect(application).toContain('safeStorage.encryptString');
-    expect(application).toContain('createEncryptedDesktopSecretPort');
-    expect(application).toContain("'provider-credentials.json'");
-    expect(application).not.toContain("'agent-credentials.json'");
-    expect(application).not.toContain('createAgentCredentialRuntime');
-    expect(application).not.toContain('createMacOSProtectedAuthPrompt');
-    expect(credentialAuthority).toContain('HostSecretPort');
-    expect(credentialAuthority).toContain("'openneko.provider.credential:'");
-    expect(credentialAuthority).not.toContain('openneko.agent.pi.credential');
+    expect(application).toContain('new ProviderCredentialAuthority({');
+    expect(application).toContain('filePath: buildConfigFilePath(homedir)');
+    expect(credentialAuthority).toContain('readConfigFileResult(this.filePath)');
     expect(credentialAuthority).not.toContain('BrowserWindow');
     expect(credentialAuthority).not.toContain('ipcRenderer');
     expect(credentialAuthority).not.toContain('postMessage');
-    expect(existsSync(path.join(mainRoot, 'macos-protected-auth-prompt.ts'))).toBe(false);
   });
 
   it('keeps direct Canvas Generation on owning services without an Agent turn', () => {

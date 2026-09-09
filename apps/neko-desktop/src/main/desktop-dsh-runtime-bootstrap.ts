@@ -1,5 +1,6 @@
 import { mkdir, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 
 import type { AgentConversationContext } from '@neko/agent-contracts';
 import type { ConversationDshSessionBindingStore } from '@neko/agent-runtime/application';
@@ -97,6 +98,7 @@ export async function startDesktopDshProductRuntime(options: {
   readonly prepared: PreparedDesktopDshRuntime;
   readonly runtime: DesktopDshAgentRuntime;
   readonly executionCatalog: DesktopDshExecutionCatalog;
+  refreshProviders(): Promise<'unchanged' | 'pending'>;
 }> {
   const prepareCandidate = async (): Promise<{
     readonly prepared: PreparedDesktopDshRuntime;
@@ -116,10 +118,10 @@ export async function startDesktopDshProductRuntime(options: {
   };
   let queuedCandidate: RuntimeCandidate | undefined = initial;
   let connectingCandidate: RuntimeCandidate | undefined = queuedCandidate;
-  let activeExecutionCatalog: DesktopDshExecutionCatalog | undefined;
+  let activeProviders: DesktopDshProviderRuntimeProjection | undefined;
   const executionCatalog: DesktopDshExecutionCatalog = Object.freeze({
     resolve(providerId: string, productModelId: string) {
-      return activeExecutionCatalog?.resolve(providerId, productModelId);
+      return activeProviders?.executionCatalog.resolve(providerId, productModelId);
     },
   });
   const runtime = await startDesktopDshAgentRuntime({
@@ -136,11 +138,11 @@ export async function startDesktopDshProductRuntime(options: {
       if (candidate === undefined) {
         throw new Error('Desktop DSH runtime connected without a prepared Provider candidate.');
       }
-      activeExecutionCatalog = candidate.providers.executionCatalog;
+      activeProviders = candidate.providers;
       connectingCandidate = undefined;
     },
     onInstanceUnavailable() {
-      activeExecutionCatalog = undefined;
+      activeProviders = undefined;
       connectingCandidate = undefined;
     },
     virtualCwd: initial.prepared.workingDirectory,
@@ -155,7 +157,21 @@ export async function startDesktopDshProductRuntime(options: {
         personalSkillRoot: join(initial.prepared.profile.dshHome, 'skills'),
       }),
   });
-  return Object.freeze({ prepared: initial.prepared, runtime, executionCatalog });
+  return Object.freeze({
+    prepared: initial.prepared,
+    runtime,
+    executionCatalog,
+    async refreshProviders() {
+      const next = await options.providers();
+      const unchanged =
+        activeProviders !== undefined &&
+        isDeepStrictEqual(next.profilePatchEntries, activeProviders.profilePatchEntries) &&
+        isDeepStrictEqual(next.credentialEnvironment, activeProviders.credentialEnvironment) &&
+        isDeepStrictEqual(next.modelBindings, activeProviders.modelBindings);
+      runtime.setSessionConfigurationPending(!unchanged);
+      return unchanged ? ('unchanged' as const) : ('pending' as const);
+    },
+  });
 }
 
 function selectDshShellEnvironment(

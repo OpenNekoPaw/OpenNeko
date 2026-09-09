@@ -19,7 +19,11 @@ describe('Desktop DSH product handlers', () => {
       generationProjection: {
         projectSnapshot: vi.fn(async () => ({ status: 'accepted' as const })),
       },
-      configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
+      configuration: {
+        resolveModelRefForPurpose: vi.fn(),
+        getProvider: vi.fn(),
+        getModel: vi.fn(),
+      },
       assistant: { assistantSpaceId: 'assistant:one', root: '/tmp/assistant' },
       skillAuthoring: { create: vi.fn() },
       cutRuntime: cutRuntime(),
@@ -62,7 +66,11 @@ describe('Desktop DSH product handlers', () => {
       generationProjection: {
         projectSnapshot: vi.fn(async () => ({ status: 'accepted' as const })),
       },
-      configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
+      configuration: {
+        resolveModelRefForPurpose: vi.fn(),
+        getProvider: vi.fn(),
+        getModel: vi.fn(),
+      },
       assistant: { assistantSpaceId: 'assistant:one', root: '/tmp/assistant' },
       skillAuthoring: { create: vi.fn() },
       cutRuntime: cutRuntime(),
@@ -96,7 +104,11 @@ describe('Desktop DSH product handlers', () => {
       generationProjection: {
         projectSnapshot: vi.fn(async () => ({ status: 'accepted' as const })),
       },
-      configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
+      configuration: {
+        resolveModelRefForPurpose: vi.fn(),
+        getProvider: vi.fn(),
+        getModel: vi.fn(),
+      },
       assistant: { assistantSpaceId: 'assistant:one', root: '/tmp/assistant' },
       skillAuthoring: { create: vi.fn() },
       cutRuntime: cutRuntime(),
@@ -134,7 +146,11 @@ describe('Desktop DSH product handlers', () => {
       generationProjection: {
         projectSnapshot: vi.fn(async () => ({ status: 'accepted' as const })),
       },
-      configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
+      configuration: {
+        resolveModelRefForPurpose: vi.fn(),
+        getProvider: vi.fn(),
+        getModel: vi.fn(),
+      },
       assistant: { assistantSpaceId: 'assistant:one', root: '/tmp/assistant' },
       skillAuthoring: { create: vi.fn() },
       cutRuntime: cutRuntime(),

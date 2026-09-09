@@ -13,12 +13,21 @@
 
 ## 当前 owner
 
-| 边界                      | Owner                                                | 约束                                                                          |
-| ------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Desktop 用户凭据          | `apps/neko-desktop` Main 的 `HostSecretPort` adapter | 使用 OS 保护存储；不得传入 renderer 或项目文件                                |
-| Agent provider credential | Agent platform/provider adapter                      | runtime 只消费解析后的能力；prompt、Skill 和 session transcript 不保存 secret |
-| MCP/project tool policy   | workspace config + host policy                       | workspace 可声明允许项或引用，但个人凭据仍归用户 scope                        |
-| 运行时 session            | owning process/session                               | 可刷新、可取消、可失效；不是持久创作事实                                      |
+| 边界                      | Owner                             | 约束                                                                      |
+| ------------------------- | --------------------------------- | ------------------------------------------------------------------------- |
+| Provider API Key          | `@neko/host` 用户配置与凭据 owner | 唯一保存在 `~/.neko/config.toml`，Host 解析；状态投影不含密钥             |
+| Agent provider credential | Agent platform/provider adapter   | 仅在精确 Provider 执行边界消费；prompt、Skill 和 transcript 不保存 secret |
+| MCP/project tool policy   | workspace config + host policy    | workspace 可声明允许项或引用，但个人凭据仍归用户 scope                    |
+| 运行时 session            | owning process/session            | 可刷新、可取消、可失效；不是持久创作事实                                  |
+
+Provider 编辑入口必须告知 API Key 以明文保存在本地用户配置。Provider 元数据与提交的 API Key
+由配置 owner 原子写入，文件仅当前用户可读写；省略 Key 保留现有声明，显式提交才替换，删除
+Provider 同时移除其配置凭据。设置展示只消费 configured/missing/invalid 状态，已保存的 Key 不返回
+Renderer。读取配置不修改其内容或权限；权限限制仅在产品写入时应用。
+
+凭据读取始终使用精确 Provider 在用户配置中的声明。缺失或非法声明在对应 Provider 报错并保留
+编辑入口，无关 Provider 保持可用。正常运行不访问其他凭据 authority，不导入、删除或改写无 owner
+的本地文件。
 
 不存在一个通用 `auth:*` renderer 命令面。需要登录或授权体验的保留功能应在 owning package 定义最小 typed intent/status contract，并由 Desktop Main adapter 实现；不得把 provider token 作为 IPC payload 返回。
 
