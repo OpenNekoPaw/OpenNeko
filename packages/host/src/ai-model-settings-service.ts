@@ -47,7 +47,7 @@ export function resolveDshDialogueProtocol(
 export class DesktopAiModelSettingsService {
   constructor(
     private readonly config: ConfigManager,
-    private readonly credentials: ProviderCredentialAuthority,
+    private readonly credentials: Pick<ProviderCredentialAuthority, 'status'>,
     private readonly dialogueCapabilities: DesktopAiDialogueCapabilityReader,
     private readonly generationCapabilities: DesktopAiGenerationCapabilityReader,
   ) {}
@@ -88,10 +88,10 @@ export class DesktopAiModelSettingsService {
 
   async execute(request: DesktopAiModelSettingsRequest): Promise<{
     readonly projection: DesktopAiModelSettingsProjection;
-    readonly executionConfigurationChanged: boolean;
+    readonly configurationChanged: boolean;
   }> {
     if (request.operation === 'get')
-      return { projection: await this.project(), executionConfigurationChanged: false };
+      return { projection: await this.project(), configurationChanged: false };
     if (request.operation === 'save-provider') {
       const existing = this.config.getProvider(request.provider.id);
       const generationCapability = request.provider.presetId
@@ -162,36 +162,36 @@ export class DesktopAiModelSettingsService {
       if (!existing && requiresApiKey && request.apiKey === undefined) {
         throw new Error(`Provider ${request.provider.id} requires an API key.`);
       }
-      await this.config.setProvider({
-        id: request.provider.id,
-        name: existing?.name ?? request.provider.id,
-        displayName: request.provider.displayName,
-        type: request.provider.type,
-        apiUrl: request.provider.apiUrl,
-        enabled: request.provider.enabled,
-        connectionKind: request.provider.connectionKind,
-        ...(request.provider.protocol === undefined
-          ? {}
-          : { protocolProfile: request.provider.protocol }),
-        supportLevel:
-          generationCapability === undefined
-            ? (existing?.supportLevel ?? 'custom')
-            : request.provider.apiUrl === generationCapability.defaultApiUrl
-              ? generationCapability.supportLevel
-              : 'custom',
-        supportedModelFamilies: request.provider.supportedModelFamilies,
-        requiresApiKey,
-        supportsBeta: existing?.supportsBeta ?? request.provider.type === 'anthropic',
-        useBearerAuth:
-          existing?.useBearerAuth ??
-          (request.provider.type !== 'ollama' && request.provider.type !== 'anthropic'),
-        ...(existing?.options ? { options: existing.options } : {}),
-        ...(existing?.protocolVariant ? { protocolVariant: existing.protocolVariant } : {}),
-      });
-      if (request.apiKey !== undefined) {
-        await this.credentials.replaceApiKey(request.provider.id, request.apiKey);
-      }
-      return { projection: await this.project(), executionConfigurationChanged: true };
+      await this.config.setProvider(
+        {
+          id: request.provider.id,
+          name: existing?.name ?? request.provider.id,
+          displayName: request.provider.displayName,
+          type: request.provider.type,
+          apiUrl: request.provider.apiUrl,
+          enabled: request.provider.enabled,
+          connectionKind: request.provider.connectionKind,
+          ...(request.provider.protocol === undefined
+            ? {}
+            : { protocolProfile: request.provider.protocol }),
+          supportLevel:
+            generationCapability === undefined
+              ? (existing?.supportLevel ?? 'custom')
+              : request.provider.apiUrl === generationCapability.defaultApiUrl
+                ? generationCapability.supportLevel
+                : 'custom',
+          supportedModelFamilies: request.provider.supportedModelFamilies,
+          requiresApiKey,
+          supportsBeta: existing?.supportsBeta ?? request.provider.type === 'anthropic',
+          useBearerAuth:
+            existing?.useBearerAuth ??
+            (request.provider.type !== 'ollama' && request.provider.type !== 'anthropic'),
+          ...(existing?.options ? { options: existing.options } : {}),
+          ...(existing?.protocolVariant ? { protocolVariant: existing.protocolVariant } : {}),
+        },
+        request.apiKey,
+      );
+      return { projection: await this.project(), configurationChanged: true };
     }
     if (request.operation === 'save-model') {
       const provider = this.config.getProvider(request.model.providerId);
@@ -295,7 +295,7 @@ export class DesktopAiModelSettingsService {
         capabilities: template ? [...template.capabilities] : [...request.model.capabilities],
         enabled: request.model.enabled,
       });
-      return { projection: await this.project(), executionConfigurationChanged: true };
+      return { projection: await this.project(), configurationChanged: true };
     }
     if (request.operation === 'delete-model') {
       const model = this.config.getModel(request.modelId);
@@ -308,29 +308,8 @@ export class DesktopAiModelSettingsService {
           );
         }
       }
-      const selected = this.config.getAssistantSettingsSnapshot();
-      const clearsRuntimeSelection =
-        selected.selectedProviderId === model.providerId && selected.selectedModelId === model.id;
       await this.config.removeModel(model.id);
-      if (clearsRuntimeSelection) {
-        try {
-          await this.config.clearAssistantModelSelection();
-        } catch (error) {
-          try {
-            await this.config.setModel(model);
-          } catch (rollbackError) {
-            throw new Error(
-              `Model ${model.providerId}/${model.id} was removed but the stale Composer selection could not be cleared and the model could not be restored. Selection error: ${describeError(error)}. Restore error: ${describeError(rollbackError)}.`,
-              { cause: error },
-            );
-          }
-          throw new Error(
-            `Model ${model.providerId}/${model.id} deletion was reverted because its stale Composer selection could not be cleared: ${describeError(error)}.`,
-            { cause: error },
-          );
-        }
-      }
-      return { projection: await this.project(), executionConfigurationChanged: true };
+      return { projection: await this.project(), configurationChanged: true };
     }
     if (request.operation === 'delete-provider') {
       const provider = this.config.getProvider(request.providerId);
@@ -342,26 +321,10 @@ export class DesktopAiModelSettingsService {
         );
       }
       await this.config.removeProvider(provider.id);
-      try {
-        await this.credentials.delete(provider.id);
-      } catch (error) {
-        try {
-          await this.config.setProvider(provider);
-        } catch (rollbackError) {
-          throw new Error(
-            `Provider ${provider.id} was removed but credential cleanup and Provider restoration both failed. Credential error: ${describeError(error)}. Restore error: ${describeError(rollbackError)}.`,
-            { cause: error },
-          );
-        }
-        throw new Error(
-          `Provider ${provider.id} credential cleanup failed, so its configuration was restored: ${describeError(error)}.`,
-          { cause: error },
-        );
-      }
-      return { projection: await this.project(), executionConfigurationChanged: true };
+      return { projection: await this.project(), configurationChanged: true };
     }
     await this.config.setDefaultModelRef(request.modelType, request.ref);
-    return { projection: await this.project(), executionConfigurationChanged: true };
+    return { projection: await this.project(), configurationChanged: true };
   }
 
   private async projectProvider(
@@ -393,10 +356,10 @@ export class DesktopAiModelSettingsService {
       };
     }
     try {
-      const credential = await this.credentials.read(provider.id);
+      const credentialStatus = await this.credentials.status(provider.id);
       return {
         ...base,
-        credentialStatus: credential ? 'configured' : 'missing',
+        credentialStatus,
         ...(capabilityDiagnostic === undefined ? {} : { diagnostic: capabilityDiagnostic }),
       };
     } catch (error: unknown) {

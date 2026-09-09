@@ -24,14 +24,14 @@ The isolated DSH subprocess SHALL expose a bounded, secret-free projection of it
 
 ### Requirement: DSH settings use the canonical provider authority
 
-Provider, model and default changes SHALL update the existing OpenNeko TOML ConfigManager authority consumed by DSH and SHALL NOT create a parallel model configuration file. Provider secrets SHALL remain in the Host credential authority. Provider and model directory changes SHALL locally refresh the DSH runtime from that authority without restarting the Desktop application.
+Provider, model and default changes SHALL use the OpenNeko user TOML configuration authority. Provider metadata and a submitted API key SHALL be committed atomically by the Host configuration owner. Omitting the API key SHALL preserve the current declaration; an explicit replacement SHALL replace only that Provider's key. Removing a Provider SHALL remove its key in the same configuration commit. Settings SHALL show credential status without returning stored secret bytes and SHALL disclose plaintext local storage. Only changes to the Provider profile, credentials or model bindings actually consumed by DSH SHALL require its execution configuration to refresh. Generation-only changes and identical saves SHALL not require a DSH refresh. All consumers SHALL read the same application-owned user configuration.
 
-#### Scenario: A DSH-advertised Provider is configured
+#### Scenario: A Provider and API key are saved
 
-- **WHEN** the user saves a Provider selected from the current DSH capability projection
-- **THEN** its non-secret configuration is written to `~/.neko/config.toml`
-- **AND** its credential is stored only through the Host credential authority
-- **AND** a new DSH runtime instance is materialized from those OpenNeko authorities
+- **WHEN** the user saves a valid Provider and API key
+- **THEN** both are persisted in the same user TOML commit with owner-only file permissions
+- **AND** a failed write leaves the previous document intact
+- **AND** the returned projection contains only credential status
 
 #### Scenario: A selected capability is no longer advertised
 
@@ -50,7 +50,7 @@ Provider, model and default changes SHALL update the existing OpenNeko TOML Conf
 
 - **WHEN** a valid Provider and model are saved and no DSH turn is running
 - **THEN** they are present in canonical config
-- **AND** DSH rematerializes its profile, credential environment, subprocess and execution catalog before the mutation reports `applied`
+- **AND** changed DSH execution inputs are reported as pending and rematerialized before a subsequent conversation is prepared
 - **AND** a newly created conversation can use the updated catalog without restarting OpenNeko
 
 #### Scenario: Provider is added while a turn is running
@@ -58,8 +58,14 @@ Provider, model and default changes SHALL update the existing OpenNeko TOML Conf
 - **WHEN** a valid Provider or model is saved while a DSH turn is active
 - **THEN** the running turn retains its exact runtime and session identity
 - **AND** the refresh reports `pending`
-- **AND** new DSH work is rejected rather than using the stale catalog
-- **AND** the latest canonical configuration is applied automatically after the active turn ends
+- **AND** preparation that requires the updated configuration waits for the active work to finish
+- **AND** the next conversation preparation applies the latest canonical execution inputs
+
+#### Scenario: A missing credential needs user input
+
+- **WHEN** a Provider has no configured API key
+- **THEN** settings report missing credentials and offer the existing Provider editor
+- **AND** unrelated Providers remain usable and no system keychain access occurs
 
 ### Requirement: Provider credentials remain host-owned
 
@@ -72,7 +78,7 @@ The Renderer SHALL never read stored provider secrets. A submitted API key SHALL
 
 ### Requirement: Existing sessions are not silently reconfigured
 
-Default dialogue changes SHALL refresh the execution configuration used by future conversations. Provider catalog and default changes SHALL replace only the ephemeral DSH runtime instance and SHALL preserve existing Conversation records, DSH session identities, bindings and transcripts.
+Default dialogue selection SHALL be applied through the existing conversation configuration path. Only changes to DSH execution inputs SHALL replace its ephemeral runtime instance, while preserving Conversation records, DSH session identities, bindings and transcripts. Reverting a pending edit to the active execution inputs SHALL clear the pending refresh.
 
 #### Scenario: Runtime is refreshed after a Provider edit
 
@@ -155,7 +161,8 @@ The Host model-settings owner SHALL support exact config-backed Provider and mod
 
 - **WHEN** the user confirms deletion of a model that is not referenced by any default
 - **THEN** only that exact model is removed from canonical config
-- **AND** DSH rematerialization is marked as required
+- **AND** DSH rematerialization is required only if the model was part of its execution inputs
+- **AND** a transient selection referencing the removed model is projected as unselected with a local diagnostic, without restoring the model or changing sibling settings
 
 #### Scenario: A referenced model is deleted
 

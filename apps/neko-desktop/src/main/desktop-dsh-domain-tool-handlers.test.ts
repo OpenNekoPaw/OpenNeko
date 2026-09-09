@@ -51,7 +51,11 @@ describe('Desktop DSH domain Tool handlers', () => {
       coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
-      configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
+      configuration: {
+        resolveModelRefForPurpose: vi.fn(),
+        getProvider: vi.fn(),
+        getModel: vi.fn(),
+      },
       assistant: { assistantSpaceId: 'assistant:one', root },
       cutRuntime: undefined,
     });
@@ -89,7 +93,11 @@ describe('Desktop DSH domain Tool handlers', () => {
       coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
-      configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
+      configuration: {
+        resolveModelRefForPurpose: vi.fn(),
+        getProvider: vi.fn(),
+        getModel: vi.fn(),
+      },
       assistant: { assistantSpaceId: 'assistant:one', root },
       cutRuntime: undefined,
     });
@@ -130,7 +138,11 @@ describe('Desktop DSH domain Tool handlers', () => {
       coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
-      configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
+      configuration: {
+        resolveModelRefForPurpose: vi.fn(),
+        getProvider: vi.fn(),
+        getModel: vi.fn(),
+      },
       assistant: { assistantSpaceId: 'assistant:one', root },
       cutRuntime: undefined,
     });
@@ -188,28 +200,22 @@ describe('Desktop DSH domain Tool handlers', () => {
       generationRuntime: { getJobs },
       generationProjection: { projectSnapshot },
       configuration: {
-        getApplicationConfig: vi.fn(),
-        getWorkspaceConfig: vi.fn(
-          () =>
-            ({
-              resolveModelRefForPurpose,
-              getProvider: (providerId: string) =>
-                providerId === 'provider:one'
-                  ? { id: providerId, type: 'generic', enabled: true }
-                  : undefined,
-              getModel: (modelId: string) =>
-                modelId === 'model:one'
-                  ? {
-                      id: modelId,
-                      providerId: 'provider:one',
-                      name: 'image-model',
-                      capabilities: ['image.generate', 'text_to_image'],
-                      enabled: true,
-                    }
-                  : undefined,
-            }) as never,
-        ),
-      },
+        resolveModelRefForPurpose,
+        getProvider: (providerId: string) =>
+          providerId === 'provider:one'
+            ? { id: providerId, type: 'generic', enabled: true }
+            : undefined,
+        getModel: (modelId: string) =>
+          modelId === 'model:one'
+            ? {
+                id: modelId,
+                providerId: 'provider:one',
+                name: 'image-model',
+                capabilities: ['image.generate', 'text_to_image'],
+                enabled: true,
+              }
+            : undefined,
+      } as never,
       assistant: { assistantSpaceId: 'assistant:one', root },
     });
 
@@ -291,28 +297,22 @@ describe('Desktop DSH domain Tool handlers', () => {
       },
       generationProjection,
       configuration: {
-        getApplicationConfig: vi.fn(),
-        getWorkspaceConfig: vi.fn(
-          () =>
-            ({
-              resolveModelRefForPurpose,
-              getProvider: (providerId: string) =>
-                providerId === 'minimax-provider'
-                  ? { id: providerId, type: 'minimax', enabled: true }
-                  : undefined,
-              getModel: (modelId: string) =>
-                modelId === 'minimax-h3'
-                  ? {
-                      id: modelId,
-                      providerId: 'minimax-provider',
-                      name: 'MiniMax-H3',
-                      capabilities: ['video.generate', 'image_to_video'],
-                      enabled: true,
-                    }
-                  : undefined,
-            }) as never,
-        ),
-      },
+        resolveModelRefForPurpose,
+        getProvider: (providerId: string) =>
+          providerId === 'minimax-provider'
+            ? { id: providerId, type: 'minimax', enabled: true }
+            : undefined,
+        getModel: (modelId: string) =>
+          modelId === 'minimax-h3'
+            ? {
+                id: modelId,
+                providerId: 'minimax-provider',
+                name: 'MiniMax-H3',
+                capabilities: ['video.generate', 'image_to_video'],
+                enabled: true,
+              }
+            : undefined,
+      } as never,
       assistant: { assistantSpaceId: 'assistant:one', root },
     });
 
@@ -369,8 +369,9 @@ describe('Desktop DSH domain Tool handlers', () => {
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
       configuration: {
-        getApplicationConfig: vi.fn(),
-        getWorkspaceConfig: vi.fn(),
+        resolveModelRefForPurpose: vi.fn(),
+        getProvider: vi.fn(),
+        getModel: vi.fn(),
       },
       assistant: { assistantSpaceId: 'assistant:one', root },
     });
@@ -423,7 +424,11 @@ describe('Desktop DSH domain Tool handlers', () => {
       },
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
-      configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
+      configuration: {
+        resolveModelRefForPurpose: vi.fn(),
+        getProvider: vi.fn(),
+        getModel: vi.fn(),
+      },
       assistant: { assistantSpaceId: 'assistant:one', root },
     });
 
@@ -489,7 +494,11 @@ describe('Desktop DSH domain Tool handlers', () => {
       coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
-      configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
+      configuration: {
+        resolveModelRefForPurpose: vi.fn(),
+        getProvider: vi.fn(),
+        getModel: vi.fn(),
+      },
       assistant: { assistantSpaceId: 'assistant:one', root },
       character: { resolveService },
     });
@@ -536,7 +545,11 @@ describe('Desktop DSH domain Tool handlers', () => {
       coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
-      configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
+      configuration: {
+        resolveModelRefForPurpose: vi.fn(),
+        getProvider: vi.fn(),
+        getModel: vi.fn(),
+      },
       assistant: { assistantSpaceId: 'assistant:one', root: '/tmp/assistant' },
       character: { resolveService },
     });
@@ -587,8 +600,9 @@ describe('Desktop DSH domain Tool handlers', () => {
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
       configuration: {
-        getApplicationConfig: vi.fn(),
-        getWorkspaceConfig: vi.fn(),
+        resolveModelRefForPurpose: vi.fn(),
+        getProvider: vi.fn(),
+        getModel: vi.fn(),
       },
       assistant: { assistantSpaceId: 'assistant:one', root },
     });
@@ -631,8 +645,9 @@ describe('Desktop DSH domain Tool handlers', () => {
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
       configuration: {
-        getApplicationConfig: vi.fn(),
-        getWorkspaceConfig: vi.fn(),
+        resolveModelRefForPurpose: vi.fn(),
+        getProvider: vi.fn(),
+        getModel: vi.fn(),
       },
       assistant: { assistantSpaceId: 'assistant:one', root },
       cutRuntime: { resolveExportService } as never,
@@ -684,8 +699,9 @@ describe('Desktop DSH domain Tool handlers', () => {
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
       configuration: {
-        getApplicationConfig: vi.fn(),
-        getWorkspaceConfig: vi.fn(),
+        resolveModelRefForPurpose: vi.fn(),
+        getProvider: vi.fn(),
+        getModel: vi.fn(),
       },
       assistant: { assistantSpaceId: 'assistant:one', root },
     });
@@ -741,7 +757,7 @@ describe('Desktop DSH domain Tool handlers', () => {
 
   it('rejects an unknown Assistant Space without using application configuration', async () => {
     const root = await createRoot();
-    const getApplicationConfig = vi.fn();
+    const getModel = vi.fn();
     const handlers = createDesktopDshDomainToolHandlers({
       bindings: {
         async getByDshSessionId() {
@@ -757,7 +773,7 @@ describe('Desktop DSH domain Tool handlers', () => {
       coordinateCanvasMutation,
       generationRuntime: { getJobs: vi.fn() },
       generationProjection,
-      configuration: { getApplicationConfig, getWorkspaceConfig: vi.fn() },
+      configuration: { resolveModelRefForPurpose: vi.fn(), getProvider: vi.fn(), getModel },
       assistant: { assistantSpaceId: 'assistant:one', root },
     });
 
@@ -767,7 +783,7 @@ describe('Desktop DSH domain Tool handlers', () => {
       outcome: 'failure',
       diagnostic: { code: 'GENERATION_DSH_ASSISTANT_UNAUTHORIZED' },
     });
-    expect(getApplicationConfig).not.toHaveBeenCalled();
+    expect(getModel).not.toHaveBeenCalled();
   });
 });
 

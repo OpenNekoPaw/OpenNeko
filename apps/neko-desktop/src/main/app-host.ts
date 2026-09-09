@@ -291,7 +291,7 @@ export interface DesktopAppHostOptions {
     }): Promise<WorldAuthoringSnapshot>;
   };
   readonly generationLifecycle?: { dispose(): Promise<void> };
-  readonly workspaceConfigLifecycle?: { dispose(): void };
+  readonly configurationLifecycle?: { dispose(): void };
   readonly workspaceGrants: DesktopWorkspaceGrantAuthority;
   readonly conversationContexts: Pick<AgentConversationContextAuthorityPort, 'readContext'>;
   readonly characterFoundation: CharacterFoundationService;
@@ -334,7 +334,7 @@ export interface DesktopAppHostOptions {
   readonly cut?: DesktopCutRuntime;
   readonly settings: DesktopApplicationSettingsService;
   readonly aiModelSettings: DesktopAiModelSettingsService;
-  readonly refreshAiModelExecutionConfiguration: () => Promise<'applied' | 'pending'>;
+  readonly refreshAiModelExecutionConfiguration: () => Promise<'unchanged' | 'applied' | 'pending'>;
   readonly storageSettings: DesktopStorageSettingsRuntime;
   readonly openAgentAdvancedSettings: () => Promise<void>;
   readonly instanceId?: string;
@@ -995,7 +995,7 @@ export class DesktopAppHost {
     return {
       requestId: request.requestId,
       projection: result.projection,
-      runtimeEffect: result.executionConfigurationChanged
+      runtimeEffect: result.configurationChanged
         ? await this.options.refreshAiModelExecutionConfiguration()
         : 'unchanged',
     };
@@ -2127,7 +2127,7 @@ export class DesktopAppHost {
       errors.push(error);
     }
     try {
-      this.options.workspaceConfigLifecycle?.dispose();
+      this.options.configurationLifecycle?.dispose();
     } catch (error) {
       errors.push(error);
     }

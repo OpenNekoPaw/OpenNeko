@@ -143,7 +143,7 @@ export const en = {
   'settings.agent.providerId': 'Provider ID',
   'settings.agent.providerIdPlaceholder': 'For example, acme-gateway',
   'settings.agent.providerIdHelp':
-    'Use a unique identifier starting with a lowercase letter; it also scopes the credential.',
+    'Use a unique identifier starting with a lowercase letter to associate Provider configuration and models.',
   'settings.agent.providerName': 'Display name',
   'settings.agent.providerNamePlaceholder': 'Provider display name',
   'settings.agent.protocol': 'Protocol',
@@ -159,6 +159,8 @@ export const en = {
   'settings.agent.authentication.apiKey': 'API Key',
   'settings.agent.authentication.none': 'No API Key',
   'settings.agent.apiKey': 'API Key',
+  'settings.agent.apiKeyStorage':
+    'API keys are stored as plain text in ~/.neko/config.toml on this computer. Do not share or commit this file.',
   'settings.agent.apiKeyPlaceholder': 'Enter API Key',
   'settings.agent.apiKeyKeep': 'Leave empty to keep the existing credential',
   'settings.agent.deleteProvider': 'Delete provider',

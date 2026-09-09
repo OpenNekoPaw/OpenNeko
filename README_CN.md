@@ -56,7 +56,7 @@ pnpm dev:desktop
 ```
 
 启动后，在左下角设置中配置 AI 服务和模型，再从“开始创作”发起对话，或选择项目进入创作。
-模型配置保存在 `~/.neko/config.toml`。详细开发与验证说明见[参与开发](./CONTRIBUTING_CN.md)。
+模型配置和 API Key 统一保存在本机 `~/.neko/config.toml`；API Key 为明文，产品写入时将文件权限限制为仅当前用户可读写。请勿分享或提交此文件。详细开发与验证说明见[参与开发](./CONTRIBUTING_CN.md)。
 
 ## 了解更多
 

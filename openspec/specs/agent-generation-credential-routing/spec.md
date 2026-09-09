@@ -8,19 +8,19 @@ Keep generation credentials Host-owned while routing exact provider access into 
 
 ### Requirement: Agent generation uses typed defaults and the canonical credential authority
 
-Agent generation policy SHALL map each requested operation to one flat `default_models` type binding and determine provider credential availability through the injected CredentialStore authority. A valid configuration-file credential SHALL take precedence over an interactive auth-login credential, and Provider metadata MUST remain secret-free. Operation purposes SHALL NOT create a second default-model configuration layer.
+Agent generation policy SHALL map each requested operation to one flat default-model type binding and determine credential availability through the injected Host credential authority backed only by user configuration. Provider metadata MUST remain secret-free. Operation purposes SHALL NOT create another configuration or credential source.
 
-#### Scenario: Configuration file supplies the media credential
+#### Scenario: User configuration supplies the media credential
 
-- **WHEN** the exact media provider has a valid configuration-file API key and an image model binding
-- **THEN** Agent policy marks that exact image purpose available without reading `Provider.apiKey`
+- **WHEN** the exact media Provider has a valid user-configuration API key and image model binding
+- **THEN** Agent policy marks that exact purpose available through the Host credential authority
 - **AND** no secret enters the turn contract, transcript, diagnostic, Webview state or model-policy snapshot
 
-#### Scenario: Auth login supplies the media credential
+#### Scenario: A Provider credential is absent
 
-- **WHEN** the configuration file has no credential and SecretStorage contains a valid interactive API-key credential for the exact media provider
-- **THEN** Agent policy marks the exact image purpose available through the same CredentialStore path
-- **AND** it does not add another credential source or change provider/model identity
+- **WHEN** the exact Provider lacks a configured API key
+- **THEN** its credential-dependent operation remains unavailable without reading another source
+- **AND** unrelated Providers and operations remain usable
 
 ### Requirement: Agent Launch preserves generation capabilities
 

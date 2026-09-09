@@ -40,7 +40,7 @@ import {
   type GenerationJobSnapshot,
 } from '@neko/generation-domain/job';
 import type { DesktopWorkspaceGrantAuthorityPort } from '@neko/host/desktop-workspace-grant-authority';
-import type { ConfigManager, WorkspaceConfigManagerAuthority } from '@neko/host/settings';
+import type { ConfigManager } from '@neko/host/settings';
 import type { CharacterDshAuthoringService } from '@neko/chara-domain/application';
 import { CharacterDshHostAdapter } from '@neko/chara-node';
 import type { WorldDshAuthoringService } from '@neko/world-domain/application';
@@ -72,8 +72,8 @@ export function createDesktopDshDomainToolHandlers(options: {
   readonly generationRuntime: Pick<GenerationApplicationRuntime, 'getJobs'>;
   readonly generationProjection: DesktopDshGenerationProjectionPort;
   readonly configuration: Pick<
-    WorkspaceConfigManagerAuthority,
-    'getApplicationConfig' | 'getWorkspaceConfig'
+    ConfigManager,
+    'resolveModelRefForPurpose' | 'getProvider' | 'getModel'
   >;
   readonly assistant: {
     readonly assistantSpaceId: string;
@@ -126,7 +126,7 @@ export function createDesktopDshDomainToolHandlers(options: {
           },
           root: options.assistant.root,
         }),
-        config: options.configuration.getApplicationConfig(),
+        config: options.configuration,
       };
     }
     if (context.binding.kind !== 'workspace' && context.binding.kind !== 'authoring') {
@@ -145,10 +145,7 @@ export function createDesktopDshDomainToolHandlers(options: {
         owner: { kind: 'workspace' as const, workspaceId: resolution.workspace.workspaceId },
         root: resolution.workspace.workspacePath,
       }),
-      config: options.configuration.getWorkspaceConfig({
-        workspaceId: resolution.workspace.workspaceId,
-        workspacePath: resolution.workspace.workspacePath,
-      }),
+      config: options.configuration,
     };
   };
   const domainTools = createDshDomainToolHandlers({

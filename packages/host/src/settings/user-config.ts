@@ -89,7 +89,7 @@ export interface IUserConfigManager {
   load(): UserConfig;
   loadResult?(): UserConfigReadResult;
   save(config: UserConfig): Promise<void>;
-  addProvider(provider: ProviderDefinition): Promise<void>;
+  addProvider(provider: ProviderDefinition, apiKey?: string): Promise<void>;
   removeProvider(providerId: string): Promise<void>;
   addModel(model: Model): Promise<void>;
   removeModel(modelId: string): Promise<void>;
@@ -186,21 +186,37 @@ export class FileUserConfigManager implements IUserConfigManager {
   // Provider Methods
   // ==========================================================================
 
-  async addProvider(provider: ProviderDefinition): Promise<void> {
-    const config = this.load();
-    const existing = config.providers.findIndex((p) => p.id === provider.id);
-    if (existing >= 0) {
-      config.providers[existing] = provider;
-    } else {
-      config.providers.push(provider);
+  async addProvider(provider: ProviderDefinition, apiKey?: string): Promise<void> {
+    if (apiKey !== undefined && apiKey.trim().length === 0) {
+      throw new Error('Provider API key must not be empty.');
     }
-    await this.save(config);
+    const document = this.loadRawForWrite();
+    const providers = [...(document.config.providers ?? [])];
+    const existing = providers.findIndex((entry) => entry.id === provider.id);
+    if (existing >= 0) providers[existing] = provider;
+    else providers.push(provider);
+    this.writeRawConfig({
+      config: { ...document.config, providers },
+      providerCredentials:
+        apiKey === undefined
+          ? document.providerCredentials
+          : { ...document.providerCredentials, [provider.id]: { status: 'configured', apiKey } },
+    });
+    this.reload();
   }
 
   async removeProvider(providerId: string): Promise<void> {
-    const config = this.load();
-    config.providers = config.providers.filter((p) => p.id !== providerId);
-    await this.save(config);
+    const document = this.loadRawForWrite();
+    const providerCredentials = { ...document.providerCredentials };
+    delete providerCredentials[providerId];
+    this.writeRawConfig({
+      config: {
+        ...document.config,
+        providers: document.config.providers?.filter((provider) => provider.id !== providerId),
+      },
+      providerCredentials,
+    });
+    this.reload();
   }
 
   // ==========================================================================
@@ -286,7 +302,7 @@ export class FileUserConfigManager implements IUserConfigManager {
   dispose(): void {}
 
   private loadRawForWrite(): WritableUserConfigDocument {
-    const result = this.loadRawResult();
+    const result = readConfigFileResult(this.filePath);
     if (result.status === 'ok') {
       return {
         config: { ...result.config },

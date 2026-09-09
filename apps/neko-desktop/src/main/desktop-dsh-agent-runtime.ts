@@ -75,7 +75,7 @@ export interface DesktopDshAgentRuntime {
   resolveSessionCwd(context: AgentConversationContext): Promise<string>;
   getStatus(): DshRuntimeHostProjection;
   subscribe(listener: (projection: DshRuntimeHostProjection) => void): () => void;
-  deferConfigurationRefresh(): Promise<'pending'>;
+  setSessionConfigurationPending(pending: boolean): void;
   prepareSession(): Promise<void>;
   refreshConfiguration(): Promise<'applied' | 'pending'>;
   flushPendingConfigurationRefresh(): Promise<void>;
@@ -320,15 +320,15 @@ export async function startDesktopDshAgentRuntime(
       statusListeners.add(listener);
       return () => statusListeners.delete(listener);
     },
-    async deferConfigurationRefresh(): Promise<'pending'> {
+    setSessionConfigurationPending(pending: boolean): void {
       if (disposed) throw new Error('Desktop DSH Agent runtime is disposed.');
-      sessionConfigurationRefreshPending = true;
+      if (sessionConfigurationRefreshPending === pending) return;
+      sessionConfigurationRefreshPending = pending;
       publishStatus(
         status.status === 'running'
-          ? { status: 'running', sessionConfigurationPending: true }
+          ? { status: 'running', ...(pending ? { sessionConfigurationPending: true } : {}) }
           : status,
       );
-      return 'pending';
     },
     prepareSession,
     async refreshConfiguration() {

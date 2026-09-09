@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { ConfigManager } from './settings/config-manager';
 import { readConfigFileResult } from './settings/config-reader';
-import type { ProviderCredentialAuthority } from './settings/provider-credential-authority';
+import { ProviderCredentialAuthority } from './settings/provider-credential-authority';
 import { FileUserConfigManager } from './settings/user-config';
 import {
   DesktopAiModelSettingsService,
@@ -110,7 +110,7 @@ const generationCapabilities: DesktopAiGenerationCapabilityReader = {
 
 function createService(
   config: ConfigManager,
-  credentials: ProviderCredentialAuthority,
+  credentials: Pick<ProviderCredentialAuthority, 'status'>,
   capabilities: DesktopAiDialogueCapabilityReader = dialogueCapabilities,
 ) {
   return new DesktopAiModelSettingsService(
@@ -161,7 +161,6 @@ function createConfig() {
         selectedProviderId: provider.id,
         selectedModelId: model.id,
       })),
-      clearAssistantModelSelection: vi.fn(async () => undefined),
     } as unknown as ConfigManager,
   };
 }
@@ -170,8 +169,8 @@ describe('DesktopAiModelSettingsService', () => {
   it('projects credential status without exposing secret material', async () => {
     const { config } = createConfig();
     const credentials = {
-      read: vi.fn(async () => ({ type: 'api_key' as const, key: 'must-not-project' })),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'configured' as const),
+    };
     const projection = await createService(config, credentials).project();
 
     expect(projection.providers).toEqual([
@@ -181,14 +180,14 @@ describe('DesktopAiModelSettingsService', () => {
         supportedModelFamilies: ['dialogue'],
       }),
     ]);
-    expect(JSON.stringify(projection)).not.toContain('must-not-project');
+    expect(credentials.status).toHaveBeenCalledWith('provider-a');
   });
 
   it('projects and persists a configured protocol through the canonical DSH protocol', async () => {
     const { config } = createConfig();
     const credentials = {
-      read: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
     const capabilities: DesktopAiDialogueCapabilityReader = {
       read: vi.fn(async () => ({
         status: 'available' as const,
@@ -226,15 +225,15 @@ describe('DesktopAiModelSettingsService', () => {
     });
     expect(config.setProvider).toHaveBeenCalledWith(
       expect.objectContaining({ protocolProfile: 'openai-completions' }),
+      undefined,
     );
   });
 
-  it('writes providers and credentials through their canonical authorities', async () => {
+  it('commits Provider metadata and credentials through one configuration write', async () => {
     const { config } = createConfig();
     const credentials = {
-      read: vi.fn(async () => undefined),
-      replaceApiKey: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
     const service = createService(config, credentials);
 
     const result = await service.execute({
@@ -260,18 +259,18 @@ describe('DesktopAiModelSettingsService', () => {
         protocolProfile: 'openai-chat',
         supportedModelFamilies: ['dialogue'],
       }),
+      'secret-value',
     );
-    expect(credentials.replaceApiKey).toHaveBeenCalledWith('provider-a', 'secret-value');
-    expect(result.executionConfigurationChanged).toBe(true);
+
+    expect(result.configurationChanged).toBe(true);
     expect(JSON.stringify(result)).not.toContain('secret-value');
   });
 
   it('creates an explicit local keyless custom DSH Provider without touching credentials', async () => {
     const { config } = createConfig();
     const credentials = {
-      read: vi.fn(async () => undefined),
-      replaceApiKey: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
     const capabilities: DesktopAiDialogueCapabilityReader = {
       read: vi.fn(async () => ({
         status: 'available' as const,
@@ -305,16 +304,15 @@ describe('DesktopAiModelSettingsService', () => {
         protocolProfile: 'openai-completions',
         requiresApiKey: false,
       }),
+      undefined,
     );
-    expect(credentials.replaceApiKey).not.toHaveBeenCalled();
   });
 
   it('creates an unknown DSH catalog Provider without a local preset or endpoint override', async () => {
     const { config } = createConfig();
     const credentials = {
-      read: vi.fn(async () => undefined),
-      replaceApiKey: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
     const capabilities: DesktopAiDialogueCapabilityReader = {
       read: vi.fn(async () => ({
         status: 'available' as const,
@@ -358,6 +356,7 @@ describe('DesktopAiModelSettingsService', () => {
         apiUrl: '',
         supportedModelFamilies: ['dialogue'],
       }),
+      'future-secret',
     );
     expect(vi.mocked(config.setProvider).mock.calls[0]?.[0]).not.toHaveProperty('protocolProfile');
   });
@@ -365,8 +364,8 @@ describe('DesktopAiModelSettingsService', () => {
   it('rejects a stale protocol before mutating OpenNeko configuration', async () => {
     const { config, provider } = createConfig();
     const credentials = {
-      read: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
     const capabilities: DesktopAiDialogueCapabilityReader = {
       read: vi.fn(async () => ({
         status: 'available' as const,
@@ -399,8 +398,8 @@ describe('DesktopAiModelSettingsService', () => {
   it('keeps configured Providers visible when DSH capability discovery is unavailable', async () => {
     const { config } = createConfig();
     const credentials = {
-      read: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
     const projection = await createService(config, credentials, {
       read: vi.fn(async () => {
         throw new Error('DSH subprocess stopped');
@@ -428,9 +427,8 @@ describe('DesktopAiModelSettingsService', () => {
       supportLevel: 'verified',
     });
     const credentials = {
-      read: vi.fn(async () => undefined),
-      replaceApiKey: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
 
     await createService(config, credentials).execute({
       requestId: 'request-existing-provider',
@@ -464,9 +462,8 @@ describe('DesktopAiModelSettingsService', () => {
     const { config, provider } = createConfig();
     Object.assign(provider, { builtin: true });
     const credentials = {
-      read: vi.fn(async () => undefined),
-      replaceApiKey: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
 
     await createService(config, credentials).execute({
       requestId: 'request-config-provider-protocol',
@@ -505,9 +502,8 @@ describe('DesktopAiModelSettingsService', () => {
       connectionKind: 'direct',
     });
     const credentials = {
-      read: vi.fn(async () => undefined),
-      replaceApiKey: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
 
     const capabilities: DesktopAiDialogueCapabilityReader = {
       read: vi.fn(async () => ({
@@ -541,6 +537,7 @@ describe('DesktopAiModelSettingsService', () => {
         connectionKind: 'gateway',
         protocolProfile: 'openai-completions',
       }),
+      undefined,
     );
   });
 
@@ -548,8 +545,8 @@ describe('DesktopAiModelSettingsService', () => {
     const { config, provider } = createConfig();
     Object.assign(provider, { requiresApiKey: true, connectionKind: 'direct' });
     const credentials = {
-      read: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
 
     await expect(
       createService(config, credentials).execute({
@@ -575,8 +572,8 @@ describe('DesktopAiModelSettingsService', () => {
   it('rejects a Provider mutation that merges dialogue and generation ownership', async () => {
     const { config } = createConfig();
     const credentials = {
-      read: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
 
     await expect(
       createService(config, credentials).execute({
@@ -603,8 +600,8 @@ describe('DesktopAiModelSettingsService', () => {
     const { config, provider } = createConfig();
     Object.assign(provider, { type: 'newapi', protocolProfile: 'newapi' });
     const credentials = {
-      read: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
 
     await expect(
       createService(config, credentials).execute({
@@ -631,8 +628,8 @@ describe('DesktopAiModelSettingsService', () => {
     const { config, provider } = createConfig();
     Object.assign(provider, { type: 'newapi', protocolProfile: 'newapi' });
     const credentials = {
-      read: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
 
     await createService(config, credentials).execute({
       requestId: 'request-provider-protocol-mismatch',
@@ -652,15 +649,15 @@ describe('DesktopAiModelSettingsService', () => {
 
     expect(config.setProvider).toHaveBeenCalledWith(
       expect.objectContaining({ protocolProfile: 'openai-responses' }),
+      undefined,
     );
   });
 
   it('rejects credentials for local keyless dialogue Providers', async () => {
     const { config } = createConfig();
     const credentials = {
-      read: vi.fn(async () => undefined),
-      replaceApiKey: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
 
     await expect(
       createService(config, credentials).execute({
@@ -682,7 +679,6 @@ describe('DesktopAiModelSettingsService', () => {
     ).rejects.toThrow(/does not accept an API key/u);
 
     expect(config.setProvider).not.toHaveBeenCalled();
-    expect(credentials.replaceApiKey).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -703,9 +699,8 @@ describe('DesktopAiModelSettingsService', () => {
   ])('persists the exact native generation adapter for $type', async (preset) => {
     const { config } = createConfig();
     const credentials = {
-      read: vi.fn(async () => undefined),
-      replaceApiKey: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
 
     await createService(config, credentials).execute({
       requestId: `request-${preset.type}`,
@@ -732,6 +727,7 @@ describe('DesktopAiModelSettingsService', () => {
         supportLevel: 'verified',
         supportedModelFamilies: ['generation'],
       }),
+      'generation-secret',
     );
     expect(vi.mocked(config.setProvider).mock.calls[0]?.[0]).not.toHaveProperty('protocolProfile');
   });
@@ -739,9 +735,8 @@ describe('DesktopAiModelSettingsService', () => {
   it('keeps the MiniMax adapter type when the preset endpoint is replaced', async () => {
     const { config } = createConfig();
     const credentials = {
-      read: vi.fn(async () => undefined),
-      replaceApiKey: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
 
     await createService(config, credentials).execute({
       requestId: 'request-minimax-custom-url',
@@ -767,6 +762,7 @@ describe('DesktopAiModelSettingsService', () => {
         apiUrl: 'https://minimax-proxy.example/v2',
         supportLevel: 'custom',
       }),
+      'generation-secret',
     );
   });
 
@@ -779,8 +775,8 @@ describe('DesktopAiModelSettingsService', () => {
     });
     Object.assign(model, { type: 'video' });
     const credentials = {
-      read: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
 
     const projection = await createService(config, credentials).project();
 
@@ -818,8 +814,8 @@ describe('DesktopAiModelSettingsService', () => {
       supportedModelFamilies: ['generation'],
     });
     const credentials = {
-      read: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
 
     await createService(config, credentials).execute({
       requestId: `request-model-${template.type}`,
@@ -854,8 +850,8 @@ describe('DesktopAiModelSettingsService', () => {
       supportedModelFamilies: ['generation'],
     });
     const credentials = {
-      read: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
 
     await expect(
       createService(config, credentials).execute({
@@ -879,8 +875,8 @@ describe('DesktopAiModelSettingsService', () => {
   it('persists explicitly selected capabilities for a custom dialogue model', async () => {
     const { config, provider } = createConfig();
     const credentials = {
-      read: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
 
     await createService(config, credentials).execute({
       requestId: 'request-custom-dialogue-capabilities',
@@ -906,8 +902,8 @@ describe('DesktopAiModelSettingsService', () => {
   it('preserves the Host-owned identity when editing an existing model', async () => {
     const { config, provider, model } = createConfig();
     const credentials = {
-      read: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
 
     await createService(config, credentials).execute({
       requestId: 'request-edit-dialogue-model',
@@ -935,8 +931,8 @@ describe('DesktopAiModelSettingsService', () => {
   it('rejects a custom model missing the capabilities required by its type', async () => {
     const { config, provider } = createConfig();
     const credentials = {
-      read: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
 
     await expect(
       createService(config, credentials).execute({
@@ -967,8 +963,8 @@ describe('DesktopAiModelSettingsService', () => {
       supportedModelFamilies: ['generation'],
     });
     const credentials = {
-      read: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
 
     await expect(
       createService(config, credentials).execute({
@@ -997,8 +993,8 @@ describe('DesktopAiModelSettingsService', () => {
       supportedModelFamilies: ['generation'],
     });
     const credentials = {
-      read: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
 
     await expect(
       createService(config, credentials).execute({
@@ -1023,8 +1019,8 @@ describe('DesktopAiModelSettingsService', () => {
   it('delegates exact generation defaults without provider fallback', async () => {
     const { config } = createConfig();
     const credentials = {
-      read: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
     const service = createService(config, credentials);
 
     const result = await service.execute({
@@ -1038,7 +1034,7 @@ describe('DesktopAiModelSettingsService', () => {
       providerId: 'provider-a',
       modelId: 'image-a',
     });
-    expect(result.executionConfigurationChanged).toBe(true);
+    expect(result.configurationChanged).toBe(true);
 
     await service.execute({
       requestId: 'request-music-default',
@@ -1056,8 +1052,8 @@ describe('DesktopAiModelSettingsService', () => {
     const { config, provider } = createConfig();
     Object.assign(provider, { supportedModelFamilies: ['generation'] });
     const credentials = {
-      read: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
 
     await expect(
       createService(config, credentials).execute({
@@ -1081,8 +1077,8 @@ describe('DesktopAiModelSettingsService', () => {
     const { config, provider } = createConfig();
     Object.assign(provider, { supportedModelFamilies: ['dialogue'] });
     const credentials = {
-      read: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
 
     await expect(
       createService(config, credentials).execute({
@@ -1114,8 +1110,8 @@ describe('DesktopAiModelSettingsService', () => {
     });
     Object.assign(model, { providerId: provider.id, type: 'llm' });
     const credentials = {
-      read: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
 
     const projection = await createService(config, credentials).project();
 
@@ -1131,15 +1127,14 @@ describe('DesktopAiModelSettingsService', () => {
     expect(projection.models).toEqual([
       expect.objectContaining({ providerId: provider.id, type: 'llm' }),
     ]);
-    expect(credentials.read).not.toHaveBeenCalled();
+    expect(credentials.status).not.toHaveBeenCalled();
   });
 
   it('rejects deleting defaults and providers that still own models', async () => {
     const { config, model, provider } = createConfig();
     const credentials = {
-      read: vi.fn(async () => undefined),
-      delete: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
     const service = createService(config, credentials);
 
     await expect(
@@ -1166,9 +1161,8 @@ describe('DesktopAiModelSettingsService', () => {
     config.getDefaultModelRef = vi.fn(() => undefined);
     config.getModelsByProvider = vi.fn(() => []);
     const credentials = {
-      read: vi.fn(async () => undefined),
-      delete: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
     const service = createService(config, credentials);
 
     await service.execute({
@@ -1183,20 +1177,16 @@ describe('DesktopAiModelSettingsService', () => {
     });
 
     expect(config.removeModel).toHaveBeenCalledWith(model.id);
-    expect(config.clearAssistantModelSelection).toHaveBeenCalledOnce();
+    expect(config.setModel).not.toHaveBeenCalled();
     expect(config.removeProvider).toHaveBeenCalledWith(provider.id);
-    expect(credentials.delete).toHaveBeenCalledWith(provider.id);
   });
 
-  it('restores a deleted model when its stale Composer selection cannot be cleared', async () => {
+  it('deletes a model without a second write to Composer settings', async () => {
     const { config, model } = createConfig();
     config.getDefaultModelRef = vi.fn(() => undefined);
-    config.clearAssistantModelSelection = vi.fn(async () => {
-      throw new Error('runtime settings unavailable');
-    });
     const credentials = {
-      read: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
 
     await expect(
       createService(config, credentials).execute({
@@ -1204,10 +1194,10 @@ describe('DesktopAiModelSettingsService', () => {
         operation: 'delete-model',
         modelId: model.id,
       }),
-    ).rejects.toThrow(/deletion was reverted/u);
+    ).resolves.toMatchObject({ configurationChanged: true });
 
     expect(config.removeModel).toHaveBeenCalledWith(model.id);
-    expect(config.setModel).toHaveBeenCalledWith(model);
+    expect(config.setModel).not.toHaveBeenCalled();
   });
 
   it('keeps an unrelated transient Composer selection when deleting another model', async () => {
@@ -1218,8 +1208,8 @@ describe('DesktopAiModelSettingsService', () => {
       selectedModelId: 'another-model',
     }));
     const credentials = {
-      read: vi.fn(async () => undefined),
-    } as unknown as ProviderCredentialAuthority;
+      status: vi.fn(async () => 'missing' as const),
+    };
 
     await createService(config, credentials).execute({
       requestId: 'delete-unselected-model',
@@ -1228,7 +1218,7 @@ describe('DesktopAiModelSettingsService', () => {
     });
 
     expect(config.removeModel).toHaveBeenCalledWith(model.id);
-    expect(config.clearAssistantModelSelection).not.toHaveBeenCalled();
+    expect(config.getAssistantSettingsSnapshot).not.toHaveBeenCalled();
   });
 
   it('persists Provider edits and deletion through the canonical config.toml owner', async () => {
@@ -1253,14 +1243,12 @@ describe('DesktopAiModelSettingsService', () => {
         models: [],
       });
       const config = new ConfigManager({ userConfigManager: userConfig });
-      const credentials = {
-        read: vi.fn(async () => undefined),
-        delete: vi.fn(async () => undefined),
-      } as unknown as ProviderCredentialAuthority;
+      const credentials = new ProviderCredentialAuthority({ filePath });
       const service = createService(config, credentials);
 
       await service.execute({
         requestId: 'persist-provider-edit',
+        apiKey: 'fixture-config-key',
         operation: 'save-provider',
         provider: {
           id: 'config-provider',
@@ -1290,6 +1278,22 @@ describe('DesktopAiModelSettingsService', () => {
       ]);
       expect(updated.config.providers?.[0]).not.toHaveProperty('builtin');
 
+      await expect(credentials.read('config-provider')).resolves.toEqual({
+        type: 'api_key',
+        key: 'fixture-config-key',
+      });
+      expect(JSON.stringify(await service.project())).not.toContain('fixture-config-key');
+      const reopenedConfig = new ConfigManager({
+        userConfigManager: new FileUserConfigManager({ filePath }),
+      });
+      const reopenedProvider = reopenedConfig.getProvider('config-provider');
+      if (!reopenedProvider) throw new Error('Reopened Provider missing');
+      await reopenedConfig.setProvider({ ...reopenedProvider, displayName: 'Edited after reopen' });
+      await expect(credentials.read('config-provider')).resolves.toEqual({
+        type: 'api_key',
+        key: 'fixture-config-key',
+      });
+
       await service.execute({
         requestId: 'persist-provider-delete',
         operation: 'delete-provider',
@@ -1302,31 +1306,27 @@ describe('DesktopAiModelSettingsService', () => {
         throw new Error(`Expected deleted config, received ${deleted.status}.`);
       }
       expect(deleted.config.providers).toEqual([]);
-      expect(credentials.delete).toHaveBeenCalledWith('config-provider');
+      expect(deleted.providerCredentials).toEqual({});
+      await expect(credentials.status('config-provider')).resolves.toBe('missing');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
 
-  it('restores Provider configuration when credential cleanup fails', async () => {
+  it('reports a failed config deletion without writing another Provider state', async () => {
     const { config, provider } = createConfig();
     config.getModelsByProvider = vi.fn(() => []);
-    const credentials = {
-      read: vi.fn(async () => undefined),
-      delete: vi.fn(async () => {
-        throw new Error('keychain unavailable');
-      }),
-    } as unknown as ProviderCredentialAuthority;
-
+    config.removeProvider = vi.fn(async () => {
+      throw new Error('configuration write failed');
+    });
+    const credentials = { status: vi.fn(async () => 'missing' as const) };
     await expect(
       createService(config, credentials).execute({
-        requestId: 'delete-provider-rollback',
+        requestId: 'delete-provider-failure',
         operation: 'delete-provider',
         providerId: provider.id,
       }),
-    ).rejects.toThrow(/configuration was restored/u);
-
-    expect(config.removeProvider).toHaveBeenCalledWith(provider.id);
-    expect(config.setProvider).toHaveBeenCalledWith(provider);
+    ).rejects.toThrow('configuration write failed');
+    expect(config.setProvider).not.toHaveBeenCalled();
   });
 });

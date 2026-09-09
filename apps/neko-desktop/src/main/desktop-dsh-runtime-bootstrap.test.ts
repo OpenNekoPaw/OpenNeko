@@ -3,10 +3,20 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { fingerprintDirectory } from '../../../../scripts/dsh-runtime-closure.mjs';
-import { prepareDesktopDshRuntime } from './desktop-dsh-runtime-bootstrap';
+import {
+  startDesktopDshAgentRuntime,
+  type DesktopDshAgentRuntime,
+} from './desktop-dsh-agent-runtime';
+import { createDesktopDshProviderRuntimeProjection } from './desktop-dsh-provider-runtime';
+import {
+  prepareDesktopDshRuntime,
+  startDesktopDshProductRuntime,
+} from './desktop-dsh-runtime-bootstrap';
+
+vi.mock('./desktop-dsh-agent-runtime', () => ({ startDesktopDshAgentRuntime: vi.fn() }));
 
 const roots: string[] = [];
 
@@ -98,16 +108,90 @@ describe('Desktop DSH runtime bootstrap', () => {
     ).rejects.toThrow(/fingerprint does not match/u);
   });
 
-  it('contains no implicit handler, system runtime, or active Workspace fallback', async () => {
-    const source = await readFile(
-      new URL('./desktop-dsh-runtime-bootstrap.ts', import.meta.url),
-      'utf8',
-    );
-
-    expect(source).not.toContain('process.execPath');
-    expect(source).not.toContain('ELECTRON_RUN_AS_NODE');
-    expect(source).not.toMatch(/activeWorkspace|currentWorkspace|recentWorkspace/u);
-    expect(source).not.toMatch(/handlers\s*\?\?/u);
+  it('refreshes only changed DSH execution inputs and cancels a reverted pending edit', async () => {
+    const runtimeRoot = await createRuntimeClosure();
+    const userDataRoot = await createRoot('openneko-provider-refresh-');
+    const builtinSkillRoot = await createRoot('openneko-provider-skills-');
+    const setSessionConfigurationPending = vi.fn();
+    vi.mocked(startDesktopDshAgentRuntime).mockImplementation(async (options) => {
+      options.onInstanceConnected?.();
+      return { setSessionConfigurationPending } as unknown as DesktopDshAgentRuntime;
+    });
+    let apiKey = 'synthetic-key';
+    let providerName = 'Chat';
+    let imageName = 'Image';
+    let modelId = 'chat';
+    const providers = () =>
+      createDesktopDshProviderRuntimeProjection({
+        providers: [
+          {
+            id: 'chat-provider',
+            name: 'chat-provider',
+            displayName: providerName,
+            type: 'openai',
+            apiUrl: 'https://example.invalid/api',
+            enabled: true,
+            requiresApiKey: true,
+            protocolProfile: 'openai-chat',
+          },
+          {
+            id: 'image-provider',
+            name: 'image-provider',
+            displayName: imageName,
+            type: 'openai',
+            apiUrl: 'https://example.invalid/images',
+            enabled: true,
+          },
+        ],
+        models: [
+          {
+            id: modelId,
+            providerId: 'chat-provider',
+            name: 'chat-api',
+            displayName: 'Chat',
+            type: 'llm',
+            enabled: true,
+            capabilities: ['chat'],
+          },
+          {
+            id: 'image',
+            providerId: 'image-provider',
+            name: imageName,
+            type: 'image',
+            enabled: true,
+            capabilities: ['image.generate'],
+          },
+        ],
+        credentials: { read: async () => ({ type: 'api_key', key: apiKey }) },
+      });
+    const product = await startDesktopDshProductRuntime({
+      isPackaged: false,
+      resourcesPath: userDataRoot,
+      userDataRoot,
+      builtinSkillRoot,
+      environment: { NEKO_DSH_RUNTIME_ROOT: runtimeRoot },
+      providers,
+      metadataStore: {} as never,
+      resolveWorkspaceSessionCwd: vi.fn(),
+      createHandlers: vi.fn(),
+    });
+    await expect(product.refreshProviders()).resolves.toBe('unchanged');
+    imageName = 'Updated image model';
+    await expect(product.refreshProviders()).resolves.toBe('unchanged');
+    expect(setSessionConfigurationPending).toHaveBeenLastCalledWith(false);
+    apiKey = 'another-synthetic-key';
+    await expect(product.refreshProviders()).resolves.toBe('pending');
+    expect(setSessionConfigurationPending).toHaveBeenLastCalledWith(true);
+    await expect(product.refreshProviders()).resolves.toBe('pending');
+    apiKey = 'synthetic-key';
+    await expect(product.refreshProviders()).resolves.toBe('unchanged');
+    expect(setSessionConfigurationPending).toHaveBeenLastCalledWith(false);
+    providerName = 'Renamed chat';
+    await expect(product.refreshProviders()).resolves.toBe('pending');
+    providerName = 'Chat';
+    modelId = 'another-product-id';
+    await expect(product.refreshProviders()).resolves.toBe('pending');
+    expect(startDesktopDshAgentRuntime).toHaveBeenCalledOnce();
   });
 });
 
@@ -118,6 +202,7 @@ function providerProjection(overrides?: {
   return {
     profilePatchEntries: overrides?.profilePatchEntries ?? [],
     credentialEnvironment: overrides?.credentialEnvironment ?? {},
+    modelBindings: [],
     executionCatalog: { resolve: () => undefined },
     diagnostics: [],
   };

@@ -131,12 +131,23 @@ export function resolveEffectiveAgentWorkspaceConfigSnapshot(
   const blockingDiagnostic =
     projectBlockingReadDiagnostic(input.userConfigReadResult) ?? selectionDiagnostics[0];
 
+  const resetProvider =
+    providerSelection.source === 'runtime' && (!provider || provider.enabled === false);
+  const resetModel =
+    modelSelection.source === 'runtime' &&
+    (!model ||
+      model.enabled === false ||
+      resetProvider ||
+      model.providerId !== providerSelection.value ||
+      (model.type !== undefined && model.type !== 'llm'));
   return {
-    providerId: providerSelection.value,
-    modelId: modelSelection.value,
-    ...(provider ? { provider } : {}),
-    ...(model ? { model } : {}),
-    ...(isStringArray(model?.capabilities) ? { modelCapabilities: model.capabilities } : {}),
+    providerId: resetProvider ? null : providerSelection.value,
+    modelId: resetModel ? null : modelSelection.value,
+    ...(provider && !resetProvider ? { provider } : {}),
+    ...(model && !resetModel ? { model } : {}),
+    ...(!resetModel && isStringArray(model?.capabilities)
+      ? { modelCapabilities: model.capabilities }
+      : {}),
     temperature: temperature.value,
     maxTokens: maxTokens.value,
     thinkingBudget: thinkingBudget.value,

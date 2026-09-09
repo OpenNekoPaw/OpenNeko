@@ -491,8 +491,7 @@ function AgentModelSettingsGroup({
     try {
       const response = await action();
       setProjection(response.projection);
-      if (response.runtimeEffect === 'pending') setRuntimeRefreshPending(true);
-      if (response.runtimeEffect === 'applied') setRuntimeRefreshPending(false);
+      setRuntimeRefreshPending(response.runtimeEffect === 'pending');
       return true;
     } catch (error: unknown) {
       onDiagnostic(error instanceof Error ? error.message : String(error));
@@ -997,6 +996,10 @@ function ProviderForm({
           </span>
         ) : null}
       </header>
+
+      {requiresApiKey ? (
+        <p className="desktop-settings__authority">{t('settings.agent.apiKeyStorage')}</p>
+      ) : null}
 
       <div className="desktop-settings__form-grid">
         {!initial ? (

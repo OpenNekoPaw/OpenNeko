@@ -15,7 +15,7 @@ SQLite 只保存本机结构化状态、可查询 catalog、账本和可重建 p
 
 持久数据准入必须按以下顺序 fail closed，不能按当前扩展名或目录猜测：
 
-1. secret/credential 使用系统 credential store 或 safeStorage 加密 authority；
+1. Provider API Key 使用 Host 拥有的用户配置，其他 secret 使用其明确的敏感 authority；
 2. raw log/audit 使用用户区受控 JSONL/log 文件与 rotation/retention；
 3. 用户需要查看、编辑、定位、导入导出或随工作区/设备转移的内容使用 owning domain
    的稳定 file/bundle；只有用户显式管理历史、发布、选择或回滚时才保留业务版本；
@@ -38,13 +38,13 @@ canonical repository，不注册自动转换或修复路径；需要保护有价
 | Media/Entity/Asset projection     | owning domain                 | 可查询 projection 与 freshness metadata                                    |
 | 后台领域 Job                      | owning domain repository      | checkpoint、状态和恢复索引                                                 |
 | 派生缓存                          | cache owner                   | locator、fingerprint、quota、GC eligibility                                |
-| 凭据与 secret                     | Desktop credential store      | 不保存 secret；仅允许无敏感信息的 provider metadata                        |
+| 凭据与 secret                     | Host 用户配置凭据 authority   | 不保存 secret；仅允许无敏感信息的 provider metadata                        |
 | 窗口、选择、滚动和布局            | Desktop view-state owner      | 仅保存明确允许恢复的稳定展示状态                                           |
 
 DSH Session transcript 保存在 Electron `userData/dsh/sessions`，由 DSH profile 直接拥有；OpenNeko
 Conversation metadata、DSH Session binding 与 checkpoint 等 operational state 使用
-`~/.neko/neko.db`，不得复制 transcript。Credential 不得进入 SQLite；Desktop 通过
-safeStorage-backed secret port 持有。
+`~/.neko/neko.db`，不得复制 transcript。Credential 不得进入 SQLite；Provider API Key 由用户 TOML 拥有，
+通过 Host-only 凭据端口提供给执行边界。
 
 ## 工作区与用户区
 

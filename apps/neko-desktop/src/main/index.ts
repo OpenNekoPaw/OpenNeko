@@ -8,7 +8,6 @@ import {
   dialog,
   nativeImage,
   nativeTheme,
-  safeStorage,
   session,
   shell,
   webContents,
@@ -79,7 +78,6 @@ import {
   readProjectEntityManagementResources,
 } from '@neko/entity-node';
 import { createDesktopGenerationExecutionProviderResolver } from './desktop-generation-execution-provider';
-import { createEncryptedDesktopSecretPort } from './encrypted-desktop-secret-port';
 import {
   createDshCanvasArtifactContentRead,
   DesktopDshCanvasArtifactDelivery,
@@ -225,10 +223,9 @@ import {
 } from '@neko/host/application-settings';
 import { buildConfigFilePath } from '@neko/host/files';
 import {
-  FileProviderCredentialSource,
   FileUserConfigManager,
   ProviderCredentialAuthority,
-  WorkspaceConfigManagerAuthority,
+  ConfigManager,
 } from '@neko/host/settings';
 import {
   listGlobalMediaLibraryConnections,
@@ -419,23 +416,10 @@ async function startDesktop(): Promise<void> {
   const agentRuntimeSettingsDiagnostic = agentRuntimeSettings.diagnostic();
   nativeTheme.themeSource = initialApplicationSettings.preferences.theme;
   const applicationInstanceId = randomUUID();
-  const secrets = createEncryptedDesktopSecretPort({
-    filePath: path.join(userData, 'secrets', 'provider-credentials.json'),
-    encryption: {
-      assertAvailable: () => {
-        if (!safeStorage.isEncryptionAvailable()) {
-          throw new Error('Electron safeStorage encryption is unavailable.');
-        }
-      },
-      encrypt: (value) => safeStorage.encryptString(value),
-      decrypt: (value) => safeStorage.decryptString(Buffer.from(value)),
-    },
-  });
   const host = createElectronNekoHostPorts({
     homedir,
     nekoHome: globalStorage.root,
     logger,
-    secrets,
     openExternal: async (uri) => {
       await shell.openExternal(uri);
     },
@@ -467,19 +451,15 @@ async function startDesktop(): Promise<void> {
     resolver: workspaceRegistry,
   });
   logger.info('Desktop workspace registry initialized.');
-  const workspaceConfigAuthority = new WorkspaceConfigManagerAuthority({
+  const applicationAgentConfig = new ConfigManager({
     userConfigManager: new FileUserConfigManager({
       filePath: buildConfigFilePath(homedir),
     }),
     assistantRuntimeSettings: agentRuntimeSettings,
   });
-  const providerCredentials = new ProviderCredentialAuthority(
-    secrets,
-    new FileProviderCredentialSource({
-      filePath: buildConfigFilePath(homedir),
-    }),
-  );
-  const applicationAgentConfig = workspaceConfigAuthority.getApplicationConfig();
+  const providerCredentials = new ProviderCredentialAuthority({
+    filePath: buildConfigFilePath(homedir),
+  });
   const dshDialogueCapabilities: {
     current?: () => Promise<DshAcpProviderCapabilityProjection>;
   } = {};
@@ -551,13 +531,7 @@ async function startDesktop(): Promise<void> {
   });
   const generationRuntime = new GenerationApplicationRuntime({
     createOwner: async ({ owner, root }) => {
-      const configManager =
-        owner.kind === 'workspace'
-          ? workspaceConfigAuthority.getWorkspaceConfig({
-              workspaceId: owner.workspaceId,
-              workspacePath: root,
-            })
-          : workspaceConfigAuthority.getApplicationConfig();
+      const configManager = applicationAgentConfig;
       const providerResolver = createDesktopGenerationExecutionProviderResolver({
         config: configManager,
         credentials: providerCredentials,
@@ -869,11 +843,8 @@ async function startDesktop(): Promise<void> {
           owner: { kind: 'workspace', workspaceId: input.workspaceId },
           root: input.workspaceRoot,
         }),
-      validateBinding: ({ workspace, binding }) => {
-        const config = workspaceConfigAuthority.getWorkspaceConfig({
-          workspaceId: workspace.workspaceId,
-          workspacePath: workspace.workspacePath,
-        });
+      validateBinding: ({ binding }) => {
+        const config = applicationAgentConfig;
         const provider = config.getProvider(binding.providerId);
         const model = config.getModel(binding.modelId);
         if (!provider || provider.enabled === false) {
@@ -1044,11 +1015,8 @@ async function startDesktop(): Promise<void> {
       regenerate: canvasUsesChineseLabels ? '重新生成' : 'Regenerate',
     },
     generation: canvasGenerationRuntime,
-    resolveGenerationModels: ({ workspace }) => {
-      const config = workspaceConfigAuthority.getWorkspaceConfig({
-        workspaceId: workspace.workspaceId,
-        workspacePath: workspace.workspacePath,
-      });
+    resolveGenerationModels: () => {
+      const config = applicationAgentConfig;
       return projectCanvasGenerationModels({
         providers: config.getEnabledProviders(),
         models: config.getEnabledModels(),
@@ -1873,7 +1841,7 @@ async function startDesktop(): Promise<void> {
     });
   };
   const dshProviderRefresh: {
-    current?: () => Promise<'applied' | 'pending'>;
+    current?: () => Promise<'unchanged' | 'pending'>;
   } = {};
   const appHost = new DesktopAppHost({
     host,
@@ -2018,7 +1986,7 @@ async function startDesktop(): Promise<void> {
       executeWorld: async (input) => (await resolveWorldAuthoring(input)).execute(input.command),
     },
     generationLifecycle: generationRuntime,
-    workspaceConfigLifecycle: workspaceConfigAuthority,
+    configurationLifecycle: applicationAgentConfig,
     workspaceGrants: workspaceGrantAuthority,
     conversationContexts: agentConversationContexts,
     characterFoundation,
@@ -2058,7 +2026,6 @@ async function startDesktop(): Promise<void> {
     settings: applicationSettings,
     aiModelSettings,
     refreshAiModelExecutionConfiguration: () => {
-      workspaceConfigAuthority.reloadAll();
       const refresh = dshProviderRefresh.current;
       if (refresh === undefined) {
         throw new Error('Desktop DSH Provider runtime refresh is not initialized.');
@@ -2184,7 +2151,7 @@ async function startDesktop(): Promise<void> {
             });
           },
         },
-        configuration: workspaceConfigAuthority,
+        configuration: applicationAgentConfig,
         assistant: { assistantSpaceId, root: assistantSpaceRoot },
         skillAuthoring,
         cutRuntime,
@@ -2302,7 +2269,7 @@ async function startDesktop(): Promise<void> {
     },
   });
   dshDialogueCapabilities.current = () => dshProduct.runtime.client.readProviderCapabilities();
-  dshProviderRefresh.current = () => dshProduct.runtime.deferConfigurationRefresh();
+  dshProviderRefresh.current = () => dshProduct.refreshProviders();
   dshCanvasArtifactDeliveryTrigger.current = async (dshSessionId, conversationId, trigger) => {
     try {
       const snapshot = dshProduct.runtime.client.projection.snapshot(dshSessionId);
@@ -2425,7 +2392,7 @@ async function startDesktop(): Promise<void> {
     canvas: canvasWorkspaceIndexService,
     canvasSelection: createDshConversationCanvasSelection(dshProduct.runtime.conversations.catalog),
     workspaceGrants: workspaceGrantAuthority,
-    configuration: workspaceConfigAuthority,
+    configuration: applicationAgentConfig,
     sessions: dshProduct.runtime.conversations.conversations,
     preTurnInputCatalog: dshProduct.runtime.client,
     lookupCwd: { resolve: dshProduct.runtime.resolveSessionCwd },

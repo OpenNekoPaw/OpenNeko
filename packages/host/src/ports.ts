@@ -99,12 +99,6 @@ export interface HostPathPort {
   isInside(request: HostPathContainmentRequest): boolean;
 }
 
-export interface HostSecretPort {
-  get(key: string): Promise<string | undefined>;
-  set(key: string, value: string): Promise<void>;
-  delete(key: string): Promise<void>;
-}
-
 export interface HostExternalPort {
   openExternal(uri: string): Promise<void>;
   revealPath?(path: string): Promise<void>;
@@ -163,7 +157,6 @@ export interface NekoHostPorts {
   readonly paths: HostPathPort;
   readonly accessPolicy?: HostAccessPolicyPort;
   readonly contentPolicy?: HostContentPolicyPort;
-  readonly secrets?: HostSecretPort;
   readonly external?: HostExternalPort;
   readonly diagnostics?: HostDiagnosticSink;
 }
